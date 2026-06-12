@@ -16,6 +16,7 @@ import type { DuckDBQueryable } from './duckdb-types.js';
 import { getDataVersion } from './data-version.js';
 import { buildTrendCubeSql, TREND_CUBE_TABLE } from '../sql/cube/trend-cube.js';
 import { buildCostCubeSql, buildCostCubeProbeSql, COST_CUBE_TABLE } from '../sql/cube/cost-cube.js';
+import { buildSalesmanCubeSql, SALESMAN_CUBE_TABLE } from '../sql/cube/salesman-cube.js';
 
 interface CubeState {
   /** 立方体构建完成时的 dataVersion；null = 从未构建成功 */
@@ -207,6 +208,78 @@ export function ensureCostCubeFresh(db: DuckDBQueryable): 'ready' | 'building' |
       })
       .finally(() => {
         costCubeState.building = null;
+      });
+  }
+  return 'building';
+}
+
+// ── 业务员立方体（CubeSalesmanDay · 第五批次） ───────────────────────────────
+// 行级可加度量（无保单去重语义）→ 无需探针，与趋势立方体同一新鲜度模型。
+
+const salesmanCubeState: CubeState = {
+  builtVersion: null,
+  building: null,
+  lastBuildMs: null,
+  lastError: null,
+};
+
+/** 观测快照（/health 或日志用） */
+export function getSalesmanCubeState(): Readonly<CubeState> {
+  return { ...salesmanCubeState };
+}
+
+/** @internal 测试用：重置状态机 */
+export function resetSalesmanCubeStateForTest(): void {
+  salesmanCubeState.builtVersion = null;
+  salesmanCubeState.building = null;
+  salesmanCubeState.lastBuildMs = null;
+  salesmanCubeState.lastError = null;
+}
+
+/** 业务员立方体是否与当前数据版本一致（可安全用于查询） */
+export function isSalesmanCubeFresh(): boolean {
+  return salesmanCubeState.builtVersion !== null && salesmanCubeState.builtVersion === getDataVersion();
+}
+
+/**
+ * 物化业务员立方体（阻塞直至完成）。
+ * 前置条件：PolicyFact 已加载。构建期间旧表（如有）仍可查询，换表原子。
+ */
+export async function materializeSalesmanCube(db: DuckDBQueryable): Promise<void> {
+  const versionAtStart = getDataVersion();
+  const t0 = Date.now();
+  console.log(`[SalesmanCube] Materializing ${SALESMAN_CUBE_TABLE} (dataVersion=${versionAtStart})...`);
+
+  const schema = await db.getTableSchema('PolicyFact');
+  const hasBranchCode = schema.some((c: { column_name?: string }) => c.column_name === 'branch_code');
+
+  await db.query(buildSalesmanCubeSql(hasBranchCode));
+
+  const [{ n }] = await db.query<{ n: number }>(`SELECT COUNT(*) AS n FROM ${SALESMAN_CUBE_TABLE}`);
+  const elapsed = Date.now() - t0;
+  // 与趋势立方体同一竞态规避：versionAtStart 记账，构建期间 ETL 重载则保持不新鲜
+  salesmanCubeState.builtVersion = versionAtStart;
+  salesmanCubeState.lastBuildMs = elapsed;
+  salesmanCubeState.lastError = null;
+  console.log(`[SalesmanCube] ${SALESMAN_CUBE_TABLE} ready: ${Number(n).toLocaleString()} rows in ${elapsed}ms (branch_code=${hasBranchCode})`);
+}
+
+/**
+ * 非阻塞确保新鲜（与趋势立方体同一模型）：
+ *   - 已新鲜 → 'ready'（可直接查立方体）
+ *   - 不新鲜 → 触发后台单飞重建并返回 'building'（本次请求应走原路径）
+ */
+export function ensureSalesmanCubeFresh(db: DuckDBQueryable): 'ready' | 'building' {
+  if (isSalesmanCubeFresh()) return 'ready';
+  if (!salesmanCubeState.building) {
+    salesmanCubeState.building = materializeSalesmanCube(db)
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        salesmanCubeState.lastError = message;
+        console.error(`[SalesmanCube] Materialization failed (route will keep falling back): ${message}`);
+      })
+      .finally(() => {
+        salesmanCubeState.building = null;
       });
   }
   return 'building';

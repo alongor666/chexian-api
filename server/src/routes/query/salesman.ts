@@ -2,8 +2,39 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, withRouteCache } from './shared.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../../sql/salesman-ranking.js';
+import { dbEnv } from '../../config/env.js';
+import { isSalesmanCubeServable, generateSalesmanRankingCubeQuery } from '../../sql/cube/salesman-cube.js';
+import { ensureSalesmanCubeFresh } from '../../services/duckdb-cube.js';
+import { runShadowCompare } from '../../services/cube-shadow.js';
 
 const router = Router();
+
+/**
+ * 业务员立方体接线（第五批次，BACKLOG uid=2026-06-11-claude-90a92c）。
+ * 双开关默认关闭时零生效。返回 null 表示走原路径（不可服务/未就绪/开关关闭）。
+ * 影子模式：返回原路径结果，同时后台双跑比对。
+ */
+async function trySalesmanCube(
+  rankingType: 'all' | 'quality',
+  whereClause: string,
+  limit: number,
+  legacyRunner: () => Promise<Array<Record<string, unknown>>>
+): Promise<Array<Record<string, unknown>> | null> {
+  const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
+  const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+  if (!cubeRouting && !cubeShadow) return null;
+  if (!isSalesmanCubeServable(whereClause).servable) return null;
+  if (ensureSalesmanCubeFresh(duckdbService) !== 'ready') return null;
+
+  const cubeSql = generateSalesmanRankingCubeQuery(rankingType, whereClause, limit);
+  if (cubeRouting) {
+    return duckdbService.query(cubeSql);
+  }
+  // 影子对账：先取原路径结果返回调用方，后台比对立方体结果
+  const legacyResult = await legacyRunner();
+  runShadowCompare('salesman-ranking', legacyResult, () => duckdbService.query(cubeSql));
+  return legacyResult;
+}
 
 export const salesmanRankingExtraSchema = z.object({
   rankingType: z.enum(['all', 'quality']).default('all'),
@@ -29,7 +60,13 @@ router.get(
       sql = generateSalesmanQualityBusinessRankingQuery(finalWhereClause, limit);
     }
 
-    const result = await duckdbService.query(sql);
+    const cubeResult = await trySalesmanCube(
+      rankingType,
+      finalWhereClause,
+      limit,
+      () => duckdbService.query(sql)
+    );
+    const result = cubeResult ?? await duckdbService.query(sql);
 
     res.json({
       success: true,
