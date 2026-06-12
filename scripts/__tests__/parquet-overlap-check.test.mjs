@@ -30,6 +30,21 @@ describe('parseDateRangeFromFilename', () => {
       .toEqual({ start: 20240101, end: 20260504 });
   });
 
+  it('解析新前缀式命名 YYYYMMDD-YYYYMMDD_01_签单清单_定稿.parquet（2026-06-10 上游重构）', () => {
+    expect(parseDateRangeFromFilename('20260601-20260610_01_签单清单_定稿.parquet'))
+      .toEqual({ start: 20260601, end: 20260610 });
+  });
+
+  it('跨命名代际重叠可被检测（遗留后缀式 vs 新前缀式）', () => {
+    const dir = makeDir([
+      '每日数据_20240101_20260610.parquet',
+      '20260601-20260612_01_签单清单_定稿.parquet',
+    ]);
+    const r = detectPolicyCurrentOverlap(dir);
+    expect(r.count).toBe(1);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it('非标准命名（单日期）返回 null', () => {
     expect(parseDateRangeFromFilename('20260514_01_签单清单.parquet')).toBeNull();
   });

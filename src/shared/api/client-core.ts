@@ -195,12 +195,19 @@ export class ApiClientCore {
   }
 
   /**
-   * 取消指定端点的进行中请求
+   * 取消指定端点的进行中请求。
+   * controller 以 `GET:${normalizeGetEndpoint(endpoint)}`（含排序后 query）为键存储，
+   * 这里必须做同样的归一化，否则传原始 endpoint 永远查不到（取消恒为 no-op）。
+   * 兼容三种调用形态：原始 endpoint / 已归一化 endpoint / 完整 dedupeKey。
    */
   cancelRequest(endpoint: string): void {
-    const controller = this.inflightControllers.get(endpoint);
+    const key = endpoint.startsWith('GET:')
+      ? endpoint
+      : `GET:${this.normalizeGetEndpoint(endpoint)}`;
+    const controller = this.inflightControllers.get(key) ?? this.inflightControllers.get(endpoint);
     if (controller) {
       controller.abort();
+      this.inflightControllers.delete(key);
       this.inflightControllers.delete(endpoint);
     }
   }

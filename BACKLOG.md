@@ -16,11 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（69 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（68 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（10 项）**
+**P1（9 项）**
 
 - B246 — VPS 分层查询改造（KPI variable_cost_ratio）
 - B291 — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
@@ -31,9 +31,8 @@
 - 2026-06-11-claude-7a2849 — 同比/YTD 查询产生重复期间行 + 虚假 -100% 增长（DuckDB 实证）
 - 2026-06-11-claude-90a92c — 通用可加性立方体查询加速
 - 2026-06-11-claude-942414 — 行级权限(RLS)整域绕过
-- 2026-06-11-claude-f608c2 — policy/current 重叠门禁对新命名失明
 
-**P2（36 项）**
+**P2（37 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -71,8 +70,9 @@
 - 2026-06-11-claude-f5646f — 为 4 张 agent 注册表补 version/changelog 可追溯字段（har
 - 2026-06-11-claude-fa0f22 — 多 sheet 加载仅命中一个必须列即并入整 sheet
 - 2026-06-11-claude-fdbba5 — [口径裁决]硬编码阈值违反红线
+- 2026-06-12-claude-27972c — 治理静态检查专项（bug-hunt 沉淀）
 
-**P3（23 项）**
+**P3（22 项）**
 
 - B247 — 图表 hex 色值审计
 - B251 — 输出风格与用户契约冲突
@@ -91,7 +91,6 @@
 - 2026-06-10-claude-807f41 — repair v2 八端点（city/channel/coop-tier/scatter
 - 2026-06-10-claude-ca3cab — cx CLI 全能力重构
 - 2026-06-11-claude-02aa70 — 产品层冗余裁剪决策（需用户拍板，全站重复审计 主题⑤）
-- 2026-06-11-claude-3d10f7 — DashboardAnchorNav 拖拽中卸载泄漏 document 监听
 - 2026-06-11-claude-42bf28 — 经营分析汇总表（performance-summary）达成率/计划列恒 NULL 的处
 - 2026-06-11-claude-7dca99 — StableContext/ExportContext value 未 memoize
 - 2026-06-11-claude-84ea3a — cleanup-reports 按 mtime 而非文件名日期保留最新
@@ -154,7 +153,6 @@
 | 2026-06-11-claude-2e311d | 2026-06-11 | Bugfix/Frontend | @claude | 增长分析无视 analysis_year 写死今年：useGrowthAnalysis.ts:236 analyzeOrgPremiumGrowth/analyzeSalesmanGrowth/analyzeKPIGrowth startDate/endDate 一律 new Date() 当前年 YTD，同面板 daily-detail 分支用 filters.analysis_year，两套口径；切到往年时季度/业务员/KPI 增长仍查当前年；基准期末拼 上年-当月-当日 遇 2/29 生成非法日期。 | P2 | PROPOSED | N/A | src/features/growth/hooks/useGrowthAnalysis.ts |  |
 | 2026-06-11-claude-3093a3 | 2026-06-11 | Refactor/Frontend | @claude | 重复组件收拢（全站重复审计 主题②）：机构×维度×时间热力图 4 套独立实现（performance-org/cross-sell/claims-detail/quote-conversion）、机构→团队→业务员下钻表 5 处、KPI 卡 5 套、趋势折线封装 5 套、导出对话框 2 个（widgets/export/ExportDialog vs features/file/ExportModal）+ crossSellExport 重写 CSV 下载、格式化函数多处本地重写（renewal-tracker/expense-development/growth 对应 shared/utils/formatters 已有）、dashboard useFilterState 与全局 FilterContext 双轨。逐类提共享部件，结合功能迭代渐进做。关联 B330（依赖违规）/B331（大文件拆分）。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/widgets；src/shared；src/features/dashboard | 标签收拢实施时排查出 5 处 SSOT 之外的残留硬编码维度标签副本（本批未动）：① PerformanceAnalysisPanel.tsx:92-101 PERF_HEATMAP_DRILL_DIMENSIONS（team:'团队'/insurance_grade:'风险评分'，与同页 HEATMAP_DIMENSION_LABELS 已统一文案形成页内不一致，优先治理）；② CrossSellAnalysisPanel.tsx:389-396 HEATMAP_DRILL_DIMENSIONS（team:'团队'，同页不一致，优先治理）；③ claims-detail/ClaimsHeatmapPanel.tsx:29,35；④ premium-report/hooks/usePremiumPlan.ts:35 LEVEL_LABELS；⑤ quote-conversion/DrilldownTable.tsx:101。收拢时改为 pickDimensionLabels 派生。 |
 | 2026-06-11-claude-3ab3e3 | 2026-06-11 | Bugfix/Frontend | @claude | 增长分析面板请求竞态旧响应覆盖新数据：GrowthAnalysisPanel.tsx:127+useGrowthAnalysis.ts:125 fetchGrowthFromApi/analyzeDualMetricComparison 无请求序号/AbortController/最新请求守卫，setState 无条件写。快速切换条件时两不同 URL 请求并发（apiClient in-flight 合并仅对相同 URL），慢的旧请求后返回覆盖新结果。 | P2 | PROPOSED | N/A | src/features/growth/components/GrowthAnalysisPanel.tsx,src/features/growth/hooks/useGrowthAnalysis.ts |  |
-| 2026-06-11-claude-3d10f7 | 2026-06-11 | Bugfix/Frontend | @claude | DashboardAnchorNav 拖拽中卸载泄漏 document 监听：DashboardAnchorNav.tsx:124 pointerdown 挂 document 级 pointermove/pointerup，仅靠 pointerup 移除，无卸载清理 effect；拖拽途中路由切换留悬挂监听并对已卸载组件 setState。 | P3 | PROPOSED | N/A | src/features/dashboard/components/DashboardAnchorNav.tsx |  |
 | 2026-06-11-claude-42bf28 | 2026-06-11 | 数据质量 | @claude | 经营分析汇总表（performance-summary）达成率/计划列恒 NULL 的处置评估：146cce 口径统一时评估结论为「不顺势接入」——年计划只有业务员粒度、无险别组合维度，强行接入只会让整体行有值而主全/交三/单交子行恒空，新增口径混淆。待业务拍板二选一：① 删除汇总表这两列（前端 12 列减 2）；② 仅整体行接入标准口径并在列头注明子行无计划。summary.ts 旧版分摊死计算已随 146cce 移除。 | P3 | PROPOSED | 开发文档/达成率三路由口径对账报告_2026-06-11.md | server/src/sql/performance-analysis/summary.ts；src/features/dashboard/PerformanceAnalysisPanel.tsx |  |
 | 2026-06-11-claude-537e28 | 2026-06-11 | 指标口径 | @claude | [口径裁决]claims-detail 频度同比分子分母 cohort 错配：generateFrequencyYoyQuery（claims-detail.ts:566）分子按 accident_time 出险季分桶、分母按 insurance_start_date 起保季 earned_days 分桶硬 JOIN(year,quarter)，分子大量赔案来自往年起保保单，freq 非真实频度。B303 只修了分母满期化。 | P2 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
 | 2026-06-11-claude-7a2849 | 2026-06-11 | Bugfix/Backend | @claude | 同比/YTD 查询产生重复期间行 + 虚假 -100% 增长（DuckDB 实证）：yoy.ts/ytd.ts 用 FULL OUTER JOIN ON c.tp=DATE_ADD(p.tp,1year)，t+1 年无数据期间 p 侧 unmatch 输出 current=0/growth=-100% 幽灵行；weekly 视图 DATE_TRUNC('week')+1年不再周一对齐致整列 NULL/-100%。 | P1 | PROPOSED | N/A | server/src/sql/growth/yoy.ts,server/src/sql/growth/ytd.ts,server/src/routes/query/growth.ts |  |
@@ -169,7 +167,7 @@
 | 2026-06-11-claude-ed63ec | 2026-06-11 | Bugfix/Frontend | @claude | SW 5 分钟版本轮询实际不存在：public/sw.js 注释宣称每 5 分钟轮询 /api/data/version 但无任何定时器，maybeCheckVersion 只在 fetch 命中缓存分支调用；SW 活跃时前端 staleTime=Infinity 初始加载后不再发请求 → 无 fetch 事件 → 版本检查永不跑 → ETL_UPDATED 永不发。长开 tab 最长 24h 看旧数据。lastKnownEtlDate 未持久化，SW 回收后归零。 | P2 | PROPOSED | N/A | public/sw.js,src/app/App.tsx |  |
 | 2026-06-11-claude-ee63ee | 2026-06-11 | Refactor/Frontend | @claude | quote-conversion KpiCards default 分支为死代码：VersionAView/VersionBView 自 PR #150 (3c9e72a4, 2026-04-03) 起均以 variant="oldCar" 调用，default 分支（整体转化率/报价总量/平均折扣率/N 位业务员参与 卡片布局，KpiCards.tsx L116-168）不可达。该死分支曾导致 E2E 09-quote-conversion 断言「整体转化率」长期假绿（已另行修复断言）。处置建议：确认无恢复 default 视图的产品计划后删除该分支并收窄 variant 类型；注意与 OPEN 状态 PR #581（给 oldCar 分支加 title 口径提示）的合并顺序。 | P3 | PROPOSED | N/A | src/features/quote-conversion/components/KpiCards.tsx |  |
 | 2026-06-11-claude-f5646f | 2026-06-11 | Agent / LLM 边界 | @claude | 为 4 张 agent 注册表补 version/changelog 可追溯字段（harness 对标门槛 3）。现状：agent-metric(29)/agent-data-capability(13)/agent-forecast-output(2)/unsupported-metric(5) 四张注册表均无版本字段，与项目主指标注册表（CLAUDE.md §2 强制 changelog）纪律不一致，释放大模型后能力边界变更无法在产物层追溯。完整实现需三件套同时落地避免留下无消费方死字段：(1) Zod schema 加 version+changelog 字段；(2) /api/agent/audit/* 响应暴露表级版本；(3) governance 加『改注册表条目须更新 version』强制校验。本次 harness 行动已完成门槛 1（explain 进审计）+门槛 2（sql-guard 加固+回归测试），门槛 3 因涉及 schema 演进单独走注册表正规修改流程。 | P2 | PROPOSED | docs/AGENT_HARNESS_BENCHMARK.md | server/src/agent/registry/ |  |
-| 2026-06-11-claude-f608c2 | 2026-06-11 | 数据质量 | @claude | policy/current 重叠门禁对新命名失明：parquet-overlap-check.mjs:14 parseDateRangeFromFilename 只匹配 _(8位)_(8位).parquet，2026-06-10 起官方命名 YYYYMMDD-YYYYMMDD_01_签单清单_定稿.parquet（连字符+后缀）与开放结束命名均无法解析被剔除 → 跨命名代际重叠（保费翻倍事故原始形态）检测不到。daily.mjs/sync-vps/governance 三处共用同时失效。 | P1 | PROPOSED | N/A | scripts/lib/parquet-overlap-check.mjs |  |
 | 2026-06-11-claude-f633c0 | 2026-06-11 | Bugfix/Frontend | @claude | cancelRequest 键不匹配永远取消不了请求：client-core.ts:192 controller 以 GET:${normalizeGetEndpoint(endpoint)}（含排序 query）为键存，cancelRequest(endpoint) 用原始 endpoint 查表必 miss；类注释宣称同端点新请求自动取消前序请求，代码无此 abort 逻辑（仅合并）。 | P3 | PROPOSED | N/A | src/shared/api/client-core.ts |  |
 | 2026-06-11-claude-fa0f22 | 2026-06-11 | 数据质量 | @claude | 多 sheet 加载仅命中一个必须列即并入整 sheet：etl_validation.py:116 has_header=any(c in required_columns)，仅含保单号列的汇总/透视 sheet 被当有效续表 concat，其余列 NaN 对齐 → 静默注入残缺行。transform.py:141 load_target_excel 同样只查保单号别名。FineBI 导出带统计 sheet 时触发。 | P2 | PROPOSED | N/A | 数据管理/pipelines/etl_validation.py |  |
 | 2026-06-11-claude-fdbba5 | 2026-06-11 | 指标口径 | @claude | [口径裁决]硬编码阈值违反红线：drilldown.ts:216、top-salesman.ts:162 四象限 growth_rate>=7/achievement_rate>=100，注册表阈值为 10/5/2 与 110/100/95，7% 不在任何注册表定义内；kpi-detail.ts:85 同城/异地机构白名单硬编码 14 个机构，新增/山西机构两边都不计入致 region 环形图分母静默缺失。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/drilldown.ts,server/src/sql/kpi-detail.ts |  |
+| 2026-06-12-claude-27972c | 2026-06-12 | Chore/Governance | @claude | 治理静态检查专项（bug-hunt 沉淀）：1) execSync 模板拼接检测—现存 15 处多为受控插值(pid/固定命令)，需先甄别白名单否则误报；重点拦插值来自文件枚举(git ls-files/readdirSync)的模式。2) Context Provider 定义未挂载检测—现存 AuthContext/LoginForm 死代码需先清理(useRBAC 已迁 PermissionContext)否则检查立刻红。3) SQL 生成器 FROM PolicyFact 未消费 permissionFilter 守卫(易误报,需路由层调用图)。 | P2 | PROPOSED | N/A | scripts/check-governance.mjs,src/shared/contexts/AuthContext.tsx |  |
