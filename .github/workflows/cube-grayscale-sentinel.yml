@@ -1,0 +1,85 @@
+name: Cube Grayscale Sentinel
+
+# 通用立方体灰度阶段 1 的自动观测器。每小时跑一次，读 /health 的 cubes + cubeShadow
+# 字段（PR #604 引入），按确定性规则判定灰度健康度，CRITICAL 异常自动追踪 issue。
+#
+# 设计：scripts/sentinel/cube-grayscale-sentinel.mjs
+# 范式对齐：etl-anomaly-sentinel.yml（同一 issue 追踪范式，sentinel-out artifact）
+# BACKLOG：uid=2026-06-11-claude-90a92c
+
+on:
+  schedule:
+    # 每小时跑一次（UTC）。灰度阶段宁可勤报：mismatch 出现越早干预越好。
+    - cron: '15 * * * *'
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: 'API base（默认 https://chexian.cretvalu.com）'
+        required: false
+        default: 'https://chexian.cretvalu.com'
+
+concurrency:
+  group: cube-grayscale-sentinel
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sentinel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run cube grayscale sentinel
+        id: run
+        env:
+          API_BASE: ${{ inputs.api_base || vars.SENTINEL_API_BASE || 'https://chexian.cretvalu.com' }}
+        run: |
+          node scripts/sentinel/cube-grayscale-sentinel.mjs \
+            --api-base "$API_BASE" \
+            --out-dir sentinel-out/cube-grayscale
+
+      - name: Upload run artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cube-grayscale-${{ github.run_id }}
+          path: sentinel-out/cube-grayscale/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Post anomaly to tracking issue
+        if: steps.run.outputs.has_anomalies == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUMMARY_PATH: ${{ steps.run.outputs.summary_path }}
+          SEVERITY: ${{ steps.run.outputs.max_severity }}
+        run: |
+          set -euo pipefail
+          TITLE="立方体灰度哨兵追踪"
+          LABEL="cube-grayscale-anomaly"
+          gh label create "$LABEL" --color D93F0B --description "立方体灰度哨兵告警" 2>/dev/null || true
+          ISSUE=$(gh issue list --state open --search "in:title $TITLE" --json number,title \
+            --jq ".[] | select(.title==\"$TITLE\") | .number" | head -n1)
+          if [ -z "$ISSUE" ]; then
+            ISSUE=$(gh issue create --title "$TITLE" --label "$LABEL" \
+              --body "立方体灰度哨兵的集中追踪 issue。每次检测到异常会在此追加评论；CRITICAL 才退出码 1，WARN/INFO 仅记录。" \
+              | grep -oE '[0-9]+$' | head -n1)
+            echo "created tracking issue #$ISSUE"
+          fi
+          gh issue edit "$ISSUE" --add-label "$LABEL" 2>/dev/null || true
+          # 评论开头带严重度，便于 issue 列表速览
+          {
+            echo "**严重度**：\`$SEVERITY\`"
+            echo ""
+            cat "$SUMMARY_PATH"
+          } | gh issue comment "$ISSUE" --body-file -
+          echo "posted anomaly (severity=$SEVERITY) to issue #$ISSUE"

@@ -83,3 +83,70 @@ PAT 不能由 PAT 自铸（`POST /api/auth/tokens` 强制会话）。须**浏览
 - 计划：`~/.claude/plans/synthetic-herding-cloud.md`（v3）
 - 同 PR 修复：`/api/filters/options` 补挂 `readonlyMiddleware`（原漏挂，对齐 `server/src/routes/query.ts`）
 - 记忆：`feedback_claims_window_aligned_to_earned`（IBNR 早期窗口虚高）
+
+---
+
+# 立方体灰度哨兵（Cube Grayscale Sentinel）
+
+> **定位**：通用立方体灰度阶段 1 的自动观测器（PR #604 引入双开关 `CUBE_SHADOW_COMPARE='true'` 后）。读 `/health` 公开端点，无需 PAT；CRITICAL 异常自动追踪 GitHub issue。
+
+每小时跑一次（cron `15 * * * *`），按确定性规则判定灰度健康度，**不阻断 ETL、不影响用户**。
+
+## 组成
+
+| 文件 | 作用 |
+|------|------|
+| `cube-grayscale-sentinel.mjs` | 主脚本：取 `/health` + `/api/data/version` → 4 条规则判定 → 产出 verdict.json/summary.md。**不碰 GitHub** |
+| `../../.github/workflows/cube-grayscale-sentinel.yml` | 每小时触发的工作流，产物上传 artifact + 异常追踪 issue |
+
+## 判定规则（确定性，可复现）
+
+| 规则 | 严重度 | 触发条件 | 含义 |
+|---|---|---|---|
+| ① `shadow_no_mismatch` | **CRITICAL** | `cubeShadow.*.mismatch > 0` | 立方体结果与原路径不等 — 立刻暂停切流；根因 = 口径漂移 / 立方体逻辑 bug / ETL 引入新字段值未识别 |
+| ② `shadow_no_error` | WARN | `cubeShadow.*.error > 0` | 立方体执行异常（构建失败 / 连接池耗尽），查 PM2 日志 `[CubeShadow]` |
+| ③ `cost_cube_exact` | INFO | `cubes.cost.exact === false` | **数据质量信号**：跨格保单出现（同保单批改改了机构/起保日），ETL 上游应复盘 |
+| ④ `cubes_fresh` | WARN | `cubes.*.builtVersion !== /api/data/version` | 立方体落后当前数据版本 — 通常 ETL 后预热请求自动追上，若长期落后查 cache-warmer 覆盖 |
+| 兼容 | WARN | `cubes.*.lastError != null` | 立方体最近一次构建失败 |
+
+**退出码**：CRITICAL→1（阻断 cron 链）；其他→0（INFO/WARN 通过 `GITHUB_OUTPUT` 透出，记录到追踪 issue 但不算"红"）。
+
+## 产物与报告去向
+
+| 输出 | 位置 |
+|---|---|
+| 机器可读 | `<out-dir>/verdict.json`（默认 `sentinel-out/cube-grayscale/verdict.json`） |
+| 人可读 | `<out-dir>/summary.md` |
+| CI artifact | `cube-grayscale-<run_id>`，保留 **30 天** |
+| 异常追踪 | GitHub issue「立方体灰度哨兵追踪」（label `cube-grayscale-anomaly`，自动建/找/追加评论） |
+| GITHUB_OUTPUT | `has_anomalies` / `max_severity` / `summary_path` / `verdict_path` |
+
+## 反哺 ETL 流程优化的具体方式
+
+立方体哨兵不直接改 ETL 脚本，但暴露了 ETL 流程难以自查的三类信号：
+
+1. **`cost.exact=false` 反复出现** → 上游"批改不会改维度列"的假设被打破。复盘 `pipelines/transform.py` 与签单清单 ETL 是否合规：批改行的机构/起保日/客户类别是否应当继承原单。如确认是数据源问题，提相应业务修复 ticket。
+2. **`shadow.*.mismatch > 0`** → 立方体 vs 原路径口径不一致。判断 ETL 是否引入新字段值（如 `tonnage_segment` 新增枚举）落到立方体 token 白名单之外。是 ETL 问题就在 `data-pipeline.md` 流程加新字段值前的"立方体可服务性检查"步骤；是立方体口径问题就同步更新改写器并补等值测试。
+3. **`builtVersion` 长期落后** → ETL 后 reload 触发的预热路由未覆盖立方体所需路由族（`trend`/`growth`/`cost`/`kpi`/`salesman-ranking`）。`cache-warmer.ts` 路由清单应当与立方体覆盖路由族对齐。
+
+## 本地 dry-run
+
+```bash
+node scripts/sentinel/cube-grayscale-sentinel.mjs \
+  --api-base https://chexian.cretvalu.com \
+  --out-dir /tmp/cube-sentinel \
+  --dry-run
+```
+
+`--dry-run` 不影响产物（仍写 verdict.json/summary.md），仅把 summary 打印到终端。
+
+## 与 ETL 异常哨兵的边界
+
+| | ETL 异常哨兵 | 立方体灰度哨兵 |
+|---|---|---|
+| 关注层 | 业务指标（赔付率/费用率/保费）逐期 Z-score + 同环比 | 立方体路径正确性 + 数据版本同步 + 数据质量信号 |
+| 触发频率 | 每天 2 次（cron 9,12 UTC） | 每小时一次 |
+| 鉴权 | PAT 只读 | 公开端点 `/health`，无 |
+| 幂等 | `data/version` ETag，数据未变 304 静默 | 否——每跑一次都是当时进程状态快照 |
+| 追踪 issue | 「ETL 异常哨兵追踪」`sentinel-anomaly` | 「立方体灰度哨兵追踪」`cube-grayscale-anomaly` |
+| BACKLOG | — | uid=2026-06-11-claude-90a92c |
