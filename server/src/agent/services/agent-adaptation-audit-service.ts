@@ -1,5 +1,17 @@
-import { agentDataCapabilityRegistry } from '../registry/agent-data-capability-registry.js';
-import { unsupportedMetricRegistry } from '../registry/unsupported-metric-registry.js';
+import {
+  agentDataCapabilityRegistry,
+  agentDataCapabilityRegistryMeta,
+} from '../registry/agent-data-capability-registry.js';
+import {
+  unsupportedMetricRegistry,
+  unsupportedMetricRegistryMeta,
+} from '../registry/unsupported-metric-registry.js';
+import { agentMetricRegistry, agentMetricRegistryMeta } from '../registry/agent-metric-registry.js';
+import {
+  agentForecastOutputRegistry,
+  agentForecastOutputRegistryMeta,
+} from '../registry/agent-forecast-output-registry.js';
+import { toRegistryVersion } from '../schemas/agent-registry-meta.schema.js';
 import {
   AgentCapabilityAuditSchema,
   AgentObservabilityAuditSchema,
@@ -33,12 +45,18 @@ export function getAgentCapabilityAudit(): AgentCapabilityAudit {
   return AgentCapabilityAuditSchema.parse({
     summary: summarizeBySupportLevel(agentDataCapabilityRegistry),
     capabilities: agentDataCapabilityRegistry,
+    registryVersions: [
+      toRegistryVersion(agentDataCapabilityRegistryMeta, agentDataCapabilityRegistry.length),
+    ],
   });
 }
 
 export function getUnsupportedMetricAudit(): UnsupportedMetricAudit {
   return UnsupportedMetricAuditSchema.parse({
     metrics: unsupportedMetricRegistry,
+    registryVersions: [
+      toRegistryVersion(unsupportedMetricRegistryMeta, unsupportedMetricRegistry.length),
+    ],
   });
 }
 
@@ -786,6 +804,12 @@ export async function getAgentReadinessAudit(options: AgentReadinessAuditOptions
     stage5Prerequisites,
     llmReadinessBlockers,
     observabilityEvidence,
+    registryVersions: [
+      toRegistryVersion(agentMetricRegistryMeta, agentMetricRegistry.length),
+      toRegistryVersion(agentDataCapabilityRegistryMeta, agentDataCapabilityRegistry.length),
+      toRegistryVersion(agentForecastOutputRegistryMeta, agentForecastOutputRegistry.length),
+      toRegistryVersion(unsupportedMetricRegistryMeta, unsupportedMetricRegistry.length),
+    ],
     notes: [
       'Stage 1-4.6 已完成：指标审计、注册表一致性、确定性诊断、经营巡检聚合和观测证据闭环。',
       stage4_8Verified

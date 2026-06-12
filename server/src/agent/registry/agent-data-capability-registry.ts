@@ -1,5 +1,20 @@
 import type { AgentCapabilityDefinition } from '../schemas/agent-capability.schema.js';
 import { AgentCapabilityDefinitionSchema } from '../schemas/agent-capability.schema.js';
+import { AgentRegistryMetaSchema } from '../schemas/agent-registry-meta.schema.js';
+
+// 表级版本：任何条目变更必须 bump version 并追加 changelog（governance「Agent注册表版本」强制）
+export const agentDataCapabilityRegistryMeta = AgentRegistryMetaSchema.parse({
+  registryId: 'agent-data-capability',
+  version: '1.0.0',
+  changelog: [
+    {
+      version: '1.0.0',
+      date: '2026-06-11',
+      changes:
+        '建立表级版本纪元：补 version/changelog 可追溯字段（harness 对标门槛 3，BACKLOG 2026-06-11-claude-f5646f）。',
+    },
+  ],
+});
 
 export const agentDataCapabilityRegistry = AgentCapabilityDefinitionSchema.array().parse([
   {

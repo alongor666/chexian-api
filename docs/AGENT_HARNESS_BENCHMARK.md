@@ -82,7 +82,7 @@ worktree 无 `server/data` 本地数据、无 `E2E_PASSWORD` / `AGENT_SMOKE_TOKE
 
 2. **🟡 补 `sql-guard` 覆盖 + 把对抗集固化为回归测试**。加 DuckDB 方言关键字（`COPY/ATTACH/PRAGMA/DESCRIBE/SUMMARIZE/PIVOT`）；§3.2 的 13 例对抗探针应落成 `sql-guard.test.ts`，输出拦截精确率指标（顶级标准要求防护有效性可量化，目前 0 量化）。
 
-3. **🟡 给 agent 注册表补 `version/changelog` 字段**。项目主指标注册表（CLAUDE.md §2）强制 changelog，4 张 agent 注册表没有，纪律不一致；释放大模型后能力边界变更无法追溯。
+3. **✅ 给 agent 注册表补 `version/changelog` 字段**（2026-06-11 已完成，BACKLOG 2026-06-11-claude-f5646f）。三件套落地：① 4 张注册表导出经 `AgentRegistryMetaSchema`（Zod）校验的表级 meta（version + changelog，refine 强制 version === changelog 末条）；② `/api/agent/audit/metrics|capabilities|unsupported|readiness` 响应新增 `registryVersions`（registryId / version / entryCount）；③ governance 新增「Agent注册表版本」检查 —— 注册表文件相对 origin/main 有变更但未更新 version 字段即阻断。回归测试：`tests/api/agent-registry-version.test.ts`。
 
 ---
 

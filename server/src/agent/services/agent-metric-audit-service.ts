@@ -1,6 +1,10 @@
-import { agentMetricRegistry } from '../registry/agent-metric-registry.js';
-import { agentForecastOutputRegistry } from '../registry/agent-forecast-output-registry.js';
+import { agentMetricRegistry, agentMetricRegistryMeta } from '../registry/agent-metric-registry.js';
+import {
+  agentForecastOutputRegistry,
+  agentForecastOutputRegistryMeta,
+} from '../registry/agent-forecast-output-registry.js';
 import { AgentMetricAuditSchema, type AgentMetricAudit } from '../schemas/agent-audit.schema.js';
+import { toRegistryVersion } from '../schemas/agent-registry-meta.schema.js';
 import type { AgentMetricDefinition, AgentMetricSupportLevel } from '../schemas/agent-metric.schema.js';
 
 function summarizeBySupportLevel<T extends { supportLevel: AgentMetricSupportLevel }>(
@@ -22,6 +26,10 @@ export function getAgentMetricAudit(): AgentMetricAudit {
     metrics: observed,
     observed,
     forecastOutputs,
+    registryVersions: [
+      toRegistryVersion(agentMetricRegistryMeta, agentMetricRegistry.length),
+      toRegistryVersion(agentForecastOutputRegistryMeta, agentForecastOutputRegistry.length),
+    ],
   });
 }
 
