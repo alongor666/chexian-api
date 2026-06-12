@@ -16,8 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（69 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
-## 📋 活跃任务速查（51 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（68 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -33,8 +32,7 @@
 - 2026-06-11-claude-90a92c `IN_PROGRESS` — 通用可加性立方体查询加速
 - 2026-06-11-claude-942414 — 行级权限(RLS)整域绕过
 
-**P2（38 项）**
-**P2（26 项）**
+**P2（37 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -69,7 +67,6 @@
 - 2026-06-11-claude-a8d3df — [口径裁决]performance 负基数同比符号反转
 - 2026-06-11-claude-e9a906 — [口径裁决]地理跨区 sentinel 反转
 - 2026-06-11-claude-ed63ec — SW 5 分钟版本轮询实际不存在
-- 2026-06-11-claude-f5646f — 为 4 张 agent 注册表补 version/changelog 可追溯字段（har
 - 2026-06-11-claude-fa0f22 — 多 sheet 加载仅命中一个必须列即并入整 sheet
 - 2026-06-11-claude-fdbba5 — [口径裁决]硬编码阈值违反红线
 - 2026-06-12-claude-27972c — 治理静态检查专项（bug-hunt 沉淀）
@@ -169,7 +166,6 @@
 | 2026-06-11-claude-e9a906 | 2026-06-11 | 指标口径 | @claude | [口径裁决]地理跨区 sentinel 反转：claims-detail.ts:361 is_cross_region=(accident_city != CASE...ELSE 'MATCH' END)，内层只映射川A/B/C/E/F/Q 六前缀，其余（川D/H/J...渝/外省）落 ELSE 'MATCH' 而 accident_city 永不等于字面 'MATCH' → 恒判跨区域，cross_region_pct 系统性虚高。需补全车牌→城市码映射并定义未知前缀归类口径。 | P2 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
 | 2026-06-11-claude-ed63ec | 2026-06-11 | Bugfix/Frontend | @claude | SW 5 分钟版本轮询实际不存在：public/sw.js 注释宣称每 5 分钟轮询 /api/data/version 但无任何定时器，maybeCheckVersion 只在 fetch 命中缓存分支调用；SW 活跃时前端 staleTime=Infinity 初始加载后不再发请求 → 无 fetch 事件 → 版本检查永不跑 → ETL_UPDATED 永不发。长开 tab 最长 24h 看旧数据。lastKnownEtlDate 未持久化，SW 回收后归零。 | P2 | PROPOSED | N/A | public/sw.js,src/app/App.tsx |  |
 | 2026-06-11-claude-ee63ee | 2026-06-11 | Refactor/Frontend | @claude | quote-conversion KpiCards default 分支为死代码：VersionAView/VersionBView 自 PR #150 (3c9e72a4, 2026-04-03) 起均以 variant="oldCar" 调用，default 分支（整体转化率/报价总量/平均折扣率/N 位业务员参与 卡片布局，KpiCards.tsx L116-168）不可达。该死分支曾导致 E2E 09-quote-conversion 断言「整体转化率」长期假绿（已另行修复断言）。处置建议：确认无恢复 default 视图的产品计划后删除该分支并收窄 variant 类型；注意与 OPEN 状态 PR #581（给 oldCar 分支加 title 口径提示）的合并顺序。 | P3 | PROPOSED | N/A | src/features/quote-conversion/components/KpiCards.tsx |  |
-| 2026-06-11-claude-f5646f | 2026-06-11 | Agent / LLM 边界 | @claude | 为 4 张 agent 注册表补 version/changelog 可追溯字段（harness 对标门槛 3）。现状：agent-metric(29)/agent-data-capability(13)/agent-forecast-output(2)/unsupported-metric(5) 四张注册表均无版本字段，与项目主指标注册表（CLAUDE.md §2 强制 changelog）纪律不一致，释放大模型后能力边界变更无法在产物层追溯。完整实现需三件套同时落地避免留下无消费方死字段：(1) Zod schema 加 version+changelog 字段；(2) /api/agent/audit/* 响应暴露表级版本；(3) governance 加『改注册表条目须更新 version』强制校验。本次 harness 行动已完成门槛 1（explain 进审计）+门槛 2（sql-guard 加固+回归测试），门槛 3 因涉及 schema 演进单独走注册表正规修改流程。 | P2 | PROPOSED | docs/AGENT_HARNESS_BENCHMARK.md | server/src/agent/registry/ |  |
 | 2026-06-11-claude-f633c0 | 2026-06-11 | Bugfix/Frontend | @claude | cancelRequest 键不匹配永远取消不了请求：client-core.ts:192 controller 以 GET:${normalizeGetEndpoint(endpoint)}（含排序 query）为键存，cancelRequest(endpoint) 用原始 endpoint 查表必 miss；类注释宣称同端点新请求自动取消前序请求，代码无此 abort 逻辑（仅合并）。 | P3 | PROPOSED | N/A | src/shared/api/client-core.ts |  |
 | 2026-06-11-claude-fa0f22 | 2026-06-11 | 数据质量 | @claude | 多 sheet 加载仅命中一个必须列即并入整 sheet：etl_validation.py:116 has_header=any(c in required_columns)，仅含保单号列的汇总/透视 sheet 被当有效续表 concat，其余列 NaN 对齐 → 静默注入残缺行。transform.py:141 load_target_excel 同样只查保单号别名。FineBI 导出带统计 sheet 时触发。 | P2 | PROPOSED | N/A | 数据管理/pipelines/etl_validation.py |  |
 | 2026-06-11-claude-fdbba5 | 2026-06-11 | 指标口径 | @claude | [口径裁决]硬编码阈值违反红线：drilldown.ts:216、top-salesman.ts:162 四象限 growth_rate>=7/achievement_rate>=100，注册表阈值为 10/5/2 与 110/100/95，7% 不在任何注册表定义内；kpi-detail.ts:85 同城/异地机构白名单硬编码 14 个机构，新增/山西机构两边都不计入致 region 环形图分母静默缺失。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/drilldown.ts,server/src/sql/kpi-detail.ts |  |
