@@ -118,6 +118,20 @@ export const dbEnv = {
    * 回滚：scripts/rollback-multi-branch.mjs 一键关闭 + PM2 reload；.claude/rules/multi-branch-rollback-sop.md。
    */
   BRANCH_RLS_ENABLED: process.env.BRANCH_RLS_ENABLED ?? 'false',
+  /**
+   * 通用可加性立方体路由（设计文档：开发文档/架构设计/通用立方体查询加速方案.md，
+   * BACKLOG uid=2026-06-11-claude-90a92c）。
+   * - CUBE_ROUTING_ENABLED='true'：可服务的查询（第一阶段：/api/query/trend）改走
+   *   预聚合立方体（CubeTrendDay），不可服务的筛选组合自动回退原路径。
+   * - 缺省 / 'false'：完全走原路径，零行为变更。回滚 = 关闭本开关 + reload。
+   */
+  CUBE_ROUTING_ENABLED: process.env.CUBE_ROUTING_ENABLED ?? 'false',
+  /**
+   * 立方体影子对账（灰度安全网，与 CUBE_ROUTING_ENABLED 互斥使用）。
+   * 'true'：对外仍返回原路径结果，后台双跑立方体查询并逐行比对，差异进日志
+   * 与计数器（services/cube-shadow.ts）。连续观察零差异后才切 CUBE_ROUTING_ENABLED。
+   */
+  CUBE_SHADOW_COMPARE: process.env.CUBE_SHADOW_COMPARE ?? 'false',
 } as const;
 
 // ─── AI 提供商配置 ─────────────────────────────────────────────────────────────

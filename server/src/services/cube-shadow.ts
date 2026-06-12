@@ -1,0 +1,107 @@
+/**
+ * 立方体影子对账（通用可加性立方体 · 灰度安全网）
+ *
+ * CUBE_SHADOW_COMPARE=true 时：路由对外仍返回原路径结果，同时后台跑立方体
+ * 查询并逐行逐字段比对，结果只进日志与计数器 —— 连续观察零差异后才
+ * 切 CUBE_ROUTING_ENABLED=true。对应设计文档 §4 阶段 1 的"影子对账"。
+ */
+
+export interface ShadowStats {
+  match: number;
+  mismatch: number;
+  error: number;
+  lastMismatchDetail: string | null;
+}
+
+const statsByRoute = new Map<string, ShadowStats>();
+
+export function getShadowStats(): Record<string, ShadowStats> {
+  return Object.fromEntries(statsByRoute);
+}
+
+/** @internal 测试用 */
+export function resetShadowStatsForTest(): void {
+  statsByRoute.clear();
+}
+
+function statsFor(route: string): ShadowStats {
+  let s = statsByRoute.get(route);
+  if (!s) {
+    s = { match: 0, mismatch: 0, error: 0, lastMismatchDetail: null };
+    statsByRoute.set(route, s);
+  }
+  return s;
+}
+
+/** 数值容差比较（DuckDB 浮点聚合在不同执行计划下的求和顺序差异） */
+const NUMERIC_TOLERANCE = 1e-9;
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return a == null && b == null;
+  const na = Number(a);
+  const nb = Number(b);
+  if (!Number.isNaN(na) && !Number.isNaN(nb)) {
+    const scale = Math.max(1, Math.abs(na), Math.abs(nb));
+    return Math.abs(na - nb) / scale < NUMERIC_TOLERANCE;
+  }
+  return String(a) === String(b);
+}
+
+/**
+ * 比对两个结果集（行序应一致：两条 SQL 同 ORDER BY）。
+ * 返回 null 表示一致，否则返回首个差异描述。
+ */
+export function diffRows(
+  legacyRows: Array<Record<string, unknown>>,
+  cubeRows: Array<Record<string, unknown>>
+): string | null {
+  if (legacyRows.length !== cubeRows.length) {
+    return `行数不一致: legacy=${legacyRows.length} cube=${cubeRows.length}`;
+  }
+  for (let i = 0; i < legacyRows.length; i++) {
+    const a = legacyRows[i];
+    const b = cubeRows[i];
+    for (const key of Object.keys(a)) {
+      if (!valuesEqual(a[key], b[key])) {
+        return `行 ${i} 字段 ${key}: legacy=${String(a[key])} cube=${String(b[key])}`;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * 后台影子对账（fire-and-forget，不影响请求时延与结果）。
+ * @param route       - 路由标识（统计分组）
+ * @param legacyRows  - 已返回给前端的原路径结果
+ * @param runCubeQuery - 立方体查询执行闭包
+ */
+export function runShadowCompare(
+  route: string,
+  legacyRows: Array<Record<string, unknown>>,
+  runCubeQuery: () => Promise<Array<Record<string, unknown>>>
+): void {
+  void runCubeQuery()
+    .then((cubeRows) => {
+      const s = statsFor(route);
+      const diff = diffRows(legacyRows, cubeRows);
+      if (diff === null) {
+        s.match++;
+      } else {
+        s.mismatch++;
+        s.lastMismatchDetail = diff;
+        console.error(`[CubeShadow] ❌ MISMATCH route=${route}: ${diff}`);
+      }
+      // 周期性输出累计（每 50 次比对一行，避免刷屏）
+      if ((s.match + s.mismatch) % 50 === 1) {
+        console.log(`[CubeShadow] route=${route} match=${s.match} mismatch=${s.mismatch} error=${s.error}`);
+      }
+    })
+    .catch((err: unknown) => {
+      const s = statsFor(route);
+      s.error++;
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[CubeShadow] 影子查询执行失败 route=${route}: ${message}`);
+    });
+}
