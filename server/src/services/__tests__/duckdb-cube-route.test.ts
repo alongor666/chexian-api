@@ -22,8 +22,8 @@ let baseUrl: string;
 
 /** 运行时改写 env 注册表（dbEnv 在 import 时定值，测试用例间需切换开关） */
 const setFlags = (routing: boolean, shadow: boolean) => {
-  (dbEnv as Record<string, string>).CUBE_ROUTING_ENABLED = String(routing);
-  (dbEnv as Record<string, string>).CUBE_SHADOW_COMPARE = String(shadow);
+  (dbEnv as unknown as Record<string, string>).CUBE_ROUTING_ENABLED = String(routing);
+  (dbEnv as unknown as Record<string, string>).CUBE_SHADOW_COMPARE = String(shadow);
 };
 
 const getTrend = async (params: Record<string, string>) => {
