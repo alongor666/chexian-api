@@ -29,14 +29,84 @@ const buildAchievementCacheWhere = (options: KpiQueryOptions = {}): string => {
   return `WHERE ${conditions.join(' AND ')}`;
 };
 
+/**
+ * 单行 KPI SQL 生成器。
+ * @param excludeVariableCost  立方体路由专用开关：跳过 variable_cost CTE 与 SELECT
+ *   的 cost 三列（variable_cost_ratio / earned_claim_ratio / expense_ratio），
+ *   由 handler 并行的成本立方体单行 SQL 提供后 merge。默认 false 行为完全不变。
+ *   见 sql/cube/kpi-cost-cube.ts 与 routes/query/kpi.ts 的 tryKpiCostCube。
+ */
 export const generateKpiQuery = (
   whereClause: string = '1=1',
   options: KpiQueryOptions = {},
   baseWhereClause?: string,
-  dateField: string = 'policy_date'
+  dateField: string = 'policy_date',
+  excludeVariableCost: boolean = false
 ) => {
   const achievementCacheWhere = buildAchievementCacheWhere(options);
   const finalBaseWhereClause = baseWhereClause ?? whereClause;
+  // 立方体路由模式下，cost 三项由 generateKpiCostCubeQuery 单行提供。
+  // 主 SQL 完全跳过 variable_cost_base CTE（260 万行去重 + JOIN ClaimsAgg 的 P95 大头）
+  // 与 SELECT 的 vc.* 三列、CROSS JOIN vc —— 这才是 KPI 接立方体的真实加速来源。
+  const variableCostCte = excludeVariableCost ? '' : `,
+    -- B252：filtered_dedup 按 (policy_no, insurance_start_date) 聚合去重，
+    -- 防止 variable_cost_base JOIN ClaimsAgg 后因 PolicyFact 原单+批改多行导致赔款虚增
+    filtered_dedup AS (
+      SELECT
+        policy_no,
+        insurance_start_date,
+        SUM(premium) AS premium,
+        SUM(COALESCE(fee_amount, 0)) AS fee_amount
+      FROM filtered
+      WHERE insurance_start_date IS NOT NULL
+      GROUP BY policy_no, insurance_start_date
+      HAVING SUM(premium) > 0
+    ),
+    variable_cost_base AS (
+      SELECT
+        f.premium,
+        COALESCE(ca.reported_claims, 0) AS reported_claims,
+        f.fee_amount,
+        DATEDIFF(
+          'day',
+          f.insurance_start_date,
+          f.insurance_start_date + INTERVAL 1 YEAR
+        ) AS policy_term,
+        -- earned_days +1：含起保当天（与 cost-ratios.ts / sql-builder.ts 口径统一）
+        LEAST(
+          GREATEST(
+            DATEDIFF('day', f.insurance_start_date, lc.latest_policy_date) + 1,
+            0
+          ),
+          DATEDIFF(
+            'day',
+            f.insurance_start_date,
+            f.insurance_start_date + INTERVAL 1 YEAR
+          )
+        ) AS earned_days
+      FROM filtered_dedup f
+      CROSS JOIN latest_context lc
+      LEFT JOIN ClaimsAgg ca ON f.policy_no = ca.policy_no
+    ),
+    variable_cost AS (
+      SELECT
+        -- B305：变动成本率公式收归指标注册表（唯一事实源），消除此处硬编码 CASE WHEN。
+        -- variable_cost_base CTE 已暴露注册表 requiredColumns（premium/reported_claims/
+        -- fee_amount/earned_days/policy_term），registry expression 可直接内联。
+        ${getMetricSql('variable_cost_ratio')},
+        -- B(40f3ff)：同源拆出满期赔付率 + 费用率分项（变动成本率 = 二者之和，口径见
+        -- 注册表 variable_cost_ratio.formula）。供 dashboard 变动成本率卡片真实分段，
+        -- 替代前端 kpiCardProps.ts 的 ×0.69 假估算。
+        ${getMetricSql('earned_claim_ratio')},
+        ${getMetricSql('expense_ratio')}
+      FROM variable_cost_base
+    )`;
+  const variableCostSelect = excludeVariableCost ? '' : `
+      vc.variable_cost_ratio AS variable_cost_ratio,
+      vc.earned_claim_ratio AS earned_claim_ratio,
+      vc.expense_ratio AS expense_ratio,`;
+  const variableCostJoin = excludeVariableCost ? '' : `
+    CROSS JOIN variable_cost vc`;
 
   return `
     WITH filtered AS (
@@ -58,7 +128,11 @@ export const generateKpiQuery = (
         tonnage_segment,
         is_commercial_insure,
         CAST(insurance_start_date AS DATE) AS insurance_start_date,
-        renewal_policy_no
+        renewal_policy_no,
+        -- 2026-06-12 件数口径修复后 transfer_rate/renewal_rate 注册表 v2.0.0
+        -- 表达式引用 endorsement_no（"剔除批改 + policy_key 去重"）；本 CTE 漏 SELECT
+        -- 会让 focus_metrics binder 失败，补齐与下游表达式 requiredColumns 对齐
+        endorsement_no
       FROM PolicyFact
       WHERE ${whereClause}
     ),
@@ -203,59 +277,7 @@ export const generateKpiQuery = (
         ) AS driver_prev_full_premium
       FROM filtered_base f
       CROSS JOIN latest_context lc
-    ),
-    -- B252：filtered_dedup 按 (policy_no, insurance_start_date) 聚合去重，
-    -- 防止 variable_cost_base JOIN ClaimsAgg 后因 PolicyFact 原单+批改多行导致赔款虚增
-    filtered_dedup AS (
-      SELECT
-        policy_no,
-        insurance_start_date,
-        SUM(premium) AS premium,
-        SUM(COALESCE(fee_amount, 0)) AS fee_amount
-      FROM filtered
-      WHERE insurance_start_date IS NOT NULL
-      GROUP BY policy_no, insurance_start_date
-      HAVING SUM(premium) > 0
-    ),
-    variable_cost_base AS (
-      SELECT
-        f.premium,
-        COALESCE(ca.reported_claims, 0) AS reported_claims,
-        f.fee_amount,
-        DATEDIFF(
-          'day',
-          f.insurance_start_date,
-          f.insurance_start_date + INTERVAL 1 YEAR
-        ) AS policy_term,
-        -- earned_days +1：含起保当天（与 cost-ratios.ts / sql-builder.ts 口径统一）
-        LEAST(
-          GREATEST(
-            DATEDIFF('day', f.insurance_start_date, lc.latest_policy_date) + 1,
-            0
-          ),
-          DATEDIFF(
-            'day',
-            f.insurance_start_date,
-            f.insurance_start_date + INTERVAL 1 YEAR
-          )
-        ) AS earned_days
-      FROM filtered_dedup f
-      CROSS JOIN latest_context lc
-      LEFT JOIN ClaimsAgg ca ON f.policy_no = ca.policy_no
-    ),
-    variable_cost AS (
-      SELECT
-        -- B305：变动成本率公式收归指标注册表（唯一事实源），消除此处硬编码 CASE WHEN。
-        -- variable_cost_base CTE 已暴露注册表 requiredColumns（premium/reported_claims/
-        -- fee_amount/earned_days/policy_term），registry expression 可直接内联。
-        ${getMetricSql('variable_cost_ratio')},
-        -- B(40f3ff)：同源拆出满期赔付率 + 费用率分项（变动成本率 = 二者之和，口径见
-        -- 注册表 variable_cost_ratio.formula）。供 dashboard 变动成本率卡片真实分段，
-        -- 替代前端 kpiCardProps.ts 的 ×0.69 假估算。
-        ${getMetricSql('earned_claim_ratio')},
-        ${getMetricSql('expense_ratio')}
-      FROM variable_cost_base
-    ),
+    )${variableCostCte},
     vehicle_plan AS (
       SELECT
         COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
@@ -285,9 +307,7 @@ export const generateKpiQuery = (
         THEN (bp.vehicle_ytd_premium - bp.vehicle_prev_ytd_premium) / bp.vehicle_prev_ytd_premium
         ELSE NULL
       END AS vehicle_growth_rate,
-      vc.variable_cost_ratio AS variable_cost_ratio,
-      vc.earned_claim_ratio AS earned_claim_ratio,
-      vc.expense_ratio AS expense_ratio,
+${variableCostSelect}
       fm.bundle_renewal_rate AS bundle_renewal_rate,
       bp.driver_ytd_premium AS driver_premium,
       CASE
@@ -320,8 +340,7 @@ export const generateKpiQuery = (
     CROSS JOIN focus_metrics fm
     CROSS JOIN base_periods bp
     CROSS JOIN vehicle_plan vpl
-    CROSS JOIN driver_plan dpl
-    CROSS JOIN variable_cost vc
+    CROSS JOIN driver_plan dpl${variableCostJoin}
   `;
 };
 
