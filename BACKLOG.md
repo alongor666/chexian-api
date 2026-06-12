@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（69 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（68 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -32,7 +32,7 @@
 - 2026-06-11-claude-90a92c `IN_PROGRESS` — 通用可加性立方体查询加速
 - 2026-06-11-claude-942414 — 行级权限(RLS)整域绕过
 
-**P2（37 项）**
+**P2（36 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -62,7 +62,6 @@
 - 2026-06-11-claude-3093a3 — 重复组件收拢（全站重复审计 主题②）
 - 2026-06-11-claude-3ab3e3 — 增长分析面板请求竞态旧响应覆盖新数据
 - 2026-06-11-claude-537e28 — [口径裁决]claims-detail 频度同比分子分母 cohort 错配
-- 2026-06-11-claude-89a352 — E2E 纳入 CI 守护
 - 2026-06-11-claude-9ba379 — claims 源文件拼接顺序使遗留清单覆盖最新全量
 - 2026-06-11-claude-a8d3df — [口径裁决]performance 负基数同比符号反转
 - 2026-06-11-claude-e9a906 — [口径裁决]地理跨区 sentinel 反转
@@ -159,7 +158,6 @@
 | 2026-06-11-claude-7a2849 | 2026-06-11 | Bugfix/Backend | @claude | 同比/YTD 查询产生重复期间行 + 虚假 -100% 增长（DuckDB 实证）：yoy.ts/ytd.ts 用 FULL OUTER JOIN ON c.tp=DATE_ADD(p.tp,1year)，t+1 年无数据期间 p 侧 unmatch 输出 current=0/growth=-100% 幽灵行；weekly 视图 DATE_TRUNC('week')+1年不再周一对齐致整列 NULL/-100%。 | P1 | PROPOSED | N/A | server/src/sql/growth/yoy.ts,server/src/sql/growth/ytd.ts,server/src/routes/query/growth.ts |  |
 | 2026-06-11-claude-7dca99 | 2026-06-11 | Refactor/Frontend | @claude | StableContext/ExportContext value 未 memoize：StableContext.tsx:181、ExportContext.tsx:45 每次 Provider 渲染创建新 value 对象，使拆分稳定状态避免重渲染的设计落空，48 个 useGlobalFilters 消费者随上游渲染重渲染。 | P3 | PROPOSED | N/A | src/shared/contexts/StableContext.tsx,src/shared/export/ExportContext.tsx |  |
 | 2026-06-11-claude-84ea3a | 2026-06-11 | Chore/Hygiene | @claude | cleanup-reports 按 mtime 而非文件名日期保留最新：cleanup-reports.mjs:122 业务组内 sort((a,b)=>b.mtime-a.mtime) 保 mtime 最新，文件名自带日期前缀，若有人补生成/触碰旧日期报告(mtime 变新)，--apply 会删掉日期更新的保留旧日期的。sync-vps 每次同步前自动带 --apply 无人工确认。 | P3 | PROPOSED | N/A | scripts/cleanup-reports.mjs |  |
-| 2026-06-11-claude-89a352 | 2026-06-11 | Testing/CI | @claude | E2E 纳入 CI 守护：为 Playwright E2E 配一份 CI 可用的最小 Parquet 数据 fixture（含 policy/quotes_conversion/claims_detail 最小切片），使 skipWhenNoData 在 CI 不再合法跳过。背景：PR #583 修复 09-quote-conversion 长期假绿后，价值仅兑现在本地/发布前手动跑——CI 无数据时整套 E2E 静默跳过，quote-conversion 回归仍无 CI 防线。来源：PR #583 评审 N1（范围澄清），与 PR #580 harness 对标报告「生产 smoke 需数据」同一短板。注意 fixture 须过 Schema 契约且不含真实敏感数据。 | P2 | PROPOSED | N/A | tests/e2e；.github/workflows |  |
 | 2026-06-11-claude-90a92c | 2026-06-11 | 性能/Backend | @claude | **通用可加性立方体查询加速**：不依赖结果快照，立方体（签单日/起保日粒度 + 周月上卷）+ 指标可加性路由，任意参数组合查询降至毫秒级；基准原型 16 项等值校验通过，KPI 总览 276ms→7ms（39x），进程内月立方体 613µs（对照生产最坏冷路径≈16307x） | P1 | IN_PROGRESS | 开发文档/架构设计/通用立方体查询加速方案.md | scripts/perf/bench-universal-cube.mjs | 第一阶段试点落地：CubeTrendDay 物化（duckdb-cube.ts，新鲜度状态机规避 B311 竞态）+ /api/query/trend 双开关接线（CUBE_ROUTING_ENABLED / CUBE_SHADOW_COMPARE，默认关闭零行为变更）+ 影子对账（cube-shadow.ts）+ WHERE token 白名单可服务性判定 + SQL 改写器 fail-fast 断言。验证：25 单元 + 35 集成（30 数据级等值 + 路由三态 4 + 状态机 1）全过，typecheck/governance 绿 <br>第二批次落地：growth 路由（同比/环比/年累计/自定义/日对比上下文）接 CubeTrendDay，dual-metric（去重件数非可加）与业务员分组自动回退；WHERE token 白名单上提 servability.ts；趋势件数视角适配口径修复判定回退。37 单元 + 20 增长等值 + 全量 3008 单测全过 <br>第三批次完成：成本立方体 CubeCostDay（构建期 B252 去重+赔款一次归属+跨格保单探针，任意截止日满期重算）接线 /api/query/cost 四类成本分析；14 单元 + 31 数据级等值测试全过，双开关默认关闭零行为变更 <br>第四批次完成：KPI 路由 /api/query/kpi 接入 CubeCostDay（cost 三项立方体单行 + 主 SQL excludeVariableCost 并行 merge，结构性消除 P95 大头 variable_cost_base CTE）；顺手补 filtered CTE 漏 SELECT endorsement_no（metric registry v2.0.0 件数口径修复后未同步）。8 单元 + 6 KPI 路由级 e2e（含 26 列逐字段等值与影子对账）全过 <br>第五批次完成：业务员立方体 CubeSalesmanDay（行级可加无需探针）接线 /api/query/salesman-ranking 两类排名；7 单元 + 12 数据级等值全过，双开关默认关闭零行为变更 <br>第六批次（灰度启动+计划修订）：地理/报价立方体经取证取消（地理默认签单日窗100%回退、报价无压缩，用户拍板）；ecosystem.config.cjs 开 CUBE_SHADOW_COMPARE 影子对账，观测面挂 /health（cubes+cubeShadow）；报价视图物化待生产实测体量另立项 <br>新增立方体灰度哨兵 cube-grayscale-sentinel.mjs + workflow（每小时 cron 读 /health 的 cubes+cubeShadow，4 条确定性规则判定，CRITICAL→退出码 1+追踪 issue，WARN/INFO 静默记录）；产物 verdict.json+summary.md，artifact 保留 30 天 |
 | 2026-06-11-claude-942414 | 2026-06-11 | Security/Backend | @claude | 行级权限(RLS)整域绕过：customer-flow/quote-conversion/claims-detail(10+端点)/repair/premium-plan 多条路由链从不消费 req.permissionFilter，非超管/跨分公司账号可越权读全量。对照组 truck/policy-geo/trend/pivot/growth/performance 均走 parseFiltersAndBuildWhere(...,req.permissionFilter)，证明是遗漏。是否成事故取决于 allowedRoutes 策略，需按多分公司 Day-1 SOP 复核。 | P1 | PROPOSED | N/A | server/src/sql/customer-flow.ts,server/src/sql/quote-conversion.ts,server/src/routes/query/claims-detail.ts,server/src/routes/query/repair.ts,server/src/routes/query/premium-plan.ts |  |
 | 2026-06-11-claude-9ba379 | 2026-06-11 | 数据质量 | @claude | claims 源文件拼接顺序使遗留清单覆盖最新全量：daily.mjs:1091 [...newFiles,...legacyFiles]+convert_claims_detail.py:181 drop_duplicates(keep='last')，车险报立结案清单_*.xlsx 遗留旧快照排在新格式之后，同赔案号旧快照金额覆盖新全量。文件名无8位日期的遗留文件逃过自动归档守卫。 | P2 | PROPOSED | N/A | 数据管理/daily.mjs,数据管理/pipelines/convert_claims_detail.py |  |

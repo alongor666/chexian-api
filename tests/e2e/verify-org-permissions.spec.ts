@@ -115,7 +115,6 @@ test.describe('Permission Verification', () => {
     await loginAs(page, 'admin', process.env.E2E_PASSWORD ?? '');
     const adminResponse = await page.request.get(endpoint);
     expect(adminResponse.status()).toBe(200);
-    const adminSnapshot = adminResponse.headers()['x-snapshot'];
     const adminData = await adminResponse.json();
 
     // 清除 session，切换到 leshan
@@ -125,13 +124,12 @@ test.describe('Permission Verification', () => {
     await loginAs(page, 'leshan', process.env.E2E_ORG_PASSWORD ?? '');
     const leshanResponse = await page.request.get(endpoint);
     expect(leshanResponse.status()).toBe(200);
-    const leshanSnapshot = leshanResponse.headers()['x-snapshot'];
     const leshanData = await leshanResponse.json();
 
     // 3. 验证隔离
-    expect(adminSnapshot).toBe('hit');
-    expect(leshanSnapshot).toBe('hit');
-
+    // 注：原 x-snapshot=hit 断言指向从未实现的响应头契约（server 代码无此头，
+    // 该用例在 CI 接入 E2E 前从未真跑过），2026-06-12 移除幻影断言，
+    // 保留真实隔离契约：双方 200 + 数据互不相等（权限范围不同）。
     expect(adminData.success).toBe(true);
     expect(leshanData.success).toBe(true);
 

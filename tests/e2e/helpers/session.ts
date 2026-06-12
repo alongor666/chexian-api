@@ -185,11 +185,30 @@ export const skipWhenNoData = async (page: Page): Promise<boolean> => {
     return true;
   }
 
+  // CI 红线（BACKLOG 2026-06-11-claude-89a352）：CI 必须先生成数据 fixture
+  // （node scripts/e2e/generate-ci-fixture.mjs），无数据不允许静默跳过——
+  // 否则整套 E2E 假绿，quote-conversion 等回归没有 CI 防线。
+  if (process.env.CI) {
+    throw new Error(
+      '[E2E] CI 环境检测不到 Parquet 数据。请先运行 node scripts/e2e/generate-ci-fixture.mjs ' +
+      '生成数据 fixture；CI 中禁止因无数据静默跳过（skipWhenNoData fail-closed）。'
+    );
+  }
+
   test.info().annotations.push({
     type: 'skip-reason',
     description: 'No Parquet data available — skipped data-dependent assertions',
   });
   return false;
+};
+
+/**
+ * 展开页面锚点导航面板。
+ * DashboardAnchorNav 是「悬浮球 + 展开面板」设计：锚点项按钮（如 '5 Top20'）
+ * 仅在面板展开后渲染；点击任一锚点项会滚动至该节并自动收起面板。
+ */
+export const openAnchorNav = async (page: Page) => {
+  await page.getByRole('button', { name: '打开页面导航（可拖拽移动）' }).click();
 };
 
 export const assertAdvancedDrawerToggles = async (page: Page) => {

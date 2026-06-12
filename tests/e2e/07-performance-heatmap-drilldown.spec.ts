@@ -30,11 +30,11 @@ test('performance 热力图支持从单元格进入下钻并继续下钻', async
   const latestCellButton = interactiveHeatmapRow.locator('button').last();
   await latestCellButton.click();
 
-  const selectedCard = page.locator('section').filter({ hasText: '已选择：' }).first();
-  await expect(selectedCard).toContainText(selectedOrg, { timeout: 10000 });
-
+  // 点击单元格直接弹出下钻对话框（旧版「已选择：」卡片已随 UI 改版移除），
+  // 对话框标题「热力图下钻：<机构>（<日期>）」即选中状态的真实契约
   const heatmapDrillDialog = page.locator('div.fixed.inset-0').filter({ hasText: '热力图下钻：' }).last();
   await expect(heatmapDrillDialog).toBeVisible({ timeout: 10000 });
+  await expect(heatmapDrillDialog).toContainText(selectedOrg);
   await heatmapDrillDialog.getByRole('button', { name: '业务员', exact: true }).click();
   await expect(heatmapDrillDialog).not.toBeVisible({ timeout: 5000 });
 
