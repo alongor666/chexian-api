@@ -8,29 +8,33 @@
 
 ## 1. 技术栈核心依赖（CRITICAL）
 
+> **版本以 `package.json` / `server/package.json` 为唯一事实来源**。下方清单仅列关键库与约束；实际版本号以锁文件为准，此处不重复维护具体数字。
+
 ### 1.1 前端技术栈
 ```
-React 19.2.4          - UI 框架
-TypeScript 5.9.3      - 类型系统
-Vite 5.4.21           - 构建工具
-Tailwind CSS 3.4.19   - 样式框架
-ECharts 5.6.0         - 图表库
-Vitest 2.1.9          - 单元测试
+React          - UI 框架（当前 19.x）
+TypeScript     - 类型系统（当前 5.x）
+Vite           - 构建工具（当前 5.x，P2 技术债待升级）
+Tailwind CSS   - 样式框架（当前 3.x，设计系统绑定 3.x 写法）
+ECharts        - 图表库（当前 5.x）
+Vitest         - 单元测试（当前 3.x，≥3.2.6 修复严重级通告）
 ```
 
 **包管理器**：Bun（禁止使用 npm/yarn/pnpm）
 
 ### 1.2 后端技术栈
 ```
-Express 4.18.2        - Web 框架
-@duckdb/node-api 1.4.4-r.1 - DuckDB native SQL 引擎（非 WASM）
-Apache Arrow 17.0.0   - 内存数据格式
-jsonwebtoken 9.0.2    - JWT 认证
-bcrypt 5.1.1          - 密码哈希
-Helmet 7.1.0          - HTTP 安全头
-Zod 4.0.0             - 输入校验
-TypeScript 5.9.3      - 类型系统
-tsx 4.7.0             - 开发热重载
+Express        - Web 框架（当前 4.22.x，≥4.22.2 修复高危路由解析）
+@duckdb/node-api - DuckDB native SQL 引擎（非 WASM，受小版本兼容红线约束，见 CLAUDE.md §5）
+jsonwebtoken   - JWT 认证
+bcrypt         - 密码哈希（原生模块，post-checkout 自愈链路）
+Helmet         - HTTP 安全头
+Zod            - 输入校验（当前 4.x，前后端同版）
+TypeScript     - 类型系统
+tsx            - 开发热重载
+multer         - 文件上传（当前 2.x，使用点：server/src/routes/data.ts）
+better-sqlite3 - PAT 持久化存储
+lru-cache      - 路由缓存（LRU 内存层）
 ```
 
 **关键约束**：
@@ -62,7 +66,7 @@ tsx 4.7.0             - 开发热重载
 | **列名映射** | `server/src/normalize/mapping.ts` | 列名别名规则（不可删除已有映射） |
 | **KPI 计算** | `server/src/sql/kpi.ts` | 指标口径定义（不可修改已有模板） |
 | **API 路由** | `server/src/routes/*.ts` | 后端 API 端点定义（不可删除已有路由） |
-| **API 客户端** | `src/shared/api/client.ts`（+ `client-core.ts` 传输内核 + 10 个 `*-api.ts` 命名空间子客户端） | 前端所有后端请求的统一入口 `apiClient`；按域细分 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow}.*` |
+| **API 客户端** | `src/shared/api/client.ts`（+ `client-core.ts` 传输内核 + 13 个 `*-api.ts` 命名空间子客户端） | 前端所有后端请求的统一入口 `apiClient`；按域细分 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow,premium,geo,patrol}.*` |
 | **React 组件** | `src/features/INDEX.md` | 组件职责边界 |
 | **图表配置** | `src/widgets/charts/README.md` | ECharts 配置规范 |
 
@@ -272,53 +276,9 @@ bun run test
 
 ## 7. 后端关键目录结构
 
-```
-server/
-├── src/
-│   ├── app.ts                     # Express 应用入口
-│   ├── config/
-│   │   ├── auth.ts                # JWT 配置
-│   │   ├── cors.ts                # CORS 配置
-│   │   ├── database.ts            # DuckDB 配置
-│   │   ├── paths.ts               # 文件路径配置
-│   │   ├── organizations.ts       # 机构配置
-│   │   └── coefficient-thresholds.ts  # 系数阈值配置
-│   ├── middleware/
-│   │   ├── auth.ts                # JWT 认证中间件
-│   │   ├── permission.ts          # 权限校验中间件
-│   │   └── error.ts               # 错误处理中间件
-│   ├── routes/
-│   │   ├── query.ts               # 查询 API（KPI/趋势/排名/自定义）
-│   │   ├── data.ts                # 数据管理 API（文件上传/加载）
-│   │   ├── auth.ts                # 认证 API（登录/注册/刷新）
-│   │   ├── filters.ts             # 筛选项 API
-│   │   └── ai.ts                  # AI 助手 API（NL2SQL）
-│   ├── services/
-│   │   ├── duckdb.ts              # DuckDB 服务（单例，连接池）
-│   │   ├── auth.ts                # 认证服务
-│   │   ├── permission.ts          # 权限服务
-│   │   ├── column-normalizer.ts   # 列名标准化服务
-│   │   └── zhipu.ts               # 智谱 AI 服务
-│   ├── sql/
-│   │   ├── kpi.ts                 # KPI 查询模板
-│   │   ├── kpi-detail.ts          # KPI 详情查询
-│   │   ├── trend.ts               # 趋势查询模板
-│   │   ├── salesman-ranking.ts    # 业务员排名查询
-│   │   ├── growth.ts              # 增长率查询
-│   │   ├── coefficient.ts         # 系数查询
-│   │   ├── cost.ts                # 成本分析查询
-│   │   ├── renewal.ts             # 续保分析查询
-│   │   ├── renewal-drilldown.ts   # 续保下钻查询
-│   │   ├── truck.ts               # 货车专项查询
-│   │   ├── premiumPlan.ts         # 保费计划查询
-│   │   └── perspective-adapter.ts # 视角适配器
-│   ├── normalize/
-│   │   ├── mapping.ts             # 列名别名映射
-│   │   └── validator.ts           # 数据校验器
-│   ├── types/                     # 类型定义
-│   └── utils/                     # 工具函数
-└── package.json
-```
+> **以 [`开发文档/00_index/CODE_INDEX.md`](./00_index/CODE_INDEX.md) 为唯一事实来源**，此处不再维护文件级清单（维护滞后会误导导航）。
+>
+> 实际规模参考：`server/src/sql/` 含 83 个 .ts 文件（31 顶层 + 子目录拆分），`server/src/routes/query/` 下 25 个子路由文件，`server/src/config/` 含 metric-registry、field-registry、route-param-contracts、preset-users 等核心注册表。导航请用 CODE_INDEX.md。
 
 ---
 
