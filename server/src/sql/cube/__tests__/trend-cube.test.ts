@@ -60,6 +60,11 @@ describe('isTrendCubeServable（WHERE token 白名单）', () => {
     expect(isTrendCubeServable('1=1', 'insurance_start_date').servable).toBe(false);
   });
 
+  it('件数视角回退（2026-06-12 口径修复后为 COUNT(DISTINCT policy_no)，去重计数非可加）', () => {
+    expect(isTrendCubeServable('1=1', 'policy_date', 'policy_count').servable).toBe(false);
+    expect(isTrendCubeServable('1=1', 'policy_date', 'premium').servable).toBe(true);
+  });
+
   it('引号内的任意值不影响判定（值剥离后再扫 token）', () => {
     expect(isTrendCubeServable("org_level_3 = 'salesman_name 假装是列名'", 'policy_date').servable).toBe(true);
   });
@@ -77,12 +82,9 @@ describe('rewriteTrendSqlForCube', () => {
     expect(cube).not.toMatch(/\bTHEN premium\b/);
   });
 
-  it.each(TIME_VIEWS)('件数视角 %s：COUNT 全部替换为 SUM(row_cnt)', (tv) => {
+  it.each(TIME_VIEWS)('件数视角 %s：含去重计数（非可加），改写器 fail-fast 抛错', (tv) => {
     const legacy = generatePremiumTrendQuery(tv, '1=1', 'policy_date', 'policy_count', 'org_level_3');
-    const cube = rewriteTrendSqlForCube(legacy);
-    expect(cube).toContain('SUM(row_cnt)');
-    expect(cube).toContain('THEN row_cnt ELSE 0 END)');
-    expect(cube).not.toMatch(/\bCOUNT\(/);
+    expect(() => rewriteTrendSqlForCube(legacy)).toThrow(/非可加计数|改写断言失败/);
   });
 
   it('模板漂移 fail-fast：意外 SQL 形态抛错而非静默产出', () => {

@@ -57,7 +57,7 @@ router.get(
     const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
     const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
     if (cubeRouting || cubeShadow) {
-      const servability = isTrendCubeServable(whereClause, dateField);
+      const servability = isTrendCubeServable(whereClause, dateField, perspective);
       if (servability.servable && ensureTrendCubeFresh(duckdbService) === 'ready') {
         const cubeSql = generatePremiumTrendCubeQuery(
           timeView as TimeView, whereClause, dateField, perspective, groupDim

@@ -101,11 +101,19 @@ export interface TrendCubeServability {
  * 判定一次趋势请求能否由立方体精确回答。
  * @param whereClause - 最终 WHERE 子句（已含权限过滤）
  * @param dateField   - 请求的时间口径字段
+ * @param perspective - 视角：仅保费视角可加。件数视角自 2026-06-12 口径修复
+ *   （COUNT(*) → COUNT(DISTINCT policy_no)，去批改多行虚增）后为**去重计数 =
+ *   非可加指标**——批改行可能落在不同日期/维度单元，预聚合后再求和会重复计数，
+ *   按设计文档 §2.3 指标可加性路由规则回退原路径。
  */
 export function isTrendCubeServable(
   whereClause: string,
-  dateField: string
+  dateField: string,
+  perspective: string = 'premium'
 ): TrendCubeServability {
+  if (perspective !== 'premium') {
+    return { servable: false, reason: `perspective=${perspective}（去重件数为非可加指标，走原路径）` };
+  }
   // 立方体时间粒度 = 签单日；insurance_start_date 口径只有月粒度 → 回退
   if (dateField !== 'policy_date') {
     return { servable: false, reason: `dateField=${dateField}（立方体仅支持 policy_date 日粒度）` };
@@ -126,15 +134,16 @@ export function isTrendCubeServable(
 
 /**
  * 把原趋势 SQL（FROM PolicyFact，行级度量）改写为立方体版本（FROM CubeTrendDay，
- * 预聚合度量）。只做四类机械替换，且对每类替换的出现次数做断言 ——
+ * 预聚合度量）。只做三类机械替换，且对每类替换的出现次数做断言 ——
  * premium-trend.ts 模板演进导致模式对不上时立刻抛错（fail-fast），
  * 绝不静默产出口径错误的 SQL。
+ *
+ * 仅支持保费视角（件数视角为去重计数 = 非可加，由 isTrendCubeServable 拦截；
+ * 本函数对任何 COUNT 出现都直接抛错兜底）。
  *
  * 等价性依据（与原模板逐段对照）：
  *   SUM(premium)                  → SUM(premium_sum)      可加，分组重聚合
  *   SUM(CASE..THEN premium..)     → SUM(CASE..THEN premium_sum..)
- *   COUNT(*)                      → SUM(row_cnt)          行数可加
- *   COUNT(CASE..THEN 1 END)       → SUM(CASE..THEN row_cnt ELSE 0 END)
  * 时间/分组表达式（policy_date 函数、org_level_3、月锚窗口函数）原样保留 ——
  * 它们只引用立方体粒度列，对预聚合行与原始行同义。
  */
@@ -159,15 +168,11 @@ export function rewriteTrendSqlForCube(sql: string): string {
   let out = sql;
   // 数据源（恰好 1 处）
   out = replaceCounted(out, /\bFROM PolicyFact\b/g, `FROM ${TREND_CUBE_TABLE}`, { min: 1, max: 1 }, 'FROM PolicyFact');
-  // COUNT(CASE ... THEN 1 END) → SUM(CASE ... THEN row_cnt ELSE 0 END)
-  // （仅件数视角出现，0 或 2 处；必须先于 COUNT(*) / THEN 1 的其他处理）
-  out = replaceCounted(out, /\bCOUNT\(CASE\b/g, 'SUM(CASE', { min: 0, max: 2 }, 'COUNT(CASE');
-  out = replaceCounted(out, /\bTHEN 1\s+END\)/g, 'THEN row_cnt ELSE 0 END)', { min: 0, max: 2 }, 'THEN 1 END)');
-  // COUNT(*) → SUM(row_cnt)（件数视角恰好 1 处的总量聚合）
-  out = replaceCounted(out, /\bCOUNT\(\*\)/g, 'SUM(row_cnt)', { min: 0, max: 1 }, 'COUNT(*)');
-  // 行级保费 → 预聚合保费（保费视角 1-3 处：总量 + 锚定月分子分母）
-  out = replaceCounted(out, /\bSUM\(premium\)/g, 'SUM(premium_sum)', { min: 0, max: 1 }, 'SUM(premium)');
-  out = replaceCounted(out, /\bTHEN premium\b/g, 'THEN premium_sum', { min: 0, max: 2 }, 'THEN premium');
+  // 任何 COUNT（含 2026-06-12 口径修复后的 COUNT(DISTINCT policy_no)）= 非可加 → fail-fast
+  replaceCounted(out, /\bCOUNT\(/g, '', { min: 0, max: 0 }, 'COUNT(（非可加计数，立方体不支持）');
+  // 行级保费 → 预聚合保费（保费视角：总量 1 处 + 锚定月分子分母 2 处）
+  out = replaceCounted(out, /\bSUM\(premium\)/g, 'SUM(premium_sum)', { min: 1, max: 1 }, 'SUM(premium)');
+  out = replaceCounted(out, /\bTHEN premium\b/g, 'THEN premium_sum', { min: 2, max: 2 }, 'THEN premium');
 
   // 终态断言：改写后不得再出现行级度量/原表引用
   if (/\bPolicyFact\b/.test(out) || /\bTHEN premium\b/.test(out) || /\bSUM\(premium\)/.test(out) || /\bCOUNT\(/.test(out)) {

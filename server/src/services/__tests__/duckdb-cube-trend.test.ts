@@ -84,25 +84,27 @@ const WHERE_VARIANTS: Array<[string, string]> = [
   ['险类+新能源', "1=1 AND insurance_type = '交强险' AND is_nev = false"],
 ];
 
-describe('趋势立方体 数据级等值（立方体 = 原路径，逐行逐字段）', () => {
+describe('趋势立方体 数据级等值（保费视角：立方体 = 原路径，逐行逐字段）', () => {
   for (const tv of TIME_VIEWS) {
-    for (const perspective of ['premium', 'policy_count'] as const) {
-      for (const [label, where] of WHERE_VARIANTS) {
-        it(`${tv} × ${perspective} × ${label}`, async () => {
-          expect(isTrendCubeServable(where, 'policy_date').servable).toBe(true);
-          const groupDim = label === '机构多选' ? 'org_level_3' : "'全部'";
-          const legacySql = generatePremiumTrendQuery(tv, where, 'policy_date', perspective, groupDim);
-          const cubeSql = generatePremiumTrendCubeQuery(tv, where, 'policy_date', perspective, groupDim);
-          const [legacyRows, cubeRows] = await Promise.all([
-            db.query(legacySql),
-            db.query(cubeSql),
-          ]);
-          expect(legacyRows.length).toBeGreaterThan(0);
-          expect(diffRows(legacyRows, cubeRows)).toBeNull();
-        });
-      }
+    for (const [label, where] of WHERE_VARIANTS) {
+      it(`${tv} × premium × ${label}`, async () => {
+        expect(isTrendCubeServable(where, 'policy_date', 'premium').servable).toBe(true);
+        const groupDim = label === '机构多选' ? 'org_level_3' : "'全部'";
+        const legacySql = generatePremiumTrendQuery(tv, where, 'policy_date', 'premium', groupDim);
+        const cubeSql = generatePremiumTrendCubeQuery(tv, where, 'policy_date', 'premium', groupDim);
+        const [legacyRows, cubeRows] = await Promise.all([
+          db.query(legacySql),
+          db.query(cubeSql),
+        ]);
+        expect(legacyRows.length).toBeGreaterThan(0);
+        expect(diffRows(legacyRows, cubeRows)).toBeNull();
+      });
     }
   }
+
+  it('件数视角（去重计数非可加）判定为不可服务，回退原路径', () => {
+    expect(isTrendCubeServable('1=1', 'policy_date', 'policy_count').servable).toBe(false);
+  });
 });
 
 describe('趋势立方体 新鲜度状态机（结构性规避 B311 竞态）', () => {

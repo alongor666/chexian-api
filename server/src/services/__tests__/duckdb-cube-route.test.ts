@@ -133,6 +133,18 @@ describe('/api/query/trend 立方体三态行为', () => {
     spy.mockRestore();
   });
 
+  it('② 件数视角（去重计数非可加）自动回退原路径', async () => {
+    setFlags(true, false);
+    const spy = vi.spyOn(duckdbService, 'query');
+    const { status, body } = await getTrend({ granularity: 'month', perspective: 'policy_count', endDate: '2026-05-06' });
+    expect(status).toBe(200);
+    expect(body.data.length).toBeGreaterThan(0);
+    const sqls = spy.mock.calls.map(([sql]) => sql);
+    expect(sqls.some((s) => /FROM PolicyFact/.test(s))).toBe(true);
+    expect(sqls.some((s) => /FROM CubeTrendDay/.test(s))).toBe(false);
+    spy.mockRestore();
+  });
+
   it('③ 影子对账：对外返回原路径结果，后台比对计 match 且零 mismatch', async () => {
     setFlags(false, true);
     const { status, body } = await getTrend({ granularity: 'week', endDate: '2026-05-05' });
