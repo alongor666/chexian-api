@@ -11,9 +11,16 @@
 import { existsSync, readdirSync } from 'fs';
 
 export function parseDateRangeFromFilename(filename) {
-  const match = filename.match(/_(\d{8})_(\d{8})\.parquet$/);
-  if (!match) return null;
-  return { start: parseInt(match[1], 10), end: parseInt(match[2], 10) };
+  if (!filename.endsWith('.parquet')) return null;
+  // 旧后缀式：*_YYYYMMDD_YYYYMMDD.parquet（每日数据_*/01_签单清单_* 遗留命名）
+  const legacy = filename.match(/_(\d{8})_(\d{8})\.parquet$/);
+  if (legacy) return { start: parseInt(legacy[1], 10), end: parseInt(legacy[2], 10) };
+  // 新前缀式（2026-06-10 上游重构）：YYYYMMDD-YYYYMMDD_01_签单清单_定稿.parquet
+  // 日期对在头部、连字符分隔、后接业务名 — 原正则对此失明，跨命名代际的
+  // 时间重叠（保费翻倍事故原始形态）检测不到（daily.mjs/sync-vps/governance 三处共用）。
+  const prefixed = filename.match(/(?:^|_)(\d{8})-(\d{8})_/);
+  if (prefixed) return { start: parseInt(prefixed[1], 10), end: parseInt(prefixed[2], 10) };
+  return null;
 }
 
 export function isComplementaryPair(a, b) {
