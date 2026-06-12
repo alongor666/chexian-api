@@ -43,13 +43,15 @@ export function generateDualMetricComparisonQuery(
   const dimKeyExpr = groupBy.map((g) => `COALESCE(c.${g}, b.${g})`).join(" || ' - ' || ");
   const joinCond = groupBy.map((g) => `c.${g} = b.${g}`).join(' AND ');
 
-  // 注意：COUNT(*) 返回 BIGINT，件数增长率分子必须 CAST 为 DOUBLE，
+  // 注意：COUNT 返回 BIGINT，件数增长率分子必须 CAST 为 DOUBLE，
   // 否则 (BIGINT - BIGINT) / BIGINT 触发整数除法向下取整，丢失小数。
+  // 件数口径 COUNT(DISTINCT policy_no)：原 COUNT(*) 把批改多行各计一件（虚增约 4-5%），
+  // 对齐 truck.ts / cost-ratios.ts 全局件数口径。
   return `
     WITH baseline_data AS (
       SELECT
         SUM(premium) AS baseline_premium,
-        COUNT(*) AS baseline_count,
+        COUNT(DISTINCT policy_no) AS baseline_count,
         ${groupByList}
       FROM PolicyFact
       WHERE ${whereClause}
@@ -60,7 +62,7 @@ export function generateDualMetricComparisonQuery(
     current_data AS (
       SELECT
         SUM(premium) AS current_premium,
-        COUNT(*) AS current_count,
+        COUNT(DISTINCT policy_no) AS current_count,
         ${groupByList}
       FROM PolicyFact
       WHERE ${whereClause}

@@ -40,9 +40,10 @@ export function generatePremiumTrendQuery(
   const finalWhereClause = perspectiveConditions.join(' AND ');
 
   // V2.0: 生成视角聚合表达式（不带AS，稍后在SELECT中添加）
+  // 件数口径 COUNT(DISTINCT policy_no)（原 COUNT(*) 把批改多行各计一件，虚增约 4-5%），对齐 truck.ts/cost-ratios.ts
   const valueAggregation = perspective === 'premium'
     ? 'SUM(premium)'
-    : 'COUNT(*)';
+    : 'COUNT(DISTINCT policy_no)';
 
   let timeDimension: string;
   let monthKeyDimension: string;
