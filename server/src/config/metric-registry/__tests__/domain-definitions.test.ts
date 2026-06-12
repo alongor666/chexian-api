@@ -192,8 +192,9 @@ describe('整体推介率 (cross_sell_total_rate) 预聚合来源', () => {
     expect(m.sql.notes).toContain('CrossSellDailyAgg');
   });
 
-  it('formula.description 不含 "单交"', () => {
-    expect(m.formula.description).not.toContain('单交');
+  it('分子分母限定主全/交三（红线：分母不含纯交强/单交）', () => {
+    expect(m.sql.expression).toContain("coverage_combination IN ('主全', '交三')");
+    expect(m.sql.requiredColumns).toContain('coverage_combination');
   });
 
   it('requiredColumns 含 auto_count 和 driver_count', () => {

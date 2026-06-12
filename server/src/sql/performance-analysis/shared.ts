@@ -234,6 +234,10 @@ export function getPeriodExpressions(
     prevStart = `(${currentStart}) - INTERVAL 1 YEAR`;
     prevEnd = `(${currentEnd}) - INTERVAL 1 YEAR`;
   } else {
+    // mom like-for-like：current 是「周期初→ref_date」的部分周期，prev 必须截到
+    // 与本期相同的周期内天数（prevStart + 已过天数，上限完整上期末），否则
+    // 「3 天 vs 整月」会让周期初环比系统性深负。对齐 performance-heatmap 的截断语义。
+    const elapsedInterval = `INTERVAL 1 DAY * (ref_date - (${currentStart}))`;
     switch (timePeriod) {
       case 'day':
         prevStart = `(${currentStart}) - INTERVAL 1 DAY`;
@@ -241,15 +245,15 @@ export function getPeriodExpressions(
         break;
       case 'week':
         prevStart = `(${currentStart}) - INTERVAL 7 DAY`;
-        prevEnd = `(${currentStart}) - INTERVAL 1 DAY`;
+        prevEnd = `LEAST(((${currentStart}) - INTERVAL 7 DAY) + ${elapsedInterval}, (${currentStart}) - INTERVAL 1 DAY)`;
         break;
       case 'month':
         prevStart = `(${currentStart}) - INTERVAL 1 MONTH`;
-        prevEnd = `(${currentStart}) - INTERVAL 1 DAY`;
+        prevEnd = `LEAST(((${currentStart}) - INTERVAL 1 MONTH) + ${elapsedInterval}, (${currentStart}) - INTERVAL 1 DAY)`;
         break;
       case 'quarter':
         prevStart = `(${currentStart}) - INTERVAL 3 MONTH`;
-        prevEnd = `(${currentStart}) - INTERVAL 1 DAY`;
+        prevEnd = `LEAST(((${currentStart}) - INTERVAL 3 MONTH) + ${elapsedInterval}, (${currentStart}) - INTERVAL 1 DAY)`;
         break;
       default:
         prevStart = `(${currentStart}) - INTERVAL 1 YEAR`;

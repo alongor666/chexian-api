@@ -87,8 +87,8 @@ describe('cross-sell SQL 兼容交叉销售字段格式', () => {
 
     expect(sql).toContain("NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), '')");
     expect(sql).toContain("NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), '') AS raw_policy_no");
-    expect(sql).toContain('COUNT(DISTINCT dedup_key) AS auto_count');
-    expect(sql).toContain('COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count');
+    expect(sql).toContain("COUNT(DISTINCT CASE WHEN coverage_combination IN ('主全', '交三') THEN dedup_key END) AS auto_count");
+    expect(sql).toContain("COUNT(DISTINCT CASE WHEN is_cross_sell AND coverage_combination IN ('主全', '交三') THEN dedup_key END) AS driver_count");
     expect(sql).toContain('SUM(commercial_premium) AS commercial_premium');
     expect(sql).toContain('SUM(compulsory_premium) AS compulsory_premium');
     expect(sql).toContain("WHEN coverage_combination = '单交' THEN compulsory_premium");

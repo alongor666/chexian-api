@@ -15,6 +15,14 @@ import type { KpiDetailResult } from '../types/kpi.js';
 export type { KpiDetailResult } from '../types/kpi.js';
 
 /**
+ * 同城（成都地区）三级机构名单 — 同城/异地保费占比的判定依据。
+ * 异地 = 非同城兜底（原实现同城/异地各自硬编码白名单，新增机构两边都不计入，
+ * region 环形图分母静默缺失）。新设成都地区机构时需在此登记。
+ */
+export const SAME_CITY_ORGS = ['天府', '高新', '新都', '青羊', '武侯', '重客', '本部'] as const;
+const sameCityList = SAME_CITY_ORGS.map((o) => `'${o}'`).join(', ');
+
+/**
  * 生成 KPI 详细数据查询
  *
  * @param whereClause - WHERE 子句（默认 '1=1'）
@@ -81,9 +89,9 @@ export const generateKpiDetailQuery = (
       COUNT(CASE WHEN customer_category = '摩托车' THEN 1 END) as vehicle_motorcycle_count,
       COUNT(CASE WHEN customer_category NOT LIKE '%货车%' AND customer_category NOT LIKE '%客车%' AND customer_category != '非营业个人客车' AND customer_category != '摩托车' THEN 1 END) as vehicle_other_count,
 
-      -- 同城/异地占比（保费口径 - 基于机构归属）
-      SUM(CASE WHEN CAST(org_level_3 AS VARCHAR) IN ('天府', '高新', '新都', '青羊', '武侯', '重客', '本部') THEN premium ELSE 0 END) as same_city_premium,
-      SUM(CASE WHEN CAST(org_level_3 AS VARCHAR) IN ('宜宾', '德阳', '资阳', '泸州', '自贡', '乐山', '达州') THEN premium ELSE 0 END) as remote_premium
+      -- 同城/异地占比（保费口径 - 基于机构归属）；异地=非同城兜底，新机构自动归异地
+      SUM(CASE WHEN CAST(org_level_3 AS VARCHAR) IN (${sameCityList}) THEN premium ELSE 0 END) as same_city_premium,
+      SUM(CASE WHEN org_level_3 IS NOT NULL AND CAST(org_level_3 AS VARCHAR) NOT IN (${sameCityList}) THEN premium ELSE 0 END) as remote_premium
     FROM PolicyFact
     WHERE ${whereClause} ${scopeFilter}
   `;
