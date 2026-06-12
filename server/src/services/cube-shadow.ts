@@ -13,6 +13,17 @@ export interface ShadowStats {
   lastMismatchDetail: string | null;
 }
 
+/**
+ * 脱敏差异摘要：保留行号/字段名/值的"形状"（日期与短枚举可见），
+ * 业务数值打码 —— 供 /health 公开端点暴露做远程诊断（完整明细仍在 PM2 日志）。
+ */
+export function redactMismatchDetail(detail: string | null): string | null {
+  if (detail === null) return null;
+  // 把"长得像业务数值"的片段打码：含小数点或 ≥5 位的整数；
+  // 保留日期（YYYY-MM-DD 不匹配该模式因含连字符分隔后每段 ≤4 位）与行号/短计数
+  return detail.replace(/\d{5,}(\.\d+)?|\d+\.\d+/g, '#');
+}
+
 const statsByRoute = new Map<string, ShadowStats>();
 
 export function getShadowStats(): Record<string, ShadowStats> {

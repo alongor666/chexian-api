@@ -49,6 +49,16 @@ jobs:
             --api-base "$API_BASE" \
             --out-dir sentinel-out/cube-grayscale
 
+      # CRITICAL 时主步骤 exit 1，但 summary 必须可在 job 日志直接读到
+      # （artifact 在部分网络环境拿不到；日志走 GH API 永远可读）
+      - name: Print summary to log
+        if: always()
+        run: |
+          echo "===== cube-grayscale summary.md ====="
+          cat sentinel-out/cube-grayscale/summary.md 2>/dev/null || echo "(no summary)"
+          echo "===== verdict.json ====="
+          cat sentinel-out/cube-grayscale/verdict.json 2>/dev/null || echo "(no verdict)"
+
       - name: Upload run artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -59,7 +69,10 @@ jobs:
           retention-days: 30
 
       - name: Post anomaly to tracking issue
-        if: steps.run.outputs.has_anomalies == 'true'
+        # always()：CRITICAL 时主步骤 exit 1 整个 job 标记 failure，
+        # 默认 if 隐含 success() 会把本步骤跳过 —— 恰恰是最需要发 issue 的时刻。
+        # 首跑实战即踩中（4 次 CRITICAL 零 issue），加 always() 修复。
+        if: always() && steps.run.outputs.has_anomalies == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SUMMARY_PATH: ${{ steps.run.outputs.summary_path }}
