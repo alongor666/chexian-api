@@ -88,8 +88,10 @@ WITH policy_earned AS (
     CAST(insurance_start_date AS DATE) + INTERVAL 364 DAY AS end_date,
     -- 保险期限天数（闰年感知：365/366），用于时间分摊分母
     DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR) AS policy_term,
-    -- 费用率 F
-    CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
+    -- 费用率 F：premium <> 0 即按比例计算（负向批改行 fee/premium 同号得正费率，
+    -- 首日费用项 premium×F×α×I 随负保费正确冲销；原 premium>0 条件使负行 F=0，
+    -- 首日费用只计提从不冲销，全退保保单残留非零垃圾值 — 2026-06-12 用户裁决按比例冲销）
+    CASE WHEN premium <> 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
     -- 险类系数 α
     CASE insurance_type
       WHEN '交强险' THEN 0.82
@@ -165,8 +167,10 @@ WITH policy_earned AS (
     org_level_3,
     premium,
     COALESCE(fee_amount, 0) AS fee_amount,
-    -- 费用率 F
-    CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
+    -- 费用率 F：premium <> 0 即按比例计算（负向批改行 fee/premium 同号得正费率，
+    -- 首日费用项 premium×F×α×I 随负保费正确冲销；原 premium>0 条件使负行 F=0，
+    -- 首日费用只计提从不冲销，全退保保单残留非零垃圾值 — 2026-06-12 用户裁决按比例冲销）
+    CASE WHEN premium <> 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
     -- 险类系数 α
     CASE insurance_type
       WHEN '交强险' THEN 0.82

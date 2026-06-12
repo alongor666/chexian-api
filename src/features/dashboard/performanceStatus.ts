@@ -9,8 +9,11 @@ export type PerformanceQuadrant =
   | 'low_growth_low_achievement'
   | 'unknown';
 
+// 四象限分界与后端 performance-analysis/shared.ts 同源（注册表派生）：
+// 达成分界 = plan_completion_pct.thresholds.warn(100)，增长分界 = premium_growth_pct.thresholds.notice(10)。
+// 原 7% 为硬编码、不在任何注册表定义内（2026-06-12 用户裁决改为注册表值）。
 export const PERFORMANCE_ACHIEVEMENT_THRESHOLD = 100;
-export const PERFORMANCE_GROWTH_THRESHOLD = 7;
+export const PERFORMANCE_GROWTH_THRESHOLD = 10;
 
 export const PERFORMANCE_QUADRANT_META: Record<Exclude<PerformanceQuadrant, 'unknown'>, {
   label: string;
