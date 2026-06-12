@@ -14,8 +14,39 @@ import {
   GrowthType,
   TimeView as GrowthTimeView,
 } from '../../sql/growth.js';
+import { dbEnv } from '../../config/env.js';
+import { isGrowthCubeServable, rewriteGrowthSqlForCube } from '../../sql/cube/growth-cube.js';
+import { ensureTrendCubeFresh } from '../../services/duckdb-cube.js';
+import { runShadowCompare } from '../../services/cube-shadow.js';
 
 const router = Router();
+
+/**
+ * 通用可加性立方体接线（第二批次，BACKLOG uid=2026-06-11-claude-90a92c）。
+ * 双开关默认关闭时零生效。返回 null 表示走原路径（不可服务/未就绪/开关关闭）。
+ * 影子模式：返回 null（外层照常走原路径），同时后台双跑比对。
+ */
+async function tryGrowthCube(
+  legacySql: string,
+  servabilityArgs: Parameters<typeof isGrowthCubeServable>[0],
+  cacheTtl: number,
+  legacyRunner: () => Promise<Array<Record<string, unknown>>>
+): Promise<Array<Record<string, unknown>> | null> {
+  const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
+  const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+  if (!cubeRouting && !cubeShadow) return null;
+  if (!isGrowthCubeServable(servabilityArgs).servable) return null;
+  if (ensureTrendCubeFresh(duckdbService) !== 'ready') return null;
+
+  const cubeSql = rewriteGrowthSqlForCube(legacySql);
+  if (cubeRouting) {
+    return duckdbService.query(cubeSql, cacheTtl);
+  }
+  // 影子对账：先取原路径结果返回调用方，后台比对立方体结果
+  const legacyResult = await legacyRunner();
+  runShadowCompare('growth', legacyResult, () => duckdbService.query(cubeSql));
+  return legacyResult;
+}
 
 /**
  * 允许的分组维度白名单（安全：groupBy 字段会直接拼入 GROUP BY，禁止透传任意字段名）
@@ -109,7 +140,13 @@ router.get(
       };
 
       const sql = generateDailyGrowthWithContextQuery(config);
-      const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
+      const cubeResult = await tryGrowthCube(
+        sql,
+        { whereClause: finalWhereClause, metric },
+        QUERY_CACHE.hotspotShort,
+        () => duckdbService.query(sql, QUERY_CACHE.hotspotShort)
+      );
+      const result = cubeResult ?? await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
       res.json({
         success: true,
@@ -192,7 +229,13 @@ router.get(
     }
 
     const sql = generateGrowthQuery(config);
-    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
+    const cubeResult = await tryGrowthCube(
+      sql,
+      { whereClause: finalWhereClause, metric, groupBy },
+      QUERY_CACHE.hotspotMedium,
+      () => duckdbService.query(sql, QUERY_CACHE.hotspotMedium)
+    );
+    const result = cubeResult ?? await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
 
     res.json({
       success: true,
