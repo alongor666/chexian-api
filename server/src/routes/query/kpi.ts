@@ -4,6 +4,43 @@ import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_
 import { generateKpiQuery } from '../../sql/kpi.js';
 import { generateKpiDetailQuery } from '../../sql/kpi-detail.js';
 import { RouteConcurrencyGate } from '../../services/route-concurrency.js';
+import { dbEnv } from '../../config/env.js';
+import { isKpiCostCubeServable, generateKpiCostCubeQuery } from '../../sql/cube/kpi-cost-cube.js';
+import { ensureCostCubeFresh } from '../../services/duckdb-cube.js';
+import { runShadowCompare } from '../../services/cube-shadow.js';
+
+/** KPI 主 SQL 接口的 cost 三项输出列（注册表表达式直接定义的别名） */
+const KPI_COST_COLUMNS = ['variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio'] as const;
+
+/**
+ * KPI 路由的成本立方体接线（第四批次，BACKLOG uid=2026-06-11-claude-90a92c）。
+ * 双开关默认全关时零生效。
+ *
+ * routing 模式（CUBE_ROUTING_ENABLED）：
+ *   主 SQL 携 excludeVariableCost=true（去掉 260 万行 variable_cost CTE 的 P95 大头）
+ *   + 立方体单行 SQL，并行跑后 merge cost 三项。
+ *
+ * shadow 模式（CUBE_SHADOW_COMPARE）：
+ *   原 KPI 主 SQL 不变；后台双跑立方体 SQL 比对 cost 三项。
+ *
+ * 三态返回：
+ *   { mode: 'routing', mainSql, cubeSql }   handler 应并行跑两条 SQL 后 merge
+ *   { mode: 'shadow', cubeSql }             handler 跑原 mainSql，shadow 跑 cube
+ *   null                                     未开关 / 不可服务 / 未就绪 / 探针降级
+ */
+function planKpiCostCube(
+  whereWithDate: string,
+  dateField: string
+): { mode: 'routing'; cubeSql: string } | { mode: 'shadow'; cubeSql: string } | null {
+  const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
+  const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+  if (!cubeRouting && !cubeShadow) return null;
+  if (!isKpiCostCubeServable({ whereClause: whereWithDate, dateField }).servable) return null;
+  if (ensureCostCubeFresh(duckdbService) !== 'ready') return null;
+
+  const cubeSql = generateKpiCostCubeQuery(whereWithDate);
+  return cubeRouting ? { mode: 'routing', cubeSql } : { mode: 'shadow', cubeSql };
+}
 
 const router = Router();
 const KPI_COLD_QUERY_GATE = new RouteConcurrencyGate({
@@ -62,17 +99,40 @@ router.get(
     const orgNames = extractOrgNames(filterData, req.permissionFilter);
     const salesmanNames = extractSalesmanNames(filterData, req.permissionFilter);
 
-    const sql = generateKpiQuery(
+    const plan = planKpiCostCube(whereWithDate, dateField);
+    const mainSql = generateKpiQuery(
       whereWithDate,
       { orgNames, salesmanNames },
       whereWithoutDate,
-      dateField
+      dateField,
+      plan?.mode === 'routing'
     );
-    const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
+
+    let rowData: Record<string, unknown> = {};
+    if (plan?.mode === 'routing') {
+      const [mainRows, cubeRows] = await Promise.all([
+        duckdbService.query(mainSql, QUERY_CACHE.hotspotShort),
+        duckdbService.query(plan.cubeSql, QUERY_CACHE.hotspotShort),
+      ]);
+      // merge：主 SQL 已不含 cost 三项，立方体单行补齐
+      rowData = { ...(mainRows[0] || {}), ...(cubeRows[0] || {}) };
+    } else {
+      const mainRows = await duckdbService.query(mainSql, QUERY_CACHE.hotspotShort);
+      rowData = mainRows[0] || {};
+      if (plan?.mode === 'shadow') {
+        // 影子对账：只比 cost 三项，不比整行（其余指标走主路径与立方体无关）
+        const legacyCostRow: Record<string, unknown> = {};
+        for (const col of KPI_COST_COLUMNS) legacyCostRow[col] = rowData[col];
+        runShadowCompare('kpi', [legacyCostRow], async () => {
+          const cubeRows = await duckdbService.query(plan.cubeSql);
+          return cubeRows.length > 0 ? [cubeRows[0]] : [];
+        });
+      }
+    }
 
     sendWithEtag(req, res, {
       success: true,
-      data: result[0] || {},
+      data: rowData,
     }, HTTP_MAX_AGE.query);
   })
 );
