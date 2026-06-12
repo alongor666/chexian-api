@@ -14,6 +14,8 @@ import helmet from 'helmet';
 import { corsConfig } from './config/cors.js';
 import { serverEnv, dbEnv } from './config/env.js';
 import { duckdbService } from './services/duckdb.js';
+import { getTrendCubeState, getCostCubeState, getSalesmanCubeState } from './services/duckdb-cube.js';
+import { getShadowStats } from './services/cube-shadow.js';
 // state-db 仅在 STATE_STORE_BACKEND=sqlite 时动态加载（codex P1 修复 b85efba）：
 // state-db.ts 顶部 import 'better-sqlite3'，虽然 binding.js 是 lazy（new Database
 // 才 dlopen NAPI），不能依赖此隐性实现。dynamic import 把模块加载边界对齐到
@@ -127,10 +129,32 @@ app.get('/health', (req, res) => {
   // saturatedRecently 由 ConnectionPool 在 queue full 或 acquire timeout 时打点。
   const pool = duckdbService.getPoolStats();
   const overloaded = pool !== null && pool.saturatedRecently;
+  // 通用立方体灰度观测面（BACKLOG uid=2026-06-11-claude-90a92c）：
+  // 立方体新鲜度状态 + 影子对账计数器。影子比对差异明细（含业务数值）只进
+  // PM2 日志不上公开端点，此处仅暴露计数与构建元信息。
+  const cubeShadow = Object.fromEntries(
+    Object.entries(getShadowStats()).map(([route, s]) => [
+      route,
+      { match: s.match, mismatch: s.mismatch, error: s.error },
+    ])
+  );
+  const cubeStateView = (s: { builtVersion: string | null; building: unknown; lastBuildMs: number | null; lastError: string | null; exact?: boolean | null }) => ({
+    builtVersion: s.builtVersion,
+    building: s.building !== null,
+    lastBuildMs: s.lastBuildMs,
+    lastError: s.lastError,
+    ...(s.exact !== undefined ? { exact: s.exact } : {}),
+  });
   res.status(overloaded ? 503 : 200).json({
     success: !overloaded,
     message: overloaded ? 'Server overloaded' : 'Server is running',
     pool,
+    cubes: {
+      trend: cubeStateView(getTrendCubeState()),
+      cost: cubeStateView(getCostCubeState()),
+      salesman: cubeStateView(getSalesmanCubeState()),
+    },
+    cubeShadow,
     timestamp: new Date().toISOString(),
   });
 });
