@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, resolveGroupDim, withRouteCache } from './shared.js';
 import { generatePremiumTrendQuery, generateQualityBusinessTrendQuery, TimeView } from '../../sql/trend.js';
 import type { ViewPerspective } from '../../types/view-perspective.js';
+import { dbEnv } from '../../config/env.js';
+import { isTrendCubeServable, generatePremiumTrendCubeQuery } from '../../sql/cube/trend-cube.js';
+import { ensureTrendCubeFresh } from '../../services/duckdb-cube.js';
+import { runShadowCompare } from '../../services/cube-shadow.js';
 
 const router = Router();
 
@@ -39,13 +43,39 @@ router.get(
     const { filterData, whereClause } = parseFiltersAndBuildWhere(req);
     const groupDim = resolveGroupDim(filterData, req);
 
+    const dateField = filterData.dateField || 'policy_date';
     const sql = generatePremiumTrendQuery(
       timeView as TimeView,
       whereClause,
-      filterData.dateField || 'policy_date',
+      dateField,
       perspective,
       groupDim
     );
+
+    // ── 通用可加性立方体试点（BACKLOG uid=2026-06-11-claude-90a92c）──
+    // 双开关均关闭（默认）时下方分支零生效，行为与历史完全一致。
+    const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
+    const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+    if (cubeRouting || cubeShadow) {
+      const servability = isTrendCubeServable(whereClause, dateField, perspective);
+      if (servability.servable && ensureTrendCubeFresh(duckdbService) === 'ready') {
+        const cubeSql = generatePremiumTrendCubeQuery(
+          timeView as TimeView, whereClause, dateField, perspective, groupDim
+        );
+        if (cubeRouting) {
+          // 正式路由：直接走立方体（不可服务/未就绪场景已在上方条件自动回退）
+          const cubeResult = await duckdbService.query(cubeSql, QUERY_CACHE.hotspotMedium);
+          sendWithEtag(req, res, { success: true, data: cubeResult }, HTTP_MAX_AGE.query);
+          return;
+        }
+        // 影子对账：对外返回原路径结果，后台双跑比对（不影响时延）
+        const legacyResult = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
+        runShadowCompare('trend', legacyResult, () => duckdbService.query(cubeSql));
+        sendWithEtag(req, res, { success: true, data: legacyResult }, HTTP_MAX_AGE.query);
+        return;
+      }
+    }
+
     const result = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
 
     sendWithEtag(req, res, {
