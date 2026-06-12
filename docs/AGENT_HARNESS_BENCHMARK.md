@@ -68,6 +68,8 @@ CI=1 npx vitest run tests/api/agent           # → 30 passed / 167 passed（约
 
 **威胁模型澄清（重要）**：`sql-guard` 拦的是大模型**解释文本里**的 SQL，这些文本不进执行路径——漏过 `COPY/ATTACH` 的实际危害只是「用户看到一段没用的伪 SQL 文本」，不是数据被导出。真正的执行防线是「大模型根本不生成可执行 SQL + 注册表白名单」。因此这 7 个漏过属于「质量待提升」，不是「安全漏洞」。
 
+> **修复记录（2026-06-11，PR #580）**：上表 7 例漏过已全部修复——`sql-guard.ts` 补齐 DuckDB 方言关键字，对抗集固化为 `server/src/skills/__tests__/llm-adapter.test.ts` 回归用例。本表保留为评测时点的历史实测证据。
+
 ### 3.3 本地环境限制
 
 worktree 无 `server/data` 本地数据、无 `E2E_PASSWORD` / `AGENT_SMOKE_TOKEN`，跑不了需真实数据或线上 token 的端到端生产 smoke。完整 `bun run verify:agent:smoke` 需线上只读 token，应在有数据的环境执行。
@@ -76,11 +78,11 @@ worktree 无 `server/data` 本地数据、无 `E2E_PASSWORD` / `AGENT_SMOKE_TOKE
 
 ## 4. 释放大模型解释层前的三道硬门槛
 
-`readyForLlm` 当前恒为 `false`、Stage 5A 已注册 `explain` 路由——系统正站在「释放前夜」。释放前必补：
+`readyForLlm` 当前恒为 `false`、Stage 5A 已注册 `explain` 路由——系统正站在「释放前夜」。**三道硬门槛已于 2026-06-11 全部完成**（门槛 1/2 见 PR #580，门槛 3 见 PR #586）：
 
-1. **🔴 把 `/api/agent/explain` 纳入审计日志**（逻辑自洽问题）。就绪门禁的前置条件之一是「生产审计日志能看到调用记录」，但唯一大模型入口 `explain` 不在 `AUDITED_PATHS` 里——门禁条件与审计覆盖自相矛盾。改 `server/src/middleware/audit.ts` 的 `AUDITED_PATHS` 一行即可。
+1. **✅ 把 `/api/agent/explain` 纳入审计日志**（2026-06-11 已完成，PR #580）。`server/src/middleware/audit.ts` 的 `AUDITED_PATHS` 已加入 `/api/agent/explain`，「就绪门禁要求审计可见」与审计覆盖恢复自洽。契约回归：`tests/api/audit-paths-contract.test.ts`。
 
-2. **🟡 补 `sql-guard` 覆盖 + 把对抗集固化为回归测试**。加 DuckDB 方言关键字（`COPY/ATTACH/PRAGMA/DESCRIBE/SUMMARIZE/PIVOT`）；§3.2 的 13 例对抗探针应落成 `sql-guard.test.ts`，输出拦截精确率指标（顶级标准要求防护有效性可量化，目前 0 量化）。
+2. **✅ 补 `sql-guard` 覆盖 + 对抗集固化为回归测试**（2026-06-11 已完成，PR #580）。已加 DuckDB 方言关键字（`COPY/ATTACH/INSTALL/LOAD/PRAGMA/DESCRIBE/SUMMARIZE` 等）；§3.2 对抗探针已固化为 `server/src/skills/__tests__/llm-adapter.test.ts` 对抗集用例（原 7 例漏过全部转为拦截，不误伤中文叙述用例保持放行）。
 
 3. **✅ 给 agent 注册表补 `version/changelog` 字段**（2026-06-11 已完成，BACKLOG 2026-06-11-claude-f5646f）。三件套落地：① 4 张注册表导出经 `AgentRegistryMetaSchema`（Zod）校验的表级 meta（version + changelog，refine 强制 version === changelog 末条）；② `/api/agent/audit/metrics|capabilities|unsupported|readiness` 响应新增 `registryVersions`（registryId / version / entryCount）；③ governance 新增「Agent注册表版本」检查 —— 注册表文件相对 origin/main 有变更但未更新 version 字段即阻断。回归测试：`tests/api/agent-registry-version.test.ts`。
 
