@@ -8,6 +8,16 @@
  */
 
 import { escapeSqlValue } from '../../utils/security.js';
+import { getMetricOrThrow } from '../../config/metric-registry/index.js';
+
+// ============================================================================
+// 四象限分界阈值（从指标注册表派生 — 红线：禁止硬编码阈值不从注册表派生）
+// ============================================================================
+
+/** 增长分界 = premium_growth_pct.thresholds.notice（良好档，当前 10%；原硬编码 7 不在任何注册表定义内） */
+export const QUADRANT_GROWTH_THRESHOLD = getMetricOrThrow('premium_growth_pct').thresholds!.notice;
+/** 达成分界 = plan_completion_pct.thresholds.warn（达标线，当前 100%） */
+export const QUADRANT_ACHIEVEMENT_THRESHOLD = getMetricOrThrow('plan_completion_pct').thresholds!.warn;
 
 // ============================================================================
 // 类型定义

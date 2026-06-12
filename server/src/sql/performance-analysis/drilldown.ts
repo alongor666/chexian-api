@@ -14,6 +14,8 @@
 
 import { logger } from '../../utils/logger.js';
 import {
+  QUADRANT_GROWTH_THRESHOLD,
+  QUADRANT_ACHIEVEMENT_THRESHOLD,
   truthyExpr,
   getPerformanceSegmentFilter,
   buildPeriodBoundsCte,
@@ -214,9 +216,9 @@ export function generatePerformanceDrilldownQuery(
       m.*,
       CASE
         WHEN m.achievement_rate IS NULL OR m.growth_rate IS NULL THEN 'unknown'
-        WHEN m.growth_rate >= 7 AND m.achievement_rate >= 100 THEN 'high_growth_high_achievement'
-        WHEN m.growth_rate >= 7 AND m.achievement_rate < 100 THEN 'high_growth_low_achievement'
-        WHEN m.growth_rate < 7 AND m.achievement_rate >= 100 THEN 'low_growth_high_achievement'
+        WHEN m.growth_rate >= ${QUADRANT_GROWTH_THRESHOLD} AND m.achievement_rate >= ${QUADRANT_ACHIEVEMENT_THRESHOLD} THEN 'high_growth_high_achievement'
+        WHEN m.growth_rate >= ${QUADRANT_GROWTH_THRESHOLD} AND m.achievement_rate < ${QUADRANT_ACHIEVEMENT_THRESHOLD} THEN 'high_growth_low_achievement'
+        WHEN m.growth_rate < ${QUADRANT_GROWTH_THRESHOLD} AND m.achievement_rate >= ${QUADRANT_ACHIEVEMENT_THRESHOLD} THEN 'low_growth_high_achievement'
         ELSE 'low_growth_low_achievement'
       END AS quadrant
     FROM metrics m

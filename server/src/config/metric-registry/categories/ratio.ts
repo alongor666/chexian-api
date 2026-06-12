@@ -30,19 +30,20 @@ const QUALITY_BUSINESS_CONDITION = `(
 export const ratioMetrics: readonly MetricDefinition[] = [
   {
     id: 'transfer_rate',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '过户率',
     category: 'ratio',
     tags: ['kpi', 'ratio'],
     formula: {
       description: '过户保单数 / 总保单数',
-      numerator: 'COUNT(CASE WHEN is_transfer THEN 1 END)',
-      denominator: 'COUNT(*)',
+      numerator: 'COUNT(DISTINCT 剔除批改后的保单键 WHERE is_transfer)',
+      denominator: 'COUNT(DISTINCT 剔除批改后的保单键)',
       unit: '%',
     },
     sql: {
-      expression: 'COUNT(CASE WHEN is_transfer THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as transfer_rate',
-      requiredColumns: ['is_transfer'],
+      expression:
+        "COUNT(DISTINCT CASE WHEN NULLIF(TRIM(CAST(endorsement_no AS VARCHAR)), '') IS NULL AND is_transfer THEN COALESCE(NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''), NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')) END) * 1.0 / NULLIF(COUNT(DISTINCT CASE WHEN NULLIF(TRIM(CAST(endorsement_no AS VARCHAR)), '') IS NULL THEN COALESCE(NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''), NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')) END), 0) as transfer_rate",
+      requiredColumns: ['is_transfer', 'endorsement_no', 'policy_no', 'vehicle_frame_no'],
     },
     display: {
       formatter: 'percent',
@@ -56,7 +57,10 @@ export const ratioMetrics: readonly MetricDefinition[] = [
         assertions: { transfer_rate: { op: 'between', min: 0, max: 1 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' }],
+    changelog: [
+      { version: '2.0.0', date: '2026-06-12', changes: '计数口径统一为业绩面板口径：剔除批改(endorsement_no 非空) + policy_key 去重；原 COUNT(*) 含批改多行与交强/商业各一行，同名指标两套值（用户 2026-06-12 裁决以面板口径为准）' },
+      { version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' },
+    ],
   },
 
   {
@@ -92,19 +96,20 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'renewal_rate',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '续保率',
     category: 'ratio',
     tags: ['core', 'kpi', 'ratio', 'renewal'],
     formula: {
       description: '续保保单数 / 总保单数',
-      numerator: 'COUNT(CASE WHEN is_renewal THEN 1 END)',
-      denominator: 'COUNT(*)',
+      numerator: 'COUNT(DISTINCT 剔除批改后的保单键 WHERE is_renewal)',
+      denominator: 'COUNT(DISTINCT 剔除批改后的保单键)',
       unit: '%',
     },
     sql: {
-      expression: 'COUNT(CASE WHEN is_renewal THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as renewal_rate',
-      requiredColumns: ['is_renewal'],
+      expression:
+        "COUNT(DISTINCT CASE WHEN NULLIF(TRIM(CAST(endorsement_no AS VARCHAR)), '') IS NULL AND is_renewal THEN COALESCE(NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''), NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')) END) * 1.0 / NULLIF(COUNT(DISTINCT CASE WHEN NULLIF(TRIM(CAST(endorsement_no AS VARCHAR)), '') IS NULL THEN COALESCE(NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''), NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')) END), 0) as renewal_rate",
+      requiredColumns: ['is_renewal', 'endorsement_no', 'policy_no', 'vehicle_frame_no'],
       notes: '此为 KPI 面板的快速续保占比，非续保分析板块的精确续保率（后者基于起保日期到期判断）',
     },
     display: {
@@ -119,7 +124,10 @@ export const ratioMetrics: readonly MetricDefinition[] = [
         assertions: { renewal_rate: { op: 'between', min: 0, max: 1 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' }],
+    changelog: [
+      { version: '2.0.0', date: '2026-06-12', changes: '计数口径统一为业绩面板口径：剔除批改(endorsement_no 非空) + policy_key 去重；原 COUNT(*) 含批改多行与交强/商业各一行，同名指标两套值（用户 2026-06-12 裁决以面板口径为准）' },
+      { version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' },
+    ],
   },
 
   {
@@ -155,19 +163,20 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'nev_rate',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '新能源率',
     category: 'ratio',
     tags: ['kpi', 'ratio'],
     formula: {
       description: '新能源车保单数 / 总保单数',
-      numerator: 'COUNT(CASE WHEN is_nev THEN 1 END)',
-      denominator: 'COUNT(*)',
+      numerator: 'COUNT(DISTINCT 剔除批改后的保单键 WHERE is_nev)',
+      denominator: 'COUNT(DISTINCT 剔除批改后的保单键)',
       unit: '%',
     },
     sql: {
-      expression: 'COUNT(CASE WHEN is_nev THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as nev_rate',
-      requiredColumns: ['is_nev'],
+      expression:
+        "COUNT(DISTINCT CASE WHEN NULLIF(TRIM(CAST(endorsement_no AS VARCHAR)), '') IS NULL AND is_nev THEN COALESCE(NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''), NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')) END) * 1.0 / NULLIF(COUNT(DISTINCT CASE WHEN NULLIF(TRIM(CAST(endorsement_no AS VARCHAR)), '') IS NULL THEN COALESCE(NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''), NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')) END), 0) as nev_rate",
+      requiredColumns: ['is_nev', 'endorsement_no', 'policy_no', 'vehicle_frame_no'],
     },
     display: {
       formatter: 'percent',
@@ -181,24 +190,28 @@ export const ratioMetrics: readonly MetricDefinition[] = [
         assertions: { nev_rate: { op: 'between', min: 0, max: 1 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' }],
+    changelog: [
+      { version: '2.0.0', date: '2026-06-12', changes: '计数口径统一为业绩面板口径：剔除批改(endorsement_no 非空) + policy_key 去重；原 COUNT(*) 含批改多行与交强/商业各一行，同名指标两套值（用户 2026-06-12 裁决以面板口径为准）' },
+      { version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' },
+    ],
   },
 
   {
     id: 'new_car_rate',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '新车率',
     category: 'ratio',
     tags: ['kpi', 'ratio'],
     formula: {
       description: '新车保单数 / 总保单数',
-      numerator: 'COUNT(CASE WHEN is_new_car THEN 1 END)',
-      denominator: 'COUNT(*)',
+      numerator: 'COUNT(DISTINCT 剔除批改后的保单键 WHERE is_new_car)',
+      denominator: 'COUNT(DISTINCT 剔除批改后的保单键)',
       unit: '%',
     },
     sql: {
-      expression: 'COUNT(CASE WHEN is_new_car THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0) as new_car_rate',
-      requiredColumns: ['is_new_car'],
+      expression:
+        "COUNT(DISTINCT CASE WHEN NULLIF(TRIM(CAST(endorsement_no AS VARCHAR)), '') IS NULL AND is_new_car THEN COALESCE(NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''), NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')) END) * 1.0 / NULLIF(COUNT(DISTINCT CASE WHEN NULLIF(TRIM(CAST(endorsement_no AS VARCHAR)), '') IS NULL THEN COALESCE(NULLIF(TRIM(CAST(policy_no AS VARCHAR)), ''), NULLIF(TRIM(CAST(vehicle_frame_no AS VARCHAR)), '')) END), 0) as new_car_rate",
+      requiredColumns: ['is_new_car', 'endorsement_no', 'policy_no', 'vehicle_frame_no'],
     },
     display: {
       formatter: 'percent',
@@ -212,7 +225,10 @@ export const ratioMetrics: readonly MetricDefinition[] = [
         assertions: { new_car_rate: { op: 'between', min: 0, max: 1 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' }],
+    changelog: [
+      { version: '2.0.0', date: '2026-06-12', changes: '计数口径统一为业绩面板口径：剔除批改(endorsement_no 非空) + policy_key 去重；原 COUNT(*) 含批改多行与交强/商业各一行，同名指标两套值（用户 2026-06-12 裁决以面板口径为准）' },
+      { version: '1.0.0', date: '2026-03-27', changes: '从 kpi.ts 迁移' },
+    ],
   },
 
   {

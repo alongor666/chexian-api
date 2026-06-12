@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（71 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（69 项 · 数据截至 2026-06-11 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -33,7 +33,7 @@
 - 2026-06-11-claude-942414 — 行级权限(RLS)整域绕过
 - 2026-06-11-claude-f608c2 — policy/current 重叠门禁对新命名失明
 
-**P2（38 项）**
+**P2（36 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -59,7 +59,6 @@
 - 2026-06-10-claude-8964d3 — Phase 1 参数契约
 - 2026-06-10-claude-b4da70 — 数据管理/cli.py 工具库空壳化处置
 - 2026-06-10-claude-e2240c — 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通
-- 2026-06-11-claude-1e746e — [口径裁决]performance mom 环比部分周期 vs 完整上期
 - 2026-06-11-claude-2e311d — 增长分析无视 analysis_year 写死今年
 - 2026-06-11-claude-3093a3 — 重复组件收拢（全站重复审计 主题②）
 - 2026-06-11-claude-3ab3e3 — 增长分析面板请求竞态旧响应覆盖新数据
@@ -67,7 +66,6 @@
 - 2026-06-11-claude-89a352 — E2E 纳入 CI 守护
 - 2026-06-11-claude-9ba379 — claims 源文件拼接顺序使遗留清单覆盖最新全量
 - 2026-06-11-claude-a8d3df — [口径裁决]performance 负基数同比符号反转
-- 2026-06-11-claude-d8bb8b — performance-heatmap 计划列硬编码 car_insurance_pla
 - 2026-06-11-claude-e9a906 — [口径裁决]地理跨区 sentinel 反转
 - 2026-06-11-claude-ed63ec — SW 5 分钟版本轮询实际不存在
 - 2026-06-11-claude-f5646f — 为 4 张 agent 注册表补 version/changelog 可追溯字段（har
@@ -153,7 +151,6 @@
 | 2026-06-10-claude-ca3cab | 2026-06-10 | Chore | @claude | cx CLI 全能力重构：route-catalog 33→64 条补全 + governance QueryCatalog 对账检查 + CLI v0.2.0（14 命令/退出码契约/path直通/stdin/补全） | P3 | PROPOSED | N/A | N/A |  |
 | 2026-06-10-claude-e2240c | 2026-06-10 | 续保追踪 | @claude | 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通。根因：RenewalTrackerFact 派生域缺 tonnage_segment 与 vehicle_model 字段。需续保派生域 ETL 从主表 join 补这两字段（tonnage_segment 轻，vehicle_model 重）后，后端 renewal-tracker 路由加对应过滤。 | P2 | PROPOSED | N/A | server/src/sql/renewal-tracker.ts |  |
 | 2026-06-11-claude-02aa70 | 2026-06-11 | 产品决策 | @claude | 产品层冗余裁剪决策（需用户拍板，全站重复审计 主题⑤）：a) 报价转化页 A 版/B 版六专题大面积同件复用，同一内容 3 个入口，是否保留双版本；b) 成本分析页 basic 与 comprehensive 两视图明细表实质重叠（综合视图独有价值=象限图+ROI），是否合并；c) 客户流向页「转入来源」API 已封装前端从未调用（板块空缺，做或删）；d) 报表模板页「使用此模板」为空函数纯占位（做或删）。 | P3 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/features/quote-conversion；src/features/cost；src/features/customer-flow；src/features/report |  |
-| 2026-06-11-claude-1e746e | 2026-06-11 | 指标口径 | @claude | [口径裁决]performance mom 环比部分周期 vs 完整上期：performance-analysis/shared.ts:236 mom+week/month/quarter 下 prev=完整上一周期、current=周期初→ref_date（部分），月初第3天环比=3天/整月 系统性深负。同面板 performance-heatmap.ts:302 对部分周期做了 like-for-like 截断，两套语义矛盾。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/shared.ts |  |
 | 2026-06-11-claude-2e311d | 2026-06-11 | Bugfix/Frontend | @claude | 增长分析无视 analysis_year 写死今年：useGrowthAnalysis.ts:236 analyzeOrgPremiumGrowth/analyzeSalesmanGrowth/analyzeKPIGrowth startDate/endDate 一律 new Date() 当前年 YTD，同面板 daily-detail 分支用 filters.analysis_year，两套口径；切到往年时季度/业务员/KPI 增长仍查当前年；基准期末拼 上年-当月-当日 遇 2/29 生成非法日期。 | P2 | PROPOSED | N/A | src/features/growth/hooks/useGrowthAnalysis.ts |  |
 | 2026-06-11-claude-3093a3 | 2026-06-11 | Refactor/Frontend | @claude | 重复组件收拢（全站重复审计 主题②）：机构×维度×时间热力图 4 套独立实现（performance-org/cross-sell/claims-detail/quote-conversion）、机构→团队→业务员下钻表 5 处、KPI 卡 5 套、趋势折线封装 5 套、导出对话框 2 个（widgets/export/ExportDialog vs features/file/ExportModal）+ crossSellExport 重写 CSV 下载、格式化函数多处本地重写（renewal-tracker/expense-development/growth 对应 shared/utils/formatters 已有）、dashboard useFilterState 与全局 FilterContext 双轨。逐类提共享部件，结合功能迭代渐进做。关联 B330（依赖违规）/B331（大文件拆分）。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/widgets；src/shared；src/features/dashboard | 标签收拢实施时排查出 5 处 SSOT 之外的残留硬编码维度标签副本（本批未动）：① PerformanceAnalysisPanel.tsx:92-101 PERF_HEATMAP_DRILL_DIMENSIONS（team:'团队'/insurance_grade:'风险评分'，与同页 HEATMAP_DIMENSION_LABELS 已统一文案形成页内不一致，优先治理）；② CrossSellAnalysisPanel.tsx:389-396 HEATMAP_DRILL_DIMENSIONS（team:'团队'，同页不一致，优先治理）；③ claims-detail/ClaimsHeatmapPanel.tsx:29,35；④ premium-report/hooks/usePremiumPlan.ts:35 LEVEL_LABELS；⑤ quote-conversion/DrilldownTable.tsx:101。收拢时改为 pickDimensionLabels 派生。 |
 | 2026-06-11-claude-3ab3e3 | 2026-06-11 | Bugfix/Frontend | @claude | 增长分析面板请求竞态旧响应覆盖新数据：GrowthAnalysisPanel.tsx:127+useGrowthAnalysis.ts:125 fetchGrowthFromApi/analyzeDualMetricComparison 无请求序号/AbortController/最新请求守卫，setState 无条件写。快速切换条件时两不同 URL 请求并发（apiClient in-flight 合并仅对相同 URL），慢的旧请求后返回覆盖新结果。 | P2 | PROPOSED | N/A | src/features/growth/components/GrowthAnalysisPanel.tsx,src/features/growth/hooks/useGrowthAnalysis.ts |  |
@@ -168,7 +165,6 @@
 | 2026-06-11-claude-942414 | 2026-06-11 | Security/Backend | @claude | 行级权限(RLS)整域绕过：customer-flow/quote-conversion/claims-detail(10+端点)/repair/premium-plan 多条路由链从不消费 req.permissionFilter，非超管/跨分公司账号可越权读全量。对照组 truck/policy-geo/trend/pivot/growth/performance 均走 parseFiltersAndBuildWhere(...,req.permissionFilter)，证明是遗漏。是否成事故取决于 allowedRoutes 策略，需按多分公司 Day-1 SOP 复核。 | P1 | PROPOSED | N/A | server/src/sql/customer-flow.ts,server/src/sql/quote-conversion.ts,server/src/routes/query/claims-detail.ts,server/src/routes/query/repair.ts,server/src/routes/query/premium-plan.ts |  |
 | 2026-06-11-claude-9ba379 | 2026-06-11 | 数据质量 | @claude | claims 源文件拼接顺序使遗留清单覆盖最新全量：daily.mjs:1091 [...newFiles,...legacyFiles]+convert_claims_detail.py:181 drop_duplicates(keep='last')，车险报立结案清单_*.xlsx 遗留旧快照排在新格式之后，同赔案号旧快照金额覆盖新全量。文件名无8位日期的遗留文件逃过自动归档守卫。 | P2 | PROPOSED | N/A | 数据管理/daily.mjs,数据管理/pipelines/convert_claims_detail.py |  |
 | 2026-06-11-claude-a8d3df | 2026-06-11 | 指标口径 | @claude | [口径裁决]performance 负基数同比符号反转：drilldown.ts:197、top-salesman.ts:143 WHEN COALESCE(prev,0)=0 THEN NULL ELSE (c-p)/p，批改冲减使上期为负时除以负数 → 增长率符号反转。注册表 growth.ts 统一 WHEN prev>0...ELSE NULL，唯这两处不一致。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/drilldown.ts,server/src/sql/performance-analysis/top-salesman.ts |  |
-| 2026-06-11-claude-d8bb8b | 2026-06-11 | Bugfix/Backend | @claude | performance-heatmap 计划列硬编码 car_insurance_plan_2026：performance-heatmap.ts:313 loader 仅按 plan_year=2026 填充，2027 年起热力图计划列静默归零；与 drilldown/top-salesman 用 achievement_cache 不同源。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/performance-heatmap.ts |  |
 | 2026-06-11-claude-e9a906 | 2026-06-11 | 指标口径 | @claude | [口径裁决]地理跨区 sentinel 反转：claims-detail.ts:361 is_cross_region=(accident_city != CASE...ELSE 'MATCH' END)，内层只映射川A/B/C/E/F/Q 六前缀，其余（川D/H/J...渝/外省）落 ELSE 'MATCH' 而 accident_city 永不等于字面 'MATCH' → 恒判跨区域，cross_region_pct 系统性虚高。需补全车牌→城市码映射并定义未知前缀归类口径。 | P2 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
 | 2026-06-11-claude-ed63ec | 2026-06-11 | Bugfix/Frontend | @claude | SW 5 分钟版本轮询实际不存在：public/sw.js 注释宣称每 5 分钟轮询 /api/data/version 但无任何定时器，maybeCheckVersion 只在 fetch 命中缓存分支调用；SW 活跃时前端 staleTime=Infinity 初始加载后不再发请求 → 无 fetch 事件 → 版本检查永不跑 → ETL_UPDATED 永不发。长开 tab 最长 24h 看旧数据。lastKnownEtlDate 未持久化，SW 回收后归零。 | P2 | PROPOSED | N/A | public/sw.js,src/app/App.tsx |  |
 | 2026-06-11-claude-ee63ee | 2026-06-11 | Refactor/Frontend | @claude | quote-conversion KpiCards default 分支为死代码：VersionAView/VersionBView 自 PR #150 (3c9e72a4, 2026-04-03) 起均以 variant="oldCar" 调用，default 分支（整体转化率/报价总量/平均折扣率/N 位业务员参与 卡片布局，KpiCards.tsx L116-168）不可达。该死分支曾导致 E2E 09-quote-conversion 断言「整体转化率」长期假绿（已另行修复断言）。处置建议：确认无恢复 default 视图的产品计划后删除该分支并收窄 variant 类型；注意与 OPEN 状态 PR #581（给 oldCar 分支加 title 口径提示）的合并顺序。 | P3 | PROPOSED | N/A | src/features/quote-conversion/components/KpiCards.tsx |  |
