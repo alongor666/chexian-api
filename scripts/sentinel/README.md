@@ -140,19 +140,13 @@ node scripts/sentinel/cube-grayscale-sentinel.mjs \
 
 `--dry-run` 不影响产物（仍写 verdict.json/summary.md），仅把 summary 打印到终端。
 
-## 调频里程碑（BACKLOG uid=2026-06-12-claude-055a12 · BLOCKED）
+## 完整运维 SOP（唯一事实源）
 
-灰度阶段 cron 每小时一次是合理的（mismatch 出现越早干预越好，且 public repo 完全免费）。但切流稳定后应该降频省 GHA minutes，避免长期满频次跑无意义的 match 累计：
+本哨兵的**在做什么 / 怎么看 / 异常分级处理 / 切流流程 / 调频里程碑 / 回滚 / 禁止事项**全部沉淀在：
 
-| 阶段 | 触发条件 | cron | 月跑次 |
-|---|---|---|---|
-| **当前 — 灰度阶段 1（影子对账）** | `CUBE_SHADOW_COMPARE='true'` 已生效 | `15 * * * *` | 720 |
-| 切流后观察期 | `CUBE_ROUTING_ENABLED='true'` 合并 + 30 天稳定（mismatch=0、cost.exact 稳定） | `15 */3 * * *` | 240 |
-| 长期生产稳态 | 观察期后 + 1 个月无 CRITICAL | `15 */6 * * *` 或并入 ETL 哨兵 cron | 120 |
+📖 **[.claude/rules/cube-grayscale-sop.md](../../.claude/rules/cube-grayscale-sop.md)**
 
-**触发动作**：满足条件时改 `.github/workflows/cube-grayscale-sentinel.yml` 的 `cron:` 一行 + 把 BACKLOG `2026-06-12-claude-055a12` 状态推进 BLOCKED → DOING → DONE（附 commit 证据）。
-
-**为什么先记下来**：人脑记不住，BACKLOG event log + yml/README 三处冗余指针 = 未来任何 AI 接手都会被提醒。
+—— 改 cron、提切流 PR、看到追踪 issue 评论时先查 SOP。本 README 只覆盖哨兵自身的"组成 / 判定规则 / 产物去向"，不重复 SOP 的运维知识（避免漂移）。
 
 ## 与 ETL 异常哨兵的边界
 
