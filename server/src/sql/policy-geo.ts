@@ -20,16 +20,27 @@ export interface PolicyGeoFilters {
 export function generatePolicyGeoProvinceQuery(filters: PolicyGeoFilters): string {
   const { whereClause } = filters;
   return `
-    WITH geo AS (
+    WITH dedup AS (
+      -- B252：先按 (policy_no, insurance_start_date) 去重，原单+批改多行合一，
+      -- HAVING SUM(premium)>0 剔除净退保，避免车辆数虚增 / 件均被负向批改拉偏
+      SELECT
+        policy_no,
+        ANY_VALUE(plate_no) AS plate_no,
+        SUM(premium) AS premium
+      FROM PolicyFact
+      WHERE ${whereClause}
+      GROUP BY policy_no, insurance_start_date
+      HAVING SUM(premium) > 0
+    ),
+    geo AS (
       SELECT
         COALESCE(prm.province, '未知') AS province,
         COUNT(*) AS vehicle_count,
-        ROUND(SUM(p.premium) / 1e4, 1) AS premium_wan,
-        ROUND(AVG(p.premium), 0) AS avg_premium
-      FROM PolicyFact p
+        ROUND(SUM(d.premium) / 1e4, 1) AS premium_wan,
+        ROUND(AVG(d.premium), 0) AS avg_premium
+      FROM dedup d
       LEFT JOIN PlateRegionMap prm
-        ON SUBSTRING(p.plate_no, 1, 2) = prm.plate_prefix
-      WHERE ${whereClause}
+        ON SUBSTRING(d.plate_no, 1, 2) = prm.plate_prefix
       GROUP BY COALESCE(prm.province, '未知')
     ),
     total AS (
@@ -62,17 +73,28 @@ export function generatePolicyGeoCityQuery(filters: PolicyGeoFilters): string {
     ? ` AND prm.province = '${escapeSqlValue(province)}'`
     : '';
   return `
-    WITH geo AS (
+    WITH dedup AS (
+      -- B252：先按 (policy_no, insurance_start_date) 去重 + HAVING SUM(premium)>0
+      SELECT
+        policy_no,
+        ANY_VALUE(plate_no) AS plate_no,
+        SUM(premium) AS premium
+      FROM PolicyFact
+      WHERE ${whereClause}
+      GROUP BY policy_no, insurance_start_date
+      HAVING SUM(premium) > 0
+    ),
+    geo AS (
       SELECT
         COALESCE(prm.province, '未知') AS province,
         COALESCE(prm.city, '未知') AS city,
         COUNT(*) AS vehicle_count,
-        ROUND(SUM(p.premium) / 1e4, 1) AS premium_wan,
-        ROUND(AVG(p.premium), 0) AS avg_premium
-      FROM PolicyFact p
+        ROUND(SUM(d.premium) / 1e4, 1) AS premium_wan,
+        ROUND(AVG(d.premium), 0) AS avg_premium
+      FROM dedup d
       LEFT JOIN PlateRegionMap prm
-        ON SUBSTRING(p.plate_no, 1, 2) = prm.plate_prefix
-      WHERE ${whereClause}${provinceFilter}
+        ON SUBSTRING(d.plate_no, 1, 2) = prm.plate_prefix
+      WHERE 1=1${provinceFilter}
       GROUP BY COALESCE(prm.province, '未知'), COALESCE(prm.city, '未知')
     ),
     total AS (

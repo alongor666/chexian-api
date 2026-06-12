@@ -128,13 +128,13 @@ export function generateRenewalTrackerQuery(params: RenewalTrackerQueryParams): 
       renewal_type,
       COUNT(DISTINCT vehicle_frame_no) AS A,
       COUNT(DISTINCT CASE
-        WHEN is_quoted AND first_quote_time <= DATE '${cutoff}' THEN vehicle_frame_no
+        WHEN is_quoted AND CAST(first_quote_time AS DATE) <= DATE '${cutoff}' THEN vehicle_frame_no
       END) AS B,
       COUNT(DISTINCT CASE
         WHEN is_renewed THEN vehicle_frame_no
       END) AS C,
       COUNT(DISTINCT vehicle_frame_no) - COUNT(DISTINCT CASE
-        WHEN is_quoted AND first_quote_time <= DATE '${cutoff}' THEN vehicle_frame_no
+        WHEN is_quoted AND CAST(first_quote_time AS DATE) <= DATE '${cutoff}' THEN vehicle_frame_no
       END) AS D,
       COUNT(DISTINCT vehicle_frame_no) - COUNT(DISTINCT CASE
         WHEN is_renewed THEN vehicle_frame_no

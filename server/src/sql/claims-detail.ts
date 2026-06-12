@@ -566,15 +566,18 @@ export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string 
   return `
     WITH quarterly_claims AS (
       SELECT
-        YEAR(c.accident_time) AS year,
-        QUARTER(c.accident_time) AS quarter,
+        -- cohort 对齐：分子按保单起保季分桶（与分母 quarterly_policies 同源），
+        -- 原按 accident_time 分桶时「本季出险÷本季起保暴露」两侧时间轴不同源，
+        -- 分子混入往年起保保单的赔案，freq_per_1000 非真实 cohort 频度。
+        YEAR(p.insurance_start_date) AS year,
+        QUARTER(p.insurance_start_date) AS quarter,
         COUNT(*) AS claim_count,
         SUM(CASE WHEN c.is_bodily_injury THEN 1 ELSE 0 END) AS injury_count,
         ROUND(SUM(c.reserve_amount) / 1e4, 0) AS reserve_wan
       FROM ClaimsDetail c
       JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
-      WHERE c.accident_time >= '2022-01-01' AND ${claimWhere}${policyWhere}
-      GROUP BY YEAR(c.accident_time), QUARTER(c.accident_time)
+      WHERE p.insurance_start_date >= '2022-01-01' AND ${claimWhere}${policyWhere}
+      GROUP BY YEAR(p.insurance_start_date), QUARTER(p.insurance_start_date)
     ),
     quarterly_policies AS (
       SELECT

@@ -61,9 +61,9 @@ describe('generatePremiumTrendQuery', () => {
     expect(sql).toContain('SUM(premium)');
   });
 
-  it('视角 policy_count：使用 COUNT(*)', () => {
+  it('视角 policy_count：使用 COUNT(DISTINCT policy_no)', () => {
     const sql = generatePremiumTrendQuery('monthly', '1=1', 'policy_date', 'policy_count');
-    expect(sql).toContain('COUNT(*)');
+    expect(sql).toContain('COUNT(DISTINCT policy_no)');
   });
 
   it('WHERE 子句注入', () => {
@@ -154,9 +154,9 @@ describe('generateTotalPremiumTrendQuery', () => {
     expect(sql).toContain('SUM(premium)');
   });
 
-  it('视角 policy_count：使用 COUNT(*)', () => {
+  it('视角 policy_count：使用 COUNT(DISTINCT policy_no)', () => {
     const sql = generateTotalPremiumTrendQuery('monthly', '1=1', 'policy_date', 'policy_count');
-    expect(sql).toContain('COUNT(*)');
+    expect(sql).toContain('COUNT(DISTINCT policy_no)');
   });
 
   it('WHERE 子句注入', () => {

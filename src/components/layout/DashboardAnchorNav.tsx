@@ -159,6 +159,15 @@ export const DashboardAnchorNav: React.FC<DashboardAnchorNavProps> = ({
     setIsOpen(true);
   }, []);
 
+  // 卸载兜底：拖拽中（active=true）若组件被卸载（如路由切换），
+  // pointerdown 挂的 document 级监听不会触发 pointerup 移除 → 悬挂监听 + 对已卸载组件 setState
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('pointermove', onDocPointerMove);
+      document.removeEventListener('pointerup', onDocPointerUp);
+    };
+  }, [onDocPointerMove, onDocPointerUp]);
+
   if (sections.length === 0) return null;
 
   const activeIndex = sectionIds.indexOf(activeId);

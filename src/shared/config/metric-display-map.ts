@@ -2,7 +2,7 @@
  * 指标展示映射 — 从注册表自动生成
  *
  * 生成命令：bun scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-06-11T04:19:21.298Z
+ * 生成时间：2026-06-12T00:10:18.343Z
  * 指标数量：52
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成
@@ -163,7 +163,7 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   "earned_profit_amount": "满期保费 - 综合成本额 = 边际贡献额 - 固定成本额",
   "bi_case_ratio_pct": "人伤案件数 / 总案件数（claims_detail 底表）",
   "bi_amount_ratio_pct": "(人伤已决 + 人伤未决) / (总已决 + 总未决)（claims_detail 底表）",
-  "cross_sell_total_rate": "驾意险件数 / 车险件数",
+  "cross_sell_total_rate": "驾意险推介件数 / 商业险出单件数（分子分母均限主全+交三，不含纯交强/单交）",
   "cross_sell_danjiao_rate": "单交下驾意险件数 / 单交车险件数",
   "cross_sell_jiaosan_rate": "交三下驾意险件数 / 交三车险件数",
   "cross_sell_zhuquan_rate": "主全下驾意险件数 / 主全车险件数",
