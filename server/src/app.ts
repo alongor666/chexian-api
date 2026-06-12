@@ -15,7 +15,7 @@ import { corsConfig } from './config/cors.js';
 import { serverEnv, dbEnv } from './config/env.js';
 import { duckdbService } from './services/duckdb.js';
 import { getTrendCubeState, getCostCubeState, getSalesmanCubeState } from './services/duckdb-cube.js';
-import { getShadowStats } from './services/cube-shadow.js';
+import { getShadowStats, redactMismatchDetail } from './services/cube-shadow.js';
 // state-db 仅在 STATE_STORE_BACKEND=sqlite 时动态加载（codex P1 修复 b85efba）：
 // state-db.ts 顶部 import 'better-sqlite3'，虽然 binding.js 是 lazy（new Database
 // 才 dlopen NAPI），不能依赖此隐性实现。dynamic import 把模块加载边界对齐到
@@ -135,7 +135,13 @@ app.get('/health', (req, res) => {
   const cubeShadow = Object.fromEntries(
     Object.entries(getShadowStats()).map(([route, s]) => [
       route,
-      { match: s.match, mismatch: s.mismatch, error: s.error },
+      {
+        match: s.match,
+        mismatch: s.mismatch,
+        error: s.error,
+        // 脱敏摘要（业务数值打码，保留行号/字段名/日期形状）供远程诊断；完整明细在 PM2 日志
+        lastMismatch: redactMismatchDetail(s.lastMismatchDetail),
+      },
     ])
   );
   const cubeStateView = (s: { builtVersion: string | null; building: unknown; lastBuildMs: number | null; lastError: string | null; exact?: boolean | null }) => ({
