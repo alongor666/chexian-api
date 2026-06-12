@@ -10,6 +10,10 @@ name: Cube Grayscale Sentinel
 on:
   schedule:
     # 每小时跑一次（UTC）。灰度阶段宁可勤报：mismatch 出现越早干预越好。
+    # 调频里程碑（BACKLOG uid=2026-06-12-claude-055a12 BLOCKED）：
+    #   切流 CUBE_ROUTING_ENABLED='true' 稳定 1 个月后 → '15 */3 * * *'（每 3 小时）
+    #   长期稳态 → '15 */6 * * *'（每 6 小时）或并入 ETL 哨兵 cron
+    # 改频率前先看 scripts/sentinel/README.md 调频里程碑章节
     - cron: '15 * * * *'
   workflow_dispatch:
     inputs:

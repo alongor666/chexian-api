@@ -17,6 +17,7 @@
 ---
 
 ## 📋 活跃任务速查（68 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（70 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -72,7 +73,7 @@
 - 2026-06-12-claude-27972c — 治理静态检查专项（bug-hunt 沉淀）
 - 2026-06-12-claude-45630f — 存量
 
-**P3（22 项）**
+**P3（23 项）**
 
 - B247 — 图表 hex 色值审计
 - B251 — 输出风格与用户契约冲突
@@ -96,6 +97,7 @@
 - 2026-06-11-claude-84ea3a — cleanup-reports 按 mtime 而非文件名日期保留最新
 - 2026-06-11-claude-ee63ee — quote-conversion KpiCards default 分支为死代码
 - 2026-06-11-claude-f633c0 — cancelRequest 键不匹配永远取消不了请求
+- 2026-06-12-claude-055a12 `BLOCKED` — 立方体灰度哨兵降频里程碑
 
 ---
 
@@ -169,5 +171,6 @@
 | 2026-06-11-claude-f633c0 | 2026-06-11 | Bugfix/Frontend | @claude | cancelRequest 键不匹配永远取消不了请求：client-core.ts:192 controller 以 GET:${normalizeGetEndpoint(endpoint)}（含排序 query）为键存，cancelRequest(endpoint) 用原始 endpoint 查表必 miss；类注释宣称同端点新请求自动取消前序请求，代码无此 abort 逻辑（仅合并）。 | P3 | PROPOSED | N/A | src/shared/api/client-core.ts |  |
 | 2026-06-11-claude-fa0f22 | 2026-06-11 | 数据质量 | @claude | 多 sheet 加载仅命中一个必须列即并入整 sheet：etl_validation.py:116 has_header=any(c in required_columns)，仅含保单号列的汇总/透视 sheet 被当有效续表 concat，其余列 NaN 对齐 → 静默注入残缺行。transform.py:141 load_target_excel 同样只查保单号别名。FineBI 导出带统计 sheet 时触发。 | P2 | PROPOSED | N/A | 数据管理/pipelines/etl_validation.py |  |
 | 2026-06-11-claude-fdbba5 | 2026-06-11 | 指标口径 | @claude | [口径裁决]硬编码阈值违反红线：drilldown.ts:216、top-salesman.ts:162 四象限 growth_rate>=7/achievement_rate>=100，注册表阈值为 10/5/2 与 110/100/95，7% 不在任何注册表定义内；kpi-detail.ts:85 同城/异地机构白名单硬编码 14 个机构，新增/山西机构两边都不计入致 region 环形图分母静默缺失。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/drilldown.ts,server/src/sql/kpi-detail.ts |  |
+| 2026-06-12-claude-055a12 | 2026-06-12 | 性能/灰度收尾 | @claude | 立方体灰度哨兵降频里程碑：现在每小时一次；待 CUBE_ROUTING_ENABLED='true' 切流稳定 1 个月后（mismatch 持续 0、cost.exact 稳定）改 .github/workflows/cube-grayscale-sentinel.yml 的 cron 为 '15 */3 * * *'（每 3 小时）；长期稳态再改 '15 */6 * * *'（每 6 小时）或并入 ETL 哨兵 cron 节省 GHA minutes。触发条件：切流 PR 合并后 30 天。文档：scripts/sentinel/README.md 调频里程碑章节 | P3 | BLOCKED | N/A | .github/workflows/cube-grayscale-sentinel.yml,scripts/sentinel/README.md | 等灰度切流后稳定 1 个月触发；当前 cron=每小时一次合理 |
 | 2026-06-12-claude-27972c | 2026-06-12 | Chore/Governance | @claude | 治理静态检查专项（bug-hunt 沉淀）：1) execSync 模板拼接检测—现存 15 处多为受控插值(pid/固定命令)，需先甄别白名单否则误报；重点拦插值来自文件枚举(git ls-files/readdirSync)的模式。2) Context Provider 定义未挂载检测—现存 AuthContext/LoginForm 死代码需先清理(useRBAC 已迁 PermissionContext)否则检查立刻红。3) SQL 生成器 FROM PolicyFact 未消费 permissionFilter 守卫(易误报,需路由层调用图)。 | P2 | PROPOSED | N/A | scripts/check-governance.mjs,src/shared/contexts/AuthContext.tsx |  |
 | 2026-06-12-claude-45630f | 2026-06-12 | Bug/Backend | @claude | **存量**：metric-registry 领域断言集成测试 5 项失败（transfer_rate/renewal_rate/nev_rate/new_car_rate/cross_sell_total_rate 区间断言）——在干净 main（17c4586）上复现，疑似口径Ⅱa/Ⅱb 组件数口径修复后 testCase fixture 未同步；仅本地集成桶，不影响 CI | P2 | PROPOSED | N/A | server/src/config/metric-registry/__tests__/integration/domain-testcases.test.ts |  |
