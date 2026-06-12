@@ -9,24 +9,29 @@ import type { MetricDefinition } from '../types.js';
 export const crossSellMetrics: readonly MetricDefinition[] = [
   {
     id: 'cross_sell_total_rate',
-    version: '1.0.0',
+    version: '2.0.0',
     name: '整体推介率',
     category: 'cross_sell',
     tags: ['kpi', 'cross_sell'],
     formula: {
-      description: '驾意险件数 / 车险件数',
-      numerator: 'SUM(driver_count)',
-      denominator: 'SUM(auto_count)',
+      description: '驾意险推介件数 / 商业险出单件数（分子分母均限主全+交三，不含纯交强/单交）',
+      numerator: "SUM(driver_count) WHERE coverage_combination IN ('主全','交三')",
+      denominator: "SUM(auto_count) WHERE coverage_combination IN ('主全','交三')",
       unit: '%',
     },
     sql: {
       expression: `CASE
-    WHEN SUM(auto_count) > 0
-    THEN ROUND(SUM(driver_count) * 100.0 / SUM(auto_count), 2)
+    WHEN SUM(CASE WHEN coverage_combination IN ('主全', '交三') THEN auto_count ELSE 0 END) > 0
+    THEN ROUND(
+      SUM(CASE WHEN coverage_combination IN ('主全', '交三') THEN driver_count ELSE 0 END) * 100.0
+      / SUM(CASE WHEN coverage_combination IN ('主全', '交三') THEN auto_count ELSE 0 END), 2)
     ELSE 0
   END AS total_rate`,
-      requiredColumns: ['auto_count', 'driver_count'],
-      notes: '使用 CrossSellDailyAgg 聚合表中的预计算字段',
+      requiredColumns: ['auto_count', 'driver_count', 'coverage_combination'],
+      notes:
+        '使用 CrossSellDailyAgg 聚合表中的预计算字段。' +
+        '红线（business-domain.md）：推介率分母为商业险出单件数（主全+交三），不含纯交强/单交；' +
+        '与 cross-sell.ts total_auto_count/total_driver_count 同口径。',
     },
     display: {
       formatter: 'percent',
@@ -41,7 +46,16 @@ export const crossSellMetrics: readonly MetricDefinition[] = [
         assertions: { total_rate: { op: 'between', min: 0, max: 100 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 cross-sell.ts 迁移' }],
+    changelog: [
+      {
+        version: '2.0.0',
+        date: '2026-06-12',
+        changes:
+          '分子分母限定 coverage_combination IN (主全,交三)：原对全险别求和（分母含单交，' +
+          '稀释整体推介率），违反推介率分母红线，与 SQL 实现 cross-sell.ts 不一致。',
+      },
+      { version: '1.0.0', date: '2026-03-27', changes: '从 cross-sell.ts 迁移' },
+    ],
   },
 
   {

@@ -302,8 +302,9 @@ export function generateCrossSellHeatmapQuery(
       SELECT
         pd,
         ${dimConfig.alias},
-        COUNT(DISTINCT dedup_key) AS auto_count,
-        COUNT(DISTINCT CASE WHEN is_cross_sell THEN dedup_key END) AS driver_count,
+        -- 推介率分子分母限定主全/交三（红线：分母不含纯交强/单交），对齐 cross-sell.ts total_auto/driver_count
+        COUNT(DISTINCT CASE WHEN coverage_combination IN ('主全', '交三') THEN dedup_key END) AS auto_count,
+        COUNT(DISTINCT CASE WHEN is_cross_sell AND coverage_combination IN ('主全', '交三') THEN dedup_key END) AS driver_count,
         COUNT(DISTINCT CASE WHEN is_cross_sell THEN raw_policy_no END) AS driver_policy_count,
         SUM(CASE WHEN is_cross_sell THEN cross_sell_premium_driver ELSE 0 END) AS driver_premium,
         SUM(commercial_premium) AS commercial_premium,
@@ -323,8 +324,9 @@ export function generateCrossSellHeatmapQuery(
       SELECT
         CAST(policy_date AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
-        SUM(auto_count) AS auto_count,
-        SUM(driver_count) AS driver_count,
+        -- 推介率分子分母限定主全/交三（红线：分母不含纯交强/单交），对齐 cross-sell.ts total_auto/driver_count
+        SUM(CASE WHEN coverage_combination IN ('主全', '交三') THEN auto_count ELSE 0 END) AS auto_count,
+        SUM(CASE WHEN coverage_combination IN ('主全', '交三') THEN driver_count ELSE 0 END) AS driver_count,
         SUM(driver_policy_count) AS driver_policy_count,
         SUM(driver_premium) AS driver_premium,
         SUM(commercial_premium) AS commercial_premium,

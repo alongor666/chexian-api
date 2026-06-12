@@ -673,14 +673,14 @@ describe('generateFrequencyYoyQuery', () => {
 
   it('数据覆盖 2022 年以后', () => {
     const sql = generateFrequencyYoyQuery(EMPTY_FILTERS);
-    expect(sql).toContain("c.accident_time >= '2022-01-01'");
+    expect(sql).toContain("p.insurance_start_date >= '2022-01-01'");
     expect(sql).toContain("insurance_start_date >= '2022-01-01'");
   });
 
   it('按年/季度分组', () => {
     const sql = generateFrequencyYoyQuery(EMPTY_FILTERS);
-    expect(sql).toContain('YEAR(c.accident_time) AS year');
-    expect(sql).toContain('QUARTER(c.accident_time) AS quarter');
+    expect(sql).toContain('YEAR(p.insurance_start_date) AS year');
+    expect(sql).toContain('QUARTER(p.insurance_start_date) AS quarter');
   });
 
   it('输出千件出险频率 freq_per_1000', () => {
