@@ -1,5 +1,5 @@
 /**
- * 通用可加性立方体 — 物化与新鲜度管理（第一阶段试点：趋势立方体）
+ * 通用可加性立方体 — 物化与新鲜度管理（趋势立方体 CubeTrendDay + 成本立方体 CubeCostDay）
  *
  * 设计文档：开发文档/架构设计/通用立方体查询加速方案.md
  * BACKLOG：uid=2026-06-11-claude-90a92c（P1）
@@ -15,6 +15,7 @@
 import type { DuckDBQueryable } from './duckdb-types.js';
 import { getDataVersion } from './data-version.js';
 import { buildTrendCubeSql, TREND_CUBE_TABLE } from '../sql/cube/trend-cube.js';
+import { buildCostCubeSql, buildCostCubeProbeSql, COST_CUBE_TABLE } from '../sql/cube/cost-cube.js';
 
 interface CubeState {
   /** 立方体构建完成时的 dataVersion；null = 从未构建成功 */
@@ -96,6 +97,116 @@ export function ensureTrendCubeFresh(db: DuckDBQueryable): 'ready' | 'building' 
       })
       .finally(() => {
         trendCubeState.building = null;
+      });
+  }
+  return 'building';
+}
+
+// ── 成本立方体（CubeCostDay · 第三批次） ─────────────────────────────────────
+
+interface CostCubeState extends CubeState {
+  /**
+   * 构建期探针结论：true = 无跨格保单，等值前提成立可服务；
+   * false = 发现跨格保单，本数据版本整体降级（不建表、不重试，回退原路径）；
+   * null = 本版本尚未探针。语义见 sql/cube/cost-cube.ts 文件头。
+   */
+  exact: boolean | null;
+}
+
+const costCubeState: CostCubeState = {
+  builtVersion: null,
+  building: null,
+  lastBuildMs: null,
+  lastError: null,
+  exact: null,
+};
+
+/** 观测快照（/health 或日志用） */
+export function getCostCubeState(): Readonly<CostCubeState> {
+  return { ...costCubeState };
+}
+
+/** @internal 测试用：重置状态机 */
+export function resetCostCubeStateForTest(): void {
+  costCubeState.builtVersion = null;
+  costCubeState.building = null;
+  costCubeState.lastBuildMs = null;
+  costCubeState.lastError = null;
+  costCubeState.exact = null;
+}
+
+/** 成本立方体是否与当前数据版本一致且探针通过（可安全用于查询） */
+export function isCostCubeFresh(): boolean {
+  return (
+    costCubeState.builtVersion !== null &&
+    costCubeState.builtVersion === getDataVersion() &&
+    costCubeState.exact === true
+  );
+}
+
+/**
+ * 物化成本立方体（阻塞直至完成）。
+ * 前置条件：PolicyFact 与 ClaimsAgg 均已加载（cost 路由的 createDomainMiddleware
+ * 保证 ClaimsAgg 惰性域已就绪后才会触发本函数）。
+ *
+ * 流程：跨格保单探针 → 通过才建表；不通过则记 exact=false 并跳过建表
+ * （本数据版本内不再重试，路由持续回退原路径——结构性降级而非报错）。
+ */
+export async function materializeCostCube(db: DuckDBQueryable): Promise<void> {
+  const versionAtStart = getDataVersion();
+  const t0 = Date.now();
+  console.log(`[CostCube] Probing + materializing ${COST_CUBE_TABLE} (dataVersion=${versionAtStart})...`);
+
+  const schema = await db.getTableSchema('PolicyFact');
+  const hasBranchCode = schema.some((c: { column_name?: string }) => c.column_name === 'branch_code');
+
+  const [{ impure_policies }] = await db.query<{ impure_policies: number | bigint }>(
+    buildCostCubeProbeSql(hasBranchCode)
+  );
+  if (Number(impure_policies) > 0) {
+    costCubeState.builtVersion = versionAtStart;
+    costCubeState.exact = false;
+    costCubeState.lastBuildMs = Date.now() - t0;
+    costCubeState.lastError = null;
+    console.warn(
+      `[CostCube] 探针发现 ${Number(impure_policies)} 张跨格保单（行间起保日/维度值不一致），` +
+      `本数据版本降级：cost 路由保持原路径（等值前提不成立，详见 sql/cube/cost-cube.ts）`
+    );
+    return;
+  }
+
+  await db.query(buildCostCubeSql(hasBranchCode));
+
+  const [{ n }] = await db.query<{ n: number }>(`SELECT COUNT(*) AS n FROM ${COST_CUBE_TABLE}`);
+  const elapsed = Date.now() - t0;
+  // 与趋势立方体同一竞态规避：versionAtStart 记账，构建期间 ETL 重载则保持不新鲜
+  costCubeState.builtVersion = versionAtStart;
+  costCubeState.exact = true;
+  costCubeState.lastBuildMs = elapsed;
+  costCubeState.lastError = null;
+  console.log(`[CostCube] ${COST_CUBE_TABLE} ready: ${Number(n).toLocaleString()} rows in ${elapsed}ms (branch_code=${hasBranchCode})`);
+}
+
+/**
+ * 非阻塞确保新鲜（与趋势立方体同一模型，多一个探针降级态）：
+ *   - 'ready'    新鲜且探针通过 → 可直接查立方体
+ *   - 'degraded' 本版本探针未通过 → 回退原路径，且不再重复触发构建
+ *   - 'building' 不新鲜 → 触发后台单飞重建，本次请求走原路径
+ */
+export function ensureCostCubeFresh(db: DuckDBQueryable): 'ready' | 'building' | 'degraded' {
+  if (isCostCubeFresh()) return 'ready';
+  if (costCubeState.builtVersion === getDataVersion() && costCubeState.exact === false) {
+    return 'degraded';
+  }
+  if (!costCubeState.building) {
+    costCubeState.building = materializeCostCube(db)
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        costCubeState.lastError = message;
+        console.error(`[CostCube] Materialization failed (route will keep falling back): ${message}`);
+      })
+      .finally(() => {
+        costCubeState.building = null;
       });
   }
   return 'building';
