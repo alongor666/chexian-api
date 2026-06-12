@@ -116,7 +116,7 @@
 
 **启动**：`bun run dev:full`（禁止只运行 `bun run dev`）
 
-**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口 `apiClient`；Phase 2 拆为 client-core 传输内核 + 13 域命名空间子客户端 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow,premium,geo,patrol}.*`，详见 CODE_INDEX.md）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器）+ `query/*.ts`（20 子路由 + shared）· `server/src/sql/`（50 个 SQL 模块：30 顶层 + 20 子目录拆分）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
+**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口 `apiClient`；Phase 2 拆为 client-core 传输内核 + 13 域命名空间子客户端 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow,premium,geo,patrol}.*`，详见 CODE_INDEX.md）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器）+ `query/*.ts`（22 子路由 + shared）· `server/src/sql/`（54 个 SQL 模块：31 顶层 + 23 子目录拆分）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
 
 **API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录 + tokens + route-catalog）· `/api/filters/*`（筛选器）
 
@@ -136,17 +136,22 @@
 
 ```bash
 bun install && bun run dev:full    # 安装+启动
+bun run hooks:install              # 首次 clone 后装 git hooks（worktree 依赖自愈）
 bun run build                      # 类型检查+构建
-bun run test                       # 单元测试（⚠️ 不是 bun test）
+bun run typecheck                  # 仅类型检查
+bun run test --run                 # 单元测试一次性运行（⚠️ 不是 bun test；不带 --run 进 vitest watch）
+bun run test --run <文件路径>      # 跑单个测试文件
 bun run test:integration           # 集成测试（需 DuckDB 原生二进制，仅本地）
 bun run test:e2e                   # E2E（需先 dev:full，凭据 admin/<在凭据库/E2E_PASSWORD 环境变量中获取>）
 bun run governance                 # 治理校验
+bun run verify:quick               # preflight + governance + typecheck
+bun run verify:full                # verify:quick + 单元测试
 ```
 
 **CI 测试分层协议**（RED LINE）：
-- **单元测试** (`bun run test`): 198 文件 / 2559 测试 — CI + 本地
+- **单元测试** (`bun run test --run`): 228 测试文件（数字随迭代漂移，以 `vite.config.ts` include 为准）— CI + 本地
 - **集成测试** (`bun run test:integration`): 4 文件 — 仅本地（需 DuckDB 原生二进制）
-- CI 环境无法解析 `.node` 原生模块（vitest/jsdm 限制），相关测试必须在 `vite.config.ts` exclude 中排除
+- CI 环境无法解析 `.node` 原生模块（vitest/jsdom 限制），相关测试必须在 `vite.config.ts` exclude 中排除
 - 新增原生模块依赖时，必须检查是否有对应测试需排除
 
 ---
