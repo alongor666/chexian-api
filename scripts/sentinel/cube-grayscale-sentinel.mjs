@@ -1,34 +1,43 @@
 #!/usr/bin/env node
 /**
- * 立方体灰度哨兵（Cube Grayscale Sentinel）
+ * 立方体灰度哨兵（Cube Grayscale Sentinel）— AI agent 入口
  *
- * 通用可加性立方体灰度阶段 1 的自动观测器。读 GET /health 的 cubes + cubeShadow
- * 字段（PR #604 引入），按确定性规则判定灰度健康度并产出报告。
+ * AI agent 想知道"立方体灰度系统现在健康吗"时跑这个脚本。不依赖任何 SOP 文档，
+ * 全部判定逻辑就在本文件——读 /health 自己判断。
  *
- * 范式对齐 scripts/sentinel/etl-anomaly-sentinel.mjs：
- *   - 产物：verdict.json（机器读）+ summary.md（人读）→ --out-dir
- *   - GitHub workflow 把 sentinel-out/ 上传为 artifact 保留 30 天
- *   - hasAnomalies=true 时透出 GITHUB_OUTPUT，workflow 自动追踪 GitHub issue
+ * 通用可加性立方体灰度阶段 1 的自动观测器（PR #604 引入 cubes+cubeShadow 后）。
+ * 每小时 cron 跑一次（.github/workflows/cube-grayscale-sentinel.yml），异常自动追踪
+ * GitHub issue「立方体灰度哨兵追踪」（label cube-grayscale-anomaly）。
  *
  * 设计文档：开发文档/架构设计/通用立方体查询加速方案.md
- * BACKLOG：uid=2026-06-11-claude-90a92c
+ * BACKLOG 主任务：uid=2026-06-11-claude-90a92c
+ * BACKLOG 调频里程碑：uid=2026-06-12-claude-055a12
  *
- * 用法：
- *   node scripts/sentinel/cube-grayscale-sentinel.mjs --api-base https://chexian.cretvalu.com
- *   node scripts/sentinel/cube-grayscale-sentinel.mjs --dry-run --out-dir /tmp/cube-sentinel
+ * ── 用法 ──
+ *   节点本地：node scripts/sentinel/cube-grayscale-sentinel.mjs --api-base URL [--out-dir DIR]
+ *   CI 跑：sentinel-out/cube-grayscale/ 自动上传为 artifact 保留 30 天
+ *   离线烟测：--dry-run（仅把 summary 打到 stdout，verdict.json/summary.md 仍写）
  *
- * 判定规则（确定性，可复现）：
- *   ① shadow.*.mismatch > 0  → CRITICAL（立方体算错，灰度阶段最严重）
- *   ② shadow.*.error > 0     → WARN（立方体执行异常，多见于构建失败/连接池耗尽）
- *   ③ cubes.cost.exact=false → INFO（探针发现跨格保单，业务数据质量信号）
- *   ④ cubes.*.builtVersion=null 且非进程冷启动期 → WARN（立方体未构建）
+ * ── 4 条判定规则（确定性可复现，与项目 etl-anomaly-sentinel 同范式）──
+ *   ① shadow.*.mismatch > 0   → CRITICAL  立方体算错，立刻暂停切流；根因 = 改写器口径漂移 / ETL 新字段值 / 立方体 bug
+ *   ② shadow.*.error > 0      → WARN      立方体执行异常（构建失败 / 连接池耗尽 / 内存）
+ *   ③ cubes.cost.exact=false  → INFO      跨格保单（**ETL 数据质量信号** — 同保单批改改了机构/起保日）
+ *   ④ cubes.*.builtVersion    → WARN      立方体落后 /api/data/version（cache-warmer 路由未覆盖）
  *
- * 退出码：CRITICAL=1，否则 0（INFO/WARN 也是 0，靠 hasAnomalies 透出给 workflow）
+ * 退出码：CRITICAL → 1（阻断 cron）；其他 → 0（INFO/WARN 通过 GITHUB_OUTPUT 透出但不算"红"）
  *
- * 反哺 ETL 的可能信号（详见 README）：
- *   - exact=false 反复出现 → ETL 上游"批改改维度列"假设被打破，应复盘源数据 dedup
- *   - mismatch=立方体逻辑 bug 或 ETL 引入新字段值未被白名单识别 → 立刻停灰度切流
- *   - builtVersion 长期落后 dataVersion → cache-warmer 路由未覆盖该立方体路由族
+ * ── 异常时 AI agent 该做什么 ──
+ *   CRITICAL  → 看 PM2 日志 [CubeShadow] MISMATCH 拿差异明细 → 改 sql/cube/<route>-cube.ts
+ *               改写器或扩 servability.ts token 白名单 + 补集成测试 + 重跑哨兵
+ *   WARN/INFO → 记到追踪 issue 里，当天解决（不阻断流程）
+ *   误报想紧急关闭 → 跑 scripts/cube-rollback.mjs --target shadow
+ *
+ * ── 想推进到下一阶段（影子→正式切流 / 切流→调频）──
+ *   跑 scripts/release/cube-promote.mjs → 自动读哨兵 7 天历史判定是否可推进
+ *
+ * ── 红线（governance check 自动兜底，不靠记忆）──
+ *   - cube-shadow.ts 的 NUMERIC_TOLERANCE 不可放宽（governance「立方体影子对账容差」）
+ *   - 改写器对模板演进有 fail-fast 断言（在 sql/cube/*-cube.ts 内）
  */
 
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';

@@ -2365,6 +2365,36 @@ export const DATA_READINESS_CHECKS = [
   ...POST_SYNC_READINESS_CHECKS,
 ];
 
+/**
+ * 立方体影子对账数值容差红线（AI agent 容易把容差放宽来"消除 mismatch"，但
+ * 1e-9 已是 DuckDB 浮点求和顺序差异的物理下限；放宽 = 把真实口径漂移当噪音忽略）。
+ * 任何 AI agent 试图改 cube-shadow.ts 的 NUMERIC_TOLERANCE 会被本检查阻断。
+ *
+ * 真正的口径 mismatch 应该改改写器 / 白名单 / 集成测试，不应该放宽容差。
+ */
+function checkCubeShadowTolerance() {
+  info('检查立方体影子对账容差红线...');
+  const filePath = path.join(ROOT_DIR, 'server/src/services/cube-shadow.ts');
+  if (!fs.existsSync(filePath)) {
+    warning('cube-shadow.ts 不存在，跳过（立方体未启用）');
+    return true;
+  }
+  const src = fs.readFileSync(filePath, 'utf-8');
+  // 期望恰好一处 `const NUMERIC_TOLERANCE = 1e-9`
+  const match = src.match(/const\s+NUMERIC_TOLERANCE\s*=\s*([^\s;]+)/);
+  if (!match) {
+    error('cube-shadow.ts 缺少 NUMERIC_TOLERANCE 常量定义');
+    return false;
+  }
+  if (match[1] !== '1e-9') {
+    error(`cube-shadow.ts 的 NUMERIC_TOLERANCE 被改为 ${match[1]}，不可放宽（1e-9 已是 DuckDB 浮点求和顺序差异的物理下限）`);
+    error('  正确做法：mismatch 出现时改 sql/cube/<route>-cube.ts 改写器 / 白名单 / 补集成测试，不是改容差');
+    return false;
+  }
+  success('容差为 1e-9（红线保持）');
+  return true;
+}
+
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件', fn: checkRequiredFiles },
@@ -2397,6 +2427,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
   { name: 'RouteCatalog参数契约', fn: checkRouteCatalogParamContracts },
   { name: 'Agent注册表版本', fn: checkAgentRegistryVersionBump },
+  { name: '立方体影子对账容差', fn: checkCubeShadowTolerance },
 ];
 
 /**

@@ -140,13 +140,17 @@ node scripts/sentinel/cube-grayscale-sentinel.mjs \
 
 `--dry-run` 不影响产物（仍写 verdict.json/summary.md），仅把 summary 打印到终端。
 
-## 完整运维 SOP（唯一事实源）
+## AI agent 入口（不写 SOP，全部决策由脚本承载）
 
-本哨兵的**在做什么 / 怎么看 / 异常分级处理 / 切流流程 / 调频里程碑 / 回滚 / 禁止事项**全部沉淀在：
+| 想做的事 | 跑的脚本 | 决策依据 |
+|---|---|---|
+| 看灰度健康度 | `scripts/sentinel/cube-grayscale-sentinel.mjs` | 读 `/health` + 4 条规则（见脚本文件头） |
+| 判定是否可推进到下一阶段 | `scripts/release/cube-promote.mjs` | 读 ecosystem 开关 + GitHub issue 评论历史 |
+| 紧急回滚立方体行为 | `scripts/cube-rollback.mjs` | ssh + sed + reload 两道开关 |
 
-📖 **[.claude/rules/cube-grayscale-sop.md](../../.claude/rules/cube-grayscale-sop.md)**
+**为什么不写 SOP**：AI agent 项目里，SOP 假设"有人会主动查文档"——这正是 AI 的弱项。改为"脚本即决策入口 + 文件头注释即文档"——AI grep 关键字立刻找到对应脚本，文件头注释里有判定逻辑/触发条件/异常处理路径，比 SOP 文档可靠。
 
-—— 改 cron、提切流 PR、看到追踪 issue 评论时先查 SOP。本 README 只覆盖哨兵自身的"组成 / 判定规则 / 产物去向"，不重复 SOP 的运维知识（避免漂移）。
+**红线由 governance check 兜底**（`bun run governance` 校验「立方体影子对账容差」），不靠人/AI 记忆。
 
 ## 与 ETL 异常哨兵的边界
 

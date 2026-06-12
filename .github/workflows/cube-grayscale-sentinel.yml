@@ -9,10 +9,9 @@ name: Cube Grayscale Sentinel
 
 on:
   schedule:
-    # 每小时跑一次（UTC）。灰度阶段宁可勤报：mismatch 出现越早干预越好。
-    # 调频 / 异常处理 / 切流 / 回滚的完整运维 SOP（唯一事实源）：
-    #   .claude/rules/cube-grayscale-sop.md
-    # 改 cron 前必读 SOP §5 调频里程碑（BACKLOG uid=2026-06-12-claude-055a12 BLOCKED）
+    # 每小时跑一次（UTC）。灰度阶段宁可勤报。
+    # 改 cron 前先跑：node scripts/release/cube-promote.mjs --history-issue <num> --gh-token "$GH_TOKEN"
+    # 该脚本读哨兵 7 天历史自动判定是否可推进；canAdvance=true 才改。
     - cron: '15 * * * *'
   workflow_dispatch:
     inputs:
