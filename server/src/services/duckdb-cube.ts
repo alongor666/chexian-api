@@ -18,6 +18,12 @@ import { buildTrendCubeSql, TREND_CUBE_TABLE } from '../sql/cube/trend-cube.js';
 import { buildCostCubeSql, buildCostCubeProbeSql, COST_CUBE_TABLE } from '../sql/cube/cost-cube.js';
 import { buildSalesmanCubeSql, SALESMAN_CUBE_TABLE } from '../sql/cube/salesman-cube.js';
 
+/** PolicyFact.policy_date 是否 TIMESTAMP 类（DESCRIBE column_type 含 TIMESTAMP 前缀） */
+function detectPolicyDateIsTimestamp(schema: Array<{ column_name?: string; column_type?: string }>): boolean {
+  const col = schema.find((c) => c.column_name === 'policy_date');
+  return typeof col?.column_type === 'string' && col.column_type.toUpperCase().startsWith('TIMESTAMP');
+}
+
 interface CubeState {
   /** 立方体构建完成时的 dataVersion；null = 从未构建成功 */
   builtVersion: string | null;
@@ -66,8 +72,11 @@ export async function materializeTrendCube(db: DuckDBQueryable): Promise<void> {
   // branch_code 列探测（多分公司 RLS：列存在则纳入粒度，permissionFilter 条件可直接下推）
   const schema = await db.getTableSchema('PolicyFact');
   const hasBranchCode = schema.some((c: { column_name?: string }) => c.column_name === 'branch_code');
+  // policy_date 类型探测：立方体列类型必须跟随源列（生产 ETL 落盘 TIMESTAMP、本地常为 DATE；
+  // 类型不一致会让 CAST(policy_date AS VARCHAR) 等表达式两边输出不同 → 影子 mismatch，issue #608）
+  const policyDateIsTimestamp = detectPolicyDateIsTimestamp(schema);
 
-  await db.query(buildTrendCubeSql(hasBranchCode));
+  await db.query(buildTrendCubeSql(hasBranchCode, policyDateIsTimestamp));
 
   const [{ n }] = await db.query<{ n: number }>(`SELECT COUNT(*) AS n FROM ${TREND_CUBE_TABLE}`);
   const elapsed = Date.now() - t0;
@@ -76,7 +85,7 @@ export async function materializeTrendCube(db: DuckDBQueryable): Promise<void> {
   trendCubeState.builtVersion = versionAtStart;
   trendCubeState.lastBuildMs = elapsed;
   trendCubeState.lastError = null;
-  console.log(`[TrendCube] ${TREND_CUBE_TABLE} ready: ${Number(n).toLocaleString()} rows in ${elapsed}ms (branch_code=${hasBranchCode})`);
+  console.log(`[TrendCube] ${TREND_CUBE_TABLE} ready: ${Number(n).toLocaleString()} rows in ${elapsed}ms (branch_code=${hasBranchCode}, policy_date_ts=${policyDateIsTimestamp})`);
 }
 
 /**
@@ -252,8 +261,9 @@ export async function materializeSalesmanCube(db: DuckDBQueryable): Promise<void
 
   const schema = await db.getTableSchema('PolicyFact');
   const hasBranchCode = schema.some((c: { column_name?: string }) => c.column_name === 'branch_code');
+  const policyDateIsTimestamp = detectPolicyDateIsTimestamp(schema);
 
-  await db.query(buildSalesmanCubeSql(hasBranchCode));
+  await db.query(buildSalesmanCubeSql(hasBranchCode, policyDateIsTimestamp));
 
   const [{ n }] = await db.query<{ n: number }>(`SELECT COUNT(*) AS n FROM ${SALESMAN_CUBE_TABLE}`);
   const elapsed = Date.now() - t0;
@@ -261,7 +271,7 @@ export async function materializeSalesmanCube(db: DuckDBQueryable): Promise<void
   salesmanCubeState.builtVersion = versionAtStart;
   salesmanCubeState.lastBuildMs = elapsed;
   salesmanCubeState.lastError = null;
-  console.log(`[SalesmanCube] ${SALESMAN_CUBE_TABLE} ready: ${Number(n).toLocaleString()} rows in ${elapsed}ms (branch_code=${hasBranchCode})`);
+  console.log(`[SalesmanCube] ${SALESMAN_CUBE_TABLE} ready: ${Number(n).toLocaleString()} rows in ${elapsed}ms (branch_code=${hasBranchCode}, policy_date_ts=${policyDateIsTimestamp})`);
 }
 
 /**

@@ -38,11 +38,21 @@ export const TREND_CUBE_OPTIONAL_DIMENSIONS = CUBE_OPTIONAL_DIMENSIONS;
 /**
  * 生成立方体构建 SQL。
  * @param hasBranchCode - PolicyFact schema 是否含 branch_code（由物化器探测后传入）
+ * @param policyDateIsTimestamp - PolicyFact.policy_date 是否 TIMESTAMP 类型（由物化器探测）。
+ *   生产 ETL（pandas datetime64）落盘为 TIMESTAMP（时分秒恒 00:00:00）；本地合成数据
+ *   常为 DATE。**立方体列类型必须跟随源列**——否则 `CAST(policy_date AS VARCHAR)` 等
+ *   类型敏感表达式在两边输出不同字符串（'2026-01-01 00:00:00' vs '2026-01-01'），
+ *   生产影子对账 trend 12/12 全 mismatch 即此根因（2026-06-12，追踪 issue #608）。
  */
-export function buildTrendCubeSql(hasBranchCode: boolean): string {
+export function buildTrendCubeSql(hasBranchCode: boolean, policyDateIsTimestamp: boolean = false): string {
+  // 日截断 + 类型保真：TIMESTAMP 源截断后 CAST 回 TIMESTAMP（00:00:00），DATE 源保持 DATE
+  const policyDateExpr = policyDateIsTimestamp
+    ? `CAST(CAST(policy_date AS DATE) AS TIMESTAMP) AS policy_date`
+    : `CAST(policy_date AS DATE) AS policy_date`;
   const dims = [
-    `CAST(policy_date AS DATE) AS policy_date`,
-    // 月初日期：年月与原起保日一致（见 TREND_CUBE_DIMENSIONS 注释）
+    policyDateExpr,
+    // 月初日期：年月与原起保日一致（见 TREND_CUBE_DIMENSIONS 注释）。
+    // 该列不出现在任何输出（仅供 EXTRACT 年月比较），无类型保真需求
     `DATE_TRUNC('month', CAST(insurance_start_date AS DATE)) AS insurance_start_date`,
     `org_level_3`,
     `customer_category`,

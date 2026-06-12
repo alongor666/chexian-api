@@ -61,10 +61,15 @@ const SALESMAN_WHERE_ALLOWLIST = buildWhereTokenAllowlist([
 /**
  * 生成立方体构建 SQL。
  * @param hasBranchCode - PolicyFact schema 是否含 branch_code（由物化器探测后传入）
+ * @param policyDateIsTimestamp - PolicyFact.policy_date 是否 TIMESTAMP（与 trend-cube 同因：
+ *   立方体列类型跟随源列，避免类型敏感表达式在两边输出不同。排名输出虽无日期列，
+ *   但保真让 WHERE 下推与未来模板演进零类型隐患）
  */
-export function buildSalesmanCubeSql(hasBranchCode: boolean): string {
+export function buildSalesmanCubeSql(hasBranchCode: boolean, policyDateIsTimestamp: boolean = false): string {
   const dims = [
-    `CAST(policy_date AS DATE) AS policy_date`,
+    policyDateIsTimestamp
+      ? `CAST(CAST(policy_date AS DATE) AS TIMESTAMP) AS policy_date`
+      : `CAST(policy_date AS DATE) AS policy_date`,
     `salesman_name`,
     `org_level_3`,
     `customer_category`,
