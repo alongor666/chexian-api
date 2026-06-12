@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（68 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（69 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -32,7 +32,7 @@
 - 2026-06-11-claude-90a92c `IN_PROGRESS` — 通用可加性立方体查询加速
 - 2026-06-11-claude-942414 — 行级权限(RLS)整域绕过
 
-**P2（37 项）**
+**P2（38 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -71,6 +71,7 @@
 - 2026-06-11-claude-fa0f22 — 多 sheet 加载仅命中一个必须列即并入整 sheet
 - 2026-06-11-claude-fdbba5 — [口径裁决]硬编码阈值违反红线
 - 2026-06-12-claude-27972c — 治理静态检查专项（bug-hunt 沉淀）
+- 2026-06-12-claude-45630f — 存量
 
 **P3（22 项）**
 
@@ -159,7 +160,7 @@
 | 2026-06-11-claude-7dca99 | 2026-06-11 | Refactor/Frontend | @claude | StableContext/ExportContext value 未 memoize：StableContext.tsx:181、ExportContext.tsx:45 每次 Provider 渲染创建新 value 对象，使拆分稳定状态避免重渲染的设计落空，48 个 useGlobalFilters 消费者随上游渲染重渲染。 | P3 | PROPOSED | N/A | src/shared/contexts/StableContext.tsx,src/shared/export/ExportContext.tsx |  |
 | 2026-06-11-claude-84ea3a | 2026-06-11 | Chore/Hygiene | @claude | cleanup-reports 按 mtime 而非文件名日期保留最新：cleanup-reports.mjs:122 业务组内 sort((a,b)=>b.mtime-a.mtime) 保 mtime 最新，文件名自带日期前缀，若有人补生成/触碰旧日期报告(mtime 变新)，--apply 会删掉日期更新的保留旧日期的。sync-vps 每次同步前自动带 --apply 无人工确认。 | P3 | PROPOSED | N/A | scripts/cleanup-reports.mjs |  |
 | 2026-06-11-claude-89a352 | 2026-06-11 | Testing/CI | @claude | E2E 纳入 CI 守护：为 Playwright E2E 配一份 CI 可用的最小 Parquet 数据 fixture（含 policy/quotes_conversion/claims_detail 最小切片），使 skipWhenNoData 在 CI 不再合法跳过。背景：PR #583 修复 09-quote-conversion 长期假绿后，价值仅兑现在本地/发布前手动跑——CI 无数据时整套 E2E 静默跳过，quote-conversion 回归仍无 CI 防线。来源：PR #583 评审 N1（范围澄清），与 PR #580 harness 对标报告「生产 smoke 需数据」同一短板。注意 fixture 须过 Schema 契约且不含真实敏感数据。 | P2 | PROPOSED | N/A | tests/e2e；.github/workflows |  |
-| 2026-06-11-claude-90a92c | 2026-06-11 | 性能/Backend | @claude | **通用可加性立方体查询加速**：不依赖结果快照，立方体（签单日/起保日粒度 + 周月上卷）+ 指标可加性路由，任意参数组合查询降至毫秒级；基准原型 16 项等值校验通过，KPI 总览 276ms→7ms（39x），进程内月立方体 613µs（对照生产最坏冷路径≈16307x） | P1 | IN_PROGRESS | 开发文档/架构设计/通用立方体查询加速方案.md | scripts/perf/bench-universal-cube.mjs | 第一阶段试点落地：CubeTrendDay 物化（duckdb-cube.ts，新鲜度状态机规避 B311 竞态）+ /api/query/trend 双开关接线（CUBE_ROUTING_ENABLED / CUBE_SHADOW_COMPARE，默认关闭零行为变更）+ 影子对账（cube-shadow.ts）+ WHERE token 白名单可服务性判定 + SQL 改写器 fail-fast 断言。验证：25 单元 + 35 集成（30 数据级等值 + 路由三态 4 + 状态机 1）全过，typecheck/governance 绿 |
+| 2026-06-11-claude-90a92c | 2026-06-11 | 性能/Backend | @claude | **通用可加性立方体查询加速**：不依赖结果快照，立方体（签单日/起保日粒度 + 周月上卷）+ 指标可加性路由，任意参数组合查询降至毫秒级；基准原型 16 项等值校验通过，KPI 总览 276ms→7ms（39x），进程内月立方体 613µs（对照生产最坏冷路径≈16307x） | P1 | IN_PROGRESS | 开发文档/架构设计/通用立方体查询加速方案.md | scripts/perf/bench-universal-cube.mjs | 第一阶段试点落地：CubeTrendDay 物化（duckdb-cube.ts，新鲜度状态机规避 B311 竞态）+ /api/query/trend 双开关接线（CUBE_ROUTING_ENABLED / CUBE_SHADOW_COMPARE，默认关闭零行为变更）+ 影子对账（cube-shadow.ts）+ WHERE token 白名单可服务性判定 + SQL 改写器 fail-fast 断言。验证：25 单元 + 35 集成（30 数据级等值 + 路由三态 4 + 状态机 1）全过，typecheck/governance 绿 <br>第二批次落地：growth 路由（同比/环比/年累计/自定义/日对比上下文）接 CubeTrendDay，dual-metric（去重件数非可加）与业务员分组自动回退；WHERE token 白名单上提 servability.ts；趋势件数视角适配口径修复判定回退。37 单元 + 20 增长等值 + 全量 3008 单测全过 |
 | 2026-06-11-claude-942414 | 2026-06-11 | Security/Backend | @claude | 行级权限(RLS)整域绕过：customer-flow/quote-conversion/claims-detail(10+端点)/repair/premium-plan 多条路由链从不消费 req.permissionFilter，非超管/跨分公司账号可越权读全量。对照组 truck/policy-geo/trend/pivot/growth/performance 均走 parseFiltersAndBuildWhere(...,req.permissionFilter)，证明是遗漏。是否成事故取决于 allowedRoutes 策略，需按多分公司 Day-1 SOP 复核。 | P1 | PROPOSED | N/A | server/src/sql/customer-flow.ts,server/src/sql/quote-conversion.ts,server/src/routes/query/claims-detail.ts,server/src/routes/query/repair.ts,server/src/routes/query/premium-plan.ts |  |
 | 2026-06-11-claude-9ba379 | 2026-06-11 | 数据质量 | @claude | claims 源文件拼接顺序使遗留清单覆盖最新全量：daily.mjs:1091 [...newFiles,...legacyFiles]+convert_claims_detail.py:181 drop_duplicates(keep='last')，车险报立结案清单_*.xlsx 遗留旧快照排在新格式之后，同赔案号旧快照金额覆盖新全量。文件名无8位日期的遗留文件逃过自动归档守卫。 | P2 | PROPOSED | N/A | 数据管理/daily.mjs,数据管理/pipelines/convert_claims_detail.py |  |
 | 2026-06-11-claude-a8d3df | 2026-06-11 | 指标口径 | @claude | [口径裁决]performance 负基数同比符号反转：drilldown.ts:197、top-salesman.ts:143 WHEN COALESCE(prev,0)=0 THEN NULL ELSE (c-p)/p，批改冲减使上期为负时除以负数 → 增长率符号反转。注册表 growth.ts 统一 WHEN prev>0...ELSE NULL，唯这两处不一致。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/drilldown.ts,server/src/sql/performance-analysis/top-salesman.ts |  |
@@ -171,3 +172,4 @@
 | 2026-06-11-claude-fa0f22 | 2026-06-11 | 数据质量 | @claude | 多 sheet 加载仅命中一个必须列即并入整 sheet：etl_validation.py:116 has_header=any(c in required_columns)，仅含保单号列的汇总/透视 sheet 被当有效续表 concat，其余列 NaN 对齐 → 静默注入残缺行。transform.py:141 load_target_excel 同样只查保单号别名。FineBI 导出带统计 sheet 时触发。 | P2 | PROPOSED | N/A | 数据管理/pipelines/etl_validation.py |  |
 | 2026-06-11-claude-fdbba5 | 2026-06-11 | 指标口径 | @claude | [口径裁决]硬编码阈值违反红线：drilldown.ts:216、top-salesman.ts:162 四象限 growth_rate>=7/achievement_rate>=100，注册表阈值为 10/5/2 与 110/100/95，7% 不在任何注册表定义内；kpi-detail.ts:85 同城/异地机构白名单硬编码 14 个机构，新增/山西机构两边都不计入致 region 环形图分母静默缺失。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/drilldown.ts,server/src/sql/kpi-detail.ts |  |
 | 2026-06-12-claude-27972c | 2026-06-12 | Chore/Governance | @claude | 治理静态检查专项（bug-hunt 沉淀）：1) execSync 模板拼接检测—现存 15 处多为受控插值(pid/固定命令)，需先甄别白名单否则误报；重点拦插值来自文件枚举(git ls-files/readdirSync)的模式。2) Context Provider 定义未挂载检测—现存 AuthContext/LoginForm 死代码需先清理(useRBAC 已迁 PermissionContext)否则检查立刻红。3) SQL 生成器 FROM PolicyFact 未消费 permissionFilter 守卫(易误报,需路由层调用图)。 | P2 | PROPOSED | N/A | scripts/check-governance.mjs,src/shared/contexts/AuthContext.tsx |  |
+| 2026-06-12-claude-45630f | 2026-06-12 | Bug/Backend | @claude | **存量**：metric-registry 领域断言集成测试 5 项失败（transfer_rate/renewal_rate/nev_rate/new_car_rate/cross_sell_total_rate 区间断言）——在干净 main（17c4586）上复现，疑似口径Ⅱa/Ⅱb 组件数口径修复后 testCase fixture 未同步；仅本地集成桶，不影响 CI | P2 | PROPOSED | N/A | server/src/config/metric-registry/__tests__/integration/domain-testcases.test.ts |  |

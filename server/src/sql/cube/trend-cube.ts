@@ -17,6 +17,7 @@
 
 import { generatePremiumTrendQuery } from '../trend/premium-trend.js';
 import type { TimeView, ViewPerspective, DateCriteria } from '../trend/shared.js';
+import { CUBE_DIMENSIONS, CUBE_OPTIONAL_DIMENSIONS, isWhereServableByCube } from './servability.js';
 
 /** 立方体表名（物化逻辑见 services/duckdb-cube.ts） */
 export const TREND_CUBE_TABLE = 'CubeTrendDay';
@@ -29,21 +30,10 @@ export const TREND_CUBE_TABLE = 'CubeTrendDay';
  * （只取 YEAR/MONTH，月初日期的年月 == 原日期的年月）无需改写即语义等价。
  * 禁止在立方体上做 insurance_start_date 的"日"粒度筛选/分组。
  */
-export const TREND_CUBE_DIMENSIONS = [
-  'policy_date',
-  'insurance_start_date',
-  'org_level_3',
-  'customer_category',
-  'insurance_type',
-  'is_renewal',
-  'is_new_car',
-  'is_transfer',
-  'is_nev',
-  'is_telemarketing',
-] as const;
+export const TREND_CUBE_DIMENSIONS = CUBE_DIMENSIONS;
 
 /** 多分公司行级安全列（PolicyFact 存在该列时纳入立方体粒度，permissionFilter 注入的 branch_code 条件可直接下推） */
-export const TREND_CUBE_OPTIONAL_DIMENSIONS = ['branch_code'] as const;
+export const TREND_CUBE_OPTIONAL_DIMENSIONS = CUBE_OPTIONAL_DIMENSIONS;
 
 /**
  * 生成立方体构建 SQL。
@@ -77,21 +67,8 @@ export function buildTrendCubeSql(hasBranchCode: boolean): string {
 
 // ── 可服务性判定 ──────────────────────────────────────────────────────────────
 
-/**
- * WHERE 子句 token 白名单。
- * whereClause 由 buildWhereFromFilterParams + permissionMiddleware 受控产出，
- * 语法只有：列名 比较符 '字符串' / 列 IN (...) / 列 = true|false / 列 LIKE '...' /
- * 列 IS [NOT] NULL / AND / OR / 括号 / 1=1。
- * 剥离引号字符串后逐 token 校验：出现白名单外 token（如 salesman_name /
- * coverage_combination / fuel_type / vehicle_model ...）即判定不可服务 → 回退原路径。
- * 采用白名单而非黑名单：未来新增筛选列时默认安全回退，不会静默出错。
- */
-const WHERE_TOKEN_ALLOWLIST = new Set<string>([
-  ...TREND_CUBE_DIMENSIONS,
-  ...TREND_CUBE_OPTIONAL_DIMENSIONS,
-  'and', 'or', 'in', 'not', 'is', 'null', 'like', 'true', 'false',
-]);
-
+// WHERE token 白名单判定逻辑已上提到 servability.ts（growth 等路由族共用），
+// 本模块只保留趋势特有的视角/时间口径判定。
 export interface TrendCubeServability {
   servable: boolean;
   reason?: string;
@@ -118,16 +95,7 @@ export function isTrendCubeServable(
   if (dateField !== 'policy_date') {
     return { servable: false, reason: `dateField=${dateField}（立方体仅支持 policy_date 日粒度）` };
   }
-  // 1) 剥离单引号字符串字面量（含 '' 转义），避免值内容干扰 token 解析
-  const stripped = whereClause.replace(/'(?:[^']|'')*'/g, "''");
-  // 2) 提取标识符 token 逐一校验
-  const tokens = stripped.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
-  for (const token of tokens) {
-    if (!WHERE_TOKEN_ALLOWLIST.has(token.toLowerCase())) {
-      return { servable: false, reason: `WHERE 含立方体外标识符: ${token}` };
-    }
-  }
-  return { servable: true };
+  return isWhereServableByCube(whereClause);
 }
 
 // ── SQL 改写器 ───────────────────────────────────────────────────────────────
