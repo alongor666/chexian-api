@@ -86,17 +86,17 @@ export function generateQualityBusinessTrendQuery(
       ${timeDimension} AS time_period,
       ${perspective === 'premium'
       ? `SUM(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN premium ELSE 0 END)`
-      : `COUNT(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN 1 END)`
+      : `COUNT(DISTINCT CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN policy_no END)`
     } AS quality_premium,
       ${perspective === 'premium'
       ? 'SUM(premium)'
-      : 'COUNT(*)'
+      : 'COUNT(DISTINCT policy_no)'
     } AS total_premium,
       CASE
-        WHEN ${perspective === 'premium' ? 'SUM(premium)' : 'COUNT(*)'} > 0 THEN
+        WHEN ${perspective === 'premium' ? 'SUM(premium)' : 'COUNT(DISTINCT policy_no)'} > 0 THEN
           ${perspective === 'premium'
       ? `SUM(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN premium ELSE 0 END) / SUM(premium)`
-      : `COUNT(CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN 1 END) * 1.0 / COUNT(*)`
+      : `COUNT(DISTINCT CASE WHEN ${QUALITY_BUSINESS_CONDITION} THEN policy_no END) * 1.0 / COUNT(DISTINCT policy_no)`
     }
         ELSE 0
       END AS quality_ratio

@@ -402,10 +402,16 @@ export function generateClaimsHeatmapQuery(
         ac.cutoff_idx,
         COUNT(DISTINCT c.claim_no) AS claim_count,
         ROUND(SUM(CASE
-          WHEN c.settlement_time IS NOT NULL
-           AND CAST(c.settlement_time AS DATE) <= ac.cutoff
-          THEN COALESCE(c.settled_amount, 0)
-          ELSE COALESCE(c.reserve_amount, 0)
+          -- B302: 与 ClaimsAgg.reported_claims 同口径，排除无责(liability_ratio=0)与无效案件(零结/注销/拒赔)
+          WHEN COALESCE(c.liability_ratio, 100) > 0
+           AND (c.case_type IS NULL OR c.case_type NOT IN ('零结','注销','拒赔'))
+          THEN CASE
+            WHEN c.settlement_time IS NOT NULL
+             AND CAST(c.settlement_time AS DATE) <= ac.cutoff
+            THEN COALESCE(c.settled_amount, 0)
+            ELSE COALESCE(c.reserve_amount, 0)
+          END
+          ELSE 0
         END) / 1e4, 4) AS total_claims_wan
       FROM ClaimsDetail c
       JOIN eligible_policies p ON c.policy_no = p.policy_no
@@ -451,10 +457,16 @@ export function generateClaimsHeatmapQuery(
         ac.cutoff_idx,
         COUNT(DISTINCT c.claim_no) AS claim_count,
         ROUND(SUM(CASE
-          WHEN c.settlement_time IS NOT NULL
-           AND CAST(c.settlement_time AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
-          THEN COALESCE(c.settled_amount, 0)
-          ELSE COALESCE(c.reserve_amount, 0)
+          -- B302: 与 ClaimsAgg.reported_claims 同口径，排除无责(liability_ratio=0)与无效案件(零结/注销/拒赔)
+          WHEN COALESCE(c.liability_ratio, 100) > 0
+           AND (c.case_type IS NULL OR c.case_type NOT IN ('零结','注销','拒赔'))
+          THEN CASE
+            WHEN c.settlement_time IS NOT NULL
+             AND CAST(c.settlement_time AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
+            THEN COALESCE(c.settled_amount, 0)
+            ELSE COALESCE(c.reserve_amount, 0)
+          END
+          ELSE 0
         END) / 1e4, 4) AS total_claims_wan
       FROM ClaimsDetail c
       JOIN eligible_policies p ON c.policy_no = p.policy_no
