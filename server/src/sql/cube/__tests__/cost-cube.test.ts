@@ -1,0 +1,162 @@
+/**
+ * 成本立方体 SQL 模块单元测试（纯字符串级，CI 可跑）
+ * 数据级等值见集成测试 services/__tests__/duckdb-cube-cost.test.ts（仅本地）。
+ */
+import { describe, expect, it } from 'vitest';
+import {
+  COST_CUBE_TABLE,
+  buildCostCubeSql,
+  buildCostCubeProbeSql,
+  isCostCubeServable,
+  generateCostCubeQuery,
+  type CostCubeAnalysisType,
+} from '../cost-cube.js';
+import {
+  generateClaimRatioQuery,
+  generateExpenseRatioQuery,
+  generateComprehensiveCostQuery,
+  generateVariableCostQuery,
+} from '../../cost/cost-ratios.js';
+import type { CostAnalysisConfig, CostDimension } from '../../cost/shared.js';
+
+const config = (over: Partial<CostAnalysisConfig> = {}): CostAnalysisConfig => ({
+  dimension: 'org_level_3',
+  cutoffDate: '2026-05-31',
+  whereClause: '1=1',
+  ...over,
+});
+
+describe('isCostCubeServable', () => {
+  it('五个分组维度 × 立方体内 WHERE → 全部可服务', () => {
+    const dims: CostDimension[] = ['customer_category', 'org_level_3', 'coverage_combination', 'org_customer', 'org_coverage'];
+    for (const dimension of dims) {
+      expect(isCostCubeServable({ whereClause: '1=1', dimension }).servable).toBe(true);
+    }
+    expect(isCostCubeServable({
+      whereClause: "1=1 AND org_level_3 IN ('天府', '乐山') AND is_renewal = true AND insurance_type = '交强险'",
+      dimension: 'org_level_3',
+    }).servable).toBe(true);
+    expect(isCostCubeServable({
+      whereClause: "1=1 AND customer_category LIKE '营业%' AND tonnage_segment = '2-9吨' AND coverage_combination IS NOT NULL",
+      dimension: 'org_customer',
+    }).servable).toBe(true);
+  });
+
+  it('起保日窗（日粒度格子键）→ 可服务', () => {
+    expect(isCostCubeServable({
+      whereClause: "1=1 AND insurance_start_date >= '2025-06-01' AND insurance_start_date <= '2026-03-31'",
+      dimension: 'org_level_3',
+    }).servable).toBe(true);
+  });
+
+  it('签单日窗（行级属性，批改行会被切开）→ 结构性回退', () => {
+    const r = isCostCubeServable({
+      whereClause: "1=1 AND policy_date >= '2026-01-01'",
+      dimension: 'org_level_3',
+    });
+    expect(r.servable).toBe(false);
+    expect(r.reason).toContain('policy_date');
+  });
+
+  it('立方体外列（业务员/车型/燃料/评分/套单）→ 回退', () => {
+    for (const where of [
+      "1=1 AND salesman_name = '张三'",
+      "1=1 AND vehicle_model LIKE '%自卸%'",
+      "1=1 AND fuel_type LIKE '天然气%'",
+      "1=1 AND insurance_grade IN ('A', 'B')",
+      "1=1 AND is_commercial_insure = '套单'",
+      "1=1 AND renewal_mode IS NULL",
+    ]) {
+      expect(isCostCubeServable({ whereClause: where, dimension: 'org_level_3' }).servable).toBe(false);
+    }
+  });
+});
+
+describe('buildCostCubeSql / buildCostCubeProbeSql', () => {
+  it('构建 SQL 含 B252 去重三要素 + 赔款一次归属 + 格子聚合', () => {
+    const sql = buildCostCubeSql(false);
+    expect(sql).toContain(`CREATE OR REPLACE TABLE ${COST_CUBE_TABLE}`);
+    expect(sql).toContain('GROUP BY policy_no, CAST(insurance_start_date AS DATE)');
+    expect(sql).toContain('HAVING SUM(premium) > 0');
+    expect(sql).toContain('LEFT JOIN ClaimsAgg');
+    expect(sql).toContain('GROUP BY ALL');
+    expect(sql).not.toContain('branch_code');
+  });
+
+  it('branch_code 探测开启时纳入粒度（构建 + 探针一致）', () => {
+    expect(buildCostCubeSql(true)).toContain('ANY_VALUE(branch_code) AS branch_code');
+    expect(buildCostCubeProbeSql(true)).toContain('branch_code');
+    expect(buildCostCubeProbeSql(false)).not.toContain('branch_code');
+  });
+
+  it('探针对起保日 + 每个维度列做跨格检测（NULL 哨兵参与）', () => {
+    const sql = buildCostCubeProbeSql(false);
+    expect(sql).toContain("COUNT(DISTINCT CAST(insurance_start_date AS DATE)) > 1");
+    expect(sql).toContain("COALESCE(CAST(org_level_3 AS VARCHAR), '__NULL__')");
+    expect(sql).toContain("COALESCE(CAST(tonnage_segment AS VARCHAR), '__NULL__')");
+  });
+});
+
+describe('generateCostCubeQuery（输出列与 cost-ratios.ts 逐列同名）', () => {
+  // 每类分析的输出别名清单 —— 同时锚定 legacy 与 cube 两边（任一边改列名即红）
+  const EXPECTED_ALIASES: Record<CostCubeAnalysisType, string[]> = {
+    claimRatio: [
+      'dim_key', 'policy_count', 'total_premium', 'total_claim_cases', 'total_reported_claims',
+      'avg_claim_amount', 'earned_premium', 'total_exposure_days', 'avg_exposure_days',
+      'earned_claim_ratio', 'earned_loss_frequency',
+    ],
+    expenseRatio: ['dim_key', 'policy_count', 'total_premium', 'total_fee', 'expense_ratio'],
+    comprehensiveCost: [
+      'dim_key', 'policy_count', 'total_premium', 'total_reported_claims', 'total_fee',
+      'earned_premium', 'earned_claim_ratio', 'expense_ratio', 'comprehensive_cost_ratio',
+      'earned_margin_amount', 'projected_margin_amount',
+    ],
+    variableCost: [
+      'dim_key', 'policy_count', 'total_premium', 'earned_premium', 'total_reported_claims',
+      'total_fee', 'earned_claim_ratio', 'expense_ratio', 'variable_cost_ratio',
+    ],
+  };
+
+  const LEGACY_GENERATORS: Record<CostCubeAnalysisType, (c: CostAnalysisConfig) => string> = {
+    claimRatio: generateClaimRatioQuery,
+    expenseRatio: generateExpenseRatioQuery,
+    comprehensiveCost: generateComprehensiveCostQuery,
+    variableCost: generateVariableCostQuery,
+  };
+
+  const TYPES = Object.keys(EXPECTED_ALIASES) as CostCubeAnalysisType[];
+
+  for (const analysisType of TYPES) {
+    it(`${analysisType}：只查立方体、零行级残留、别名两边对齐`, () => {
+      const cube = generateCostCubeQuery(analysisType, config());
+      const legacy = LEGACY_GENERATORS[analysisType](config());
+
+      expect(cube).toContain(`FROM ${COST_CUBE_TABLE}`);
+      expect(cube).not.toMatch(/\bPolicyFact\b/);
+      expect(cube).not.toMatch(/\bClaimsAgg\b/);
+      expect(cube).not.toMatch(/\bCOUNT\(DISTINCT\b/);
+      expect(cube).toContain('ORDER BY SUM(premium) DESC');
+
+      for (const alias of EXPECTED_ALIASES[analysisType]) {
+        expect(cube, `cube 缺输出列 ${alias}`).toContain(`AS ${alias}`);
+        expect(legacy, `legacy 缺输出列 ${alias}（模板已演进？同步更新 cost-cube.ts 与本测试）`).toContain(`AS ${alias}`);
+      }
+    });
+  }
+
+  it('多维度（org_customer / org_coverage）：dim_key 拼接 + GROUP BY 两列', () => {
+    const cube = generateCostCubeQuery('claimRatio', config({ dimension: 'org_customer' }));
+    expect(cube).toContain("|| ' - ' ||");
+    expect(cube).toContain('GROUP BY org_level_3, customer_category');
+  });
+
+  it('WHERE 透传到格子过滤', () => {
+    const cube = generateCostCubeQuery('variableCost', config({ whereClause: "1=1 AND is_nev = true" }));
+    expect(cube).toContain('WHERE 1=1 AND is_nev = true');
+  });
+
+  it('非法 cutoffDate → fail-fast 抛错（防注入兜底，路由层应已校验）', () => {
+    expect(() => generateCostCubeQuery('claimRatio', config({ cutoffDate: "2026-05-31' OR 1=1 --" })))
+      .toThrow(/cutoffDate/);
+  });
+});

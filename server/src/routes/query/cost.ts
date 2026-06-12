@@ -15,8 +15,39 @@ import {
   generateMonthlyExpenseQuery,
   CostDimension,
 } from '../../sql/cost.js';
+import { dbEnv } from '../../config/env.js';
+import { isCostCubeServable, generateCostCubeQuery, type CostCubeAnalysisType } from '../../sql/cube/cost-cube.js';
+import { ensureCostCubeFresh } from '../../services/duckdb-cube.js';
+import { runShadowCompare } from '../../services/cube-shadow.js';
+import type { CostAnalysisConfig } from '../../sql/cost/shared.js';
 
 const router = Router();
+
+/**
+ * 成本立方体接线（第三批次，BACKLOG uid=2026-06-11-claude-90a92c）。
+ * 双开关默认关闭时零生效。返回 null 表示走原路径（不可服务/未就绪/探针降级/开关关闭）。
+ * 影子模式：返回原路径结果，同时后台双跑比对。
+ */
+async function tryCostCube(
+  analysisType: CostCubeAnalysisType,
+  config: CostAnalysisConfig,
+  legacyRunner: () => Promise<Array<Record<string, unknown>>>
+): Promise<Array<Record<string, unknown>> | null> {
+  const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
+  const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+  if (!cubeRouting && !cubeShadow) return null;
+  if (!isCostCubeServable({ whereClause: config.whereClause ?? '1=1', dimension: config.dimension }).servable) return null;
+  if (ensureCostCubeFresh(duckdbService) !== 'ready') return null;
+
+  const cubeSql = generateCostCubeQuery(analysisType, config);
+  if (cubeRouting) {
+    return duckdbService.query(cubeSql);
+  }
+  // 影子对账：先取原路径结果返回调用方，后台比对立方体结果
+  const legacyResult = await legacyRunner();
+  runShadowCompare('cost', legacyResult, () => duckdbService.query(cubeSql));
+  return legacyResult;
+}
 
 // 确保 ClaimsAgg 惰性域在首次访问 cost API 时已加载
 router.use(createDomainMiddleware('ClaimsAgg'));
@@ -147,7 +178,12 @@ router.get(
         sql = generateClaimRatioQuery(config);
     }
 
-    const result = await duckdbService.query(sql);
+    const cubeResult = await tryCostCube(
+      finalAnalysisType as CostCubeAnalysisType,
+      config,
+      () => duckdbService.query(sql)
+    );
+    const result = cubeResult ?? await duckdbService.query(sql);
 
     res.json({
       success: true,
