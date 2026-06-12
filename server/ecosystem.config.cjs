@@ -35,6 +35,12 @@ module.exports = {
         //  要让 PM2 重读 process.env 必须用 shell 前缀赋值 + --update-env。codex P1 PR#391 修正）
         STATE_STORE_BACKEND: 'sqlite',
         STATE_DB_PATH: '/var/www/chexian/server/data/state.db',
+        // 通用立方体灰度阶段 1（BACKLOG uid=2026-06-11-claude-90a92c，PR #595/#600-#603）：
+        // 影子对账 —— 对外仍返回原路径结果，后台双跑立方体逐字段比对。
+        // 观测面：GET /health 的 cubes + cubeShadow；差异明细在 PM2 日志 [CubeShadow]。
+        // 验收（设计文档 §4 阶段 1）：连续 7 天 mismatch=0 → 改 CUBE_ROUTING_ENABLED: 'true' 切流。
+        // 回滚：删除本行 revert PR，或 VPS 上改 'false' + sudo /usr/local/bin/deploy-chexian-api reload。
+        CUBE_SHADOW_COMPARE: 'true',
       },
 
       // 日志配置
