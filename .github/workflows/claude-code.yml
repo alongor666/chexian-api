@@ -9,6 +9,12 @@ on:
   issues:
     types: [opened, edited]
 
+  # PR 自动 review：opened / reopened / push 新 commit / 从 draft 升级 ready
+  # 替代 codex 自动 review，让每次 PR 提交都有第二意见而不必手动 @claude review
+  # draft PR 不跑（用 ready_for_review 升级时再触发）；详见 auto-review job 的 if 条件
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
   # 手动触发（支持 --teleport 从本地切换到云端）
   workflow_dispatch:
     inputs:
@@ -21,7 +27,7 @@ on:
         required: false
         type: string
 
-# 避免并发运行同一 PR 的任务
+# claude-code 写代码 job 的并发控制（auto-review 在 job 级单独覆盖以支持取消旧 review）
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: false
@@ -101,39 +107,91 @@ jobs:
         continue-on-error: true
         run: bun run governance
 
-  # PR 中显式请求 @claude review 才触发审查
+  # PR 自动 review：opened / reopened / synchronize / ready_for_review 自动触发；
+  # 也保留 @claude review 评论触发作为「修复后再评一次」的手动入口。
+  # 与 claude-code job 不同 concurrency 组：同 PR 后续 push 取消未完成的 review，
+  # 避免针对中间 commit 的过时评论 + 节省 token。
   auto-review:
     name: Auto Review PR
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'issue_comment' &&
-      contains(github.event.comment.body, '@claude review')
+      (
+        github.event_name == 'pull_request' &&
+        contains(fromJson('["opened","reopened","synchronize","ready_for_review"]'), github.event.action) &&
+        github.event.pull_request.draft == false
+      ) ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        contains(github.event.comment.body, '@claude review')
+      )
+
+    concurrency:
+      group: claude-auto-review-pr-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
 
     permissions:
       contents: read
       pull-requests: write
+      id-token: write  # anthropics/claude-code-action OIDC 鉴权必需（漏了会报 "Failed to fetch OIDC token"）
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
       - name: Claude Code Review
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            请审查此 PR 的代码变更：
-            1. 检查是否符合 CLAUDE.md 规范
-            2. 检查是否有潜在的安全问题
-            3. 检查是否有性能问题
-            4. 提供改进建议
+            请对本 PR 做一次第二意见 review，使用中文，结论先行、证据贴行号。
 
-            使用中文回复，保持专业简洁。
+            **必读项目规范**（任何一条违反必须显式指出）：
+            - CLAUDE.md（红线规则 / 验证协议 / 指标 + 字段注册表流程）
+            - .claude/rules/business-domain.md（车险业务 9 条铁律 / 客户类别 11 类 / 风险等级 ≠ 质量泄漏 / 出险率分母用已赚暴露 / 满期赔付率公式）
+            - .claude/rules/data-pipeline.md（claims_detail 存量更新铁律 / Excel 多 sheet 加载 / 源文件命名）
+            - .claude/rules/deploy-chain-sop.md（触及 deploy.yml/vps-wrapper 时必须显式标注禁 auto-merge）
+            - .claude/rules/sql-generators.md（如改 server/src/sql/*.ts）
+            - 数据管理/knowledge/rules/车险数据业务规则字典.md（业务口径唯一事实源）
+
+            **review 维度**（按优先级，逐项给"通过 / 关注 / 阻断"+ 理由）：
+            1. **业务口径与数据正确性**：率值聚合是否 SUM(分子)/SUM(分母)；满期 / 赔付率 / 出险率公式是否对齐字典；JOIN 是否去重；DuckDB 字符串转义；时间窗口对齐
+            2. **API / SQL 安全**：是否有 SQL 注入风险；是否有未经鉴权的 /api/* 路由；危险字符过滤是否绕过；新增字段是否走字段注册表 codegen
+            3. **指标与字段注册表一致性**：新指标是否在 metric-registry 注册并有 testCase + changelog；新字段是否在 fields.json 注册并跑 codegen
+            4. **部署链影响面**：是否触及 .github/workflows/deploy.yml / deploy/vps-wrapper / scripts/sync-vps.mjs / ecosystem.config.cjs — 任一触及必须强调禁 auto-merge
+            5. **测试覆盖**：新逻辑是否有单元测试；边界三件套（阈值刚好 / 超过 / 不及）；幂等性
+            6. **可维护性**：单一事实源是否被违反；是否有硬编码值；是否引入死代码 / 备份注释 / TODO 不闭环
+
+            **输出格式**（严格遵守）：
+            ```
+            ## 结论
+            <一句话总结：是否建议合并 / 阻断的 P0 问题 / 关注的 P1 项数量>
+
+            ## P0 阻断（必须修才能合并）
+            <每条：文件:行号 — 问题 — 修复方向；没有则写"无">
+
+            ## P1 强烈建议
+            <同上格式>
+
+            ## P2 可选优化
+            <同上格式>
+
+            ## 通过项
+            <用一两行总结哪些维度本次做得对，给作者正反馈>
+            ```
+
+            没有问题时也要明确说"无 P0/P1/P2，可合并"。
+            禁止英文术语堆砌（满期赔付率 / 观察期 / 保单年度 / 成熟度因子等用中文全称）。
           allowed_tools: |
             Read
             Glob
             Grep
-          max_thinking_tokens: 5000
-          timeout_minutes: 10
+            Bash(gh pr diff:*)
+            Bash(gh pr view:*)
+            Bash(git diff:*)
+            Bash(git log:*)
+          max_thinking_tokens: 12000
+          timeout_minutes: 15
