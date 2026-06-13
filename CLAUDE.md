@@ -188,6 +188,8 @@ bun run verify:full                # verify:quick + 单元测试
 
 **PR 前**：`git fetch origin main && git rebase origin/main && bun run governance`（并行规则见 §0 红线"并行不串行"）
 
+**PR 创建状态**（用户偏好 2026-06-13，覆盖远程执行环境"默认建 draft"约定）：PR 一律以 **ready（非 draft）** 创建，禁止建 draft——用户不想人工标记待审核。部署链 PR 仍按 `.claude/pr-checklist.md` §4 禁 auto-merge（非 draft ≠ auto-merge）。
+
 **生产环境**：腾讯云 2核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist` · **PM2 重启**：deployer 无法直接调 pm2，须 `sudo /usr/local/bin/deploy-chexian-api reload`（或 `restart`/`install`）
 
 **日常数据发布**：优先用 `bun run release:daily:dry`（只看计划）· `bun run release:daily:check`（ETL/VPS/reload/health，企微 dry-run）· `bun run release:daily`（ETL → VPS → reload → health → 企微同步）。细节见 `数据管理/integrations/wecom_smartsheet/README.md` 与 `scripts/sync-and-reload.mjs --help`
