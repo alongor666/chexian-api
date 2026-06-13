@@ -1,0 +1,9 @@
+# ETL & 数据管理脚本依赖（最小集）
+# 安装：pip install -r 数据管理/requirements.txt
+#
+# Python 3.10+ 推荐；生产 VPS 以实际版本为准
+duckdb>=1.4.0
+pandas>=2.0.0
+pyarrow>=15.0.0
+openpyxl>=3.1.0
+numpy>=1.26.0
