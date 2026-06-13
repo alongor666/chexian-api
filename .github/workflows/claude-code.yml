@@ -133,6 +133,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      id-token: write  # anthropics/claude-code-action OIDC 鉴权必需（漏了会报 "Failed to fetch OIDC token"）
 
     steps:
       - name: Checkout
