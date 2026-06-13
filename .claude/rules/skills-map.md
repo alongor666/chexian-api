@@ -61,6 +61,7 @@
 | **qa** / **qa-only** | 系统性 QA 并修 bug（生产前最后一道闸） |
 | **review** | Pre-landing PR review（SQL 安全 / LLM 信任边界 / 条件副作用） |
 | **security-review** | 处理用户输入 / 鉴权 / 敏感数据时强制触发 |
+| **tech-stack-audit** | 技术栈只读审计 + 治理热启动 prompt（"审计技术栈/依赖审计/技术栈体检"触发）。首次产出见 开发文档/reviews/2026-06-12-技术栈审计.md |
 | **investigate** | 系统性 debug 四阶段，铁律"无根因不修复" |
 | **claude-api** | 修改本项目 Anthropic SDK 调用（智谱→真 Claude、prompt caching 调优） |
 | **sql-pro** | DuckDB 复杂 SQL 优化（窗口函数 / CTE / 执行计划） |
