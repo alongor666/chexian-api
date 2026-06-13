@@ -274,6 +274,7 @@ async function main() {
     writeFileSync(`${outDir}/verdict.json`, JSON.stringify(verdict, null, 2));
     writeFileSync(`${outDir}/summary.md`, `# 立方体灰度哨兵报告\n\n❌ CRITICAL：/health 端点不可达\n\n\`\`\`\n${err.message}\n\`\`\`\n`);
     writeGhOutput('has_anomalies', 'true');
+    writeGhOutput('max_severity', 'CRITICAL');
     writeGhOutput('summary_path', `${outDir}/summary.md`);
     writeGhOutput('verdict_path', `${outDir}/verdict.json`);
     process.exit(1);

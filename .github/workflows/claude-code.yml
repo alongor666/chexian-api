@@ -15,15 +15,11 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
 
-  # 手动触发（支持 --teleport 从本地切换到云端）
+  # 手动触发
   workflow_dispatch:
     inputs:
       prompt:
         description: 'Task prompt for Claude'
-        required: false
-        type: string
-      session_id:
-        description: 'Session ID for teleport continuation'
         required: false
         type: string
 
@@ -67,8 +63,7 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: ${{ github.event.inputs.prompt || '' }}
-          session_id: ${{ github.event.inputs.session_id || '' }}
+          direct_prompt: ${{ github.event.inputs.prompt || '' }}
 
           allowed_tools: |
             Read
@@ -94,7 +89,6 @@ jobs:
             4. 修改代码后运行 `bun run test --run` 确保测试通过
             5. 遵循检查协议，查找现有实现再动手
 
-          max_thinking_tokens: 10000
           timeout_minutes: 30
 
       - name: Run tests after changes
@@ -146,7 +140,7 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
+          direct_prompt: |
             请对本 PR 做一次第二意见 review，使用中文，结论先行、证据贴行号。
 
             **必读项目规范**（任何一条违反必须显式指出）：
@@ -193,5 +187,4 @@ jobs:
             Bash(gh pr view:*)
             Bash(git diff:*)
             Bash(git log:*)
-          max_thinking_tokens: 12000
           timeout_minutes: 15
