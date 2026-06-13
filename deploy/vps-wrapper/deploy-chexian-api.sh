@@ -4,7 +4,7 @@
 # 配合 sudoers: deployer ALL=(root) NOPASSWD: /usr/local/bin/deploy-chexian-api
 #
 # 安全设计:
-#   - 子命令白名单，只允许 install/start/restart/reload/stop/status/describe/logs/save/doctor/self-update/fix-deps-owner
+#   - 子命令白名单，只允许 install/start/restart/reload/stop/status/describe/logs/save/doctor/self-update/fix-deps-owner/verify-natives
 #   - start 仅允许固定 ecosystem 文件路径，防止任意脚本执行
 #   - install 仅在 /var/www/chexian/server 下执行，防止目录逃逸
 #   - self-update 只从固定路径 $APP_DIR/.wrapper-source/ 读取，由 deploy bundle 投放
@@ -49,6 +49,78 @@ APP_DIR="/var/www/chexian/server"
 APP_NAME="chexian-api"
 ECOSYSTEM="${APP_DIR}/ecosystem.config.cjs"
 
+# --- 原生模块健康检查 + 自愈（共享逻辑）─────────────────────────────────────
+# 背景：CN 代理 / registry 抖动 / optional 平台包缺失可能让 node-pre-gyp 预编译下载
+#       损坏或缺失，install/rebuild 报"完成"但 .node 截断/缺失；磁盘损坏被运行中
+#       进程的内存副本掩盖，直到下次 reload/restart 才引爆 crash-loop → 生产 502
+#       （2026-06-06 daily ETL reload 撞 bcrypt 缺失即此机理；memory
+#       project_vps_bcrypt_reload_landmine 记录详情）。
+# 设计：
+#   - install / reload / restart 三个子命令统一前置调用本函数，覆盖所有触发 reload
+#     的路径（PR merge / daily ETL / 手工应急）
+#   - 健康时单次 require ≈ 30-60ms × 3 模块 ≈ < 200ms，零额外开销
+#   - 按分发类型分修复（PR #516 codex review 沉淀，对纯预编译包 npm rebuild 无效）：
+#       ① 纯预编译分发型 @duckdb/node-api：facade 包无源码，scripts 为空，
+#          .node 在 optional 平台包 @duckdb/node-bindings-<platform>。损坏时
+#          只能全量 npm ci --omit=dev 重装重拉 optional 二进制；npm rebuild 是
+#          no-op；这一步会重置整个 node_modules，故必须排在源码编译之前。
+#       ② 源码可编译型 bcrypt / better-sqlite3：install script 走 node-pre-gyp /
+#          node-gyp。预编译下载被腐蚀时 npm_config_build_from_source=true npm
+#          rebuild <mod> 强制源码编译绕开。
+#   - set -e 兼容：require / 重装 / rebuild 都用 if 包裹（set -e 在 if 条件中
+#     失效），避免预期内的损坏返回非零把脚本提前中止；仅当修复后仍加载失败才
+#     exit 1（避免半升级上线后 reload 引爆）。
+#   - HEAL_RAN 标志：仅在实际触发了重装 / rebuild 后置为 true，供调用方决定
+#     是否需要 chown 修正 root-owned 残留（健康路径零文件系统改动）。
+# 调用约定：调用方在执行前通过自己的 trap EXIT 处理 chown；本函数只负责诊断 + 修复。
+HEAL_RAN=false
+heal_natives_or_exit() {
+  local context="$1"
+
+  # ① 纯预编译分发型：损坏时全量重装重拉 optional 平台二进制
+  for MOD in "@duckdb/node-api"; do
+    [ -d "$APP_DIR/node_modules/$MOD" ] || continue
+    if "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
+      continue
+    fi
+    HEAL_RAN=true
+    echo "[$context] $MOD 预编译二进制加载失败（facade 包，.node 在 optional @duckdb/node-bindings-<platform>），全量重装重拉..." >&2
+    if ( cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev ) \
+       && "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
+      echo "[$context] $MOD 已重装恢复"
+    else
+      echo "[$context] 错误: $MOD 重装后仍无法加载，中止（避免半升级上线）。" >&2
+      echo "[$context]   @duckdb 为纯预编译分发（无源码编译路径），疑似 optional 包 @duckdb/node-bindings-<platform> 的 .node 下载损坏/缺失；" >&2
+      echo "[$context]   人工排查: ls $APP_DIR/node_modules/@duckdb/（看 node-bindings-* 是否存在）+ 检查 registry/代理。" >&2
+      exit 1
+    fi
+  done
+
+  # ② 源码可编译型：损坏时 build-from-source 绕开被腐蚀的预编译下载
+  for MOD in "bcrypt" "better-sqlite3"; do
+    [ -d "$APP_DIR/node_modules/$MOD" ] || continue
+    if "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
+      continue
+    fi
+    HEAL_RAN=true
+    echo "[$context] $MOD 原生二进制加载失败，从源码重编译..." >&2
+    if ( cd "$APP_DIR" && npm_config_build_from_source=true "$NPM_BIN" rebuild "$MOD" ) \
+       && "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
+      echo "[$context] $MOD 已从源码重编译恢复"
+    else
+      echo "[$context] 错误: $MOD 重编译后仍无法加载，中止（避免半升级上线）" >&2
+      exit 1
+    fi
+  done
+}
+
+# 条件 chown trap：仅在 heal_natives_or_exit 实际触发了 npm ci/rebuild 后
+# （会产生 root-owned 子树）才 chown 回 deployer。健康路径不动文件系统时为 no-op。
+# install 子命令有自己的强 trap（无条件 chown，因为 npm ci 必然执行），不用本 helper。
+register_conditional_chown_trap() {
+  trap '[ "$HEAL_RAN" = true ] && chown -R deployer:deployer "$APP_DIR/node_modules" 2>/dev/null || true' EXIT
+}
+
 # --- 子命令分发 ---
 case "${1:-help}" in
   install)
@@ -66,54 +138,10 @@ case "${1:-help}" in
     trap 'chown -R deployer:deployer "$APP_DIR/node_modules" 2>/dev/null || true' EXIT
     cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev
 
-    # 原生模块自检 + 自愈（与本地 scripts/hooks/post-checkout §3 同源，按模块类型分修复策略）
-    # 背景：原生 .node 可能在某次 install 下载/编译失败（典型 CN 代理腐蚀预编译下载），npm ci
-    #       报"完成"但 .node 缺失/截断；磁盘损坏被运行中进程的内存副本掩盖，直到下次 reload/deploy
-    #       才引爆 crash-loop → 生产 502（2026-06-06 daily ETL reload 撞上 bcrypt 缺失即此机理，
-    #       详见 memory project_vps_bcrypt_reload_landmine）。
-    # 两类原生模块修复手段不同（PR #516 codex review 指出统一 npm rebuild 对纯预编译包无效）：
-    #   ① 纯预编译分发型 @duckdb/node-api：facade 包（package.json scripts 为空），真正的 .node
-    #      在 optional 平台包 @duckdb/node-bindings-<platform>（VPS=linux-x64）；npm rebuild 无
-    #      build script 可跑 = no-op，修不了 → 必须全量 npm ci 重装重拉 optional 预编译二进制。
-    #      重装会重置整个 node_modules，故必须排在源码编译之前。
-    #   ② 源码可编译型 bcrypt / better-sqlite3：install script 走 node-pre-gyp / node-gyp，预编译
-    #      下载被腐蚀时用 npm_config_build_from_source=true npm rebuild <mod> 强制源码编译绕开。
-    # set -e 兼容：require / 重装 / rebuild 都用 `if` 包裹（set -e 在 if 条件中失效），避免预期内
-    #       的损坏返回非零把脚本提前中止；仅当修复后仍加载失败才 exit 1（避免半升级上线后 reload 引爆）。
-
-    # ① 纯预编译分发型：损坏时全量重装重拉 optional 平台二进制（重装会重置 node_modules，须在源码编译前）
-    for MOD in "@duckdb/node-api"; do
-      [ -d "$APP_DIR/node_modules/$MOD" ] || continue
-      if "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
-        continue  # 健康，跳过
-      fi
-      echo "[install] $MOD 预编译二进制加载失败（facade 包，.node 在 optional @duckdb/node-bindings-<platform>），全量重装重拉..." >&2
-      if ( cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev ) \
-         && "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
-        echo "[install] $MOD 已重装恢复"
-      else
-        echo "[install] 错误: $MOD 重装后仍无法加载，中止部署（避免半升级上线）。" >&2
-        echo "[install]   @duckdb 为纯预编译分发（无源码编译路径），疑似 optional 包 @duckdb/node-bindings-<platform> 的 .node 下载损坏/缺失；" >&2
-        echo "[install]   人工排查: ls $APP_DIR/node_modules/@duckdb/（看 node-bindings-* 是否存在）+ 检查 registry/代理。" >&2
-        exit 1
-      fi
-    done
-
-    # ② 源码可编译型：损坏时 build-from-source 绕开被腐蚀的预编译下载（rebuild 输出不抑制，失败时 CI 日志可见编译错误）
-    for MOD in "bcrypt" "better-sqlite3"; do
-      [ -d "$APP_DIR/node_modules/$MOD" ] || continue
-      if "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
-        continue  # 健康，跳过
-      fi
-      echo "[install] $MOD 原生二进制加载失败，从源码重编译..." >&2
-      if ( cd "$APP_DIR" && npm_config_build_from_source=true "$NPM_BIN" rebuild "$MOD" ) \
-         && "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
-        echo "[install] $MOD 已从源码重编译恢复"
-      else
-        echo "[install] 错误: $MOD 重编译后仍无法加载，中止部署（避免半升级上线）" >&2
-        exit 1
-      fi
-    done
+    # 原生模块自检 + 自愈：共享逻辑见脚本顶部 heal_natives_or_exit。
+    # 与本地 scripts/hooks/post-checkout §3 同源策略（按模块分发类型分修复），
+    # 但本地用 bun + 不同路径，故各自实现、共享清单 (@duckdb/node-api / bcrypt / better-sqlite3)。
+    heal_natives_or_exit "install"
 
     # 所有权由分支开头的 trap EXIT 统一兜底（成功 / 失败 exit 1 / set -e 中断都会触发），此处无需再 chown
     ;;
@@ -121,12 +149,23 @@ case "${1:-help}" in
     "$PM2_BIN" start "$ECOSYSTEM" --env production
     ;;
   restart)
+    # 前置原生模块自愈：daily ETL 链路只走 reload/restart（不经 install），
+    # 磁盘上 .node 损坏（CN 代理腐蚀下载等）被运行中进程内存掩盖时，下次
+    # PM2 启动会撞 dlopen 崩 → 生产 502（memory project_vps_bcrypt_reload_landmine）。
+    # 健康时 < 200ms 零成本；损坏时按分发类型自愈或 exit 1（避免半升级）。
+    register_conditional_chown_trap
+    heal_natives_or_exit "restart"
     "$PM2_BIN" restart "$APP_NAME"
     ;;
   reload)
     # delete + start: 确保重读 ecosystem.config.cjs 中的环境变量
     # ⚠️ 有短暂停机窗口（delete 到 start 之间约 1-3 秒）
     # 如果只需热重启且不改 env，用 restart 子命令（零停机）
+    #
+    # 前置原生模块自愈（同 restart）：daily ETL 链路 sync-and-reload.mjs 走 ssh reload，
+    # 不经 install；2026-06-06 daily ETL reload 撞 bcrypt 缺失就是这个空档。
+    register_conditional_chown_trap
+    heal_natives_or_exit "reload"
     "$PM2_BIN" delete "$APP_NAME" 2>/dev/null || true
     "$PM2_BIN" start "$ECOSYSTEM" --env production
     ;;
@@ -202,22 +241,43 @@ case "${1:-help}" in
       echo "[fix-deps-owner] node_modules 不存在，跳过"
     fi
     ;;
+  verify-natives)
+    # 只读检测：分别 require 各原生模块，输出 OK/FAIL 但不触发任何修复。
+    # 用途：应急诊断（"reload 前先确认原生模块状态"）/ SOP 手动巡检 / 监控脚本探针。
+    # 与 reload / restart 子命令的前置自愈互补：前置自愈是 fail-fix；这里是 fail-report。
+    # 退出码：全部 OK 返回 0；任一加载失败返回 1（供脚本判断）。
+    EXIT_CODE=0
+    for MOD in "@duckdb/node-api" "bcrypt" "better-sqlite3"; do
+      if [ ! -d "$APP_DIR/node_modules/$MOD" ]; then
+        echo "[verify-natives] $MOD: skip (未安装)"
+        continue
+      fi
+      if "$NODE_BIN" -e "require('$APP_DIR/node_modules/$MOD')" >/dev/null 2>&1; then
+        echo "[verify-natives] $MOD: OK"
+      else
+        echo "[verify-natives] $MOD: FAIL (加载失败，需自愈; 跑 install/reload/restart 触发)"
+        EXIT_CODE=1
+      fi
+    done
+    exit $EXIT_CODE
+    ;;
   help|*)
-    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor|self-update|fix-deps-owner}"
+    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor|self-update|fix-deps-owner|verify-natives}"
     echo ""
     echo "子命令:"
-    echo "  install      在 $APP_DIR 执行 npm ci --omit=dev (要求 package-lock.json)"
-    echo "  start        启动 PM2 进程 (ecosystem.config.cjs)"
-    echo "  restart      重启 PM2 进程 (保留环境变量)"
-    echo "  reload       删除后重新启动 (重读 ecosystem 配置)"
-    echo "  stop         停止 PM2 进程"
-    echo "  status       查看 PM2 进程列表"
-    echo "  describe     查看进程详情"
-    echo "  logs [N]     查看最近 N 行日志 (默认 50)"
-    echo "  save         保存 PM2 进程列表 (用于开机自启)"
-    echo "  doctor       输出探测到的 NODE_BIN/NPM_BIN/PM2_BIN + 版本，供外部脚本 eval"
-    echo "  self-update  从 deploy bundle 投放的 wrapper 源自我替换 (CI 在 install 前调用)"
+    echo "  install         在 $APP_DIR 执行 npm ci --omit=dev (要求 package-lock.json)"
+    echo "  start           启动 PM2 进程 (ecosystem.config.cjs)"
+    echo "  restart         重启 PM2 进程 (前置原生模块自愈; 保留环境变量)"
+    echo "  reload          删除后重新启动 (前置原生模块自愈; 重读 ecosystem 配置)"
+    echo "  stop            停止 PM2 进程"
+    echo "  status          查看 PM2 进程列表"
+    echo "  describe        查看进程详情"
+    echo "  logs [N]        查看最近 N 行日志 (默认 50)"
+    echo "  save            保存 PM2 进程列表 (用于开机自启)"
+    echo "  doctor          输出探测到的 NODE_BIN/NPM_BIN/PM2_BIN + 版本，供外部脚本 eval"
+    echo "  self-update     从 deploy bundle 投放的 wrapper 源自我替换 (CI 在 install 前调用)"
     echo "  fix-deps-owner  把 node_modules 所有权归一到 deployer (CI 在 backup 前调用，防死锁)"
+    echo "  verify-natives  只读检测 @duckdb/node-api / bcrypt / better-sqlite3 加载状态 (诊断用)"
     exit 1
     ;;
 esac
