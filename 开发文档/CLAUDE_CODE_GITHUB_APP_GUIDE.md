@@ -14,7 +14,7 @@
 4. [使用方式](#4-使用方式)
 5. [权限与安全模型](#5-权限与安全模型)
 6. [工具白名单与黑名单](#6-工具白名单与黑名单)
-7. [两个 Job 的区别](#7-两个-job-的区别)
+7. [触发入口与 Job 现状](#7-触发入口与-job-现状)
 8. [前置条件与配置清单](#8-前置条件与配置清单)
 9. [最佳实践](#9-最佳实践)
 10. [常见问题 FAQ](#10-常见问题-faq)
@@ -102,7 +102,9 @@ Claude 在 GitHub Actions 中运行时会自动获取：
 
 ### 工作流文件结构
 
-`.github/workflows/claude-code.yml` 包含两个独立 Job：
+> **2026-06-13（PR #620）变更**：`claude-code.yml` 原含的 `auto-review` Job 与 `pull_request` 自动触发器**已取消**——不再每次 PR 提交自动跑第二意见 review。现仅保留下方单个 `claude-code` Job（`@claude` / 手动 dispatch 触发）。手动 review 改由 `claude.yml`（`@claude` 触发）接住执行。
+
+`.github/workflows/claude-code.yml` 现仅含一个 Job：
 
 #### Job 1: `claude-code`（主 Agent）
 
@@ -116,14 +118,11 @@ Claude 在 GitHub Actions 中运行时会自动获取：
 | `timeout_minutes` | `30` | 单次运行最长 30 分钟 |
 | `max_thinking_tokens` | `10000` | 内部推理预算 |
 
-#### Job 2: `auto-review`（代码审查）
+#### ~~Job 2: `auto-review`（代码审查）~~ — 已于 2026-06-13（PR #620）取消
 
-| 配置项 | 值 | 说明 |
-|--------|-----|------|
-| 触发条件 | `@claude review` | 仅在明确请求审查时触发 |
-| 权限 | `contents: read` + `pull-requests: write` | 只读代码 + 可写评论（不能提交代码） |
-| 工具 | `Read` / `Glob` / `Grep` | 仅读取工具，无写入能力 |
-| `timeout_minutes` | `10` | 审查超时更短 |
+原 `auto-review` Job 在每次 PR `opened`/`reopened`/`synchronize`/`ready_for_review` 时自动跑只读第二意见 review，已连同 `pull_request` 触发器一并删除（不再自动占用 CI）。
+
+需要 review 时，在 PR 评论 `@claude review` 由 `claude.yml`（`@claude` 触发）按 CLAUDE.md 规范执行一次。
 
 ### 自定义指令（custom_instructions）
 
@@ -281,36 +280,37 @@ allowed_tools: |
 
 ---
 
-## 7. 两个 Job 的区别
+## 7. 触发入口与 Job 现状
+
+> 2026-06-13（PR #620）后 `claude-code.yml` 仅剩 `claude-code` 一个 Job；`auto-review` 与 `pull_request` 自动触发器已删除。手动 review 走 `claude.yml`。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   claude-code.yml                           │
-│                                                             │
-│  ┌─────────────────────┐    ┌─────────────────────────┐    │
-│  │  Job: claude-code   │    │  Job: auto-review       │    │
-│  │                     │    │                         │    │
-│  │  触发：@claude      │    │  触发：@claude review   │    │
-│  │  能力：读+写+执行    │    │  能力：只读+评论        │    │
-│  │  可提交代码：✅      │    │  可提交代码：❌         │    │
-│  │  超时：30分钟        │    │  超时：10分钟           │    │
-│  │  后置：test+govern  │    │  后置：无               │    │
-│  └─────────────────────┘    └─────────────────────────┘    │
-│                                                             │
-│  互斥：两个 Job 不会同时触发（if 条件互斥）                  │
+│  claude-code.yml                                            │
+│  ┌─────────────────────┐                                    │
+│  │  Job: claude-code   │   触发：@claude（评论/Issue）       │
+│  │  能力：读+写+执行    │       + workflow_dispatch 手动      │
+│  │  可提交代码：✅      │   超时：30分钟                      │
+│  │  后置：test+govern  │                                    │
+│  └─────────────────────┘                                    │
+├─────────────────────────────────────────────────────────────┤
+│  claude.yml                                                 │
+│  ┌─────────────────────┐                                    │
+│  │  Job: claude        │   触发：@claude（评论/审查评论/     │
+│  │  按评论指令执行      │       审查正文/Issue）— 含手动 review │
+│  └─────────────────────┘                                    │
 └─────────────────────────────────────────────────────────────┘
+  无任何 PR 自动触发：仅在显式 @claude 或手动 dispatch 时运行。
 ```
 
-| 维度 | claude-code（Agent） | auto-review（审查） |
-|------|---------------------|-------------------|
-| 用途 | 执行任务（修改代码） | 审查代码（只看不改） |
-| 触发词 | `@claude` | `@claude review` |
-| 代码权限 | 读 + 写 | 只读 |
-| 可用工具 | 8 种（含 Write/Edit/Bash） | 3 种（Read/Glob/Grep） |
-| 可提交代码 | 是 | 否 |
+| 维度 | claude-code（`claude-code.yml`） | claude（`claude.yml`） |
+|------|---------------------------------|------------------------|
+| 用途 | 执行任务（修改代码） | 通用响应（含 `@claude review`） |
+| 触发词 | `@claude`（评论/Issue）+ 手动 dispatch | `@claude`（评论/审查评论/审查正文/Issue） |
+| 代码权限 | 读 + 写 | 按 action 配置 |
+| 可提交代码 | 是 | 视指令 |
 | 运行测试 | 是（后置步骤） | 否 |
-| 推理预算 | 10,000 tokens | 5,000 tokens |
-| 超时 | 30 分钟 | 10 分钟 |
+| 超时 | 30 分钟 | action 默认 |
 
 ---
 

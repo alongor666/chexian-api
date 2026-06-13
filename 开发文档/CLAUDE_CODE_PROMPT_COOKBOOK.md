@@ -605,7 +605,8 @@ ssh: connect to host 162.14.113.44 port 22: Connection timed out
 @claude review
 ```
 
-> 触发 auto-review Job（只读模式），自动按 CLAUDE.md 规范审查。
+> `@claude review` 由 `claude.yml`（`@claude` 触发）接住，按 CLAUDE.md 规范执行一次 review。
+> 注：旧 `auto-review` 专用 Job 及 PR 自动触发已于 2026-06-13（PR #620）取消，现仅手动触发。
 
 ---
 
