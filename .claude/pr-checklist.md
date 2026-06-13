@@ -37,7 +37,9 @@
 
 ## 3. 第二意见（按需，付费 token，勿滥用）
 
-架构变动 / 跨模块重构 / 可疑业务口径 → 追加 `/codex review`，或在 PR 评论 `@claude review` 显式触发 `claude-code.yml` 的 auto-review job。**不要**为常规变更滥用——自审不到位时才上。
+架构变动 / 跨模块重构 / 可疑业务口径 → 追加 `/codex review`，或在 PR 评论 `@claude review` 由 `claude.yml`（`@claude` 触发）执行一次 review。**不要**为常规变更滥用——自审不到位时才上。
+
+> 注：PR 自动 review（`claude-code.yml` 旧 `auto-review` job + `pull_request` 触发器）已于 2026-06-13（PR #620）取消，不再每次提交自动跑。现仅保留 `@claude` 手动触发。
 
 ## 4. 部署链 PR 特例（RED LINE）
 
