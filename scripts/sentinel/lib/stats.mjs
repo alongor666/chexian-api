@@ -94,7 +94,7 @@ export function findSamePeriodLastYear(series, period) {
  *   7) YoY 对齐：opts.yoy 缺省 → 自动从 series 查 latestMature 同月前一年值，
  *      避免把 series 尾月（cutoff 当月未成熟）当 yoy.current 错误佐证（codex P2）。
  *
- * @returns {object} verdict（含 triggered / 触发原因 / 数值上下文，供 LLM 归因与 issue 展示）
+ * @returns {object} verdict（含 triggered / 触发原因 / 数值上下文，供规则归因与 issue 展示）
  */
 export function evaluateMetricSeries(metric, series, opts = {}) {
   const {
