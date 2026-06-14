@@ -13,7 +13,7 @@
  *   3) GET /api/query/trend ×2               → 保费/件数断崖序列
  *   4) GET /api/query/comprehensive-bundle(去年同期) → 赔付率 YoY 交叉
  *   5) 统计判定（确定性，唯一告警决策者）+ 成熟度排除（IBNR 防线）
- *   6) LLM 归因（仅对已触发项，temperature=0，不裁决）
+ *   6) 确定性规则归因（仅对已触发项；业务深度归因走本地 skill /chexian-sentinel-attribution）
  *   7) 产出 verdict.json + summary.md + run-log；GITHUB_OUTPUT 透出状态
  *
  * 不碰 GitHub（职责单一，可本地 dry-run）。GitHub issue/cache 由工作流负责。
@@ -86,7 +86,7 @@ function buildSummaryMd({ cutoffDate, timeProgress, etlDate, triggered, judged, 
   lines.push(`## 🚨 ETL 异常哨兵告警 — ${cutoffDate ?? '?'}`);
   lines.push('');
   lines.push(`- ETL 数据日期：\`${etlDate ?? '?'}\` · 当期已过：${timeProgress != null ? (timeProgress * 100).toFixed(1) + '%' : '?'}`);
-  lines.push(`- 命中异常：**${triggered.length}** 项（统计层判定，LLM 归因）`);
+  lines.push(`- 命中异常：**${triggered.length}** 项（统计层判定 + 规则归因；业务归因走本地 /chexian-sentinel-attribution）`);
   lines.push('');
   lines.push('| 指标 | 最新成熟期 | 当前值 | 基线均值 | Z | 环比% | 同比% | 严重度 | 归因 |');
   lines.push('|---|---|---|---|---|---|---|---|---|');
@@ -239,8 +239,8 @@ async function main() {
     persistSilenceState(silenceAbsPath, silenceState, silenceCfg.maxEntries ?? 100);
   }
 
-  // 5) LLM 归因（仅对未被静默的新触发项）
-  const judged = await judgeAnomalies(newAnomalies, { cutoffDate, timeProgress }, config.llm);
+  // 5) 规则归因（仅对未被静默的新触发项；config.llm 已删，传 undefined 保持签名兼容）
+  const judged = await judgeAnomalies(newAnomalies, { cutoffDate, timeProgress }, undefined);
 
   // 6) 产出
   const verdictObj = {
