@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import {
-  asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache,
+  asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache, requireBranchAdmin,
 } from './shared.js';
 import {
   generatePendingOverviewQuery,
@@ -30,6 +30,11 @@ import {
 } from '../../sql/claims-heatmap.js';
 
 const router = Router();
+
+// RLS 整域绕过紧急止血（BACKLOG 2026-06-11-claude-942414 / P0）
+// claims-detail 10+ 端点 SQL 生成器签名均未预留 whereClause 入参 → 整域 admin-only。
+// 长期修法：扩生成器签名 + 路由调 parseFiltersAndBuildWhere 注入 permissionFilter。
+router.use(requireBranchAdmin);
 
 // 集中式惰性域加载中间件（per MAT-01）：ClaimsDetail + ClaimsAgg
 router.use(createDomainMiddleware('ClaimsDetail', 'ClaimsAgg'));
