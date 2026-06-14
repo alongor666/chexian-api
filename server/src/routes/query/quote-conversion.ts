@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache, requireBranchAdmin } from './shared.js';
+import { asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache, parseFiltersAndBuildWhere } from './shared.js';
 import {
   generateQuoteKpiQuery,
   generateQuoteFunnelQuery,
@@ -20,11 +20,6 @@ import {
 } from '../../sql/quote-conversion.js';
 
 const router = Router();
-
-// RLS 整域绕过紧急止血（BACKLOG 2026-06-11-claude-942414 / P0）
-// 报价转化 SQL 生成器签名未预留 whereClause 入参 → 整域 admin-only。
-// 长期修法：扩 7 个生成器签名 + 路由调 parseFiltersAndBuildWhere 注入。
-router.use(requireBranchAdmin);
 
 function preprocessBlankToUndefined(value: unknown): unknown {
   return typeof value === 'string' && value.trim() === '' ? undefined : value;
@@ -100,7 +95,8 @@ router.get(
   withRouteCache('quote-conversion-kpi'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateQuoteKpiQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateQuoteKpiQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data: data[0] ?? {} });
   })
@@ -115,7 +111,8 @@ router.get(
   withRouteCache('quote-conversion-funnel'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateQuoteFunnelQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateQuoteFunnelQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -131,7 +128,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const level = parseEnumParam(req.query.level, ['org', 'team', 'salesman'], 'level', 'org') as 'org' | 'team' | 'salesman';
     const filters = parseFilters(req.query);
-    const sql = generateQuoteDrilldownQuery(filters, level);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateQuoteDrilldownQuery(filters, level, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data, level });
   })
@@ -146,8 +144,9 @@ router.get(
   withRouteCache('quote-conversion-heatmap'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
     const colDimension = (req.query.colDimension as string) ?? '续保情况';
-    const sql = generateQuoteHeatmapQuery(filters, colDimension);
+    const sql = generateQuoteHeatmapQuery(filters, colDimension, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data, colDimension });
   })
@@ -162,7 +161,8 @@ router.get(
   withRouteCache('quote-conversion-price'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateQuotePriceQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateQuotePriceQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -177,8 +177,9 @@ router.get(
   withRouteCache('quote-conversion-ranking'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
     const dimension = (req.query.dimension as string) ?? '客户类别';
-    const sql = generateQuoteRankingQuery(filters, dimension);
+    const sql = generateQuoteRankingQuery(filters, dimension, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data, dimension });
   })
@@ -193,8 +194,9 @@ router.get(
   withRouteCache('quote-conversion-trend'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
     const granularity = parseEnumParam(req.query.granularity, ['day', 'week', 'month'], 'granularity', 'week') as 'day' | 'week' | 'month';
-    const sql = generateQuoteTrendQuery(filters, granularity);
+    const sql = generateQuoteTrendQuery(filters, granularity, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data, granularity });
   })
