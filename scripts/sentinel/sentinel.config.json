@@ -21,7 +21,8 @@
       "zThreshold": 2.5,
       "momThreshold": 8,
       "yoyThreshold": 10,
-      "_note": "核心。逐期序列 Z-score + 成熟度排除 + YoY 交叉。赔付率波动天然大，阈值放宽到 2.5。"
+      "baselineTrim": { "iqrK": 1.5, "dropHead": 6 },
+      "_note": "核心。逐期序列 Z-score + 成熟度排除 + YoY 交叉。赔付率波动天然大，阈值放宽到 2.5。baselineTrim: lossTrend 早期 6 期保单刚起保赔款未爬完（单期值常 0~数百%），IQR 离群剔除剩余极端值 — 治根 issue #550（实测 mean=151%/std=568% → 期望回归 50~80% 业务范围，Z 恢复有效）。"
     },
     {
       "id": "expense_ratio",
@@ -78,10 +79,17 @@
   ],
   "llm": {
     "enabled": true,
-    "_comment": "LLM 仅对统计已触发项做归因（one_line_cause）+ 分级，不裁决是否告警（codex E2）。",
+    "_comment": "LLM 仅对统计已触发项做归因（one_line_cause）+ 分级，不裁决是否告警（codex E2）。Anthropic 优先；缺 ANTHROPIC_API_KEY 时降级智谱（GLM_4_PLUS 等价模型），仍缺则规则兜底。",
     "provider": "anthropic",
     "model": "claude-haiku-4-5-20251001",
+    "zhipuModel": "glm-4.7-flash",
     "temperature": 0,
     "maxTokens": 1024
+  },
+  "silence": {
+    "_comment": "去重机制：同质告警（指标×期×方向×环比规模）一次告警后静默，期数推进或量级跳跃才再次出声。state 文件由 workflow cache 持久化跨 run（同 .sentinel-state/etag 一起恢复）。enabled=false 退化为旧『每跑必发』行为。",
+    "enabled": true,
+    "stateFile": ".sentinel-state/silence.json",
+    "maxEntries": 100
   }
 }

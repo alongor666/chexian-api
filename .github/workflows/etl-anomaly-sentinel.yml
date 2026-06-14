@@ -68,11 +68,19 @@ jobs:
           CX_PAT: ${{ secrets.CX_PAT }}
           SENTINEL_API_BASE: ${{ vars.SENTINEL_API_BASE || 'https://chexian.cretvalu.com' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # 智谱 fallback：本项目主体走 GLM，配上后即使 Anthropic 失活也能归因（治根 issue #550「LLM 不可用」）
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
         run: |
+          # --reset-silence: workflow_dispatch force=true 时一并清空 silence 缓存，让之前 silenced 的告警重新发声
+          RESET_SILENCE=""
+          if [ "${{ inputs.force }}" = "true" ]; then
+            RESET_SILENCE="--reset-silence"
+          fi
           node scripts/sentinel/etl-anomaly-sentinel.mjs \
             --api-base "$SENTINEL_API_BASE" \
             --last-etag "${{ steps.last_etag.outputs.value }}" \
-            --out-dir sentinel-out
+            --out-dir sentinel-out \
+            $RESET_SILENCE
 
       - name: Persist new ETag
         if: steps.run.outputs.not_modified != 'true' && steps.run.outputs.etag != ''
@@ -97,7 +105,9 @@ jobs:
           retention-days: 30
 
       - name: Post anomaly to tracking issue
-        if: steps.run.outputs.has_anomalies == 'true'
+        # has_new_anomalies = 触发但未 silenced 的（issue #550 治本）。同质告警去重后不再每跑追加 comment。
+        # 旧 has_anomalies 仍输出供观测/metrics，但不再控 comment。
+        if: steps.run.outputs.has_new_anomalies == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SUMMARY_PATH: ${{ steps.run.outputs.summary_path }}

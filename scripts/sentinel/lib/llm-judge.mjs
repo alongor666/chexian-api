@@ -46,6 +46,33 @@ async function callAnthropic({ model, temperature, maxTokens }, apiKey, userPayl
   return text;
 }
 
+/**
+ * 智谱 GLM（兼容 OpenAI chat completions 格式）— 当 Anthropic 失活时作为车险项目主体 LLM 的 fallback。
+ * Endpoint 与字段名都不同于 Anthropic，原 callAnthropic 写死 anthropic.com 是 issue #550
+ * 「LLM 不可用」的根因（即使配了 ZHIPU_API_KEY 也调不通）。
+ */
+async function callZhipu({ model, temperature, maxTokens }, apiKey, userPayload) {
+  const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: JSON.stringify(userPayload) },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Zhipu HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = await res.json();
+  return json?.choices?.[0]?.message?.content ?? '';
+}
+
 function parseLlmJson(text) {
   // 容错：抽出第一个 {...} JSON 块
   const match = text.match(/\{[\s\S]*\}/);
@@ -53,20 +80,8 @@ function parseLlmJson(text) {
   return JSON.parse(match[0]);
 }
 
-/**
- * @param {Array} triggered stats.evaluateMetricSeries 返回的已触发项数组
- * @param {object} ctx { timeProgress, cutoffDate }
- * @param {object} llmCfg config.llm
- * @returns {Promise<Array<{metric, severity, one_line_cause}>>}
- */
-export async function judgeAnomalies(triggered, ctx, llmCfg) {
-  if (!triggered || triggered.length === 0) return [];
-  if (!llmCfg?.enabled) return fallbackJudge(triggered);
-
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.ZHIPU_API_KEY;
-  if (!apiKey) return fallbackJudge(triggered);
-
-  const userPayload = {
+function buildUserPayload(triggered, ctx) {
+  return {
     cutoffDate: ctx.cutoffDate ?? null,
     timeProgress: ctx.timeProgress ?? null,
     anomalies: triggered.map((t) => ({
@@ -82,26 +97,54 @@ export async function judgeAnomalies(triggered, ctx, llmCfg) {
       reasons: t.reasons,
     })),
   };
+}
 
-  try {
-    const text = await callAnthropic(
-      { model: llmCfg.model, temperature: llmCfg.temperature ?? 0, maxTokens: llmCfg.maxTokens ?? 1024 },
-      apiKey,
-      userPayload
-    );
-    const parsed = parseLlmJson(text);
-    const items = Array.isArray(parsed.items) ? parsed.items : [];
-    // 用 LLM 结果覆盖，缺失项用兜底补齐
-    const byMetric = new Map(items.map((i) => [i.metric, i]));
-    return triggered.map((t) => {
-      const hit = byMetric.get(t.metric);
-      if (hit && hit.severity && hit.one_line_cause) {
-        return { metric: t.metric, severity: hit.severity, one_line_cause: hit.one_line_cause };
-      }
-      return fallbackJudge([t])[0];
-    });
-  } catch (err) {
-    console.warn(`[sentinel] LLM 归因失败，降级规则兜底：${err.message}`);
-    return fallbackJudge(triggered);
+function mergeLlmAndFallback(triggered, items) {
+  const byMetric = new Map(items.map((i) => [i.metric, i]));
+  return triggered.map((t) => {
+    const hit = byMetric.get(t.metric);
+    if (hit && hit.severity && hit.one_line_cause) {
+      return { metric: t.metric, severity: hit.severity, one_line_cause: hit.one_line_cause };
+    }
+    return fallbackJudge([t])[0];
+  });
+}
+
+/**
+ * @param {Array} triggered stats.evaluateMetricSeries 返回的已触发项数组
+ * @param {object} ctx { timeProgress, cutoffDate }
+ * @param {object} llmCfg config.llm
+ * @returns {Promise<Array<{metric, severity, one_line_cause}>>}
+ */
+export async function judgeAnomalies(triggered, ctx, llmCfg) {
+  if (!triggered || triggered.length === 0) return [];
+  if (!llmCfg?.enabled) return fallbackJudge(triggered);
+
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const zhipuKey = process.env.ZHIPU_API_KEY;
+  if (!anthropicKey && !zhipuKey) return fallbackJudge(triggered);
+
+  const userPayload = buildUserPayload(triggered, ctx);
+  const temperature = llmCfg.temperature ?? 0;
+  const maxTokens = llmCfg.maxTokens ?? 1024;
+  // 项目主体已切真 Anthropic（claude-haiku-4-5），优先用；缺失或调用失败则降级智谱（GLM）。
+  // 两路都失败才退到规则兜底，确保归因质量 >= 兜底。
+  const providers = [];
+  if (anthropicKey) providers.push({ name: 'anthropic', call: () => callAnthropic({ model: llmCfg.model, temperature, maxTokens }, anthropicKey, userPayload) });
+  if (zhipuKey) providers.push({ name: 'zhipu', call: () => callZhipu({ model: llmCfg.zhipuModel || 'glm-4.7-flash', temperature, maxTokens }, zhipuKey, userPayload) });
+
+  let lastErr = null;
+  for (const p of providers) {
+    try {
+      const text = await p.call();
+      const parsed = parseLlmJson(text);
+      const items = Array.isArray(parsed.items) ? parsed.items : [];
+      return mergeLlmAndFallback(triggered, items);
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[sentinel] LLM(${p.name}) 归因失败：${err.message}`);
+    }
   }
+  console.warn(`[sentinel] 全部 LLM 提供方失败，降级规则兜底：${lastErr?.message || '未知原因'}`);
+  return fallbackJudge(triggered);
 }
