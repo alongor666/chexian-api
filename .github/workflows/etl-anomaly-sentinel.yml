@@ -1,7 +1,8 @@
 name: ETL Anomaly Sentinel
 
 # ETL 异常哨兵 — 发布后监控（非准入闸门）。
-# 周期轮询生产 API（PAT 只读），统计层判定异常 + LLM 归因，异常才在追踪 issue 告警。
+# 周期轮询生产 API（PAT 只读），统计层判定异常 + 确定性规则归因，异常才在追踪 issue 告警。
+# 业务深度归因走本地 skill /chexian-sentinel-attribution（不依赖外部 LLM API key）。
 # 幂等：以 comprehensive 响应的 ETag（绑定 getDataVersion 指纹）去重，数据版本未变即静默。
 # 详见 scripts/sentinel/README.md 与计划 v3。
 
@@ -67,9 +68,6 @@ jobs:
         env:
           CX_PAT: ${{ secrets.CX_PAT }}
           SENTINEL_API_BASE: ${{ vars.SENTINEL_API_BASE || 'https://chexian.cretvalu.com' }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # 智谱 fallback：本项目主体走 GLM，配上后即使 Anthropic 失活也能归因（治根 issue #550「LLM 不可用」）
-          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
         run: |
           # --reset-silence: workflow_dispatch force=true 时一并清空 silence 缓存，让之前 silenced 的告警重新发声
           RESET_SILENCE=""
