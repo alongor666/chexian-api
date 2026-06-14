@@ -16,11 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（68 项 · 数据截至 2026-06-12 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（69 项 · 数据截至 2026-06-14 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（9 项）**
+**P1（10 项）**
 
 - B246 — VPS 分层查询改造（KPI variable_cost_ratio）
 - B291 — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
@@ -31,6 +31,7 @@
 - 2026-06-11-claude-7a2849 — 同比/YTD 查询产生重复期间行 + 虚假 -100% 增长（DuckDB 实证）
 - 2026-06-11-claude-90a92c `IN_PROGRESS` — 通用可加性立方体查询加速
 - 2026-06-11-claude-942414 — 行级权限(RLS)整域绕过
+- 2026-06-14-claude-b7d892 — ETL 异常哨兵 CI 内 LLM 归因剥离 → 本地 skill /chexian-s
 
 **P2（36 项）**
 
@@ -171,3 +172,4 @@
 | 2026-06-12-claude-055a12 | 2026-06-12 | 性能/灰度收尾 | @claude | 立方体灰度哨兵降频里程碑：现在每小时一次；待 CUBE_ROUTING_ENABLED='true' 切流稳定 1 个月后（mismatch 持续 0、cost.exact 稳定）改 .github/workflows/cube-grayscale-sentinel.yml 的 cron 为 '15 */3 * * *'（每 3 小时）；长期稳态再改 '15 */6 * * *'（每 6 小时）或并入 ETL 哨兵 cron 节省 GHA minutes。触发条件：切流 PR 合并后 30 天。文档：scripts/sentinel/README.md 调频里程碑章节 | P3 | BLOCKED | N/A | .github/workflows/cube-grayscale-sentinel.yml,scripts/sentinel/README.md | 等灰度切流后稳定 1 个月触发；当前 cron=每小时一次合理 <br>完整运维 SOP 已沉淀到 .claude/rules/cube-grayscale-sop.md（在做什么/怎么看/异常分级处理/切流/调频/回滚 6 章节 + 顶部明确机制 vs 记忆边界）。本任务触发条件、cron 三阶段表、动作链均以 SOP §5 为准；yml/README 仅保留指针，不重复内容避免漂移 <br>范式整改（用户拍板激进路线）：删除 .claude/rules/cube-grayscale-sop.md（SOP 假设有人主动查文档，不符合 AI agent native）。新决策入口：scripts/release/cube-promote.mjs（自动判定能否推进，读 ecosystem 开关+哨兵历史，canAdvance=true/false 退出码）+ scripts/cube-rollback.mjs（回滚 wrapper）+ governance check 立方体影子对账容差（红线机制化）。调频时机：跑 cube-promote.mjs 让它自己判定 |
 | 2026-06-12-claude-27972c | 2026-06-12 | Chore/Governance | @claude | 治理静态检查专项（bug-hunt 沉淀）：1) execSync 模板拼接检测—现存 15 处多为受控插值(pid/固定命令)，需先甄别白名单否则误报；重点拦插值来自文件枚举(git ls-files/readdirSync)的模式。2) Context Provider 定义未挂载检测—现存 AuthContext/LoginForm 死代码需先清理(useRBAC 已迁 PermissionContext)否则检查立刻红。3) SQL 生成器 FROM PolicyFact 未消费 permissionFilter 守卫(易误报,需路由层调用图)。 | P2 | PROPOSED | N/A | scripts/check-governance.mjs,src/shared/contexts/AuthContext.tsx |  |
 | 2026-06-12-claude-45630f | 2026-06-12 | Bug/Backend | @claude | **存量**：metric-registry 领域断言集成测试 5 项失败（transfer_rate/renewal_rate/nev_rate/new_car_rate/cross_sell_total_rate 区间断言）——在干净 main（17c4586）上复现，疑似口径Ⅱa/Ⅱb 组件数口径修复后 testCase fixture 未同步；仅本地集成桶，不影响 CI | P2 | PROPOSED | N/A | server/src/config/metric-registry/__tests__/integration/domain-testcases.test.ts |  |
+| 2026-06-14-claude-b7d892 | 2026-06-14 | 运维 / 监控治理 | @claude | ETL 异常哨兵 CI 内 LLM 归因剥离 → 本地 skill /chexian-sentinel-attribution；删 callAnthropic/callZhipu/sentinel.config.json llm 块 + workflow yaml ANTHROPIC_API_KEY/ZHIPU_API_KEY env；归因列保留确定性规则文案，业务归因走 Claude Code Max 本地路径（不依赖外部 LLM API key）。延续 PR #626 治理。 | P1 | PROPOSED | N/A | scripts/sentinel/lib/llm-judge.mjs,.github/workflows/etl-anomaly-sentinel.yml,scripts/sentinel/sentinel.config.json,scripts/sentinel/README.md,.claude/skills/chexian-sentinel-attribution.md |  |
