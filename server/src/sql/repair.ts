@@ -24,8 +24,9 @@ function buildWhere(filters: RepairFilters): string {
 }
 
 /** 机构级维修资源汇总 */
-export function generateRepairOverviewQuery(filters: RepairFilters): string {
+export function generateRepairOverviewQuery(filters: RepairFilters, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   return `
     SELECT
       org_level_3,
@@ -36,15 +37,16 @@ export function generateRepairOverviewQuery(filters: RepairFilters): string {
       ROUND(AVG(COALESCE(parts_discount_rate, 0)), 4) AS avg_discount_rate,
       ROUND(SUM(COALESCE(net_premium, 0)), 2) AS total_net_premium
     FROM RepairDim
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY org_level_3
     ORDER BY total_net_premium DESC
   `.trim();
 }
 
 /** 修理厂明细列表 */
-export function generateRepairDetailQuery(filters: RepairFilters, limit = 200, offset = 0): string {
+export function generateRepairDetailQuery(filters: RepairFilters, limit = 200, offset = 0, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   return `
     SELECT
       repair_shop_name,
@@ -58,35 +60,37 @@ export function generateRepairDetailQuery(filters: RepairFilters, limit = 200, o
       ROUND(COALESCE(net_premium, 0), 2) AS net_premium,
       report_date
     FROM RepairDim
-    WHERE ${where}
+    WHERE ${finalWhere}
     ORDER BY net_premium DESC
     LIMIT ${limit} OFFSET ${offset}
   `.trim();
 }
 
 /** 合作状态分布 */
-export function generateRepairStatusQuery(filters: RepairFilters): string {
+export function generateRepairStatusQuery(filters: RepairFilters, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   return `
     SELECT
       cooperation_status,
       COUNT(DISTINCT repair_shop_name) AS shop_count,
       ROUND(SUM(COALESCE(net_premium, 0)), 2) AS total_net_premium
     FROM RepairDim
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY cooperation_status
     ORDER BY shop_count DESC
   `.trim();
 }
 
-/** 元数据：筛选选项 */
-export function generateRepairMetadataQuery(): string {
+/** 元数据：筛选选项（按权限过滤可见机构/城市范围） */
+export function generateRepairMetadataQuery(whereClause: string = '1=1'): string {
+  const wc = whereClause !== '1=1' ? ` AND ${whereClause}` : '';
   return `
     SELECT
-      (SELECT array_agg(DISTINCT org_level_3 ORDER BY org_level_3) FROM RepairDim WHERE org_level_3 IS NOT NULL) AS orgs,
-      (SELECT array_agg(DISTINCT cooperation_status ORDER BY cooperation_status) FROM RepairDim WHERE cooperation_status IS NOT NULL) AS statuses,
-      (SELECT array_agg(DISTINCT city ORDER BY city) FROM RepairDim WHERE city IS NOT NULL) AS cities,
-      (SELECT COUNT(DISTINCT repair_shop_name) FROM RepairDim) AS total_shops
+      (SELECT array_agg(DISTINCT org_level_3 ORDER BY org_level_3) FROM RepairDim WHERE org_level_3 IS NOT NULL${wc}) AS orgs,
+      (SELECT array_agg(DISTINCT cooperation_status ORDER BY cooperation_status) FROM RepairDim WHERE cooperation_status IS NOT NULL${wc}) AS statuses,
+      (SELECT array_agg(DISTINCT city ORDER BY city) FROM RepairDim WHERE city IS NOT NULL${wc}) AS cities,
+      (SELECT COUNT(DISTINCT repair_shop_name) FROM RepairDim${wc !== '' ? ` WHERE 1=1${wc}` : ''}) AS total_shops
   `.trim();
 }
 
@@ -151,8 +155,9 @@ function buildWhereV2(filters: RepairFiltersV2): string {
 }
 
 /** 【1】城市汇总：按修理厂所在市聚合 */
-export function generateRepairCityQuery(filters: RepairFiltersV2): string {
+export function generateRepairCityQuery(filters: RepairFiltersV2, whereClause: string = '1=1'): string {
   const where = buildWhereV2(filters);
+  const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   return `
     SELECT
       city,
@@ -162,15 +167,16 @@ export function generateRepairCityQuery(filters: RepairFiltersV2): string {
       ROUND(SUM(COALESCE(damage_assessment_amount, 0)), 2) AS total_damage_amount,
       ROUND(SUM(COALESCE(net_premium, 0)), 2) AS total_net_premium
     FROM RepairDim
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY city
     ORDER BY total_net_premium DESC
   `.trim();
 }
 
 /** 【2】渠道类型 × 4S 交叉分布 */
-export function generateRepairChannelQuery(filters: RepairFiltersV2): string {
+export function generateRepairChannelQuery(filters: RepairFiltersV2, whereClause: string = '1=1'): string {
   const where = buildWhereV2(filters);
+  const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   return `
     SELECT
       COALESCE(channel_type, '未分类') AS channel_type,
@@ -179,15 +185,16 @@ export function generateRepairChannelQuery(filters: RepairFiltersV2): string {
       ROUND(SUM(COALESCE(damage_assessment_amount, 0)), 2) AS total_damage_amount,
       ROUND(SUM(COALESCE(net_premium, 0)), 2) AS total_net_premium
     FROM RepairDim
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY channel_type, is_4s_shop
     ORDER BY shop_count DESC
   `.trim();
 }
 
 /** 【3】三态合作分布（含影子网点从 claims 反推） */
-export function generateRepairCoopTierQuery(filters: RepairFiltersV2): string {
+export function generateRepairCoopTierQuery(filters: RepairFiltersV2, whereClause: string = '1=1'): string {
   const where = buildWhereV2(filters);
+  const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   const timeWhere = claimsTimeWindow(filters.timeWindow);
   return `
     WITH repair_tiers AS (
@@ -197,7 +204,7 @@ export function generateRepairCoopTierQuery(filters: RepairFiltersV2): string {
         COALESCE(damage_assessment_amount, 0) AS damage_amt,
         COALESCE(net_premium, 0) AS premium
       FROM RepairDim
-      WHERE ${where}
+      WHERE ${finalWhere}
     ),
     shadow_shops AS (
       SELECT DISTINCT c.subject_shop_code AS shop_code
@@ -221,8 +228,9 @@ export function generateRepairCoopTierQuery(filters: RepairFiltersV2): string {
 }
 
 /** 【4】散点图数据：区县 × 机构 网格三态（业务规则字典 §6） */
-export function generateRepairScatterQuery(filters: RepairFiltersV2): string {
+export function generateRepairScatterQuery(filters: RepairFiltersV2, whereClause: string = '1=1'): string {
   const where = buildWhereV2(filters);
+  const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   const timeWhere = claimsTimeWindow(filters.timeWindow);
   return `
     WITH repair_shops AS (
@@ -237,7 +245,7 @@ export function generateRepairScatterQuery(filters: RepairFiltersV2): string {
         COALESCE(damage_assessment_amount, 0) AS damage_amount,
         COALESCE(net_premium, 0) AS net_premium
       FROM RepairDim
-      WHERE ${where}
+      WHERE ${finalWhere}
     ),
     shadow_geo AS (
       SELECT
@@ -285,8 +293,9 @@ export function generateRepairScatterQuery(filters: RepairFiltersV2): string {
 }
 
 /** 【5】本地资源占比（L4，RepairDim LEFT JOIN ClaimsDetail） */
-export function generateRepairLocalResourceQuery(filters: RepairFiltersV2): string {
+export function generateRepairLocalResourceQuery(filters: RepairFiltersV2, whereClause: string = '1=1'): string {
   const where = buildWhereV2(filters);
+  const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   const timeWhere = claimsTimeWindow(filters.timeWindow);
   return `
     WITH base AS (
@@ -296,7 +305,7 @@ export function generateRepairLocalResourceQuery(filters: RepairFiltersV2): stri
         org_level_3,
         district AS shop_district
       FROM RepairDim
-      WHERE ${where}
+      WHERE ${finalWhere}
     ),
     joined AS (
       SELECT
@@ -318,9 +327,10 @@ export function generateRepairLocalResourceQuery(filters: RepairFiltersV2): stri
   `.trim();
 }
 
-/** 【6】修保比（维修产值 / 签单净保费） */
-export function generateRepairToPremiumQuery(filters: RepairFiltersV2): string {
+/** 6. 修保比（维修产值 / 签单净保费） */
+export function generateRepairToPremiumQuery(filters: RepairFiltersV2, whereClause: string = '1=1'): string {
   const where = buildWhereV2(filters);
+  const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   return `
     SELECT
       org_level_3,
@@ -333,7 +343,7 @@ export function generateRepairToPremiumQuery(filters: RepairFiltersV2): string {
            THEN ROUND(SUM(COALESCE(damage_assessment_amount, 0)) * 1.0 / SUM(COALESCE(net_premium, 0)), 3)
            ELSE NULL END AS repair_to_premium_ratio
     FROM RepairDim
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY org_level_3, shop_code, shop_name, coop_tier
     HAVING SUM(COALESCE(net_premium, 0)) > 0
     ORDER BY net_premium DESC
@@ -341,9 +351,11 @@ export function generateRepairToPremiumQuery(filters: RepairFiltersV2): string {
 }
 
 /** 【7】导流目标清单：送修在"曾合作/未合作/影子"的保单 */
-export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit = 500, offset = 0): string {
+export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit = 500, offset = 0, whereClause: string = '1=1'): string {
   const timeWhere = claimsTimeWindow(filters.timeWindow);
   const orgClause = filters.orgName ? `AND p.org_level_3 = '${escapeSqlValue(filters.orgName)}'` : '';
+  // whereClause 注入到 PolicyFact（有 org_level_3/is_telemarketing），实现保单维度权限收束
+  const policyWhereExtra = whereClause !== '1=1' ? ` AND ${whereClause}` : '';
   return `
     WITH active_shops AS (
       SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) AS shop_code
@@ -376,6 +388,7 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
         ANY_VALUE(salesman_name) AS salesman_name,
         ANY_VALUE(customer_category) AS customer_category
       FROM PolicyFact
+      WHERE 1=1${policyWhereExtra}
       GROUP BY policy_no
       HAVING SUM(premium) > 0
     )
@@ -400,7 +413,10 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
 }
 
 /** 【8】影子网点（claims 中出现但 RepairDim 未登记）地理归属 */
-export function generateRepairOrphanShopsQuery(filters: RepairFiltersV2, limit = 100): string {
+export function generateRepairOrphanShopsQuery(filters: RepairFiltersV2, limit = 100, whereClause: string = '1=1'): string {
+  // whereClause 为签名扩展，ClaimsDetail 无 org_level_3/is_telemarketing，
+  // 影子网点是全省维度数据，不按机构过滤（_whereClause 保留入参兼容路由层统一传参）
+  void whereClause;
   const timeWhere = claimsTimeWindow(filters.timeWindow);
   return `
     WITH orphan_claims AS (
