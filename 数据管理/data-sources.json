@@ -94,7 +94,7 @@
       "update_cadence": "with_quote_data",
       "last_updated": "2026-06-14",
       "data_range": "2025-12-02 ~ 2026-05-20",
-      "row_count": 877608,
+      "row_count": 880489,
       "field_count": 32,
       "key_fields": [
         "quote_time",
