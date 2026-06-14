@@ -87,6 +87,7 @@ function parseArgs(argv) {
     wecom: false,
     wecomDryRun: false,
     wecomOrg: null,
+    skipLarkArchive: false,
     dailyArgs: [],
   };
   for (let i = 0; i < argv.length; i++) {
@@ -114,8 +115,9 @@ function parseArgs(argv) {
     else if (a.startsWith('--wecom-org=')) {
       opts.wecomOrg = a.slice('--wecom-org='.length);
     }
+    else if (a === '--skip-lark-archive') opts.skipLarkArchive = true;
     else if (a === '--help' || a === '-h') {
-      log('cyan', '用法：node scripts/sync-and-reload.mjs [daily.mjs subcommand] [--dry-run] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表]');
+      log('cyan', '用法：node scripts/sync-and-reload.mjs [daily.mjs subcommand] [--dry-run] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]');
       process.exit(0);
     } else opts.dailyArgs.push(a);
   }
@@ -305,6 +307,7 @@ async function main() {
     log('yellow', `\n⚠ 跳过报告生成（技能文件不存在：${skillCli}）`);
   }
 
+
   // Stage 1.7: 数据就绪校验（pre-sync）— ETL 完成后、sync-vps 前
   // 只跑 Parquet 重叠 / Claims 去重 / 知识库规模；同步漂移留到 Stage 3.5（sync-vps 后）
   // 原因：刚完成 ETL，本地必然领先 VPS，把"同步漂移"放在这里必然失败。
@@ -365,6 +368,43 @@ async function main() {
       ['scripts/check-data-readiness.mjs', '--phase=post'],
       { dryRun: opts.dryRun }
     );
+  }
+
+  // Stage 3.6: 归档 period-trend 报告链接到飞书多维表（可选，meta.json/manifest 缺失则 skip；失败不阻断主流程）
+  // 必须在 sync-vps 后跑：sync-vps.generateManifestsLocal 写 manifest.json，URL 才指向真实可访问的 VPS 资源
+  const larkMeta = join(ROOT_DIR, '数据管理/integrations/lark_bitable/state/meta.json');
+  const pushReportCli = join(ROOT_DIR, '数据管理/integrations/lark_bitable/push_report.py');
+  const ptManifest = join(ROOT_DIR, 'public/reports/diagnose-period-trend/manifest.json');
+  if (opts.skipLarkArchive) {
+    log('yellow', '\n⚠ 跳过飞书归档（--skip-lark-archive）');
+  } else if (!existsSync(larkMeta)) {
+    log('cyan', '\n  (跳过飞书归档：未跑 bootstrap.py 初始化 base — 跑一次后自动启用)');
+  } else if (!existsSync(ptManifest)) {
+    log('yellow', '\n⚠ 跳过飞书归档：manifest.json 不存在（sync-vps generateManifestsLocal 未执行？）');
+  } else {
+    try {
+      const manifest = JSON.parse(readFileSync(ptManifest, 'utf8'));
+      const latest = manifest.latest;
+      const latestFile = manifest.latestFile;
+      if (!latest || !latestFile) throw new Error('manifest 缺 latest/latestFile 字段');
+      const url = `https://chexian.cretvalu.com/api/reports/diagnose-period-trend/${latest}/${latestFile}`;
+      const archiveArgs = [
+        pushReportCli,
+        '--report-type', 'diagnose-period-trend',
+        '--date', latest,
+        '--url', url,
+        '--report-name', latestFile,
+        '--note', 'auto-archived by sync-and-reload',
+      ];
+      if (opts.dryRun) {
+        log('cyan', `\n▶ [lark archive] python3 ${archiveArgs.join(' ')}`);
+        log('yellow', '  (dry-run，跳过实际归档)');
+      } else {
+        await runCmd('lark archive', 'python3', archiveArgs, { dryRun: false, timeoutMs: 30000 });
+      }
+    } catch (err) {
+      log('yellow', `⚠ 飞书归档失败（不阻断主流程）：${err.message}`);
+    }
   }
 
   // Stage 4: full_snapshot 域优先数据 reload，其他域才 PM2 reload
