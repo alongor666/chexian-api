@@ -11,9 +11,9 @@
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-06-10",
+      "last_updated": "2026-06-14",
       "data_range": "2021-01-01 ~ 2026-05-16",
-      "row_count": 2594621,
+      "row_count": 2600421,
       "field_count": 42,
       "key_fields": [
         "保单号",
@@ -46,9 +46,9 @@
       "etl_script": "pipelines/convert_claims_detail.py",
       "output": "warehouse/fact/claims_detail/claims_*.parquet",
       "update_cadence": "daily_cdc_partition",
-      "last_updated": "2026-06-10",
+      "last_updated": "2026-06-14",
       "data_range": "2019-01-01 ~ 2026-05-16",
-      "row_count": 287541,
+      "row_count": 288198,
       "field_count": 40,
       "key_fields": [
         "claim_no",
@@ -92,9 +92,9 @@
       },
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
-      "last_updated": "2026-06-10",
+      "last_updated": "2026-06-14",
       "data_range": "2025-12-02 ~ 2026-05-20",
-      "row_count": 859579,
+      "row_count": 877608,
       "field_count": 32,
       "key_fields": [
         "quote_time",
@@ -189,7 +189,7 @@
       },
       "output": "warehouse/dim/brand/latest.parquet",
       "update_cadence": "with_premium",
-      "last_updated": "2026-06-10",
+      "last_updated": "2026-06-14",
       "row_count": 371359,
       "field_count": 15,
       "key_fields": [
@@ -353,8 +353,8 @@
       ],
       "frontend_page": "repair",
       "notes": "维修厂合作数据，12列+派生 shop_code（前8位编码），含核损金额/换件折扣率/合作状态。2026-04-18 重设计：引入 coop_tier 三态分类 + shop_code JOIN ClaimsDetail",
-      "last_updated": "2026-06-10",
-      "row_count": 6648,
+      "last_updated": "2026-06-14",
+      "row_count": 6682,
       "field_count": 13,
       "data_range": "2025-01-01 ~ 2026-05-21"
     },
@@ -455,8 +455,8 @@
       "api_routes": [],
       "frontend_page": null,
       "notes": "新能源出险每日全量快照；首版仅标准化报案时间、报案号、车架号、结案状态、立案/已决金额和 source_batch_date，供后续新能源专项分析接入。",
-      "last_updated": "2026-06-10",
-      "row_count": 874,
+      "last_updated": "2026-06-14",
+      "row_count": 901,
       "field_count": 10
     },
     {
@@ -493,8 +493,8 @@
       ],
       "frontend_page": "renewal-tracker",
       "notes": "派生域：2025 起保 + 2026 到期商业险宇宙。dual-key 续保匹配 (source_policy_no + VIN)。报价窗口 2025-12-03 起。从 renewal-tracker 子项目迁移（2026-04-19，替代 2026-04-18 下线的 renewal 模块）",
-      "last_updated": "2026-06-10",
-      "row_count": 127980,
+      "last_updated": "2026-06-14",
+      "row_count": 128016,
       "field_count": 23
     }
   ]

@@ -22,6 +22,9 @@ server/.tmp/
 *.tar.gz
 *.parquet
 
+# daily.mjs 自动归档目录（旧短窗 xlsx/parquet 被新全量覆盖时归档，含历史快照子目录）
+数据管理/.archive/
+
 # 临时数据文件
 parquet_data.json
 
