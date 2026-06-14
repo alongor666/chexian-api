@@ -4,11 +4,17 @@
  * 支持 macOS / Linux
  *
  * 使用方法:
- *   node scripts/sync-vps.mjs                    # rsync 同步所有数据目录
+ *   node scripts/sync-vps.mjs                    # rsync 同步所有数据目录（默认不重启 PM2）
  *   node scripts/sync-vps.mjs --check            # 仅预检 SSH 与本地待同步文件
- *   node scripts/sync-vps.mjs --no-restart       # 同步但不重启
- *   node scripts/sync-vps.mjs --domain customer_flow --no-restart
+ *   node scripts/sync-vps.mjs --restart          # 同步后显式触发 PM2 restart
+ *   node scripts/sync-vps.mjs --no-restart       # [已废弃] 等同默认行为；兼容旧调用
+ *   node scripts/sync-vps.mjs --domain customer_flow
  *   node scripts/sync-vps.mjs --dry-run          # 仅打印执行计划，不连接 VPS
+ *
+ * 默认行为变更（2026-06-13 起）：
+ *   - 文件同步与服务重启是两件事，默认混合是高危陷阱（曾撞 bcrypt 原生模块地雷）
+ *   - 默认改为「纯文件同步」；reload/restart 走 sync-and-reload.mjs 或 deploy 链路
+ *   - 兼容性：sync-and-reload.mjs:349 已显式传 --no-restart，GitHub Actions 不调用本脚本
  *
  * 同步目录（本地 → VPS）:
  *   数据管理/warehouse/fact/policy/current/       →  data/current/
@@ -96,7 +102,7 @@ function quoteForSingle(value) {
 
 function parseArgs(argv = process.argv.slice(2)) {
   const parsed = {
-    noRestart: false,
+    noRestart: true,  // 默认不重启 — 2026-06-13 默认行为反转，详见文件头注释
     dryRun: false,
     checkMode: false,
     helpMode: false,
@@ -117,7 +123,12 @@ function parseArgs(argv = process.argv.slice(2)) {
 
     switch (token) {
       case '--no-restart':
+        // 已废弃但保留向后兼容：等同默认行为（noRestart=true）
         parsed.noRestart = true;
+        break;
+      case '--restart':
+        // 显式触发 PM2 restart（默认行为已反转为不重启）
+        parsed.noRestart = false;
         break;
       case '--dry-run':
         parsed.dryRun = true;
@@ -554,11 +565,11 @@ function collectCheckDirs() {
 
 function printHelp() {
   console.log(`用法:
-  node scripts/sync-vps.mjs              # rsync 同步所有数据目录
-  node scripts/sync-vps.mjs --domain customer_flow --no-restart
-  node scripts/sync-vps.mjs --check     # 预检 SSH + 列出本地待同步文件
-  node scripts/sync-vps.mjs --dry-run   # 仅打印执行计划，不连接 VPS
-  node scripts/sync-vps.mjs --no-restart  # 同步但不重启 PM2
+  node scripts/sync-vps.mjs              # rsync 同步所有数据目录（默认不重启 PM2）
+  node scripts/sync-vps.mjs --domain customer_flow
+  node scripts/sync-vps.mjs --check      # 预检 SSH + 列出本地待同步文件
+  node scripts/sync-vps.mjs --dry-run    # 仅打印执行计划，不连接 VPS
+  node scripts/sync-vps.mjs --restart    # 同步后显式触发 PM2 restart
 
 同步目录（默认使用 rsync --delete，VPS 多余文件会被清理）:
   数据管理/warehouse/fact/policy/current/       →  data/current/
