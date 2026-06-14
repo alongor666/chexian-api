@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（73 项 · 数据截至 2026-06-14 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（72 项 · 数据截至 2026-06-14 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -24,7 +24,7 @@
 
 - 2026-06-11-claude-942414 `IN_PROGRESS` — 行级权限(RLS)整域绕过
 
-**P1（13 项）**
+**P1（12 项）**
 
 - B246 — VPS 分层查询改造（KPI variable_cost_ratio）
 - B291 — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
@@ -38,7 +38,6 @@
 - 2026-06-14-claude-9377d1 — quote-conversion RLS 完整化（942414 子项 2/5）
 - 2026-06-14-claude-9719ff — repair RLS 完整化（942414 子项 4/5）
 - 2026-06-14-claude-992469 — claims-detail RLS 完整化（942414 子项 3/5）
-- 2026-06-14-claude-b7d892 — ETL 异常哨兵 CI 内 LLM 归因剥离 → 本地 skill /chexian-s
 
 **P2（36 项）**
 
@@ -183,4 +182,3 @@
 | 2026-06-14-claude-9377d1 | 2026-06-14 | Security/Backend | @claude | **quote-conversion RLS 完整化（942414 子项 2/5）**：当前紧急止血方案 quote-conversion 域整体 admin-only。长期修法：扩 7 个 SQL 生成器（generateQuoteKpiQuery/FunnelQuery/DrilldownQuery/HeatmapQuery/PriceQuery/RankingQuery/TrendQuery）签名加 whereClause 入参，路由调 parseFiltersAndBuildWhere(req) → 移除 requireBranchAdmin。验收：org_user 调 7 端点仅看本机构、telemarketing_user 仅看电销、admin 看全量。 | P1 | PROPOSED | .claude/rules/skill-prefix.md | server/src/sql/quote-conversion.ts; server/src/routes/query/quote-conversion.ts |  |
 | 2026-06-14-claude-9719ff | 2026-06-14 | Security/Backend | @claude | **repair RLS 完整化（942414 子项 4/5）**：当前紧急止血方案 repair 域 8 端点整体 admin-only。长期修法：扩 12 个 SQL 生成器签名加 whereClause（generateRepairOverviewQuery/DetailQuery/StatusQuery/MetadataQuery/CityQuery/ChannelQuery/CoopTierQuery/ScatterQuery/LocalResourceQuery/ToPremiumQuery/DiversionListQuery/OrphanShopsQuery），路由调 parseFiltersAndBuildWhere → 移除 requireBranchAdmin。注意 V2 端点对应 filterSchemaV2。 | P1 | PROPOSED | N/A | server/src/sql/repair.ts; server/src/routes/query/repair.ts |  |
 | 2026-06-14-claude-992469 | 2026-06-14 | Security/Backend | @claude | **claims-detail RLS 完整化（942414 子项 3/5）**：当前紧急止血方案 claims-detail 域 10+ 端点整体 admin-only。长期修法：扩 11 个 SQL 生成器签名加 whereClause（generatePendingOverviewQuery/PendingByOrgQuery/PendingAgingQuery/CauseAnalysisQuery/GeoRiskByAccidentQuery/GeoRiskByPlateQuery/GeoComparisonQuery/ClaimCycleQuery/FrequencyYoyQuery/LossRatioDevelopmentQuery/ClaimsHeatmapQuery），其中 JOIN PolicyFact 模式需注意 DEDUPED_POLICY_SUBQUERY 内层也注入 → 路由调 parseFiltersAndBuildWhere → 移除 requireBranchAdmin。 | P1 | PROPOSED | N/A | server/src/sql/claims-detail.ts; server/src/sql/claims-heatmap.ts; server/src/routes/query/claims-detail.ts |  |
-| 2026-06-14-claude-b7d892 | 2026-06-14 | 运维 / 监控治理 | @claude | ETL 异常哨兵 CI 内 LLM 归因剥离 → 本地 skill /chexian-sentinel-attribution；删 callAnthropic/callZhipu/sentinel.config.json llm 块 + workflow yaml ANTHROPIC_API_KEY/ZHIPU_API_KEY env；归因列保留确定性规则文案，业务归因走 Claude Code Max 本地路径（不依赖外部 LLM API key）。延续 PR #626 治理。 | P1 | PROPOSED | N/A | scripts/sentinel/lib/llm-judge.mjs,.github/workflows/etl-anomaly-sentinel.yml,scripts/sentinel/sentinel.config.json,scripts/sentinel/README.md,.claude/skills/chexian-sentinel-attribution.md |  |
