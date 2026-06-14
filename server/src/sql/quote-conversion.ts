@@ -91,8 +91,9 @@ function buildWhere(filters: QuoteConversionFilters): string {
 }
 
 /** KPI 概览卡片 */
-export function generateQuoteKpiQuery(filters: QuoteConversionFilters = {}): string {
+export function generateQuoteKpiQuery(filters: QuoteConversionFilters = {}, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause && whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   return `
     SELECT
       COUNT(*) AS total_quotes,
@@ -110,13 +111,14 @@ export function generateQuoteKpiQuery(filters: QuoteConversionFilters = {}): str
       COUNT(CASE WHEN renewal_status = '转保' AND is_underwritten = '承保' THEN 1 END) AS switch_insured,
       ROUND(SUM(CASE WHEN renewal_status = '转保' AND is_underwritten = '承保' THEN final_quote_premium ELSE 0 END), 0) AS switch_insured_premium
     FROM QuoteConversion
-    WHERE ${where}
+    WHERE ${finalWhere}
   `;
 }
 
 /** 转化漏斗（续保/转保分开） */
-export function generateQuoteFunnelQuery(filters: QuoteConversionFilters = {}): string {
+export function generateQuoteFunnelQuery(filters: QuoteConversionFilters = {}, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause && whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   return `
     SELECT
       renewal_status AS renewal_type,
@@ -125,7 +127,7 @@ export function generateQuoteFunnelQuery(filters: QuoteConversionFilters = {}): 
       COUNT(CASE WHEN final_quote_premium > 0 AND insurance_grade IN ('A','B','C','D') AND commercial_ncd <= 1.0 THEN 1 END) AS l3_quality,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS l4_insured
     FROM QuoteConversion
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY renewal_status
     ORDER BY renewal_status
   `;
@@ -134,9 +136,11 @@ export function generateQuoteFunnelQuery(filters: QuoteConversionFilters = {}): 
 /** 三级下钻表 */
 export function generateQuoteDrilldownQuery(
   filters: QuoteConversionFilters = {},
-  level: 'org' | 'team' | 'salesman' = 'org'
+  level: 'org' | 'team' | 'salesman' = 'org',
+  whereClause: string = '1=1'
 ): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause && whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
 
   let groupCol: string;
   let nameCol: string;
@@ -172,7 +176,7 @@ export function generateQuoteDrilldownQuery(
       -- 平均折扣率
       ROUND(SUM(CASE WHEN pure_risk_premium > 0 THEN final_quote_premium END) / NULLIF(SUM(CASE WHEN pure_risk_premium > 0 THEN pure_risk_premium END), 0), 3) AS avg_discount
     FROM QuoteConversion
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY ${groupCol}${level === 'salesman' ? '' : `, ${nameCol}`}
     ORDER BY total_quotes DESC
   `;
@@ -181,9 +185,11 @@ export function generateQuoteDrilldownQuery(
 /** 维度热力图 */
 export function generateQuoteHeatmapQuery(
   filters: QuoteConversionFilters = {},
-  colDimension: string = 'renewal_status'
+  colDimension: string = 'renewal_status',
+  whereClause: string = '1=1'
 ): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause && whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   const safeCol = esc(colDimension);
   // 允许的列维度白名单
   const allowedCols: Record<string, string> = {
@@ -207,15 +213,16 @@ export function generateQuoteHeatmapQuery(
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS underwriting_rate
     FROM QuoteConversion
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY org_level_3, ${colExpr}
     ORDER BY org_level_3, dim_value
   `;
 }
 
 /** 价格敏感度分析 */
-export function generateQuotePriceQuery(filters: QuoteConversionFilters = {}): string {
+export function generateQuotePriceQuery(filters: QuoteConversionFilters = {}, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause && whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   return `
     SELECT
       ROUND(CASE WHEN pure_risk_premium > 0 THEN final_quote_premium / pure_risk_premium END * 20) / 20.0 AS discount_bin,
@@ -226,7 +233,7 @@ export function generateQuotePriceQuery(filters: QuoteConversionFilters = {}): s
       ROUND(AVG(final_quote_premium), 0) AS avg_premium,
       ROUND(SUM(commercial_pricing_factor * final_quote_premium) / NULLIF(SUM(CASE WHEN commercial_pricing_factor IS NOT NULL AND commercial_pricing_factor > 0 THEN final_quote_premium END), 0), 3) AS avg_pricing_coef
     FROM QuoteConversion
-    WHERE ${where} AND pure_risk_premium > 0
+    WHERE ${finalWhere} AND pure_risk_premium > 0
     GROUP BY discount_bin
     ORDER BY discount_bin
   `;
@@ -235,9 +242,11 @@ export function generateQuotePriceQuery(filters: QuoteConversionFilters = {}): s
 /** 多维度排行 */
 export function generateQuoteRankingQuery(
   filters: QuoteConversionFilters = {},
-  dimension: string = 'customer_category'
+  dimension: string = 'customer_category',
+  whereClause: string = '1=1'
 ): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause && whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   const allowedDims: Record<string, string> = {
     'customer_category': 'customer_category',
     'commercial_ncd': "CAST(commercial_ncd AS VARCHAR)",
@@ -259,7 +268,7 @@ export function generateQuoteRankingQuery(
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS underwriting_rate,
       ROUND(SUM(CASE WHEN pure_risk_premium > 0 THEN final_quote_premium END) / NULLIF(SUM(CASE WHEN pure_risk_premium > 0 THEN pure_risk_premium END), 0), 3) AS avg_discount
     FROM QuoteConversion
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY ${dimExpr}
     ORDER BY total_quotes DESC
   `;
@@ -268,9 +277,11 @@ export function generateQuoteRankingQuery(
 /** 时间趋势 */
 export function generateQuoteTrendQuery(
   filters: QuoteConversionFilters = {},
-  granularity: 'day' | 'week' | 'month' = 'week'
+  granularity: 'day' | 'week' | 'month' = 'week',
+  whereClause: string = '1=1'
 ): string {
   const where = buildWhere(filters);
+  const finalWhere = whereClause && whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
 
   let timeBucket: string;
   switch (granularity) {
@@ -294,7 +305,7 @@ export function generateQuoteTrendQuery(
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS conversion_rate,
       ROUND(100.0 * COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) / NULLIF(COUNT(*), 0), 1) AS underwriting_rate
     FROM QuoteConversion
-    WHERE ${where}
+    WHERE ${finalWhere}
     GROUP BY ${timeBucket}, renewal_status
     ORDER BY time_bucket, renewal_status
   `;
