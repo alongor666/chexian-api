@@ -9,6 +9,8 @@ import {
   evaluateMetricSeries,
   lastYearCutoff,
   findSamePeriodLastYear,
+  trimBaseline,
+  computeFingerprint,
   // @ts-expect-error mjs without types
 } from '../../scripts/sentinel/lib/stats.mjs';
 
@@ -221,5 +223,144 @@ describe('sentinel/stats evaluateMetricSeries YoY 同期对齐（codex P2）', (
       yoy: { current: 99, previous: 50, previousPeriod: 'manual' },
     });
     expect(v.yoy).toEqual({ current: 99, previous: 50, previousPeriod: 'manual' });
+  });
+});
+
+describe('sentinel/stats trimBaseline（issue #550 治本）', () => {
+  it('短样本（<4）直接返回不 trim', () => {
+    const r = trimBaseline([10, 20, 30]);
+    expect(r.trimmed).toEqual([10, 20, 30]);
+    expect(r.dropped).toEqual([]);
+  });
+
+  it('IQR 默认 k=1.5 剔除极端离群，保留主体', () => {
+    // 主体 50-80 集中，极端 500 应被 IQR 剔除
+    const r = trimBaseline([55, 60, 62, 65, 68, 70, 72, 75, 500]);
+    expect(r.dropped).toContain(500);
+    expect(r.trimmed.every((v) => v < 100)).toBe(true);
+  });
+
+  it('dropHead 剔除头部 N 期', () => {
+    const r = trimBaseline([1000, 800, 50, 55, 60, 65, 70], { dropHead: 2 });
+    expect(r.dropped).toContain(1000);
+    expect(r.dropped).toContain(800);
+  });
+
+  it('dropHead 剔过狠则回退（剩余 <3 不剔）', () => {
+    const r = trimBaseline([100, 50, 60, 70], { dropHead: 3 });
+    // 4-3=1 < 3 → 回退保留全部
+    expect(r.trimmed).toEqual([100, 50, 60, 70]);
+    expect(r.dropped).toEqual([]);
+  });
+
+  it('IQR 剔过狠回退（保证剩余 ≥3）', () => {
+    // 全部值都极近 → IQR=0 → 直接返回
+    const r = trimBaseline([50, 50, 50, 50, 50]);
+    expect(r.trimmed.length).toBe(5);
+  });
+
+  it('issue #550 真实病灶：mean/std 在 trim 后回归业务范围', () => {
+    // 模拟 lossTrend 实际形态：头部早期 6 期极端，主体 40 期赔付率 50-80%
+    const earlyChaos = [800, 500, 300, 200, 150, 100]; // 早期保单赔款未爬完
+    const mainBody: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      mainBody.push(60 + (i % 5) * 4); // 60, 64, 68, 72, 76 循环
+    }
+    const raw = [...earlyChaos, ...mainBody];
+    const rawMean = raw.reduce((a, b) => a + b, 0) / raw.length;
+    const rawStd = Math.sqrt(raw.reduce((a, b) => a + (b - rawMean) ** 2, 0) / (raw.length - 1));
+    expect(rawMean).toBeGreaterThan(100); // 被污染
+    expect(rawStd).toBeGreaterThan(100);   // std 巨大
+
+    const { trimmed, dropped } = trimBaseline(raw, { iqrK: 1.5, dropHead: 6 });
+    const trimmedMean = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+    const trimmedStd = Math.sqrt(trimmed.reduce((a, b) => a + (b - trimmedMean) ** 2, 0) / (trimmed.length - 1));
+    // 期望：trim 后均值回归 50~80 区间，std 回到个位数
+    expect(trimmedMean).toBeGreaterThan(50);
+    expect(trimmedMean).toBeLessThan(80);
+    expect(trimmedStd).toBeLessThan(20);
+    expect(dropped.length).toBeGreaterThanOrEqual(6); // 至少剔了头部 6 期
+  });
+});
+
+describe('sentinel/stats evaluateMetricSeries baselineTrim 集成（向后兼容）', () => {
+  // 构造与 issue #550 同型病灶：被污染基线 + 当期环比 +18%
+  const sicklySeries = [
+    ...Array.from({ length: 6 }, (_, i) => ({ time_period: `2022-${String(i + 1).padStart(2, '0')}`, value: 800 - i * 100 })), // 早期极端
+    ...Array.from({ length: 36 }, (_, i) => ({
+      time_period: `2023-${String(i + 1).padStart(2, '0')}`.replace(/-(\d\d)$/, (_, m) => `-${String(((+m - 1) % 12) + 1).padStart(2, '0')}`),
+      value: 65 + (i % 4) * 3,
+    })),
+    { time_period: '2026-01', value: 66 },
+    { time_period: '2026-02', value: 66 },
+    { time_period: '2026-03', value: 78 }, // 被检值：环比 +18%
+  ];
+
+  it('baselineTrim=null 时保持旧行为（向后兼容 prepublish-gate）', () => {
+    const v = evaluateMetricSeries('earned_claim_ratio', sicklySeries, {
+      zThreshold: 2.5,
+      momThreshold: 8,
+      direction: 'up',
+      excludeRecent: 0,
+      // 未传 baselineTrim
+    });
+    expect(v.triggered).toBe(true);
+    // 旧行为：std 被早期值污染巨大 → Z 失效（必由环比兜底）
+    expect(v.baselineStd).toBeGreaterThan(50);
+    // 触发原因里只有环比，没有 Z
+    expect(v.reasons.some((r: string) => r.startsWith('Z='))).toBe(false);
+    expect(v.reasons.some((r: string) => r.includes('环比'))).toBe(true);
+    expect(v.baselineTrimmedCount).toBe(0);
+  });
+
+  it('启用 baselineTrim 后 std 回归业务范围，Z 路径恢复有效', () => {
+    const v = evaluateMetricSeries('earned_claim_ratio', sicklySeries, {
+      zThreshold: 2.5,
+      momThreshold: 8,
+      direction: 'up',
+      excludeRecent: 0,
+      baselineTrim: { iqrK: 1.5, dropHead: 6 },
+    });
+    expect(v.baselineStd).toBeLessThan(20); // trim 后标准差回归业务范围
+    expect(v.baselineTrimmedCount).toBeGreaterThan(0);
+    expect(v.baselineSize).toBeGreaterThan(0);
+  });
+});
+
+describe('sentinel/stats computeFingerprint（silence 用）', () => {
+  it('相同 metric+期+方向+环比规模 → 相同 fp', () => {
+    const v1 = { metric: 'earned_claim_ratio', latestMaturePeriod: '2026-03', direction: 'up', mom: 18.3 };
+    const v2 = { metric: 'earned_claim_ratio', latestMaturePeriod: '2026-03', direction: 'up', mom: 18.45 }; // 微抖动
+    expect(computeFingerprint(v1)).toBe(computeFingerprint(v2));
+  });
+
+  it('期数推进 → 新 fp（让告警重新发声）', () => {
+    const v1 = { metric: 'earned_claim_ratio', latestMaturePeriod: '2026-03', direction: 'up', mom: 18 };
+    const v2 = { metric: 'earned_claim_ratio', latestMaturePeriod: '2026-04', direction: 'up', mom: 18 };
+    expect(computeFingerprint(v1)).not.toBe(computeFingerprint(v2));
+  });
+
+  it('环比量级跳跃（>1% 整数变化）→ 新 fp', () => {
+    const v1 = { metric: 'earned_claim_ratio', latestMaturePeriod: '2026-03', direction: 'up', mom: 18 };
+    const v2 = { metric: 'earned_claim_ratio', latestMaturePeriod: '2026-03', direction: 'up', mom: 25 };
+    expect(computeFingerprint(v1)).not.toBe(computeFingerprint(v2));
+  });
+
+  it('方向反转 → 新 fp', () => {
+    const v1 = { metric: 'total_premium', latestMaturePeriod: '2026-05', direction: 'up', mom: 30 };
+    const v2 = { metric: 'total_premium', latestMaturePeriod: '2026-05', direction: 'down', mom: 30 };
+    expect(computeFingerprint(v1)).not.toBe(computeFingerprint(v2));
+  });
+
+  it('mom 为 NaN/缺失时 fp 仍稳定（用 na 占位）', () => {
+    const v1 = { metric: 'x', latestMaturePeriod: '2026-03', direction: 'up', mom: NaN };
+    const v2 = { metric: 'x', latestMaturePeriod: '2026-03', direction: 'up' };
+    expect(computeFingerprint(v1)).toBe(computeFingerprint(v2));
+    expect(computeFingerprint(v1)).toContain('|na');
+  });
+
+  it('缺 metric 返回空串（防把空 fp 误进 silence）', () => {
+    expect(computeFingerprint(null)).toBe('');
+    expect(computeFingerprint({})).toBe('');
   });
 });

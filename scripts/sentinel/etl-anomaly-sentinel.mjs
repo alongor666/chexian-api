@@ -23,28 +23,54 @@
  *     [--dry-run] [--api-base <url>] [--config <path>] [--last-etag <etag>] [--out-dir <dir>]
  */
 
-import { readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, appendFileSync, existsSync } from 'node:fs';
+import { dirname, join, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   fetchDataVersion, fetchComprehensive, fetchTrend, lossTrendToSeries,
 } from './lib/fetch-metrics.mjs';
-import { evaluateMetricSeries } from './lib/stats.mjs';
+import { evaluateMetricSeries, computeFingerprint } from './lib/stats.mjs';
 import { judgeAnomalies } from './lib/llm-judge.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+// 仓库根：scripts/sentinel/.. /.. → 项目根
+const REPO_ROOT = resolve(__dirname, '..', '..');
 
 function parseArgs(argv) {
-  const args = { dryRun: false, apiBase: null, config: null, lastEtag: null, outDir: null };
+  const args = { dryRun: false, apiBase: null, config: null, lastEtag: null, outDir: null, resetSilence: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') args.dryRun = true;
+    else if (a === '--reset-silence') args.resetSilence = true;
     else if (a === '--api-base') args.apiBase = argv[++i];
     else if (a === '--config') args.config = argv[++i];
     else if (a === '--last-etag') args.lastEtag = argv[++i];
     else if (a === '--out-dir') args.outDir = argv[++i];
   }
   return args;
+}
+
+/**
+ * Silence state I/O — 告警去重持久化（issue #550 治本）。
+ * state shape: { updatedAt:ISO, fingerprints: [{fp, firstSeenAt, count}] }
+ * 写回时按 fp 唯一 + 总条数上限（防长期累积爆炸）；workflow cache 跨 run 恢复。
+ */
+function loadSilenceState(absPath) {
+  if (!existsSync(absPath)) return { updatedAt: null, fingerprints: [] };
+  try {
+    const j = JSON.parse(readFileSync(absPath, 'utf8'));
+    return { updatedAt: j.updatedAt ?? null, fingerprints: Array.isArray(j.fingerprints) ? j.fingerprints : [] };
+  } catch {
+    return { updatedAt: null, fingerprints: [] };
+  }
+}
+
+function persistSilenceState(absPath, state, maxEntries) {
+  mkdirSync(dirname(absPath), { recursive: true });
+  // 保留最新 N 条（按 firstSeenAt 倒序），避免 state 文件无限增长
+  const sorted = [...state.fingerprints].sort((a, b) => String(b.firstSeenAt).localeCompare(String(a.firstSeenAt)));
+  const truncated = sorted.slice(0, Math.max(1, maxEntries));
+  writeFileSync(absPath, JSON.stringify({ updatedAt: new Date().toISOString(), fingerprints: truncated }, null, 2));
 }
 
 function setGithubOutput(kv) {
@@ -168,6 +194,9 @@ async function main() {
       // flow 类（trend 接口无未来月）只需排 cutoff 当月（覆写为 1），否则倒退到春节高峰期会伪触发
       excludeRecent: Number.isInteger(mc.excludeRecent) ? mc.excludeRecent : excludeRecent,
       yoyThreshold: mc.yoyThreshold ?? null,
+      // 基线 trim（可选）：默认 null=保留旧行为；earned_claim_ratio 在 config 显式启用
+      // 以根治 lossTrend 早期未稳定期+IBNR 极端值污染（实测 mean=151%/std=568%）。
+      baselineTrim: mc.baselineTrim ?? null,
     });
     v.name = mc.name;
     v.unit = mc.unit;
@@ -177,18 +206,54 @@ async function main() {
 
   log(`判定完成：触发 ${triggered.length} / ${metricsCfg.length}`);
 
-  // 4) LLM 归因（仅对触发项）
-  const judged = await judgeAnomalies(triggered, { cutoffDate, timeProgress }, config.llm);
+  // 4) Silence 去重：算 fingerprint，与历史 state 比对，分离 newAnomalies / silencedAnomalies
+  //    workflow 用 has_new_anomalies 控 issue comment（has_anomalies 仍输出供观测/metrics）
+  const silenceCfg = config.silence ?? { enabled: false };
+  const silencePathRel = silenceCfg.stateFile || '.sentinel-state/silence.json';
+  const silenceAbsPath = isAbsolute(silencePathRel) ? silencePathRel : join(REPO_ROOT, silencePathRel);
+  const silenceState = (args.resetSilence || !silenceCfg.enabled)
+    ? { updatedAt: null, fingerprints: [] }
+    : loadSilenceState(silenceAbsPath);
+  const knownFps = new Set(silenceState.fingerprints.map((e) => e.fp));
 
-  // 5) 产出
+  const newAnomalies = [];
+  const silencedAnomalies = [];
+  const nowIso = new Date().toISOString();
+  for (const t of triggered) {
+    const fp = computeFingerprint(t);
+    t.fingerprint = fp;
+    if (silenceCfg.enabled && knownFps.has(fp)) {
+      // 增加 count（用于 issue 历史回溯），但不再触发新 comment
+      const entry = silenceState.fingerprints.find((e) => e.fp === fp);
+      if (entry) entry.count = (entry.count ?? 1) + 1;
+      silencedAnomalies.push(t);
+    } else {
+      newAnomalies.push(t);
+      silenceState.fingerprints.push({ fp, firstSeenAt: nowIso, count: 1 });
+    }
+  }
+  log(`silence: new=${newAnomalies.length} silenced=${silencedAnomalies.length} (enabled=${silenceCfg.enabled})`);
+
+  // 持久化 state（即使本次无新告警也写一遍：更新 updatedAt + count），dry-run 跳过避免污染本地
+  if (silenceCfg.enabled && !args.dryRun) {
+    persistSilenceState(silenceAbsPath, silenceState, silenceCfg.maxEntries ?? 100);
+  }
+
+  // 5) LLM 归因（仅对未被静默的新触发项）
+  const judged = await judgeAnomalies(newAnomalies, { cutoffDate, timeProgress }, config.llm);
+
+  // 6) 产出
   const verdictObj = {
-    generatedAt: new Date().toISOString(),
+    generatedAt: nowIso,
     apiBase,
     etlDate,
     cutoffDate,
     timeProgress,
     etag,
     triggeredCount: triggered.length,
+    newCount: newAnomalies.length,
+    silencedCount: silencedAnomalies.length,
+    silencedFingerprints: silencedAnomalies.map((t) => t.fingerprint),
     verdicts,
     judged,
   };
@@ -196,14 +261,16 @@ async function main() {
   writeFileSync(verdictPath, JSON.stringify(verdictObj, null, 2));
 
   let summaryPath = '';
-  if (triggered.length > 0) {
-    const md = buildSummaryMd({ cutoffDate, timeProgress, etlDate, triggered, judged, allVerdicts: verdicts });
+  if (newAnomalies.length > 0) {
+    const md = buildSummaryMd({ cutoffDate, timeProgress, etlDate, triggered: newAnomalies, judged, allVerdicts: verdicts });
     summaryPath = join(outDir, 'summary.md');
     writeFileSync(summaryPath, md);
     if (args.dryRun) {
       log('=== DRY-RUN：以下为本应推送 GitHub issue 的告警 ===');
       console.log(md);
     }
+  } else if (silencedAnomalies.length > 0) {
+    log(`全部 ${silencedAnomalies.length} 项告警已 silenced（同质告警去重），不写 issue comment。`);
   } else {
     log('无异常，静默（不写 issue）。');
   }
@@ -211,6 +278,8 @@ async function main() {
   setGithubOutput({
     not_modified: 'false',
     has_anomalies: String(triggered.length > 0),
+    has_new_anomalies: String(newAnomalies.length > 0),
+    silenced_count: String(silencedAnomalies.length),
     etag: etag || '',
     summary_path: summaryPath,
     verdict_path: verdictPath,

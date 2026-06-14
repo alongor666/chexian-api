@@ -104,6 +104,10 @@ export function evaluateMetricSeries(metric, series, opts = {}) {
     excludeRecent = 1,
     yoy = null, // 缺省 → 自动按 latestMature 期 -1 年从 series 内查（修复 codex P2）
     yoyThreshold = null,
+    // 基线 trim（issue #550 治本）：null=不 trim，保留旧行为；
+    //   {iqrK?, dropHead?} 启用 trimBaseline 剔除离群与早期未稳定期。
+    //   prepublish-gate 维持默认 null 不受影响；仅 sentinel.config 的 earned_claim_ratio 显式启用。
+    baselineTrim = null,
   } = opts;
 
   const { mature, excluded } = splitByMaturity(series, excludeRecent);
@@ -122,6 +126,8 @@ export function evaluateMetricSeries(metric, series, opts = {}) {
     yoy: null,
     excludedPeriods: excluded.map((e) => e.time_period),
     insufficientData: false,
+    baselineSize: 0,
+    baselineTrimmedCount: 0,
   };
 
   if (mature.length < 3) {
@@ -132,7 +138,16 @@ export function evaluateMetricSeries(metric, series, opts = {}) {
   const latest = mature[mature.length - 1];
   const prior = mature[mature.length - 2];
   const baselineRows = mature.slice(0, mature.length - 1); // 不含被检值
-  const baselineValues = baselineRows.map((r) => r.value);
+  const rawBaselineValues = baselineRows.map((r) => r.value);
+
+  // 基线 trim（可选）：根治 lossTrend 长序列被早期未稳定期+IBNR 极端值污染（issue #550）
+  let baselineValues = rawBaselineValues;
+  let trimmedCount = 0;
+  if (baselineTrim) {
+    const r = trimBaseline(rawBaselineValues, baselineTrim);
+    baselineValues = r.trimmed;
+    trimmedCount = r.dropped.length;
+  }
 
   const m = mean(baselineValues);
   const s = stdDev(baselineValues);
@@ -195,7 +210,73 @@ export function evaluateMetricSeries(metric, series, opts = {}) {
     mom: Number.isFinite(mom) ? Number(mom.toFixed(4)) : NaN,
     yoy: effectiveYoy,
     yoyDeviation: Number.isFinite(yoyDeviation) ? Number(yoyDeviation.toFixed(4)) : NaN,
+    baselineSize: baselineValues.length,
+    baselineTrimmedCount: trimmedCount,
   };
+}
+
+/**
+ * 基线 trim：剔除离群值，得到更稳健的基线序列（issue #550 治本）。
+ *
+ * 背景：lossTrend 长序列会把早期未稳定期（保单刚起保、IBNR 未爬完）的极端值喂进基线，
+ * 实测 mean=151%、std=568%，Z-score 永远失效；环比兜底成唯一触发路径 → 一旦刚出排除窗口
+ * 的月仍在自然爬坡就误报。trim 后基线均值/方差回归业务正常范围（赔付率 50~80%）。
+ *
+ * 算法：① 可选剔除头部 N 期（早期单期样本极小）② IQR×k 法剔除离群（默认 k=1.5）
+ *      ③ 任一步剔过狠（剩余 <3）则回退该步，保证最少 3 个基线点。
+ *
+ * @param {number[]} values 基线原始值数组（不含被检值）
+ * @param {object} [options]
+ * @param {number} [options.iqrK=1.5] IQR 倍数；越大越宽松
+ * @param {number} [options.dropHead=0] 额外剔除头部 N 期
+ * @returns {{ trimmed:number[], dropped:number[] }}
+ */
+export function trimBaseline(values, options = {}) {
+  const { iqrK = 1.5, dropHead = 0 } = options;
+  const nums = values.filter((v) => Number.isFinite(v));
+  if (nums.length < 4) return { trimmed: nums, dropped: [] };
+
+  // 头部排除（早期期数赔款未爬完，单期样本极小）；剔过狠回退
+  const headDropped = dropHead > 0 ? nums.slice(0, Math.min(dropHead, nums.length)) : [];
+  let working = nums.length - headDropped.length >= 3 ? nums.slice(headDropped.length) : nums;
+  const effectiveHeadDropped = working === nums ? [] : headDropped;
+
+  // IQR 离群剔除
+  const sorted = [...working].sort((a, b) => a - b);
+  const q1 = sorted[Math.floor(sorted.length * 0.25)];
+  const q3 = sorted[Math.floor(sorted.length * 0.75)];
+  const iqr = q3 - q1;
+  if (iqr === 0) return { trimmed: working, dropped: effectiveHeadDropped };
+
+  const lo = q1 - iqrK * iqr;
+  const hi = q3 + iqrK * iqr;
+  const trimmed = [];
+  const droppedIqr = [];
+  for (const v of working) {
+    if (v >= lo && v <= hi) trimmed.push(v);
+    else droppedIqr.push(v);
+  }
+  // trim 过狠回退
+  if (trimmed.length < 3) return { trimmed: working, dropped: effectiveHeadDropped };
+  return { trimmed, dropped: effectiveHeadDropped.concat(droppedIqr) };
+}
+
+/**
+ * 计算 verdict 的告警指纹（silence 用，issue #550 治本）。
+ *
+ * 设计：把"同质告警"（指标 × 最新成熟期 × 方向 × 环比规模）归为同一 fp。
+ * z 不进 fp（其值常 NaN 或巨变不稳定）；mom 四舍五入到整数避免微抖动产生新 fp。
+ * 同 fp 已记入 silence state 后不再追加 issue comment，直到任一元素变化（期数推进 / 方向反转 / 量级跳跃）。
+ *
+ * @param {object} verdict evaluateMetricSeries 返回的 verdict（无论是否触发都可算）
+ * @returns {string} 形如 'earned_claim_ratio|2026-03|up|18'
+ */
+export function computeFingerprint(verdict) {
+  if (!verdict || !verdict.metric) return '';
+  const period = verdict.latestMaturePeriod ?? '?';
+  const dir = verdict.direction ?? 'both';
+  const momRounded = Number.isFinite(verdict.mom) ? Math.round(verdict.mom) : 'na';
+  return `${verdict.metric}|${period}|${dir}|${momRounded}`;
 }
 
 /** 计算去年同期 cutoff（YYYY-MM-DD → 年份 -1）。非法输入返回 null */
