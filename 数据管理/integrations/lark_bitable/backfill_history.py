@@ -29,46 +29,90 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SSH_ALIAS = "chexian-vps-deploy"
-VPS_REPORTS_ROOT = "/var/www/chexian/server/data/reports"
-LOCAL_REPORTS_ROOT = PROJECT_ROOT / "server" / "data" / "reports"
-PUBLIC_URL_BASE = "https://chexian.cretvalu.com/api/reports"
 
-
-ENTRYPOINT_RULES = {
-    "diagnose-loss-development": lambda date: "preview-mvp.html",
-    "diagnose-period-trend": lambda date: f"{date}-dashboard.html",
+# 两类报告的存储语义完全不同：
+# - loss-development：受鉴权 API 托管，VPS 路径 server/data/reports/<slug>/<date>/<entrypoint>
+#   URL = /api/reports/<slug>/<date>/<entrypoint>
+# - period-trend：前端静态资源，VPS 路径 frontend/dist/reports/<slug>/<date>-<view>.html（扁平）
+#   URL = /reports/<slug>/<date>-<view>.html
+REPORT_TYPE_CONFIG = {
+    "diagnose-loss-development": {
+        "vps_root": "/var/www/chexian/server/data/reports/diagnose-loss-development",
+        "local_root": PROJECT_ROOT / "server" / "data" / "reports" / "diagnose-loss-development",
+        "url_template": lambda date, filename: (
+            f"https://chexian.cretvalu.com/api/reports/diagnose-loss-development/{date}/{filename}"
+        ),
+        "entrypoint": lambda date: "preview-mvp.html",
+        "has_date_subdir": True,
+    },
+    "diagnose-period-trend": {
+        "vps_root": "/var/www/chexian/frontend/dist/reports/diagnose-period-trend",
+        "local_root": PROJECT_ROOT / "public" / "reports" / "diagnose-period-trend",
+        "url_template": lambda date, filename: (
+            f"https://chexian.cretvalu.com/reports/diagnose-period-trend/{filename}"
+        ),
+        "entrypoint": lambda date: f"{date}-dashboard.html",
+        "has_date_subdir": False,
+    },
 }
 
 
 def scan_local(report_type: str) -> set[str]:
-    root = LOCAL_REPORTS_ROOT / report_type
+    cfg = REPORT_TYPE_CONFIG[report_type]
+    root = cfg["local_root"]
     if not root.exists():
         return set()
-    return {p.name for p in root.iterdir() if p.is_dir() and DATE_RE.match(p.name)}
+    if cfg["has_date_subdir"]:
+        return {p.name for p in root.iterdir() if p.is_dir() and DATE_RE.match(p.name)}
+    # 扁平文件命名：从 <date>-<view>.html 提取日期
+    dates = set()
+    for p in root.iterdir():
+        if not p.is_file() or not p.name.endswith(".html"):
+            continue
+        m = re.match(r"^(\d{4}-\d{2}-\d{2})-.*\.html$", p.name)
+        if m:
+            dates.add(m.group(1))
+    return dates
 
 
 def scan_vps(report_type: str) -> set[str]:
+    cfg = REPORT_TYPE_CONFIG[report_type]
+    root = cfg["vps_root"]
+    if cfg["has_date_subdir"]:
+        cmd = f"ls -d {root}/*/ 2>/dev/null"
+    else:
+        cmd = f"ls {root}/ 2>/dev/null"
     try:
         result = subprocess.run(
-            ["ssh", SSH_ALIAS, f"ls -d {VPS_REPORTS_ROOT}/{report_type}/*/ 2>/dev/null"],
+            ["ssh", SSH_ALIAS, cmd],
             capture_output=True, text=True, timeout=30, check=False,
         )
     except subprocess.TimeoutExpired:
         print("[warn] VPS ssh 超时，跳过 VPS 扫描", file=sys.stderr)
         return set()
     dates = set()
-    for line in result.stdout.splitlines():
-        parts = line.rstrip("/").split("/")
-        if parts and DATE_RE.match(parts[-1]):
-            dates.add(parts[-1])
+    if cfg["has_date_subdir"]:
+        for line in result.stdout.splitlines():
+            parts = line.rstrip("/").split("/")
+            if parts and DATE_RE.match(parts[-1]):
+                dates.add(parts[-1])
+    else:
+        for line in result.stdout.splitlines():
+            m = re.match(r"^(\d{4}-\d{2}-\d{2})-.*\.html$", line.strip())
+            if m:
+                dates.add(m.group(1))
     return dates
 
 
 def get_vps_file_size_kb(report_type: str, date: str, filename: str) -> int | None:
+    cfg = REPORT_TYPE_CONFIG[report_type]
+    if cfg["has_date_subdir"]:
+        path = f"{cfg['vps_root']}/{date}/{filename}"
+    else:
+        path = f"{cfg['vps_root']}/{filename}"
     try:
         result = subprocess.run(
-            ["ssh", SSH_ALIAS,
-             f"stat -c%s {VPS_REPORTS_ROOT}/{report_type}/{date}/{filename} 2>/dev/null"],
+            ["ssh", SSH_ALIAS, f"stat -c%s {path} 2>/dev/null"],
             capture_output=True, text=True, timeout=15, check=False,
         )
         if result.stdout.strip().isdigit():
@@ -79,16 +123,20 @@ def get_vps_file_size_kb(report_type: str, date: str, filename: str) -> int | No
 
 
 def count_subpages_local(report_type: str, date: str) -> int | None:
-    drill_dir = LOCAL_REPORTS_ROOT / report_type / date / "drill"
+    cfg = REPORT_TYPE_CONFIG[report_type]
+    if not cfg["has_date_subdir"]:
+        return None  # 扁平存储无下钻子页
+    drill_dir = cfg["local_root"] / date / "drill"
     if drill_dir.exists():
         return sum(1 for _ in drill_dir.rglob("*.html"))
     return None
 
 
 def backfill_one_type(report_type: str, dry_run: bool = False) -> None:
-    if report_type not in ENTRYPOINT_RULES:
-        print(f"[skip] {report_type}: entrypoint 规则未定义", file=sys.stderr)
+    if report_type not in REPORT_TYPE_CONFIG:
+        print(f"[skip] {report_type}: 未在 REPORT_TYPE_CONFIG 中定义", file=sys.stderr)
         return
+    cfg = REPORT_TYPE_CONFIG[report_type]
     local_dates = scan_local(report_type)
     vps_dates = scan_vps(report_type)
     all_dates = sorted(local_dates | vps_dates)
@@ -100,8 +148,8 @@ def backfill_one_type(report_type: str, dry_run: bool = False) -> None:
         return
 
     for date in all_dates:
-        entrypoint = ENTRYPOINT_RULES[report_type](date)
-        url = f"{PUBLIC_URL_BASE}/{report_type}/{date}/{entrypoint}"
+        entrypoint = cfg["entrypoint"](date)
+        url = cfg["url_template"](date, entrypoint)
         sub_pages = count_subpages_local(report_type, date)
         vps_size = get_vps_file_size_kb(report_type, date, entrypoint)
         in_vps = "✅" if date in vps_dates else "❌(已丢)"
@@ -130,13 +178,13 @@ def backfill_one_type(report_type: str, dry_run: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--report-type", choices=list(ENTRYPOINT_RULES.keys()))
+    parser.add_argument("--report-type", choices=list(REPORT_TYPE_CONFIG.keys()))
     parser.add_argument("--all", action="store_true", help="回填所有支持的报告类型")
     parser.add_argument("--dry-run", action="store_true", help="只列计划不写入")
     args = parser.parse_args()
 
     if args.all:
-        targets = list(ENTRYPOINT_RULES.keys())
+        targets = list(REPORT_TYPE_CONFIG.keys())
     elif args.report_type:
         targets = [args.report_type]
     else:
