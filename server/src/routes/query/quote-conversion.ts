@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache } from './shared.js';
+import { asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache, requireBranchAdmin } from './shared.js';
 import {
   generateQuoteKpiQuery,
   generateQuoteFunnelQuery,
@@ -20,6 +20,11 @@ import {
 } from '../../sql/quote-conversion.js';
 
 const router = Router();
+
+// RLS 整域绕过紧急止血（BACKLOG 2026-06-11-claude-942414 / P0）
+// 报价转化 SQL 生成器签名未预留 whereClause 入参 → 整域 admin-only。
+// 长期修法：扩 7 个生成器签名 + 路由调 parseFiltersAndBuildWhere 注入。
+router.use(requireBranchAdmin);
 
 function preprocessBlankToUndefined(value: unknown): unknown {
   return typeof value === 'string' && value.trim() === '' ? undefined : value;

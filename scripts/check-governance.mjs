@@ -2395,6 +2395,68 @@ function checkCubeShadowTolerance() {
   return true;
 }
 
+/**
+ * RLS（行级安全）整域绕过防回归（BACKLOG 2026-06-11-claude-942414 / P0）
+ *
+ * 历史教训：customer-flow / quote-conversion / claims-detail / repair 四域的
+ * 路由 handler 长期不消费 req.permissionFilter（且对应 SQL 生成器签名也未预留
+ * whereClause 入参），非超管账号可越权读全量。本检查防止同类漏洞再次溜进 main。
+ *
+ * 判定：server/src/routes/query/*.ts 中每个路由文件必须二选一：
+ *   (A) 消费 req.permissionFilter（直接 grep，或经 parseFiltersAndBuildWhere /
+ *       parseFiltersAndBuildBothWhere 间接消费），或
+ *   (B) 用 requireBranchAdmin 兜底（路由级 admin-only 闸）
+ *
+ * 豁免清单（EXEMPT）：不查业务 SQL 的路由或纯分发器（未来如有新豁免，必须在此显式登记）。
+ */
+function checkRlsRouteCoverage() {
+  info('检查 RLS 整域绕过防回归（BACKLOG 942414）...');
+  const ROUTE_DIR = path.join(ROOT_DIR, 'server/src/routes/query');
+  if (!fs.existsSync(ROUTE_DIR)) {
+    warning('server/src/routes/query 不存在，跳过');
+    return true;
+  }
+  const EXEMPT = new Set([
+    'shared.ts',     // 公共模块，非路由
+    'bundles.ts',    // 仅 router.use 子路由分发，无业务端点
+    'patrol.ts',     // 只读巡检 JSON 文件，无 SQL 查询
+    // premium-plan：临时豁免（BACKLOG 2026-06-11-claude-942414 紧急止血 PR）。
+    // 该路由用应用层 RLS（req.user.role === 'org_user' 强制覆盖 orgFilter），
+    // 但不完整：漏 telemarketing_user / branchCode / 跨维度逃逸。
+    // 长期修法见拆出的 BACKLOG 子项「premium-plan RLS 完整化」。
+    'premium-plan.ts',
+  ]);
+  const PERMISSION_CONSUMER_PATTERN =
+    /\b(parseFiltersAndBuildWhere|parseFiltersAndBuildBothWhere|requireBranchAdmin|req\.permissionFilter|injectPermissionIntoAnySql)\b/;
+
+  const offenders = [];
+  const entries = fs.readdirSync(ROUTE_DIR);
+  for (const name of entries) {
+    if (EXEMPT.has(name)) continue;
+    if (!name.endsWith('.ts')) continue;
+    const filePath = path.join(ROUTE_DIR, name);
+    if (!fs.statSync(filePath).isFile()) continue;
+    const src = fs.readFileSync(filePath, 'utf-8');
+    if (!PERMISSION_CONSUMER_PATTERN.test(src)) {
+      offenders.push(name);
+    }
+  }
+
+  if (offenders.length > 0) {
+    error('RLS 整域绕过防回归失败：以下路由既未消费 req.permissionFilter，也未用 requireBranchAdmin 兜底');
+    for (const f of offenders) {
+      error(`  - server/src/routes/query/${f}`);
+    }
+    error('  修复路径：');
+    error('    (A) 路由 handler 调 parseFiltersAndBuildWhere(req) 取 whereClause 传给 SQL 生成器；');
+    error('    (B) SQL 生成器签名不接 whereClause 时，router.use(requireBranchAdmin) 兜底 admin-only；');
+    error('    (C) 路由不查业务 SQL（如纯文件 IO）需在 scripts/check-governance.mjs:checkRlsRouteCoverage EXEMPT 显式登记。');
+    return false;
+  }
+  success(`所有 ${entries.filter(n => n.endsWith('.ts') && !EXEMPT.has(n)).length} 个路由文件均消费 permissionFilter 或 requireBranchAdmin 兜底`);
+  return true;
+}
+
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件', fn: checkRequiredFiles },
@@ -2428,6 +2490,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'RouteCatalog参数契约', fn: checkRouteCatalogParamContracts },
   { name: 'Agent注册表版本', fn: checkAgentRegistryVersionBump },
   { name: '立方体影子对账容差', fn: checkCubeShadowTolerance },
+  { name: 'RLS路由消费覆盖', fn: checkRlsRouteCoverage },
 ];
 
 /**

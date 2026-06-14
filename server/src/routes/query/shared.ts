@@ -2,8 +2,9 @@
  * Shared utilities, types, and constants used across query route modules.
  */
 
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import { AppError } from '../../middleware/error.js';
 import { getRouteCache, getRouteCacheEntry, setRouteCache, computeEtag, sendWithEtag, sendCachedEntry } from '../../services/route-cache.js';
 import { markRequestCacheHit } from '../../utils/request-context.js';
 import { buildResponseMeta } from '../../utils/api-meta.js';
@@ -50,6 +51,31 @@ export const HTTP_MAX_AGE = {
   bundle: 300,    // 5 分钟（旧: 30-60 秒）— 聚合 bundle 端点
   query: 300,     // 5 分钟（旧: 30-60 秒）— 独立查询端点
 } as const;
+
+/**
+ * 紧急止血：路由级 admin-only 闸（BACKLOG 2026-06-11-claude-942414 / P0）
+ *
+ * 背景：customer-flow / quote-conversion / claims-detail / repair 四域
+ * 的路由 handler 历史上未消费 req.permissionFilter，且其底层 SQL 生成器签名
+ * 也未预留 whereClause 入参 → 非超管账号可越权读全量数据。
+ *
+ * 紧急对策（本中间件）：四域整体退化为 admin-only，非 branch_admin 一律 403。
+ * 长期修法（拆 BACKLOG 子项）：按域注入 permissionFilter（字段齐的 3 域）
+ * 或域逻辑兜底（customer-flow 视图无 org_level_3）。
+ *
+ * 历史先例：B263 已对 agent diagnosis 客户流向端点做过同款 admin-only 兜底。
+ */
+export function requireBranchAdmin(req: Request, _res: Response, next: NextFunction) {
+  if (!req.user) {
+    next(new AppError(401, 'Authentication required'));
+    return;
+  }
+  if (req.user.role !== 'branch_admin') {
+    next(new AppError(403, '此域当前仅对分公司管理员开放（RLS 整域改造期临时策略，详见 BACKLOG 2026-06-11-claude-942414）'));
+    return;
+  }
+  next();
+}
 
 const NON_SEMANTIC_QUERY_PARAMS = new Set(['_t', '_', 'cacheBust', 'cachebuster', 'timestamp']);
 
@@ -216,7 +242,6 @@ export function buildComprehensiveAlerts(
 // 惰性域加载中间件工厂（per MAT-01 / 04-02-PLAN.md）
 // ============================================
 
-import type { NextFunction } from 'express';
 import { getBootstrapper } from '../../services/bootstrapper-registry.js';
 
 /**

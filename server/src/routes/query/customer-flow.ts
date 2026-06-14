@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache } from './shared.js';
+import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache, requireBranchAdmin } from './shared.js';
 import {
   generateInflowQuery,
   generateOutflowQuery,
@@ -18,6 +18,11 @@ import {
 } from '../../sql/customer-flow.js';
 
 const router = Router();
+
+// RLS 整域绕过紧急止血（BACKLOG 2026-06-11-claude-942414 / P0）
+// CustomerFlow VIEW 无 org_level_3/branch_code/is_telemarketing 字段，
+// 无法注入 permissionFilter，整域退化为 admin-only 等待长期 ETL 字段扩充。
+router.use(requireBranchAdmin);
 
 // 集中式惰性域加载中间件（per MAT-01）：CustomerFlow
 router.use(createDomainMiddleware('CustomerFlow'));
