@@ -194,7 +194,6 @@ widgets/table/VirtualTable.tsx
 - **`growth/components/GrowthAnalysisPanel.tsx`**: 新增"对比分析"模式（同比/环比月/环比周/自定义期间，双指标图表+详细数据表格）
 - **`growth/components/ComparisonQuickPresets.tsx`**: 对比快捷预设按钮组件（YoY/MoM/WoW一键切换）
 - **`growth/utils/comparisonPresets.ts`**: 预设日期计算工具（闰年处理、跨年边界、期间对齐验证）
-- **`dashboard/Dashboard.tsx`**: 集成预警系统（AlertPanel + AlertBadge）
 - **`filters/FilterLayoutV2.tsx`**: 置顶筛选改为四维度按需展开（三级机构/客户类别/险别组合/续保模式）
 - **`filters/DateRangePicker.tsx`**: 起始日/截止日合并为起止日期，使用原生 date 输入并按需展开
 - **`filters/MultiSelectDropdown.tsx`**: 支持 compact 形态用于折叠容器内展示
