@@ -22,14 +22,12 @@
 |---------|--------------|------|------|
 | `app/` | App.tsx · main.tsx · index.css | 应用入口（路由挂载、根组件） | 活跃 |
 | `features/` | 21 模块，各含 components/hooks/utils/types | **业务功能模块集**（前端主体） | 活跃 |
-| `shared/` | api · contexts · hooks · ui · ai-insights · config · styles · theme · types · utils | 共享层（API 客户端/上下文/设计系统） | 活跃 |
+| `shared/` | api · contexts · hooks · ui · config · styles · theme · types · utils | 共享层（API 客户端/上下文/设计系统） | 活跃 |
 | `widgets/` | alerts · charts · export · filters · kpi · table · tables | 通用 UI 组件库 | 活跃 |
 | `components/` | layout/ | 全局布局组件（PageFilterPanel 等） | 活跃 |
 | `charts/` | ScissorsTrendChart.tsx | 独立特化图表 | 活跃 |
 | `services/` | PdfExportService.ts | 前端轻量服务（看板导出 PDF） | 活跃 |
 | `shims/` | external-modules.d.ts | 第三方模块类型垫片 | 活跃 |
-| `core/` | 仅 README | 历史架构遗留区，主链路已迁出 | ⚠️ 待归档 |
-| `types/` | chart.types.ts | 历史类型目录，新类型放 `shared/types/` | ⚠️ 待归档 |
 
 ### 后端 `server/src/` 一级目录全景
 
@@ -238,7 +236,6 @@ src/features/*                                    # 功能模块 UI 渲染
 | `sql-sanitizer.ts` | SQL 参数转义 |
 | `sql-permission-injector.ts` | 权限过滤注入 |
 | `security.ts` | 安全工具（API Key 脱敏、日志安全） |
-| `queryBuilder.ts` | 查询构建工具 |
 | `logger.ts` | 日志工具 |
 
 ### 前端核心模块
@@ -339,15 +336,9 @@ src/features/*                                    # 功能模块 UI 渲染
 | `client.test.ts` | API 客户端 | `tests/api/client.test.ts` |
 | `data-source.test.ts` | 数据源逻辑 | `tests/api/data-source.test.ts` |
 | `sql-parser.test.ts` | SQL 解析 | `tests/api/sql-parser.test.ts` |
-| `sql-validator.test.ts` | SQL 校验（前端） | `src/shared/utils/__tests__/sql-validator.test.ts` |
-| `sqlValidator.test.ts` | SQL 校验（NL2SQL） | `src/features/sql-query/aiSql/__tests__/sqlValidator.test.ts` |
-| `sqlGenerator.test.ts` | SQL 生成器 | `src/features/sql-query/queryBuilder/__tests__/sqlGenerator.test.ts` |
 | `formatters.test.ts` | 格式化函数 | `tests/formatters.test.ts` |
-| `queryBuilder.test.ts` | 查询构建 | `tests/queryBuilder.test.ts` |
 | `security.test.ts` | 安全工具 | `tests/security.test.ts` |
-| `template-engine.test.ts` | 模板引擎 | `tests/template-engine.test.ts` |
 | `holidayUtils.test.ts` | 假日工具 | `tests/marketing-report/holidayUtils.test.ts` |
-| `ai-insights/*.test.ts` | AI 洞察 | `src/shared/ai-insights/__tests__/` |
 | `critical-path.test.ts` | 关键路径集成测试 | `tests/integration/critical-path.test.ts` |
 
 运行测试：`bun run test`（注意：不是 `bun test`）

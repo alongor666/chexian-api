@@ -42,7 +42,6 @@
 ### Types 模块
 - **`types/index.ts`**: 类型定义统一导出
 - **`types/duckdb.ts`**: Worker 通信协议类型定义
-- **`types/sql-query.ts`**: SQL 查询功能类型定义（模板、结果、历史）
 - **`types/data.ts`**: 核心数据类型定义（KPI、趋势、表格、筛选器等）
 - **`types/echarts.ts`**: ECharts 事件/tooltip 参数类型定义
 - **`types/view-perspective.ts`**: 视角类型定义（保费/商业险件数/交强险件数）
@@ -62,12 +61,9 @@
 - **`utils/logger.ts`**: 统一日志服务（分级日志、上下文管理、生产环境优化）
 - **`utils/export.ts`**: CSV/Excel 导出工具（Table → 文件）
 - **`utils/security.ts`**: 安全限制常量（SQL长度、超时、行数限制）
-- **`utils/sql-validator.ts`**: SQL 安全验证器（只读+聚合+边界检查）
 - **`utils/formatters.ts`**: 统一格式化工具（保费/占比/数值）
-- **`utils/queryBuilder.ts`**: 高级筛选 WHERE 子句构建器（多维度过滤）
 - **`utils/size-sensor.ts`**: size-sensor 安全兼容层（避免 ResizeObserver 清理异常）
 - **`utils/echarts.ts`**: ECharts 按需导入注册（图表组件与渲染器）
-- **`utils/alertChecker.ts`**: 预警检测引擎（增长率下降/目标落后/续保率下降/保费波动检测）
 - **`utils/storage.ts`**: 安全 localStorage 封装（隐私模式兼容、错误处理、内存后备）
 - **`utils/redirect-state.ts`**: 路由回跳状态契约工具（统一 `fromPath`，兼容历史 state 结构）
 
@@ -142,7 +138,6 @@ features/dashboard/Dashboard.tsx             # 7. UI 渲染
 
 - **`sql/truck.ts`**: 营业货车专项分析 SQL 生成器支持视角切换（保费/商业险件数/交强险件数）
 - **`sql/renewal.ts`**: 续保明细表格查询支持视角切换与商业险/交强险口径过滤
-- **`utils/queryBuilder.ts`**: 高级筛选新增 renewal_mode 多选过滤（支持 IS NULL 场景）；新增权限过滤函数 buildPermissionWhereClause 和 buildWhereClauseWithPermission
 - **`types/data.ts`**: AdvancedFilterState/FilterOptions 增加 renewal_mode 字段
 - **`config/organizations.ts`**: 新增机构和权限配置模块（12个三级机构、BRANCH_ADMIN/ORG_USER角色、权限判断函数）
 - **`contexts/PermissionContext.tsx`**: 新增用户权限认证 Context（PermissionProvider + usePermission/useVisibleOrganizations Hooks）
@@ -303,8 +298,7 @@ import { cn, cardStyles, getTrendColorClass, colors } from '@/shared/styles';
 ## 2026-03-09 指标方向语义补充（B2xx）
 
 - `styles/index.ts`：新增 `MetricPolarity`（`positive`/`negative`）、`getTrendDirection()`、`getTrendColorClassByPolarity()`；`getTrendColorClass()` 兼容旧 `inverse` 参数并支持直接传 `metricPolarity`。
-- `ui/Card.tsx`、`ui/Table.tsx`、`json-render/components.tsx`：趋势展示统一支持 `metricPolarity`，默认按正向指标（涨绿跌红）。
-- `ai-insights/types.ts` + `ai-insights/components/InsightCard.tsx`：洞察指标支持 `metricPolarity` 与 `delta` 颜色标记，统一涨跌语义。
+- `ui/Card.tsx`、`ui/Table.tsx`：趋势展示统一支持 `metricPolarity`，默认按正向指标（涨绿跌红）。
 
 ## 2026-03-10 长表吸顶与冻结能力补充（B225）
 

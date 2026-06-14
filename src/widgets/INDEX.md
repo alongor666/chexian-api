@@ -24,8 +24,6 @@
 - **`charts/TonnageRoseChart.tsx`**: 吨位玫瑰图组件（支持保费/保单数指标切换）
 - **`charts/OrgPremiumPieChart.tsx`**: 三级机构保费占比环形图（外置标题、中心总保费）
 - **`charts/TruckDrillDownChart.tsx`**: 营业货车下钻分析图（机构堆叠柱状图→吨位分段饼图）
-- **`charts/OrgByTonnageDualYChart.tsx`**: 机构-吨位双Y图（已被 TruckDrillDownChart 替代）
-- **`charts/TonnageByOrgDualYChart.tsx`**: 吨位-机构双Y图（已被 TruckDrillDownChart 替代）
 - **`charts/QualityBusinessChart.tsx`**: 优质业务占比趋势图
 - **`charts/OrgPremiumPieChart.tsx`**: 三级机构保费占比环形图（中心总保费展示）
 - **`charts/GroupedBarChart.tsx`**: 分组柱状图（多系列对比）
@@ -45,8 +43,7 @@
 - **`filters/PerspectiveSwitcher.tsx`**: 视角切换器组件（保费/商业险件数/交强险件数）
 
 ### Alerts 模块
-- **`alerts/AlertPanel.tsx`**: 预警面板组件（预警列表、摘要卡片、筛选、标记已读/已处理）
-- **`alerts/AlertBadge.tsx`**: 预警徽章组件（导航栏未读数提示、严重程度颜色指示）
+- **`alerts/DataScopeAlert.tsx`**: 数据范围告警组件（用于 CostAnalysisPanel 等场景）
 - **`alerts/index.ts`**: 预警组件统一导出
 
 ### Export 模块
