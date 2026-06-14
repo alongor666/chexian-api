@@ -387,7 +387,9 @@ async function main() {
       const latest = manifest.latest;
       const latestFile = manifest.latestFile;
       if (!latest || !latestFile) throw new Error('manifest 缺 latest/latestFile 字段');
-      const url = `https://chexian.cretvalu.com/api/reports/diagnose-period-trend/${latest}/${latestFile}`;
+      // period-trend 是前端静态资源：/reports/<slug>/<file>（扁平文件名含日期，无日期子目录）
+      // 与 loss-development 的 /api/reports/<slug>/<date>/<entrypoint> 鉴权 API 路径不同
+      const url = `https://chexian.cretvalu.com/reports/diagnose-period-trend/${latestFile}`;
       const archiveArgs = [
         pushReportCli,
         '--report-type', 'diagnose-period-trend',
