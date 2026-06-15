@@ -22,8 +22,14 @@ import { pushVehicleQuickFilterConditions } from '../utils/filter-params.js';
  * 不引入 insurance_start_date 分组，避免同一保单跨年批改被拆。
  *
  * `insurance_grade` / `commercial_pricing_factor` 批改可能变值，优先取原单值（决策 3）。
+ *
+ * @param whereClause - permissionFilter 生成的权限过滤条件（如 branch_code='SC'）。
+ *   必须注入到内层 PolicyFact 子查询的 WHERE，而非外层 JOIN 后的 ON/WHERE，
+ *   否则会先 JOIN 全量 policy 再过滤（跨分公司数据泄漏 + 性能劣化）。
+ *   字段 branch_code / is_telemarketing 均属于 PolicyFact，无需表别名前缀。
  */
-const DEDUPED_POLICY_SUBQUERY = `(
+function buildDedupedPolicySubquery(whereClause: string = '1=1'): string {
+  return `(
   SELECT
     policy_no,
     SUM(premium) AS premium,
@@ -47,9 +53,11 @@ const DEDUPED_POLICY_SUBQUERY = `(
       ANY_VALUE(insurance_grade)
     ) AS insurance_grade
   FROM PolicyFact
+  WHERE ${whereClause}
   GROUP BY policy_no
   HAVING SUM(premium) > 0
 )`;
+}
 
 // ── 类型 ──
 
@@ -147,7 +155,7 @@ function buildPolicyWhere(filters: ClaimsDetailFilters): string {
 
 // ── 1. 未决赔案概览 ──
 
-export function generatePendingOverviewQuery(filters: ClaimsDetailFilters): string {
+export function generatePendingOverviewQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
   return `
@@ -162,7 +170,7 @@ export function generatePendingOverviewQuery(filters: ClaimsDetailFilters): stri
       ROUND(SUM(c.reserve_vehicle_amount) / 1e4, 0) AS vehicle_wan,
       ROUND(SUM(c.reserve_property_amount) / 1e4, 0) AS property_wan
     FROM ClaimsDetail c
-    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
+    JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
     GROUP BY c.claim_status
   `;
@@ -170,7 +178,7 @@ export function generatePendingOverviewQuery(filters: ClaimsDetailFilters): stri
 
 // ── 2. 未决赔案机构分布 ──
 
-export function generatePendingByOrgQuery(filters: ClaimsDetailFilters): string {
+export function generatePendingByOrgQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
   const where = buildWhere({ ...filters, claimStatus: '未业务结案' });
   const policyWhere = buildPolicyWhere(filters);
   return `
@@ -183,7 +191,7 @@ export function generatePendingByOrgQuery(filters: ClaimsDetailFilters): string 
       ROUND(AVG(DATEDIFF('day', c.accident_time, CURRENT_DATE)), 0) AS avg_pending_days,
       MAX(DATEDIFF('day', c.accident_time, CURRENT_DATE)) AS max_pending_days
     FROM ClaimsDetail c
-    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
+    JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
     GROUP BY p.org_level_3
     ORDER BY reserve_wan DESC
@@ -192,7 +200,7 @@ export function generatePendingByOrgQuery(filters: ClaimsDetailFilters): string 
 
 // ── 3. 未决赔案账龄分布 ──
 
-export function generatePendingAgingQuery(filters: ClaimsDetailFilters): string {
+export function generatePendingAgingQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
   const where = buildWhere({ ...filters, claimStatus: '未业务结案' });
   const policyWhere = buildPolicyWhere(filters);
   return `
@@ -215,7 +223,7 @@ export function generatePendingAgingQuery(filters: ClaimsDetailFilters): string 
       ROUND(SUM(c.reserve_amount) / 1e4, 0) AS reserve_wan,
       SUM(CASE WHEN c.is_bodily_injury THEN 1 ELSE 0 END) AS injury_cases
     FROM ClaimsDetail c
-    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
+    JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
     GROUP BY aging_bucket, sort_order
     ORDER BY sort_order
@@ -224,7 +232,7 @@ export function generatePendingAgingQuery(filters: ClaimsDetailFilters): string 
 
 // ── 4. 出险原因 + 人伤分析 ──
 
-export function generateCauseAnalysisQuery(filters: ClaimsDetailFilters): string {
+export function generateCauseAnalysisQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
   return `
@@ -236,7 +244,7 @@ export function generateCauseAnalysisQuery(filters: ClaimsDetailFilters): string
       SUM(CASE WHEN c.is_bodily_injury THEN 1 ELSE 0 END) AS injury_cases,
       ROUND(SUM(CASE WHEN c.is_bodily_injury THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS injury_pct
     FROM ClaimsDetail c
-    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
+    JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
     GROUP BY c.accident_cause
     ORDER BY cases DESC
@@ -245,7 +253,7 @@ export function generateCauseAnalysisQuery(filters: ClaimsDetailFilters): string
 
 // ── 5. 地理风险分析（出险地点）──
 
-export function generateGeoRiskByAccidentQuery(filters: ClaimsDetailFilters): string {
+export function generateGeoRiskByAccidentQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
   return `
@@ -260,7 +268,7 @@ export function generateGeoRiskByAccidentQuery(filters: ClaimsDetailFilters): st
       ROUND(AVG(DATEDIFF('day', c.accident_time, c.payment_time))
         FILTER (WHERE c.payment_time IS NOT NULL), 0) AS avg_cycle_days
     FROM ClaimsDetail c
-    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
+    JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
       AND c.accident_city IS NOT NULL
       AND p.plate_no IS NOT NULL  -- 与 generateGeoComparisonQuery 共享 cohort，避免案均最高省份卡片 ratio 失真（codex review PR #411 第三轮 P1）
@@ -272,7 +280,7 @@ export function generateGeoRiskByAccidentQuery(filters: ClaimsDetailFilters): st
 
 // ── 6. 地理风险分析（车牌归属地）──
 
-export function generateGeoRiskByPlateQuery(filters: ClaimsDetailFilters): string {
+export function generateGeoRiskByPlateQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
   return `
@@ -308,7 +316,7 @@ export function generateGeoRiskByPlateQuery(filters: ClaimsDetailFilters): strin
           ELSE '其他'
         END AS plate_city
       FROM ClaimsDetail c
-      JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
+      JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
       WHERE ${where}${policyWhere}
     )
     SELECT
@@ -327,7 +335,7 @@ export function generateGeoRiskByPlateQuery(filters: ClaimsDetailFilters): strin
 
 // ── 7. 地理风险对比（出险地 vs 车牌归属地）──
 
-export function generateGeoComparisonQuery(filters: ClaimsDetailFilters): string {
+export function generateGeoComparisonQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
   const where = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
   return `
@@ -370,7 +378,7 @@ export function generateGeoComparisonQuery(filters: ClaimsDetailFilters): string
           END
         ) THEN TRUE ELSE FALSE END AS is_cross_region
       FROM ClaimsDetail c
-      JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
+      JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
       WHERE ${where}${policyWhere}
         AND p.plate_no IS NOT NULL
         AND c.accident_city IS NOT NULL  -- 与 generateGeoRiskByAccidentQuery 共享 cohort（codex review PR #411 第三轮 P1）
@@ -387,7 +395,7 @@ export function generateGeoComparisonQuery(filters: ClaimsDetailFilters): string
 
 // ── 8. 理赔时效分析 ──
 
-export function generateClaimCycleQuery(filters: ClaimsDetailFilters): string {
+export function generateClaimCycleQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
   const where = buildWhere({ ...filters, claimStatus: '已业务结案' });
   const policyWhere = buildPolicyWhere(filters);
   return `
@@ -401,7 +409,7 @@ export function generateClaimCycleQuery(filters: ClaimsDetailFilters): string {
       ROUND(AVG(DATEDIFF('day', c.accident_time, c.payment_time)), 1) AS avg_total_days,
       ROUND(MEDIAN(DATEDIFF('day', c.accident_time, c.payment_time)), 1) AS median_total_days
     FROM ClaimsDetail c
-    JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
+    JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
     WHERE ${where}${policyWhere}
       AND c.payment_time IS NOT NULL
     GROUP BY c.is_bodily_injury
@@ -425,7 +433,8 @@ export function generateClaimCycleQuery(filters: ClaimsDetailFilters): string {
 export function generateLossRatioDevelopmentQuery(
   filters: ClaimsDetailFilters,
   cohortYears: number[] = [2023, 2024, 2025, 2026],
-  maxDevMonth: number = 24
+  maxDevMonth: number = 24,
+  whereClause: string = '1=1'
 ): string {
   const policyWhere = buildPolicyWhere(filters);
   const yearsIn = cohortYears.join(',');
@@ -443,6 +452,7 @@ export function generateLossRatioDevelopmentQuery(
                   p.insurance_start_date + INTERVAL 1 YEAR) AS policy_term_days
       FROM PolicyFact p
       WHERE YEAR(p.insurance_start_date) IN (${yearsIn})
+        AND (${whereClause})
         ${policyWhere}
     ),
     policies AS (
@@ -556,7 +566,7 @@ export function generateLossRatioDevelopmentQuery(
   `;
 }
 
-export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string {
+export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
   const claimWhere = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
   // B303: cutoffDate 用于 earned_days 计算（与 cost-ratios.ts earned_loss_frequency 同口径）
@@ -575,7 +585,7 @@ export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string 
         SUM(CASE WHEN c.is_bodily_injury THEN 1 ELSE 0 END) AS injury_count,
         ROUND(SUM(c.reserve_amount) / 1e4, 0) AS reserve_wan
       FROM ClaimsDetail c
-      JOIN ${DEDUPED_POLICY_SUBQUERY} p ON c.policy_no = p.policy_no
+      JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
       WHERE p.insurance_start_date >= '2022-01-01' AND ${claimWhere}${policyWhere}
       GROUP BY YEAR(p.insurance_start_date), QUARTER(p.insurance_start_date)
     ),
@@ -594,7 +604,7 @@ export function generateFrequencyYoyQuery(filters: ClaimsDetailFilters): string 
           GREATEST(DATEDIFF('day', p.insurance_start_date, DATE '${cutoffDate}') + 1, 0),
           DATEDIFF('day', p.insurance_start_date, p.insurance_start_date + INTERVAL 1 YEAR)
         )) AS total_earned_days
-      FROM ${DEDUPED_POLICY_SUBQUERY} p
+      FROM ${buildDedupedPolicySubquery(whereClause)} p
       WHERE p.insurance_start_date >= '2022-01-01'${policyWhere}
       GROUP BY YEAR(p.insurance_start_date), QUARTER(p.insurance_start_date)
     )

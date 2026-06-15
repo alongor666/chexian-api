@@ -220,6 +220,7 @@ export function generateClaimsHeatmapQuery(
   claimsDateField: ClaimsDateField = 'report_time',
   policyYear?: number,
   customCutoffs?: string[],
+  whereClause: string = '1=1',
 ): string {
   // 白名单校验，防止 SQL 注入
   // dateField 参数保留兼容，但累计口径下 cohort 必须锚定 insurance_start_date
@@ -356,7 +357,8 @@ export function generateClaimsHeatmapQuery(
         ANY_VALUE(insurance_type) AS insurance_type,
         ANY_VALUE(fuel_type) AS fuel_type
       FROM PolicyFact
-      WHERE EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) >= (SELECT policy_year FROM year_bounds) - 1
+      WHERE (${whereClause})
+        AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) >= (SELECT policy_year FROM year_bounds) - 1
         AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) <= (SELECT policy_year FROM year_bounds)
       GROUP BY policy_no, CAST(insurance_start_date AS DATE)
       HAVING SUM(premium) > 0

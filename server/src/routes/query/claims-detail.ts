@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import {
-  asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache, requireBranchAdmin,
+  asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache, parseFiltersAndBuildWhere,
 } from './shared.js';
 import {
   generatePendingOverviewQuery,
@@ -30,11 +30,6 @@ import {
 } from '../../sql/claims-heatmap.js';
 
 const router = Router();
-
-// RLS 整域绕过紧急止血（BACKLOG 2026-06-11-claude-942414 / P0）
-// claims-detail 10+ 端点 SQL 生成器签名均未预留 whereClause 入参 → 整域 admin-only。
-// 长期修法：扩生成器签名 + 路由调 parseFiltersAndBuildWhere 注入 permissionFilter。
-router.use(requireBranchAdmin);
 
 // 集中式惰性域加载中间件（per MAT-01）：ClaimsDetail + ClaimsAgg
 router.use(createDomainMiddleware('ClaimsDetail', 'ClaimsAgg'));
@@ -84,7 +79,8 @@ router.get(
   withRouteCache('claims-detail-pending-overview'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generatePendingOverviewQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generatePendingOverviewQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -99,7 +95,8 @@ router.get(
   withRouteCache('claims-detail-pending-by-org'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generatePendingByOrgQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generatePendingByOrgQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -114,7 +111,8 @@ router.get(
   withRouteCache('claims-detail-pending-aging'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generatePendingAgingQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generatePendingAgingQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -129,7 +127,8 @@ router.get(
   withRouteCache('claims-detail-cause-analysis'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateCauseAnalysisQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateCauseAnalysisQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -144,7 +143,8 @@ router.get(
   withRouteCache('claims-detail-geo-accident'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateGeoRiskByAccidentQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateGeoRiskByAccidentQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -159,7 +159,8 @@ router.get(
   withRouteCache('claims-detail-geo-plate'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateGeoRiskByPlateQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateGeoRiskByPlateQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -174,7 +175,8 @@ router.get(
   withRouteCache('claims-detail-geo-comparison'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateGeoComparisonQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateGeoComparisonQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data: data[0] ?? {} });
   })
@@ -189,7 +191,8 @@ router.get(
   withRouteCache('claims-detail-claim-cycle'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateClaimCycleQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateClaimCycleQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -204,7 +207,8 @@ router.get(
   withRouteCache('claims-detail-frequency-yoy'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const sql = generateFrequencyYoyQuery(filters);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateFrequencyYoyQuery(filters, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -223,7 +227,8 @@ router.get(
     const cohortYears = typeof cohortYearsStr === 'string'
       ? cohortYearsStr.split(',').map(Number).filter(n => !isNaN(n) && n >= 2020 && n <= 2030)
       : [2023, 2024, 2025, 2026];
-    const sql = generateLossRatioDevelopmentQuery(filters, cohortYears);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateLossRatioDevelopmentQuery(filters, cohortYears, 24, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -296,7 +301,8 @@ router.get(
       customCutoffs = parts;
     }
 
-    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField, policyYear, customCutoffs);
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField, policyYear, customCutoffs, whereClause);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
