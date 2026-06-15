@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "measured_at": "2026-06-15T16:02:38.700Z",
+  "base_url": "https://chexian.cretvalu.com",
+  "runtime": {
+    "node": "v26.0.0",
+    "bun": "1.3.14"
+  },
+  "mode": "compiled-bin",
+  "samples": 20,
+  "metrics": {
+    "A_cold_start_ms": {
+      "n": 20,
+      "p50": 16,
+      "p95": 96,
+      "min": 15,
+      "max": 96
+    },
+    "B_first_remote_ms": {
+      "n": 20,
+      "p50": 353,
+      "p95": 424,
+      "min": 255,
+      "max": 424
+    },
+    "C_warm_reuse_ms": {
+      "n": 20,
+      "p50": 47,
+      "p95": 248,
+      "min": 38,
+      "max": 248
+    },
+    "D_batch_100": {
+      "total_ms": 4797,
+      "avg_ms": 48
+    },
+    "E_batch_100_keepalive": {
+      "total_ms": 3118,
+      "avg_ms": 31,
+      "concurrency": 8
+    }
+  },
+  "targets": {
+    "A_cold_start_p95_ms": 50,
+    "B_first_remote_p95_ms": 150,
+    "C_warm_reuse_p95_ms": 50,
+    "D_batch_100_total_ms": 1500,
+    "E_batch_100_keepalive_total_ms": 1500
+  }
+}

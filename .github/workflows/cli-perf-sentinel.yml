@@ -1,0 +1,55 @@
+name: cli-perf-sentinel
+
+# cx CLI 性能哨兵：PR 触发跑冷启动基准（A 档），p95 > 50ms 阻断 merge。
+# 只测 A 档（机器无关），B/C/D 涉及网络抖动 + 生产限流，留给本地 bun run bench 跑。
+# 收益边界：防止 cx 启动时间因新依赖膨胀 / circular import 退化。
+
+on:
+  pull_request:
+    paths:
+      - 'cli/**'
+      - '.github/workflows/cli-perf-sentinel.yml'
+  workflow_dispatch:
+
+jobs:
+  cold-start:
+    name: cx 冷启动 p95 ≤ 50ms
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Install cli deps
+        working-directory: cli
+        run: bun install --registry=https://registry.npmmirror.com
+
+      - name: Build cx binary
+        working-directory: cli
+        run: bun run build:bin
+
+      - name: Run cold-start benchmark (A 档 only, N=15)
+        run: |
+          node cli/scripts/benchmark.mjs --n=15 --only=A > /tmp/bench.json
+          cat /tmp/bench.json
+
+      - name: Gate A 档 p95
+        run: |
+          P95=$(jq '.metrics.A_cold_start_ms.p95' /tmp/bench.json)
+          TARGET=50
+          echo "::notice::cx 冷启动 p95 = ${P95}ms (target ${TARGET}ms)"
+          echo "## cx CLI 冷启动 p95" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 指标 | 值 | 目标 | 状态 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$P95" -le "$TARGET" ]; then
+            echo "| A 冷启动 p95 (ms) | $P95 | ≤ $TARGET | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          else
+            echo "| A 冷启动 p95 (ms) | $P95 | ≤ $TARGET | ❌ |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::cx CLI 冷启动 p95 ${P95}ms 超过硬阈值 ${TARGET}ms — 排查新依赖 / circular import / 异步副作用"
+            exit 1
+          fi
