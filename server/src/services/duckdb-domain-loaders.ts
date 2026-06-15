@@ -502,16 +502,35 @@ export async function loadBrandDim(db: DuckDBQueryable, parquetPath: string): Pr
 }
 
 /**
- * 加载客户来源去向 Parquet → CustomerFlow VIEW
+ * 加载客户来源去向 VIEW（派生自 PolicyFact，BACKLOG 86d10f）
+ *
+ * 历史：2026-06-10 之前从独立 customer_flow.parquet（08/09 xlsx 合成）加载，
+ * 该域 VIEW 无 org_level_3/branch_code/is_telemarketing 字段→无法注入 RLS。
+ * 2026-06-10 起上游签单清单新增 previous_insurer/next_insurer 两列，
+ * 客户流向数据合并到 PolicyFact。本 loader 改从 PolicyFact 派生：
+ * - 业务上「2025 保单含 next_insurer」+「2026 保单含 previous_insurer」即全集（中国车险一年一续保）
+ * - 历史年份 (2020-2024) NULL = 业务上不存在，非数据丢失
+ * - VIEW 不去重；批改副本影响 < 2%（业务方可接受）
+ * - 自动获得 RLS 字段，支持 parseFiltersAndBuildWhere 注入
  */
-export async function loadCustomerFlow(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+export async function loadCustomerFlow(db: DuckDBQueryable): Promise<void> {
   await db.query(`
     CREATE OR REPLACE VIEW CustomerFlow AS
-    SELECT * FROM read_parquet('${safePath}')
+    SELECT
+      policy_no,
+      insurance_start_date,
+      previous_insurer,
+      next_insurer,
+      org_level_3,
+      branch_code,
+      is_telemarketing,
+      customer_category,
+      insurance_type,
+      coverage_combination
+    FROM PolicyFact
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CustomerFlow');
-  console.log(`[DuckDB] CustomerFlow view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+  console.log(`[DuckDB] CustomerFlow view loaded: ${countResult[0]?.cnt ?? 0} rows (derived from PolicyFact)`);
 }
 
 /**
