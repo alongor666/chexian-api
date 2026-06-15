@@ -17,7 +17,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { createLogger } from '../utils/logger';
-import { getAvailableSalesmen, type OrgSalesmanCache } from '../../features/dashboard/orgSalesman';
+import { getAvailableSalesmen, type OrgSalesmanCache } from '../utils/orgSalesman';
 import type { AdvancedFilterState, FilterOptions } from '../types/data';
 import { useStableContext } from './StableContext';
 

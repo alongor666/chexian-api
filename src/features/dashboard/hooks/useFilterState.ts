@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { createLogger } from '../../../shared/utils/logger';
-import { getAvailableSalesmen, type OrgSalesmanCache } from '../orgSalesman';
+import { getAvailableSalesmen, type OrgSalesmanCache } from '@/shared/utils/orgSalesman';
 import type { AdvancedFilterState, FilterOptions, DateMetadata, DualDateMetadata } from '../../../shared/types/data';
 import { getMetadataByCriteria } from '../../../shared/types/data';
 import { apiClient } from '../../../shared/api/client';
