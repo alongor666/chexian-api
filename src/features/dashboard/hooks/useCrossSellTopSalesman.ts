@@ -13,7 +13,7 @@ import { formatSalesmanName } from '@/shared/utils/formatters';
 import { useRBAC } from '@/shared/hooks/useRBAC';
 import { queryKeys } from '@/shared/api/query-keys';
 import type { VehicleCategory, SeatCoverageLevel } from './useCrossSellTimePeriod';
-import type { TopSalesmanCoverage } from '../../../../server/src/sql/cross-sell-top-salesman';
+import type { TopSalesmanCoverage } from '@/shared/types/cross-sell';
 
 export interface TopSalesmanRow {
     salesman_name: string;

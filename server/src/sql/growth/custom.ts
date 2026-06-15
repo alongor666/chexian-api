@@ -88,15 +88,20 @@ export function generateComprehensiveGrowthQuery(
   config: GrowthConfig,
   dateField: DateCriteria = 'policy_date'
 ): string {
-  const { growthType, timeView, groupBy = [], metric = 'SUM(premium)', whereClause = '1=1' } = config;
+  const {
+    growthType, timeView, groupBy = [], metric = 'SUM(premium)', whereClause = '1=1',
+    currentPeriod, previousPeriod,
+  } = config;
 
   switch (growthType) {
     case 'yoy':
-      return generateYoYGrowthQuery({ growthType, timeView, groupBy, metric, whereClause }, dateField);
+      // 7a2849 二轮修复：透传 currentPeriod/previousPeriod，让 yoy.ts 分别拼日期窗
+      return generateYoYGrowthQuery({ growthType, timeView, groupBy, metric, whereClause, currentPeriod, previousPeriod }, dateField);
     case 'mom':
       return generateMoMGrowthQuery({ growthType, timeView, groupBy, metric, whereClause }, dateField);
     case 'ytd':
-      return generateYTDGrowthQuery({ growthType, timeView, groupBy, metric, whereClause }, dateField);
+      // 7a2849 二轮修复：同 yoy，透传双日期窗给 ytd.ts
+      return generateYTDGrowthQuery({ growthType, timeView, groupBy, metric, whereClause, currentPeriod, previousPeriod }, dateField);
     case 'custom':
       return generateCustomGrowthQuery(config, dateField);
     default:

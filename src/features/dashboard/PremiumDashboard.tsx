@@ -5,7 +5,7 @@ import { formatPremiumWan, formatRate } from '../../shared/utils/formatters';
 import { useKpiData } from './hooks/useKpiData';
 import { useTrendData } from './hooks/useTrendData';
 import { usePremiumDashboardData } from './hooks/usePremiumDashboardData';
-import { usePerspective } from './hooks/usePerspective';
+import { usePerspective } from '@/shared/hooks/usePerspective';
 import { useDashboardLayout } from './hooks/useDashboardLayout';
 import { useDashboardBundle } from './hooks/useDashboardBundle';
 import { KpiSection } from './components/KpiSection';

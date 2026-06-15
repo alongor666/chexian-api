@@ -22,3 +22,7 @@ export { useFocusTrap, useKeyboardNavigation } from './useFocusTrap';
 
 // 引用稳定化（筛选参数透传防重复请求，治理计划 Task 1-B 评审 🟡3）
 export { useStableParams } from './useStableParams';
+
+// 视角状态（保费/件数，B330 从 features/dashboard/hooks/usePerspective 上提）
+export { usePerspective } from './usePerspective';
+export type { PerspectiveState } from './usePerspective';
