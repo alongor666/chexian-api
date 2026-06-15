@@ -65,8 +65,26 @@ policy: append-only
 - ❌ 复活 `assign-task-id.mjs` 或任何「取下一个编号」逻辑（碰号根因）
 - ❌ 用 `merge=union` 以外的策略处理 `BACKLOG_LOG.jsonl`，或对视图冲突手解
 
+## 7. event-log 不根治的一类病：实现-状态漂移（自进化护栏）
+
+event-log 根治了「碰号 / 重复行 / 手解派生文件」三类**结构性**病（§1），但**不**根治
+**实现-状态漂移**——任务代码已存在（已并入 main，或躺在开放 PR 分支上），而 BACKLOG
+状态仍停在 PROPOSED。两种危害：
+
+1. **已合并却未置 DONE** → 看板谎报「待办」（实证：9377d1/PR #633、9719ff/PR #636 已合并仍标 PROPOSED）。
+2. **开放 PR 未在看板登记** → 后续会话误判「未开始」而**重复实现**（实证：992469/PR #635、28bd9c/PR #634 各有开放 PR，险些被重做）。
+
+**护栏（advisory）**：`bun scripts/backlog/check-merged-drift.mjs`
+- 判据（高精度）：PROPOSED 任务若存在一条**引用其现代 uid 短后缀**（提交惯例 `(P1 9719ff)`）、
+  **改动了非账本文件**、且**命中该任务 `code` 字段声明路径**的提交（`git log --all`，含开放 PR 分支）→ 漂移候选。
+- 精度取舍：只认现代 uid 短后缀（≥5 字符），不认曾用号 `B###`（短且在「登记/顺带提及」类提交泛滥，实测 27 例误报）。
+- 浅克隆自动 SKIP（不误报）；`--strict` 可作可选 CI 闸（需 `fetch-depth:0` + 全远端分支）。
+
+**用法纪律**：开工一个标 PROPOSED 的任务前，先跑本检测——命中即先核实「已合并 → 置 DONE」/「开放 PR → 勿重复，登记 PR 号」，避免重复劳动。
+
 ## 关联
 
 - 母 PR：[#522 refactor(backlog): 可变表 → event-log 治本](https://github.com/alongor666/chexian-api/pull/522)
 - 并发隔离纪律：[worktree-setup.md](./worktree-setup.md) §A
+- 实现漂移检测器：[../../scripts/backlog/check-merged-drift.mjs](../../scripts/backlog/check-merged-drift.mjs)（§7）
 - AGENTS.md §8.2 append-only：本文件作为新增独立护栏文件，无需 `[policy-override]` 授权
