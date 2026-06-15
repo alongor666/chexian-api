@@ -25,8 +25,17 @@ export interface GrowthConfig {
     startDate: string;
     endDate: string;
   };
-  /** 当前期间（用于自定义比较） */
+  /** 当前期间（custom 自定义比较 + 7a2849 二轮 yoy/ytd 双窗口模式） */
   currentPeriod?: {
+    startDate: string;
+    endDate: string;
+  };
+  /**
+   * 上一对照期间（7a2849 二轮 yoy/ytd 双窗口模式专用）。
+   * 路由层显式传入"去年同期窗"，避免 whereClause 共用 startDate/endDate
+   * 把 previous 也限到当年；custom 模式仍用 baselinePeriod。
+   */
+  previousPeriod?: {
     startDate: string;
     endDate: string;
   };

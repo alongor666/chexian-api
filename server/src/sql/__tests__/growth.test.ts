@@ -295,4 +295,46 @@ describe('7a2849 同比/YTD 幽灵 -100% 回归', () => {
       expect(sql).not.toMatch(/COALESCE\(c\.org_level_3,\s*p\.org_level_3\)/);
     });
   });
+
+  describe('双窗口路径（owner review 二轮修复）', () => {
+    it('YoY 同时传 currentPeriod/previousPeriod → current/previous CTE 分别拼自己的日期条件', () => {
+      const sql = generateYoYGrowthQuery({
+        ...BASE_CONFIG,
+        currentPeriod: { startDate: '2026-01-01', endDate: '2026-01-31' },
+        previousPeriod: { startDate: '2025-01-01', endDate: '2025-01-31' },
+      });
+      // current_period CTE 包含 2026 窗口
+      expect(sql).toMatch(/current_period[\s\S]*?WHERE[\s\S]*?'2026-01-01'[\s\S]*?'2026-01-31'/);
+      // previous_period CTE 包含 2025 窗口
+      expect(sql).toMatch(/previous_period[\s\S]*?WHERE[\s\S]*?'2025-01-01'[\s\S]*?'2025-01-31'/);
+    });
+
+    it('YoY 退化路径（仅传 currentPeriod 缺 previousPeriod）→ 不拼日期，向下兼容旧行为', () => {
+      const sql = generateYoYGrowthQuery({
+        ...BASE_CONFIG,
+        currentPeriod: { startDate: '2026-01-01', endDate: '2026-01-31' },
+      });
+      // 单边 currentPeriod 不生效（成对契约），仍走 whereClause-only 路径
+      expect(sql).not.toMatch(/'2026-01-01'/);
+    });
+
+    it('YTD 双窗口 → yearly_data WHERE 含两年 OR 条件', () => {
+      const sql = generateYTDGrowthQuery({
+        ...BASE_CONFIG,
+        growthType: 'ytd',
+        currentPeriod: { startDate: '2026-01-01', endDate: '2026-06-30' },
+        previousPeriod: { startDate: '2025-01-01', endDate: '2025-06-30' },
+      });
+      expect(sql).toMatch(/yearly_data[\s\S]*?WHERE[\s\S]*?'2026-01-01'[\s\S]*?'2026-06-30'[\s\S]*?OR[\s\S]*?'2025-01-01'[\s\S]*?'2025-06-30'/);
+    });
+
+    it('YTD 退化路径 → 不拼日期 OR 条件', () => {
+      const sql = generateYTDGrowthQuery({
+        ...BASE_CONFIG,
+        growthType: 'ytd',
+      });
+      expect(sql).not.toMatch(/'2026-01-01'/);
+      expect(sql).not.toMatch(/'2025-01-01'/);
+    });
+  });
 });

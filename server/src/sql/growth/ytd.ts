@@ -7,6 +7,7 @@
  */
 
 import { DateCriteria } from '../../types/data.js';
+import { buildDateCondition } from '../../utils/sql-sanitizer.js';
 import { GrowthConfig, generateTimeExpression, timeViewToTruncUnit } from './shared.js';
 
 /**
@@ -24,8 +25,12 @@ import { GrowthConfig, generateTimeExpression, timeViewToTruncUnit } from './sha
  *   2) 改 FULL OUTER JOIN → LEFT JOIN —— 旧版在去年累计有数据但今年同期
  *      尚无数据时（半年报跑全年比较的常见情况）输出幽灵 -100% 行；YTD 报告
  *      只应展示当年已有的累计期间。
+ *   3) **owner review 二轮修复**：当 config 同时提供 currentPeriod 与
+ *      previousPeriod 时，yearly_data 的 WHERE 显式叠加 (current 日期窗 OR
+ *      previous 日期窗) —— 修复"whereClause 共用 startDate/endDate 把去年
+ *      yearly 数据也过滤掉"的生产路径 bug，路由层须先剥离 startDate/endDate。
  *
- * @param config - 增长率配置
+ * @param config - 增长率配置（currentPeriod/previousPeriod 必须成对传入）
  * @param dateField - 可选的日期字段覆盖（默认使用 'policy_date'）
  * @returns SQL查询字符串
  */
@@ -33,12 +38,29 @@ export function generateYTDGrowthQuery(
   config: GrowthConfig,
   dateField: DateCriteria = 'policy_date'
 ): string {
-  const { timeView = 'monthly', metric = 'SUM(premium)', groupBy = [], whereClause = '1=1' } = config;
+  const {
+    timeView = 'monthly',
+    metric = 'SUM(premium)',
+    groupBy = [],
+    whereClause = '1=1',
+    currentPeriod,
+    previousPeriod,
+  } = config;
   // DC-001: 使用动态日期字段
   const df = dateField;
   const timeExpression = generateTimeExpression(timeView, dateField);
   const truncUnit = timeViewToTruncUnit(timeView);
   const groupByClause = groupBy.length > 0 ? `, ${groupBy.join(', ')}` : '';
+
+  // 7a2849 二轮修复：成对 currentPeriod/previousPeriod 时显式叠加两年日期窗
+  const hasPairedPeriods = Boolean(currentPeriod && previousPeriod);
+  const dateWindowFilter = hasPairedPeriods
+    ? ` AND (
+        (${buildDateCondition(df, '>=', currentPeriod!.startDate)} AND ${buildDateCondition(df, '<=', currentPeriod!.endDate)})
+        OR
+        (${buildDateCondition(df, '>=', previousPeriod!.startDate)} AND ${buildDateCondition(df, '<=', previousPeriod!.endDate)})
+      )`
+    : '';
 
   return `
     WITH yearly_data AS (
@@ -47,7 +69,7 @@ export function generateYTDGrowthQuery(
         ${timeExpression} AS time_period,
         ${metric} AS value${groupByClause}
       FROM PolicyFact
-      WHERE ${whereClause}
+      WHERE ${whereClause}${dateWindowFilter}
       GROUP BY year, ${timeExpression}${groupByClause}
     ),
     cumulative_data AS (
