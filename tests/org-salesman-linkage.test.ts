@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildOrgSalesmanCache, getAvailableSalesmen } from '../src/features/dashboard/orgSalesman';
+import { buildOrgSalesmanCache, getAvailableSalesmen } from '../src/shared/utils/orgSalesman';
 
 describe('机构-业务员联动', () => {
   it('should build cache and dedupe salesmen', () => {
