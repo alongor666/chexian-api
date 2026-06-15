@@ -227,3 +227,72 @@ describe('时间视图覆盖', () => {
     expect(sql.length).toBeGreaterThan(50);
   });
 });
+
+// ═══════════════════════════════════════════════════
+// 10. 同比/YTD 幽灵 -100% bug 回归（7a2849）
+// ═══════════════════════════════════════════════════
+
+describe('7a2849 同比/YTD 幽灵 -100% 回归', () => {
+  describe('YoY 必须 LEFT JOIN 而非 FULL OUTER JOIN', () => {
+    it('YoY monthly 不再使用 FULL OUTER JOIN', () => {
+      const sql = generateYoYGrowthQuery({ ...BASE_CONFIG, timeView: 'monthly' });
+      expect(sql).not.toMatch(/FULL\s+OUTER\s+JOIN/i);
+      expect(sql).toMatch(/LEFT\s+JOIN/i);
+    });
+
+    it('YoY weekly 不再使用 FULL OUTER JOIN', () => {
+      const sql = generateYoYGrowthQuery({ ...BASE_CONFIG, timeView: 'weekly' });
+      expect(sql).not.toMatch(/FULL\s+OUTER\s+JOIN/i);
+      expect(sql).toMatch(/LEFT\s+JOIN/i);
+    });
+
+    it('YoY 不再 COALESCE(c.time_period, p.time_period)（避免去年时点泄漏）', () => {
+      const sql = generateYoYGrowthQuery(BASE_CONFIG);
+      expect(sql).not.toMatch(/COALESCE\(c\.time_period,\s*p\.time_period\)/);
+      expect(sql).toMatch(/c\.time_period AS time_period/);
+    });
+  });
+
+  describe('YoY weekly 视图必须先位移再截断（保证周一边界对齐）', () => {
+    it('previous_period 表达式包含 DATE_TRUNC(week, date + 1 year)', () => {
+      const sql = generateYoYGrowthQuery({ ...BASE_CONFIG, timeView: 'weekly' });
+      expect(sql).toMatch(/DATE_TRUNC\('week',\s*\(CAST\(policy_date AS DATE\)\s*\+\s*INTERVAL\s*'1 year'\)\)/);
+    });
+
+    it('previous_period 不再使用 DATE_ADD(p.time_period, INTERVAL 1 year)', () => {
+      const sql = generateYoYGrowthQuery({ ...BASE_CONFIG, timeView: 'weekly' });
+      expect(sql).not.toMatch(/DATE_ADD\(p\.time_period,\s*INTERVAL\s*'1 year'\)/);
+    });
+
+    it('YoY monthly 也用 shift-before-truncate', () => {
+      const sql = generateYoYGrowthQuery({ ...BASE_CONFIG, timeView: 'monthly' });
+      expect(sql).toMatch(/DATE_TRUNC\('month',\s*\(CAST\(policy_date AS DATE\)\s*\+\s*INTERVAL\s*'1 year'\)\)/);
+    });
+  });
+
+  describe('YTD 必须 LEFT JOIN 且 weekly 视图位移后重新 DATE_TRUNC', () => {
+    it('YTD monthly 不再使用 FULL OUTER JOIN', () => {
+      const sql = generateYTDGrowthQuery({ ...BASE_CONFIG, growthType: 'ytd', timeView: 'monthly' });
+      expect(sql).not.toMatch(/FULL\s+OUTER\s+JOIN/i);
+      expect(sql).toMatch(/LEFT\s+JOIN/i);
+    });
+
+    it('YTD weekly 在 previous_ytd 中位移后 DATE_TRUNC(week)', () => {
+      const sql = generateYTDGrowthQuery({ ...BASE_CONFIG, growthType: 'ytd', timeView: 'weekly' });
+      expect(sql).toMatch(/DATE_TRUNC\('week',\s*time_period\s*\+\s*INTERVAL\s*'1 year'\)/);
+    });
+
+    it('YTD 不再 COALESCE(c.time_period, p.time_period)', () => {
+      const sql = generateYTDGrowthQuery({ ...BASE_CONFIG, growthType: 'ytd', timeView: 'monthly' });
+      expect(sql).not.toMatch(/COALESCE\(c\.time_period,\s*p\.time_period\)/);
+    });
+  });
+
+  describe('groupBy 维度场景：c.<g> 直取，不再 COALESCE 去年值', () => {
+    it('YoY + groupBy=org_level_3：SELECT 用 c.org_level_3 直取', () => {
+      const sql = generateYoYGrowthQuery({ ...BASE_CONFIG, groupBy: ['org_level_3'] });
+      expect(sql).toMatch(/c\.org_level_3 AS org_level_3/);
+      expect(sql).not.toMatch(/COALESCE\(c\.org_level_3,\s*p\.org_level_3\)/);
+    });
+  });
+});
