@@ -185,7 +185,18 @@ export async function materializeCostCube(db: DuckDBQueryable): Promise<void> {
     return;
   }
 
-  await db.query(buildCostCubeSql(hasBranchCode));
+  // 方案 A：分阶段执行三条 SQL（建临时去重表 → 主表 JOIN 聚合 → 清理临时表）
+  // 每步在独立 statement 中运行，DuckDB TEMP TABLE 允许溢出磁盘，根治内存峰值。
+  const [tempTableSql, mainTableSql, cleanupSql] = buildCostCubeSql(hasBranchCode);
+  try {
+    await db.query(tempTableSql);   // 步骤 1：B252 去重物化到临时表
+    await db.query(mainTableSql);  // 步骤 2：轻量 JOIN 聚合成格子
+  } finally {
+    // 步骤 3：无论成功失败都清理临时表，避免内存泄漏
+    await db.query(cleanupSql).catch((e: unknown) => {
+      console.warn(`[CostCube] TEMP TABLE 清理失败（非致命）: ${e instanceof Error ? e.message : String(e)}`);
+    });
+  }
 
   const [{ n }] = await db.query<{ n: number }>(`SELECT COUNT(*) AS n FROM ${COST_CUBE_TABLE}`);
   const elapsed = Date.now() - t0;
@@ -213,7 +224,23 @@ export function ensureCostCubeFresh(db: DuckDBQueryable): 'ready' | 'building' |
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         costCubeState.lastError = message;
-        console.error(`[CostCube] Materialization failed (route will keep falling back): ${message}`);
+        // 方案 C：OOM 是结构性失败（内存不足无法靠重试解决），标记 degraded 防止
+        // ensureCostCubeFresh 在同一 dataVersion 内持续重试（死循环）。
+        // 设 builtVersion=versionAtStart + exact=false → 下次调用走第 208 行
+        // "builtVersion===getDataVersion() && exact===false" 分支返回 'degraded'。
+        // ETL 数据版本更新后 getDataVersion() 变化，builtVersion 不再匹配，
+        // 会重新触发构建尝试（新版本数据量/配置可能不再 OOM，给自愈机会）。
+        if (/Out of Memory|OOM|memory_limit/i.test(message)) {
+          const versionAtCatch = getDataVersion();
+          costCubeState.builtVersion = versionAtCatch;
+          costCubeState.exact = false;
+          console.warn(
+            `[CostCube] OOM 检测到，标记 degraded（exact=false, builtVersion=${versionAtCatch}），` +
+            `本数据版本不再重试，cost 路由回退原 SQL。下次 ETL 更新后自动重试。`
+          );
+        } else {
+          console.error(`[CostCube] 物化失败（路由持续回退原路径）: ${message}`);
+        }
       })
       .finally(() => {
         costCubeState.building = null;

@@ -73,18 +73,37 @@ describe('isCostCubeServable', () => {
 });
 
 describe('buildCostCubeSql / buildCostCubeProbeSql', () => {
-  it('构建 SQL 含 B252 去重三要素 + 赔款一次归属 + 格子聚合', () => {
-    const sql = buildCostCubeSql(false);
-    expect(sql).toContain(`CREATE OR REPLACE TABLE ${COST_CUBE_TABLE}`);
-    expect(sql).toContain('GROUP BY policy_no, CAST(insurance_start_date AS DATE)');
-    expect(sql).toContain('HAVING SUM(premium) > 0');
-    expect(sql).toContain('LEFT JOIN ClaimsAgg');
-    expect(sql).toContain('GROUP BY ALL');
-    expect(sql).not.toContain('branch_code');
+  it('构建 SQL 返回三条语句数组（临时去重表 / 主表 / 清理）', () => {
+    const sqls = buildCostCubeSql(false);
+    // 方案 A：返回 [建临时表, 建主表, 清理临时表] 三元组
+    expect(Array.isArray(sqls)).toBe(true);
+    expect(sqls).toHaveLength(3);
+    const [tempSql, mainSql, cleanupSql] = sqls;
+
+    // 第一条：B252 去重物化到 TEMP TABLE（含去重三要素）
+    expect(tempSql).toContain('CREATE OR REPLACE TEMP TABLE __cost_policy_dedup');
+    expect(tempSql).toContain('GROUP BY policy_no, CAST(insurance_start_date AS DATE)');
+    expect(tempSql).toContain('HAVING SUM(premium) > 0');
+    expect(tempSql).not.toContain('branch_code');
+    // 临时表只做去重，不含 JOIN 与格子聚合
+    expect(tempSql).not.toContain('LEFT JOIN ClaimsAgg');
+    expect(tempSql).not.toContain(`CREATE OR REPLACE TABLE ${COST_CUBE_TABLE}`);
+
+    // 第二条：从轻量临时表 JOIN ClaimsAgg 聚合成格子
+    expect(mainSql).toContain(`CREATE OR REPLACE TABLE ${COST_CUBE_TABLE}`);
+    expect(mainSql).toContain('FROM __cost_policy_dedup d');
+    expect(mainSql).toContain('LEFT JOIN ClaimsAgg');
+    expect(mainSql).toContain('GROUP BY ALL');
+    // 主表不再直读 PolicyFact（内存峰值根因）
+    expect(mainSql).not.toContain('FROM PolicyFact');
+
+    // 第三条：清理临时表
+    expect(cleanupSql).toContain('DROP TABLE IF EXISTS __cost_policy_dedup');
   });
 
   it('branch_code 探测开启时纳入粒度（构建 + 探针一致）', () => {
-    expect(buildCostCubeSql(true)).toContain('ANY_VALUE(branch_code) AS branch_code');
+    const [tempSql] = buildCostCubeSql(true);
+    expect(tempSql).toContain('ANY_VALUE(branch_code) AS branch_code');
     expect(buildCostCubeProbeSql(true)).toContain('branch_code');
     expect(buildCostCubeProbeSql(false)).not.toContain('branch_code');
   });

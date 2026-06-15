@@ -16,11 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（68 项 · 数据截至 2026-06-15 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（69 项 · 数据截至 2026-06-15 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（7 项）**
+**P1（8 项）**
 
 - B246 — VPS 分层查询改造（KPI variable_cost_ratio）
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
@@ -29,6 +29,7 @@
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
 - 2026-06-11-claude-7a2849 — 同比/YTD 查询产生重复期间行 + 虚假 -100% 增长（DuckDB 实证）
 - 2026-06-11-claude-90a92c `IN_PROGRESS` — 通用可加性立方体查询加速
+- 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
 
 **P2（38 项）**
 
@@ -178,4 +179,5 @@
 | 2026-06-12-claude-27972c | 2026-06-12 | Chore/Governance | @claude | 治理静态检查专项（bug-hunt 沉淀）：1) execSync 模板拼接检测—现存 15 处多为受控插值(pid/固定命令)，需先甄别白名单否则误报；重点拦插值来自文件枚举(git ls-files/readdirSync)的模式。2) Context Provider 定义未挂载检测—现存 AuthContext/LoginForm 死代码需先清理(useRBAC 已迁 PermissionContext)否则检查立刻红。3) SQL 生成器 FROM PolicyFact 未消费 permissionFilter 守卫(易误报,需路由层调用图)。 | P2 | PROPOSED | N/A | scripts/check-governance.mjs,src/shared/contexts/AuthContext.tsx |  |
 | 2026-06-12-claude-45630f | 2026-06-12 | Bug/Backend | @claude | **存量**：metric-registry 领域断言集成测试 5 项失败（transfer_rate/renewal_rate/nev_rate/new_car_rate/cross_sell_total_rate 区间断言）——在干净 main（17c4586）上复现，疑似口径Ⅱa/Ⅱb 组件数口径修复后 testCase fixture 未同步；仅本地集成桶，不影响 CI | P2 | PROPOSED | N/A | server/src/config/metric-registry/__tests__/integration/domain-testcases.test.ts |  |
 | 2026-06-15-claude-2e017d | 2026-06-15 | Refactor/Tooling | @claude | B330 防回归 governance 闸：加纯文本扫描守护已修复的 5 处违规 — (a) src/widgets/ 下禁 'from.*features'；(b) src/shared/ 下禁 'from.*features'；(c) src/features 下禁 'from.*server/src'；任一命中 governance fail。后续待 ESLint 配置后切换为 boundaries/element-types 规则。 | P2 | PROPOSED | BACKLOG B330 | scripts/check-governance.mjs;.claude/rules/architecture.md（新增） | 2026-06-15 PR #642 owner review 修正：原文案「src/shared 下禁 from.*features」会触发存量违规 src/shared/contexts/FilterContext.tsx → features/dashboard/orgSalesman（B330 漏挂的第 6 处）。处置：PR #643 已修该违规（orgSalesman 上提 shared/utils/），合并后本任务全文案可直接落地无需 carve-out。governance 闸守护范围保持原文不变：(a) src/widgets 下禁 from.*features；(b) src/shared 下禁 from.*features；(c) src/features 下禁 from.*server/src。 |
+| 2026-06-15-claude-b38dcc | 2026-06-15 | Chore | @claude | PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，server/src/config/metric-registry/categories/ratio.ts 中的 transfer_rate/renewal_rate/nev_rate/new_car_rate 指标引用 endorsement_no，但 CubeCostDay.policy_dedup CTE 的 SELECT 列表未含此字段，导致 api-error.log 自 2026-06-12 09:02 起持续 Binder Error。与 cost OOM (d72e4717) 是独立两个 Bug。修复方向：扩展 policy_dedup CTE 加 ANY_VALUE(endorsement_no) 或改指标公式避开该字段。 | P1 | PROPOSED | N/A | N/A |  |
 | 2026-06-15-claude-edbd61 | 2026-06-15 | Refactor/Frontend | @claude | B330 follow-up：components/layout → features 依赖倒置（TopNavigation/PageFilterPanel）。当前 TopNavigation 直接 import features/file 的 3 个 Modal、PageFilterPanel 直接 import features/filters 的 2 个组件。修复需把 layout 改为 shell+slot：App.tsx 顶层负责把具体 Modal/Panel 作为 children/slot 传入。属重构而非搬迁，独立 PR。验收：grep components/layout/ 无 features import；build 绿；2921 单测全过。 | P2 | PROPOSED | ARCHITECTURE.md §2.2 | src/components/layout/TopNavigation.tsx;src/components/layout/PageFilterPanel.tsx;src/App.tsx | PR #643 同时关闭了 shared→features 第 6 处（orgSalesman），但 layout→features 倒置（TopNavigation 用 features/file 的 3 个 Modal、PageFilterPanel 用 features/filters 的 2 个组件）仍属本 follow-up 范围 — 是更深的 shell+slot 重构。 |
