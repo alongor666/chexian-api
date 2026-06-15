@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, withRouteCache } from './shared.js';
+import { asyncHandler, AppError, duckdbService, withRouteCache, parseFiltersAndBuildWhere } from './shared.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../../sql/premiumPlan.js';
 
 const router = Router();
@@ -36,16 +36,20 @@ router.get(
       rankingEnabled, topN, bottomN,
     } = parseResult.data;
 
-    const isOrgUser = req.user?.role === 'org_user';
-    const forcedOrg = isOrgUser ? req.user?.organization : undefined;
-    if (isOrgUser && !forcedOrg) {
+    // RLS：通过 permissionFilter 统一注入（覆盖 org_user / telemarketing_user / branchCode 三态）
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    // achievement_cache 层需要单独映射 org_name（因该表无 org_level_3 / is_telemarketing 字段）
+    const rlsOrgName = req.user?.role === 'org_user' ? (req.user?.organization ?? undefined) : undefined;
+
+    // org_user 强制覆盖 orgFilter（与原逻辑等价，现已由 rlsOrgName 承接）
+    if (req.user?.role === 'org_user' && !req.user?.organization) {
       throw new AppError(403, 'Organization not specified for ORG_USER role');
     }
 
     const dimension: PlanDrilldownDimension = {
       level: level as PlanDrilldownLevel,
       filters: {
-        org: forcedOrg || orgFilter,
+        org: rlsOrgName ?? orgFilter,
         team: teamFilter,
         salesman: salesmanFilter,
         customerCategory: customerCategoryFilter,
@@ -55,10 +59,10 @@ router.get(
     let sql: string;
     switch (queryType) {
       case 'kpi':
-        sql = generateKPICardQuery(planYear, dimension);
+        sql = generateKPICardQuery(planYear, dimension, rlsOrgName);
         break;
       case 'distribution':
-        sql = generateRateDistributionQuery(planYear, dimension);
+        sql = generateRateDistributionQuery(planYear, dimension, rlsOrgName);
         break;
       case 'drilldown':
       default:
@@ -73,6 +77,8 @@ router.get(
           },
           sortField as PlanSortField,
           sortOrder as PlanSortOrder,
+          rlsOrgName,
+          whereClause,
         );
         break;
     }
@@ -107,16 +113,20 @@ router.get(
     }
 
     const { planYear, level, orgFilter, teamFilter, salesmanFilter, customerCategoryFilter, sortField, sortOrder } = parseResult.data;
-    const isOrgUser = req.user?.role === 'org_user';
-    const forcedOrg = isOrgUser ? req.user?.organization : undefined;
-    if (isOrgUser && !forcedOrg) {
+
+    // RLS：通过 permissionFilter 统一注入（覆盖 org_user / telemarketing_user / branchCode 三态）
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    // achievement_cache 层需要单独映射 org_name
+    const rlsOrgName = req.user?.role === 'org_user' ? (req.user?.organization ?? undefined) : undefined;
+
+    if (req.user?.role === 'org_user' && !req.user?.organization) {
       throw new AppError(403, 'Organization not specified for ORG_USER role');
     }
 
     const dimension: PlanDrilldownDimension = {
       level: level as PlanDrilldownLevel,
       filters: {
-        org: forcedOrg || orgFilter,
+        org: rlsOrgName ?? orgFilter,
         team: teamFilter,
         salesman: salesmanFilter,
         customerCategory: customerCategoryFilter,
@@ -128,6 +138,8 @@ router.get(
       dimension,
       sortField as PlanSortField,
       sortOrder as PlanSortOrder,
+      rlsOrgName,
+      whereClause,
     );
 
     const [children, summaryRows, distribution] = await Promise.all([
