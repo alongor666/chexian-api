@@ -7,7 +7,7 @@ import { DateCriteria, type AdvancedFilterState } from '../../shared/types/data'
 import type { FilterFieldsConfig, FilterSelectionModeConfig, FilterPresetName } from '../../shared/types/filters';
 import { FILTER_PRESETS } from '../../shared/types/filters';
 import { FilterLayoutV2 } from './FilterLayoutV2';
-import { CollapsibleFilterSection } from './CollapsibleFilterSection';
+import { CollapsibleFilterSection } from '@/shared/components/filters/CollapsibleFilterSection';
 import { ChevronRight } from 'lucide-react';
 import { cn, colorClasses } from '../../shared/styles';
 

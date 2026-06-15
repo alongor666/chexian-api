@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { colorClasses, inputStyles, cn } from '../../../shared/styles';
-import { CollapsibleFilterSection } from '../../filters/CollapsibleFilterSection';
+import { CollapsibleFilterSection } from '@/shared/components/filters/CollapsibleFilterSection';
 import type { QuoteConversionVersion, QuoteFilters } from '../types';
 import {
   CAT_NON_COMMERCIAL_PERSONAL,

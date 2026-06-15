@@ -6,7 +6,7 @@ import { BarChart } from '../../../widgets/charts/BarChart';
 import { formatCount, formatPremiumWan, formatRate } from '../../../shared/utils/formatters';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import { WaterfallChart } from '../../../widgets/charts/WaterfallChart';
-import { usePerspective } from '../../dashboard/hooks/usePerspective';
+import { usePerspective } from '@/shared/hooks/usePerspective';
 import { useDataStatus } from '../../../shared/contexts/DataContext';
 import {
   type ComparisonPreset,
