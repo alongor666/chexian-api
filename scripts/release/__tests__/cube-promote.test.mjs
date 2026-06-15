@@ -1,106 +1,68 @@
 /**
  * cube-promote.mjs 单元测试
  *
- * 测试范围：
- *   - detectSwitches：ecosystem 文本解析 → shadow/routing 布尔值
- *   - detectPhase：开关组合 → 阶段号（0/1/2）
- *   - buildVerdict：4 类决策矩阵 + 边界
- *   - fetchSentinelHistory：GH 评论体严重度 regex 解析契约（通过 mock fetch 验证）
+ * 测试范围（PR #644 review fix 改造）：
+ *   - detectSwitches / detectPhase / buildVerdict — import 真函数自 lib
+ *   - checkBuildHealth / checkShadowSampleFloor — 新加入测试覆盖
+ *   - fetchSentinelHistory — import 真函数 + vi.stubGlobal('fetch') 拦截
  *
- * 注意：cube-promote.mjs 是 CLI 入口，直接 import 会触发 main()。
- * 因此我们只测它导出的纯函数层（detectSwitches/detectPhase/buildVerdict），
- * 以及通过 mock fetch 测 fetchSentinelHistory 行为。
- * 由于当前脚本未导出这些函数（只有 main），我们用 vi.mock + 内联复现纯函数进行契约测试。
+ * 改造（删除 inline 复现，import 真函数）：
+ *   原 inline 副本的 buildVerdict 是旧版本（total=0 → canAdvance=true），
+ *   与生产已升级版本（PR #644 改为 canAdvance=false 阻断）静默漂移。
+ *   抽 lib + import 后测试自动追上脚本本体。
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import {
+  DEFAULT_MATCH_FLOOR,
+  detectSwitches,
+  detectPhase,
+  checkBuildHealth,
+  checkShadowSampleFloor,
+  fetchSentinelHistory,
+  buildVerdict,
+} from '../lib/cube-promote-judge.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = join(__dirname, '__fixtures__');
 
-// ─── 从源码内联纯函数（脚本未 export，测试直接复现契约层） ───────────────────
-
-function detectSwitches(ecosystemSrc) {
-  const shadow = /CUBE_SHADOW_COMPARE:\s*['"](true|false)['"]/.exec(ecosystemSrc)?.[1] === 'true';
-  const routing = /CUBE_ROUTING_ENABLED:\s*['"](true|false)['"]/.exec(ecosystemSrc)?.[1] === 'true';
-  return { shadow, routing };
-}
-
-function detectPhase(switches) {
-  if (!switches.shadow && !switches.routing) return 0;
-  if (switches.shadow && !switches.routing) return 1;
-  if (switches.shadow && switches.routing) return 2;
-  return 0;
-}
-
-function buildVerdict({ phase, switches, history }) {
-  if (phase === 0) {
-    return {
-      phase: 0,
-      summary: '阶段 0 — 立方体未启用（两开关均 false）',
-      canAdvance: true,
-      nextAction: "在 server/ecosystem.config.cjs 设 CUBE_SHADOW_COMPARE: 'true'，按 deploy-chain 部署链 PR 流程合并",
-      blockers: [],
-    };
-  }
-
-  if (phase === 1) {
-    if (!history.available) {
-      return {
-        phase: 1,
-        summary: `阶段 1（影子对账） · 哨兵历史不可读：${history.reason}`,
-        canAdvance: false,
-        nextAction: null,
-        blockers: [`需要 GitHub token 与 --history-issue 才能判定 7 天稳定性；当前：${history.reason}`],
-      };
-    }
-    const c = history.counts;
-    if (c.critical > 0) {
-      return {
-        phase: 1,
-        summary: `阶段 1 · 过去 7 天有 ${c.critical} 次 CRITICAL · 不可推进`,
-        canAdvance: false,
-        nextAction: null,
-        blockers: [
-          `过去 7 天哨兵报 CRITICAL ${c.critical} 次`,
-          '解决方法：去追踪 issue 看哪些路由 mismatch，按改写器/白名单/逻辑 bug 三类排查',
-        ],
-      };
-    }
-    if (c.total === 0) {
-      return {
-        phase: 1,
-        summary: '阶段 1 · 过去 7 天哨兵无任何评论（健康，但样本不足）',
-        canAdvance: true,
-        nextAction: '可推进：但请确认哨兵 cron 真在跑、流量已让影子对账触发（看 /health 的 cubeShadow.*.match 是否 > 0）',
-        blockers: [],
-      };
-    }
-    return {
-      phase: 1,
-      summary: `阶段 1 · 过去 7 天 ${c.total} 条非 CRITICAL 评论（WARN ${c.warn} / INFO ${c.info}） · 可推进`,
-      canAdvance: true,
-      nextAction: "提部署链 PR：server/ecosystem.config.cjs 追加 CUBE_ROUTING_ENABLED: 'true'，按 deploy-chain SOP 人工低峰合并",
-      blockers: [],
-    };
-  }
-
-  return {
-    phase: 2,
-    summary: '阶段 2 — 正式切流已生效；观察期与降频判定见文件头注释（待实现）',
-    canAdvance: false,
-    nextAction: '阶段 2 → 3 推进逻辑：检查 git log 找 CUBE_ROUTING_ENABLED 引入时间，> 30 天且无 CRITICAL → 降 cron。本批次未实现，留 BACKLOG',
-    blockers: [],
-  };
-}
-
-// GH 评论严重度 regex（与 fetchSentinelHistory 内保持一致）
+// GH 评论严重度 regex（fetchSentinelHistory 内一致，独立暴露便于测试解析契约）
 function parseSeverityFromComment(body) {
   return /严重度.*?`(CRITICAL|WARN|INFO|NONE)`/.exec(body)?.[1] ?? null;
 }
+
+// 旧 buildVerdict 测试无 healthData 参数，统一传 skipped 模拟 --no-health
+const SKIPPED_HEALTH = { skipped: true };
+
+// 健康+样本充足的 healthData（用于"可推进"路径测试）
+const HEALTHY_HEALTH = {
+  cubes: {
+    trend: { builtVersion: 'v1', lastError: null },
+    cost: { builtVersion: 'v1', lastError: null },
+    salesman: { builtVersion: 'v1', lastError: null },
+  },
+  cubeShadow: {
+    trend: { match: 1200, mismatch: 0, error: 0 },
+    growth: { match: 1100, mismatch: 0, error: 0 },
+    cost: { match: 1300, mismatch: 0, error: 0 },
+    kpi: { match: 1500, mismatch: 0, error: 0 },
+    'salesman-ranking': { match: 1000, mismatch: 0, error: 0 },
+  },
+  buildHealthResult: { pass: true, failedCubes: [] },
+  sampleFloorResult: {
+    pass: true,
+    routeFloors: {
+      trend: { match: 1200, target: 1000, pass: true },
+      growth: { match: 1100, target: 1000, pass: true },
+      cost: { match: 1300, target: 1000, pass: true },
+      kpi: { match: 1500, target: 1000, pass: true },
+      'salesman-ranking': { match: 1000, target: 1000, pass: true },
+    },
+  },
+};
 
 // ─── detectSwitches 测试 ─────────────────────────────────────────────────────
 
@@ -197,81 +159,265 @@ describe('detectPhase — 阶段判定矩阵', () => {
 
 // ─── buildVerdict 决策矩阵测试 ───────────────────────────────────────────────
 
-describe('buildVerdict — 推进决策矩阵', () => {
-  // 阶段 0
+describe('buildVerdict — 推进决策矩阵（含 healthData 路径，PR #644 review fix）', () => {
   it('阶段 0 → canAdvance=true，nextAction 含"CUBE_SHADOW_COMPARE"', () => {
-    const v = buildVerdict({ phase: 0, switches: { shadow: false, routing: false }, history: { available: true, counts: { critical: 0, warn: 0, info: 0, total: 0 } } });
+    const v = buildVerdict({
+      phase: 0,
+      switches: { shadow: false, routing: false },
+      history: { available: true, counts: { critical: 0, warn: 0, info: 0, total: 0 } },
+      healthData: SKIPPED_HEALTH,
+    });
     expect(v.canAdvance).toBe(true);
     expect(v.nextAction).toMatch(/CUBE_SHADOW_COMPARE/);
     expect(v.blockers).toHaveLength(0);
   });
 
-  // 阶段 1 — 哨兵历史不可读
   it('阶段 1 + 哨兵不可读（无 GH token）→ canAdvance=false，blockers 含提示', () => {
     const v = buildVerdict({
       phase: 1,
       switches: { shadow: true, routing: false },
       history: { available: false, reason: '未提供 GH_TOKEN / GITHUB_TOKEN' },
+      healthData: SKIPPED_HEALTH,
     });
     expect(v.canAdvance).toBe(false);
     expect(v.blockers.length).toBeGreaterThan(0);
     expect(v.blockers[0]).toMatch(/GH_TOKEN/);
   });
 
-  // 阶段 1 — 过去 7 天有 CRITICAL（A 类：cost.lastError → false 预期行为）
   it('阶段 1 + CRITICAL=1 → canAdvance=false，blockers 含 CRITICAL 次数', () => {
     const v = buildVerdict({
       phase: 1,
       switches: { shadow: true, routing: false },
       history: { available: true, counts: { critical: 1, warn: 0, info: 0, total: 1 } },
+      healthData: SKIPPED_HEALTH,
     });
     expect(v.canAdvance).toBe(false);
     expect(v.blockers[0]).toMatch(/CRITICAL/);
   });
 
-  // 阶段 1 — 过去 7 天 CRITICAL=3（多次）
   it('阶段 1 + CRITICAL=3 → canAdvance=false，summary 含 3', () => {
     const v = buildVerdict({
       phase: 1,
       switches: { shadow: true, routing: false },
       history: { available: true, counts: { critical: 3, warn: 1, info: 0, total: 4 } },
+      healthData: SKIPPED_HEALTH,
     });
     expect(v.canAdvance).toBe(false);
     expect(v.summary).toContain('3');
   });
 
-  // 阶段 1 — 7 天无任何评论（样本不足但健康）
-  it('阶段 1 + total=0（哨兵无评论）→ canAdvance=true，nextAction 含"cron 真在跑"', () => {
+  // PR #644 已修：total=0 → canAdvance=false 阻断（之前是 true 静默放行）
+  it('阶段 1 + total=0（哨兵无评论）→ canAdvance=false（PR #644 已修静默放行）', () => {
     const v = buildVerdict({
       phase: 1,
       switches: { shadow: true, routing: false },
       history: { available: true, counts: { critical: 0, warn: 0, info: 0, total: 0 } },
+      healthData: SKIPPED_HEALTH,
     });
-    expect(v.canAdvance).toBe(true);
-    expect(v.nextAction).toMatch(/cron/);
+    expect(v.canAdvance).toBe(false);
+    expect(v.nextAction).toMatch(/burn-in|样本/);
+    expect(v.blockers.some((b) => /样本下限/.test(b))).toBe(true);
   });
 
-  // 阶段 1 — 有 WARN/INFO 无 CRITICAL（全绿 D 类）
-  it('阶段 1 + WARN=2 INFO=1 CRITICAL=0 → canAdvance=true，nextAction 含"CUBE_ROUTING_ENABLED"', () => {
+  it('阶段 1 + WARN=2 INFO=1 CRITICAL=0 + 健康通过 → canAdvance=true', () => {
     const v = buildVerdict({
       phase: 1,
       switches: { shadow: true, routing: false },
       history: { available: true, counts: { critical: 0, warn: 2, info: 1, total: 3 } },
+      healthData: HEALTHY_HEALTH,
     });
     expect(v.canAdvance).toBe(true);
     expect(v.nextAction).toMatch(/CUBE_ROUTING_ENABLED/);
     expect(v.blockers).toHaveLength(0);
   });
 
-  // 阶段 2
   it('阶段 2 → canAdvance=false，summary 含"正式切流"', () => {
     const v = buildVerdict({
       phase: 2,
       switches: { shadow: true, routing: true },
       history: { available: true, counts: { critical: 0, warn: 0, info: 0, total: 0 } },
+      healthData: SKIPPED_HEALTH,
     });
     expect(v.canAdvance).toBe(false);
     expect(v.summary).toContain('正式切流');
+  });
+
+  // 健康检查路径 — PR #644 新增的实际覆盖
+  it('阶段 1 + healthData=null（/health 不可达）→ canAdvance=false + health_unreachable=true', () => {
+    const v = buildVerdict({
+      phase: 1,
+      switches: { shadow: true, routing: false },
+      history: { available: true, counts: { critical: 0, warn: 0, info: 0, total: 3 } },
+      healthData: null,
+    });
+    expect(v.canAdvance).toBe(false);
+    expect(v.health_unreachable).toBe(true);
+  });
+
+  it('阶段 1 + cost.lastError → canAdvance=false，blockers 含立方体构建失败', () => {
+    const v = buildVerdict({
+      phase: 1,
+      switches: { shadow: true, routing: false },
+      history: { available: true, counts: { critical: 0, warn: 0, info: 0, total: 3 } },
+      healthData: {
+        cubes: { trend: { builtVersion: 'v1', lastError: null }, cost: { builtVersion: null, lastError: 'OOM' }, salesman: { builtVersion: 'v1', lastError: null } },
+        cubeShadow: HEALTHY_HEALTH.cubeShadow,
+        buildHealthResult: { pass: false, failedCubes: ['cost（lastError: OOM）'] },
+        sampleFloorResult: HEALTHY_HEALTH.sampleFloorResult,
+      },
+    });
+    expect(v.canAdvance).toBe(false);
+    expect(v.blockers.some((b) => /立方体构建失败/.test(b))).toBe(true);
+    expect(v.blockers.some((b) => /cost/.test(b))).toBe(true);
+  });
+
+  it('阶段 1 + kpi.match=0（样本不足）→ canAdvance=false，blockers 含样本不足', () => {
+    const v = buildVerdict({
+      phase: 1,
+      switches: { shadow: true, routing: false },
+      history: { available: true, counts: { critical: 0, warn: 0, info: 0, total: 3 } },
+      healthData: {
+        cubes: HEALTHY_HEALTH.cubes,
+        cubeShadow: { ...HEALTHY_HEALTH.cubeShadow, kpi: { match: 0, mismatch: 0, error: 0 } },
+        buildHealthResult: { pass: true, failedCubes: [] },
+        sampleFloorResult: {
+          pass: false,
+          routeFloors: { ...HEALTHY_HEALTH.sampleFloorResult.routeFloors, kpi: { match: 0, target: 1000, pass: false } },
+        },
+      },
+    });
+    expect(v.canAdvance).toBe(false);
+    expect(v.blockers.some((b) => /样本不足/.test(b))).toBe(true);
+    expect(v.blockers.some((b) => /kpi/.test(b))).toBe(true);
+  });
+
+  it('matchFloor 参数注入 message：blockers 提示文本随 matchFloor 变化', () => {
+    const v = buildVerdict({
+      phase: 1,
+      switches: { shadow: true, routing: false },
+      history: { available: true, counts: { critical: 0, warn: 0, info: 0, total: 0 } },
+      healthData: SKIPPED_HEALTH,
+      matchFloor: 5000,
+    });
+    expect(v.blockers.some((b) => /match ≥ 5000/.test(b))).toBe(true);
+  });
+});
+
+// ─── checkBuildHealth 测试（新增）────────────────────────────────────────────
+
+describe('checkBuildHealth — 三立方体健康检查', () => {
+  it('三立方体全绿 → pass=true', () => {
+    const r = checkBuildHealth({
+      trend: { builtVersion: 'v1', lastError: null },
+      cost: { builtVersion: 'v1', lastError: null },
+      salesman: { builtVersion: 'v1', lastError: null },
+    });
+    expect(r.pass).toBe(true);
+    expect(r.failedCubes).toHaveLength(0);
+  });
+
+  it('cost.lastError != null → pass=false，failedCubes 含 cost', () => {
+    const r = checkBuildHealth({
+      trend: { builtVersion: 'v1', lastError: null },
+      cost: { builtVersion: 'v1', lastError: 'OOM Error' },
+      salesman: { builtVersion: 'v1', lastError: null },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.failedCubes[0]).toMatch(/cost/);
+    expect(r.failedCubes[0]).toMatch(/OOM/);
+  });
+
+  it('trend.builtVersion=null → pass=false', () => {
+    const r = checkBuildHealth({
+      trend: { builtVersion: null, lastError: null },
+      cost: { builtVersion: 'v1', lastError: null },
+      salesman: { builtVersion: 'v1', lastError: null },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.failedCubes[0]).toMatch(/trend/);
+    expect(r.failedCubes[0]).toMatch(/builtVersion 为空/);
+  });
+
+  it('salesman 状态缺失 → pass=false', () => {
+    const r = checkBuildHealth({
+      trend: { builtVersion: 'v1', lastError: null },
+      cost: { builtVersion: 'v1', lastError: null },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.failedCubes[0]).toMatch(/salesman/);
+    expect(r.failedCubes[0]).toMatch(/状态缺失/);
+  });
+});
+
+// ─── checkShadowSampleFloor 测试（新增）─────────────────────────────────────
+
+describe('checkShadowSampleFloor — 5 路由样本下限', () => {
+  it('5 路由 match 全 ≥ 1000 → pass=true', () => {
+    const r = checkShadowSampleFloor({
+      trend: { match: 1200 },
+      growth: { match: 1100 },
+      cost: { match: 1500 },
+      kpi: { match: 2000 },
+      'salesman-ranking': { match: 1000 },
+    });
+    expect(r.pass).toBe(true);
+    expect(Object.values(r.routeFloors).every((v) => v.pass)).toBe(true);
+  });
+
+  it('kpi.match=0 → pass=false，routeFloors.kpi.pass=false', () => {
+    const r = checkShadowSampleFloor({
+      trend: { match: 1200 },
+      growth: { match: 1100 },
+      cost: { match: 1500 },
+      kpi: { match: 0 },
+      'salesman-ranking': { match: 1000 },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.routeFloors.kpi.pass).toBe(false);
+    expect(r.routeFloors.trend.pass).toBe(true);
+  });
+
+  it('边界值 match=DEFAULT_MATCH_FLOOR → pass=true', () => {
+    const r = checkShadowSampleFloor({
+      trend: { match: DEFAULT_MATCH_FLOOR },
+      growth: { match: DEFAULT_MATCH_FLOOR },
+      cost: { match: DEFAULT_MATCH_FLOOR },
+      kpi: { match: DEFAULT_MATCH_FLOOR },
+      'salesman-ranking': { match: DEFAULT_MATCH_FLOOR },
+    });
+    expect(r.pass).toBe(true);
+  });
+
+  it('边界值 match=DEFAULT_MATCH_FLOOR-1 → pass=false', () => {
+    const r = checkShadowSampleFloor({
+      trend: { match: DEFAULT_MATCH_FLOOR - 1 },
+      growth: { match: 1100 },
+      cost: { match: 1100 },
+      kpi: { match: 1100 },
+      'salesman-ranking': { match: 1100 },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.routeFloors.trend.pass).toBe(false);
+  });
+
+  it('match 字段缺失 → 视为 0，pass=false', () => {
+    const r = checkShadowSampleFloor({
+      trend: {},
+      growth: { match: 1100 },
+      cost: { match: 1100 },
+      kpi: { match: 1100 },
+      'salesman-ranking': { match: 1100 },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.routeFloors.trend.match).toBe(0);
+  });
+
+  it('matchFloor=500 自定义阈值 → match=500 → pass=true（覆盖 env 派生）', () => {
+    const r = checkShadowSampleFloor(
+      { trend: { match: 500 }, growth: { match: 500 }, cost: { match: 500 }, kpi: { match: 500 }, 'salesman-ranking': { match: 500 } },
+      500,
+    );
+    expect(r.pass).toBe(true);
   });
 });
 
@@ -330,42 +476,7 @@ describe('fetchSentinelHistory — 评论计数聚合', () => {
     vi.unstubAllGlobals();
   });
 
-  // 因 fetchSentinelHistory 未导出，在此用内联复现版本测试聚合逻辑
-  async function fetchSentinelHistoryInline({ ghToken, repo, historyIssue, sinceDays = 7 }) {
-    if (!historyIssue) return { available: false, reason: '未指定 --history-issue' };
-    if (!ghToken) return { available: false, reason: '未提供 GH_TOKEN / GITHUB_TOKEN' };
-
-    const since = new Date(Date.now() - sinceDays * 86400 * 1000).toISOString();
-    const url = `https://api.github.com/repos/${repo}/issues/${historyIssue}/comments?since=${since}&per_page=100`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${ghToken}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    });
-    if (!res.ok) {
-      return { available: false, reason: `GH API ${res.status}: ${await res.text()}` };
-    }
-    const comments = await res.json();
-
-    let critical = 0, warn = 0, info = 0;
-    const latest = [];
-    for (const c of comments) {
-      const body = c.body ?? '';
-      const sev = /严重度.*?`(CRITICAL|WARN|INFO|NONE)`/.exec(body)?.[1];
-      if (sev === 'CRITICAL') critical++;
-      else if (sev === 'WARN') warn++;
-      else if (sev === 'INFO') info++;
-      latest.push({ at: c.created_at, severity: sev ?? 'unknown' });
-    }
-    return {
-      available: true,
-      windowDays: sinceDays,
-      counts: { critical, warn, info, total: comments.length },
-      latest: latest.slice(-5),
-    };
-  }
+  // fetchSentinelHistory 改为 import 真函数，删除 inline 复现（PR #644 review fix）
 
   it('GH API 返回 3 条评论（1 CRITICAL+1 WARN+1 INFO）→ 正确计数', async () => {
     fetch.mockResolvedValueOnce({
@@ -376,7 +487,7 @@ describe('fetchSentinelHistory — 评论计数聚合', () => {
         { body: '**严重度**：`INFO`\n跨格保单信号', created_at: '2026-06-10T01:00:00Z' },
       ],
     });
-    const result = await fetchSentinelHistoryInline({ ghToken: 'tok', repo: 'r/r', historyIssue: 99 });
+    const result = await fetchSentinelHistory({ ghToken: 'tok', repo: 'r/r', historyIssue: 99 });
     expect(result.available).toBe(true);
     expect(result.counts.critical).toBe(1);
     expect(result.counts.warn).toBe(1);
@@ -386,7 +497,7 @@ describe('fetchSentinelHistory — 评论计数聚合', () => {
 
   it('GH API 返回空数组（7 天内无评论）→ total=0, available=true', async () => {
     fetch.mockResolvedValueOnce({ ok: true, json: async () => [] });
-    const result = await fetchSentinelHistoryInline({ ghToken: 'tok', repo: 'r/r', historyIssue: 99 });
+    const result = await fetchSentinelHistory({ ghToken: 'tok', repo: 'r/r', historyIssue: 99 });
     expect(result.available).toBe(true);
     expect(result.counts.total).toBe(0);
     expect(result.counts.critical).toBe(0);
@@ -394,19 +505,19 @@ describe('fetchSentinelHistory — 评论计数聚合', () => {
 
   it('GH API 返回 401 → available=false，reason 含 HTTP 状态码', async () => {
     fetch.mockResolvedValueOnce({ ok: false, status: 401, text: async () => 'Unauthorized' });
-    const result = await fetchSentinelHistoryInline({ ghToken: 'bad-token', repo: 'r/r', historyIssue: 99 });
+    const result = await fetchSentinelHistory({ ghToken: 'bad-token', repo: 'r/r', historyIssue: 99 });
     expect(result.available).toBe(false);
     expect(result.reason).toMatch(/401/);
   });
 
   it('未指定 historyIssue → available=false，reason 含"未指定"', async () => {
-    const result = await fetchSentinelHistoryInline({ ghToken: 'tok', repo: 'r/r', historyIssue: null });
+    const result = await fetchSentinelHistory({ ghToken: 'tok', repo: 'r/r', historyIssue: null });
     expect(result.available).toBe(false);
     expect(result.reason).toMatch(/未指定/);
   });
 
   it('未提供 ghToken → available=false，reason 含"GH_TOKEN"', async () => {
-    const result = await fetchSentinelHistoryInline({ ghToken: '', repo: 'r/r', historyIssue: 99 });
+    const result = await fetchSentinelHistory({ ghToken: '', repo: 'r/r', historyIssue: 99 });
     expect(result.available).toBe(false);
     expect(result.reason).toMatch(/GH_TOKEN/);
   });
@@ -419,7 +530,7 @@ describe('fetchSentinelHistory — 评论计数聚合', () => {
         { body: '**严重度**：`WARN`\n已知问题', created_at: '2026-06-11T01:00:00Z' },
       ],
     });
-    const result = await fetchSentinelHistoryInline({ ghToken: 'tok', repo: 'r/r', historyIssue: 99 });
+    const result = await fetchSentinelHistory({ ghToken: 'tok', repo: 'r/r', historyIssue: 99 });
     expect(result.counts.total).toBe(2);
     expect(result.counts.warn).toBe(1);
     expect(result.counts.critical).toBe(0);
