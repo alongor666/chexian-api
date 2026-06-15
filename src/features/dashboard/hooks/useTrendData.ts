@@ -25,16 +25,10 @@ export interface TrendDataPoint {
 }
 
 /**
- * 双Y轴柱状+折线组合图数据点
+ * 双Y轴柱状+折线组合图数据点（B330：类型上提至 shared/types/trend，本处仅 re-export 维持外部 import 兼容）
  */
-export interface PremiumTrendBarData {
-  time_period: string;             // 对齐后的时间标签（去年份前缀）
-  display_label: string;           // X轴显示标签
-  current_premium: number;         // 本年保费（原值）
-  prev_premium: number;            // 上年同期保费（原值）
-  yoy_rate: number | null;         // 当期同比增长率
-  achievement_rate: number | null; // 累计计划达成率（仅有计划时非null）
-}
+export type { PremiumTrendBarData } from '@/shared/types/trend';
+import type { PremiumTrendBarData } from '@/shared/types/trend';
 
 /**
  * 优质业务数据点类型

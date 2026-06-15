@@ -19,7 +19,7 @@ import type { KpiData } from '../hooks/useKpiData';
 import type { KpiDetailResult } from '../../../shared/types/kpi';
 import { KPI_CARD_META, type KpiCardId } from '../dashboardLayoutConfig';
 import { comprehensiveTheme } from '../../../shared/styles';
-import { statusFor } from '../utils/kpiStatus';
+import { statusFor } from '@/shared/utils/kpiStatus';
 
 /** 卡片 id→标签映射，派生自静态 KPI_CARD_META，模块级常量（避免每次渲染 reduce） */
 const KPI_LABEL_MAP = KPI_CARD_META.reduce((acc, item) => {

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import type { ViewPerspective, PerspectiveConfig } from '../../../shared/types';
-import { DEFAULT_PERSPECTIVE, getPerspectiveConfig } from '../../../shared/types';
-import { safeStorage } from '../../../shared/utils/storage';
+import type { ViewPerspective, PerspectiveConfig } from '../types';
+import { DEFAULT_PERSPECTIVE, getPerspectiveConfig } from '../types';
+import { safeStorage } from '../utils/storage';
 
 /**
  * 视角状态管理 Hook

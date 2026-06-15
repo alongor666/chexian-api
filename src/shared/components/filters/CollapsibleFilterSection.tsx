@@ -1,5 +1,5 @@
 import React from 'react';
-import { getStorageBoolean, setStorageBoolean } from '../../shared/utils/storage';
+import { getStorageBoolean, setStorageBoolean } from '../../utils/storage';
 
 interface CollapsibleFilterSectionProps {
   id: string;

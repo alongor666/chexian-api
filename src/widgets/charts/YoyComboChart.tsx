@@ -5,7 +5,7 @@ import { formatPremiumWan } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 import { getYearChartColor } from '../../shared/styles';
 import { cardStyles, cn } from '../../shared/styles';
-import type { PremiumTrendBarData } from '../../features/dashboard/hooks/useTrendData';
+import type { PremiumTrendBarData } from '@/shared/types/trend';
 import { getChartTheme } from '../../shared/config/chartStyles';
 import { useTheme } from '../../shared/theme';
 

@@ -24,7 +24,7 @@ import {
   textStyles,
 } from '../../shared/styles';
 import { formatCount, formatPercent, formatRate } from '../../shared/utils/formatters';
-import { TONE_VAR, type KpiStatus, type StatusTone } from '../../features/dashboard/utils/kpiStatus';
+import { TONE_VAR, type KpiStatus, type StatusTone } from '@/shared/utils/kpiStatus';
 
 /** 环形图数据项 */
 export interface DonutDataItem {
