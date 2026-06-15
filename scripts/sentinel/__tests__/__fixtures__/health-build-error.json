@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "message": "dataReady",
+  "cubes": {
+    "cost": {
+      "builtVersion": null,
+      "building": false,
+      "lastBuildMs": null,
+      "exact": null,
+      "lastError": "DuckDB connection pool exhausted after 3 retries"
+    }
+  },
+  "cubeShadow": {
+    "kpi": { "match": 0, "mismatch": 0, "error": 0 }
+  }
+}
