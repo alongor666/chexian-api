@@ -2420,11 +2420,6 @@ function checkRlsRouteCoverage() {
     'shared.ts',     // 公共模块，非路由
     'bundles.ts',    // 仅 router.use 子路由分发，无业务端点
     'patrol.ts',     // 只读巡检 JSON 文件，无 SQL 查询
-    // premium-plan：临时豁免（BACKLOG 2026-06-11-claude-942414 紧急止血 PR）。
-    // 该路由用应用层 RLS（req.user.role === 'org_user' 强制覆盖 orgFilter），
-    // 但不完整：漏 telemarketing_user / branchCode / 跨维度逃逸。
-    // 长期修法见拆出的 BACKLOG 子项「premium-plan RLS 完整化」。
-    'premium-plan.ts',
   ]);
   const PERMISSION_CONSUMER_PATTERN =
     /\b(parseFiltersAndBuildWhere|parseFiltersAndBuildBothWhere|requireBranchAdmin|req\.permissionFilter|injectPermissionIntoAnySql)\b/;

@@ -87,13 +87,25 @@ const CACHE_SELECT = `
 
 /**
  * 根据 level 和 filters 构建 achievement_cache 的 WHERE 子句
+ *
+ * @param filters       下钻维度过滤（用户显式传入的 org/team/salesman）
+ * @param planYear      计划年度
+ * @param rlsOrgName    RLS 强制机构名（来自 req.user.organization，org_user 角色专用）。
+ *                      achievement_cache 字段是 org_name，不是 org_level_3，因此不能直接
+ *                      注入 permissionFilter 字符串（Binder Error），须在此处单独映射。
+ *                      branch_admin：undefined（全量）；org_user：req.user.organization；
+ *                      telemarketing_user：undefined（achievement_cache 无 is_telemarketing
+ *                      字段，该角色在此层可见全量计划数据；PolicyFact 层另行用 whereClause 限制）。
  */
 function buildCacheWhere(
   filters: PlanDrilldownDimension['filters'],
-  planYear: number
+  planYear: number,
+  rlsOrgName?: string,
 ): string {
   const conds: string[] = [`plan_year = ${Number(planYear)}`];
-  if (filters?.org) conds.push(`org_name = '${esc(filters.org)}'`);
+  // RLS：org_user 强制限本机构（优先于用户传入的 orgFilter，两者逻辑等价）
+  const effectiveOrg = rlsOrgName ?? filters?.org;
+  if (effectiveOrg) conds.push(`org_name = '${esc(effectiveOrg)}'`);
   if (filters?.team) conds.push(`team_name = '${esc(filters.team)}'`);
   if (filters?.salesman) conds.push(`full_name = '${esc(filters.salesman)}'`);
   return `WHERE ${conds.join(' AND ')}`;
@@ -151,6 +163,9 @@ function buildAggSelect(
  * 生成保费达成下钻查询
  * 从 achievement_cache 读取，按层级分组（company/org/team/salesman）
  * customer_category / coverage 层级直接查询 PolicyFact
+ *
+ * @param rlsOrgName    org_user 角色的强制机构名（RLS 注入）；其余角色传 undefined
+ * @param policyFactWhereClause  PolicyFact 直查的完整 WHERE 子句（含 permissionFilter）
  */
 export function generatePremiumPlanDrilldownQuery(
   planYear: number,
@@ -158,13 +173,15 @@ export function generatePremiumPlanDrilldownQuery(
   ranking: PlanRankingConfig = { enabled: false },
   sortField: PlanSortField = 'plan_vehicle',
   sortOrder: SortOrder = 'desc',
+  rlsOrgName?: string,
+  policyFactWhereClause?: string,
 ): string {
   const { level, filters = {} } = dimension;
-  const where = buildCacheWhere(filters, planYear);
+  const where = buildCacheWhere(filters, planYear, rlsOrgName);
 
   // customer_category / coverage：无计划数据，直接查 PolicyFact
   if (level === 'customer_category' || level === 'coverage') {
-    return generatePolicyFactDrilldownQuery(planYear, dimension, sortField, sortOrder);
+    return generatePolicyFactDrilldownQuery(planYear, dimension, sortField, sortOrder, policyFactWhereClause);
   }
 
   let selectBody: string;
@@ -232,12 +249,15 @@ export function generatePremiumPlanDrilldownQuery(
 
 /**
  * 生成 KPI 卡片查询（单行汇总）
+ *
+ * @param rlsOrgName  org_user 角色的强制机构名（RLS 注入）；其余角色传 undefined
  */
 export function generateKPICardQuery(
   planYear: number,
   dimension: PlanDrilldownDimension,
+  rlsOrgName?: string,
 ): string {
-  const where = buildCacheWhere(dimension.filters, planYear);
+  const where = buildCacheWhere(dimension.filters, planYear, rlsOrgName);
   return `
     SELECT
       SUM(plan_vehicle)                                      AS total_plan_vehicle,
@@ -259,12 +279,15 @@ export function generateKPICardQuery(
 
 /**
  * 生成达成率分布查询（六个区间）
+ *
+ * @param rlsOrgName  org_user 角色的强制机构名（RLS 注入）；其余角色传 undefined
  */
 export function generateRateDistributionQuery(
   planYear: number,
   dimension: PlanDrilldownDimension,
+  rlsOrgName?: string,
 ): string {
-  const where = buildCacheWhere(dimension.filters, planYear);
+  const where = buildCacheWhere(dimension.filters, planYear, rlsOrgName);
   return `
     SELECT
       CASE
@@ -296,29 +319,41 @@ export function generateRateDistributionQuery(
 
 /**
  * 生成面板所需的三条 SQL（供 /plan-achievement 合并端点并发执行）
+ *
+ * @param rlsOrgName             org_user 角色的强制机构名（RLS 注入）；其余角色传 undefined
+ * @param policyFactWhereClause  PolicyFact 直查的完整 WHERE 子句（含 permissionFilter）
  */
 export function generatePlanAchievementPanel(
   planYear: number,
   dimension: PlanDrilldownDimension,
   sortField: PlanSortField = 'actual_vehicle',
   sortOrder: SortOrder = 'desc',
+  rlsOrgName?: string,
+  policyFactWhereClause?: string,
 ): { childrenSql: string; summarySql: string; distributionSql: string } {
   return {
     childrenSql: generatePremiumPlanDrilldownQuery(
-      planYear, dimension, { enabled: false }, sortField, sortOrder
+      planYear, dimension, { enabled: false }, sortField, sortOrder, rlsOrgName, policyFactWhereClause
     ),
-    summarySql: generateKPICardQuery(planYear, dimension),
-    distributionSql: generateRateDistributionQuery(planYear, dimension),
+    summarySql: generateKPICardQuery(planYear, dimension, rlsOrgName),
+    distributionSql: generateRateDistributionQuery(planYear, dimension, rlsOrgName),
   };
 }
 
 // ─── customer_category / coverage 层级（无计划，直接查 PolicyFact） ──────────
 
+/**
+ * @param whereClause  来自 parseFiltersAndBuildWhere(req) 的完整 WHERE 子句（含 permissionFilter）。
+ *                     若传入，将追加到 yearWhere 条件中，覆盖 org_level_3/salesman_name/
+ *                     is_telemarketing/branch_code 等 RLS 维度，确保不越权。
+ *                     若不传（undefined），则保持原有应用层 filters 逻辑（向后兼容）。
+ */
 function generatePolicyFactDrilldownQuery(
   planYear: number,
   dimension: PlanDrilldownDimension,
   sortField: PlanSortField,
   sortOrder: SortOrder,
+  whereClause?: string,
 ): string {
   const filters = dimension.filters ?? {};
   const prevYear = planYear - 1;
@@ -326,17 +361,23 @@ function generatePolicyFactDrilldownQuery(
     dimension.level === 'customer_category' ? 'customer_category' : 'coverage_combination';
 
   const yearWhere: string[] = [`policy_date >= DATE '${planYear}-01-01'`];
-  if (filters.org) yearWhere.push(`org_level_3 = '${esc(filters.org)}'`);
-  if (filters.team) {
-    yearWhere.push(
-      `salesman_name IN (
-        SELECT DISTINCT salesman_name
-        FROM SalesmanPlanFact
-        WHERE team_name = '${esc(filters.team)}'
-      )`
-    );
+  // RLS：若路由层传入了完整的 whereClause（含 permissionFilter），追加到 yearWhere；
+  // 否则降级为应用层 filters（向后兼容）。
+  if (whereClause && whereClause !== '1=1') {
+    yearWhere.push(whereClause);
+  } else {
+    if (filters.org) yearWhere.push(`org_level_3 = '${esc(filters.org)}'`);
+    if (filters.team) {
+      yearWhere.push(
+        `salesman_name IN (
+          SELECT DISTINCT salesman_name
+          FROM SalesmanPlanFact
+          WHERE team_name = '${esc(filters.team)}'
+        )`
+      );
+    }
+    if (filters.salesman) yearWhere.push(`salesman_name = '${esc(filters.salesman)}'`);
   }
-  if (filters.salesman) yearWhere.push(`salesman_name = '${esc(filters.salesman)}'`);
   if (filters.customerCategory && dimension.level === 'coverage') {
     yearWhere.push(`customer_category = '${esc(filters.customerCategory)}'`);
   }
