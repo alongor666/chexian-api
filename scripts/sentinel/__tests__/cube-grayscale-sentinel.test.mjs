@@ -2,144 +2,25 @@
  * cube-grayscale-sentinel.mjs 单元测试
  *
  * 测试范围：
- *   - buildAnomalies：4 条判定规则（fixture 驱动）
+ *   - buildAnomalies：判定规则（fixture 驱动）
  *   - maxSeverity：多规则同时命中取最高严重度
- *   - renderSummary：输出 schema 稳定性（快照测试）
+ *   - renderSummary：输出 schema 稳定性
  *
- * 哨兵是 CLI 入口（mkdirSync/writeFileSync/process.exit），
- * 测试复现纯函数层 buildAnomalies / maxSeverity / renderSummary。
+ * 改造（PR #644 review fix）：从 inline 复现纯函数改为 import lib 真函数，
+ * 解决「测试副本 vs 脚本本体漂移」风险。
  */
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { buildAnomalies, maxSeverity, renderSummary } from '../lib/cube-grayscale-judge.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = join(__dirname, '__fixtures__');
 
 function loadFixture(name) {
   return JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf-8'));
-}
-
-// ─── 从源码内联纯函数 ──────────────────────────────────────────────────────────
-
-const SEVERITY = { CRITICAL: 3, WARN: 2, INFO: 1 };
-
-function buildAnomalies({ healthBody, dataVersion }) {
-  const anomalies = [];
-  const checks = [];
-  const cubes = healthBody?.cubes ?? {};
-  const shadow = healthBody?.cubeShadow ?? {};
-
-  // 规则 ① mismatch > 0 → CRITICAL
-  const mismatches = Object.entries(shadow)
-    .map(([route, s]) => ({ route, n: Number(s?.mismatch ?? 0) }))
-    .filter((x) => x.n > 0);
-  checks.push({
-    id: 'shadow_no_mismatch',
-    ok: mismatches.length === 0,
-    detail: mismatches.length === 0
-      ? '所有路由影子对账 mismatch=0'
-      : `${mismatches.length} 条路由出现差异：${mismatches.map((m) => `${m.route}=${m.n}`).join(', ')}`,
-  });
-  for (const m of mismatches) {
-    anomalies.push({ severity: 'CRITICAL', kind: 'shadow_mismatch', route: m.route, message: `路由 ${m.route} 影子对账出现 ${m.n} 次差异` });
-  }
-
-  // 规则 ② error > 0 → WARN
-  const errors = Object.entries(shadow)
-    .map(([route, s]) => ({ route, n: Number(s?.error ?? 0) }))
-    .filter((x) => x.n > 0);
-  checks.push({
-    id: 'shadow_no_error',
-    ok: errors.length === 0,
-    detail: errors.length === 0 ? '所有路由影子对账 error=0' : errors.map((e) => `${e.route}=${e.n}`).join(', '),
-  });
-  for (const e of errors) {
-    anomalies.push({ severity: 'WARN', kind: 'shadow_error', route: e.route, message: `路由 ${e.route} 影子查询执行异常 ${e.n} 次` });
-  }
-
-  // 规则 ③ cost cube exact=false → INFO
-  const costExact = cubes?.cost?.exact;
-  if (costExact === false) {
-    anomalies.push({ severity: 'INFO', kind: 'cost_cube_degraded', route: 'cost', message: '成本立方体探针发现跨格保单' });
-  }
-  checks.push({ id: 'cost_cube_exact', ok: costExact !== false, detail: costExact === false ? '探针发现跨格保单（exact=false）' : '探针通过' });
-
-  // 规则 ④ builtVersion 落后 dataVersion → WARN（含 lastError）
-  const lagged = [];
-  for (const [name, state] of Object.entries(cubes)) {
-    if (!state) continue;
-    if (state.lastError) {
-      anomalies.push({ severity: 'WARN', kind: 'cube_build_error', route: name, message: `立方体 ${name} 最近一次构建失败：${state.lastError}` });
-    }
-    if (dataVersion && state.builtVersion && state.builtVersion !== dataVersion) {
-      lagged.push({ name, built: state.builtVersion, want: dataVersion });
-    }
-  }
-  checks.push({
-    id: 'cubes_fresh',
-    ok: lagged.length === 0,
-    detail: lagged.length === 0 ? '立方体已追上当前数据版本（或尚未构建）' : lagged.map((l) => `${l.name}: built=${l.built} want=${l.want}`).join('; '),
-  });
-  for (const l of lagged) {
-    anomalies.push({ severity: 'WARN', kind: 'cube_stale', route: l.name, message: `立方体 ${l.name} builtVersion=${l.built} 落后` });
-  }
-
-  return { anomalies, checks };
-}
-
-function maxSeverity(anomalies) {
-  if (anomalies.length === 0) return null;
-  let maxKey = null;
-  let maxScore = 0;
-  for (const a of anomalies) {
-    const s = SEVERITY[a.severity] ?? 0;
-    if (s > maxScore) { maxScore = s; maxKey = a.severity; }
-  }
-  return maxKey;
-}
-
-function renderSummary({ ranAt, dataVersion, healthBody, anomalies, checks, apiBase }) {
-  const cubes = healthBody?.cubes ?? {};
-  const shadow = healthBody?.cubeShadow ?? {};
-  const overall = anomalies.length === 0 ? '✅ 健康' : `❌ ${maxSeverity(anomalies)}（${anomalies.length} 条）`;
-
-  let md = `# 立方体灰度哨兵报告\n\n`;
-  md += `- **时间**：${ranAt}\n`;
-  md += `- **环境**：${apiBase}\n`;
-  md += `- **数据版本**：${dataVersion ?? '(未取到)'}\n`;
-  md += `- **总体状态**：${overall}\n\n`;
-  md += `## 检查项\n\n`;
-  md += `| 检查 | 结果 | 说明 |\n|---|---|---|\n`;
-  for (const c of checks) {
-    md += `| ${c.id} | ${c.ok ? '✅' : '❌'} | ${c.detail} |\n`;
-  }
-  md += `\n## 立方体新鲜度\n\n`;
-  md += `| 立方体 | builtVersion | building | lastBuildMs | exact | lastError |\n|---|---|---|---|---|---|\n`;
-  for (const [name, s] of Object.entries(cubes)) {
-    md += `| ${name} | ${s.builtVersion ?? '(null)'} | ${s.building ? '是' : '否'} | ${s.lastBuildMs ?? '-'} | ${s.exact === undefined ? '-' : s.exact} | ${s.lastError ?? '-'} |\n`;
-  }
-  md += `\n## 影子对账计数（本进程累计，PM2 reload 重置）\n\n`;
-  if (Object.keys(shadow).length === 0) {
-    md += `_暂无路由触发过影子对账。_\n\n`;
-  } else {
-    md += `| 路由 | match | mismatch | error |\n|---|---:|---:|---:|\n`;
-    for (const [route, s] of Object.entries(shadow)) {
-      md += `| ${route} | ${s.match} | ${s.mismatch} | ${s.error} |\n`;
-    }
-    md += `\n`;
-  }
-  if (anomalies.length > 0) {
-    md += `## 异常清单\n\n`;
-    for (const a of anomalies) {
-      md += `- **[${a.severity}] ${a.kind}** (${a.route})：${a.message}\n`;
-    }
-    md += `\n`;
-  }
-  md += `---\n`;
-  return md;
 }
 
 // ─── 规则 ①：mismatch > 0 → CRITICAL ────────────────────────────────────────
@@ -177,23 +58,83 @@ describe('规则 ①：shadow mismatch > 0 → CRITICAL', () => {
   });
 });
 
-// ─── 规则 ②：cost.lastError != null → WARN ───────────────────────────────────
+// ─── 规则 ②：cube lastError → cost 升 CRITICAL，其他 WARN ──────────────────
 
-describe('规则 ②：cube lastError != null → WARN（等待行动 #2 升级为 CRITICAL）', () => {
-  it('fixture health-build-error：cost.lastError 非空 → 1 条 WARN cube_build_error', () => {
-    // TODO 等待行动 #2 完成：行动 #2 会将此升为 CRITICAL，届时修改期望值
+describe('规则 ②：cube lastError != null — cost 域 → CRITICAL（KPI 大盘），其他 → WARN', () => {
+  it('cost.lastError 非空 → 1 条 CRITICAL cube_build_error（影响 KPI 大盘 + cost 分析）', () => {
     const healthBody = loadFixture('health-build-error.json');
     const { anomalies } = buildAnomalies({ healthBody, dataVersion: '2026-06-14' });
     const buildErrors = anomalies.filter((a) => a.kind === 'cube_build_error');
     expect(buildErrors).toHaveLength(1);
-    expect(buildErrors[0].severity).toBe('WARN'); // 等待行动 #2 完成：届时改为 CRITICAL
+    expect(buildErrors[0].severity).toBe('CRITICAL');
+    expect(buildErrors[0].route).toBe('cost');
   });
 
-  it('lastError 信息应出现在异常 message 中', () => {
+  it('cost CRITICAL message 含"影响 KPI 大盘 + cost 分析"标记', () => {
     const healthBody = loadFixture('health-build-error.json');
     const { anomalies } = buildAnomalies({ healthBody, dataVersion: '2026-06-14' });
     const e = anomalies.find((a) => a.kind === 'cube_build_error');
+    expect(e?.message).toContain('KPI 大盘');
     expect(e?.message).toContain('DuckDB connection pool exhausted');
+  });
+
+  it('cost CRITICAL → maxSeverity=CRITICAL → 退出码 1（阻断 cron）', () => {
+    const healthBody = loadFixture('health-build-error.json');
+    const { anomalies } = buildAnomalies({ healthBody, dataVersion: '2026-06-14' });
+    expect(maxSeverity(anomalies)).toBe('CRITICAL');
+  });
+
+  it('trend.lastError 非空 → WARN（不阻断切流推进）', () => {
+    const healthBody = {
+      success: true,
+      cubes: {
+        cost: { builtVersion: '2026-06-14', exact: true, lastError: null },
+        trend: { builtVersion: '2026-06-14', exact: true, lastError: 'trend SQL syntax error in cubeSql rewriter' },
+        salesman: { builtVersion: '2026-06-14', exact: true, lastError: null },
+      },
+      cubeShadow: {},
+    };
+    const { anomalies } = buildAnomalies({ healthBody, dataVersion: '2026-06-14' });
+    const buildErrors = anomalies.filter((a) => a.kind === 'cube_build_error');
+    expect(buildErrors).toHaveLength(1);
+    expect(buildErrors[0].severity).toBe('WARN');
+    expect(buildErrors[0].route).toBe('trend');
+    expect(maxSeverity(anomalies)).toBe('WARN'); // 不阻断 cron
+  });
+
+  it('salesman.lastError 非空 → WARN（不阻断切流推进）', () => {
+    const healthBody = {
+      success: true,
+      cubes: {
+        cost: { builtVersion: '2026-06-14', exact: true, lastError: null },
+        salesman: { builtVersion: '2026-06-14', exact: true, lastError: 'salesman cube probe failed' },
+      },
+      cubeShadow: {},
+    };
+    const { anomalies } = buildAnomalies({ healthBody, dataVersion: '2026-06-14' });
+    const buildErrors = anomalies.filter((a) => a.kind === 'cube_build_error');
+    expect(buildErrors).toHaveLength(1);
+    expect(buildErrors[0].severity).toBe('WARN');
+    expect(buildErrors[0].route).toBe('salesman');
+  });
+
+  it('cost + trend 同时失败 → cost CRITICAL + trend WARN，最高 CRITICAL', () => {
+    const healthBody = {
+      success: true,
+      cubes: {
+        cost: { builtVersion: null, exact: null, lastError: 'OOM during construction' },
+        trend: { builtVersion: null, exact: null, lastError: 'syntax error' },
+      },
+      cubeShadow: {},
+    };
+    const { anomalies } = buildAnomalies({ healthBody, dataVersion: '2026-06-14' });
+    const buildErrors = anomalies.filter((a) => a.kind === 'cube_build_error');
+    expect(buildErrors).toHaveLength(2);
+    const costErr = buildErrors.find((a) => a.route === 'cost');
+    const trendErr = buildErrors.find((a) => a.route === 'trend');
+    expect(costErr.severity).toBe('CRITICAL');
+    expect(trendErr.severity).toBe('WARN');
+    expect(maxSeverity(anomalies)).toBe('CRITICAL');
   });
 
   it('lastError=null 的立方体不产出 cube_build_error 异常', () => {
