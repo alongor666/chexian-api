@@ -112,13 +112,15 @@ function makeMockDb(opts: {
  * 直接调用 materializeCostCube 并等待完成（无论成功还是报错）。
  * 比 ensureCostCubeFresh + waitFor(building===null) 更可靠，
  * 因为 building 初始即 null，waitFor 可能提前返回。
+ *
+ * 注：OOM 错误已在 materializeCostCube 内部处理（不再向外抛出，避免外层 catch 用
+ * 错误的 versionAtCatch 标记 degraded，PR #645 review fix）；非 OOM 错误仍向外抛。
  */
 async function triggerAndWaitBuild(db: DuckDBQueryable): Promise<void> {
   try {
     await materializeCostCube(db);
   } catch {
-    // OOM / 非 OOM 错误均已在 materializeCostCube 外部（ensureCostCubeFresh 的 catch 块）
-    // 处理，这里忽略——测试检查 state 而非异常本身
+    // 非 OOM 错误（Binder/语法等）——测试检查 state 而非异常本身
   }
 }
 
@@ -161,45 +163,17 @@ describe('方案 A：buildCostCubeSql 三步拆分验证', () => {
 });
 
 describe('方案 C：OOM 检测后标记 degraded，防止同版本死循环', () => {
-  it('临时表步骤抛出 OOM → exact=false, builtVersion=当前版本, lastError 含错误信息', async () => {
+  it('临时表步骤抛出 OOM → materializeCostCube 内部吞掉，state 标 degraded（PR #645 review fix）', async () => {
     const oomError = new Error('Out of Memory: cannot allocate memory (16GB limit exceeded)');
     const { db } = makeMockDb({ tempTableError: oomError });
     setDataVersion('ver-oom-01');
 
-    // 直接调用 materializeCostCube（OOM 错误会传播出来）
-    await expect(materializeCostCube(db)).rejects.toThrow('Out of Memory');
-
-    // materializeCostCube 里没有做 OOM 标记，标记在 ensureCostCubeFresh 的 .catch 里
-    // 需通过 ensureCostCubeFresh 触发才能测试 OOM 降级路径
-    resetCostCubeStateForTest();
-    setDataVersion('ver-oom-01');
-
-    // 用 ensureCostCubeFresh 触发，其 .catch 块负责 OOM 标记
-    const result = ensureCostCubeFresh(db);
-    expect(result).toBe('building');
-
-    // 等待 building Promise 完成（.catch 和 .finally 都执行后 building 变为 null）
-    await new Promise<void>((resolve) => {
-      const check = () => {
-        if (getCostCubeState().building === null) {
-          resolve();
-        } else {
-          setTimeout(check, 10);
-        }
-      };
-      // building 是 non-null Promise，等它完成
-      const state = getCostCubeState();
-      if (state.building) {
-        state.building.finally(() => setTimeout(resolve, 0));
-      } else {
-        resolve();
-      }
-    });
+    // OOM 不再向外抛（在 materializeCostCube 内部 try-catch 用 versionAtStart 处理）
+    await expect(materializeCostCube(db)).resolves.toBeUndefined();
 
     const state = getCostCubeState();
-    // 方案 C：OOM 标记 degraded
     expect(state.exact).toBe(false);
-    expect(state.builtVersion).toBe('ver-oom-'); // 前 8 字符
+    expect(state.builtVersion).toBe('ver-oom-'); // 前 8 字符（versionAtStart）
     expect(state.lastError).toContain('Out of Memory');
   });
 
@@ -278,11 +252,43 @@ describe('方案 C：OOM 检测后标记 degraded，防止同版本死循环', (
     const { db, cleanupCallCount } = makeMockDb({ tempTableError: oomError });
     setDataVersion('ver-oom-05');
 
-    // OOM 会从 materializeCostCube 传播出来
-    await expect(materializeCostCube(db)).rejects.toThrow('Out of Memory');
+    // OOM 不再向外抛（内部处理），但 finally 仍保证清理
+    await expect(materializeCostCube(db)).resolves.toBeUndefined();
 
     // 即使 OOM，清理也必须执行（finally 保证）
     expect(cleanupCallCount()).toBe(1);
+  });
+
+  it('构建期间 ETL 推进 dataVersion，OOM 降级仍绑定 versionAtStart（PR #645 review fix）', async () => {
+    // 模拟 ETL race：进入 materializeCostCube 后但抛 OOM 之前，dataVersion 被推进
+    const oomError = new Error('Out of Memory: ETL race scenario');
+    const { db: baseDb } = makeMockDb({});
+    setDataVersion('v1-build'); // versionAtStart 抓取此版本
+
+    const dbWithRace: DuckDBQueryable = {
+      ...baseDb,
+      async query<T = Record<string, unknown>>(sql: string): Promise<T[]> {
+        if (/TEMP TABLE\s+__cost_policy_dedup/i.test(sql)) {
+          // 模拟 ETL race：在 OOM 抛出之前先推进版本
+          setDataVersion('v2-newer');
+          throw oomError;
+        }
+        return baseDb.query<T>(sql);
+      },
+    };
+
+    await materializeCostCube(dbWithRace);
+
+    // 关键断言：builtVersion 绑定到 versionAtStart='v1-build' 前 8 字符 'v1-build'
+    // 而非 catch 时的 'v2-newer'（旧实现的 bug）
+    const state = getCostCubeState();
+    expect(state.exact).toBe(false);
+    expect(state.builtVersion).toBe('v1-build');
+
+    // 现在 dataVersion='v2-newer'，state.builtVersion='v1-build' → 不匹配
+    // ensureCostCubeFresh 应该重新触发构建（v2 有机会，不被 v1 的 degraded 阻塞）
+    const result = ensureCostCubeFresh(dbWithRace);
+    expect(result).toBe('building');
   });
 
   it('非 OOM 错误不触发 degraded（保持原有行为——builtVersion 和 exact 保持初始 null）', async () => {
