@@ -96,18 +96,20 @@ PAT 不能由 PAT 自铸（`POST /api/auth/tokens` 强制会话）。须**浏览
 
 | 文件 | 作用 |
 |------|------|
-| `cube-grayscale-sentinel.mjs` | 主脚本：取 `/health` + `/api/data/version` → 4 条规则判定 → 产出 verdict.json/summary.md。**不碰 GitHub** |
+| `cube-grayscale-sentinel.mjs` | 主脚本（IO 层）：取 `/health` + `/api/data/version` → 调 lib 判定 → 产出 verdict.json/summary.md。**不碰 GitHub** |
+| `lib/cube-grayscale-judge.mjs` | 纯函数 lib：`buildAnomalies` + `maxSeverity` + `renderSummary`（**判定规则唯一事实源**，单测直接 import） |
 | `../../.github/workflows/cube-grayscale-sentinel.yml` | 每小时触发的工作流，产物上传 artifact + 异常追踪 issue |
 
-## 判定规则（确定性，可复现）
+## 判定规则（确定性，可复现 — 唯一事实源在 `lib/cube-grayscale-judge.mjs`）
 
 | 规则 | 严重度 | 触发条件 | 含义 |
 |---|---|---|---|
 | ① `shadow_no_mismatch` | **CRITICAL** | `cubeShadow.*.mismatch > 0` | 立方体结果与原路径不等 — 立刻暂停切流；根因 = 口径漂移 / 立方体逻辑 bug / ETL 引入新字段值未识别 |
 | ② `shadow_no_error` | WARN | `cubeShadow.*.error > 0` | 立方体执行异常（构建失败 / 连接池耗尽），查 PM2 日志 `[CubeShadow]` |
 | ③ `cost_cube_exact` | INFO | `cubes.cost.exact === false` | **数据质量信号**：跨格保单出现（同保单批改改了机构/起保日），ETL 上游应复盘 |
-| ④ `cubes_fresh` | WARN | `cubes.*.builtVersion !== /api/data/version` | 立方体落后当前数据版本 — 通常 ETL 后预热请求自动追上，若长期落后查 cache-warmer 覆盖 |
-| 兼容 | WARN | `cubes.*.lastError != null` | 立方体最近一次构建失败 |
+| ④ `cube_build_error` (cost) | **CRITICAL** | `cubes.cost.lastError != null` | cost 立方体最近一次构建失败 — **阻断切流推进**（KPI 大盘 + cost 分析双路由失效，P95 大头域） |
+| ④' `cube_build_error` (trend/salesman) | WARN | `cubes.{trend,salesman}.lastError != null` | 其他立方体降级只影响特定路由（trend 失败 → trend+growth 回退；salesman 失败 → salesman-ranking 回退） |
+| ⑤ `cubes_fresh` | WARN | `cubes.*.builtVersion !== /api/data/version` | 立方体落后当前数据版本 — 通常 ETL 后预热请求自动追上，若长期落后查 cache-warmer 覆盖 |
 
 **退出码**：CRITICAL→1（阻断 cron 链）；其他→0（INFO/WARN 通过 `GITHUB_OUTPUT` 透出，记录到追踪 issue 但不算"红"）。
 
@@ -144,7 +146,7 @@ node scripts/sentinel/cube-grayscale-sentinel.mjs \
 
 | 想做的事 | 跑的脚本 | 决策依据 |
 |---|---|---|
-| 看灰度健康度 | `scripts/sentinel/cube-grayscale-sentinel.mjs` | 读 `/health` + 4 条规则（见脚本文件头） |
+| 看灰度健康度 | `scripts/sentinel/cube-grayscale-sentinel.mjs` | 读 `/health` + 调 `lib/cube-grayscale-judge.mjs`（判定规则唯一事实源，见上表） |
 | 判定是否可推进到下一阶段 | `scripts/release/cube-promote.mjs` | 读 ecosystem 开关 + GitHub issue 评论历史 |
 | 紧急回滚立方体行为 | `scripts/cube-rollback.mjs` | ssh + sed + reload 两道开关 |
 
