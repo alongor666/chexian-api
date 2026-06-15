@@ -55,6 +55,18 @@ async function tryGrowthCube(
 const GROWTH_GROUPBY_DIMENSIONS = ['org_level_3', 'salesman_name'] as const;
 
 /**
+ * 将 YYYY-MM-DD 日期回退 1 年，闰日 2-29 落到上年 2-28（7a2849 二轮修复）。
+ * 严格要求入参已通过 isValidDateFormat 校验，故只做字符级解析，不再防御性兜底。
+ */
+function shiftDateBackOneYear(yyyyMMdd: string): string {
+  const [y, m, d] = yyyyMMdd.split('-').map(Number);
+  if (m === 2 && d === 29) {
+    return `${y - 1}-02-28`;
+  }
+  return `${String(y - 1).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/**
  * 解析并白名单校验 groupBy（CSV → string[]）。
  * 任一字段不在白名单 → 抛 400（防 SQL 注入 + 明确报错）。
  */
@@ -194,9 +206,15 @@ router.get(
       return;
     }
 
-    // custom 增长类型：日期由 currentPeriod/baselinePeriod 分别控制，
-    // whereClause 中不能包含日期条件，否则会与 baselinePeriod 的日期范围冲突导致基期数据为 0
-    const filterParamsForWhere = growthType === 'custom' && baselineStart && baselineEnd
+    // 日期窗剥离策略：
+    // - custom + baseline：完全由 currentPeriod/baselinePeriod 控制（已有）
+    // - yoy/ytd + startDate/endDate：7a2849 二轮修复 — 剥离日期改走 currentPeriod/previousPeriod
+    //   双窗口构造，避免 whereClause 共用日期把 previous 也限到当年（owner review fix）
+    const stripDatesFromWhere =
+      (growthType === 'custom' && baselineStart && baselineEnd) ||
+      ((growthType === 'yoy' || growthType === 'ytd') && Boolean(startDate) && Boolean(endDate));
+
+    const filterParamsForWhere = stripDatesFromWhere
       ? { ...filterResult.data, startDate: undefined, endDate: undefined }
       : filterResult.data;
 
@@ -226,6 +244,16 @@ router.get(
       }
       config.baselinePeriod = { startDate: baselineStart, endDate: baselineEnd };
       config.currentPeriod = { startDate, endDate };
+    } else if ((growthType === 'yoy' || growthType === 'ytd') && startDate && endDate) {
+      // 7a2849 二轮修复：yoy/ytd 把当年窗 + 去年同期窗显式传给生成器，避免 whereClause 共用 startDate/endDate
+      if (!isValidDateFormat(startDate) || !isValidDateFormat(endDate)) {
+        throw new AppError(400, 'Invalid date format. Expected YYYY-MM-DD');
+      }
+      config.currentPeriod = { startDate, endDate };
+      config.previousPeriod = {
+        startDate: shiftDateBackOneYear(startDate),
+        endDate: shiftDateBackOneYear(endDate),
+      };
     }
 
     const sql = generateGrowthQuery(config);
