@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "message": "dataReady",
+  "cubes": {
+    "cost": {
+      "builtVersion": "2026-06-14",
+      "building": false,
+      "lastBuildMs": 1500,
+      "exact": false,
+      "lastError": null
+    }
+  },
+  "cubeShadow": {
+    "kpi": { "match": 100, "mismatch": 0, "error": 0 }
+  }
+}
