@@ -106,31 +106,49 @@ export function isCostCubeServable(args: CostCubeServabilityArgs): CubeServabili
 // ── 构建 SQL ─────────────────────────────────────────────────────────────────
 
 /**
- * 生成立方体构建 SQL。
- * 去重 CTE 与 sql/shared/policy-dedup.ts 的 buildPolicyDedupCTE 同口径
- * （GROUP BY policy_no+起保日 / SUM 净额 / HAVING>0 / 维度 ANY_VALUE /
- * 排除起保日为空），赔款按去重后保单归属一次（B252）。
+ * 生成立方体构建 SQL 序列（方案 A：分阶段 TEMP TABLE 物化，根治内存峰值）。
+ *
+ * 返回三条 SQL，调用方须按顺序逐条执行：
+ *   [0] 临时去重表：CREATE OR REPLACE TEMP TABLE __cost_policy_dedup AS ...
+ *       将 260 万行 PolicyFact 按 B252 口径去重（GROUP BY policy_no + 起保日 /
+ *       SUM 净额 / HAVING>0 / 维度 ANY_VALUE / 排除起保日为空），结果落盘到
+ *       DuckDB TEMP TABLE（允许溢出磁盘，不受内存限制）。
+ *   [1] 主表：CREATE OR REPLACE TABLE ${COST_CUBE_TABLE} AS ...
+ *       从轻量 TEMP TABLE LEFT JOIN ClaimsAgg 后 GROUP BY ALL，内存压力大幅
+ *       降低（输入已从 260 万行压缩为去重后保单级，约减 90%+）。
+ *   [2] 清理：DROP TABLE IF EXISTS __cost_policy_dedup
+ *       避免 TEMP TABLE 在连接生命周期内持续占用内存。
+ *
+ * SQL 语义与原单条版本完全等价：去重逻辑 / HAVING / 维度列 / 聚合字段均不变，
+ * 仅执行结构拆分为三步。
+ *
  * @param hasBranchCode - PolicyFact schema 是否含 branch_code（由物化器探测后传入）
+ * @returns [建临时去重表SQL, 建主表SQL, 清理临时表SQL]
  */
-export function buildCostCubeSql(hasBranchCode: boolean): string {
+export function buildCostCubeSql(hasBranchCode: boolean): [string, string, string] {
   const dims = [
     ...COST_CUBE_DIMENSIONS,
     ...(hasBranchCode ? COST_CUBE_OPTIONAL_DIMENSIONS : []),
   ];
-  return `
+
+  // 第一步：B252 去重物化到 TEMP TABLE（允许 DuckDB 溢出磁盘，打破内存上限）
+  const tempTableSql = `
+    CREATE OR REPLACE TEMP TABLE __cost_policy_dedup AS
+    SELECT
+      policy_no,
+      CAST(insurance_start_date AS DATE) AS insurance_start_date,
+      SUM(premium) AS premium,
+      SUM(COALESCE(fee_amount, 0)) AS fee_amount,
+      ${dims.map((d) => `ANY_VALUE(${d}) AS ${d}`).join(',\n      ')}
+    FROM PolicyFact
+    WHERE insurance_start_date IS NOT NULL
+    GROUP BY policy_no, CAST(insurance_start_date AS DATE)
+    HAVING SUM(premium) > 0
+  `;
+
+  // 第二步：从轻量去重表 LEFT JOIN ClaimsAgg 后聚合成格子（内存压力大幅降低）
+  const mainTableSql = `
     CREATE OR REPLACE TABLE ${COST_CUBE_TABLE} AS
-    WITH policy_dedup AS (
-      SELECT
-        policy_no,
-        CAST(insurance_start_date AS DATE) AS insurance_start_date,
-        SUM(premium) AS premium,
-        SUM(COALESCE(fee_amount, 0)) AS fee_amount,
-        ${dims.map((d) => `ANY_VALUE(${d}) AS ${d}`).join(',\n        ')}
-      FROM PolicyFact
-      WHERE insurance_start_date IS NOT NULL
-      GROUP BY policy_no, CAST(insurance_start_date AS DATE)
-      HAVING SUM(premium) > 0
-    )
     SELECT
       d.insurance_start_date,
       ${dims.map((d) => `d.${d}`).join(',\n      ')},
@@ -139,10 +157,15 @@ export function buildCostCubeSql(hasBranchCode: boolean): string {
       COUNT(*) AS policy_cnt,
       SUM(COALESCE(c.claim_cases, 0)) AS claim_cases_sum,
       SUM(COALESCE(c.reported_claims, 0)) AS reported_claims_sum
-    FROM policy_dedup d
+    FROM __cost_policy_dedup d
     LEFT JOIN ClaimsAgg c ON d.policy_no = c.policy_no
     GROUP BY ALL
   `;
+
+  // 第三步：清理临时表，避免占用连接内存
+  const cleanupSql = `DROP TABLE IF EXISTS __cost_policy_dedup`;
+
+  return [tempTableSql, mainTableSql, cleanupSql];
 }
 
 /**

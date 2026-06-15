@@ -185,7 +185,36 @@ export async function materializeCostCube(db: DuckDBQueryable): Promise<void> {
     return;
   }
 
-  await db.query(buildCostCubeSql(hasBranchCode));
+  // 方案 A：分阶段执行三条 SQL（建临时去重表 → 主表 JOIN 聚合 → 清理临时表）
+  // 每步在独立 statement 中运行，DuckDB TEMP TABLE 允许溢出磁盘，根治内存峰值。
+  const [tempTableSql, mainTableSql, cleanupSql] = buildCostCubeSql(hasBranchCode);
+  try {
+    await db.query(tempTableSql);   // 步骤 1：B252 去重物化到临时表
+    await db.query(mainTableSql);  // 步骤 2：轻量 JOIN 聚合成格子
+  } catch (err) {
+    // 方案 C：OOM 降级在 versionAtStart 作用域内处理（PR #645 review fix）。
+    // 防止构建期间 ETL 推进 dataVersion 时，外层 catch 用 getDataVersion() 把
+    // 新版本无辜标 degraded（新版本可能不会 OOM，应留给后续 ensureCostCubeFresh
+    // 重新尝试构建的机会）。
+    const message = err instanceof Error ? err.message : String(err);
+    if (/Out of Memory|OOM|memory_limit/i.test(message)) {
+      costCubeState.builtVersion = versionAtStart;
+      costCubeState.exact = false;
+      costCubeState.lastError = message;
+      costCubeState.lastBuildMs = Date.now() - t0;
+      console.warn(
+        `[CostCube] OOM 检测到，标记 degraded（exact=false, builtVersion=${versionAtStart}）。` +
+        `本数据版本不再重试，cost 路由回退原 SQL。下次 ETL 更新后自动重试。`
+      );
+      return; // 不 rethrow，外层 ensureCostCubeFresh 的 catch 不再处理 OOM
+    }
+    throw err; // 非 OOM 错误（Binder/语法等）由外层 catch 记录
+  } finally {
+    // 步骤 3：无论成功失败都清理临时表，避免内存泄漏
+    await db.query(cleanupSql).catch((e: unknown) => {
+      console.warn(`[CostCube] TEMP TABLE 清理失败（非致命）: ${e instanceof Error ? e.message : String(e)}`);
+    });
+  }
 
   const [{ n }] = await db.query<{ n: number }>(`SELECT COUNT(*) AS n FROM ${COST_CUBE_TABLE}`);
   const elapsed = Date.now() - t0;
@@ -211,9 +240,12 @@ export function ensureCostCubeFresh(db: DuckDBQueryable): 'ready' | 'building' |
   if (!costCubeState.building) {
     costCubeState.building = materializeCostCube(db)
       .catch((err: unknown) => {
+        // OOM 已在 materializeCostCube 内部用 versionAtStart 处理（PR #645 review fix）；
+        // 这里只处理非 OOM 错误（Binder/语法/连接错），记录后保持 builtVersion=null
+        // 允许下次重试。
         const message = err instanceof Error ? err.message : String(err);
         costCubeState.lastError = message;
-        console.error(`[CostCube] Materialization failed (route will keep falling back): ${message}`);
+        console.error(`[CostCube] 物化失败（路由持续回退原路径）: ${message}`);
       })
       .finally(() => {
         costCubeState.building = null;
