@@ -1,13 +1,14 @@
 /**
  * 客户来源去向分析路由
  *
- * 数据源：CustomerFlow VIEW
+ * 数据源：CustomerFlow VIEW（派生自 PolicyFact，BACKLOG 86d10f）
  * 端点：/api/query/customer-flow/*
+ * RLS：消费 req.permissionFilter，org_user/telemarketing_user/branch_admin 自动按权限隔离
  */
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache, requireBranchAdmin } from './shared.js';
+import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache, parseFiltersAndBuildWhere } from './shared.js';
 import {
   generateInflowQuery,
   generateOutflowQuery,
@@ -18,11 +19,6 @@ import {
 } from '../../sql/customer-flow.js';
 
 const router = Router();
-
-// RLS 整域绕过紧急止血（BACKLOG 2026-06-11-claude-942414 / P0）
-// CustomerFlow VIEW 无 org_level_3/branch_code/is_telemarketing 字段，
-// 无法注入 permissionFilter，整域退化为 admin-only 等待长期 ETL 字段扩充。
-router.use(requireBranchAdmin);
 
 // 集中式惰性域加载中间件（per MAT-01）：CustomerFlow
 router.use(createDomainMiddleware('CustomerFlow'));
@@ -43,7 +39,8 @@ router.get(
   withRouteCache('customer-flow-summary'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const data = await duckdbService.query(generateFlowSummaryQuery(filters));
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const data = await duckdbService.query(generateFlowSummaryQuery(filters, whereClause));
     res.json({ success: true, data: data[0] ?? {} });
   })
 );
@@ -54,7 +51,8 @@ router.get(
   withRouteCache('customer-flow-inflow'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const data = await duckdbService.query(generateInflowQuery(filters));
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const data = await duckdbService.query(generateInflowQuery(filters, whereClause));
     res.json({ success: true, data });
   })
 );
@@ -65,7 +63,8 @@ router.get(
   withRouteCache('customer-flow-outflow'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const data = await duckdbService.query(generateOutflowQuery(filters));
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const data = await duckdbService.query(generateOutflowQuery(filters, whereClause));
     res.json({ success: true, data });
   })
 );
@@ -76,7 +75,8 @@ router.get(
   withRouteCache('customer-flow-trend'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const data = await duckdbService.query(generateFlowTrendQuery(filters));
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const data = await duckdbService.query(generateFlowTrendQuery(filters, whereClause));
     res.json({ success: true, data });
   })
 );
@@ -85,8 +85,9 @@ router.get(
 router.get(
   '/customer-flow/metadata',
   withRouteCache('customer-flow-metadata', 14_400_000),
-  asyncHandler(async (_req, res) => {
-    const data = await duckdbService.query(generateFlowMetadataQuery());
+  asyncHandler(async (req, res) => {
+    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const data = await duckdbService.query(generateFlowMetadataQuery(whereClause));
     res.json({ success: true, data: data[0] ?? {} });
   })
 );

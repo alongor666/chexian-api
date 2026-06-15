@@ -453,11 +453,9 @@ export class DataBootstrapper {
       console.timeEnd('[Bootstrap:Lazy] BrandDim');
     });
 
-    // CustomerFlow（仅客户来源页）
+    // CustomerFlow（仅客户来源页；BACKLOG 86d10f 后改为从 PolicyFact 派生，不再读独立 parquet）
     this.lazyRegistry.register('CustomerFlow', async () => {
-      const p = getCustomerFlowPaths().find(p => fs.existsSync(p));
-      if (!p) return;
-      await domainLoaders.loadCustomerFlow(db, p);
+      await domainLoaders.loadCustomerFlow(db);
     });
 
     // NewEnergyClaims（新能源出险信息全量快照）
