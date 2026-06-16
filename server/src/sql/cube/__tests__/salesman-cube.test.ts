@@ -64,6 +64,8 @@ describe('rewriteSalesmanSqlForCube / generateSalesmanRankingCubeQuery', () => {
       expect(cube).toContain('SUM(premium_sum) as total_premium');
       expect(cube).toContain('SUM(row_cnt) as policy_count');
       expect(cube).toContain('ORDER BY total_premium DESC');
+      // Tie-break：两人保费相等时排序须确定（防 burn-in 抓到的 cube vs legacy 第 N 名差异，PR #9）
+      expect(cube).toContain('ORDER BY total_premium DESC, salesman_name ASC, org_level_3 ASC');
       expect(cube).toContain('LIMIT 20');
       expect(cube).not.toMatch(/\bPolicyFact\b/);
       expect(cube).not.toMatch(/\bSUM\(premium\)/);
