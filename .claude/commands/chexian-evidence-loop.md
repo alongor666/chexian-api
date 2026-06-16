@@ -28,12 +28,12 @@ last_updated: "2026-06-16"
 |---|---|
 | §4 harness 映射表 | [.claude/rules/evidence-loop.md §4](../rules/evidence-loop.md) — 6 类任务的实际命令（bench / golden-baseline / cube-shadow / duckdb 直查 / verify:full / governance / sentinel） |
 | verifier agent | [.claude/agents/evidence-verifier.md](../agents/evidence-verifier.md)（项目级，提示词源自基座 `verifier-agent-template.md`） |
-| scorecard 落位 | `.claude/shared-memory/`（基座 §8 阶段 C 步骤 4） |
+| scorecard 落位 | `.claude/workflow/pr-evolution.md`（append；与 `commit-push-pr-core` 自进化日志同位置）。**禁止** `.claude/shared-memory/**` / `~/.claude/projects/**/memory/**` —— AGENTS.md §8.3 user-only |
 | 项目治理 / 回归门禁 | `bun run governance`（聚合 32+ 项）/ `bun run verify:full`（governance + 单元测试） |
 
 ### 3. 本项目特例（覆盖基座通用项）
 
-- **scorecard 不新建 `docs/perf/` 等目录**，统一写 `.claude/shared-memory/`。
+- **scorecard 不新建 `docs/perf/` 等目录**，append 到 `.claude/workflow/pr-evolution.md`（AI 可写；与 commit-push-pr-core 自进化日志共享文件）。AGENTS.md §8.3 列的 user-only 路径（`.claude/shared-memory/**` 等）**只读不写**。
 - **发布安全机制**：立方体专项有 `cube-promote.mjs` / `cube-rollback.mjs` / sentinel；其他类型按本项目 rule §4 表的"发布安全"列。
 - **验证证据红线**：声明"完成"前必须出现 `curl` / `duckdb` / `bun run verify:full` 等命令的真实输出（`CLAUDE.md §0` / §6）。
 

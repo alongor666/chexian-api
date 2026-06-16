@@ -29,7 +29,7 @@ policy: append-only
 
 ## 本项目特例
 
-- **scorecard 落位**：基座 §8 阶段 C 步骤 4 写入 `.claude/shared-memory/`（**不新建 `docs/perf/` 等目录**）。
+- **scorecard 落位**：基座 §8 阶段 C 步骤 4 写入 **`.claude/workflow/pr-evolution.md`**（append 到尾部，性质与 `commit-push-pr-core` 的"自进化日志"一致）。**禁止**写入 `.claude/shared-memory/**` 或 `~/.claude/projects/**/memory/**` —— 这两个路径在 AGENTS.md §8.3 标为 user-only，AI 仅可只读引用。**不新建 `docs/perf/` 等目录**。
 - **verifier 隔离**：correctness / 度量 / 发布风险优先交给**确定性脚本**（影子对账 / bench / `bun run governance` / sentinel），不用 LLM subagent 去做。收尾时调本项目 `.claude/agents/evidence-verifier.md`（fresh-context）。
 - **立方体专项**作为"性能 → 项目特化"实例，其 cube-shadow / cube-promote / cube-rollback 是发布安全机制的具体实现，不是基座要求。
 
