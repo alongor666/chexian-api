@@ -1,8 +1,11 @@
 name: cli-perf-sentinel
 
-# cx CLI 性能哨兵：PR 触发跑冷启动基准（A 档），p95 > 50ms 阻断 merge。
-# 只测 A 档（机器无关），B/C/D 涉及网络抖动 + 生产限流，留给本地 bun run bench 跑。
-# 收益边界：防止 cx 启动时间因新依赖膨胀 / circular import 退化。
+# cx CLI 性能哨兵：PR 触发跑冷启动基准（A 档），p95 > 250ms 阻断 merge。
+# 阈值 250ms 是「GitHub Actions ubuntu-latest 共享 runner 上不退化」的护栏，
+# **本地北极星目标 50ms** 由 `bun run bench:check` 守（targets.A_cold_start_p95_ms）。
+# 两层守护：CI 抓「新依赖膨胀 / circular import / 异步副作用」级别的退化（>5x runner 基线），
+#          本地抓「真实用户感知」级别的退化（>50ms）。
+# B/C/D/E 涉及网络抖动 + 生产限流，不进 CI 闸，留给本地 bun run bench 跑。
 
 on:
   pull_request:
@@ -13,7 +16,7 @@ on:
 
 jobs:
   cold-start:
-    name: cx 冷启动 p95 ≤ 50ms
+    name: cx 冷启动 p95 ≤ 250ms (CI runner)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -36,20 +39,25 @@ jobs:
           node cli/scripts/benchmark.mjs --n=15 --only=A > /tmp/bench.json
           cat /tmp/bench.json
 
-      - name: Gate A 档 p95
+      - name: Gate A 档 p95（CI runner 阈值 250ms）
         run: |
           P95=$(jq '.metrics.A_cold_start_ms.p95' /tmp/bench.json)
-          TARGET=50
-          echo "::notice::cx 冷启动 p95 = ${P95}ms (target ${TARGET}ms)"
-          echo "## cx CLI 冷启动 p95" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 指标 | 值 | 目标 | 状态 |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$P95" -le "$TARGET" ]; then
-            echo "| A 冷启动 p95 (ms) | $P95 | ≤ $TARGET | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          CI_TARGET=250
+          LOCAL_TARGET=50
+          echo "::notice::cx 冷启动 p95 = ${P95}ms (CI gate ≤${CI_TARGET}ms, local target ≤${LOCAL_TARGET}ms)"
+          {
+            echo "## cx CLI 冷启动 p95"
+            echo ""
+            echo "| 指标 | 值 | CI 闸 | 本地目标 | 状态 |"
+            echo "|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$P95" -le "$CI_TARGET" ]; then
+            echo "| A 冷启动 p95 (ms) | $P95 | ≤ $CI_TARGET | ≤ $LOCAL_TARGET | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "本地北极星目标由 \`bun run bench:check\` 守（targets.A_cold_start_p95_ms=50）。" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           else
-            echo "| A 冷启动 p95 (ms) | $P95 | ≤ $TARGET | ❌ |" >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::cx CLI 冷启动 p95 ${P95}ms 超过硬阈值 ${TARGET}ms — 排查新依赖 / circular import / 异步副作用"
+            echo "| A 冷启动 p95 (ms) | $P95 | ≤ $CI_TARGET | ≤ $LOCAL_TARGET | ❌ |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::cx CLI 冷启动 p95 ${P95}ms 超过 CI 硬阈值 ${CI_TARGET}ms — 排查新依赖 / circular import / 异步副作用"
             exit 1
           fi
