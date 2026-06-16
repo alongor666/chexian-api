@@ -61,3 +61,11 @@
 - **根因 2**: sub-agent 自报"22/22 测试通过"用的是 `bun run test` (vitest + esbuild)，esbuild 不做严格类型检查；`tsc --noEmit` 严格，发现 mock 缺接口方法。两条工具链严格度不一致重蹈 2026-05-31 PR #459 覆辙（vite build vs tsc）
 - **修复**: 等 sub-agent 完成通知（任务尾部跑 tests 时它实际没补 mock）；主会话手工 Edit 补 3 个 mock 方法（`hasRelation`/`dropRelationIfExists`/`invalidateCache`）；切到新 worktree 分支 `fix/cost-cube-oom-a-c` 基于 `origin/main` 隔离 PR-2 不污染 PR-1
 - **预防**: ①sub-agent prompt 模板里强调"跑 `bun run typecheck` 验证 mock 类型完整"，不要只跑 vitest；②`bun run typecheck` 是 §3.3 治理校验链一部分（已在 2026-05-31 加），但仅 sub-agent 自己跑时不在它的验收单 → 在 sub-agent prompt 模板加"最终验收必跑 typecheck"明确要求；③stash → push 路径在 worktree 有 in_progress sub-agent 时不可靠，应等 sub-agent 完成通知再 push；④sub-agent 文件写完成位置不可预测时，PR 拆分必须切新分支基于 `origin/main`（不能复用 worktree 当前分支累积 commit）
+
+### 2026-06-15 — PR #647: benchmark 写盘未 warmup + CI/本地硬件差异未分层
+- **症状**: cx CLI 性能优化 PR owner review 揪出两个事实问题：① `cli/perf-baseline.json` 写盘的是带 outlier 的 N=20（A p95=96ms），与 PR body/docs 宣称的 A=17ms / E=964ms / 6.9x 不符；② `bench:check` 只比当前 vs baseline（回归校验），baseline 一次"写差了"就把目标永久放宽，自净化机制实质失效；③ 推 fix commit 后 CI 闸 50ms 失败（runner 实测 172ms），把"runner 硬件慢"误当成"代码退化"
+- **根因 1**: spawn 档（A/B）首次跑受 OS 磁盘 cold + Bun runtime 首次 link 影响，p95 outlier 直接放进 baseline——稳定测的前提（warmup K 次丢弃）从未存在
+- **根因 2**: 自净化只设了"回归阈值"（vs baseline 上次），没有"目标阈值"（vs targets 北极星）——两者必须同时校验，否则 baseline 自身漂移即等于目标失守
+- **根因 3**: CI 闸用了与本地相同的绝对阈值，但 GitHub Actions ubuntu-latest 共享 runner 性能 ~5-10x 慢于 M-series Mac；CI 本意是防退化（catch >5x runner 基线变化），与本地"真实用户感知"目标是两个层次
+- **修复**: 抽 `resolveBatchRoute` 纯函数 + 12 用例覆盖 `/health` 直通 bug（commit `ce032856`）；benchmark 加 `--warmup`（默认 3）+ bench:check 双校验（回归 A+E / 目标 `targets`）；`perf-baseline.json` 结构分层 `targets`（强校验，仅 A+E 核心承诺）+ `aspirational_targets`（理想，B+C，仅展示）；CI 闸调 50→250ms 配 workflow summary 标明双层阈值（commit `232f8eaa`）
+- **预防**: ①性能 baseline 写盘前必带 warmup（已写进 docs/cli-perf-baseline.md §2）。同类失败再发生 1 次 → benchmark 写盘失败时若 `(p95 - p50) / p50 > 2.0`（高离散度）直接拒绝写。②自净化机制设计必同时含「回归校验 + 目标校验」两层，避免 baseline 自漂移破坏目标守护——后续性能/质量类 baseline 都应采用此模式。③CI 闸与本地阈值分离：CI 闸用 runner 上实际可达的宽阈值（防退化），本地用真实用户感知的严阈值（守目标）；workflow summary 必同时列两层并解释"为什么"。④PR body 数字必须从 baseline 文件 jq 取或留"以 baseline 为准"说明，禁止手抄绝对值（2026-06-15 事故的直接触发点）
