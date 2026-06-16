@@ -5,16 +5,12 @@
  * 不包含判定逻辑（见 shadow-judge.mjs）。
  */
 
+import { CUBE_ROUTES } from '../../shared/cube-routes.mjs';
+
 // ─── 路由清单 ────────────────────────────────────────────────────
 
-/** 5 个 burn-in 目标路由（路由表与 /health cubeShadow key 对应）*/
-export const ROUTES = Object.freeze([
-  { key: 'trend',            path: '/api/query/trend',             shadowKey: 'trend'            },
-  { key: 'growth',           path: '/api/query/growth',            shadowKey: 'growth'           },
-  { key: 'cost',             path: '/api/query/cost',              shadowKey: 'cost'             },
-  { key: 'kpi',              path: '/api/query/kpi',               shadowKey: 'kpi'              },
-  { key: 'salesman',         path: '/api/query/salesman-ranking',  shadowKey: 'salesman-ranking' },
-]);
+/** re-export 给本 lib 测试用（SSOT 在 scripts/shared/cube-routes.mjs）*/
+export const ROUTES = CUBE_ROUTES;
 
 // ─── 工具函数 ────────────────────────────────────────────────────
 
