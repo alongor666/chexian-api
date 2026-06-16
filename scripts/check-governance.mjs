@@ -2649,6 +2649,60 @@ function checkCubeVersionBinding() {
   return true;
 }
 
+/**
+ * 防 5 路由清单 SSOT 漂移（PR #653 漏改 cube-promote-judge.mjs 教训）。
+ *
+ * scripts/shared/cube-routes.mjs 是 5 路由清单的唯一事实源。其他文件不得 inline
+ * 重复定义 5 路由字面量数组（含顺序），
+ * 必须从 SSOT import SHADOW_KEYS。
+ *
+ * 历史：evidence-verifier 在 PR #653 后查到 scripts/release/lib/cube-promote-judge.mjs:28
+ * 仍有 inline SHADOW_ROUTES 定义（PR #648 lib 产物，#653 漏改），独立维护同样清单。
+ */
+function checkCubeRoutesSSOT() {
+  info('检查 5 路由清单 SSOT 漂移防回归（PR #653 教训）...');
+  const SSOT_FILE = 'scripts/shared/cube-routes.mjs';
+  // 限定数组字面量：必须 `[` 开头才报（防止注释里的提示文字误命中）
+  const FORBIDDEN_RE = /\[\s*['"]trend['"]\s*,\s*['"]growth['"]\s*,\s*['"]cost['"]\s*,\s*['"]kpi['"]\s*,\s*['"]salesman-ranking['"]\s*\]/;
+  const SCAN_DIRS = ['scripts', 'server/src'];
+  const offenders = [];
+
+  for (const dir of SCAN_DIRS) {
+    const fullDir = path.join(ROOT_DIR, dir);
+    if (!fs.existsSync(fullDir)) continue;
+    walkDir(fullDir, (filePath) => {
+      const rel = path.relative(ROOT_DIR, filePath);
+      if (rel === SSOT_FILE) return;
+      if (!/\.(mjs|js|ts)$/.test(rel)) return;
+      if (rel.includes('__tests__') || rel.includes('node_modules')) return;
+      const src = fs.readFileSync(filePath, 'utf-8');
+      if (FORBIDDEN_RE.test(src)) {
+        offenders.push(rel);
+      }
+    });
+  }
+
+  if (offenders.length > 0) {
+    error('5 路由清单 SSOT 漂移失败：以下文件 inline 定义了 5 路由字面量');
+    for (const f of offenders) error(`  - ${f}`);
+    error('  修复路径：');
+    error(`    1) 从 ${SSOT_FILE} import { SHADOW_KEYS } 或 { CUBE_ROUTES }`);
+    error('    2) 不要 inline 重复 5 路由字面量数组');
+    return false;
+  }
+  success(`5 路由清单仅在 SSOT 定义（${SSOT_FILE}），其他文件均 import 派生`);
+  return true;
+}
+
+function walkDir(dir, cb) {
+  for (const name of fs.readdirSync(dir)) {
+    const full = path.join(dir, name);
+    const stat = fs.statSync(full);
+    if (stat.isDirectory()) walkDir(full, cb);
+    else if (stat.isFile()) cb(full);
+  }
+}
+
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件', fn: checkRequiredFiles },
@@ -2683,6 +2737,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'Agent注册表版本', fn: checkAgentRegistryVersionBump },
   { name: '立方体影子对账容差', fn: checkCubeShadowTolerance },
   { name: 'RLS路由消费覆盖', fn: checkRlsRouteCoverage },
+  { name: '5路由清单SSOT', fn: checkCubeRoutesSSOT },
   { name: '立方体影子路由覆盖', fn: checkCubeShadowRouteCoverage },
   { name: '立方体SQL三件套', fn: checkCubeSqlThreePieceShape },
   { name: '立方体版本绑定', fn: checkCubeVersionBinding },
