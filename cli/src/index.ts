@@ -207,9 +207,15 @@ program
     }),
   )
   .addHelpText('after', `
+路由寻址（同 cx query）:
+  catalog key   route: "KPI"                  → 大小写/连字符宽容（/-_ 互通）
+  catalog path  route: "/kpi"                 → 包装为 /api/query/kpi
+  /api/* 直通   route: "/api/data/version"    → 不加前缀
+  顶层直通      route: "/health"              → 不在 catalog 时 fall back 顶层
+
 示例:
-  $ printf '{"route":"/health"}\\n%.0s' {1..100} | cx batch --summary
-  $ cat queries.jsonl | cx batch --concurrency=16 --summary
+  $ echo '{"route":"KPI","params":{"year":2026}}' | cx batch --summary
+  $ printf '{"route":"/health"}\\n%.0s' {1..50} | cx batch --concurrency=4 --summary
   $ cx routes --format=json | jq -c '.[] | {route: .path}' | cx batch`);
 
 const configCmd = program

@@ -109,6 +109,40 @@ function quantile(arr: number[], q: number): number {
 }
 
 /**
+ * batch 路径解析（纯函数，便于单测）。
+ *
+ * 输入 raw 三种形态 + 解析规则：
+ *   1) catalog key（不以 / 开头）          → 走 resolveTarget 宽容匹配（KPI / kpi / 'claims-detail-heatmap' 等）
+ *   2) /api/* 顶层 API path（含 query/data/auth 等）  → 直通，不再加前缀
+ *   3) / 开头的 catalog 登记 path（如 /kpi）            → 包装为 catalog 登记的 fullPath（带 /api/query）
+ *   4) / 开头但 catalog 未登记的顶层 path（如 /health） → **直通顶层**（修正：旧实现错误包装为 /api/query/health）
+ *
+ * 返回 { fullPath } 或 null（catalog key 未命中）。
+ */
+export function resolveBatchRoute(
+  raw: string,
+  catalog: RouteMeta[] | null,
+): { fullPath: string } | null {
+  // 非 / 开头：catalog key 寻址
+  if (!raw.startsWith('/')) {
+    if (!catalog) return null;
+    const hit = resolveTarget(raw, catalog);
+    return hit ? { fullPath: hit.fullPath } : null;
+  }
+  // /api/* 直通（含 /api/query/*、/api/data/*、/api/auth/*）
+  if (raw.startsWith('/api/')) {
+    return { fullPath: raw };
+  }
+  // / 开头：先查 catalog（/kpi 等登记 path）
+  if (catalog) {
+    const byCatalog = catalog.find((r) => r.path === raw);
+    if (byCatalog) return { fullPath: byCatalog.fullPath };
+  }
+  // catalog miss：顶层直通（/health 等）
+  return { fullPath: raw };
+}
+
+/**
  * 并发池：连续吃 inputs 队列，concurrency 个 worker 共享同一全局 dispatcher（keep-alive 复用）。
  * inputs 顺序保留（输出按 inputs 索引写回，而非完成顺序）。
  */
@@ -135,7 +169,8 @@ export async function batchCommand(opts: BatchOpts): Promise<void> {
   try {
     if (process.stdin.isTTY) {
       console.error('cx batch: 期望从 stdin 读 JSONL（每行 {route, params?}），交互模式无 stdin。');
-      console.error('示例: echo \'{"route":"/health"}\' | cx batch');
+      console.error('示例: echo \'{"route":"KPI","params":{"year":2026}}\' | cx batch --summary');
+      console.error('      echo \'{"route":"/health"}\' | cx batch          # 顶层直通');
       process.exit(4);
     }
     const inputs = await readStdinLines();
@@ -152,15 +187,12 @@ export async function batchCommand(opts: BatchOpts): Promise<void> {
       catalog = null;
     }
     const routeResolver = async (raw: string) => {
-      if (raw.startsWith('/')) {
-        // path 直通跳过 catalog 解析
-        return { fullPath: raw.startsWith('/api/') ? raw : `/api/query${raw}` };
-      }
-      if (!catalog) {
+      // catalog 未拉到（fetch 失败）+ 非 / 开头的 key：触发一次强制刷新
+      if (!catalog && !raw.startsWith('/')) {
         const r = await resolveWithRefresh(raw, fetchCatalog);
         return r.route;
       }
-      return resolveTarget(raw, catalog);
+      return resolveBatchRoute(raw, catalog);
     };
 
     const start = performance.now();
