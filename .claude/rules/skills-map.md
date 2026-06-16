@@ -67,6 +67,7 @@
 | **sql-pro** | DuckDB 复杂 SQL 优化（窗口函数 / CTE / 执行计划） |
 | **chexian-crystallize-skill** | "沉淀成 skill / 固化成技能" → 五步流水线。铁律「改在仓库·装到本地·本地只读」，详见 memory `project_skills_maintenance_model` |
 | **cleanup-worktrees** | "清理/回收 worktree" → 安全回收器，默认只删零损失（`--dry-run` 盘点 / `--archive` 备份后清理） |
+| **/chexian-evidence-loop**（基座 `evidence-loop-core`） | "按证据闭环做 / evidence loop / 先建 harness 再动手" → 三阶段（harness 报告 → loop checkpoint → verifier 证伪）。本项目 §4 表见 `.claude/rules/evidence-loop.md` |
 
 ---
 
