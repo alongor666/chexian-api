@@ -5,6 +5,10 @@ import { QUALITY_BUSINESS_CONDITION } from './shared/business-conditions.js';
 
 /**
  * 业务员全部业务 TopN 排名查询
+ *
+ * Tie-break：total_premium 相等时，DuckDB ORDER BY 是非稳定排序，不同执行计划
+ * 返回不同顺序——burn-in 影子对账抓到 cube 与 legacy 第 8 名差异（PR #9 实测）。
+ * 加 salesman_name / org_level_3 二级排序：业务上无差，技术上确定。
  */
 export function generateSalesmanAllBusinessRankingQuery(
   whereClause: string,
@@ -19,13 +23,15 @@ export function generateSalesmanAllBusinessRankingQuery(
     FROM PolicyFact
     WHERE ${whereClause}
     GROUP BY salesman_name, org_level_3
-    ORDER BY total_premium DESC
+    ORDER BY total_premium DESC, salesman_name ASC, org_level_3 ASC
     LIMIT ${limit}
   `;
 }
 
 /**
  * 业务员优质业务 TopN 排名查询（按优质业务保费排序）
+ *
+ * Tie-break 同上 generateSalesmanAllBusinessRankingQuery。
  */
 export function generateSalesmanQualityBusinessRankingQuery(
   whereClause: string,
@@ -41,7 +47,7 @@ export function generateSalesmanQualityBusinessRankingQuery(
     WHERE ${whereClause}
       AND ${QUALITY_BUSINESS_CONDITION}
     GROUP BY salesman_name, org_level_3
-    ORDER BY total_premium DESC
+    ORDER BY total_premium DESC, salesman_name ASC, org_level_3 ASC
     LIMIT ${limit}
   `;
 }
