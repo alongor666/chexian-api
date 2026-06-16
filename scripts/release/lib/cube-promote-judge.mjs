@@ -19,13 +19,15 @@
  *        checkShadowSampleFloor / fetchSentinelHistory / buildVerdict
  */
 
+import { SHADOW_KEYS } from '../../shared/cube-routes.mjs';
+
 // ─────────────────────────── 常量 ───────────────────────────
 
 /** 影子对账每条路由最低观测门槛：低于此数视为"样本不足，禁止放行" */
 export const DEFAULT_MATCH_FLOOR = 1000;
 
-/** 影子对账的 5 条路由名（与 /health 的 cubeShadow 键对应） */
-export const SHADOW_ROUTES = ['trend', 'growth', 'cost', 'kpi', 'salesman-ranking'];
+/** 影子对账的 5 条路由名（SSOT 在 scripts/shared/cube-routes.mjs，re-export 保持向后兼容）*/
+export const SHADOW_ROUTES = SHADOW_KEYS;
 
 // ─────────────────────────── 阶段判定 ───────────────────────────
 
