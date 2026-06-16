@@ -45,21 +45,32 @@ export const TIER_CROSS = 'cross';
 // ─── 核心函数 ────────────────────────────────────────────────────
 
 /**
+ * 路由必传参数注入：cost route 旧协议要求 cutoffDate（不传直接 400），
+ * 不注入则 cost/kpi 路径永不到 tryCostCube → cost cube 永不构建 → 影子对账 INSUFFICIENT。
+ * trend/salesman/growth 不需要 cutoffDate，但 commonFilterSchema 用 zod safeParse strip-unknown，
+ * 多传该字段被静默忽略，不影响其他路由。
+ */
+function todayIsoDate() {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+/**
  * 生成基础 basic 层矩阵：
  * 11 customer_category × 3 is_nev × 3 is_renewal = 99 个 filter 对象
  *
  * 每个 filter 对象形状：
- *   { customerCategories: string, isNev?: 'true'|'false', isRenewal?: 'true'|'false' }
+ *   { customerCategories: string, isNev?: 'true'|'false', isRenewal?: 'true'|'false', cutoffDate: 'YYYY-MM-DD' }
  *
  * 字段名与 commonFilterSchema 的 query-string key 一致（驼峰）。
  * 布尔值用字符串形式，与 HTTP GET 参数一致。
  */
-function buildBasicMatrix() {
+function buildBasicMatrix(cutoffDate = todayIsoDate()) {
   const result = [];
   for (const cat of CUSTOMER_CATEGORIES) {
     for (const nev of BOOL_STATES) {
       for (const renewal of BOOL_STATES) {
-        const filter = { customerCategories: cat };
+        const filter = { customerCategories: cat, cutoffDate };
         if (nev !== undefined) filter.isNev = String(nev);
         if (renewal !== undefined) filter.isRenewal = String(renewal);
         result.push(filter);
@@ -72,8 +83,8 @@ function buildBasicMatrix() {
 /**
  * 生成 org 层矩阵：basic × 3 个代表性机构 = 297 个
  */
-function buildOrgMatrix() {
-  const basic = buildBasicMatrix();
+function buildOrgMatrix(cutoffDate) {
+  const basic = buildBasicMatrix(cutoffDate);
   const result = [];
   for (const org of ORG_SAMPLES) {
     for (const filter of basic) {
@@ -89,8 +100,8 @@ function buildOrgMatrix() {
  * tonnageSegments 仅在非 electric fuelCategory 下传入（electric 驱动的车大多无吨位分段，
  * 但 burn-in 目的是边界覆盖，不做业务排除）。
  */
-function buildCrossMatrix() {
-  const org = buildOrgMatrix();
+function buildCrossMatrix(cutoffDate) {
+  const org = buildOrgMatrix(cutoffDate);
   const result = [];
   for (const fuel of FUEL_CATEGORIES) {
     for (const ton of TONNAGE_SAMPLES) {
@@ -106,13 +117,14 @@ function buildCrossMatrix() {
  * 根据 tier 返回 filter 对象数组。
  *
  * @param {string} tier - 'basic' | 'org' | 'cross'
+ * @param {string} [cutoffDate] - 路由必传日期参数（默认今天 UTC YYYY-MM-DD），用于 cost route 必填校验
  * @returns {Array<Record<string, string>>} filter 对象数组
  */
-export function buildWhereMatrix(tier) {
+export function buildWhereMatrix(tier, cutoffDate) {
   switch (tier) {
-    case TIER_BASIC: return buildBasicMatrix();
-    case TIER_ORG:   return buildOrgMatrix();
-    case TIER_CROSS: return buildCrossMatrix();
+    case TIER_BASIC: return buildBasicMatrix(cutoffDate);
+    case TIER_ORG:   return buildOrgMatrix(cutoffDate);
+    case TIER_CROSS: return buildCrossMatrix(cutoffDate);
     default:
       throw new Error(`未知 tier：${tier}（合法值：basic | org | cross）`);
   }

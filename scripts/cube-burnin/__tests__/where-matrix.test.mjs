@@ -33,6 +33,21 @@ describe('buildWhereMatrix(basic) — 基础三态矩阵', () => {
     }
   });
 
+  it('每个 filter 都含有 cutoffDate（cost route 必传，YYYY-MM-DD 形式）', () => {
+    const matrix = buildWhereMatrix(TIER_BASIC);
+    for (const f of matrix) {
+      expect(f).toHaveProperty('cutoffDate');
+      expect(f.cutoffDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it('buildWhereMatrix 接受 cutoffDate 参数，注入所有 filter', () => {
+    const matrix = buildWhereMatrix(TIER_BASIC, '2026-06-10');
+    for (const f of matrix) {
+      expect(f.cutoffDate).toBe('2026-06-10');
+    }
+  });
+
   it('布尔字段 isNev / isRenewal 取值为 "true" | "false" 或不存在（不出现 "undefined"）', () => {
     const matrix = buildWhereMatrix(TIER_BASIC);
     for (const f of matrix) {
