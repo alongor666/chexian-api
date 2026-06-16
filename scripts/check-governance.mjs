@@ -53,6 +53,7 @@ import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 import {
   parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow,
 } from './backlog/lib.mjs';
+import { SHADOW_KEYS } from './shared/cube-routes.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2460,11 +2461,11 @@ function checkRlsRouteCoverage() {
  *
  * 5 路由（trend/growth/cost/kpi/salesman-ranking）各自在 handler 里调
  * runShadowCompare('<key>', ...)，shadow key 需与路由业务一一对应。
- * 新增 cube 路由时必须同步把新 key 加入 EXPECTED_SHADOW_KEYS，否则本 check 报错。
+ * 新增 cube 路由时只改 scripts/shared/cube-routes.mjs（SSOT），本 check 自动跟上。
  */
 function checkCubeShadowRouteCoverage() {
   info('检查立方体影子路由覆盖（shadow key 白名单）...');
-  const EXPECTED_SHADOW_KEYS = new Set(['trend', 'growth', 'cost', 'kpi', 'salesman-ranking']);
+  const EXPECTED_SHADOW_KEYS = new Set(SHADOW_KEYS);
   const ROUTE_DIR = path.join(ROOT_DIR, 'server/src/routes/query');
   const EXEMPT = new Set(['shared.ts', 'bundles.ts', 'patrol.ts']);
 
@@ -2499,7 +2500,7 @@ function checkCubeShadowRouteCoverage() {
       error(`  多余 key（新增 cube 路由未登记到白名单）：${extra.join(', ')}`);
       error('  如新增 cube 路由：');
       error('    1) 路由 handler 调 runShadowCompare(\'<key>\', ...) ');
-      error('    2) 同步更新 scripts/check-governance.mjs:checkCubeShadowRouteCoverage 的 EXPECTED_SHADOW_KEYS');
+      error('    2) 同步更新 scripts/shared/cube-routes.mjs（SSOT，本 check + burn-in 共用）');
     }
     return false;
   }

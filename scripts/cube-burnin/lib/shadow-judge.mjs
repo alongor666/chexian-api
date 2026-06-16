@@ -4,6 +4,8 @@
  * 纯函数，无 IO 副作用。可被测试直接 import。
  */
 
+import { SHADOW_KEYS } from '../../shared/cube-routes.mjs';
+
 // ─── 判定常量 ────────────────────────────────────────────────────
 
 export const VERDICT = Object.freeze({
@@ -13,8 +15,8 @@ export const VERDICT = Object.freeze({
   INSUFFICIENT: 'INSUFFICIENT',
 });
 
-/** 5 个需要追踪的路由 shadow key（与 /health 响应字段对应）*/
-export const SHADOW_KEYS = ['trend', 'growth', 'cost', 'kpi', 'salesman-ranking'];
+/** re-export 给本 lib 测试用（SSOT 在 scripts/shared/cube-routes.mjs）*/
+export { SHADOW_KEYS };
 
 // ─── 核心函数 ────────────────────────────────────────────────────
 
