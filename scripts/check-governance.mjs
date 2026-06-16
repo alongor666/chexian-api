@@ -2520,35 +2520,58 @@ function checkCubeShadowRouteCoverage() {
  *
  * growth/kpi 复用 trend/cost cube，不在 MAIN_CUBES 列表中。
  */
+/**
+ * 剥离 JS/TS 注释，防止注释掉的导出误触发 export 正则检测。
+ * 先去块注释（非贪婪），再去行注释。
+ */
+function stripComments(src) {
+  // 去块注释 /* ... */（非贪婪，防止跨越多个注释块）
+  let s = src.replace(/\/\*[\s\S]*?\*\//g, '');
+  // 去行注释 //...（锚定行首可选空白，确保不误删字符串内 //）
+  s = s.replace(/^\s*\/\/.*$/gm, '');
+  return s;
+}
+
 function checkCubeSqlThreePieceShape() {
   info('检查主 cube SQL 三件套导出...');
 
   // 每个 cube 期望的三件套导出函数名（以实际源文件为准）
+  // key 与 Check 33 EXPECTED_SHADOW_KEYS 对齐：salesman-ranking（非 salesman）
+  // key='salesman-ranking' 对应文件 server/src/sql/cube/salesman-cube.ts
+  // 新增 cube 时同步更新本表 + Check 33 EXPECTED_SHADOW_KEYS + Check 35 CUBE_STATE_NAMES
   const CUBE_REQUIRED_EXPORTS = {
-    trend:    ['isTrendCubeServable',    'generatePremiumTrendCubeQuery', 'buildTrendCubeSql'],
-    cost:     ['isCostCubeServable',     'generateCostCubeQuery',         'buildCostCubeSql'],
-    // salesman 命名为 generateSalesmanRankingCubeQuery（非 generateSalesmanCubeQuery），以实际文件为准
-    salesman: ['isSalesmanCubeServable', 'generateSalesmanRankingCubeQuery', 'buildSalesmanCubeSql'],
+    trend:              ['isTrendCubeServable',    'generatePremiumTrendCubeQuery', 'buildTrendCubeSql'],
+    cost:               ['isCostCubeServable',     'generateCostCubeQuery',         'buildCostCubeSql'],
+    // salesman 文件名为 salesman-cube.ts，但导出函数命名为 generateSalesmanRankingCubeQuery
+    'salesman-ranking': ['isSalesmanCubeServable', 'generateSalesmanRankingCubeQuery', 'buildSalesmanCubeSql'],
+  };
+
+  // cube 文件名映射（key → 实际文件名，默认 `${key}-cube.ts`，salesman-ranking 特殊）
+  const CUBE_FILE_NAME = {
+    'salesman-ranking': 'salesman',
   };
 
   const CUBE_SQL_DIR = path.join(ROOT_DIR, 'server/src/sql/cube');
   let allOk = true;
 
   for (const [cube, required] of Object.entries(CUBE_REQUIRED_EXPORTS)) {
-    const filePath = path.join(CUBE_SQL_DIR, `${cube}-cube.ts`);
+    const fileName = CUBE_FILE_NAME[cube] ?? cube;
+    const filePath = path.join(CUBE_SQL_DIR, `${fileName}-cube.ts`);
     if (!fs.existsSync(filePath)) {
-      error(`主 cube 文件缺失：server/src/sql/cube/${cube}-cube.ts`);
+      error(`主 cube 文件缺失：server/src/sql/cube/${fileName}-cube.ts`);
       allOk = false;
       continue;
     }
-    const src = fs.readFileSync(filePath, 'utf-8');
+    const rawSrc = fs.readFileSync(filePath, 'utf-8');
+    // 剥离注释后再检测，防止 `// export function X()` 误判为存在导出
+    const src = stripComments(rawSrc);
     const missing = required.filter(fn => {
       // 匹配 export [async] function <name>  或  export const <name>
       const re = new RegExp(`\\bexport\\b[\\s\\S]{0,20}\\b${fn}\\b`);
       return !re.test(src);
     });
     if (missing.length > 0) {
-      error(`${cube}-cube.ts 缺漏导出：${missing.join(', ')}`);
+      error(`${fileName}-cube.ts 缺漏导出：${missing.join(', ')}`);
       error('  三件套约束：servability gate 防误对账；buildXxxCubeSql 防 OOM 死循环；generateXxxCubeQuery 三阶段构建');
       allOk = false;
     }
@@ -2583,37 +2606,41 @@ function checkCubeVersionBinding() {
   const src = fs.readFileSync(CUBE_SVC, 'utf-8');
   const lines = src.split('\n');
 
+  // 新增立方体 state 变量时必须同步将其名称追加到 CUBE_STATE_NAMES
+  // （与 Check 33 的 EXPECTED_SHADOW_KEYS、Check 34 的 CUBE_REQUIRED_EXPORTS 三处保持隐式同步）
+  const CUBE_STATE_NAMES = ['trendCubeState', 'costCubeState', 'salesmanCubeState'];
+
   // 提取所有 .builtVersion = <rhs>; 赋值行（单等号，排除 === / !== 比较）
   // 负向前瞻确保 = 后不紧跟另一个 =
-  const ASSIGN_RE = /\b(trendCubeState|costCubeState|salesmanCubeState)\.builtVersion\s*=(?!=)\s*([^;]+);/g;
-  // 非法右值特征：直接调 getDataVersion() 或使用 currentVersion / versionAtCatch
-  const ILLEGAL_RHS_RE = /getDataVersion\(\)|currentVersion|versionAtCatch/;
+  const ASSIGN_RE = new RegExp(
+    `\\b(${CUBE_STATE_NAMES.join('|')})\\.builtVersion\\s*=(?!=)\\s*([^;]+);`,
+    'g'
+  );
+
+  // allowlist 策略：右值只允许 'versionAtStart'（标准绑定）或 'null'（reset）
+  // 不再用 denylist——间接变量（freshVersion）/ fallback（versionAtStart || x）
+  // / 任何未知右值均为非法，PR #645 等价违规无法再静默通过
 
   const violations = [];
   let m;
   ASSIGN_RE.lastIndex = 0;
   while ((m = ASSIGN_RE.exec(src)) !== null) {
-    const rhs = m[2].trim();
-    // null 是合法的 reset 路径
-    if (rhs === 'null') continue;
-    // versionAtStart 是合法绑定
-    if (rhs === 'versionAtStart') continue;
-    // 其他非法
-    if (ILLEGAL_RHS_RE.test(rhs)) {
-      // 计算行号
-      const pos = m.index;
-      const lineNo = src.slice(0, pos).split('\n').length;
-      violations.push({ line: lineNo, text: lines[lineNo - 1].trim(), rhs });
-    }
+    const rhs = m[2].trim().replace(/;$/, '').trim();
+    // 合法：null（reset）或 versionAtStart（标准绑定）
+    if (rhs === 'null' || rhs === 'versionAtStart') continue;
+    // 其余一律非法
+    const pos = m.index;
+    const lineNo = src.slice(0, pos).split('\n').length;
+    violations.push({ line: lineNo, text: lines[lineNo - 1].trim(), rhs });
   }
 
   if (violations.length > 0) {
-    error('builtVersion 绑定违规（PR #645 历史教训：ETL 推进期间用 getDataVersion() 赋值会污染 cube 状态）：');
+    error('builtVersion 绑定违规（PR #645 历史教训：ETL 推进期间用动态值赋值会污染 cube 状态）：');
     for (const v of violations) {
-      error(`  L${v.line}: ${v.text}`);
+      error(`  L${v.line}: ${v.text}  （右值：${v.rhs}）`);
     }
-    error('  修复路径：在 materializeXxxCube 函数体顶部 const versionAtStart = getDataVersion()，');
-    error('  OOM/异常降级路径统一用 versionAtStart 而非重新调 getDataVersion()。');
+    error('  修复路径：OOM 降级须在 materializeXxxCube 函数体内取 versionAtStart 后绑定（PR #645 教训）');
+    error('  禁止间接变量（const x = getDataVersion(); builtVersion = x）/ fallback（versionAtStart || y）/ 直接调用');
     return false;
   }
 
