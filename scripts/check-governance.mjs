@@ -2452,6 +2452,202 @@ function checkRlsRouteCoverage() {
   return true;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Check 33: cube shadow route coverage
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * 防漏注册 cube shadow key。
+ *
+ * 5 路由（trend/growth/cost/kpi/salesman-ranking）各自在 handler 里调
+ * runShadowCompare('<key>', ...)，shadow key 需与路由业务一一对应。
+ * 新增 cube 路由时必须同步把新 key 加入 EXPECTED_SHADOW_KEYS，否则本 check 报错。
+ */
+function checkCubeShadowRouteCoverage() {
+  info('检查立方体影子路由覆盖（shadow key 白名单）...');
+  const EXPECTED_SHADOW_KEYS = new Set(['trend', 'growth', 'cost', 'kpi', 'salesman-ranking']);
+  const ROUTE_DIR = path.join(ROOT_DIR, 'server/src/routes/query');
+  const EXEMPT = new Set(['shared.ts', 'bundles.ts', 'patrol.ts']);
+
+  if (!fs.existsSync(ROUTE_DIR)) {
+    warning('server/src/routes/query 不存在，跳过');
+    return true;
+  }
+
+  const foundKeys = new Set();
+  const KEY_RE = /\brunShadowCompare\(\s*['"]([^'"]+)['"]/g;
+
+  for (const name of fs.readdirSync(ROUTE_DIR)) {
+    if (EXEMPT.has(name)) continue;
+    if (!name.endsWith('.ts')) continue;
+    const src = fs.readFileSync(path.join(ROUTE_DIR, name), 'utf-8');
+    KEY_RE.lastIndex = 0;
+    let m;
+    while ((m = KEY_RE.exec(src)) !== null) {
+      foundKeys.add(m[1]);
+    }
+  }
+
+  const missing = [...EXPECTED_SHADOW_KEYS].filter(k => !foundKeys.has(k));
+  const extra   = [...foundKeys].filter(k => !EXPECTED_SHADOW_KEYS.has(k));
+
+  if (missing.length > 0 || extra.length > 0) {
+    error('立方体影子路由覆盖失败：');
+    if (missing.length > 0) {
+      error(`  缺漏 key（路由 handler 未调 runShadowCompare）：${missing.join(', ')}`);
+    }
+    if (extra.length > 0) {
+      error(`  多余 key（新增 cube 路由未登记到白名单）：${extra.join(', ')}`);
+      error('  如新增 cube 路由：');
+      error('    1) 路由 handler 调 runShadowCompare(\'<key>\', ...) ');
+      error('    2) 同步更新 scripts/check-governance.mjs:checkCubeShadowRouteCoverage 的 EXPECTED_SHADOW_KEYS');
+    }
+    return false;
+  }
+  success(`立方体影子路由覆盖完整（${[...foundKeys].join(', ')}）`);
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Check 34: cube SQL three-piece shape
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * 防主 cube SQL 三件套漏导出。
+ *
+ * 每个主 cube 必须导出三件套：
+ *   isXxxCubeServable     — servability gate，防直接查空表/缺数据触发误对账
+ *   generateXxxCubeQuery  — 三阶段查询构建（注：salesman 命名为 generateSalesmanRankingCubeQuery）
+ *   buildXxxCubeSql       — 物化 SQL 生成，防 OOM 死循环
+ *
+ * growth/kpi 复用 trend/cost cube，不在 MAIN_CUBES 列表中。
+ */
+/**
+ * 剥离 JS/TS 注释，防止注释掉的导出误触发 export 正则检测。
+ * 先去块注释（非贪婪），再去行注释。
+ */
+function stripComments(src) {
+  // 去块注释 /* ... */（非贪婪，防止跨越多个注释块）
+  let s = src.replace(/\/\*[\s\S]*?\*\//g, '');
+  // 去行注释 //...（锚定行首可选空白，确保不误删字符串内 //）
+  s = s.replace(/^\s*\/\/.*$/gm, '');
+  return s;
+}
+
+function checkCubeSqlThreePieceShape() {
+  info('检查主 cube SQL 三件套导出...');
+
+  // 每个 cube 期望的三件套导出函数名（以实际源文件为准）
+  // key 与 Check 33 EXPECTED_SHADOW_KEYS 对齐：salesman-ranking（非 salesman）
+  // key='salesman-ranking' 对应文件 server/src/sql/cube/salesman-cube.ts
+  // 新增 cube 时同步更新本表 + Check 33 EXPECTED_SHADOW_KEYS + Check 35 CUBE_STATE_NAMES
+  const CUBE_REQUIRED_EXPORTS = {
+    trend:              ['isTrendCubeServable',    'generatePremiumTrendCubeQuery', 'buildTrendCubeSql'],
+    cost:               ['isCostCubeServable',     'generateCostCubeQuery',         'buildCostCubeSql'],
+    // salesman 文件名为 salesman-cube.ts，但导出函数命名为 generateSalesmanRankingCubeQuery
+    'salesman-ranking': ['isSalesmanCubeServable', 'generateSalesmanRankingCubeQuery', 'buildSalesmanCubeSql'],
+  };
+
+  // cube 文件名映射（key → 实际文件名，默认 `${key}-cube.ts`，salesman-ranking 特殊）
+  const CUBE_FILE_NAME = {
+    'salesman-ranking': 'salesman',
+  };
+
+  const CUBE_SQL_DIR = path.join(ROOT_DIR, 'server/src/sql/cube');
+  let allOk = true;
+
+  for (const [cube, required] of Object.entries(CUBE_REQUIRED_EXPORTS)) {
+    const fileName = CUBE_FILE_NAME[cube] ?? cube;
+    const filePath = path.join(CUBE_SQL_DIR, `${fileName}-cube.ts`);
+    if (!fs.existsSync(filePath)) {
+      error(`主 cube 文件缺失：server/src/sql/cube/${fileName}-cube.ts`);
+      allOk = false;
+      continue;
+    }
+    const rawSrc = fs.readFileSync(filePath, 'utf-8');
+    // 剥离注释后再检测，防止 `// export function X()` 误判为存在导出
+    const src = stripComments(rawSrc);
+    const missing = required.filter(fn => {
+      // 匹配 export [async] function <name>  或  export const <name>
+      const re = new RegExp(`\\bexport\\b[\\s\\S]{0,20}\\b${fn}\\b`);
+      return !re.test(src);
+    });
+    if (missing.length > 0) {
+      error(`${fileName}-cube.ts 缺漏导出：${missing.join(', ')}`);
+      error('  三件套约束：servability gate 防误对账；buildXxxCubeSql 防 OOM 死循环；generateXxxCubeQuery 三阶段构建');
+      allOk = false;
+    }
+  }
+
+  if (allOk) {
+    success('所有主 cube SQL 三件套导出完整（isCubeServable + generateQuery + buildSql）');
+  }
+  return allOk;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Check 35: cube version binding
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * 防 PR #645 同类回归：builtVersion 赋值必须绑 versionAtStart，不能用 catch 时
+ * 重新调 getDataVersion()（ETL 推进会污染状态，导致过期 cube 被标为最新）。
+ *
+ * 合法右值：
+ *   - versionAtStart（构建起始版本）
+ *   - null（reset 路径）
+ * 非法右值：直接调用 getDataVersion() 或 currentVersion 等动态值
+ */
+function checkCubeVersionBinding() {
+  info('检查立方体 builtVersion 绑定合规（防 PR #645 回归）...');
+  const CUBE_SVC = path.join(ROOT_DIR, 'server/src/services/duckdb-cube.ts');
+  if (!fs.existsSync(CUBE_SVC)) {
+    warning('server/src/services/duckdb-cube.ts 不存在，跳过');
+    return true;
+  }
+
+  const src = fs.readFileSync(CUBE_SVC, 'utf-8');
+  const lines = src.split('\n');
+
+  // 新增立方体 state 变量时必须同步将其名称追加到 CUBE_STATE_NAMES
+  // （与 Check 33 的 EXPECTED_SHADOW_KEYS、Check 34 的 CUBE_REQUIRED_EXPORTS 三处保持隐式同步）
+  const CUBE_STATE_NAMES = ['trendCubeState', 'costCubeState', 'salesmanCubeState'];
+
+  // 提取所有 .builtVersion = <rhs>; 赋值行（单等号，排除 === / !== 比较）
+  // 负向前瞻确保 = 后不紧跟另一个 =
+  const ASSIGN_RE = new RegExp(
+    `\\b(${CUBE_STATE_NAMES.join('|')})\\.builtVersion\\s*=(?!=)\\s*([^;]+);`,
+    'g'
+  );
+
+  // allowlist 策略：右值只允许 'versionAtStart'（标准绑定）或 'null'（reset）
+  // 不再用 denylist——间接变量（freshVersion）/ fallback（versionAtStart || x）
+  // / 任何未知右值均为非法，PR #645 等价违规无法再静默通过
+
+  const violations = [];
+  let m;
+  ASSIGN_RE.lastIndex = 0;
+  while ((m = ASSIGN_RE.exec(src)) !== null) {
+    const rhs = m[2].trim().replace(/;$/, '').trim();
+    // 合法：null（reset）或 versionAtStart（标准绑定）
+    if (rhs === 'null' || rhs === 'versionAtStart') continue;
+    // 其余一律非法
+    const pos = m.index;
+    const lineNo = src.slice(0, pos).split('\n').length;
+    violations.push({ line: lineNo, text: lines[lineNo - 1].trim(), rhs });
+  }
+
+  if (violations.length > 0) {
+    error('builtVersion 绑定违规（PR #645 历史教训：ETL 推进期间用动态值赋值会污染 cube 状态）：');
+    for (const v of violations) {
+      error(`  L${v.line}: ${v.text}  （右值：${v.rhs}）`);
+    }
+    error('  修复路径：OOM 降级须在 materializeXxxCube 函数体内取 versionAtStart 后绑定（PR #645 教训）');
+    error('  禁止间接变量（const x = getDataVersion(); builtVersion = x）/ fallback（versionAtStart || y）/ 直接调用');
+    return false;
+  }
+
+  success('所有 builtVersion 赋值均绑定 versionAtStart 或 null（合规）');
+  return true;
+}
+
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件', fn: checkRequiredFiles },
@@ -2486,6 +2682,9 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'Agent注册表版本', fn: checkAgentRegistryVersionBump },
   { name: '立方体影子对账容差', fn: checkCubeShadowTolerance },
   { name: 'RLS路由消费覆盖', fn: checkRlsRouteCoverage },
+  { name: '立方体影子路由覆盖', fn: checkCubeShadowRouteCoverage },
+  { name: '立方体SQL三件套', fn: checkCubeSqlThreePieceShape },
+  { name: '立方体版本绑定', fn: checkCubeVersionBinding },
 ];
 
 /**
