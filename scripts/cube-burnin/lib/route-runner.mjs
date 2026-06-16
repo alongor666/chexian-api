@@ -47,7 +47,7 @@ export function buildQueryString(filters) {
  * @param {number} concurrency - 最大并发数
  * @returns {Promise<any[]>} 与 tasks 顺序对应的结果数组
  */
-async function runWithConcurrency(tasks, concurrency) {
+export async function runWithConcurrency(tasks, concurrency) {
   const results = new Array(tasks.length);
   let index = 0;
 
@@ -66,13 +66,17 @@ async function runWithConcurrency(tasks, concurrency) {
 /**
  * 发送单个 GET 请求，静默捕获网络错误。
  *
+ * @param {string} url
+ * @param {{ signal?: AbortSignal, headers?: Record<string, string> }} [opts]
  * @returns {{ ok: boolean, status: number | null, error: string | null }}
  */
-async function fetchOne(url) {
+async function fetchOne(url, { signal, headers } = {}) {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal, headers: headers ?? {} });
     return { ok: res.ok, status: res.status, error: null };
   } catch (err) {
+    // AbortError 视为中断，非错误
+    if (err?.name === 'AbortError') return { ok: false, status: null, error: null };
     return { ok: false, status: null, error: String(err?.message ?? err) };
   }
 }
@@ -83,16 +87,19 @@ async function fetchOne(url) {
  * 执行一轮 burn-in 流量生成。
  *
  * @param {object} opts
- * @param {string} opts.baseUrl       - 服务基地址（含协议和端口）
- * @param {string} opts.tier          - 'basic' | 'org' | 'cross'
- * @param {number} [opts.concurrency] - 并发数（默认 8）
- * @param {boolean} [opts.dryRun]     - 仅打印计划，不发请求
+ * @param {string} opts.baseUrl        - 服务基地址（含协议和端口）
+ * @param {string} opts.tier           - 'basic' | 'org' | 'cross'
+ * @param {number} [opts.concurrency]  - 并发数（默认 8）
+ * @param {boolean} [opts.dryRun]      - 仅打印计划，不发请求
  * @param {Array<Record<string, string>>} opts.matrix - filter 对象数组（由 buildWhereMatrix 生成）
+ * @param {string} [opts.token]        - Bearer Token（从 CX_BURNIN_TOKEN env 注入）
+ * @param {AbortSignal} [opts.signal]  - 中断信号（Ctrl+C 时中止飞行中的请求）
  * @returns {Promise<{ sent: number, ok: number, failed: number, errors: string[] }>}
  */
-export async function runFlight({ baseUrl, tier, concurrency = 8, dryRun = false, matrix }) {
+export async function runFlight({ baseUrl, tier, concurrency = 8, dryRun = false, matrix, token, signal }) {
   const base = baseUrl.replace(/\/+$/, '');
   const totalRequests = matrix.length * ROUTES.length;
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
   // dry-run：只打印计划
   if (dryRun) {
@@ -108,8 +115,8 @@ export async function runFlight({ baseUrl, tier, concurrency = 8, dryRun = false
   console.log(`[cube-burnin] 预热（每路由 2 个请求）…`);
   for (const route of ROUTES) {
     const warmUrl = `${base}${route.path}`;
-    await fetchOne(warmUrl);
-    await fetchOne(warmUrl);
+    await fetchOne(warmUrl, { signal, headers });
+    await fetchOne(warmUrl, { signal, headers });
   }
   await sleep(200); // 给 cube 切换状态留余量
 
@@ -121,7 +128,7 @@ export async function runFlight({ baseUrl, tier, concurrency = 8, dryRun = false
     for (const route of ROUTES) {
       const qs = buildQueryString(filter);
       const url = `${base}${route.path}${qs ? '?' + qs : ''}`;
-      tasks.push(() => fetchOne(url));
+      tasks.push(() => fetchOne(url, { signal, headers }));
     }
   }
 

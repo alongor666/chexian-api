@@ -14,6 +14,7 @@ import {
   computeDelta,
   judge,
   VERDICT,
+  SHADOW_KEYS,
 } from '../lib/shadow-judge.mjs';
 
 // ─── fixtures ─────────────────────────────────────────────────────
@@ -50,7 +51,7 @@ function healthyHealth(matchCount = 2000) {
 describe('snapshotShadow — 快照提取', () => {
   it('正常 health 响应 → 返回 5 路由各三字段', () => {
     const snap = snapshotShadow(healthyHealth(500));
-    const keys = ['trend', 'growth', 'cost', 'kpi', 'salesman-ranking'];
+    const keys = SHADOW_KEYS;
     expect(Object.keys(snap)).toEqual(expect.arrayContaining(keys));
     for (const k of keys) {
       expect(snap[k]).toMatchObject({ match: 500, mismatch: 0, error: 0 });
@@ -99,7 +100,7 @@ describe('computeDelta — delta 计算', () => {
     const before = snapshotShadow(zeroHealth());
     const after  = snapshotShadow(healthyHealth(1000));
     const delta  = computeDelta(before, after);
-    for (const key of ['trend', 'growth', 'cost', 'kpi', 'salesman-ranking']) {
+    for (const key of SHADOW_KEYS) {
       expect(delta[key].match).toBe(1000);
       expect(delta[key].mismatch).toBe(0);
       expect(delta[key].error).toBe(0);
@@ -111,6 +112,23 @@ describe('computeDelta — delta 计算', () => {
     const after  = snapshotShadow(zeroHealth());
     const delta  = computeDelta(before, after);
     expect(delta.trend.match).toBe(-500);
+  });
+
+  it('before === after → delta 全为 0', () => {
+    const h = healthyHealth(500);
+    const delta = computeDelta(snapshotShadow(h), snapshotShadow(h));
+    expect(delta.trend.match).toBe(0);
+    expect(delta.cost.mismatch).toBe(0);
+    expect(delta.kpi.error).toBe(0);
+  });
+
+  it('各字段均正增长 → match delta 为正数，mismatch/error delta 非负', () => {
+    const before = snapshotShadow(zeroHealth());
+    const after  = snapshotShadow(healthyHealth(1000));
+    const delta  = computeDelta(before, after);
+    expect(delta.trend.match).toBeGreaterThan(0);
+    expect(delta.cost.mismatch).toBeGreaterThanOrEqual(0);
+    expect(delta['salesman-ranking'].error).toBeGreaterThanOrEqual(0);
   });
 
   it('部分路由有 mismatch 增量 → 对应 mismatch delta > 0', () => {

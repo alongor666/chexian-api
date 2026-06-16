@@ -14,7 +14,7 @@ export const VERDICT = Object.freeze({
 });
 
 /** 5 个需要追踪的路由 shadow key（与 /health 响应字段对应）*/
-const SHADOW_KEYS = ['trend', 'growth', 'cost', 'kpi', 'salesman-ranking'];
+export const SHADOW_KEYS = ['trend', 'growth', 'cost', 'kpi', 'salesman-ranking'];
 
 // ─── 核心函数 ────────────────────────────────────────────────────
 
