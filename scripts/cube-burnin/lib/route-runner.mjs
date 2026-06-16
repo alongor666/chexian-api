@@ -81,6 +81,42 @@ async function fetchOne(url, { signal, headers } = {}) {
   }
 }
 
+// ─── 立方体就绪等待 ──────────────────────────────────────────────
+
+const CUBE_KEYS = ['trend', 'cost', 'salesman'];
+
+/**
+ * 轮询 /health 直到三个核心立方体全部就绪（building=false 且 builtVersion 非 null）。
+ * 替代固定 200ms sleep：cube 首次构建是秒级，sleep 根本不够，会导致 INSUFFICIENT 掩盖验证。
+ *
+ * @param {string} baseUrl
+ * @param {AbortSignal} [signal]
+ * @param {number} [timeoutMs=30000]
+ * @returns {Promise<{ ready: boolean, elapsed: number, reason?: string }>}
+ */
+async function waitForCubeReady(baseUrl, signal, timeoutMs = 30000) {
+  const url = `${baseUrl.replace(/\/+$/, '')}/health`;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (signal?.aborted) return { ready: false, elapsed: Date.now() - start, reason: 'aborted' };
+    try {
+      const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
+      if (res.ok) {
+        const text = await res.text();
+        const health = JSON.parse(text);
+        const allReady = CUBE_KEYS.every(
+          k => health?.cubes?.[k]?.building === false && health?.cubes?.[k]?.builtVersion != null
+        );
+        if (allReady) return { ready: true, elapsed: Date.now() - start };
+      }
+    } catch {
+      // 网络抖动或 AbortError —— 继续重试
+    }
+    await sleep(500);
+  }
+  return { ready: false, elapsed: Date.now() - start, reason: 'timeout' };
+}
+
 // ─── 主入口 ─────────────────────────────────────────────────────
 
 /**
@@ -94,7 +130,7 @@ async function fetchOne(url, { signal, headers } = {}) {
  * @param {Array<Record<string, string>>} opts.matrix - filter 对象数组（由 buildWhereMatrix 生成）
  * @param {string} [opts.token]        - Bearer Token（从 CX_BURNIN_TOKEN env 注入）
  * @param {AbortSignal} [opts.signal]  - 中断信号（Ctrl+C 时中止飞行中的请求）
- * @returns {Promise<{ sent: number, ok: number, failed: number, errors: string[] }>}
+ * @returns {Promise<{ sent: number, ok: number, failed: number, errors: string[], authError?: boolean, cubeNotReady?: boolean }>}
  */
 export async function runFlight({ baseUrl, tier, concurrency = 8, dryRun = false, matrix, token, signal }) {
   const base = baseUrl.replace(/\/+$/, '');
@@ -111,14 +147,35 @@ export async function runFlight({ baseUrl, tier, concurrency = 8, dryRun = false
     return { sent: 0, ok: 0, failed: 0, errors: [] };
   }
 
-  // 预热：每路由打 2 个 noop 请求（避免命中 cube building 状态）
-  console.log(`[cube-burnin] 预热（每路由 2 个请求）…`);
-  for (const route of ROUTES) {
-    const warmUrl = `${base}${route.path}`;
-    await fetchOne(warmUrl, { signal, headers });
-    await fetchOne(warmUrl, { signal, headers });
+  // 预热：轮询 /health 等待立方体就绪（替代固定 sleep，cube 首次构建是秒级非毫秒级）
+  console.log(`[cube-burnin] 等待立方体就绪（轮询 /health，最长 30s）…`);
+  const cubeStatus = await waitForCubeReady(base, signal);
+  if (!cubeStatus.ready) {
+    console.warn(
+      `[cube-burnin] 警告：立方体未就绪（${cubeStatus.reason}，已等待 ${cubeStatus.elapsed}ms）。` +
+      `结果可能 INSUFFICIENT，请检查 /health cubes.{trend,cost,salesman} 状态。`
+    );
+  } else {
+    console.log(`[cube-burnin] 立方体就绪（${cubeStatus.elapsed}ms）。`);
   }
-  await sleep(200); // 给 cube 切换状态留余量
+
+  // HIGH #3 — 采样头 5 个请求判断鉴权，避免"401 vs cube 未就绪"根因混淆
+  // 全 401 时立即中止，提示用户设置 CX_BURNIN_TOKEN，不走主流量
+  const probeRoutes = ROUTES.slice(0, Math.min(5, ROUTES.length));
+  const probeResults = [];
+  for (const route of probeRoutes) {
+    const probeUrl = `${base}${route.path}`;
+    const r = await fetchOne(probeUrl, { signal, headers });
+    probeResults.push(r);
+  }
+  const count401 = probeResults.filter(r => r.status === 401).length;
+  if (count401 >= 3) {
+    console.error(
+      `[cube-burnin] 全部请求返回 401。请设置 CX_BURNIN_TOKEN 环境变量获取的 Bearer token：\n` +
+      `  CX_BURNIN_TOKEN=<token> node scripts/cube-burnin.mjs --tier ${tier}`
+    );
+    return { sent: probeResults.length, ok: 0, failed: probeResults.length, errors: ['401 Unauthorized'], authError: true };
+  }
 
   // 主流量
   console.log(`[cube-burnin] 发送 ${totalRequests} 个请求（tier=${tier}, concurrency=${concurrency}）…`);

@@ -52,6 +52,10 @@ function printHelp() {
   --dry-run          仅打印计划，不发请求
   --help             显示帮助
 
+鉴权：
+  如需 Bearer Token，设 CX_BURNIN_TOKEN 环境变量（不支持 --token 参数，避免进入 shell history）：
+    CX_BURNIN_TOKEN=<token> node scripts/cube-burnin.mjs --tier basic
+
 判定规则：
   FAIL         任一路由 mismatch_delta > 0（立方体算错）→ exit 1
   WARN         任一路由 error_delta > 0（执行异常）
@@ -93,6 +97,16 @@ async function main() {
   const concurrency = Number(args.concurrency   || 8);
   const dryRun      = args['dry-run'] === true || args['dry-run'] === 'true';
 
+  // Bearer Token 从 env 注入（禁止 --token 参数，避免进 shell history）
+  const token = process.env.CX_BURNIN_TOKEN || undefined;
+
+  // Ctrl+C 时中止飞行中的所有请求
+  const ac = new AbortController();
+  process.on('SIGINT', () => {
+    console.log('\n[cube-burnin] 中断中，等待飞行中请求结束…');
+    ac.abort();
+  });
+
   const validTiers = [TIER_BASIC, TIER_ORG, TIER_CROSS];
   if (!validTiers.includes(tier)) {
     console.error(`[cube-burnin] 错误：未知 tier="${tier}"，合法值：${validTiers.join(' | ')}`);
@@ -101,10 +115,10 @@ async function main() {
 
   const matrix = buildWhereMatrix(tier);
 
-  console.log(`[cube-burnin] base=${baseUrl} tier=${tier} matrix=${matrix.length} minMatch=${minMatch} concurrency=${concurrency} dryRun=${dryRun}`);
+  console.log(`[cube-burnin] base=${baseUrl} tier=${tier} matrix=${matrix.length} minMatch=${minMatch} concurrency=${concurrency} dryRun=${dryRun} token=${token ? '已设置' : '未设置'}`);
 
   if (dryRun) {
-    await runFlight({ baseUrl, tier, concurrency, dryRun: true, matrix });
+    await runFlight({ baseUrl, tier, concurrency, dryRun: true, matrix, token, signal: ac.signal });
     process.exit(0);
   }
 
@@ -119,8 +133,12 @@ async function main() {
   }
   const before = snapshotShadow(beforeHealth);
 
-  // 2. 发流量（含预热）
-  await runFlight({ baseUrl, tier, concurrency, dryRun: false, matrix });
+  // 2. 发流量（含预热 + 鉴权探针）
+  const flightResult = await runFlight({ baseUrl, tier, concurrency, dryRun: false, matrix, token, signal: ac.signal });
+  if (flightResult.authError) {
+    process.exitCode = 1;
+    return;
+  }
 
   // 3. after
   console.log('[cube-burnin] 读取 /health after…');

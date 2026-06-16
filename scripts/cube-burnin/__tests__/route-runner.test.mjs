@@ -57,6 +57,19 @@ describe('runWithConcurrency — 并发执行器', () => {
     const tasks = [() => Promise.reject(new Error('测试错误'))];
     await expect(runWithConcurrency(tasks, 1)).rejects.toThrow('测试错误');
   });
+
+  it('concurrency=2 真并发 → 总耗时显著低于串行', async () => {
+    // 3 个 task，每个 sleep 80ms。
+    // 串行（concurrency=1）≈ 240ms；concurrency=2 分 2+1 批次 ≈ 160ms。
+    // 阈值 200ms：比串行少 40ms buffer，兼顾 CI 环境调度抖动。
+    const mkTask = () => () => new Promise(r => setTimeout(() => r('ok'), 80));
+    const tasks = [mkTask(), mkTask(), mkTask()];
+    const start = performance.now();
+    const results = await runWithConcurrency(tasks, 2);
+    const elapsed = performance.now() - start;
+    expect(results).toEqual(['ok', 'ok', 'ok']);
+    expect(elapsed).toBeLessThan(200); // 串行会是 240ms+，此处验证真并发效果
+  });
 });
 
 // ─── ROUTES ──────────────────────────────────────────────────────
