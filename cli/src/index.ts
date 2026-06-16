@@ -9,8 +9,8 @@
  * 退出码契约：0 成功 · 1 通用错误 · 2 鉴权失败 · 3 权限不足 · 4 用法错误 · 5 限流
  */
 import { cliState } from './cli-state.js'; // 必须第一个 import（NO_COLOR 预处理）
-import { createRequire } from 'module';
 import { Command } from 'commander';
+import pkg from '../package.json' with { type: 'json' };
 import { loginCommand } from './commands/login.js';
 import { logoutCommand } from './commands/logout.js';
 import { whoamiCommand } from './commands/whoami.js';
@@ -23,6 +23,7 @@ import { sqlCommand } from './commands/sql.js';
 import { filtersCommand } from './commands/filters.js';
 import { dataCommand, type DataSub } from './commands/data.js';
 import { healthCommand } from './commands/health.js';
+import { batchCommand } from './commands/batch.js';
 import {
   configGetCommand, configSetCommand, configUnsetCommand,
   configListCommand, configPathCommand,
@@ -30,9 +31,6 @@ import {
 import { completionCommand } from './commands/completion.js';
 import { apiDebug } from './api.js';
 import { EXIT } from './exit-codes.js';
-
-const require = createRequire(import.meta.url);
-const pkg = require('../package.json') as { version: string };
 
 const program = new Command();
 
@@ -160,13 +158,17 @@ program
 
 program
   .command('filters')
-  .description('列出筛选维度的可选值（写查询条件前先看维度有哪些值）')
+  .description('列出筛选维度的可选值（写查询条件前先看维度有哪些值）；本地缓存 4h，--refresh 强刷')
   .option('--dimension <name>', '只看指定维度（如 org_level_3）')
+  .option('--refresh', '强制刷新本地缓存（按 PAT tokenId 隔离）')
   .option('-f, --format <fmt>', '输出格式 table|json|csv')
-  .action((options) => filtersCommand({ dimension: options.dimension, format: options.format }))
+  .action((options) =>
+    filtersCommand({ dimension: options.dimension, refresh: Boolean(options.refresh), format: options.format }),
+  )
   .addHelpText('after', `
 示例:
-  $ cx filters --dimension org_level_3`);
+  $ cx filters --dimension org_level_3
+  $ cx filters --refresh                  强制重新拉取`);
 
 program
   .command('data <sub>')
@@ -190,6 +192,31 @@ program
   .description('一站式连通性诊断（/health 存活 + 数据版本 + 延迟）')
   .option('-f, --format <fmt>', '输出格式 table|json|csv')
   .action((options) => healthCommand({ format: options.format }));
+
+program
+  .command('batch')
+  .description('从 stdin 读 JSONL（{route, params?}）批量调用，复用 keep-alive 连接')
+  .option('-c, --concurrency <n>', '并发数（默认 8）', '8')
+  .option('--summary', '末尾在 stderr 输出汇总（total/ok/fail/p50/p95/total_ms）')
+  .option('--timeout <ms>', '单次请求超时毫秒数')
+  .action((options) =>
+    batchCommand({
+      concurrency: Math.max(1, Number(options.concurrency) || 8),
+      summary: Boolean(options.summary),
+      timeoutMs: options.timeout ? Number(options.timeout) : undefined,
+    }),
+  )
+  .addHelpText('after', `
+路由寻址（同 cx query）:
+  catalog key   route: "KPI"                  → 大小写/连字符宽容（/-_ 互通）
+  catalog path  route: "/kpi"                 → 包装为 /api/query/kpi
+  /api/* 直通   route: "/api/data/version"    → 不加前缀
+  顶层直通      route: "/health"              → 不在 catalog 时 fall back 顶层
+
+示例:
+  $ echo '{"route":"KPI","params":{"year":2026}}' | cx batch --summary
+  $ printf '{"route":"/health"}\\n%.0s' {1..50} | cx batch --concurrency=4 --summary
+  $ cx routes --format=json | jq -c '.[] | {route: .path}' | cx batch`);
 
 const configCmd = program
   .command('config')

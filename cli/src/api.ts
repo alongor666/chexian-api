@@ -1,8 +1,18 @@
 /**
- * HTTP 客户端：包装 fetch，自动注入 Bearer + 标准错误处理
+ * HTTP 客户端：包装 fetch，自动注入 Bearer + 标准错误处理。
+ * 顶层 import './http.js' 启用全局 undici dispatcher（keep-alive + HTTP/2）。
  */
 import kleur from 'kleur';
+import './http.js';
+import { attachTlsPersistence } from './http.js';
 import { loadConfig } from './config.js';
+
+const tlsAttached = new Set<string>();
+function ensureTlsPersistence(host: string): void {
+  if (tlsAttached.has(host)) return;
+  tlsAttached.add(host);
+  attachTlsPersistence(host);
+}
 
 export class CxApiError extends Error {
   constructor(public status: number, message: string, public retryAfter?: number) {
@@ -27,6 +37,7 @@ export async function cxGet<T = unknown>(routePath: string, opts: RequestOpts = 
   }
 
   const url = new URL(routePath.startsWith('http') ? routePath : `${cfg.baseUrl}${routePath}`);
+  ensureTlsPersistence(url.host);
   if (opts.query) {
     for (const [k, v] of Object.entries(opts.query)) {
       if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
@@ -79,12 +90,14 @@ async function doRequest<T>(url: URL, token: string, signal?: AbortSignal, attem
   }
   if (res.status === 429) {
     const retryAfter = Number(res.headers.get('Retry-After') ?? '60');
-    if (attempt === 1) {
-      console.error(kleur.yellow(`Rate limited, retrying in ${retryAfter}s...`));
-      await sleep(retryAfter * 1000);
+    // 限流回退上限 10s — 防止单个请求等几十秒拖垮整个 batch；超出上限直接抛 429 让上层（如 cx batch）决策
+    const capped = Math.min(retryAfter, 10);
+    if (attempt === 1 && capped <= 5) {
+      console.error(kleur.yellow(`Rate limited, retrying in ${capped}s...`));
+      await sleep(capped * 1000);
       return doRequest<T>(url, token, signal, attempt + 1);
     }
-    throw new CxApiError(429, 'Rate limited', retryAfter);
+    throw new CxApiError(429, `Rate limited (Retry-After ${retryAfter}s)`, retryAfter);
   }
   if (res.status >= 500 && attempt < maxAttempts) {
     await sleep(2 ** (attempt - 1) * 1000);
