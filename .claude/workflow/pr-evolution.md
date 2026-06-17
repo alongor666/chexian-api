@@ -92,3 +92,25 @@
   4. **baseline 覆盖缺口**：xuechenglong（branch_admin/SC）抓不到系统级 admin 权限的 45 个端点（claims-detail 全套 + repair + customer-flow + renewal-tracker + auth/users/roles + filters-options 等）。若未来重构涉及这些路径，需先解锁系统级 admin 凭据补全 baseline（或用户提供）
   5. **同类成功再做 N 次**：把"补单测 oracle → refactor"作为大文件治理的标准化流水线，每个文件单独 PR + 单独 evidence-loop checkpoint，避免"一次性大重构"塌方
   6. **evidence-verifier 价值首次实战展示**：本次 fresh-context verifier 揪出我夸大 baseline 价值的盲点（声称"对纯前端 hook 重构足够"但 cost 端点根本未抓），这正是基座 §5 verifier 隔离原则的核心——实施者不能做自己的唯一验证者。未来 evidence-loop 阶段 C 调 verifier **必须**做，不能省。同类教训再发生 1 次 → wrapper rule 加 "阶段 C 步骤 2 跳过 verifier 视为流程违规"
+### 2026-06-17 — PR #662: cx wizard 二度违反 user-only red line + CI 冷启动 eager-load 回归
+- **症状**: 人类 owner review 揪出 3 个问题：①[blocking] PR 写入 `.claude/shared-memory/project_cx_cli_interactive_wizard.md`，违反 AGENTS.md §8.3 user-only 红线；②[blocking] `cli-perf-sentinel` 实测 A 冷启动 p95=**298ms** 超 CI 闸 250ms（48ms / ~19%）；③[P2] interactive.ts TTY guard 同时要 `stdin.isTTY && stdout.isTTY` 双 TTY，把 `cx query -i -f json > out.json`（stdin TTY + stdout 重定向）这类正常用法误拒为 exit 4
+- **根因①**: 我读了 `.claude/rules/evidence-loop.md`「scorecard 落位 → `.claude/shared-memory/`」（旧描述），**没读 pr-evolution.md 最新 entry**（2026-06-16 PR #650/#655 预防第 4 条已明确改为 `.claude/workflow/pr-evolution.md`）。基座 evidence-loop §8 阶段 C 步骤 4 也只说"shared sink"，未对齐到本项目 user-only 红线 — 文档与最新教训 24h 内即漂移
+- **根因②**: index.ts 顶层 eager import interactive.ts → `node:readline/promises` 在 `cx --version` 这类完全不进 wizard 的命令上也被解析进 module graph；本地 19→21ms（M-series 噪声）放到 CI 共享 runner ×14 系数即 ~298ms。bench:check 本地双校验只守 ≤50ms 北极星，CI 闸 250ms 是另一层 — 本地过≠CI 过（PR #647 教训实际复发，但表现形式不同：那次是绝对阈值放宽问题，这次是 eager-load 拖慢）
+- **根因③**: TTY guard 凭"交互 = 需要终端"的肌肉记忆直接写 `stdin && stdout`，未审视 wizard 的实际 IO 走向（prompt → stderr / 数据 → stdout）；对照 cli/src/commands/* 其他 10 处 `isTTY` 用法（全部仅查 stdout 选输出格式）独此一家
+- **修复**: ①删 `.claude/shared-memory/project_cx_cli_interactive_wizard.md` + 把 scorecard 内容并入本 entry（既是失败教训也是 evidence-loop 阶段 C 落位）；②index.ts 改 `await import('./commands/interactive.js')` lazy，仅 wizard 入口才加载；③TTY guard 抽 `isInteractiveUnsupported(stdinTty)` 纯函数只查 stdin，补 2 个测试覆盖 `stdin=true, stdout=任意` 必允许进入
+- **预防**: 
+  1. **任何 evidence-loop scorecard 落盘前**必 `tail -20 .claude/workflow/pr-evolution.md` 校 user-only 边界（同类失败再发生 1 次 → 加 governance #N 扫所有新 commit 的 `.claude/shared-memory/**` 增改，本会话内未做但已登记 BACKLOG 候选）
+  2. **基座 evidence-loop §8** 的"scorecard 落位"措辞应明确分项目：chexian-api → `.claude/workflow/pr-evolution.md`；其他项目按各自 AGENTS.md。已在 `~/.claude/skills/evidence-loop-core/` 留 TODO，下次跨项目同步时一并修
+  3. **CLI 性能闸两层并守**：本地 `bun run bench:check` 守北极星 50ms（不通过则不能进入提交流程），但**本地过仅必要不充分** — CI cli-perf-sentinel 250ms 是 final gate；本地 lazy import 类改动必须用 `bun build:bin && bun run bench` 重测，看 A p95 是否真"零退化"（增 2ms 在 M-series 是噪声，但在 CI 共享 runner 可能 ×14 系数即灾难）
+  4. **CLI guard 写`isTTY`时必先**对照已有 cli/src/commands/* 用法 — 其他命令一致地用 stdout 决定输出格式，stdin 决定是否读管道；新增交互 guard 不应同时绑两端
+
+#### evidence-loop scorecard（并入本 entry，原 `.claude/shared-memory/` 落位已删）
+
+- **业务目标**: `cx query` 在缺 key/参数名时进交互式构建器，复用 queryCommand 下游链路，无新增依赖
+- **正确性 oracle**: cli test 72/72（51 原 + 21 wizard：纯函数 11 / 集成 6 / retry 2 / TTY guard 2）；`bun run typecheck` ✓
+- **度量**:
+  - 本地 A 冷启动 p95：baseline 19 → eager-import 19 → **lazy-import 21**（M-series 噪声，<50 北极星 ✓）
+  - 本地 E 批量 100 keepalive：baseline 866 → **563ms**（改善 35% ✓）
+  - CI A 冷启动 p95：eager-import **298ms ❌** > 250ms 闸 → lazy-import 待 push 验证
+- **零侵入**: 非交互 `cx query KEY --p=v` 字符仅 action 体 `(key, options, cmd) =>` 改为 `async (key, options, cmd) =>`（lazy import 需 await）；queryCommand / parseExtraParams / applyPathParams 全部不动
+- **决策**: lazy import + TTY 修复 → 推 fix commit → 等 CI 验证

@@ -96,6 +96,17 @@ export function previewUrl(route: RouteMeta, params: Record<string, string>): st
 
 /** ----- 交互入口 ----- */
 
+/**
+ * wizard 是否应直接拒绝交互（缺 TTY）。
+ *
+ * 只检查 stdin — 因 prompt/进度全部走 stderr，stdout 是数据出口；
+ * `cx query -i -f json > result.json`（stdin TTY 交互 + stdout 重定向）属正常用法，
+ * 不应被 guard 拒。仅当 stdin 不是 TTY（如 `cx query < input.txt` 管道喂数据）时才拒。
+ */
+export function isInteractiveUnsupported(stdinTty: boolean | undefined): boolean {
+  return !stdinTty;
+}
+
 export interface IO {
   question(prompt: string): Promise<string>;
   close(): void;
@@ -117,8 +128,8 @@ export interface InteractiveDeps {
 
 export async function interactiveQueryCommand(opts: InteractiveOpts, deps: InteractiveDeps = {}): Promise<void> {
   const usingDefaultIO = !deps.io;
-  if (usingDefaultIO && (!process.stdin.isTTY || !process.stdout.isTTY)) {
-    process.stderr.write(kleur.red('✘ 交互模式需要 TTY。请直接传 key + 参数：\n'));
+  if (usingDefaultIO && isInteractiveUnsupported(process.stdin.isTTY)) {
+    process.stderr.write(kleur.red('✘ 交互模式需要 stdin 是 TTY（stdout 可重定向到文件/管道）。请直接传 key + 参数：\n'));
     process.stderr.write(kleur.gray('  cx query <key|path> [--param=value ...]\n'));
     process.stderr.write(kleur.gray('  cx routes 列出可用路由\n'));
     process.exit(EXIT.USAGE);

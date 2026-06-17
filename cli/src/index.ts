@@ -16,7 +16,8 @@ import { logoutCommand } from './commands/logout.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { routesCommand } from './commands/routes.js';
 import { queryCommand, parseExtraParams } from './commands/query.js';
-import { interactiveQueryCommand } from './commands/interactive.js';
+// interactive 走 lazy import：仅 wizard 入口 (-i / 无 key) 时才加载 readline + interactive.ts，
+// 保持非交互冷启动的零依赖载入（CI cli-perf-sentinel 闸）
 import { fieldsCommand } from './commands/fields.js';
 import { metricsCommand } from './commands/metrics.js';
 import { presetsCommand } from './commands/presets.js';
@@ -99,13 +100,14 @@ program
   .option('-l, --limit <n>', '客户端截断行数（仅列表型响应）')
   .option('--timeout <ms>', '请求超时毫秒数')
   .option('-i, --interactive', '交互式构建查询（无 key 时自动进入）')
-  .action((key, options, cmd) => {
+  .action(async (key, options, cmd) => {
     const wizardOpts = {
       format: options.format,
       limit: options.limit ? Number(options.limit) : undefined,
       timeoutMs: options.timeout ? Number(options.timeout) : undefined,
     };
     if (!key || options.interactive) {
+      const { interactiveQueryCommand } = await import('./commands/interactive.js');
       return interactiveQueryCommand(wizardOpts);
     }
     const extras = parseExtraParams(cmd.args.slice(1));

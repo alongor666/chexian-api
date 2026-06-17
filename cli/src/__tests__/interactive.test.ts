@@ -4,6 +4,7 @@ import {
   buildParamSpec,
   previewUrl,
   interactiveQueryCommand,
+  isInteractiveUnsupported,
   type IO,
 } from '../commands/interactive.js';
 import type { RouteMeta } from '../commands/routes.js';
@@ -83,6 +84,18 @@ describe('buildParamSpec', () => {
   it('无 parameters 时返回空数组', () => {
     const bare: RouteMeta = { ...ROUTES[0], fullPath: '/api/query/none', parameters: [] };
     expect(buildParamSpec(bare)).toEqual([]);
+  });
+});
+
+describe('isInteractiveUnsupported（TTY guard 只查 stdin）', () => {
+  it('stdin 不是 TTY → 拒绝交互（管道喂数据场景）', () => {
+    expect(isInteractiveUnsupported(false)).toBe(true);
+    expect(isInteractiveUnsupported(undefined)).toBe(true);
+  });
+
+  it('stdin 是 TTY → 允许交互（无论 stdout 是否重定向）', () => {
+    // 等价 `cx query -i -f json > result.json`：stdin TTY 可输入，stdout pipe 接数据
+    expect(isInteractiveUnsupported(true)).toBe(false);
   });
 });
 
