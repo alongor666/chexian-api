@@ -14,10 +14,10 @@ import {
   GrowthType,
   TimeView as GrowthTimeView,
 } from '../../sql/growth.js';
-import { dbEnv } from '../../config/env.js';
 import { isGrowthCubeServable, rewriteGrowthSqlForCube } from '../../sql/cube/growth-cube.js';
 import { ensureTrendCubeFresh } from '../../services/duckdb-cube.js';
 import { runShadowCompare } from '../../services/cube-shadow.js';
+import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor } from '../../services/cube-routing.js';
 
 const router = Router();
 
@@ -32,8 +32,8 @@ async function tryGrowthCube(
   cacheTtl: number,
   legacyRunner: () => Promise<Array<Record<string, unknown>>>
 ): Promise<Array<Record<string, unknown>> | null> {
-  const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
-  const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+  const cubeRouting = isCubeRoutingEnabledFor('growth');
+  const cubeShadow = isCubeShadowEnabledFor('growth');
   if (!cubeRouting && !cubeShadow) return null;
   if (!isGrowthCubeServable(servabilityArgs).servable) return null;
   if (ensureTrendCubeFresh(duckdbService) !== 'ready') return null;

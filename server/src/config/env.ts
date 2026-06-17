@@ -132,6 +132,23 @@ export const dbEnv = {
    * 与计数器（services/cube-shadow.ts）。连续观察零差异后才切 CUBE_ROUTING_ENABLED。
    */
   CUBE_SHADOW_COMPARE: process.env.CUBE_SHADOW_COMPARE ?? 'false',
+  /**
+   * 立方体路由按路由白名单（部分切流闸，与 CUBE_ROUTING_ENABLED 配合）。
+   * 取值：逗号分隔的 cube 路由 shadowKey（trend / growth / cost / kpi / salesman-ranking），
+   * 与 scripts/shared/cube-routes.mjs SSOT 对齐；解析时去空格、忽略大小写。
+   *
+   * 语义：
+   *   - 缺省 / 空串：不限制——CUBE_ROUTING_ENABLED='true' 时全部 5 路由切流（向后兼容，
+   *     等价于本变量未引入前的行为）。
+   *   - 非空：仅白名单内路由切流，其余路由（含 cost cube OOM 物化失败 / 跨格保单探针降级
+   *     等"cube 暂不可服务"路由）继续走原路径，直至诊断修复后再扩列表。
+   *
+   * #7 部分切流推荐配置（trend / growth / salesman-ranking 三路由实测 0 mismatch）：
+   *   CUBE_ROUTING_ENABLED=true
+   *   CUBE_ROUTING_ROUTES=trend,growth,salesman-ranking
+   * cost / kpi 因 cost cube 在当前数据版本探针降级，暂留原路径。
+   */
+  CUBE_ROUTING_ROUTES: process.env.CUBE_ROUTING_ROUTES ?? '',
 } as const;
 
 // ─── AI 提供商配置 ─────────────────────────────────────────────────────────────

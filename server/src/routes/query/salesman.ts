@@ -2,10 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, withRouteCache } from './shared.js';
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../../sql/salesman-ranking.js';
-import { dbEnv } from '../../config/env.js';
 import { isSalesmanCubeServable, generateSalesmanRankingCubeQuery } from '../../sql/cube/salesman-cube.js';
 import { ensureSalesmanCubeFresh } from '../../services/duckdb-cube.js';
 import { runShadowCompare } from '../../services/cube-shadow.js';
+import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor } from '../../services/cube-routing.js';
 
 const router = Router();
 
@@ -20,8 +20,8 @@ async function trySalesmanCube(
   limit: number,
   legacyRunner: () => Promise<Array<Record<string, unknown>>>
 ): Promise<Array<Record<string, unknown>> | null> {
-  const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
-  const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+  const cubeRouting = isCubeRoutingEnabledFor('salesman-ranking');
+  const cubeShadow = isCubeShadowEnabledFor('salesman-ranking');
   if (!cubeRouting && !cubeShadow) return null;
   if (!isSalesmanCubeServable(whereClause).servable) return null;
   if (ensureSalesmanCubeFresh(duckdbService) !== 'ready') return null;
