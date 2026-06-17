@@ -32,7 +32,7 @@
 
 ### KPI 模块
 - **`kpi/KpiCard.tsx`**: KPI 卡片组件（数值、趋势、对比）
-- **`kpi/EnhancedKpiCard.tsx`**: 增强型 KPI 卡片组件（环形图、占比条）
+- **`kpi/EnhancedKpiCard/`**: 增强型 KPI 卡片（目录入口=`index.tsx`；2026-06-17 PR #667 把 870 行单文件拆为 5 子文件：`types` / `utils` / `LegacyRatioParts` / `HeroReferenceParts` / `StatusAtoms`）— hero/standard 双变体 + value/donut/bar 三类型 + 完整参照系（progress/ring/segments + threshold + delta + sparkline + status rail）。详见 [kpi/INDEX.md](./kpi/INDEX.md)
 - **`kpi/RenewalKpiFunnel.tsx`**: 续保漏斗 KPI 卡片（流程图式展示：应续→报价→已续）
 
 ### Table 模块
