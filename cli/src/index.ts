@@ -16,6 +16,8 @@ import { logoutCommand } from './commands/logout.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { routesCommand } from './commands/routes.js';
 import { queryCommand, parseExtraParams } from './commands/query.js';
+// interactive 走 lazy import：仅 wizard 入口 (-i / 无 key) 时才加载 readline + interactive.ts，
+// 保持非交互冷启动的零依赖载入（CI cli-perf-sentinel 闸）
 import { fieldsCommand } from './commands/fields.js';
 import { metricsCommand } from './commands/metrics.js';
 import { presetsCommand } from './commands/presets.js';
@@ -90,24 +92,31 @@ program
   $ cx routes --format=json | jq '.[].key'`);
 
 program
-  .command('query <key|path>')
-  .description('调用查询路由（key 宽容匹配 / catalog path / 以 / 开头直通）')
+  .command('query [key|path]')
+  .description('调用查询路由（key 宽容匹配 / catalog path / 以 / 开头直通）；缺 key 或 -i 进入交互式构建器')
   .allowUnknownOption(true)
   .allowExcessArguments(true)
   .option('-f, --format <fmt>', '输出格式 table|json|csv（非终端默认 json）')
   .option('-l, --limit <n>', '客户端截断行数（仅列表型响应）')
   .option('--timeout <ms>', '请求超时毫秒数')
-  .action((key, options, cmd) => {
-    const extras = parseExtraParams(cmd.args.slice(1));
-    return queryCommand(key, {
+  .option('-i, --interactive', '交互式构建查询（无 key 时自动进入）')
+  .action(async (key, options, cmd) => {
+    const wizardOpts = {
       format: options.format,
-      params: extras,
       limit: options.limit ? Number(options.limit) : undefined,
       timeoutMs: options.timeout ? Number(options.timeout) : undefined,
-    });
+    };
+    if (!key || options.interactive) {
+      const { interactiveQueryCommand } = await import('./commands/interactive.js');
+      return interactiveQueryCommand(wizardOpts);
+    }
+    const extras = parseExtraParams(cmd.args.slice(1));
+    return queryCommand(key, { ...wizardOpts, params: extras });
   })
   .addHelpText('after', `
 示例:
+  $ cx query                                  （无 key → 交互式 wizard）
+  $ cx query -i                               （强制 wizard）
   $ cx query KPI --year=2026 --org_level_3=分公司A
   $ cx query claims-detail-heatmap --dateStart=2026-01-01
   $ cx query /patrol/renewal                    （path 直通）
