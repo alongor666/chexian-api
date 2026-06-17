@@ -76,8 +76,9 @@
 | `.claude/rules/sql-generators.md` | SQL 业务口径护栏 |
 | `.claude/rules/claude-md-budget.md` | CLAUDE.md 体积红线 |
 | `.claude/agents/**` | Agent 行为契约 |
-| `reference_shared_memory.md` | 共享记忆契约 |
 | AGENTS.md §8 本节 | 元规则（修改本节也算 frozen）|
+
+> **2026-06-17 §8.1 校准**：`reference_shared_memory.md` 已从本表移除——其物理路径 `~/.claude/projects/**/memory/reference_shared_memory.md` 已被 §8.3 user-only 覆盖。user-only（AI 完全不动）严于 frozen（需 `[policy-override]`），双标只会让档位判断歧义。该文件作为契约的修改路径：用户人工编辑（与其它 memory 文件一致）。
 
 > **2026-06-05（PR #493）**：经 owner 显式授权（`[policy-override]`），`CLAUDE.md` 移出 frozen 名单——顶层指令的常规校准（注册表计数、命令约定等）不再需逐次 `[policy-override]`；CLAUDE.md 体积红线仍由 frozen 的 `.claude/rules/claude-md-budget.md` + governance #23 守护，业务口径/红线表的实质改动仍应走 PR + review。
 
@@ -97,14 +98,37 @@ PR 涉及 append-only 路径的纯新增时，**不需要**额外授权，但 PR
 
 ### 8.3 `user-only` — 本地状态 / 共享记忆
 
-AI 不得修改，只读引用；只能由用户手动 sync / 编辑。
+**规则语义**：
 
-| 路径 |
-|------|
-| `.claude/shared-memory/**` |
-| `~/.claude/shared-memory/chexian/**` |
-| `.claude/scheduled_tasks.lock` |
-| `~/.claude/projects/**/memory/**`（auto-memory，hook 自动写入除外）|
+- **读始终允许**（含 `grep` / `cat` / Read 工具 / lock 状态查询）。
+- **写禁止**：AI 不得通过 Write / Edit / 删除 / `>` 重定向 / `sed -i` / `git rm` / `git mv` 等任何方式修改下表路径。
+
+| 路径 | 说明 |
+|------|------|
+| `.claude/shared-memory/**` | 项目内 git tracked 共享记忆（私董会/作战地图/chexian 多项目共用）|
+| `~/.claude/shared-memory/**` | 全部用户级共享记忆根目录（chexian / sidonghui / 等所有子项目）|
+| `.claude/scheduled_tasks.lock` | 调度运行时 lock（gitignore，并发原语）|
+| `~/.claude/projects/**/memory/**` | auto-memory 与用户手工 memory（统一保护）|
+
+**豁免**：`~/.claude/projects/**/memory/**` 下，**平台内置 auto-memory 工具入口**（Claude Code 内置的 memory 写入机制 / Claude Agent SDK 的 memory 持久化通道）写入不受本规则约束——AI 通过 Write/Edit 工具调用不豁免。
+
+**用户对话中要求修改 user-only 路径时的 AI 响应规范**：
+
+1. **不直接改**：即使用户明确说"把 memory `feedback_xxx` 里 X 改成 Y"或"删掉这条 memory"，AI 不得用 Write/Edit 工具完成。
+2. **提供 diff/patch**：给出具体改动方案（`<file_path>:<line>` 处 X → Y 的明确 diff），让用户 copy-paste 到自己的终端 / 编辑器手动 apply。
+3. **不绕路**：禁止建议"我来跑一个 shell 脚本 / Bash here-doc 帮你写入"——这属于借道 Bash 绕开 Write/Edit 拦截，违反本节精神。
+
+**机制覆盖范围与剩余规约层**（诚实声明，对应规则语义中的"写禁止"全口径）：
+
+| 写入入口 | user-only 路径 | 拦截层 | 状态 |
+|---|---|---|---|
+| Write / Edit（Claude Code 工具调用）| 全部 4 类（项目内+项目外+gitignore）| **PreToolUse hook**（`scripts/hooks/claude-user-only-guard.sh`，matcher `Write\|Edit`）| ✅ 机制拦截，写动作发起前阻止 |
+| 已 commit 进 PR 的违规 | 仅 `.claude/shared-memory/**`（git 可见）| **governance check**（`scripts/check-governance.mjs:checkSharedMemoryUserOnly` 第 37 项，扫 staged/unstaged/untracked/`origin/main...HEAD` commit range）| ✅ 机制拦截，pre-push / CI / `bun run governance` 闸 |
+| Bash 命令（here-doc `cat >` / `sed -i` / `git rm` / `git mv` / 任意 shell 重定向）写入 user-only | 全部 4 类 | ⚠️ **无机制拦截**——matcher 不挂 Bash | 走 AI 自律「不绕路」+ reviewer 人工核查；命中 `.claude/shared-memory/**` 的 Bash 写入会被 governance commit range 兜底（事后），但 `~/.claude/**` 与 `scheduled_tasks.lock` 的 Bash 写入**无机制兜底** |
+
+> Bash 入口未挂 hook 的取舍：项目内大量合法 Bash 写文件（ETL 写 parquet / sed 改 lockfile / git mv 重组目录），无差别拦截误拦率高、解析 shell 命令易绕过；故只在 Write/Edit 工具入口设硬拦截，Bash 写入对 user-only 的合规由「不绕路」自律 + PR 评审兜底。需要更强保证时，user 可设 `SHARED_MEMORY_USER_WRITE=1` 显式豁免开关（命名带 USER_WRITE 自我提示，**AI 会话禁用**）作为治理 lever。
+
+详细规则（违规清单、备选路径建议、自动闸行为）见 [`.claude/rules/shared-memory-discipline.md`](.claude/rules/shared-memory-discipline.md)。
 
 ### 8.4 与外部 AI 评审协作（Codex）
 
