@@ -89,6 +89,20 @@ export const dbEnv = {
   /** DuckDB 线程数 */
   DUCKDB_THREADS: process.env.DUCKDB_THREADS ? parseInt(process.env.DUCKDB_THREADS, 10) : 4,
   /**
+   * DuckDB 临时目录（larger-than-memory 聚合 / JOIN spill 到磁盘的物理路径）。
+   *
+   * DuckDB 行为说明（实测 1.x，CLI `SELECT current_setting('temp_directory')`）：
+   *   - 缺省 / 空串：保持 DuckDB 默认——在进程 cwd 下自动创建 `.tmp/` 并 spill（默认值 `'.tmp'`）。
+   *     本项目 server 启动时 cwd = `server/`，所以默认 spill 落到 `server/.tmp/`（已 .gitignore）。
+   *   - 非空：显式 `SET temp_directory='${此值}'`，便于运维指向 SSD / 大盘
+   *     （生产 VPS 2 核 4G 默认根盘空间紧张，可指 `/var/www/chexian/server/.tmp` 或 `/mnt/data/duckdb-spill`）。
+   *
+   * 范围说明：本变量只控制 **spill 物理路径**，不改 `memory_limit`，不解决 cost 立方体物化阶段的
+   * 工作集（working set）超 `memory_limit` 触发 OOM 的根因。cost 立方体 OOM 的根治
+   * （SQL 列裁剪 / 探针口径放宽 / 物化分块）属于另一 PR 范围。
+   */
+  DUCKDB_TEMP_DIR: process.env.DUCKDB_TEMP_DIR ?? '',
+  /**
    * 连接池最大连接数（默认 8）
    * 双重对齐：CPU 物理上限 ∩ 应用 fanout 下限。
    * - 8 槽配合 queue=32，覆盖 bundles 路由单请求 10 query 并发 + cache-warmer

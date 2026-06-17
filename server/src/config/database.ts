@@ -37,4 +37,9 @@ export const DUCKDB_INIT_OPTIONS = {
   allow_unsigned_extensions: false,
   max_memory: dbEnv.DUCKDB_MAX_MEMORY,
   threads: dbEnv.DUCKDB_THREADS,
+  /**
+   * 显式 spill 路径（空串=用 DuckDB cwd 下 .tmp/ 默认行为，与历史一致）。
+   * 详见 env.ts DUCKDB_TEMP_DIR 注释；生产建议显式指向大盘避免根盘 spill 撑满。
+   */
+  temp_directory: dbEnv.DUCKDB_TEMP_DIR,
 };
