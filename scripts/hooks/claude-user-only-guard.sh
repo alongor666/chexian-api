@@ -33,9 +33,14 @@ if [ -z "$file_path" ]; then
     exit 0
 fi
 
-case "$file_path" in
-    */.claude/shared-memory/*|*/.claude/scheduled_tasks.lock|*/.claude/projects/*/memory/*)
-        cat <<EOF >&2
+# 用 grep -E + (^|/) 锚定路径段开头，同时覆盖三种 file_path 形式：
+#   1. 绝对路径   /Users/.../.claude/shared-memory/foo.md   → 命中（/.claude/）
+#   2. ./ 前缀    ./.claude/shared-memory/foo.md            → 命中（/.claude/）
+#   3. 裸相对路径 .claude/shared-memory/foo.md              → 命中（^\.claude/）
+# 之前的 case "*/.claude/..." 仅匹配 1+2，漏 3（PR #666 owner review #1 blocker）。
+USER_ONLY_REGEX='(^|/)\.claude/(shared-memory/|scheduled_tasks\.lock$|projects/[^/]+/memory/)'
+if printf '%s' "$file_path" | grep -qE "$USER_ONLY_REGEX"; then
+    cat <<EOF >&2
 ❌ 禁止 AI 修改 user-only 路径（AGENTS.md §8.3）
 
   目标文件：$file_path
@@ -50,8 +55,7 @@ AGENTS.md §8.3 规定：读始终允许；写禁止。
 如确属误拦（例如调用方不是 AI 而是用户运行的脚本），由用户在 .claude/settings.local.json
 临时禁用本 hook。
 EOF
-        exit 2
-        ;;
-esac
+    exit 2
+fi
 
 exit 0
