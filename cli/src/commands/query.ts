@@ -14,7 +14,7 @@ import { applyPathParams } from '../path-params.js';
 import { note } from '../cli-state.js';
 import { fetchCatalog } from './routes.js';
 
-interface QueryOpts {
+export interface QueryOpts {
   format?: OutputFormat;
   /** 额外 query 参数：来自 commander 的 --key=value 解析 */
   params: Record<string, string>;
