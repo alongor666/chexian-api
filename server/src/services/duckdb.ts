@@ -17,6 +17,13 @@ export interface DuckDBServiceConfig {
   maxConnections?: number;
   maxMemory?: string;
   threads?: number;
+  /**
+   * 显式 spill 路径（larger-than-memory 临时盘）。
+   *   - undefined：从 DUCKDB_INIT_OPTIONS.temp_directory 回退
+   *   - 空串：保留 DuckDB 默认（cwd 下 .tmp/），与历史一致
+   *   - 非空：init 时 `SET temp_directory='${此值}'`
+   */
+  tempDirectory?: string;
 }
 
 export class DuckDBService implements DuckDBQueryable {
@@ -36,10 +43,15 @@ export class DuckDBService implements DuckDBQueryable {
       const maxConn = this.config?.maxConnections ?? databaseConfig.maxConnections ?? 10;
       const maxMem = this.config?.maxMemory ?? DUCKDB_INIT_OPTIONS.max_memory;
       const threads = this.config?.threads ?? DUCKDB_INIT_OPTIONS.threads;
+      const tempDir = this.config?.tempDirectory ?? DUCKDB_INIT_OPTIONS.temp_directory;
       this.instance = await DuckDBInstance.create(dbPath, { max_memory: maxMem, threads: String(threads) });
       this.connectionPool = new ConnectionPool(this.instance, maxConn);
       await this.query(`SET memory_limit='${maxMem}'`); await this.query(`SET threads=${threads}`); // 显式 SET 确保生效
-      console.log('[DuckDB] Database initialized:', dbPath, `(pool max: ${maxConn}, max_memory: ${maxMem}, threads: ${threads})`);
+      // 非空时显式 SET temp_directory（运维指向 SSD/大盘）；空时保持 DuckDB 默认（cwd 下 .tmp/）
+      if (tempDir) await this.query(`SET temp_directory='${escapeSqlValue(tempDir)}'`);
+      // 启动日志输出真实生效的 temp_directory（cost 立方体 OOM 诊断时需要可观测，B 阶段 PR-12 引入）
+      const actualTempDir = (await this.query<{ temp_directory: string }>(`SELECT current_setting('temp_directory') AS temp_directory`))[0]?.temp_directory ?? '?';
+      console.log('[DuckDB] Database initialized:', dbPath, `(pool max: ${maxConn}, max_memory: ${maxMem}, threads: ${threads}, temp_directory: ${actualTempDir})`);
       this.isInitialized = true;
       await initDuckDBTables(this);
     } catch (err: unknown) {
