@@ -4,10 +4,10 @@ import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_
 import { generateKpiQuery } from '../../sql/kpi.js';
 import { generateKpiDetailQuery } from '../../sql/kpi-detail.js';
 import { RouteConcurrencyGate } from '../../services/route-concurrency.js';
-import { dbEnv } from '../../config/env.js';
 import { isKpiCostCubeServable, generateKpiCostCubeQuery } from '../../sql/cube/kpi-cost-cube.js';
 import { ensureCostCubeFresh } from '../../services/duckdb-cube.js';
 import { runShadowCompare } from '../../services/cube-shadow.js';
+import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor } from '../../services/cube-routing.js';
 
 /** KPI 主 SQL 接口的 cost 三项输出列（注册表表达式直接定义的别名） */
 const KPI_COST_COLUMNS = ['variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio'] as const;
@@ -32,8 +32,8 @@ function planKpiCostCube(
   whereWithDate: string,
   dateField: string
 ): { mode: 'routing'; cubeSql: string } | { mode: 'shadow'; cubeSql: string } | null {
-  const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
-  const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+  const cubeRouting = isCubeRoutingEnabledFor('kpi');
+  const cubeShadow = isCubeShadowEnabledFor('kpi');
   if (!cubeRouting && !cubeShadow) return null;
   if (!isKpiCostCubeServable({ whereClause: whereWithDate, dateField }).servable) return null;
   if (ensureCostCubeFresh(duckdbService) !== 'ready') return null;

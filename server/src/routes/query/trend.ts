@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, resolveGroupDim, withRouteCache } from './shared.js';
 import { generatePremiumTrendQuery, generateQualityBusinessTrendQuery, TimeView } from '../../sql/trend.js';
 import type { ViewPerspective } from '../../types/view-perspective.js';
-import { dbEnv } from '../../config/env.js';
 import { isTrendCubeServable, generatePremiumTrendCubeQuery } from '../../sql/cube/trend-cube.js';
 import { ensureTrendCubeFresh } from '../../services/duckdb-cube.js';
 import { runShadowCompare } from '../../services/cube-shadow.js';
+import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor } from '../../services/cube-routing.js';
 
 const router = Router();
 
@@ -54,8 +54,8 @@ router.get(
 
     // ── 通用可加性立方体试点（BACKLOG uid=2026-06-11-claude-90a92c）──
     // 双开关均关闭（默认）时下方分支零生效，行为与历史完全一致。
-    const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
-    const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+    const cubeRouting = isCubeRoutingEnabledFor('trend');
+    const cubeShadow = isCubeShadowEnabledFor('trend');
     if (cubeRouting || cubeShadow) {
       const servability = isTrendCubeServable(whereClause, dateField, perspective);
       if (servability.servable && ensureTrendCubeFresh(duckdbService) === 'ready') {

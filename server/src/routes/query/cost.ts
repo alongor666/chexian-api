@@ -15,10 +15,10 @@ import {
   generateMonthlyExpenseQuery,
   CostDimension,
 } from '../../sql/cost.js';
-import { dbEnv } from '../../config/env.js';
 import { isCostCubeServable, generateCostCubeQuery, type CostCubeAnalysisType } from '../../sql/cube/cost-cube.js';
 import { ensureCostCubeFresh } from '../../services/duckdb-cube.js';
 import { runShadowCompare } from '../../services/cube-shadow.js';
+import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor } from '../../services/cube-routing.js';
 import type { CostAnalysisConfig } from '../../sql/cost/shared.js';
 
 const router = Router();
@@ -33,8 +33,8 @@ async function tryCostCube(
   config: CostAnalysisConfig,
   legacyRunner: () => Promise<Array<Record<string, unknown>>>
 ): Promise<Array<Record<string, unknown>> | null> {
-  const cubeRouting = dbEnv.CUBE_ROUTING_ENABLED === 'true';
-  const cubeShadow = dbEnv.CUBE_SHADOW_COMPARE === 'true';
+  const cubeRouting = isCubeRoutingEnabledFor('cost');
+  const cubeShadow = isCubeShadowEnabledFor('cost');
   if (!cubeRouting && !cubeShadow) return null;
   if (!isCostCubeServable({ whereClause: config.whereClause ?? '1=1', dimension: config.dimension }).servable) return null;
   if (ensureCostCubeFresh(duckdbService) !== 'ready') return null;
