@@ -162,3 +162,39 @@
      - **Blocker 1（扫描漏 commit range）**：原 `checkSharedMemoryUserOnly()` 只扫 staged + working tree + untracked，CI / pre-push 跑在 clean checkout（已 commit 改动不出现在 staged/working tree） → 已 commit 进 PR 的 `.claude/shared-memory/**` A/M 会被静默漏过——等于"PR #662 模式"绕过自家闸。**修**：加第 4 路扫描 `git diff --name-status origin/main...HEAD`，origin/main 不存在时静默跳过（首次推送场景）。教训：写"防止 X 类违规"的闸时必须对照该违规历史**实际发生路径**（PR #662 是已 commit 后被人类发现的）反推扫描范围，不能凭"本地编辑流"直觉只扫工作区
      - **Blocker 2（AI 自删后门）**：原版让 AI 删了两个违规文件 + governance 给"纯 D = warning"留通道——AGENTS.md §8.3 "AI 不得修改"含义包含删除/重命名；新规则文件自己 §1 也承认 git rm/git mv 是写操作；自己给自己留例外 = 后门。**修**：恢复两个 shared-memory 文件（从 origin/main） + 移除 D warning 例外 + 规则文件 §4 明确"本 PR 不删，user 决定后续"；两个违规文件的原文 100% 完整在 §A 归档可追溯，shared-memory 内的"原件"由 user 用 `SHARED_MEMORY_USER_WRITE=1 git rm ...` 自行清理（或永久保留）
      - 元教训：当机制本身要承担"治理违规"职责时，**不能在同一 PR 里既建闸又用 AI 自我授权绕闸做清理**；建闸 PR 必须自身合规（零 A/M/D shared-memory），违规清理留给 user / 后续 PR
+
+### 2026-06-17 — Wave 1 P2 收尾：EnhancedKpiCard 870→321 + 5 子文件 + 27 case oracle
+
+- **起点**: f756eb07 session 7-file investigation 报告 P2，按 target_split 直接套用（types/utils/Legacy/Hero/Status 五件套 + 薄壳 index）；前置 P1 (#665) 已 merged 进 main
+- **合同六要素**（基座 §1）:
+  - 业务目标 = 870 → 主入口目标 ~280 行（实际 321，-63%）+ 6 子文件 + 6 public export 100% 兼容
+  - 终止条件 = 12-15 case oracle 测试全绿 + verify:full 零退化 + 4 调用方 import 不变
+  - 证据 = `wc -l` 行数 / `git rm + git add` diff / vitest 27/27 / governance 36/36 / typecheck ✓
+  - loop 协议 = 八步（基线 → 不变量 → 假设 → 最小改动 → 正确性 → 前后对比 → 决策 → 沉淀）
+  - verifier = 项目级 `evidence-verifier` agent（PR review 时调度）
+  - 停止条件 = 测试 baseline 跑不通 / typecheck 退化 / 调用方需改 import
+- **harness 现状**（阶段 A）: vitest jsdom + `tests/setup.ts` matchMedia 注入 + `cross-sell-ux-review-fixes.test.tsx` 等 tsx-test 模板齐备；oracle = vitest-component 12+ case
+- **改动文件**:
+  - `src/widgets/kpi/EnhancedKpiCard.tsx` (870 lines) → `D` 删除
+  - `src/widgets/kpi/EnhancedKpiCard/types.ts` (103) - 6 个 public interface
+  - `src/widgets/kpi/EnhancedKpiCard/utils.ts` (28) - DEFAULT_COLORS/SEGMENT_COLORS/toneColor/normalizeNumeric
+  - `src/widgets/kpi/EnhancedKpiCard/LegacyRatioParts.tsx` (226) - MiniDonutChart/ChartLegend/RatioBar
+  - `src/widgets/kpi/EnhancedKpiCard/HeroReferenceParts.tsx` (169) - ProgressBar/RingChart/SegmentBarReference
+  - `src/widgets/kpi/EnhancedKpiCard/StatusAtoms.tsx` (99) - DeltaChip/StatusTag/StatusRail/Sparkline
+  - `src/widgets/kpi/EnhancedKpiCard/index.tsx` (321) - 主入口 + 6 type re-export
+  - `src/widgets/kpi/__tests__/EnhancedKpiCard.test.tsx` (427) - 27 case oracle
+- **跑的命令**:
+  - oracle baseline: `bun run test --run src/widgets/kpi/__tests__/EnhancedKpiCard.test.tsx` → 先在 870 行原文件跑 = 25/27 (2 case 因 title 与 status.label 同名 getByText 多匹配 → 修 title 为 "赔付率监控") → **27/27**
+  - 重构后 oracle: 同命令 → **27/27** 零差异（行为不变锚点成立）
+  - `bun run typecheck` → ✓（修 `unused screen import` 1 处）
+  - `bun run verify:full` → governance 36/36 + 237 测试文件 / **3280 用例**全过（含 KpiSection.test.tsx 4 个调用方测试 + 新增 27）
+- **正确性结果**: 27 case 在拆分前后行为 byte-identical；调用方 KpiSection / EarnedPremiumCharts / kpiCardProps import 路径 `widgets/kpi/EnhancedKpiCard` 自动解析到 `index.tsx`，**0 处需改**
+- **度量结果**:
+  - 行数：870 → 321 (-63%)；目标 ~280 ±15%（容差内）
+  - 子文件最大 226（LegacyRatioParts），全部 < 800 红线
+  - 测试新增 27 case / 78ms 跑过
+- **基线 vs 候选**: 行为不变（27 case identical）+ 行数 -63% + 0 调用方 break + oracle 永久建立（PR #663 模式）
+- **verifier 结果**: 待 PR review 时调 evidence-verifier agent fresh-context 证伪
+- **决策**: **promote** — commit + push + PR
+- **下一步**: Wave 2 P3 `NewEarnedPremiumTable.tsx` (891 行)，等本 PR 合并后开新 worktree
+- **未验证声明**: 无（所有数字均有命令输出支撑）
