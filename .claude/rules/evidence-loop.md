@@ -17,15 +17,15 @@ policy: append-only
 
 | 任务类型 | 基线 / 度量 | 正确性 oracle | 回归门禁 | 发布安全 |
 |---|---|---|---|---|
-| 性能优化（通用） | `scripts/benchmark-key-routes.mjs`（HTTP 路由 p50/p95/p99）、`scripts/golden-baseline.mjs`（落 `.planning/golden-baseline/`）、按需 profiler | `golden-baseline.mjs --compare` 零差异 / 相关单测 | `bun run verify:full` | 视改动而定（有灰度 flag 则用） |
-| └ 立方体专项（perf 的一个实例，非全部 perf） | `scripts/perf/bench-universal-cube.mjs`（L0→L3） | `server/src/services/cube-shadow.ts` 影子对账（容差见 `NUMERIC_TOLERANCE`，不在此复述数值）+ `duckdb-cube-*.test.ts` | `bun run verify:full` | `cube-promote.mjs` / `cube-rollback.mjs` / sentinel |
+| 性能优化（通用） | `scripts/benchmark-key-routes.mjs`（HTTP 路由 p50/p95/p99，需 server 跑 `dev:full`）、`scripts/golden-baseline.mjs`（落 `.planning/golden-baseline/`；**首次用须先跑 `--build` 抓 71 端点基线，否则 `--compare` 无对照**）、按需 profiler | `golden-baseline.mjs --compare` 零差异 / 相关单测 | `bun run verify:full` | 视改动而定（有灰度 flag 则用） |
+| └ 立方体专项（perf 的一个实例，非全部 perf） | `scripts/perf/bench-universal-cube.mjs`（L0→L3） | `server/src/services/cube-shadow.ts` 影子对账（容差见 `NUMERIC_TOLERANCE`，不在此复述数值）+ `duckdb-cube-*.test.ts` | `bun run verify:full` | `scripts/release/cube-promote.mjs` / `scripts/cube-rollback.mjs` / `scripts/sentinel/cube-grayscale-sentinel.mjs` |
 | SQL / 口径修改 | `curl .../api/query/* \| jq` 前后对比 | `duckdb -c "..."` 直查 Parquet vs API（`CLAUDE.md §6`）+ `verify-cross-sell.py` 等 | `bun run governance` + 单测 | 灰度 flag（如适用） |
-| 重构 | 无（行为不变） | `golden-baseline.mjs --compare`（黄金基线零差异） | `bun run verify:full` | — |
+| 重构 | 无（行为不变） | `golden-baseline.mjs --compare`（黄金基线零差异；**`.planning/golden-baseline/` 不存在则报 BLOCKED 而非跳过 oracle**） | `bun run verify:full` | — |
 | 新功能 | — | 新增测试 + `CLAUDE.md §6` curl/duckdb 验证 | `bun run verify:full` + route 契约测试 | 灰度 flag |
 | 安全加固 | — | **修补不拆除**（`CLAUDE.md §0`）；`/chexian-security-review` | `bun run governance` | — |
-| 数据 ETL | 转换质量报告 | `duckdb` 直查值域/对账（万分之一） | `node scripts/check-data-readiness.mjs` | sentinel |
+| 数据 ETL | ETL 产物 `数据管理/<域>/.../转换质量报告.json`（每域 ETL 自动产出，跑 `node 数据管理/daily.mjs` 后查看） | `duckdb` 直查值域/对账（万分之一） | `node scripts/check-data-readiness.mjs` | sentinel（`scripts/sentinel/etl-anomaly-sentinel.mjs`）|
 
-> 度量与门禁脚本以仓库实际为准，跑前 `--help` 确认签名；找不到现成 harness 才提议新建，并先说明缺口。
+> 度量与门禁脚本以仓库实际为准，跑前 `--help` 确认签名；找不到现成 harness 才提议新建，并先说明缺口。**禁止凭记忆写脚本路径——本表条目须经 `ls -la` 物理验证**（2026-06-16 体检发现 §4 立方体行 cube-rollback 路径写错 + sentinel 漏登记，详见 PR / pr-evolution.md）。
 
 ## 本项目特例
 
