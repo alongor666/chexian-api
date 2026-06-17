@@ -76,7 +76,16 @@ const ENDPOINT_DEFINITIONS = [
   { slug: 'coefficient', path: '/api/query/coefficient', params: {}, deprecated: true },
 
   // ── /api/query/cost ───────────────────────
-  { slug: 'cost', path: '/api/query/cost', params: {}, deprecated: false },
+  // cost 端点接受多种 analysisType / type 请求形态，对应 useCostAnalysis 8 个 fetch
+  // dimension 合法白名单（cost.ts:61 zod enum）：customer_category | org_level_3 | coverage_combination | org_customer | org_coverage
+  { slug: 'cost-claim-ratio', path: '/api/query/cost', params: { analysisType: 'claimRatio', dimension: 'customer_category', cutoffDate: '2026-04-29' }, deprecated: false },
+  { slug: 'cost-expense-ratio', path: '/api/query/cost', params: { analysisType: 'expenseRatio', dimension: 'org_level_3', cutoffDate: '2026-04-29' }, deprecated: false },
+  { slug: 'cost-comprehensive', path: '/api/query/cost', params: { analysisType: 'comprehensiveCost', dimension: 'coverage_combination', cutoffDate: '2026-04-29' }, deprecated: false },
+  { slug: 'cost-variable', path: '/api/query/cost', params: { analysisType: 'variableCost', dimension: 'org_customer', cutoffDate: '2026-04-29' }, deprecated: false },
+  { slug: 'cost-variable-kpi', path: '/api/query/cost', params: { analysisType: 'variableCost', dimension: 'org_level_3', cutoffDate: '2026-04-29' }, deprecated: false },
+  { slug: 'cost-earned', path: '/api/query/cost', params: { type: 'earned', cutoffDate: '2026-04-29' }, deprecated: false },
+  { slug: 'cost-earned-new', path: '/api/query/cost', params: { type: 'earned-new' }, deprecated: false },
+  { slug: 'cost-expense-forecast', path: '/api/query/cost', params: { type: 'expense-forecast', operatingCostRate: '9' }, deprecated: false },
 
   // ── /api/query/comprehensive ──────────────
   { slug: 'comprehensive-bundle', path: '/api/query/comprehensive-bundle', params: {}, deprecated: false },

@@ -75,3 +75,20 @@
 - **根因**: ① baseline 首次构建依赖 dev:full 运行 + 71 端点遍历，构建过 1 次但目录未持久化（或被清理）后没人补回 — oracle 静默失效；② wrapper rule §4 表是 PR #650 凭记忆写，未跑 `ls -la` 物理验证脚本真实位置；③ "新人引导"维度从未审视过 §4 表
 - **修复**: BACKLOG 登记 3 条（uid 1f3bc1 P1 baseline 未建 / 5fc464 P2 §4 路径错 / d2fa19 P3 文档引导不足）+ 本 PR 一次性修 P2+P3（§4 表加路径全限定 + 首次须 --build 前置 + ETL 路径示例 + 表尾"禁凭记忆写脚本路径"警示）；P1 留作后续（需 user 提供 E2E_PASSWORD 跑 golden-baseline --build）
 - **预防**: ①evidence-loop wrapper rule §4 表落地必须**物理验证**每一格脚本（跑 `ls -la` + `--help`），不靠记忆。同类失败再发生 1 次 → 加 governance 项扫 §4 表内所有提到的脚本路径是否存在；②每个 evidence-loop 任务的阶段 A 必须主动跑 `--dry-run`（基线工具）+ `--help`（其它工具），不能假定"上次能跑"；③`.planning/golden-baseline/` 缺失应作为 perf/refactor 任务的"基线缺口"在阶段 A 直接报 BLOCKED，倒逼项目维持基线时效；④pr-evolution.md 作为 scorecard 落位首次实战通过（取代了基座默认的 .claude/shared-memory/，避免触发 AGENTS.md §8.3 user-only 红线）；⑤**并发会话隔离 worktree 是硬要求**——本次首次提交在主目录被另一会话 `git reset` 抹掉所有改动（reflog 见 HEAD@{1} reset），切 worktree 重做才成功。同类失败再发生 1 次 → 任何 evidence-loop scorecard / BACKLOG 沉淀必须在隔离 worktree 内（不依赖人 / AI 记得，按 memory `feedback_isolate_concurrent_verify_head_first` 已沉淀）
+
+### 2026-06-17 — evidence-loop dry-run #2: useCostAnalysis oracle 双层激活 + 缺凭据请求授权范式
+
+- **起点（不是症状）**: 用户调 `/chexian-evidence-loop 优化项目架构`。阶段 A 收口：前端 src/ 411 文件 / 74322 行 / 8 个文件违反 CLAUDE.md max(800) 红线 / Top 8 全部**零单测覆盖** / `.planning/golden-baseline/` 不存在 → 命中基座 §6 两条停止条件（"测试数据缺失" + "正确性无法验证"）。澄清两轮锁定：维度=可维护性 / 范围=前端层 / 路径=A（先建 baseline + 补 1 个热点测试 + 再启动重构）/ 目标文件=`useCostAnalysis.ts`（880 行纯 hook，最易测）
+- **根因（执行路径）**: 起初我推荐"务实/绕过 baseline 走 Step 3 单测"——用户立刻反："不能因为缺什么就不做，可让我授权" 并提供 xuechenglong 凭据。这是关键认知反转：**遇到缺凭据/数据/配置时，默认应该是"先问 → 用户给"，而不是"绕过"**——已沉淀到 memory `feedback_no_giveup_ask_authorization`。两个具体卡点的解锁：① E2E_PASSWORD 缺 → 用户给凭据，主目录跑 baseline；② worktree 数据缺 → 切到主目录跑（主目录数据齐备）。worktree-setup.md §A "主目录锁 main 只读" 由用户显式"授权本次可开发" 覆盖
+- **修复（交付物）**:
+  - **Step 1**: worktree dev:full 启动验证 healthy（DuckDB pool idle=1/max=8 正常）
+  - **Step 2**: 主目录 baseline build → `.planning/golden-baseline/` 落地 26/71 端点快照。**verifier 反驳找出关键缺口**：`/api/query/cost` 端点（slug 9）抓取失败 400（`baseline.mjs` 的 ENDPOINT_DEFINITIONS 没给 cost 默认参数模板，cost 必须传 analysisType/type/dimension/cutoffDate）→ baseline 对 useCostAnalysis 重构**无兜底**。其他 45 个失败端点（claims-detail/repair/customer-flow/renewal-tracker/auth 等）因 xuechenglong 权限范围 500/400。**结论：baseline 层对本次任务 oracle 无效**，oracle 实际只有单测一层。须后续补 cost 参数模板再抓 baseline 才能让第二层生效
+  - **Step 3**: 写 `tests/features/cost/useCostAnalysis.test.tsx` — 36 个用例，覆盖 8 fetch (happy + Error 异常 + 非 Error 异常 + 非数组响应 + filterParams 透传) + summary 计算（含除零防护）+ fetchDataBySubTab 6 case + default + reset。22ms 跑过
+  - **Step 4**: `bun run verify:full` 全绿 — 233 文件 / **3213 测试用例全过**（含 36 新增），governance + typecheck + 全单元测试零回归
+- **预防（下一步纪律）**:
+  1. ✅ memory `feedback_no_giveup_ask_authorization` 沉淀：复杂工作缺凭据/数据/配置不能默认"绕过/降级"，先向用户索取授权——用户给的概率比想象的高很多
+  2. ⚠️ `useCostAnalysis` oracle **仅第一层激活**（单测）；第二层（baseline）因 cost 端点未抓成对本次任务**无效**，需后续在 `baseline.mjs` ENDPOINT_DEFINITIONS 给 cost 加参数模板后重抓。后续可发起 refactor evidence-loop，把 880 行降到 ≤ 400 行（CLAUDE.md typical 阈值），逐步抽出 8 个子 hook（先 export 再单测拆分，最小有用实验）；动 API 前必须先补 cost baseline
+  3. **未完成**：剩余 7 个 >800 行文件（GeoRiskPanel 951 / CrossSellAnalysisPanel 891 / NewEarnedPremiumTable 891 / EnhancedKpiCard 870 / costTypes 820 / AccessControlPage 770 / PerformanceAnalysisPanel 1401）仍零单测覆盖。每个文件做"补单测 → refactor"前都需类似 evidence-loop 单独走一遍
+  4. **baseline 覆盖缺口**：xuechenglong（branch_admin/SC）抓不到系统级 admin 权限的 45 个端点（claims-detail 全套 + repair + customer-flow + renewal-tracker + auth/users/roles + filters-options 等）。若未来重构涉及这些路径，需先解锁系统级 admin 凭据补全 baseline（或用户提供）
+  5. **同类成功再做 N 次**：把"补单测 oracle → refactor"作为大文件治理的标准化流水线，每个文件单独 PR + 单独 evidence-loop checkpoint，避免"一次性大重构"塌方
+  6. **evidence-verifier 价值首次实战展示**：本次 fresh-context verifier 揪出我夸大 baseline 价值的盲点（声称"对纯前端 hook 重构足够"但 cost 端点根本未抓），这正是基座 §5 verifier 隔离原则的核心——实施者不能做自己的唯一验证者。未来 evidence-loop 阶段 C 调 verifier **必须**做，不能省。同类教训再发生 1 次 → wrapper rule 加 "阶段 C 步骤 2 跳过 verifier 视为流程违规"
