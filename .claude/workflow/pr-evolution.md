@@ -198,3 +198,30 @@
 - **决策**: **promote** — commit + push + PR
 - **下一步**: Wave 2 P3 `NewEarnedPremiumTable.tsx` (891 行)，等本 PR 合并后开新 worktree
 - **未验证声明**: 无（所有数字均有命令输出支撑）
+
+### 2026-06-17 — PR #668 (skill 自身硬化): PR #662 复盘 8 个 skill 缺口机制化（G1-G8）
+
+> 本 entry 既是失败教训沉淀，**也是 evidence-loop 阶段 C scorecard 落位**（meta：本 PR 修的就是"scorecard 落位规则"自身）
+
+- **触发**: PR #662 (cx wizard) 暴露 8 个 skill 缺口（详见 2026-06-17 PR #662 entry "预防"段）。用户问"如果重新做，如何优化技能才做得更好？" → 元任务 meta-loop
+- **缺口清单与落地**:
+  | # | 缺口 | 落地 | anti-pattern 验证 |
+  |---|---|---|---|
+  | G1 | sink/scorecard 路径合规未进 pr-checklist | `.claude/pr-checklist.md §1` 加红线行 | 改 governance check 反复跑 ✅ |
+  | G2 | CI 闸预测公式缺 | `.claude/pr-checklist.md §1` 加 "CLI 性能 CI 闸预测" 行（含 ×14 系数） | 公式来自 PR #662 实测 |
+  | G3 | evidence-loop 两处 SSOT 漂移无 governance | `scripts/check-governance.mjs` 加 `checkEvidenceLoopSsotDrift`（rebase 后 39 项含 main 新增） | 临时删 pr-checklist 关键词 → fail ✅；恢复 → ✅ |
+  | G4 | pr-evolution 已沉淀预防 24h 复发无强制升级 | `scripts/check-governance.mjs` 加 `checkPrEvolutionExpired` + 引入 `needs_automation` + `expires` schema | 临时加 `expires: 2020-12-31` entry → warning ✅；删除 → ✅ |
+  | G5 | 新 CLI guard 必跨入口对齐未协议化 | `.claude/pr-checklist.md §1` 加 "CLI 一致性" 红线行 | 文档级 |
+  | G6 | 阶段 A 缺 user friction 调研 | spawn task `task_b97e0530` → 基座 `~/alongor666-skills` 仓 PR | 跨仓 PR |
+  | G7 | scorecard 落位 SSOT 多处重复 | wrapper + pr-checklist 两处加 SSOT 内容 + G3 governance 强制两处同步 | G3 验 |
+  | G8 | wrapper 缺 Pre-flight checklist | `.claude/commands/chexian-evidence-loop.md §0` 加 5 项强制 checklist | 下次 `/chexian-evidence-loop` 触发即验 |
+- **根因（meta）**: 8 个缺口里 **5 个是"沉淀缺口"（写了不执行）** —— 与 memory `feedback_rules_need_automation` 完全一致；说明"规则需自动化"这条 meta-rule 自身没机制化。本 PR 通过 G3/G4 governance 把这条 meta-rule 自身机制化（**meta-mechanization**）
+- **零侵入证据**: 不动 `cli/` / 不动现有 commands/agents / 仅改 `.claude/commands/chexian-evidence-loop.md`（既有命令修订，本 PR body §"用户授权"说明记录用户在本会话中口头授权 — AGENTS.md §8.2 commands 既有命令修订条款）+ `.claude/pr-checklist.md`（项目自审清单，AI-writable）+ `scripts/check-governance.mjs`（governance 新增 2 项）+ `.claude/workflow/pr-evolution.md`（本 entry，append-only sink）。**未改既有 `.claude/rules/*.md`**（PR #668 review 反馈撤回 rules 改动；按 AGENTS.md §8.2 既有 rules 改动需 [policy-override]）
+- **回归门禁**: `bun run typecheck` ✅ / `bun run governance` 39/39（含 main 新增的 shared-memory user-only + 本 PR 加 G3 + G4）/ G3+G4 双向 anti-pattern 验证 ✅ / `git diff --check` 无报错
+- **预防（下一步）**:
+  1. 本 PR 是 PR #662 复盘成果的机制化交付；下次 `/chexian-evidence-loop` 触发即进入新协议（G8 Pre-flight 5 项 / G1+G2+G5 自审 / G3+G4 governance）
+  2. G6 基座 PR 合并 + 跨仓同步后，阶段 A 必先做 user friction 调研，候选清单从"AI 想到的"升级为"用户真痛的"
+  3. **本 entry 自身用 `needs_automation: false` 示范** —— 本 PR 已机制化，无超期风险
+     - needs_automation: false
+     - rationale: 本 PR 即为机制化交付，G1-G8 全部落地或独立 spawn
+  4. **本 PR review fix 教训（PR #668 owner review 闭环）**：第一版 PR 改了既有 `.claude/rules/evidence-loop.md` line 32（加 SSOT pointer 注），违反 AGENTS.md §8.2"既有 rules 改动按 frozen 处理"——根因是 AI 凭"小修改无害"心态触动 frozen-ish 文件，自审清单没在 §1 红线表显式列入 AGENTS §8 frozen 路径检查。**修法（本次）**：撤回 rules 改动 + G3 governance 改两处。**预防（机制化）**：本 PR pr-checklist §1 红线表已加 "sink/scorecard 落位" 行（覆盖 user-only 写入）；后续可考虑再加一行 "AGENTS §8 frozen 路径"——同类失败再发生 1 次 → 加 governance 新项扫 diff 是否触动 §8.1+§8.2 列出路径且 commit message 无 `[policy-override]` → exit 1（不再依赖自审纪律）

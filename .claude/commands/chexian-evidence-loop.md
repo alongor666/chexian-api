@@ -15,6 +15,28 @@ last_updated: "2026-06-16"
 
 ---
 
+## 0. Pre-flight Checklist（动手前必勾，缺则 BLOCKED）
+
+> 来源：PR #662 复盘 — wrapper 头部明文规则**会**被 AI 跳过。强制 checklist 形式让"必读"变成"必勾"。
+
+```
+□ 1. scorecard 落位：本任务最终 sink 必为 .claude/workflow/pr-evolution.md
+     —— 禁 .claude/shared-memory/** / ~/.claude/projects/**/memory/**
+□ 2. CI 闸预测：若改动涉及 cli/ 顶层 import 或 cold path → 预先算
+     本地 A p95 × 14 ≤ 250ms，否则 push 前 BLOCKED
+□ 3. pr-evolution 最近 7 天 entry：tail -100 .claude/workflow/pr-evolution.md
+     看是否已记录同类失败模式（避免 24h 内复发）
+□ 4. verifier 计划：阶段 C 必跑 evidence-verifier（fresh context）
+     不可跳过，否则属流程违规
+□ 5. 凭据/数据缺口：若任务需 E2E_PASSWORD / admin token / baseline 文件
+     等而当前缺失 → 先向用户索取，不要默认绕过
+     （memory feedback_no_giveup_ask_authorization）
+```
+
+未勾完 5 项 → 进入阶段 A 之前显式声明跳过的项与理由。
+
+---
+
 ## 执行（读基座 + 注入项目内容）
 
 ### 1. 读基座协议
@@ -28,7 +50,7 @@ last_updated: "2026-06-16"
 |---|---|
 | §4 harness 映射表 | [.claude/rules/evidence-loop.md §4](../rules/evidence-loop.md) — 6 类任务的实际命令（bench / golden-baseline / cube-shadow / duckdb 直查 / verify:full / governance / sentinel） |
 | verifier agent | [.claude/agents/evidence-verifier.md](../agents/evidence-verifier.md)（项目级，提示词源自基座 `verifier-agent-template.md`） |
-| scorecard 落位 | `.claude/workflow/pr-evolution.md`（append；与 `commit-push-pr-core` 自进化日志同位置）。**禁止** `.claude/shared-memory/**` / `~/.claude/projects/**/memory/**` —— AGENTS.md §8.3 user-only |
+| scorecard 落位 | `.claude/workflow/pr-evolution.md`（append；与 `commit-push-pr-core` 自进化日志同位置）。**禁止** `.claude/shared-memory/**` / `~/.claude/projects/**/memory/**` —— AGENTS.md §8.3 user-only。**SSOT**: [`.claude/pr-checklist.md`](../pr-checklist.md) "sink/scorecard 落位" 行，三处同步由 governance "evidence-loop SSOT 漂移" 强制 |
 | 项目治理 / 回归门禁 | `bun run governance`（聚合 32+ 项）/ `bun run verify:full`（governance + 单元测试） |
 
 ### 3. 本项目特例（覆盖基座通用项）

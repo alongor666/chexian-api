@@ -2836,7 +2836,114 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '立方体SQL三件套', fn: checkCubeSqlThreePieceShape },
   { name: '立方体版本绑定', fn: checkCubeVersionBinding },
   { name: 'shared-memory user-only', fn: checkSharedMemoryUserOnly },
+  { name: 'evidence-loop SSOT 漂移', fn: checkEvidenceLoopSsotDrift },
+  { name: 'pr-evolution 沉淀超期', fn: checkPrEvolutionExpired },
 ];
+
+// ============================================================
+// evidence-loop 三处 SSOT 漂移检测（防 PR #662 复发）
+// ============================================================
+
+/**
+ * PR #662 复盘：scorecard 落位规则同时写在 wrapper / pr-checklist 两处。
+ * 24h 内即可漂移（实际就触发了违规）。本检查强制两处都明文提到
+ * `.claude/workflow/pr-evolution.md` 作落位 + 都禁止 `.claude/shared-memory/**`。
+ *
+ * 注：原设计含 `.claude/rules/evidence-loop.md`（三处），但该文件按 AGENTS.md §8.2 既有 rules 改动需 [policy-override]；
+ * PR #668 评审 (codex) 反馈撤回 rule 改动，governance 只验 wrapper + pr-checklist 两处。
+ * 既有 rule 文件本身的 scorecard 段（line 32 现状）由 AGENTS §8 frozen 规则保护，不需 governance 重复检测。
+ */
+function checkEvidenceLoopSsotDrift() {
+  info('检查 evidence-loop SSOT 两处同步（PR #662 教训）...');
+
+  const files = [
+    '.claude/commands/chexian-evidence-loop.md',
+    '.claude/pr-checklist.md',
+  ];
+  const keywords = [
+    { re: /\.claude\/workflow\/pr-evolution\.md/, desc: 'scorecard 落位指向 pr-evolution.md' },
+    { re: /\.claude\/shared-memory/, desc: 'shared-memory 禁止提醒' },
+  ];
+
+  const missing = [];
+  for (const file of files) {
+    const filePath = path.join(ROOT_DIR, file);
+    if (!fs.existsSync(filePath)) {
+      missing.push(`${file}（文件不存在）`);
+      continue;
+    }
+    const content = fs.readFileSync(filePath, 'utf-8');
+    for (const kw of keywords) {
+      if (!kw.re.test(content)) {
+        missing.push(`${file} 缺 "${kw.desc}"`);
+      }
+    }
+  }
+
+  if (missing.length === 0) {
+    success('evidence-loop SSOT 两处同步（wrapper/pr-checklist）');
+    return true;
+  }
+  error('evidence-loop SSOT 漂移：');
+  missing.forEach((m) => console.log(`    - ${m}`));
+  error('  修复：让两处（wrapper / pr-checklist）都提到 `.claude/workflow/pr-evolution.md` 作落位 + 都明文禁止 `.claude/shared-memory/`');
+  return false;
+}
+
+// ============================================================
+// pr-evolution 沉淀超期未机制化警告（防 24h 漂移）
+// ============================================================
+
+/**
+ * PR #662 复盘：2026-06-16 entry 已写"预防：pr-evolution.md 作 scorecard 落位"，
+ * 24h 后仍踩。说明纯文档沉淀不够，规则必须有 expire 机制 + governance 强制升级。
+ *
+ * 约定 schema：entry 内含 `needs_automation: true` 即声明该项需机制化；
+ * 紧跟一行 `expires: YYYY-MM-DD`。超过 expires 仍未机制化 → warning（不 fail，让用户判断）。
+ */
+function checkPrEvolutionExpired() {
+  info('检查 pr-evolution.md 沉淀超期未机制化项（PR #662 教训）...');
+
+  const filePath = path.join(ROOT_DIR, '.claude/workflow/pr-evolution.md');
+  if (!fs.existsSync(filePath)) {
+    warning('pr-evolution.md 不存在，跳过');
+    return true;
+  }
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const lines = content.split('\n');
+  const today = new Date().toISOString().slice(0, 10);
+
+  let currentEntry = '(unknown entry)';
+  const expired = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const entryMatch = line.match(/^### (\d{4}-\d{2}-\d{2}.*)/);
+    if (entryMatch) {
+      currentEntry = entryMatch[1].trim();
+      continue;
+    }
+    if (/needs_automation:\s*true/.test(line)) {
+      for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+        const expMatch = lines[j].match(/expires:\s*(\d{4}-\d{2}-\d{2})/);
+        if (expMatch) {
+          if (expMatch[1] < today) {
+            expired.push(`${currentEntry} (expired ${expMatch[1]})`);
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  if (expired.length === 0) {
+    success('pr-evolution.md 无超期未机制化项');
+    return true;
+  }
+  warning('pr-evolution.md 含超期未机制化的 needs_automation 项（须升级为 governance/hook）：');
+  expired.forEach((e) => console.log(`    - ${e}`));
+  warning('  规则说明：entry 含 `needs_automation: true` + `expires: YYYY-MM-DD` 即声明须机制化；超 expires 仍未做 → 触发本警告');
+  return true;
+}
 
 /**
  * 执行一组检查并打印汇总。返回 true 表示全部通过（不退出进程，由调用方决定退出码）。
