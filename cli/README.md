@@ -95,3 +95,15 @@ CX_BASE_URL=http://localhost:3000 CX_PAT=cx_pat_xxx.yyy cx query KPI
 - 路由能力由服务端 `route-catalog` 唯一事实源驱动，服务端新增查询路由后 CLI 自动可用：`cx query <新路由>` 在本地缓存未命中时会自动强制刷新缓存重试一次（无需手动 `cx routes --refresh`，缓存 TTL 24h）
 
 详见 `开发文档/PAT_GUIDE.md`。
+
+## 独立仓库镜像（alongor666/cx-cli）
+
+本子目录是 SSOT，[`alongor666/cx-cli`](https://github.com/alongor666/cx-cli) 是从此自动同步的**只读镜像**。Windows 用户下载文档 / 截图脚本 / `index.html` 在 `manual/` 子目录。
+
+**同步机制**：[`.github/workflows/sync-cx-cli.yml`](../.github/workflows/sync-cx-cli.yml) 监听 `main` 分支 `cli/**` 路径变更，自动 squash 同步到 `cx-cli` main。`manual/` 也走该流水线。
+
+**不要直接改 cx-cli 仓库** — 任何改动会被下次同步覆盖。所有 PR 走 `alongor666/chexian-api`。
+
+**镜像延迟**：PR 合并到 chexian-api main 后约 1-3 分钟出现在 cx-cli main（受 GitHub Actions 排队时间影响）。`gh run watch` 在 chexian-api 看 `Sync cli to cx-cli` workflow。
+
+**首次设置**：需 user 创 PAT + 配 secret，见 workflow 文件顶部注释 step 1-2。

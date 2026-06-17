@@ -225,3 +225,82 @@
      - needs_automation: false
      - rationale: 本 PR 即为机制化交付，G1-G8 全部落地或独立 spawn
   4. **本 PR review fix 教训（PR #668 owner review 闭环）**：第一版 PR 改了既有 `.claude/rules/evidence-loop.md` line 32（加 SSOT pointer 注），违反 AGENTS.md §8.2"既有 rules 改动按 frozen 处理"——根因是 AI 凭"小修改无害"心态触动 frozen-ish 文件，自审清单没在 §1 红线表显式列入 AGENTS §8 frozen 路径检查。**修法（本次）**：撤回 rules 改动 + G3 governance 改两处。**预防（机制化）**：本 PR pr-checklist §1 红线表已加 "sink/scorecard 落位" 行（覆盖 user-only 写入）；后续可考虑再加一行 "AGENTS §8 frozen 路径"——同类失败再发生 1 次 → 加 governance 新项扫 diff 是否触动 §8.1+§8.2 列出路径且 commit message 无 `[policy-override]` → exit 1（不再依赖自审纪律）
+
+### 2026-06-17 — PR #669: cli/ 同步到独立仓库 alongor666/cx-cli（自动化机制）
+
+- **触发**: 用户提出"chexian-api/cli/ 现已更新，需同步到独立仓库 alongor666/cx-cli，且未来应自动同步"
+- **PR #668 新协议首次实战**:
+  - ✅ §0 Pre-flight checklist 全勾（scorecard 落位 / 不动 cli 顶层 import 故 CI 闸预测 N/A / 读 pr-evolution 最近 7 天 / verifier 计划 / 凭据缺口标记 — PAT secret 由 user 创建）
+  - ✅ G1 sink/scorecard 落位检查通过：本 PR 写 pr-evolution.md（非 shared-memory）
+  - ✅ G3 governance 跑过仍 ✅（两处同步未漂移）
+  - ✅ G4 governance 跑过仍 ✅（无超期项）
+- **方案设计**（按 user 3 个决策）:
+  - manual/ 处理：拉回 chexian-api/cli/manual/（10 文件含 Windows 下载指南 / 截图脚本 / index.html）→ chexian-api/cli/ 是 SSOT
+  - 认证：fine-grained PAT secret `CX_CLI_SYNC_TOKEN`（cx-cli contents:write 权限）
+  - 触发：`push to main + paths:cli/**` + `workflow_dispatch`（手动 dispatch 用于首次同步 / 调试）
+- **实现**:
+  - 新增 `.github/workflows/sync-cx-cli.yml`：clone cx-cli → rsync cli/ → squash commit + push（保留 cx-cli commit history，每次同步一个 "sync: ..." commit）
+  - rsync exclude：`.git` / `node_modules` / `dist`（build 产物不入仓）
+  - 安全：未设 secret 时 workflow fail-fast 并打印明确指引
+  - 文档：cli/README 加"独立仓库镜像（alongor666/cx-cli）"段落 + workflow 顶部含完整 PAT 设置 step 1-2
+- **零侵入**: 不动 cli/src/* 任何代码 / 不动现有 8 个 workflow 文件 / 不动 .gitignore（manual/ 已在已跟踪范围内）
+- **回归门禁**: typecheck ✅ / governance 39/39 ✅ / git diff --check 无报错
+- **待 user 操作（凭据缺口）**:
+  1. https://github.com/settings/personal-access-tokens/new 创 fine-grained PAT（Repository access: cx-cli only / Permissions: Contents write / Expiration 1y）
+  2. chexian-api Settings → Secrets → Actions → Add `CX_CLI_SYNC_TOKEN`
+  3. PR 合并后 Actions 页 manual dispatch `Sync cli to cx-cli` 验证首次同步
+- **预防（机制化）**:
+  - 同步链 PR 类似 deploy.yml 但**不属于** deploy chain（不在 .claude/rules/deploy-chain-sop.md §1 wrapper-source 列表 / §4 8 项验证清单）→ 不需"禁 auto-merge"特例
+  - 但 sync-cx-cli.yml 是单方向"chexian-api → cx-cli"广播器：任何 cli/ 提交即广播到外部仓库，敏感性高。若未来 cli/ 接受外部贡献，应在 chexian-api 自审清单加"广播扩散"检查（确认本 PR 的 cli/ 改动适合公开外部仓库）
+  - 同类失败再发生 1 次（如同步出现意外的 cx-cli 数据丢失）→ 加 governance 项扫 workflow 文件含 `force` 字样的 push 模式（本 workflow 用 squash 不 force，但加广义防御）
+  - needs_automation: false
+  - rationale: 本 PR 已机制化交付，"广播扩散"自审是预防性建议，触发频次低不必立刻加 governance
+
+#### PR #669 v2 — codex review 闭环（4 反馈，5 步 SOP 复盘）
+
+**抽 pattern**：第一版 PR 4 个 blocker/P3 根因都指向"AI 设计同步机制时只盘点了表面差异（manual/），未做完整 diff 全量比对"——与 PR #662 复盘 G3 "三处 SSOT 漂移"同源（不全量盘点 → 漂移）。
+
+| # | codex 反馈 | 等级 | 修法 |
+|---|---|---|---|
+| 1 | `rsync --delete` 会丢 cx-cli 独有 `release.yml`/`.gitignore`/`package-lock.json` | blocking | 全量 diff (`comm -23` 双向)：拉回 release.yml + .gitignore；package-lock.json **不拉**（chexian-api 是 bun-only，避免双锁污染），workflow rsync 加 `--filter='P package-lock.json'` 保护 target lock；同时加 `--exclude='manual/images'` 双层防护 |
+| 2 | `capture-screenshots*.ps1` 默认 `$PAT_TOKEN = "cx_pat_xxx.yyy"` + 引导用户写真 PAT + 跑 `cx login --token $PAT_TOKEN` 截图 → 真 PAT 入截图 → 同步到公开 cx-cli | blocking/security | (a) 改默认值为 `$DISPLAY_PAT_PLACEHOLDER = "cx_pat_PLACEHOLDER.example_replace_locally_DO_NOT_COMMIT"`；(b) 启动检查从"PAT 是否配置"改为"是否 cx login 完成"（`cx whoami` 退出码）；(c) login 截图步骤改用占位 PAT 不真登录；(d) 头部加 5 条安全约定；(e) `cli/.gitignore` 加 `manual/images/`；(f) workflow rsync `--exclude='manual/images'` 双层兜底 |
+| 3 | PR body 说"合并后 user 创 PAT + 加 secret"，但 workflow `push to main + cli/**` 触发；secret 不存在则 fail-fast → main 出现红 check | blocking | workflow 拆 `Check secret presence` step（缺 secret 走 graceful skip + warning，不 fail）；user 本次已先建好 secret，PR body 同步更正 |
+| 4 | `截图指南.md` 多处 trailing whitespace + EOF 空行 | P3 | `sed 's/[[:space:]]*$//'` + `printf '%s\n' "$(cat ...)"` 清 |
+
+**抽 pattern → 全仓 grep**：
+- 是否其他 workflow 用 rsync --delete 同步外部仓库？只有本 workflow（grep 全 `.github/workflows/*.yml` 仅 sync-cx-cli.yml 含 rsync）
+- 是否其他文件含 PAT 占位但有泄露风险？grep 全仓 `cx_pat_xxx` 仅本 PR 拉回的两个 ps1 命中（已修）
+- chexian-api 内有无其他 镜像/广播 模式 workflow 需要同步加固？没有（grep workflow 含 `clone.*github.com\|push.*github.com` 仅本 workflow）
+
+**预防（机制化建议）**：
+1. **同步类 workflow 设计护栏**：rsync to external repo 强制要求 `--filter='P ...'` 保护 target 独有文件 + `--exclude='manual/images'` 等显式排除截图/敏感目录 + secret 检查 graceful skip 模式。同类失败再发生 1 次 → 加 governance 项扫 workflow 文件含 `rsync.*--delete` 是否同时含 `--filter='P` 或 `--exclude=`
+2. **PAT 占位符护栏**：截图脚本顶部默认变量名禁用 `*TOKEN*` 后缀（用 `*DISPLAY_PAT_PLACEHOLDER` 等不易被复制粘贴成真 token 的命名）；启动检查走"已 login"而非"PAT 配置"。同类失败再发生 1 次 → 加 governance 项扫 `manual/**/*.{ps1,sh,bat}` 含 `--token \$` 是否同行有占位符备注
+3. **全量盘点纪律**：跨仓同步 / 跨域镜像 PR 必须 `comm -23 <(find A) <(find B)` 双向比对完整文件树，不能只看 codex 提到的"明显差异"。**这是 PR #662 G3 教训的递归**：单点 SSOT 漂移 → 全量 SSOT 漂移
+- needs_automation: false（教训已写入 pr-checklist 自审 + workflow protect filter 实现，无需进一步机制化）
+- rationale: 同步类 workflow 在本项目当前仅 1 个（sync-cx-cli.yml），governance 自动化的边际收益低；若未来再加 1-2 个跨仓同步则启动机制化
+
+#### PR #669 v3 — codex review 闭环（2 P1 + 1 观察，同 pattern 三次发作）
+
+**抽 pattern**：v2 修了 ps1 默认 PAT 占位符 + 头部约定，但**没改两条致命路径**——(a) v2 ps1 的 login 步骤仍真跑 `Invoke-CxScreenshot` 把占位 token 喂给 cx login，loginCommand 会写 ~/.chexian/config.json 然后校验失败回滚但**清掉**真登录态；(b) 6 个 .md 文档仍要求用户写真 PAT 入脚本。这是 PR #669 v1→v2 同源 pattern **第三次发作**："只改了看见的，没遍历同源"。
+
+| # | 反馈 | 等级 | 修法 |
+|---|---|---|---|
+| 1 | v2 ps1 line 203-207 / v1 ps1 line 146-149 仍真执行 `cx login --token $DISPLAY_PAT_PLACEHOLDER`，loginCommand 写盘 + 校验失败回滚清掉真登录态 | P1 | `Invoke-CxScreenshot` / `Invoke-CxCommand` 加 `-DisplayOnly` switch；login 步骤标记 `-DisplayOnly` 只打印命令字符串不真跑 |
+| 2 | 6 个文档（README/截图指南/脚本使用说明/交付清单/截图命令速查/index.html）仍要求 `$PAT_TOKEN = "你的真实token"` / `cx login --token cx_pat_xxx.yyy` | P1 | 统一口径：终端外手动 `cx login`（masked PAT）→ 截图脚本不要求改 PAT 字段 → 占位符仅用于 login 命令字符串截图演示；6 文件 8 处全部改写 |
+| 观察 | v1 ps1 `Take-Screenshot` 用未定义的 `Get-SystemMetrics(0)`，即使修登录也跑不起来 | latent bug | 改成 v2 风格 `[System.Windows.Forms.Screen]::PrimaryScreen.Bounds`；v1 同时补 `cx whoami` 启动检查 |
+
+**抽 pattern → 全仓 grep**：
+- `grep -rnE "真实.*PAT\|真实.*token\|cx_pat_xxx\|\\\$PAT_TOKEN" cli/manual/` → 全量盘点 7 文件 8 处需修，逐个改完后再 grep 残留仅剩"真实登录请走交互式 cx login"等合理指导（已修复后的"真实"上下文）
+- `grep "Invoke-Expression \$Command" cli/manual/*.ps1` → 确认两个 ps1 都已加 -DisplayOnly 守护
+- `grep "Get-SystemMetrics" cli/manual/*.ps1` → 仅 v1 1 处已修
+
+**静态闸**：本项目无 governance 项扫"ps1 真跑用户输入命令"或"文档与脚本占位一致性"——边际收益低，本 PR 不引入。
+
+**跨入口对齐**：v1 + v2 两个 ps1 行为完全对齐（-DisplayOnly switch / cx whoami 启动检查 / 占位 PAT 命名）；6 文档表述完全对齐（终端外 cx login + 不改脚本 PAT 字段 + cx_pat_PLACEHOLDER.example）。
+
+**预防（机制化建议）**：
+1. **拉回外部仓库内容时必跑双重审查**：除了"功能 ok"，必须审"行为副作用"（命令是否会写盘 / 清状态 / 触发外部 API）。同类失败再发生 1 次 → 加 pr-checklist 新行"拉回脚本/工具时审查命令副作用"
+2. **"未完整盘点" pattern 第三次发作**（PR #669 v1：未对比 cx-cli vs cli 文件树；v2：未审 cx login 实际行为；v3：未遍历文档同步说法）→ 升级为铁律：拉回外部仓库内容时必 `grep -r "原作者预设的关键变量"` 全量盘点，逐处改完后再 grep 残留确认零漏
+3. **codex review 抗 N 轮发作**：本 PR 已 review v1→v2→v3 三轮，每轮都揪同 pattern 不同位置——证明 codex 是有效兜底但成本高。同类失败再发生 1 次（v4 还揪同 pattern）→ 在自审清单加"已 grep 全仓 N 处？" 强制自审证据
+- needs_automation: false
+- rationale: 本 PR 已机制化教训沉淀（自审清单已含"未完整盘点"red line 候选），未来若同 pattern 再发作即触发 governance 升级
