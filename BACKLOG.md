@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（73 项 · 数据截至 2026-06-17 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（71 项 · 数据截至 2026-06-17 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -32,7 +32,7 @@
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
 - 2026-06-16-claude-1f3bc1 `PARTIAL` — evidence-loop perf/refactor 类 oracle (.plann
 
-**P2（40 项）**
+**P2（39 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -72,10 +72,9 @@
 - 2026-06-12-claude-45630f — 存量
 - 2026-06-15-claude-2e017d — B330 防回归 governance 闸
 - 2026-06-15-claude-edbd61 — B330 follow-up
-- 2026-06-16-claude-5fc464 — evidence-loop §4 立方体专项行 cube-rollback.mjs 路径
 - 2026-06-17-claude-291788 — evidence-loop e2e dry-run 重建 baseline 时发现 5 
 
-**P3（24 项）**
+**P3（23 项）**
 
 - B247 — 图表 hex 色值审计
 - B251 — 输出风格与用户契约冲突
@@ -100,7 +99,6 @@
 - 2026-06-11-claude-ee63ee — quote-conversion KpiCards default 分支为死代码
 - 2026-06-11-claude-f633c0 — cancelRequest 键不匹配永远取消不了请求
 - 2026-06-12-claude-055a12 `BLOCKED` — 立方体灰度哨兵降频里程碑
-- 2026-06-16-claude-d2fa19 — evidence-loop §4 perf 通用行未提'首次须 --build 建 ba
 
 ---
 
@@ -186,6 +184,4 @@
 | 2026-06-15-claude-b38dcc | 2026-06-15 | Chore | @claude | PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，server/src/config/metric-registry/categories/ratio.ts 中的 transfer_rate/renewal_rate/nev_rate/new_car_rate 指标引用 endorsement_no，但 CubeCostDay.policy_dedup CTE 的 SELECT 列表未含此字段，导致 api-error.log 自 2026-06-12 09:02 起持续 Binder Error。与 cost OOM (d72e4717) 是独立两个 Bug。修复方向：扩展 policy_dedup CTE 加 ANY_VALUE(endorsement_no) 或改指标公式避开该字段。 | P1 | PROPOSED | N/A | N/A |  |
 | 2026-06-15-claude-edbd61 | 2026-06-15 | Refactor/Frontend | @claude | B330 follow-up：components/layout → features 依赖倒置（TopNavigation/PageFilterPanel）。当前 TopNavigation 直接 import features/file 的 3 个 Modal、PageFilterPanel 直接 import features/filters 的 2 个组件。修复需把 layout 改为 shell+slot：App.tsx 顶层负责把具体 Modal/Panel 作为 children/slot 传入。属重构而非搬迁，独立 PR。验收：grep components/layout/ 无 features import；build 绿；2921 单测全过。 | P2 | PROPOSED | ARCHITECTURE.md §2.2 | src/components/layout/TopNavigation.tsx;src/components/layout/PageFilterPanel.tsx;src/App.tsx | PR #643 同时关闭了 shared→features 第 6 处（orgSalesman），但 layout→features 倒置（TopNavigation 用 features/file 的 3 个 Modal、PageFilterPanel 用 features/filters 的 2 个组件）仍属本 follow-up 范围 — 是更深的 shell+slot 重构。 |
 | 2026-06-16-claude-1f3bc1 | 2026-06-16 | harness缺口/E2E阶段A体检发现 | @claude | evidence-loop perf/refactor 类 oracle (.planning/golden-baseline/) 当前未构建 — golden-baseline.mjs --compare 事实上不可用，需先 --build 抓 71 端点快照（需 dev:full 运行 + E2E_PASSWORD 环境变量），否则 perf/refactor 改动无正确性保证 | P1 | PARTIAL | .claude/rules/evidence-loop.md#4,scripts/golden-baseline.mjs | scripts/golden-baseline.mjs | 本地 baseline 66/71 已构建（成功率 93%），落 .planning/golden-baseline/（7.6MB / 68 JSON 文件 / meta + manifest 完整）；剩 5 个端点（coefficient 404 / cost holiday-drilldown patrol/premium patrol/narrative 400）是 baseline 脚本本身的 endpoint 参数定义结构性问题，登记新 BACKLOG 跟踪。本地 oracle (golden-baseline.mjs --compare) 现可用于 66 个端点的零差异比对 |
-| 2026-06-16-claude-5fc464 | 2026-06-16 | harness缺口/wrapper rule §4 文档事实错误 | @claude | evidence-loop §4 立方体专项行 cube-rollback.mjs 路径写错(rule 写 scripts/release/cube-rollback.mjs，实际在 scripts/cube-rollback.mjs)；sentinel 落地脚本 scripts/sentinel/cube-grayscale-sentinel.mjs 未在 §4 表登记。本 PR 修 | P2 | PROPOSED | .claude/rules/evidence-loop.md#4 | scripts/cube-rollback.mjs,scripts/sentinel/cube-grayscale-sentinel.mjs |  |
-| 2026-06-16-claude-d2fa19 | 2026-06-16 | harness缺口/wrapper rule §4 新人引导 | @claude | evidence-loop §4 perf 通用行未提'首次须 --build 建 baseline'前置 + ETL 行未写转换质量报告脚本具体路径。本 PR 修 | P3 | PROPOSED | .claude/rules/evidence-loop.md#4 | N/A |  |
 | 2026-06-17-claude-291788 | 2026-06-17 | harness完善/baseline 脚本端点定义 | @claude | evidence-loop e2e dry-run 重建 baseline 时发现 5 个端点持续失败（非冷启动，重跑 3 次稳定）：coefficient 404（路由可能废弃）/ cost+holiday-drilldown+patrol/premium+patrol/premium/narrative 4 个 400（必需参数未传）。修法：补 ENDPOINT_DEFINITIONS 必需参数 + 移除/更新废弃路由 | P2 | PROPOSED | scripts/golden-baseline.mjs | scripts/golden-baseline.mjs |  |
