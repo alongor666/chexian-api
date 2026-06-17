@@ -10,7 +10,8 @@ policy: append-only
 
 - **路径**：`.claude/shared-memory/**` 与 `~/.claude/shared-memory/chexian/**` 是 user-only
 - **AI 仅可只读引用**：可 Read / Grep / Bash cat，但不得 Write / Edit / NotebookEdit / `git add` 这些路径下的任何文件
-- **包括 git rm 和 git mv**：删除/重命名也是写操作（除"治理清理已违规文件"这一专项例外，见 §4）
+- **写操作全禁**：新增 / 修改 / 删除（`git rm`）/ 重命名（`git mv`）均算写操作，**无例外**
+  - PR #664 review 教训：原 §1 曾留"治理清理已违规文件"专项例外 + governance check 给"纯 D"留 warning 通道——等于 AI 自我授权后门。已删除；user 若决定清理 shared-memory 文件须本人手动执行（git/shell）后由闸验证零新增/修改
 - **不包括 hook 自动写入**：`~/.claude/projects/**/memory/**` 由 auto-memory hook 维护（AGENTS.md §8.3 已注明）
 
 ## 2. 备选路径（按内容性质选）
@@ -27,13 +28,17 @@ policy: append-only
 
 `scripts/check-governance.mjs` 第 37 项 `shared-memory user-only`：
 
-- **行为**：扫 `git diff --cached --name-status` + `git diff --name-status` + `git ls-files --others --exclude-standard`，命中 `.claude/shared-memory/` 前缀即触发
+- **扫描范围**（4 路并集，PR #664 review 修正前仅前 3 路 → CI/pre-push clean checkout 漏 commit range）：
+  1. `git diff --cached --name-status`（staged）
+  2. `git diff --name-status`（working tree unstaged）
+  3. `git ls-files --others --exclude-standard`（untracked）
+  4. `git diff --name-status origin/main...HEAD`（**已 commit 但未推到 main 的 range**——CI/pre-push 关键，原版漏掉这条 → PR #662 模式可绕过）
 - **判定**：
-  - 任何 `A`（新增）/ `M`（修改）/ `??`（未跟踪）→ **error**, exit 1
-  - 所有变更都是 `D`（删除） → warning，不阻断（视为治理清理）
+  - 任何 `A`（新增）/ `M`（修改）/ `D`（删除）/ `??`（未跟踪）→ **error, exit 1**
+  - 无"纯 D = warning"例外（PR #664 review：D 也是写操作，留例外等于给 AI 自我授权后门）
   - 环境变量 `SHARED_MEMORY_USER_WRITE=1` → user 显式授权豁免（命名带 USER_WRITE 自我提示）
 - **触发场景**：`bun run governance`（手动）/ `bun run verify:quick`（人工预检）/ pre-push hook（PreToolUse `git push` 钩子链）/ CI `governance-check.yml`
-- **绕过**：仅在 user 手动操作 shared-memory 时设环境变量。**AI 会话禁用此变量**
+- **绕过**：仅在 user 本人手动操作 shared-memory 时由 user 本人在 shell 设环境变量。**AI 会话禁用此变量**——若 AI 试图设置，等同自我授权后门，违反 user-only 红线
 
 ## 4. 违规清单（chronological）
 
@@ -44,7 +49,7 @@ policy: append-only
 | 2026-06-10 | `b3e14e1c` | feat(governance): 守恒恒等式增设演进通道 + 复盘教训固化进共享记忆 | `feedback_retrospective_to_mechanism.md` | 2026-06-17 内容归档到 `.claude/workflow/pr-evolution.md` §A.1，原文件物理删除 |
 | 2026-06-10 | `f8866baf` | feat(skills): 沉淀 PR 评审打法为项目级 skill（三层结构 + 自进化协议 + 校准账） | `project_pr_review_calibration.md` | 2026-06-17 内容归档到 `.claude/workflow/pr-evolution.md` §A.2，原文件物理删除 |
 
-**例外**：本规则机制化提交（2026-06-17）的 `git rm` 两文件属于"治理清理已违规文件"，governance check 把它认作纯 D 删除（warning 不阻断），不再算入新违规。
+**说明**：本规则机制化提交（2026-06-17 PR #664）**不删除**两个违规文件——AI 自行删除违反 §1（即使是清理违规也是写操作；本身就是 owner 在 PR #664 review 中指出的后门）。两文件原文已在 `.claude/workflow/pr-evolution.md` §A 历史归档完整保留可追溯；shared-memory 内的原始副本是否清理由 user 本人在 governance 闸生效后手动决定（`SHARED_MEMORY_USER_WRITE=1 git rm ...`）。
 
 ## 5. 关联事故 / 教训
 
@@ -55,7 +60,7 @@ policy: append-only
 
 ## 6. 禁止
 
-- ❌ AI 通过 Write / Edit / NotebookEdit / `git add` 写入 `.claude/shared-memory/**`
+- ❌ AI 通过 Write / Edit / NotebookEdit / `git add` / `git rm` / `git mv` 触动 `.claude/shared-memory/**`（新增/修改/删除/重命名全禁）
 - ❌ AI 用 `SHARED_MEMORY_USER_WRITE=1` 环境变量绕过（仅 user 手动操作时设置）
 - ❌ 在 `.claude/shared-memory/` 下新增"AI 复盘"/"AI 工作产物"——一律落 `.claude/workflow/pr-evolution.md`
 - ❌ 把违规文件的内容"挪到"`~/.claude/shared-memory/chexian/`（user 本地副本，规则同 §8.3）

@@ -2698,14 +2698,21 @@ function checkCubeRoutesSSOT() {
  * 检查 .claude/shared-memory/ user-only 红线（AGENTS.md §8.3）
  *
  * 背景：`.claude/shared-memory/**` 与 `~/.claude/shared-memory/chexian/**` 是 user-only 路径，
- * AI 仅可只读引用、不得写入。规则历史：2026-04-27 commit 801f84e7 用分层 policy 替代扁平禁改名单后
- * 正式生效。但纯文档化无自动闸，2026-06-10 两个 AI commit（b3e14e1c / f8866baf）违规写入。
+ * AI 仅可只读引用、不得写入（含新增/修改/删除/重命名——AGENTS.md §8.3 "AI 不得修改"含义为全写操作）。
+ * 规则历史：2026-04-27 commit 801f84e7 用分层 policy 替代扁平禁改名单后正式生效。但纯文档化无自动闸，
+ * 2026-06-10 两个 AI commit（b3e14e1c / f8866baf）违规写入，2026-06-17 PR #662 第 3 次复发。
  * 本检查把红线机制化为 governance 闸。
  *
+ * 扫描范围（PR #664 review 修正：原版仅扫 staged + working tree → CI/pre-push clean checkout 漏 commit range）：
+ *   1. staged (`git diff --cached --name-status`)
+ *   2. 工作区 unstaged (`git diff --name-status`)
+ *   3. 未跟踪 (`git ls-files --others --exclude-standard`)
+ *   4. 已 commit 但未推到 main 的 range (`git diff --name-status origin/main...HEAD`) — CI/pre-push 关键
+ *
  * 行为：
- *   - 检出 .claude/shared-memory/** 下任何 A/M（新增/修改）→ 阻断
- *   - 纯 D（删除）视为治理清理 → warning 不阻断
- *   - 环境变量 SHARED_MEMORY_USER_WRITE=1 → user 显式授权绕过（命名带 USER_WRITE 自我提示）
+ *   - 检出任何 A/M/D/?? 的 `.claude/shared-memory/**` 变更 → error, exit 1
+ *     （D 删除不再有"治理清理"例外——避免 AI 自我授权后门；本规则文件 §4 仅记述 user 已亲自执行的清理）
+ *   - 环境变量 SHARED_MEMORY_USER_WRITE=1 → user 显式授权绕过（命名带 USER_WRITE 自我提示，AI 禁用）
  *
  * 详见 .claude/rules/shared-memory-discipline.md
  */
@@ -2748,18 +2755,12 @@ function checkSharedMemoryUserOnly() {
   collect('git diff --cached --name-status', null);
   collect('git diff --name-status', null);
   collect('git ls-files --others --exclude-standard', '??');
+  // PR #664 review 修正：CI/pre-push 在 clean checkout 跑时，已 commit 的改动不出现在 staged/working tree。
+  // 扫 origin/main...HEAD 闭合该口子；origin/main 不存在时 try/catch 静默跳过（首次 push / 早期初始化场景）。
+  collect('git diff --name-status origin/main...HEAD', null);
 
   if (collected.size === 0) {
     success('未检出对 .claude/shared-memory/ 的写入（user-only 红线已守护）');
-    return true;
-  }
-
-  const statuses = [...collected.values()];
-  const allDeletions = statuses.every((s) => s === 'D');
-
-  if (allDeletions) {
-    warning(`.claude/shared-memory/ 检出 ${collected.size} 个纯删除变更（视为清理，不阻断）`);
-    collected.forEach((s, p) => warning(`    ${s}  ${p}`));
     return true;
   }
 
@@ -2772,7 +2773,7 @@ function checkSharedMemoryUserOnly() {
   }
 
   error('.claude/shared-memory/** 是 user-only 路径（AGENTS.md §8.3 红线）');
-  error('  AI 不得写入该路径——仅 user 手动 sync/编辑');
+  error('  AI 不得对该路径执行任何写操作——新增/修改/删除/重命名全部禁止；仅 user 手动 sync/编辑');
   error('  本次检出变更：');
   collected.forEach((s, p) => error(`    ${s}  ${p}`));
   error('');
@@ -2782,7 +2783,7 @@ function checkSharedMemoryUserOnly() {
   error('    项目级 skill            → .claude/skills/');
   error('    本项目 rule（新增护栏） → .claude/rules/（append-only）');
   error('');
-  error('  user 显式授权绕过：SHARED_MEMORY_USER_WRITE=1 bun run governance');
+  error('  user 本人手动操作授权绕过：SHARED_MEMORY_USER_WRITE=1 bun run governance');
   error('  违规历史与本红线详情见 .claude/rules/shared-memory-discipline.md');
   return false;
 }

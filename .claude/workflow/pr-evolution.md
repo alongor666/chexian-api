@@ -124,8 +124,8 @@
   - 2026-04-27 之前的所有 shared-memory 文件（含 `claims_detail_field_mapping.md` / `repair_source_field_mapping.md` / 初始 13 文件 bootstrap）均在规则生效前 commit，属于历史合规存量，不在本次迁移范围
 - **根因**: AGENTS.md §8.3 把 `.claude/shared-memory/**` 标为 user-only，但**仅文档化、无自动闸**——AI 会话间没人盯，自然漂移；2026-06-16 pr-evolution.md 2026-06-16 entry 第 4 条已写"pr-evolution.md 作为 scorecard 落位（避免触发 §8.3）"，但同样停在文档层。这正是 memory `feedback_rules_need_automation` 描述的反模式："规则需自动化执行"——文档规则 ≠ 执行规则
 - **修复**:
-  1. 把两个违规文件的内容归档到本文 §A 历史归档（见下方），从 `.claude/shared-memory/` 物理删除
-  2. `scripts/check-governance.mjs` 新增 `checkSharedMemoryUserOnly()` 检查项（#37）：扫 staged + 工作区任何 `.claude/shared-memory/**` 路径的新增 / 修改 / 删除，命中即 exit 1
+  1. 把两个违规文件的内容**完整归档**到本文 §A 历史归档（见下方），保留可追溯；**不删除 `.claude/shared-memory/` 内原文件**——AI 自行删除违反 §8.3（即使是清理违规也属写操作）；shared-memory 内原始副本是否清理由 user 本人手动决定
+  2. `scripts/check-governance.mjs` 新增 `checkSharedMemoryUserOnly()` 检查项（#37）：扫 4 路（staged / unstaged / untracked / `origin/main...HEAD` commit range）；命中任何 A/M/D/?? → exit 1（无"纯 D = warning"例外，避免 AI 自我授权后门）
   3. 例外通道：`SHARED_MEMORY_USER_WRITE=1` 环境变量豁免（命名带 USER_WRITE 自我提示——只有 user 本人手动操作时设置）。AI 会话不应使用此变量
   4. 新增 `.claude/rules/shared-memory-discipline.md` 记录红线 + 违规清单（chronological）+ 备选路径建议（教训→pr-evolution.md / 跨项目知识→`~/.claude/skills/`）
 - **预防**:
@@ -158,3 +158,7 @@
 | 2026-06-10 | #556 | 误报甄别 | 扫描器告警先解码定性：GitGuardian 按 JWT 形状抓、不看邻接 key；安全测试夹具须 key 与 value 双重混淆，混淆一半等于没混 |
 | 2026-06-09 | #554→#557 | 采纳闭环 | 评审建议"清单 glob 派生、不硬编码"被采纳后，#557 三个新子客户端自动入保零人工——机器化约定的复利实证，同类建议优先级应上调 |
   4. **本次过程教训**：会话前期我两次 Edit 误用主目录绝对路径 `/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/...`（缺 `.claude/worktrees/heuristic-stonebraker-3ceb6c/`），重蹈 2026-06-03 PR #476 与 memory `feedback_isolate_concurrent_verify_head_first` 同因。同类失败再发生 1 次 → 在 settings.json 加 PreToolUse hook 拦截 Write/Edit 路径不含 `.claude/worktrees/` 子串且当前 cwd 在 worktree 时 deny（pr-evolution.md 2026-06-03 entry 已留 TODO）
+  5. **PR #664 owner review 闭环（2026-06-17）**：第一版 PR 含两个 blocker，被 owner 当场拍回——本次记录修复轨迹避免再犯：
+     - **Blocker 1（扫描漏 commit range）**：原 `checkSharedMemoryUserOnly()` 只扫 staged + working tree + untracked，CI / pre-push 跑在 clean checkout（已 commit 改动不出现在 staged/working tree） → 已 commit 进 PR 的 `.claude/shared-memory/**` A/M 会被静默漏过——等于"PR #662 模式"绕过自家闸。**修**：加第 4 路扫描 `git diff --name-status origin/main...HEAD`，origin/main 不存在时静默跳过（首次推送场景）。教训：写"防止 X 类违规"的闸时必须对照该违规历史**实际发生路径**（PR #662 是已 commit 后被人类发现的）反推扫描范围，不能凭"本地编辑流"直觉只扫工作区
+     - **Blocker 2（AI 自删后门）**：原版让 AI 删了两个违规文件 + governance 给"纯 D = warning"留通道——AGENTS.md §8.3 "AI 不得修改"含义包含删除/重命名；新规则文件自己 §1 也承认 git rm/git mv 是写操作；自己给自己留例外 = 后门。**修**：恢复两个 shared-memory 文件（从 origin/main） + 移除 D warning 例外 + 规则文件 §4 明确"本 PR 不删，user 决定后续"；两个违规文件的原文 100% 完整在 §A 归档可追溯，shared-memory 内的"原件"由 user 用 `SHARED_MEMORY_USER_WRITE=1 git rm ...` 自行清理（或永久保留）
+     - 元教训：当机制本身要承担"治理违规"职责时，**不能在同一 PR 里既建闸又用 AI 自我授权绕闸做清理**；建闸 PR 必须自身合规（零 A/M/D shared-memory），违规清理留给 user / 后续 PR
