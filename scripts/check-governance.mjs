@@ -2694,6 +2694,99 @@ function checkCubeRoutesSSOT() {
   return true;
 }
 
+/**
+ * 检查 .claude/shared-memory/ user-only 红线（AGENTS.md §8.3）
+ *
+ * 背景：`.claude/shared-memory/**` 与 `~/.claude/shared-memory/chexian/**` 是 user-only 路径，
+ * AI 仅可只读引用、不得写入。规则历史：2026-04-27 commit 801f84e7 用分层 policy 替代扁平禁改名单后
+ * 正式生效。但纯文档化无自动闸，2026-06-10 两个 AI commit（b3e14e1c / f8866baf）违规写入。
+ * 本检查把红线机制化为 governance 闸。
+ *
+ * 行为：
+ *   - 检出 .claude/shared-memory/** 下任何 A/M（新增/修改）→ 阻断
+ *   - 纯 D（删除）视为治理清理 → warning 不阻断
+ *   - 环境变量 SHARED_MEMORY_USER_WRITE=1 → user 显式授权绕过（命名带 USER_WRITE 自我提示）
+ *
+ * 详见 .claude/rules/shared-memory-discipline.md
+ */
+function checkSharedMemoryUserOnly() {
+  info('检查 .claude/shared-memory/ user-only 红线（AGENTS.md §8.3）...');
+
+  const TARGET_PREFIX = '.claude/shared-memory/';
+  const collected = new Map(); // path -> status
+
+  const collect = (cmd, defaultStatus) => {
+    try {
+      const out = execSync(cmd, {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      if (!out) return;
+      for (const line of out.split('\n')) {
+        if (!line) continue;
+        if (defaultStatus) {
+          // git ls-files --others：仅文件名，状态固定
+          if (line.startsWith(TARGET_PREFIX)) collected.set(line, defaultStatus);
+        } else {
+          // git diff --name-status：tab 分隔，最后一列是 file path（重命名时是 dst）
+          const parts = line.split('\t');
+          const status = parts[0];
+          const target = parts[parts.length - 1];
+          if (target && target.startsWith(TARGET_PREFIX)) {
+            // 已有 A/M 记录的不被后续 D 覆盖（保留更严重的状态）
+            const prev = collected.get(target);
+            if (!prev || (prev === 'D' && status !== 'D')) collected.set(target, status);
+          }
+        }
+      }
+    } catch {
+      // 命令失败（如 origin/main 不存在）静默
+    }
+  };
+
+  collect('git diff --cached --name-status', null);
+  collect('git diff --name-status', null);
+  collect('git ls-files --others --exclude-standard', '??');
+
+  if (collected.size === 0) {
+    success('未检出对 .claude/shared-memory/ 的写入（user-only 红线已守护）');
+    return true;
+  }
+
+  const statuses = [...collected.values()];
+  const allDeletions = statuses.every((s) => s === 'D');
+
+  if (allDeletions) {
+    warning(`.claude/shared-memory/ 检出 ${collected.size} 个纯删除变更（视为清理，不阻断）`);
+    collected.forEach((s, p) => warning(`    ${s}  ${p}`));
+    return true;
+  }
+
+  if (process.env.SHARED_MEMORY_USER_WRITE) {
+    warning(
+      `.claude/shared-memory/ 检出 ${collected.size} 个变更——已通过 SHARED_MEMORY_USER_WRITE 显式豁免（user 手动操作授权）`
+    );
+    collected.forEach((s, p) => warning(`    ${s}  ${p}`));
+    return true;
+  }
+
+  error('.claude/shared-memory/** 是 user-only 路径（AGENTS.md §8.3 红线）');
+  error('  AI 不得写入该路径——仅 user 手动 sync/编辑');
+  error('  本次检出变更：');
+  collected.forEach((s, p) => error(`    ${s}  ${p}`));
+  error('');
+  error('  备选路径建议（按内容类型）：');
+  error('    教训/复盘/scorecard       → .claude/workflow/pr-evolution.md（append-only entry）');
+  error('    跨项目可复用知识 / skill  → ~/.claude/skills/（共享 skills 仓 alongor666-skills）');
+  error('    项目级 skill            → .claude/skills/');
+  error('    本项目 rule（新增护栏） → .claude/rules/（append-only）');
+  error('');
+  error('  user 显式授权绕过：SHARED_MEMORY_USER_WRITE=1 bun run governance');
+  error('  违规历史与本红线详情见 .claude/rules/shared-memory-discipline.md');
+  return false;
+}
+
 function walkDir(dir, cb) {
   for (const name of fs.readdirSync(dir)) {
     const full = path.join(dir, name);
@@ -2741,6 +2834,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '立方体影子路由覆盖', fn: checkCubeShadowRouteCoverage },
   { name: '立方体SQL三件套', fn: checkCubeSqlThreePieceShape },
   { name: '立方体版本绑定', fn: checkCubeVersionBinding },
+  { name: 'shared-memory user-only', fn: checkSharedMemoryUserOnly },
 ];
 
 /**

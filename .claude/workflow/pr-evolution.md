@@ -99,7 +99,7 @@
 - **根因③**: TTY guard 凭"交互 = 需要终端"的肌肉记忆直接写 `stdin && stdout`，未审视 wizard 的实际 IO 走向（prompt → stderr / 数据 → stdout）；对照 cli/src/commands/* 其他 10 处 `isTTY` 用法（全部仅查 stdout 选输出格式）独此一家
 - **修复**: ①删 `.claude/shared-memory/project_cx_cli_interactive_wizard.md` + 把 scorecard 内容并入本 entry（既是失败教训也是 evidence-loop 阶段 C 落位）；②index.ts 改 `await import('./commands/interactive.js')` lazy，仅 wizard 入口才加载；③TTY guard 抽 `isInteractiveUnsupported(stdinTty)` 纯函数只查 stdin，补 2 个测试覆盖 `stdin=true, stdout=任意` 必允许进入
 - **预防**: 
-  1. **任何 evidence-loop scorecard 落盘前**必 `tail -20 .claude/workflow/pr-evolution.md` 校 user-only 边界（同类失败再发生 1 次 → 加 governance #N 扫所有新 commit 的 `.claude/shared-memory/**` 增改，本会话内未做但已登记 BACKLOG 候选）
+  1. **任何 evidence-loop scorecard 落盘前**必 `tail -20 .claude/workflow/pr-evolution.md` 校 user-only 边界（同类失败再发生 1 次 → 加 governance #N 扫所有新 commit 的 `.claude/shared-memory/**` 增改）→ **✅ 已完成**，见下一条 entry「shared-memory user-only 历史违规迁移 + 机制化」，governance #37 `checkSharedMemoryUserOnly` 已落地
   2. **基座 evidence-loop §8** 的"scorecard 落位"措辞应明确分项目：chexian-api → `.claude/workflow/pr-evolution.md`；其他项目按各自 AGENTS.md。已在 `~/.claude/skills/evidence-loop-core/` 留 TODO，下次跨项目同步时一并修
   3. **CLI 性能闸两层并守**：本地 `bun run bench:check` 守北极星 50ms（不通过则不能进入提交流程），但**本地过仅必要不充分** — CI cli-perf-sentinel 250ms 是 final gate；本地 lazy import 类改动必须用 `bun build:bin && bun run bench` 重测，看 A p95 是否真"零退化"（增 2ms 在 M-series 是噪声，但在 CI 共享 runner 可能 ×14 系数即灾难）
   4. **CLI guard 写`isTTY`时必先**对照已有 cli/src/commands/* 用法 — 其他命令一致地用 stdout 决定输出格式，stdin 决定是否读管道；新增交互 guard 不应同时绑两端
@@ -114,3 +114,47 @@
   - CI A 冷启动 p95：eager-import **298ms ❌** > 250ms 闸 → lazy-import 待 push 验证
 - **零侵入**: 非交互 `cx query KEY --p=v` 字符仅 action 体 `(key, options, cmd) =>` 改为 `async (key, options, cmd) =>`（lazy import 需 await）；queryCommand / parseExtraParams / applyPathParams 全部不动
 - **决策**: lazy import + TTY 修复 → 推 fix commit → 等 CI 验证
+
+### 2026-06-17 — shared-memory user-only 历史违规迁移 + 机制化（承接 PR #662 第 1 条预防，无 PR：内部治理沉淀）
+
+- **症状**: 审计 `.claude/shared-memory/**` 全量 git log，定位到 §8.3 user-only 红线生效（2026-04-27 commit `801f84e7`）**之后**仍有两次 AI 越权写入：
+  - commit `b3e14e1c`（2026-06-10）feat(governance): 守恒恒等式增设演进通道 + 复盘教训固化进共享记忆 → 新增 `feedback_retrospective_to_mechanism.md`
+  - commit `f8866baf`（2026-06-10）feat(skills): 沉淀 PR 评审打法为项目级 skill → 新增 `project_pr_review_calibration.md`
+  - PR #662（上一条 entry）的本次违规是该模式第 3 次复发；其 P1 修复已在原 PR 处理，本 entry 收口"两个旧违规 + 机制化"
+  - 2026-04-27 之前的所有 shared-memory 文件（含 `claims_detail_field_mapping.md` / `repair_source_field_mapping.md` / 初始 13 文件 bootstrap）均在规则生效前 commit，属于历史合规存量，不在本次迁移范围
+- **根因**: AGENTS.md §8.3 把 `.claude/shared-memory/**` 标为 user-only，但**仅文档化、无自动闸**——AI 会话间没人盯，自然漂移；2026-06-16 pr-evolution.md 2026-06-16 entry 第 4 条已写"pr-evolution.md 作为 scorecard 落位（避免触发 §8.3）"，但同样停在文档层。这正是 memory `feedback_rules_need_automation` 描述的反模式："规则需自动化执行"——文档规则 ≠ 执行规则
+- **修复**:
+  1. 把两个违规文件的内容归档到本文 §A 历史归档（见下方），从 `.claude/shared-memory/` 物理删除
+  2. `scripts/check-governance.mjs` 新增 `checkSharedMemoryUserOnly()` 检查项（#37）：扫 staged + 工作区任何 `.claude/shared-memory/**` 路径的新增 / 修改 / 删除，命中即 exit 1
+  3. 例外通道：`SHARED_MEMORY_USER_WRITE=1` 环境变量豁免（命名带 USER_WRITE 自我提示——只有 user 本人手动操作时设置）。AI 会话不应使用此变量
+  4. 新增 `.claude/rules/shared-memory-discipline.md` 记录红线 + 违规清单（chronological）+ 备选路径建议（教训→pr-evolution.md / 跨项目知识→`~/.claude/skills/`）
+- **预防**:
+  1. ✅ 本次完成：规则机制化。`bun run governance` 跑过即等于第 37 项过——AI 试图写 shared-memory 立即红
+  2. 同类失败再发生 1 次（仍有人/AI 用 `SHARED_MEMORY_USER_WRITE=1` 绕过且非 user 操作）→ 把环境变量绕过路径删掉，强制 user 走 shell 而非 commit 路径
+  3. 对应在 memory `feedback_rules_need_automation` 增加引用：本次是该模式的又一实证（文档规则→6 月 10 日两次违规 + 6 月 17 日 PR #662 第 3 次违规→6 月 17 日机制化）
+
+#### A. 历史归档（两个违规文件原文，仅保留历史可追溯，不在 shared-memory 复活）
+
+##### A.1 原 `feedback_retrospective_to_mechanism.md`（commit b3e14e1c）
+
+> 来源：ApiClient 神类拆分 536→558 全线复盘。AI 会话上下文会蒸发——没固化进仓库可执行护栏（governance/hooks/rules/backlog/memory）的教训，会话结束即不存在。
+
+1. **给 sub-agent 的 brief 里的示例代码也是代码**：PR #556 事故——主会话在任务书里亲手写了 JWT 字面量让 agent 做密钥扫描器的正向测试夹具 → agent 忠实照抄提交 → GitGuardian 按 JWT 形状判泄漏 → CI 红 + force-push 抹历史 + 评审 blocker。规则：写 brief 时夹具/示例/占位值要过与正式代码同一套红线审查，涉密形状的夹具一律用「明显假 + 非真实结构」占位（如 `EXAMPLE-FAKE-TOKEN-not-a-real-secret-0000`），并核对值域约束（该次正则值域 `[A-Za-z0-9._\-]` 不含下划线——用 `_` 分隔的假 token 会让正向用例静默变红）。
+2. **exit code 不进管道**：`if git push | tail -2; then` 拿到的是 `tail` 的退出码——被拒的 push 打出假 "PUSH OK"。要分支判断的命令绝不接管道；需要裁剪输出时先 `> /tmp/x.log 2>&1` 再按真实退出码分支。
+3. **force-push 即广播**：#556 force-push 修复后 1 分钟，评审者基于旧 head 发了完整评审（白跑一轮 worktree 独立验证）。force-push 后立刻在 PR 留一行「head 已更新至 \<sha\>，\<原因\>」，省评审者整轮重验。
+4. **"机制已在、执行缺位"类教训不要再写文档规则**：同次复盘里的「主目录违纪开发」「#552 重复劳动（未提交前查重）」——规则早已在 `.claude/rules/worktree-setup.md` 与 CLAUDE.md Pre-flight 里，失败模式是没执行。再添一条文档规则无增益（本项目原则：文档规则 ≠ 执行规则）；正确动作二选一：升级为自动拦截（hook/governance），或承认属注意力纪律、在会话开工 checklist 里前置执行。
+5. **已知知识要在动笔前调用，检查只是兜底**：守恒脚本第一版漏扫 `client-core.ts`（明知 REFRESH 已下沉至此，读过该文件三遍），靠自己写的 LOST 检查才咬出来。护栏抓住自己不是骄傲——写代码那一刻就该把上下文里已有的事实清单过一遍，门禁是最后一道，不是第一道。
+
+##### A.2 原 `project_pr_review_calibration.md`（commit f8866baf）
+
+> PR 评审校准账：append-only ledger，每行 = 一次"评审结论与现实的对账"。原消费方 `.claude/skills/pr-review-playbook.md`（已删除/未存在），现作为历史记录归档。
+
+| 日期 | PR | 类型 | 教训（一行） |
+|------|----|------|------------|
+| 2026-06-09 | #543 | 自我反转 | 数据列数断言方向判反：裁决前先分清文档/生成器/运行时三口径；生成器 union_by_name=41 与运行时裸读是两回事，二者还可能互相矛盾（B340） |
+| 2026-06-09 | #548 | 判据确立 | PR 自述数字 rebase 后必陈旧（自述 79 实测 83）：数字一律以 worktree 实跑为准，自述只作线索 |
+| 2026-06-09 | #549 | 误报甄别 | 旧名 grep 命中 server 侧同名函数（workflow-runner 的 getWorkflowRun）并非前端残留：残留扫描必须逐条判属，不可按命中数下结论 |
+| 2026-06-09 | #555 | 战技确立 | 回退实验坐实 bug 三真（bug/测试/fix 各自为真）；实际症状（静默挂起到超时）比 PR 描述（TypeError）更重——症状要实测不要转述 |
+| 2026-06-10 | #556 | 误报甄别 | 扫描器告警先解码定性：GitGuardian 按 JWT 形状抓、不看邻接 key；安全测试夹具须 key 与 value 双重混淆，混淆一半等于没混 |
+| 2026-06-09 | #554→#557 | 采纳闭环 | 评审建议"清单 glob 派生、不硬编码"被采纳后，#557 三个新子客户端自动入保零人工——机器化约定的复利实证，同类建议优先级应上调 |
+  4. **本次过程教训**：会话前期我两次 Edit 误用主目录绝对路径 `/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/...`（缺 `.claude/worktrees/heuristic-stonebraker-3ceb6c/`），重蹈 2026-06-03 PR #476 与 memory `feedback_isolate_concurrent_verify_head_first` 同因。同类失败再发生 1 次 → 在 settings.json 加 PreToolUse hook 拦截 Write/Edit 路径不含 `.claude/worktrees/` 子串且当前 cwd 在 worktree 时 deny（pr-evolution.md 2026-06-03 entry 已留 TODO）
