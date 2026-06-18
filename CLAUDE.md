@@ -2,7 +2,7 @@
 
 > **chexian-api** — 车险数据分析平台（API 版）。React + TypeScript + Vite + ECharts，后端 Express + DuckDB。生产环境 `https://chexian.cretvalu.com`。
 
-> **共享记忆**：项目记忆存储在 `.claude/shared-memory/`（git 跟踪，15 个 feedback/project 文件 + `MEMORY.md` 索引）+ `~/.claude/shared-memory/chexian/`（本地运行时）。clone 后执行 `bash .claude/shared-memory/sync-memory.sh --pull` 拉取记忆到本地。AI 读取入口见 §13。
+> **共享记忆**：项目记忆存储在 `.claude/shared-memory/`（git 跟踪，`MEMORY.md` 索引 + 多个 `feedback_*`/`project_*` 专题文件）+ `~/.claude/shared-memory/chexian/`（本地运行时）。clone 后执行 `bash .claude/shared-memory/sync-memory.sh --pull` 拉取记忆到本地。AI 读取入口见 §13。
 
 > **CLAUDE.md 体积预算**：≤20KB / ≤300 行。`generate-claude-md` 注入的 stack/conventions/architecture/skills 四区块为冗余，已用墓碑 marker 占位（见 `.claude/rules/claude-md-budget.md` + governance #23）。
 
@@ -54,8 +54,8 @@
 1. `grep -r "id: '${NEW_ID}'" server/src/config/metric-registry/` — 确认不存在
 2. 判断复杂度：L1-L3（单行 SQL 表达式）→ 添加到 `categories/*.ts`；L4（CTE/窗口函数/多表 JOIN）→ SQL 生成器中实现，引用注册表原子指标
 3. 必须包含：id + name + formula + sql.expression + display + 至少 1 个 testCase + changelog
-4. `npx tsx scripts/metric-registry/validate.ts` 校验通过
-5. `npx tsx scripts/metric-registry/generate-frontend-map.ts` 更新前端映射；失败时用 `git checkout -- server/src/config/field-registry/` 回滚未提交的 codegen 产物
+4. `bun scripts/metric-registry/validate.ts` 校验通过（脚本带 `#!/usr/bin/env bun` shebang，禁止 `npx tsx`）
+5. `bun scripts/metric-registry/generate-frontend-map.ts` 更新前端映射；失败时用 `git checkout -- server/src/config/field-registry/` 回滚未提交的 codegen 产物
 
 **禁止**：
 - ❌ 在 SQL 生成器中硬编码新指标公式而不在注册表注册
@@ -109,17 +109,17 @@
 
 ```
 前端 Hook → apiClient → GET /api/query/*
-  → [Phase 2] Service Worker (stale-while-revalidate, 0ms 二次访问)
+  → Service Worker（cache-first，命中 0ms；过期/未命中走网络）
   → server/src/routes/query.ts（聚合器）
     → authMiddleware → permissionMiddleware
-    → [Phase 1] snapshotServe（检查 JSON 快照, <5ms）
-      ├→ 命中: fs.readFile → X-Snapshot:hit → respond
-      └→ 未命中: next() → query/*.ts → sql/*.ts → duckdb.ts → JSON
+    → route-cache（内存 LRU + ETag/304, brotli/gzip 预编码）
+      ├→ 命中: 直接 setHeader + send → respond
+      └→ 未命中: query/*.ts → sql/*.ts → duckdb.ts → JSON → 写入缓存
 ```
 
-**快照层**（Phase 1）：`server/src/middleware/snapshot-serve.ts` · 响应头 `X-Snapshot: hit|miss|stale|error` · 快照目录 `数据管理/warehouse/snapshots/{bundle}/{scope}/{paramHash}.json`
+**服务端缓存**：`server/src/services/route-cache.ts` · 内存 LRU + `ETag` + `If-None-Match` 走 304 · 同时缓存 brotli/gzip 编码 · 缓存键含 `dataVersion`，ETL 刷新自然失效
 
-**Service Worker**（Phase 2）：`public/sw.js` · 仅生产环境 + 仅 `/api/query/*` GET · 每日轮询 `/api/data/version` 检测 ETL 更新 · SW 活跃时 React Query staleTime=Infinity
+**Service Worker**（Phase C）：`public/sw.js` · 仅 `/api/query/*` GET · cache-first（命中即返回 0ms，不走后台 revalidate）· 每 5 分钟轮询 `GET /api/data/version`，版本变更即清空缓存并通知客户端
 
 **启动**：`bun run dev:full`（禁止只运行 `bun run dev`）
 
@@ -138,14 +138,15 @@
 **技术栈唯一事实源**：`package.json`（依赖版本）+ `server/src/config/env.ts`（环境变量）+ `开发文档/TECH_STACK.md`（架构选型说明）
 
 ```bash
-bun install && bun run dev:full    # 安装+启动
-bun run build                      # 类型检查+构建
-bun run test                       # 单元测试（⚠️ 不是 bun test）
-bun run test:integration           # 集成测试（需 DuckDB 原生二进制，仅本地）
-bun run test:e2e                   # E2E（需先 dev:full，凭据 admin/CxAdmin@2026!）
-bun run governance                 # 治理校验
-bun run snapshot:build             # 快照构建（需先 dev:full）
-bun run snapshot:verify            # 快照 dry-run + 健康检查
+bun install && bun run hooks:install  # 安装依赖 + 注册 git hooks（首次必跑，post-checkout 自愈链依赖）
+bun run dev:full                      # 启动前后端
+bun run build                         # 类型检查+构建
+bun run test --run                    # 单元测试（必须带 --run，否则进 vitest watch 模式）
+bun run test:integration              # 集成测试（需 DuckDB 原生二进制，仅本地）
+bun run test:e2e                      # E2E（需先 dev:full；凭据用户名 admin，密码读 E2E_PASSWORD 环境变量）
+bun run governance                    # 治理校验
+bun run verify:quick                  # preflight + governance + typecheck（推 PR 前快速门禁）
+bun run verify:full                   # verify:quick + 全量单测
 ```
 
 **CI 测试分层协议**（RED LINE）：
@@ -165,10 +166,10 @@ bun run snapshot:verify            # 快照 dry-run + 健康检查
 | 源数据口径验证 | DuckDB 直查 Parquet → 与 API 返回对比 |
 | 修改路由 | `curl -s -o /dev/null -w '%{http_code}' localhost:3000/api/[路由]` |
 | 修改权限/RBAC | 三个角色（branch_admin/regional_manager/salesman）各登录一次，对比同一端点返回数据范围差异 |
-| 修改环境变量 | `node -e "import('./server/src/config/env.js').then(m=>console.log(m.env))"` 不抛异常 |
+| 修改环境变量 | `bun --bun -e "import('./server/src/config/env.ts').then(m=>console.log(Object.keys(m)))"` 不抛异常（直接吃 TS，无需先编译） |
 | 修改字段注册表 | `node scripts/field-registry/generate.mjs && bun run governance` 全过 |
 | 修改前端 | `bun run build` 零 TS 报错 |
-| 修改快照 | `bun run snapshot:build --bundle <name>` 重建 + `curl -I` 检查 `X-Snapshot: hit` |
+| 修改服务端缓存 | 命中端点二次请求带 `If-None-Match: <上次 ETag>` → 期望返回 304 |
 | 声称完成 | 至少一个 API 200 + 非空 JSON |
 | Git 推送 | `bun run governance && git diff --check` |
 
@@ -184,8 +185,8 @@ bun run snapshot:verify            # 快照 dry-run + 健康检查
 | 业务口径错误 | 禁止直接改 → BACKLOG 登记 |
 | API 失败 | 检查 apiClient 与路由对应，前端新增方法须确认后端路由存在 |
 | ETL Schema 契约失败 | `sys.exit(1)` 时查 stderr 列出的未声明字段 → 加入 `fields.json` 或 `shard-config.json:explicitly_ignored_fields` |
-| 快照构建 429 限流 | `snapshot:build` 已串行 + 900ms 间隔；仍报错降低 `--concurrency` 或按 `--bundle` 单 bundle 构建 |
-| VPS 同步冲突 | `sync-vps.mjs` 默认 `--dry-run` 预览 → 确认无误后 `--apply`；线上有改动时禁止覆盖，先 `git pull` 同步 |
+| 服务端缓存异常 | 用 `data-version` 查最新 ETag；缓存键含 `dataVersion`，刷新 ETL 后自然失效，不需手动清缓存 |
+| VPS 同步冲突 | ⚠️ `sync-vps.mjs` 默认直接执行 rsync（`dryRun: false`）；要预览必须显式 `--dry-run`；线上有改动时禁止覆盖，先 `git pull` 同步 |
 | 权限 401/403 | 查 `access-control.ts` 角色定义 → 查 `permission.ts` WHERE 注入；复现需指定 token |
 
 ---
@@ -201,6 +202,7 @@ bun run snapshot:verify            # 快照 dry-run + 健康检查
 git clone <repo> && cd chexian-api
 bash .claude/shared-memory/sync-memory.sh --pull   # 拉记忆到本地
 bun install                                         # 安装依赖
+bun run hooks:install                               # 注册 git hooks（post-checkout 自愈链前置条件，见 .claude/rules/worktree-setup.md §B）
 bun run dev:full                                    # 启动开发环境
 ```
 
@@ -214,7 +216,7 @@ bun run dev:full                                    # 启动开发环境
 
 **CI/CD**：`deploy.yml`（push main → 构建→部署→健康检查）· `claude-code.yml`（@claude 触发）· `governance-check.yml`（PR 治理）
 
-**工具箱入口**：[.claude/commands/README.md](./.claude/commands/README.md) · `.claude/agents/` · 常用：`/commit-push-pr` `/sync-and-rebase` `/data-analysis` `/security-review` `/verify`（命令/agent 数量以目录列表为准）
+**工具箱入口**：`.claude/commands/`（`chexian-*` 前缀）+ `.claude/agents/` · 常用：`/chexian-commit-push-pr` `/chexian-sync-and-rebase` `/chexian-data-analysis` `/chexian-security-review` `/chexian-verify`（命令/agent 数量与名称以目录列表为准）
 
 ---
 
@@ -226,10 +228,10 @@ bun run dev:full                                    # 启动开发环境
 2. `bun run governance` — 治理通过
 3. PM2 状态检查 — `sudo /usr/local/bin/deploy-chexian-api describe`，若 errored 则 `sudo /usr/local/bin/deploy-chexian-api reload`（禁止只 restart）
 4. 环境变量 — `ssh deployer@162.14.113.44 'grep -c "=" /var/www/chexian/server/ecosystem.config.cjs'`，与本地比对数量一致
-5. CORS — `curl -I -H "Origin: https://chexian.cretvalu.com" https://chexian.cretvalu.com/api/health` 返回 `Access-Control-Allow-Origin` 头
+5. CORS — `curl -I -H "Origin: https://chexian.cretvalu.com" https://chexian.cretvalu.com/health` 返回 `Access-Control-Allow-Origin` 头（端点是 `/health`，不是 `/api/health`）
 6. DuckDB/Parquet 兼容 — `union_by_name` schema 一致性
 7. 健康检查 — `curl -s https://chexian.cretvalu.com/health` 返回 200
-8. 快照文件 — `curl -s https://chexian.cretvalu.com/api/data/snapshot-health` 返回快照状态（首次部署无快照时全部 miss，正常）
+8. 数据版本 — `curl -s https://chexian.cretvalu.com/api/data/version` 返回当前 ETL 版本（驱动 SW 缓存失效）
 9. 核心 API — 至少一个 `/api/query/*` 返回 200 + 非空 JSON
 
 **回滚方案**：`sudo /usr/local/bin/deploy-chexian-api rollback`（恢复上一版 PM2 进程）。重大故障同时：`git revert <SHA> && git push` 让 deploy.yml 重新部署上一版代码。
@@ -265,8 +267,8 @@ bun run dev:full                                    # 启动开发环境
 |------|------|
 | 先确认再动手 | 用户提到文档/计划，若有多版本先问"哪个版本？" |
 | 禁止硬编码路径 | 使用 `server/src/config/paths.ts` 或环境变量 |
-| 数据文件分层 | `数据管理/warehouse/` 是本地源（`fact/policy/current/` 当前分片 · `fact/policy/archive/` 归档 · `dim/` 维度表 · `snapshots/` API 缓存）；`server/data/` 是 VPS 运行时镜像 |
-| ETL 输入/输出 | 输入 Excel 放 `数据管理/raw/`；输出 Parquet 落 `数据管理/warehouse/`；元数据落 `数据管理/data-sources.json` |
+| 数据文件分层 | `数据管理/warehouse/` 是本地源（`fact/` 事实表 · `dim/` 维度表）；`server/data/` 是 VPS 运行时镜像 |
+| ETL 输入/输出 | 输入 Excel 放 `数据管理/` 根目录（命名见 `.claude/rules/data-pipeline.md` 源文件命名约定）；输出 Parquet 落 `数据管理/warehouse/`；元数据落 `数据管理/data-sources.json` |
 
 ---
 
@@ -280,11 +282,13 @@ bun run dev:full                                    # 启动开发环境
 
 `.claude/shared-memory/MEMORY.md` 是项目运行时知识总索引（DuckDB 迁移坑、字段映射、维度表 Parquet 化、Auth 凭据等）。**所有数据/SQL/认证任务开工前必读**。
 
-**专题文件**（按需查阅 `.claude/shared-memory/`）：
+**专题文件命名约定**（按需 `ls .claude/shared-memory/` 列举，不在本文档枚举避免漂移）：
 
-- **feedback**（经验教训）：`data_analysis_ask_before_assume`（需求确认）· `data_verify_before_path_fix`（修复前验证）· `diagnosis_report_structure`（报告规范）· `duckdb_no_param_in_view`（VIEW 禁参数化）· `earned_formulas`（已赚口径）· `four_level_alert`（告警阈值）· `inspection_method`（巡检方法论）· `rate_no_weighted_avg`（比率禁加权）· `table_formatting_rules`（表格规范）
-- **project**（项目决策）：`claims_embedded_in_policy`（claims 废弃）· `margin_contribution_metrics`（边际贡献）· `plan_dimension_rule`（计划维度）· `quote_data_issue`（报价问题）· `risk_grade_detection`（风险等级三字段互斥）· `vehicle_type_classification`（车型分类）
-- **其他**：`claims_detail_field_mapping`（赔款明细字段）· `reference_shared_memory`（跨项目机制说明）
+- `feedback_*.md` — 经验教训（需求确认 · 修复前验证 · 报告规范 · VIEW 禁参数化 · 已赚/赔付口径 · 告警阈值 · 巡检方法论 · 比率禁加权 · 表格规范 等）
+- `project_*.md` — 项目决策（claims 废弃 · 边际贡献 · 计划维度 · 报价数据问题 · 风险等级三字段互斥 · 车型分类 等）
+- `tool_*.md` / `claims_detail_field_mapping.md` / `repair_source_field_mapping.md` / `reference_shared_memory.md` — 工具/字段映射/跨项目机制说明
+
+⚠️ shared-memory 是 user-only 路径，AI 仅可只读引用，禁止 Write/Edit/git add（详见 `.claude/rules/shared-memory-discipline.md`）。
 
 ---
 
