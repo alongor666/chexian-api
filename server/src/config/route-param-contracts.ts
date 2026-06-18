@@ -14,7 +14,7 @@
  * 必须同步在此登记契约条目，validate-params 的覆盖率检查会拦截遗漏。
  * 本文件仅被校验脚本/测试 import，生产运行时不加载。
  */
-import type { z } from 'zod';
+import { z } from 'zod';
 import { commonFilterSchema } from '../utils/filter-params.js';
 import { trendExtraSchema } from '../routes/query/trend.js';
 import { growthExtraSchema } from '../routes/query/growth.js';
@@ -185,4 +185,41 @@ export function contractAllowedKeys(contract: RouteParamContract): Set<string> {
   for (const k of contract.extraKeys ?? []) keys.add(k);
   for (const k of contract.pathParams ?? []) keys.add(k);
   return keys;
+}
+
+function extractEnumValues(field: z.ZodTypeAny): string[] | null {
+  // 用 zod 4 公开 API .unwrap() 解包 Optional/Nullable；ZodDefault 没有公开 unwrap，
+  // 本项目未发现 enum 包在 default 里的用例，故不支持（出现时返回 null，warning 路径兜底）。
+  // zod 4 内部 $ZodType vs 用户面 ZodType 类型割裂，unwrap() 返回值需 cast 回 ZodTypeAny。
+  let inner: z.ZodTypeAny = field;
+  while (inner instanceof z.ZodOptional || inner instanceof z.ZodNullable) {
+    inner = inner.unwrap() as z.ZodTypeAny;
+  }
+  if (inner instanceof z.ZodEnum) {
+    // zod 4 enum 支持 string|number，本项目 catalog enum 均为字符串；统一 toString 后比对。
+    return inner.options.map((v) => String(v));
+  }
+  return null;
+}
+
+/**
+ * 提取契约中所有 zod 字段的 enum 合法值集合。
+ * 同一字段在多个 schema 里同时声明 enum 时取并集（罕见；正常一个字段只在一处声明）。
+ * 返回 Map<fieldName, sortedEnumValues>；非 enum 字段不出现在结果里。
+ */
+export function contractZodEnums(contract: RouteParamContract): Map<string, string[]> {
+  const result = new Map<string, Set<string>>();
+  const collect = (shape: z.ZodRawShape) => {
+    for (const [name, field] of Object.entries(shape)) {
+      // zod 4 ZodRawShape 的 value 推断为 $ZodType（内部基础类型），
+      // 与 extractEnumValues 期望的用户面 ZodTypeAny 类型不互通，需 cast。
+      const values = extractEnumValues(field as unknown as z.ZodTypeAny);
+      if (!values) continue;
+      if (!result.has(name)) result.set(name, new Set());
+      for (const v of values) result.get(name)!.add(v);
+    }
+  };
+  if (contract.useCommon) collect(commonFilterSchema.shape);
+  for (const schema of contract.schemas ?? []) collect(schema.shape);
+  return new Map([...result.entries()].map(([k, set]) => [k, [...set].sort()]));
 }
