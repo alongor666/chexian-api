@@ -2838,6 +2838,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'shared-memory user-only', fn: checkSharedMemoryUserOnly },
   { name: 'evidence-loop SSOT 漂移', fn: checkEvidenceLoopSsotDrift },
   { name: 'pr-evolution 沉淀超期', fn: checkPrEvolutionExpired },
+  { name: '.github/workflows YAML 语法', fn: checkWorkflowYamlSyntax },
 ];
 
 // ============================================================
@@ -2901,6 +2902,61 @@ function checkEvidenceLoopSsotDrift() {
  * 约定 schema：entry 内含 `needs_automation: true` 即声明该项需机制化；
  * 紧跟一行 `expires: YYYY-MM-DD`。超过 expires 仍未机制化 → warning（不 fail，让用户判断）。
  */
+// ============================================================
+// .github/workflows YAML 语法验证（防 PR #669 hotfix 复发）
+// ============================================================
+
+/**
+ * PR #669 hotfix 教训：sync-cx-cli.yml 用 `git commit -m "<多行字符串>"`，第二行起
+ * 没有缩进 → YAML block scalar 提前终止 → 解析报 "could not find expected ':'"
+ * → GitHub Actions UI 报 "workflow file issue" → 3 次 push 触发全部 failure。
+ * 本地 governance / pre-push 都不验 YAML 语法，governance 缺这一项。
+ *
+ * 用 python3 yaml 解析（macOS / ubuntu CI runner 都默认带）。
+ */
+function checkWorkflowYamlSyntax() {
+  info('检查 .github/workflows/*.yml 语法（PR #669 教训）...');
+
+  const workflowsDir = path.join(ROOT_DIR, '.github/workflows');
+  if (!fs.existsSync(workflowsDir)) {
+    success('.github/workflows 不存在，跳过');
+    return true;
+  }
+  const files = fs.readdirSync(workflowsDir).filter((f) => /\.ya?ml$/.test(f));
+  if (files.length === 0) {
+    success('.github/workflows 无 YAML 文件，跳过');
+    return true;
+  }
+
+  const broken = [];
+  for (const file of files) {
+    const filePath = path.join(workflowsDir, file);
+    try {
+      execFileSync('python3', [
+        '-c',
+        `import yaml,sys
+try:
+    yaml.safe_load(open('${filePath}'))
+except Exception as e:
+    print(str(e), file=sys.stderr); sys.exit(1)`,
+      ], { stdio: 'pipe' });
+    } catch (e) {
+      const stderr = (e.stderr || '').toString().trim().split('\n')[0];
+      broken.push(`${file}: ${stderr}`);
+    }
+  }
+
+  if (broken.length === 0) {
+    success(`.github/workflows YAML 语法全部 OK（${files.length} 个文件）`);
+    return true;
+  }
+  error('.github/workflows YAML 语法错误：');
+  broken.forEach((b) => console.log(`    - ${b}`));
+  error('  修复：用 `python3 -c "import yaml; yaml.safe_load(open(...))"` 本地验证；');
+  error('  多行 commit 用 `-m "line1" -m "line2"` 多次 -m 替代 YAML block scalar 缩进陷阱');
+  return false;
+}
+
 function checkPrEvolutionExpired() {
   info('检查 pr-evolution.md 沉淀超期未机制化项（PR #662 教训）...');
 

@@ -304,3 +304,21 @@
 3. **codex review 抗 N 轮发作**：本 PR 已 review v1→v2→v3 三轮，每轮都揪同 pattern 不同位置——证明 codex 是有效兜底但成本高。同类失败再发生 1 次（v4 还揪同 pattern）→ 在自审清单加"已 grep 全仓 N 处？" 强制自审证据
 - needs_automation: false
 - rationale: 本 PR 已机制化教训沉淀（自审清单已含"未完整盘点"red line 候选），未来若同 pattern 再发作即触发 governance 升级
+
+### 2026-06-18 — PR #6XX hotfix: sync-cx-cli.yml YAML 语法错误（PR #669 同 pattern 第 4 次发作）
+
+- **症状**: PR #669 合入 main 后 sync-cx-cli workflow 自动触发 → 3 次 push 触发全部 failure；GitHub Actions UI 报 "This run likely failed because of a workflow file issue"；cx-cli main 仍是 5-27 的旧状态未更新
+- **根因**: workflow line 88-94 用 `git commit -m "<多行字符串>"`，第二行 `Source:` 没有缩进 → YAML block scalar 在 line 88 提前终止 → 解析器把 `Source:` 当新 YAML key → line 93 报 "could not find expected ':'"。本地 `bun run governance` / pre-push hook 都不验 YAML 语法 — governance 缺这一项
+- **PR #669 同 pattern 第 4 次**:
+  - v1 → v2 → v3 都是 codex review 在 GitHub 揪出
+  - 本次 v4 是合并后 workflow run 揪出
+  - 都是同源："本地验证不全 → 远端揪 → 修一处 / 装一闸"
+- **修复**: 
+  1. workflow `git commit -m "..."` 改用多次 `-m`：每个 `-m` 单独一行 + `\\` 续行，YAML 看到的是简单 shell 命令字符串
+  2. governance 加 `checkWorkflowYamlSyntax`（项 40）：扫 `.github/workflows/*.yml`，用 python3 `yaml.safe_load` 验证。anti-pattern 验证：临时引入坏语法 → fail ✅；恢复 → ✅
+- **预防**:
+  1. ✅ governance 自动闸已加 — 同类问题下次本地 `bun run governance` 立刻抓
+  2. 同类 "本地通过远端 fail" 模式（PR #459 typecheck / PR #644 mock 类型 / 本次 YAML）累计 3 次以上 → 应该全面审视 pre-push hook 覆盖率：是否还有 GitHub Actions / lint / 静态分析没被本地兜底
+  3. PR #669 v1→v4 4 轮发作 → 抽 meta-pattern: "AI 设计-验证回路本身不闭合" — 设计时只验"自己写的部分"，没验"环境会以什么形式解析自己写的内容"（YAML 解析器视角 / cx login 写盘视角 / 文档读者视角）。下次同类工作前先列"环境视角清单"
+- needs_automation: false
+- rationale: 本 PR governance YAML 检查已落地；同类失败下次本地必抓
