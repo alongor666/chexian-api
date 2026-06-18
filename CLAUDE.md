@@ -21,7 +21,7 @@
 | 源数据验证 | 修改 SQL 生成器后，必须用 Parquet 直查与 API 返回对比验证 |
 | 文档同步 | 涉及 3+ 文件变更的重构完成后，扫描并更新受影响的索引（CODE_INDEX / DATA_INDEX / PARQUET_SCHEMA_KNOWLEDGE / CLAUDE.md 注册表章节） |
 | 业务口径不擅改 | 业务逻辑/口径错误一律 BACKLOG 登记等用户确认，禁止 AI 自行修正（如报价口径） |
-| 不规划只执行（限定） | 仅适用于已定义的 `/commit-push-pr`/`/sync-and-rebase` 等快捷命令；其他破坏性操作必须先列影响清单等用户确认 |
+| 不规划只执行（限定） | 仅适用于已定义的 `/chexian-commit-push-pr`/`/chexian-sync-and-rebase` 等快捷命令；其他破坏性操作必须先列影响清单等用户确认 |
 
 **Pre-flight（每次任务前）**：1) `grep -r` 搜索已有实现 2) 涉及数据时 `find 数据管理/` 3) 声称完成前 `curl` 验证 4) 删除前列影响清单等用户确认 5) push 前 `bun run governance` + `grep -rn '<<<<<<'` 扫描冲突标记
 
@@ -292,18 +292,8 @@ bun run dev:full                                    # 启动开发环境
 
 ---
 
-<!-- GSD:stack-start source:codebase/STACK.md -->
-<!-- 见 §5 + package.json — 禁止内联，见 .claude/rules/claude-md-budget.md -->
-<!-- GSD:stack-end -->
-
-<!-- GSD:conventions-start source:CONVENTIONS.md -->
-<!-- 见 ~/.claude/rules/common/coding-style.md + .claude/rules/*.md — 禁止内联 -->
-<!-- GSD:conventions-end -->
-
-<!-- GSD:architecture-start source:ARCHITECTURE.md -->
-<!-- 见 ARCHITECTURE.md + §4 — 禁止内联 -->
-<!-- GSD:architecture-end -->
-
-<!-- GSD:skills-start source:skills/ -->
-<!-- system-reminder 已自动注入完整 skill 列表 — 禁止内联 -->
-<!-- GSD:skills-end -->
+<!-- GSD 墓碑（4 区块禁内联，见 .claude/rules/claude-md-budget.md）：stack→§5+package.json · conventions→~/.claude/rules/common/coding-style.md · architecture→ARCHITECTURE.md+§4 · skills→system-reminder 自动注入 -->
+<!-- GSD:stack-start --><!-- GSD:stack-end -->
+<!-- GSD:conventions-start --><!-- GSD:conventions-end -->
+<!-- GSD:architecture-start --><!-- GSD:architecture-end -->
+<!-- GSD:skills-start --><!-- GSD:skills-end -->
