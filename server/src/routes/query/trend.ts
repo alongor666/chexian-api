@@ -19,6 +19,14 @@ export const granularityMap: Record<string, string> = {
   daily: 'daily', weekly: 'weekly', monthly: 'monthly',
 };
 
+/**
+ * 注意：trendResult = safeParse 是"全有或全无"——任一字段传非法值时整对象 parse 失败、
+ * trendResult.data 变 undefined，下面所有字段都回退默认（包括合法的 perspective）。
+ * 当前网络调用方仅传 daily/weekly/monthly + premium/policy_count 合法组合，故不触发。
+ * 若未来出现"非法粒度但合法 perspective"的真实场景，需拆为 per-field safeParse；
+ * 不建议在此用 .catch() 兜底——会吞掉 zod 错误，让 agent 失去"参数写错"的即时反馈，
+ * 与本文件配套的 route-catalog 对账机制（让 agent 自助发现合法 enum）背道而驰。
+ */
 export const trendExtraSchema = z.object({
   timeView: z.enum(['day', 'week', 'month', 'daily', 'weekly', 'monthly']).optional(),
   granularity: z.enum(['day', 'week', 'month', 'daily', 'weekly', 'monthly']).optional(),
