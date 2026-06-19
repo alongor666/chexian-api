@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（71 项 · 数据截至 2026-06-17 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（72 项 · 数据截至 2026-06-19 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -32,7 +32,7 @@
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
 - 2026-06-16-claude-1f3bc1 `PARTIAL` — evidence-loop perf/refactor 类 oracle (.plann
 
-**P2（39 项）**
+**P2（40 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -73,6 +73,7 @@
 - 2026-06-15-claude-2e017d — B330 防回归 governance 闸
 - 2026-06-15-claude-edbd61 — B330 follow-up
 - 2026-06-17-claude-291788 — evidence-loop e2e dry-run 重建 baseline 时发现 5 
+- 2026-06-19-claude-5a8f81 — runtime-parser → z.enum 收口（PR #672 首扫 90 条 w
 
 **P3（23 项）**
 
@@ -185,3 +186,4 @@
 | 2026-06-15-claude-edbd61 | 2026-06-15 | Refactor/Frontend | @claude | B330 follow-up：components/layout → features 依赖倒置（TopNavigation/PageFilterPanel）。当前 TopNavigation 直接 import features/file 的 3 个 Modal、PageFilterPanel 直接 import features/filters 的 2 个组件。修复需把 layout 改为 shell+slot：App.tsx 顶层负责把具体 Modal/Panel 作为 children/slot 传入。属重构而非搬迁，独立 PR。验收：grep components/layout/ 无 features import；build 绿；2921 单测全过。 | P2 | PROPOSED | ARCHITECTURE.md §2.2 | src/components/layout/TopNavigation.tsx;src/components/layout/PageFilterPanel.tsx;src/App.tsx | PR #643 同时关闭了 shared→features 第 6 处（orgSalesman），但 layout→features 倒置（TopNavigation 用 features/file 的 3 个 Modal、PageFilterPanel 用 features/filters 的 2 个组件）仍属本 follow-up 范围 — 是更深的 shell+slot 重构。 |
 | 2026-06-16-claude-1f3bc1 | 2026-06-16 | harness缺口/E2E阶段A体检发现 | @claude | evidence-loop perf/refactor 类 oracle (.planning/golden-baseline/) 当前未构建 — golden-baseline.mjs --compare 事实上不可用，需先 --build 抓 71 端点快照（需 dev:full 运行 + E2E_PASSWORD 环境变量），否则 perf/refactor 改动无正确性保证 | P1 | PARTIAL | .claude/rules/evidence-loop.md#4,scripts/golden-baseline.mjs | scripts/golden-baseline.mjs | 本地 baseline 66/71 已构建（成功率 93%），落 .planning/golden-baseline/（7.6MB / 68 JSON 文件 / meta + manifest 完整）；剩 5 个端点（coefficient 404 / cost holiday-drilldown patrol/premium patrol/narrative 400）是 baseline 脚本本身的 endpoint 参数定义结构性问题，登记新 BACKLOG 跟踪。本地 oracle (golden-baseline.mjs --compare) 现可用于 66 个端点的零差异比对 |
 | 2026-06-17-claude-291788 | 2026-06-17 | harness完善/baseline 脚本端点定义 | @claude | evidence-loop e2e dry-run 重建 baseline 时发现 5 个端点持续失败（非冷启动，重跑 3 次稳定）：coefficient 404（路由可能废弃）/ cost+holiday-drilldown+patrol/premium+patrol/premium/narrative 4 个 400（必需参数未传）。修法：补 ENDPOINT_DEFINITIONS 必需参数 + 移除/更新废弃路由 | P2 | PROPOSED | scripts/golden-baseline.mjs | scripts/golden-baseline.mjs |  |
+| 2026-06-19-claude-5a8f81 | 2026-06-19 | Refactor/Backend | @claude | runtime-parser → z.enum 收口（PR #672 首扫 90 条 warning 跟进）：quote-conversion/* 与 claims-detail/* 等路由用 parseEnumParam 手写枚举白名单而非 z.enum，事实上与 catalog 对齐但 validate-params 规则3（catalog↔zod enum 一致性）无法机器证明、只能降级 warning。逐路由把手写白名单改 z.enum 使对账可机器闭合、清掉 90 条 warning。影响面广需逐路由测试，PR #672 已明确不打包、单独跟进。 | P2 | PROPOSED | PR #672 闭合 catalog↔zod enum 一致性 / scripts/route-catalog/validate-params.ts 规则3 | server/src/routes/query/quote-conversion.ts, server/src/routes/query/claims-detail.ts, server/src/config/route-param-contracts.ts |  |
