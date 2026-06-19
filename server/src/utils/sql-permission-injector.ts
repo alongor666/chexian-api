@@ -5,6 +5,12 @@
  * 简化实现，处理常见场景
  */
 
+import {
+  getInjectableRelations,
+  relationSupportsFilterColumns,
+  isFederationEnabled,
+} from '../config/sql-federation-policy.js';
+
 /**
  * 移除 SQL 注释（防止注释中的关键字干扰解析）
  * @param sql - 原始 SQL
@@ -149,6 +155,100 @@ const NON_ALIAS_KEYWORDS = new Set([
  * @param permissionFilter - 权限过滤条件
  * @returns 注入权限后的 SQL
  */
+/**
+ * 构造匹配某关系「关系位置引用」的全局正则（用于包裹替换）。
+ * relationName 来自联邦注册表（合法标识符，无正则元字符），可安全内插。
+ * 捕获组：(1) 引导关键字（FROM/JOIN/逗号），(2) 可选别名片段，(3) 别名标识符。
+ * `(?!\s*\.)` 排除 `Relation.col` 列引用（仅匹配关系引用）。
+ */
+function relationRefPattern(relationName: string): RegExp {
+  return new RegExp(
+    `(\\bFROM\\b|\\bJOIN\\b|,)\\s+${relationName}\\b(?!\\s*\\.)(\\s+(?:AS\\s+)?([A-Za-z_]\\w*))?`,
+    'gi',
+  );
+}
+
+/** 非全局版：仅判断某关系是否以关系位置出现在 SQL 中（不推进 lastIndex）。 */
+function relationPresenceRegex(relationName: string): RegExp {
+  return new RegExp(`(?:\\bFROM\\b|\\bJOIN\\b|,)\\s+${relationName}\\b(?!\\s*\\.)`, 'i');
+}
+
+/**
+ * 从已通过 isValidPermissionFilter 校验的权限过滤条件中提取被引用列名（小写）。
+ * 形如 `field = 'v'` / `field LIKE '%v%'` / `field IN (...)` / `field = true`，以 AND/OR 切分。
+ *
+ * ⚠️ 安全不变量（勿删依赖）：本函数仅用于注入前的**快速 fail-closed 预检**（判断视图是否声明了
+ * 过滤所需列）。**安全下界不依赖其完备性**——`permissionFilter` 始终被**原样**注入 WHERE
+ * （wrapRelationRefs），且 DuckDB 要求列存在；故即便此提取遗漏某列，最坏也只是 DuckDB 报错
+ * （fail-closed），绝不会越权。这是设计的纵深防御兜底，扩展时不可移除"原样注入 + 列必存在"这一层。
+ */
+function extractPermissionFilterColumns(filter: string): string[] {
+  const cols: string[] = [];
+  for (const rawCond of filter.split(/\b(?:AND|OR)\b/i)) {
+    let cond = rawCond.trim();
+    if (!cond) continue;
+    if (cond.startsWith('(') && cond.endsWith(')')) cond = cond.slice(1, -1).trim();
+    const m = cond.match(/^(\w+)\s*(?:=|LIKE\b|IN\b)/i);
+    if (m) cols.push(m[1].toLowerCase());
+  }
+  return cols;
+}
+
+/**
+ * 把 SQL 中某关系的所有「关系位置引用」替换为过滤内联视图。
+ * 逻辑与历史 PolicyFact 注入一致，仅把表名参数化。
+ */
+function wrapRelationRefs(
+  sql: string,
+  relationName: string,
+  permissionFilter: string,
+): { sql: string; count: number } {
+  const filteredView = `(SELECT * FROM ${relationName} WHERE ${permissionFilter})`;
+  let count = 0;
+  const out = sql.replace(
+    relationRefPattern(relationName),
+    (
+      _full: string,
+      lead: string,
+      aliasPart: string | undefined,
+      aliasName: string | undefined,
+    ) => {
+      count++;
+      let alias = relationName;
+      let tail = '';
+      if (aliasName && !NON_ALIAS_KEYWORDS.has(aliasName.toUpperCase())) {
+        // 真实别名：… Relation p / … Relation AS p
+        alias = aliasName;
+      } else if (aliasPart) {
+        // 紧跟的是子句关键字（WHERE/GROUP/ON/JOIN…）而非别名 → 原样保留
+        tail = aliasPart;
+      }
+      return `${lead} ${filteredView} AS ${alias}${tail}`;
+    },
+  );
+  return { sql: out, count };
+}
+
+/**
+ * CTE / 子查询安全的权限注入（RLS 强制，派生域联邦感知）。
+ *
+ * 对当前开关状态下「需注入行级权限」的每个关系（getInjectableRelations：关闭=仅
+ * PolicyFact；开启=PolicyFact + 联邦 direct 视图），把其每个关系位置引用
+ * `FROM/JOIN/, <Relation> [alias]` 替换为过滤内联视图：
+ *   FROM Relation → FROM (SELECT * FROM Relation WHERE <filter>) AS Relation
+ * 对每个读取点独立、就地强制行级过滤，杜绝子查询 / 第 2+ JOIN 引用读全量的绕过。
+ *
+ * 派生域联邦（SQL_FEDERATION_ENABLED='true'）下，对每个被引用的 direct 关系做 fail-closed：
+ * 过滤条件引用的列必须**全部**存在于该关系，否则抛错拒绝执行（绝不静默丢弃过滤——
+ * 丢弃 = 跨机构越权泄漏）。exempt 参照表不在 getInjectableRelations 内，放行不注入。
+ *
+ * 替换后做全局 fail-closed 残留扫描：任一 direct 关系若仍有未被内联视图包裹的关系位置
+ * 引用 → 抛错拒绝执行，绝不放行一条可能未过滤的查询。
+ *
+ * @param sql - 原始用户 SQL（可能含 CTE / 子查询）
+ * @param permissionFilter - 权限过滤条件
+ * @returns 注入权限后的 SQL
+ */
 export function injectPermissionIntoAnySql(sql: string, permissionFilter: string): string {
   if (!permissionFilter || permissionFilter === '1=1') {
     return sql;
@@ -160,50 +260,48 @@ export function injectPermissionIntoAnySql(sql: string, permissionFilter: string
     throw new Error('RLS 注入失败：权限过滤条件未通过白名单校验，拒绝执行');
   }
 
-  const filteredView = `(SELECT * FROM PolicyFact WHERE ${permissionFilter})`;
-  // 捕获组：(1) 引导关键字（FROM/JOIN/逗号），(2) 可选别名片段（含前导空白），
-  // (3) 别名标识符本身。`(?!\s*\.)` 排除 `PolicyFact.col` 列引用（仅匹配关系引用）。
-  // JOIN 覆盖 LEFT/RIGHT/INNER/OUTER/CROSS JOIN —— JOIN 永远紧贴表名出现。
-  const polRefPattern = /(\bFROM\b|\bJOIN\b|,)\s+PolicyFact\b(?!\s*\.)(\s+(?:AS\s+)?([A-Za-z_]\w*))?/gi;
-  let injectedCount = 0;
+  const filterColumns = extractPermissionFilterColumns(permissionFilter);
+  let result = sql;
+  let anyDirectRelationPresent = false;
 
-  const result = sql.replace(
-    polRefPattern,
-    (
-      _full: string,
-      lead: string,
-      aliasPart: string | undefined,
-      aliasName: string | undefined,
-    ) => {
-      injectedCount++;
-      let alias = 'PolicyFact';
-      let tail = '';
-      if (aliasName && !NON_ALIAS_KEYWORDS.has(aliasName.toUpperCase())) {
-        // 真实别名：… PolicyFact p / … PolicyFact AS p
-        alias = aliasName;
-      } else if (aliasPart) {
-        // 紧跟的是子句关键字（WHERE/GROUP/ON/JOIN…）而非别名 → 原样保留
-        tail = aliasPart;
-      }
-      // 保留引导关键字（FROM/JOIN/,），只替换表引用为过滤内联视图
-      return `${lead} ${filteredView} AS ${alias}${tail}`;
-    },
-  );
+  for (const policy of getInjectableRelations()) {
+    if (!relationPresenceRegex(policy.canonical).test(result)) continue;
+    anyDirectRelationPresent = true;
 
-  if (injectedCount === 0) {
-    // fail-closed：validateSQL 已要求 SQL 必须引用 PolicyFact；若仍未匹配到，
-    // 说明 SQL 形态异常，拒绝执行而非放行一条未注入权限的查询。
-    throw new Error('RLS 注入失败：未能定位 PolicyFact 引用，拒绝执行');
+    // fail-closed：该关系必须支持过滤条件引用的所有列，否则拒绝（禁止丢弃过滤）
+    if (!relationSupportsFilterColumns(policy, filterColumns)) {
+      const missing = filterColumns.filter(
+        (c) => !policy.permissionColumns.has(c.toLowerCase()),
+      );
+      throw new Error(
+        `RLS 注入失败：${policy.canonical} 缺少权限列 [${missing.join(', ')}]，拒绝执行（fail-closed，禁止丢弃过滤条件）`,
+      );
+    }
+
+    result = wrapRelationRefs(result, policy.canonical, permissionFilter).sql;
   }
 
-  // fail-closed 残留扫描：剥离所有已注入的过滤视图后，若仍有"关系位置"的
-  // PolicyFact 引用（FROM/JOIN/逗号 紧跟 PolicyFact）说明有读取点漏过滤 → 拒绝执行。
-  // 注意只查关系位置：被注入的派生表别名 `AS PolicyFact`（无原始别名时）与列引用
-  // `PolicyFact.col` 都不在此模式内，不会误报。
-  const stripped = result.split(filteredView).join('');
-  if (/(\bFROM\b|\bJOIN\b|,)\s+PolicyFact\b/i.test(stripped)) {
-    throw new Error('RLS 注入失败：检测到未被行级过滤覆盖的 PolicyFact 关系引用，拒绝执行');
+  if (!anyDirectRelationPresent) {
+    if (!isFederationEnabled()) {
+      // 关闭态：validateSQL 已保证 PolicyFact 存在；走到这里说明 SQL 形态异常 → 拒绝
+      throw new Error('RLS 注入失败：未能定位 PolicyFact 引用，拒绝执行');
+    }
+    // 开启态：查询仅触及 exempt 参照表 / CTE，无机构作用域，放行不注入
+    return result;
   }
+
+  // 全局 fail-closed 残留扫描：任一 direct 关系若仍有未被内联视图包裹的关系位置引用 → 拒绝。
+  // 被注入的派生表别名 `AS <Relation>` 与列引用 `<Relation>.col` 不在关系位置模式内，不误报。
+  for (const policy of getInjectableRelations()) {
+    const filteredView = `(SELECT * FROM ${policy.canonical} WHERE ${permissionFilter})`;
+    const stripped = result.split(filteredView).join('');
+    if (relationPresenceRegex(policy.canonical).test(stripped)) {
+      throw new Error(
+        `RLS 注入失败：检测到未被行级过滤覆盖的 ${policy.canonical} 关系引用，拒绝执行`,
+      );
+    }
+  }
+
   return result;
 }
 

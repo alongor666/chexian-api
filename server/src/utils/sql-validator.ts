@@ -10,6 +10,7 @@
  */
 
 import type { ValidationResult } from '../types/sql-query.js';
+import { isRelationAllowed, isFederationEnabled } from '../config/sql-federation-policy.js';
 
 /**
  * SQL 长度限制 (字符)
@@ -125,18 +126,27 @@ function collectReferencedRelations(sql: string): string[] {
   return refs;
 }
 
-function validatePolicyFactBoundary(sql: string): ValidationResult | null {
+/**
+ * 访问边界校验（派生域联邦感知）。
+ *
+ * 每个被引用的关系必须是：CTE 别名、或当前开关状态下被授权的关系
+ * （PolicyFact 始终授权；联邦白名单仅 SQL_FEDERATION_ENABLED='true' 时授权）。
+ * 授权清单见 config/sql-federation-policy.ts。
+ *
+ * 行为兼容：开关关闭时退化为「仅 PolicyFact」，报错文案与历史一致。
+ */
+function validateRelationBoundary(sql: string): ValidationResult | null {
   const cteAliases = collectCteAliases(sql);
   const relations = collectReferencedRelations(sql);
-  let hasPolicyFact = false;
+  let hasAllowedBaseRelation = false;
 
   for (const relation of relations) {
     const normalized = relation.toUpperCase();
-    if (normalized === 'POLICYFACT') {
-      hasPolicyFact = true;
+    if (cteAliases.has(normalized)) {
       continue;
     }
-    if (cteAliases.has(normalized)) {
+    if (isRelationAllowed(relation)) {
+      hasAllowedBaseRelation = true;
       continue;
     }
     return {
@@ -145,10 +155,12 @@ function validatePolicyFactBoundary(sql: string): ValidationResult | null {
     };
   }
 
-  if (!hasPolicyFact) {
+  if (!hasAllowedBaseRelation) {
     return {
       valid: false,
-      error: '查询必须使用 PolicyFact 视图 (访问边界限制)',
+      error: isFederationEnabled()
+        ? '查询必须使用已授权的视图 (访问边界限制)'
+        : '查询必须使用 PolicyFact 视图 (访问边界限制)',
     };
   }
 
@@ -225,8 +237,8 @@ export function validateSQL(sql: string): ValidationResult {
     }
   }
 
-  // 6. 访问边界检测
-  const boundaryError = validatePolicyFactBoundary(structuralSQL);
+  // 6. 访问边界检测（派生域联邦感知）
+  const boundaryError = validateRelationBoundary(structuralSQL);
   if (boundaryError) return boundaryError;
 
   // 6.1 禁止访问 raw_parquet

@@ -163,6 +163,17 @@ export const dbEnv = {
    * cost / kpi 因 cost cube 在当前数据版本探针降级，暂留原路径。
    */
   CUBE_ROUTING_ROUTES: process.env.CUBE_ROUTING_ROUTES ?? '',
+  /**
+   * cx sql 派生域联邦（设计：.claude/plans/cx-cli-swift-pudding.md P0）。
+   * - 'true'：`cx sql` 准入白名单从单一 PolicyFact 扩展为「已实证权限列的派生视图」
+   *   （RenewalTrackerFact / QuoteConversion / CrossSellFact / NewEnergyClaims）+ 参照维度表
+   *   （BrandDim / PlateRegionMap，豁免 RLS；RepairDim 含机构敏感列 org_level_3，**不豁免、已排除**）。
+   *   每个 direct 视图强制 fail-closed
+   *   RLS 注入：过滤条件引用的列若该视图缺失 → 拒绝执行（绝不静默丢弃过滤=越权泄漏）。
+   * - 缺省 / 'false'：完全退回单 PolicyFact 行为，零行为变更。回滚 = 关闭本开关 + reload。
+   * 权限列清单为 ground-truth（duckdb DESCRIBE 实测），见 config/sql-federation-policy.ts。
+   */
+  SQL_FEDERATION_ENABLED: process.env.SQL_FEDERATION_ENABLED ?? 'false',
 } as const;
 
 // ─── AI 提供商配置 ─────────────────────────────────────────────────────────────
