@@ -1,3 +1,7 @@
+---
+paths: ["scripts/cleanup-reports.mjs", "scripts/sync-vps.mjs", "deploy/vps-wrapper/**"]
+---
+
 # Reports 累积清理三件套（RED LINE）
 
 policy: append-only

@@ -1708,6 +1708,127 @@ function checkClaudeMdBudget() {
 }
 
 // ============================================================
+// rules 体系 eager-load 体积预算（Claude Code 官方黄金标准 #2：path-scoped 按需加载）
+// ============================================================
+//
+// 背景：CLAUDE.md 与「无 paths: frontmatter 的 .claude/rules/*.md」每轮对话全量
+// 加载（eager-load），是 CLAUDE.md 的真延伸。Claude Code 官方《Memory》最佳实践：
+// 「文件超 200 行消耗更多上下文、降低遵从度；用路径门控（path-scoped rules）只在
+// 处理匹配文件时加载，或裁掉不必每轮需要的内容」。
+//
+// #23 checkClaudeMdBudget 只管 CLAUDE.md 本体（20KB），放任 rules 延伸区无闸。
+// 本闸度量「无 paths: 门控的 rules 文件」总字节——低频/事件性 SOP 应加 paths:
+// frontmatter 移出常驻区（碰匹配代码时才注入）。
+//
+// 闸级 = error（防回退）：6 个低频 SOP 已加 paths: 门控（PR [policy-override]），
+// eager-load 区从 60.3KB 降至达标。此后回退（删门控 / 塞大块常驻内容）即 fail。
+// 给既有 rule 加 frontmatter 按 AGENTS.md §8.2「rules 既有文件改动按 frozen 处理」
+// 需 [policy-override]——这是瘦身的合规前提，已在 .claude/workflow/pr-evolution.md 登记。
+
+const EAGER_LOAD_RULES_BUDGET = 40 * 1024; // 40KB 目标线
+
+/**
+ * rule 文件是否带 paths: YAML frontmatter（= 路径门控按需加载，不计入 eager-load）。
+ * paths 键必须有实际 glob 值（行内数组含引号串，或下方 `- "..."` 列表项）；
+ * 空值 / null / 注释（`paths:` 后无值）不算门控——防"空值绕过 eager-load 预算"（verifier P1）。
+ */
+export function hasPathsFrontmatter(content) {
+  if (!content.startsWith('---')) return false;
+  const end = content.indexOf('\n---', 3);
+  if (end === -1) return false;
+  const fm = content.slice(3, end);
+  return /paths\s*:\s*(\[[^\]]*["'][^"']+["'][^\]]*\]|\r?\n\s*-\s*["'][^"']+["'])/.test(fm);
+}
+
+function checkRulesEagerLoadBudget() {
+  info('检查 rules 体系 eager-load 体积预算（黄金标准：path-scoped 按需加载）...');
+  const rulesDir = path.join(ROOT_DIR, '.claude/rules');
+  if (!fs.existsSync(rulesDir)) {
+    warning('.claude/rules 不存在，跳过');
+    return true;
+  }
+  const eager = [];
+  for (const name of fs.readdirSync(rulesDir)) {
+    if (!name.endsWith('.md')) continue;
+    const fp = path.join(rulesDir, name);
+    if (!fs.statSync(fp).isFile()) continue;
+    const content = fs.readFileSync(fp, 'utf-8');
+    if (hasPathsFrontmatter(content)) continue; // 按需加载，不计入常驻预算
+    eager.push({ name, bytes: Buffer.byteLength(content, 'utf-8') });
+  }
+  const totalBytes = eager.reduce((s, f) => s + f.bytes, 0);
+  const totalKB = (totalBytes / 1024).toFixed(1);
+  const budgetKB = (EAGER_LOAD_RULES_BUDGET / 1024).toFixed(0);
+
+  if (totalBytes > EAGER_LOAD_RULES_BUDGET) {
+    const top = [...eager].sort((a, b) => b.bytes - a.bytes).slice(0, 6)
+      .map(f => `${f.name}(${(f.bytes / 1024).toFixed(1)}KB)`);
+    error(
+      `rules eager-load 区超 ${budgetKB}KB 预算：当前 ${totalKB}KB（${eager.length} 个无 paths: 门控文件，每轮全量加载）`
+    );
+    console.log(`    ▶ 体积最大者：${top.join(', ')}`);
+    console.log(`    ▶ 黄金标准 #2（Claude Code 官方）：给低频/事件性 SOP 加 paths: frontmatter 门控（只在编辑匹配代码时加载，不进每轮 eager-load）`);
+    console.log(`    ▶ 既有 rule 加 frontmatter 按 AGENTS.md §8.2 走 frozen，需 [policy-override]`);
+    return false; // 防回退：达标后回退（删门控 / 塞大块常驻内容）即 fail
+  }
+  success(`rules eager-load 区合规（${totalKB}KB / ${budgetKB}KB，${eager.length} 个无门控文件）`);
+  return true;
+}
+
+// ============================================================
+// CLAUDE.md 漂移计数防回归（Claude Code 官方黄金标准 #8：避免会过期的快照）
+// ============================================================
+//
+// 复盘：CLAUDE.md 曾硬编码「49 个指标 / 56 个字段 / 198 测试文件」等随迭代漂移的
+// 精确计数，反复手工校准（指标 25→49→52、字段 42→56→58）仍漂。黄金标准 #8：
+// eager-load 文件不放会过期的快照——这类数字 AI 干活不需要（会去 grep 注册表），
+// 留着只会漂移 + 误导。本闸检测会漂移的硬编码计数，提示改「以 X 为准」指针。
+// 不误伤：稳定枚举（「11 类」）、约数（「20+ 变量」「50+ 路由」）、changelog 历史数字。
+
+/** 返回 CLAUDE.md 文本里会随迭代漂移的硬编码计数命中（带「个」单位锚定，避开稳定枚举/约数）。 */
+export function findStaleCounts(content) {
+  // 启发式覆盖（非穷举）：抓带单位锚点的会漂计数；新模式靠 review 补充（verifier P2）。
+  // 排除约数（「50+」因 + 不匹配）与稳定枚举（「11 类」无单位词不匹配）。
+  const STALE_PATTERNS = [
+    /\d+\s*个指标/,
+    /\d+\s*个字段/,
+    /\d+\s*字段定义/,
+    /\d+\s*个?\s*SQL\s*模块/,
+    /\d+\s*子路由/,
+    /\d+\s*路由/,
+    /\d+\s*域(元数据|命名空间)/,
+    /\d+\s*测试文件/,
+  ];
+  const hits = [];
+  content.split('\n').forEach((line, i) => {
+    for (const re of STALE_PATTERNS) {
+      const m = line.match(re);
+      if (m) hits.push({ line: i + 1, text: m[0] });
+    }
+  });
+  return hits;
+}
+
+function checkClaudeMdNoStaleCounts() {
+  info('检查 CLAUDE.md 漂移计数防回归（黄金标准：避免会过期的快照）...');
+  const claudePath = path.join(ROOT_DIR, 'CLAUDE.md');
+  if (!fs.existsSync(claudePath)) {
+    warning('CLAUDE.md 不存在，跳过');
+    return true;
+  }
+  const hits = findStaleCounts(fs.readFileSync(claudePath, 'utf-8'));
+  if (hits.length > 0) {
+    warning('CLAUDE.md 含会漂移的硬编码计数（黄金标准 #8：改「以 X 为准」指针）：');
+    hits.forEach(h => console.log(`    - L${h.line}: "${h.text}"`));
+    console.log('    ▶ 这类数字 AI 干活不需要（会 grep 注册表），留着只会漂移 + 误导');
+    console.log('    ▶ 改法：如「52 个指标」→「数量以 validate.ts 为准」；稳定枚举(11 类)/约数(50+)不在此列');
+    return true; // warning 不阻断（硬编码计数是债不是 bug，配合 review）
+  }
+  success('CLAUDE.md 无已知模式的漂移计数（启发式覆盖：指标/字段/SQL/路由/域/测试，非穷举）');
+  return true;
+}
+
+// ============================================================
 // #24 ETL 管道多 sheet 加载规范
 // ============================================================
 
@@ -2820,6 +2941,8 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'sync-vps覆盖', fn: checkSyncVpsCoverage },
   { name: 'SQL模块数一致', fn: checkSqlModuleCountConsistency },
   { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
+  { name: 'rules eager-load 预算', fn: checkRulesEagerLoadBudget },
+  { name: 'CLAUDE.md计数防漂移', fn: checkClaudeMdNoStaleCounts },
   { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
   { name: '空catch禁令', fn: checkEmptyCatchBlocks },

@@ -322,3 +322,27 @@
   3. PR #669 v1→v4 4 轮发作 → 抽 meta-pattern: "AI 设计-验证回路本身不闭合" — 设计时只验"自己写的部分"，没验"环境会以什么形式解析自己写的内容"（YAML 解析器视角 / cx login 写盘视角 / 文档读者视角）。下次同类工作前先列"环境视角清单"
 - needs_automation: false
 - rationale: 本 PR governance YAML 检查已落地；同类失败下次本地必抓
+
+### 2026-06-18 — rules 体系黄金标准内化：eager-load 度量闸 + 计数防漂移闸（A+B 全套落地 · verifier 证伪后修复）
+
+- **背景**: 复盘 CLAUDE.md 演化史发现治理重心全压在 CLAUDE.md 本体（governance #23 严管），而"延伸区"——无 `paths:` 门控的 `.claude/rules/*.md` 共 60.3KB——每轮全量 eager-load 却零体积闸，且多 `append-only` 只增不减。对照 Claude Code 官方《Memory》黄金标准 #2「用路径门控只加载碰匹配文件时需要的内容」与 #8「不放会过期的快照计数」，体系在"守小门洞大门"。
+- **改动（A 类纯新增 + B 类 `[policy-override]` 授权落地）**:
+  1. `scripts/check-governance.mjs`：新增 `checkRulesEagerLoadBudget`（项 41，**error 级**，度量无 `paths:` 门控的 rules 总字节，超 40KB fail 防回退）+ `checkClaudeMdNoStaleCounts`（项 42，warning 级，启发式检测漂移计数）+ 2 个 export 纯函数 `hasPathsFrontmatter` / `findStaleCounts`。
+  2. 6 个低频 SOP 加 `paths:` 门控（multi-branch-day1/rollback、reports-cleanup、deploy-chain、backlog-eventlog、skill-prefix），prepend frontmatter 不动正文。
+  3. CLAUDE.md 9 处硬编码漂移计数指针化（指标/字段/SQL/子路由/测试/字段定义/路由/域元数据/域命名空间 → 以 X 为准）。
+  4. 单测 `scripts/__tests__/rules-eager-load-budget.test.mjs`（15 项：判据边界 + 空值绕过 + 扩展模式）。
+- **基线 vs 候选（同会话同环境）**:
+  - eager-load rules: baseline 60.3KB / 14 文件 → **after 29.9KB / 8 文件**（降 50.4%，由 6 文件门控造成，非度量口径变化）
+  - CLAUDE.md 本体: 指针化净 +89B，仍 < 20KB 预算（非"零增"——verifier P2 校正）
+  - oracle: 判据单测 15/15 ✅；`bun run governance` 42/42 ✅，EXIT=0
+- **verifier 证伪 + 修复（evidence-loop §5 fresh-context）**: verifier 裁定"不通过"，抓 4 真缺陷，全部已修：
+  - P1 `hasPathsFrontmatter` 空值绕过（`paths: null`/空/注释被误判门控 → 大文件可逃预算闸）→ 判据改为要求实际引号 glob 值 + 单测覆盖
+  - P2 `findStaleCounts` 覆盖面高估（漏「38 字段定义」「64 路由」「9 域元数据」「13 域命名空间」）→ 扩 pattern + 指针化残留 + 文案诚实化「非穷举」
+  - P2 本 entry 状态不实（曾写 7/41/待授权）→ 本次重写为最终态
+  - P2 CLAUDE.md「体积不增」不实 → 校正为净 +89B
+- **协议短板速记（evidence-loop §8 step5）**:
+  1. 阶段 A 误判"加 `paths:` frontmatter 属 append-only 纯新增不需授权"，实际 AGENTS.md §8.2 明确"`.claude/rules/` 既有文件改动按 frozen 处理"需授权。教训：动 `.claude/rules/` 既有文件前必先核 §8 档位，不能凭"只加元数据不动正文"自我豁免。
+  2. 启发式 grep 闸首版高估覆盖面被 verifier 抓出——印证 §5.1 第 8 条「零命中声明边界」：声称"无 X"前须穷举同义/变体，闸文案须诚实标注覆盖范围。
+- **自进化循环**: 复用现成 `pr-evolution.md` + `checkPrEvolutionExpired` 触发器 + 新 2 闸常态守（eager-load error 防回退 + 计数防漂移 warning）。持续复核项：体系每新增 rule 优先 `paths:` 门控，eager-load 区不得无限膨胀；新漂移计数模式靠 review 补进 `findStaleCounts`。
+- needs_automation: false
+- rationale: A+B 全套机制已落地（2 道 governance 闸 + 6 文件门控 + 计数指针化），黄金标准由闸常态守，无需进一步机制化；持续复核靠 review + 闸双轨。

@@ -1,3 +1,7 @@
+---
+paths: ["scripts/backlog/**", "scripts/backlog.mjs", "scripts/governance-backlog-curate.mjs", "BACKLOG.md", "BACKLOG_LOG.jsonl", "BACKLOG_ARCHIVE.md"]
+---
+
 # BACKLOG event-log 模型（RED LINE）
 
 policy: append-only

@@ -1,3 +1,7 @@
+---
+paths: ["deploy/**", ".github/workflows/deploy.yml", "scripts/sync-vps.mjs", "ecosystem.config.cjs"]
+---
+
 # 部署链 SOP（RED LINE）
 
 > 来源：PR #379 Phase 1-pre 部署链改造实施过程中沉淀的三条规则。
