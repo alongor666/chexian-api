@@ -103,14 +103,21 @@ PR 涉及 append-only 路径的纯新增时，**不需要**额外授权，但 PR
 - **读始终允许**（含 `grep` / `cat` / Read 工具 / lock 状态查询）。
 - **写禁止**：AI 不得通过 Write / Edit / 删除 / `>` 重定向 / `sed -i` / `git rm` / `git mv` 等任何方式修改下表路径。
 
-| 路径 | 说明 |
-|------|------|
-| `.claude/shared-memory/**` | 项目内 git tracked 共享记忆（私董会/作战地图/chexian 多项目共用）|
-| `~/.claude/shared-memory/**` | 全部用户级共享记忆根目录（chexian / sidonghui / 等所有子项目）|
-| `.claude/scheduled_tasks.lock` | 调度运行时 lock（gitignore，并发原语）|
-| `~/.claude/projects/**/memory/**` | auto-memory 与用户手工 memory（统一保护）|
+| 路径 | 档位 | 说明 |
+|------|------|------|
+| `.claude/shared-memory/**` | 🔒 硬锁 | 项目内 git tracked 共享记忆（私董会/作战地图/chexian 多项目共用）|
+| `~/.claude/shared-memory/**` | 🔒 硬锁 | 全部用户级共享记忆根目录（chexian / sidonghui / 等所有子项目）|
+| `.claude/scheduled_tasks.lock` | 🔒 硬锁 | 调度运行时 lock（gitignore，并发原语）|
+| `~/.claude/projects/**/memory/**` | 🔓 可授权 | auto-memory 与用户手工 memory；默认禁写，用户可拨开关放行（见下）|
 
 **豁免**：`~/.claude/projects/**/memory/**` 下，**平台内置 auto-memory 工具入口**（Claude Code 内置的 memory 写入机制 / Claude Agent SDK 的 memory 持久化通道）写入不受本规则约束——AI 通过 Write/Edit 工具调用不豁免。
+
+**用户授权开关（仅对 🔓 可授权档 `~/.claude/projects/**/memory/**` 生效；硬锁档不受影响）**：默认仍禁 AI 写 memory，但用户本人可拨动以下任一开关临时/长期放行（`scripts/hooks/claude-user-only-guard.sh` 识别）：
+
+1. **临时（即时生效，无需重启）**：`touch .claude/.user-only-write-ok`（仓库内，已 gitignore）或 `touch ~/.claude/.user-only-write-ok`（全局，跨 worktree）；用完 `rm` 撤销。
+2. **长期**：在 `.claude/settings.local.json` 的 `env` 段设 `CLAUDE_USER_ONLY_WRITE_OK=1`（需重启会话）。
+
+命中开关放行时 hook 向 stderr 打印审计提示。🛑 **AI 会话禁止自行设置该环境变量或创建该哨兵文件**——开关只能由用户本人拨动，AI 自拨等同自我授权后门（与 §8.3 末 `SHARED_MEMORY_USER_WRITE` 同理）。
 
 **用户对话中要求修改 user-only 路径时的 AI 响应规范**：
 
