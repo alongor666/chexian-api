@@ -16,6 +16,8 @@ import { Router } from 'express';
 import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, withRouteCache } from './shared.js';
 import { validateSQL } from '../../utils/sql-validator.js';
 import { injectPermissionIntoAnySql } from '../../utils/sql-permission-injector.js';
+import { getReferencedLazyDomains } from '../../config/sql-federation-policy.js';
+import { getBootstrapper } from '../../services/bootstrapper-registry.js';
 
 const router = Router();
 
@@ -31,6 +33,22 @@ router.get(
     const validation = validateSQL(sql);
     if (!validation.valid) {
       throw new AppError(400, validation.error ?? 'SQL 校验失败');
+    }
+
+    // 惰性域预热：cx sql 直查不经 typed 路由的 createDomainMiddleware，须在此对 SQL 引用到的
+    // federated 关系手动触发 ensureDomainLoaded，否则纯惰性域（如 NewEnergyClaims）冷态查询会
+    // 「table does not exist」。开关关闭时 getReferencedLazyDomains 恒返回空，零额外开销。
+    const bootstrapper = getBootstrapper();
+    if (bootstrapper) {
+      const domains = getReferencedLazyDomains(sql);
+      for (const domain of domains) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await bootstrapper.ensureDomainLoaded(domain);
+        } catch (err) {
+          throw new AppError(503, `派生域加载失败 (${domain}): ${(err as Error).message}`);
+        }
+      }
     }
 
     let safeSql: string;

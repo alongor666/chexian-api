@@ -21,6 +21,7 @@ import {
   getRelationPolicy,
   getInjectableRelations,
   relationSupportsFilterColumns,
+  getReferencedLazyDomains,
 } from '../../config/sql-federation-policy.js';
 
 const FLAG = 'SQL_FEDERATION_ENABLED';
@@ -79,6 +80,49 @@ describe('sql-federation-policy 注册表', () => {
     // RenewalTrackerFact 无 is_telemarketing / branch_code
     expect(relationSupportsFilterColumns(renewal, ['is_telemarketing'])).toBe(false);
     expect(relationSupportsFilterColumns(renewal, ['branch_code'])).toBe(false);
+  });
+});
+
+describe('getReferencedLazyDomains — 惰性域预热（修复 cx sql 冷态不可达）', () => {
+  it('开关关闭：任何关系都不返回惰性域（PolicyFact 无 lazyDomain，行为不变）', () => {
+    disableFederation();
+    expect(getReferencedLazyDomains('SELECT * FROM NewEnergyClaims')).toEqual([]);
+    expect(getReferencedLazyDomains('SELECT * FROM PolicyFact')).toEqual([]);
+  });
+
+  it('开关开启：纯惰性域 NewEnergyClaims → 返回其域 key（修复前冷态 cx sql 报表不存在）', () => {
+    enableFederation();
+    expect(getReferencedLazyDomains('SELECT COUNT(*) FROM NewEnergyClaims')).toEqual(['NewEnergyClaims']);
+  });
+
+  it('开关开启：各 direct 视图 → 对应 data-bootstrapper 注册的惰性域 key', () => {
+    enableFederation();
+    expect(getReferencedLazyDomains('SELECT * FROM RenewalTrackerFact')).toEqual(['RenewalTracker']);
+    expect(getReferencedLazyDomains('SELECT * FROM QuoteConversion')).toEqual(['QuoteConversion']);
+    expect(getReferencedLazyDomains('SELECT * FROM CrossSellFact')).toEqual(['CrossSell']);
+  });
+
+  it('开关开启：PolicyFact（启动即建，无 lazyDomain）→ 不预热', () => {
+    enableFederation();
+    expect(getReferencedLazyDomains('SELECT * FROM PolicyFact')).toEqual([]);
+  });
+
+  it('开关开启：JOIN 多视图 → 去重返回多个域 key', () => {
+    enableFederation();
+    const domains = getReferencedLazyDomains(
+      'SELECT * FROM RenewalTrackerFact r JOIN CrossSellFact c ON r.vehicle_frame_no = c.policy_no',
+    );
+    expect(domains.sort()).toEqual(['CrossSell', 'RenewalTracker']);
+  });
+
+  it('开关开启：关系名大小写不敏感（DuckDB 标识符大小写不敏感）', () => {
+    enableFederation();
+    expect(getReferencedLazyDomains('select count(*) from newenergyclaims')).toEqual(['NewEnergyClaims']);
+  });
+
+  it('开关开启：未引用任何惰性域的纯 PolicyFact 查询 → 空（零额外预热开销）', () => {
+    enableFederation();
+    expect(getReferencedLazyDomains("SELECT SUM(premium) FROM PolicyFact WHERE org_level_3='乐山'")).toEqual([]);
   });
 });
 
