@@ -1,3 +1,7 @@
+---
+paths: [".claude/skills/**", ".claude/agents/**", ".claude/commands/**"]
+---
+
 # Skill 命名前缀规范（chexian 簇治理）
 
 > CLAUDE.md §12 下沉。新增 / 重命名 / 审计 `~/.claude/skills/` 下的 chexian 簇 skill 时遵守。

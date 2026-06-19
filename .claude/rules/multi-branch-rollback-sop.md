@@ -1,3 +1,7 @@
+---
+paths: ["server/src/middleware/permission.ts", "server/src/config/env.ts", "scripts/rollback-multi-branch.mjs", "ecosystem.config.cjs"]
+---
+
 # 多分公司 RLS 回滚 SOP（RED LINE）
 
 policy: append-only

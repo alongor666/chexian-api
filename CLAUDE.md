@@ -35,7 +35,7 @@
 | 数据索引 | `开发文档/00_index/DATA_INDEX.md` |
 | 进展索引 | `开发文档/00_index/PROGRESS_INDEX.md` |
 
-**必读文档**：`ARCHITECTURE.md`（模块层级）· `开发文档/TECH_STACK.md`（技术栈）· `开发文档/DEVELOPER_CONVENTIONS.md`（DC-001 三要素）· `数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md`（38 字段定义）· `开发文档/缺口清单.md`（信息缺口追踪）
+**必读文档**：`ARCHITECTURE.md`（模块层级）· `开发文档/TECH_STACK.md`（技术栈）· `开发文档/DEVELOPER_CONVENTIONS.md`（DC-001 三要素）· `数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md`（Parquet 字段定义）· `开发文档/缺口清单.md`（信息缺口追踪）
 
 **两本账**：[BACKLOG.md](./BACKLOG.md)（需求）· [PROGRESS.md](./PROGRESS.md)（进展）
 
@@ -64,7 +64,7 @@
 
 ### 字段注册表（RED LINE）
 
-**唯一事实源**：`server/src/config/field-registry/fields.json`（58 个字段：14 必需 + 44 可选）
+**唯一事实源**：`server/src/config/field-registry/fields.json`（必需 + 可选字段；**数量以该文件为准**，不在此硬编码）
 
 **新增/修改字段流程**（必须按顺序）：
 1. 修改 `fields.json` 中的字段定义
@@ -81,14 +81,14 @@
 
 | 注册表 | 路径 | 覆盖范围 | codegen |
 |--------|------|---------|---------|
-| 指标注册表 | `server/src/config/metric-registry/` | 52 个指标 | `generate-frontend-map.ts` |
-| 字段注册表 | `server/src/config/field-registry/fields.json` | 58 个字段 | `field-registry/generate.mjs` |
+| 指标注册表 | `server/src/config/metric-registry/` | L1-L3 原子指标（数量以 `validate.ts` 为准） | `generate-frontend-map.ts` |
+| 字段注册表 | `server/src/config/field-registry/fields.json` | 必需 + 可选字段（数量以 `fields.json` 为准） | `field-registry/generate.mjs` |
 | 客户类别 | `src/shared/config/customer-categories.ts` + `server/src/config/` | 11 类枚举 | — |
 | 环境变量 | `server/src/config/env.ts` | 20+ 变量（6 分组） | — |
 | API 路由 | `server/src/config/api-routes.ts` + `src/shared/api/routes.ts` | 50+ 路由 | — |
 | ETL 配置 | `数据管理/shard-config.json` | 分片边界 + 显式忽略字段 | — |
-| 数据域注册表 | `数据管理/data-sources.json` | 9 域元数据 | ETL 自动更新 |
-| 路由参数契约 | `server/src/config/route-param-contracts.ts` | 64 路由 path→运行时 zod/解析字段；catalog 参数名以此为准（camelCase）；timeWindow 时间口径语义 | governance「RouteCatalog参数契约」对账 |
+| 数据域注册表 | `数据管理/data-sources.json` | 数据域元数据（域数以该文件为准） | ETL 自动更新 |
+| 路由参数契约 | `server/src/config/route-param-contracts.ts` | 路由 path→运行时 zod/解析字段；catalog 参数名以此为准（camelCase）；timeWindow 时间口径语义 | governance「RouteCatalog参数契约」对账 |
 
 ---
 
@@ -116,7 +116,7 @@
 
 **启动**：`bun run dev:full`（禁止只运行 `bun run dev`）
 
-**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口 `apiClient`；Phase 2 拆为 client-core 传输内核 + 13 域命名空间子客户端 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow,premium,geo,patrol}.*`，详见 CODE_INDEX.md）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器）+ `query/*.ts`（22 子路由 + shared）· `server/src/sql/`（54 个 SQL 模块：31 顶层 + 23 子目录拆分）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
+**关键文件**：`src/shared/contexts/DataContext.tsx`（isDataLoaded）· `src/shared/api/client.ts`（API 入口 `apiClient`；Phase 2 拆为 client-core 传输内核 + 域命名空间子客户端 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow,premium,geo,patrol}.*`，详见 CODE_INDEX.md）· `server/src/services/duckdb.ts`（查询执行 + `loadMultipleParquet()`）· `server/src/config/paths.ts`（路径配置）· `server/src/routes/query.ts`（路由聚合器）+ `query/*.ts`（子路由聚合 + shared）· `server/src/sql/`（SQL 模块，拆分结构见 CODE_INDEX.md）· `server/src/config/preset-users.ts`（用户）· `server/src/services/access-control.ts`（权限）
 
 **API 前缀**：`/api/query/*`（KPI/趋势/排名/成本/系数/续保/交叉销售）· `/api/data/*`（文件）· `/api/ai/*`（NL2SQL/需求识别）· `/api/auth/*`（登录 + tokens + route-catalog）· `/api/filters/*`（筛选器）
 
@@ -149,7 +149,7 @@ bun run verify:full                # verify:quick + 单元测试
 ```
 
 **CI 测试分层协议**（RED LINE）：
-- **单元测试** (`bun run test --run`): 228 测试文件（数字随迭代漂移，以 `vite.config.ts` include 为准）— CI + 本地
+- **单元测试** (`bun run test --run`): 测试文件数以 `vite.config.ts` include 为准 — CI + 本地
 - **集成测试** (`bun run test:integration`): 4 文件 — 仅本地（需 DuckDB 原生二进制）
 - CI 环境无法解析 `.node` 原生模块（vitest/jsdom 限制），相关测试必须在 `vite.config.ts` exclude 中排除
 - 新增原生模块依赖时，必须检查是否有对应测试需排除

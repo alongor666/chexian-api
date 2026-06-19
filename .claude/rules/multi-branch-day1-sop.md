@@ -1,3 +1,7 @@
+---
+paths: ["server/src/config/preset-users.ts", "server/src/middleware/permission.ts", "server/src/config/field-registry/**", "scripts/multi-branch-stress-test.mjs"]
+---
+
 # 多分公司 Day-1 上线 SOP（RED LINE）
 
 policy: append-only
