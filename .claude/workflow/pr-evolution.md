@@ -397,3 +397,23 @@
 - needs_automation: false（已有 governance + 测试闸；联邦视图新增时须 DESCRIBE 实证权限列，已写入策略文件注释）
 - rationale: 安全关键 RLS 改动，本地三重验证（单测 + 数据级 RLS oracle + 对抗式 verifier）已闭环；生产推广走灰度 flag + 多分公司回滚 SOP 范式
 - **下一实验**: 部署 flag ON 灰度，跑 LIVE 锚点（`cx sql` vs `cx query RENEWAL_TRACKER` 逐机构零差异）；通过后接 P0.5 错误透明化
+
+### 2026-06-19 — evidence-loop scorecard: cx sql 派生域联邦 本地全栈预验证 + 惰性域预热缺口修复
+
+- **背景**: 用户合并 PR #676（P0 派生域联邦）后要求「做本地全栈预验证，生产环境还没有山西的数据和用户」。前一记分卡明确「LIVE e2e oracle 需 flag ON 才能验」，本轮在本地用 **flag ON 的真实 server + 真实 PAT + 真实 cx** 跑通该 oracle（生产部署前的等价证据），不再停在数据级。
+- **harness（本地全栈，生产真实配置 federation ON / BRANCH_RLS OFF）**: worktree 联邦代码 + 主仓 warehouse 数据软链（gitignored，验证后清理）+ `node start.mjs --server` 端口 3939 + `DEV_SKIP_AUTH=1` 登录铸本地 PAT + `CX_BASE_URL/CX_PAT` 环境覆盖（不碰用户生产配置）。独立 oracle = duckdb 直查 parquet。
+- **通过项**:
+  - **续保逐机构复算**：admin `cx sql FROM RenewalTrackerFact` 12 机构 + 合计 **7660/3286 与 duckdb 基线零差异**（天府 3601/1590…达州 42/15）。证明全栈链路：server 读 flag→validateRelationBoundary 准入→permissionMiddleware 生成 filter→injectPermission RLS 注入→duckdb→cx 收 JSON
+  - **RLS 越权隔离**：tianfu（org_user=天府）查 RenewalTrackerFact 仅返回天府一行，其余 11 机构零泄漏
+  - **边界拒绝**：information_schema / RepairDim / raw_parquet 端到端「禁止访问（访问边界限制）」；RepairDim 越权回归闸现场守住
+  - **fail-closed（review M2 场景，BRANCH_RLS ON 复跑）**：派生视图缺 branch_code → `RLS 注入失败：缺少权限列 [branch_code]，拒绝执行`（拒绝而非静默泄漏全分公司）；PolicyFact（有该列）正常 → 证明拒绝是**精准缺列**。**即开 BRANCH_RLS 后所有用户派生查询都 fail-closed → P0.5 补 branch_code 是引入山西前的硬前置**
+- **抓到 1 个真集成缺陷（单测漏过，仅全栈暴露），本轮修复闭环**:
+  - **NewEnergyClaims 冷态 `cx sql` 不可达**（"Table does not exist"）：它在 federation 白名单但是**纯惰性域**（bootstrap 不急切建视图、不在启动预热清单 ClaimsDetail/ClaimsAgg/CrossSell），而 sql-passthrough 不走 typed 路由的 `createDomainMiddleware`→`ensureDomainLoaded` → 无人物化它。RenewalTrackerFact/QuoteConversion/CrossSellFact 因 bootstrap 急切建视图而可达，掩盖了该类缺陷
+  - **修复**：注册表 `RelationPolicy` 加 `lazyDomain` 字段（4 个 direct 视图标注 data-bootstrapper 注册的惰性域 key：RenewalTracker/QuoteConversion/CrossSell/NewEnergyClaims）；新增 `getReferencedLazyDomains(sql)`；sql-passthrough 在校验后、注入前对引用的 federated 关系逐一 `ensureDomainLoaded`（开关关闭恒返回空，零额外开销）
+  - **修复验证（同一 harness）**：NewEnergyClaims 冷态 → **可达 n=901**；其余 3 视图 + 续保 7660/3286 + RLS 隔离全部无回归
+- **附带发现（数据质量，非 federation 缺陷，已登记 BACKLOG `2026-06-19-claude-00bac8`）**: NewEnergyClaims.org_level_3 全为 NULL → org 用户查它恒空（安全无泄漏，仅 admin/branch_admin 可用）；根因在 new_energy_claims ETL 未填充机构维度。federation 保留 org_level_3 为权限列正确（列存在、RLS 注入有效）
+- **零回归**: federation 28（+7 新增 getReferencedLazyDomains 用例）· validator 31 + permission 26 + federation 28 = 85 passed · typecheck 通过 · governance 42/42
+- **决策**: 本地全栈 oracle 已通过（生产部署前等价证据）；LIVE 仅剩**确认生产 `BRANCH_RLS_ENABLED=false`**（单分公司 SC 应为默认 false）后开 `SQL_FEDERATION_ENABLED`。本修复作为 P0.5 第一个 PR（用户选定）
+- needs_automation: false（getReferencedLazyDomains 已加单测闸；数据质量问题走 BACKLOG/ETL）
+- **教训**: 字符串级单测（validator/injector）对 NewEnergyClaims 全绿，但真实查询失败——**惰性物化 + 直查路径绕过预热中间件**这类集成缺陷只有「真 server + 真 cx 全栈」能暴露。重复印证「本地全栈预验证」在数据级 oracle 之上的独立价值
+- **下一实验**: 生产确认 BRANCH_RLS_ENABLED 取值 → 开 flag 灰度跑 LIVE 锚点；P0.5 补 branch_code 列 + 错误透明 + NewEnergyClaims org ETL

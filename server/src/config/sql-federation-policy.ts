@@ -34,6 +34,17 @@ export interface RelationPolicy {
   /** 该关系上实测存在、可用于行级权限过滤的列（小写）。exempt 关系为空集 */
   permissionColumns: ReadonlySet<string>;
   strategy: FederationStrategy;
+  /**
+   * 惰性域 key（data-bootstrapper.ts lazyRegistry.register 的注册名）。
+   *
+   * 仅当该关系是「按需物化」的惰性域时设置。typed 路由经 createDomainMiddleware →
+   * ensureDomainLoaded 预热；而 cx sql（sql-passthrough）不走该中间件，故直查纯惰性域
+   * （如 NewEnergyClaims）冷态会「table does not exist」。sql-passthrough 据此字段在直查前
+   * 主动触发 ensureDomainLoaded，弥补缺口。
+   *
+   * PolicyFact / exempt 参照表等「启动即建」的关系不设此字段（无需预热）。
+   */
+  lazyDomain?: string;
 }
 
 /** PolicyFact / PolicyFactRealtime 的完整权限列（与 sql-permission-injector ALLOWED_PERMISSION_FIELDS 对齐） */
@@ -66,6 +77,7 @@ const FEDERATED_REGISTRY: Readonly<Record<string, RelationPolicy>> = {
     canonical: 'RenewalTrackerFact',
     permissionColumns: new Set(['org_level_3', 'salesman_name']),
     strategy: 'direct',
+    lazyDomain: 'RenewalTracker',
   },
   QUOTECONVERSION: {
     canonical: 'QuoteConversion',
@@ -74,16 +86,19 @@ const FEDERATED_REGISTRY: Readonly<Record<string, RelationPolicy>> = {
     // 拒绝（安全无泄漏），待 P0.5 列类型归一后再启用。
     permissionColumns: new Set(['org_level_3', 'salesman_name']),
     strategy: 'direct',
+    lazyDomain: 'QuoteConversion',
   },
   CROSSSELLFACT: {
     canonical: 'CrossSellFact',
     permissionColumns: new Set(['org_level_3', 'salesman_name']),
     strategy: 'direct',
+    lazyDomain: 'CrossSell',
   },
   NEWENERGYCLAIMS: {
     canonical: 'NewEnergyClaims',
     permissionColumns: new Set(['org_level_3']),
     strategy: 'direct',
+    lazyDomain: 'NewEnergyClaims',
   },
   // 参照维度表（exempt）：必须经 duckdb DESCRIBE 实证**无任何机构作用域列**（org_level_*/
   // salesman/branch_code）方可豁免 RLS。BrandDim=厂牌→品牌、PlateRegionMap=车牌→地区，均为全局查找。
@@ -146,4 +161,27 @@ export function relationSupportsFilterColumns(
   filterColumns: readonly string[],
 ): boolean {
   return filterColumns.every((col) => policy.permissionColumns.has(col.toLowerCase()));
+}
+
+/**
+ * 返回 SQL 中引用到的、当前开关下可注入的 federated 关系所对应的**惰性域 key**（去重）。
+ *
+ * 背景：cx sql（sql-passthrough）不走 typed 路由的 createDomainMiddleware，不会自动
+ * ensureDomainLoaded。纯惰性域（如 NewEnergyClaims，启动不急切建视图、不在启动预热清单）
+ * 在直查时会「table does not exist」。sql-passthrough 调用本函数取得需预热的域，逐一
+ * ensureDomainLoaded 后再执行，弥补该缺口。
+ *
+ * - 开关关闭：仅 PolicyFact 可注入，且其无 lazyDomain → 返回空（行为不变，零额外开销）。
+ * - 开关开启：扫描 SQL 中出现的 direct 关系，返回其 lazyDomain（PolicyFact 无 → 跳过）。
+ *
+ * 关系名按单词边界、大小写不敏感匹配（DuckDB 标识符大小写不敏感，准入校验亦不分大小写）。
+ */
+export function getReferencedLazyDomains(sql: string): string[] {
+  const domains = new Set<string>();
+  for (const policy of getInjectableRelations()) {
+    if (!policy.lazyDomain) continue;
+    const re = new RegExp(`\\b${policy.canonical}\\b`, 'i');
+    if (re.test(sql)) domains.add(policy.lazyDomain);
+  }
+  return [...domains];
 }
