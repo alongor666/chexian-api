@@ -41,6 +41,16 @@ module.exports = {
         // 验收（设计文档 §4 阶段 1）：连续 7 天 mismatch=0 → 改 CUBE_ROUTING_ENABLED: 'true' 切流。
         // 回滚：删除本行 revert PR，或 VPS 上改 'false' + sudo /usr/local/bin/deploy-chexian-api reload。
         CUBE_SHADOW_COMPARE: 'true',
+        // cx sql 派生域联邦切流（PR #676 P0 + #677 P0.5，计划 .claude/plans/cx-cli-swift-pudding.md）：
+        // 'true' = cx sql 准入从单一 PolicyFact 扩展为已实证权限列的派生视图（RenewalTrackerFact/
+        // QuoteConversion/CrossSellFact/NewEnergyClaims direct + BrandDim/PlateRegionMap exempt），
+        // 每视图 fail-closed RLS（过滤列缺失即拒绝，绝不丢弃过滤）。PolicyFact 行为逐字节不变。
+        // 硬前置：BRANCH_RLS_ENABLED 须为 false（本配置未设=false）。派生视图缺 branch_code 列，
+        // 开 BRANCH_RLS 会令所有用户派生查询 fail-closed（安全无泄漏但功能不可用，详见计划 P0.5）。
+        // 本地全栈预验证：续保逐机构与 duckdb 基线零差异 + RLS 隔离 + 边界拒绝 + fail-closed
+        // 全绿（见 pr-evolution.md 2026-06-19 两条记分卡）。
+        // 回滚：删除本行 revert PR，或 VPS 上改 'false' + sudo /usr/local/bin/deploy-chexian-api reload。
+        SQL_FEDERATION_ENABLED: 'true',
       },
 
       // 日志配置
