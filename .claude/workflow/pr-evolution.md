@@ -417,3 +417,30 @@
 - needs_automation: false（getReferencedLazyDomains 已加单测闸；数据质量问题走 BACKLOG/ETL）
 - **教训**: 字符串级单测（validator/injector）对 NewEnergyClaims 全绿，但真实查询失败——**惰性物化 + 直查路径绕过预热中间件**这类集成缺陷只有「真 server + 真 cx 全栈」能暴露。重复印证「本地全栈预验证」在数据级 oracle 之上的独立价值
 - **下一实验**: 生产确认 BRANCH_RLS_ENABLED 取值 → 开 flag 灰度跑 LIVE 锚点；P0.5 补 branch_code 列 + 错误透明 + NewEnergyClaims org ETL
+
+### 2026-06-19 — LIVE 上线确认: cx sql 派生域联邦生产切流（闭合前两条记分卡的"下一实验"）
+
+- **动作**: PR #678 把 `SQL_FEDERATION_ENABLED: 'true'` 写入 `server/ecosystem.config.cjs` env，用户手动 merge（部署链 PR，deploy-chain-sop §2 禁 auto-merge）。Production Gate → Deploy to VPS 链路：wrapper `reload`=delete+start 重读 ecosystem env → flag 生效。
+- **LIVE oracle（生产 `https://chexian.cretvalu.com`，薛成龙 branch_admin PAT）**:
+  - 上线前基线：`cx sql FROM RenewalTrackerFact` 被「禁止访问（访问边界限制）」拒绝（federation OFF），证明 #676/#677 代码在线 + 零行为变更
+  - 上线后：`cx sql FROM RenewalTrackerFact` 联邦复算续保逐机构 = 本地 duckdb 基线**零差异**（天府 3601/1590…达州 42/15，合计 **7660/3286 = 42.9%**）——即本会话起点「续保率无法在工具内独立验算」的痛点根除
+  - PolicyFact 基线 2,600,421 不变；边界拒绝（RepairDim / information_schema）在生产仍守
+  - health 200（reload 窗口曾瞬态 502，部署自带健康检查 + 回滚 trap 未触发，自愈）
+- **部署观测**: deploy.yml 由 `workflow_run`（Production Gate 完成）触发，非 push 直触；#678 部署排在 #677 部署之后串行（并发组）。轮询生产 federation 状态直到翻转（~13min 从 merge 到 ON）= 直接测终态的等待法，不靠解析多个 workflow run
+- **回滚**: 删 ecosystem 那行 revert，或 VPS 改 'false' + `deploy-chexian-api reload`。纯 flag，Parquet/用户态零改动
+- **结论**: cx-cli 全面升级计划 P0（派生域联邦）+ P0.5（惰性域预热）**已生产上线并 LIVE 验证通过**。三 PR 链 #676→#677→#678 全部合并部署
+- **下一实验**: P0.5 错误透明化（duckdb uuid → 白名单分类中文错误，闭合"错误不透明"结构墙）；P0.5 branch_code 列补齐（山西 onboarding 前）；NewEnergyClaims org_level_3 ETL（BACKLOG 2026-06-19-claude-00bac8）
+
+### 2026-06-19 — evidence-loop scorecard: cx-cli P0.5 错误透明化（闭合"错误不透明"结构墙）
+
+- **背景**: cx-cli 五道结构墙之一「错误不透明」——生产 `duckdb.ts:134` 把 DuckDB 原始报错压成 `查询执行失败 [uuid]`，cx sql 用户连列名打错/类型不匹配都无法自助 debug（本会话起点分析时即被此 uuid 挡住）。federation 已上线让用户能查派生视图，但查错仍是黑箱 → 价值打折。
+- **合同**: 生产保留 uuid 屏蔽（防泄露），叠加**白名单安全分类中文**，让用户自助 debug；安全不变量=绝不回传原始消息/数据值/完整 SQL/DuckDB 的 "Did you mean"/"Candidate bindings" 建议（后者泄露用户无权访问的内部关系/列名）。
+- **改动**:
+  - 新增 `server/src/services/duckdb-error-classifier.ts`：白名单正则把 DuckDB 报错归一为 7 类中文（关系不存在/列不存在/类型不匹配/聚合 GROUP BY/语法/数值范围/除零）。关系名/列名只取**用户自己引用的标识符**（schema 级、非数据），类型/转换类不抽取任何标识符（可能含字面量值）；safeIdent 限 `[A-Za-z0-9_]{1,64}` 防把消息其余部分带出。
+  - `duckdb.ts` 生产分支：`category = classifyDuckDbError(message)` → `查询执行失败 [uuid]：<分类>`（未命中退回纯 uuid，兜底不变）。dev 行为逐字节不变（仍回原始消息）。
+- **oracle（真实 DuckDB Neo 绑定，非构造样本）**: 用 `@duckdb/node-api` 跑 6 类真错抓 `e.message` 过分类器——关系/列/类型/聚合/语法 5 类全部正确命中且无泄露（Catalog "Did you mean RepairDim" 被剥离、Binder "Candidate bindings" 被剥离、Conversion 的 'abc' 值不外泄）；除零 DuckDB `1/0` 返回 inf 不报错（分支为防御性，单测覆盖消息格式）。
+- **零回归**: error-classifier 11 单测（含 3 条安全不变量 + 超长标识符边界）· typecheck 通过 · governance 42/42。测试文件刻意命名 `error-classifier.test.ts`（不带 duckdb- 前缀）以进 CI——被测模块纯字符串正则无原生依赖，不应落入 `duckdb-*.test.ts` 原生模块排除桶。
+- **安全**: 分类白名单审查；标识符抽取仅 schema 名（关系=联邦白名单公开视图名、列=用户自写）；类型类零标识符抽取。修补不拆除：未命中即退回原 uuid 行为。
+- **decision**: promote（生产 error-path 增强，对合法查询零影响，纯改报错文案）。
+- needs_automation: false（分类器有单测闸；新增 DuckDB 错误类型时在白名单加一条 + 一个用例）。
+- **下一实验**: P0.5 branch_code 列补齐（山西 onboarding 前的硬前置）；P1 自描述（cx describe / 续保 L4 注册）
