@@ -30,6 +30,7 @@ const QUALITY_BUSINESS_CONDITION = `(
 export const ratioMetrics: readonly MetricDefinition[] = [
   {
     id: 'transfer_rate',
+    additive: false,
     version: '2.0.0',
     name: '过户率',
     category: 'ratio',
@@ -65,6 +66,7 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'telesales_rate',
+    additive: false,
     version: '1.0.0',
     name: '电销率',
     category: 'ratio',
@@ -96,6 +98,7 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'renewal_rate',
+    additive: false,
     version: '2.0.0',
     name: '续保率',
     category: 'ratio',
@@ -132,6 +135,7 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'commercial_rate',
+    additive: false,
     version: '1.0.0',
     name: '商业险占比',
     category: 'ratio',
@@ -163,6 +167,7 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'nev_rate',
+    additive: false,
     version: '2.0.0',
     name: '新能源率',
     category: 'ratio',
@@ -198,6 +203,7 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'new_car_rate',
+    additive: false,
     version: '2.0.0',
     name: '新车率',
     category: 'ratio',
@@ -233,6 +239,7 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'quality_business_rate',
+    additive: false,
     version: '1.0.0',
     name: '优质业务率',
     category: 'ratio',
@@ -265,6 +272,7 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'commercial_insurance_rate',
+    additive: false,
     version: '1.0.0',
     name: '商业险投保率',
     category: 'ratio',
@@ -299,6 +307,7 @@ export const ratioMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'underwriting_rate',
+    additive: false,
     version: '1.0.0',
     name: '承保率（报价→承保）',
     category: 'ratio',

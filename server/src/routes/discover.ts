@@ -97,6 +97,9 @@ router.get(
       id: m.id,
       name: m.name,
       category: m.category,
+      // 可加性（cube 语义层）：true=SUM 可 roll-up（可跨切片求和）；
+      // false=比率/DISTINCT/L4 需重算（cube 按维度子集 SUM(分子)/SUM(分母) 或回退）。
+      additive: m.additive ?? null,
       tags: m.tags,
       formula: {
         description: m.formula.description,

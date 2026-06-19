@@ -15,6 +15,7 @@ import type { MetricDefinition } from '../types.js';
 export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'earned_claim_ratio',
+    additive: false,
     version: '2.0.0',
     timeWindow: 'cutoff-based',
     name: '满期赔付率',
@@ -58,6 +59,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'expense_ratio',
+    additive: false,
     version: '1.2.0',
     name: '费用率',
     category: 'cost',
@@ -100,6 +102,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'avg_claim_amount',
+    additive: false,
     version: '1.0.0',
     name: '案均赔款',
     category: 'cost',
@@ -135,6 +138,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'earned_premium',
+    additive: true,
     version: '2.0.0',
     timeWindow: 'cutoff-based',
     name: '满期保费',
@@ -167,6 +171,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'baseline_premium',
+    additive: false,
     version: '1.0.0',
     name: '基准保费',
     category: 'cost',
@@ -207,6 +212,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'baseline_earned_premium',
+    additive: true,
     version: '1.0.0',
     timeWindow: 'cutoff-based',
     name: '满期基准保费',
@@ -250,6 +256,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'baseline_earned_claim_ratio',
+    additive: false,
     version: '1.0.0',
     timeWindow: 'cutoff-based',
     name: '满期基准赔付率',
@@ -313,6 +320,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'variable_cost_ratio',
+    additive: false,
     version: '2.0.0',
     timeWindow: 'cutoff-based',
     name: '变动成本率',
@@ -358,6 +366,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'earned_loss_frequency',
+    additive: false,
     version: '2.1.0',
     timeWindow: 'cutoff-based',
     name: '满期出险率',
@@ -405,6 +414,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'earned_margin_amount',
+    additive: false,
     version: '2.0.0',
     timeWindow: 'cutoff-based',
     name: '满期边际贡献额',
@@ -451,6 +461,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'projected_margin_amount',
+    additive: false,
     version: '2.0.0',
     timeWindow: 'cutoff-based',
     name: '预估边际贡献额',
@@ -497,6 +508,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'comprehensive_expense_ratio',
+    additive: false,
     version: '1.0.0',
     name: '综合费用率',
     category: 'cost',
@@ -545,6 +557,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'fixed_cost_amount',
+    additive: false,
     version: '1.0.0',
     name: '固定成本额',
     category: 'cost',
@@ -577,6 +590,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'fixed_cost_ratio',
+    additive: false,
     version: '1.0.0',
     name: '固定成本率',
     category: 'cost',
@@ -611,6 +625,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'combined_cost_amount',
+    additive: false,
     version: '1.0.0',
     timeWindow: 'cutoff-based',
     name: '综合成本额',
@@ -644,6 +659,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'combined_cost_ratio',
+    additive: false,
     version: '1.1.0',
     timeWindow: 'cutoff-based',
     name: '综合成本率',
@@ -682,6 +698,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'earned_profit_amount',
+    additive: false,
     version: '1.0.0',
     timeWindow: 'cutoff-based',
     name: '利润额',
@@ -715,6 +732,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'bi_case_ratio_pct',
+    additive: false,
     version: '1.0.0',
     name: '人伤案件占比',
     category: 'cost',
@@ -755,6 +773,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'bi_amount_ratio_pct',
+    additive: false,
     version: '1.0.0',
     name: '人伤赔款占比',
     category: 'cost',

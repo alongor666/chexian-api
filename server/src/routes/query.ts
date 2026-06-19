@@ -33,6 +33,7 @@ import patrolRoutes from './query/patrol.js';
 import policyGeoRoutes from './query/policy-geo.js';
 import renewalTrackerRoutes from './query/renewal-tracker.js';
 import pivotRoutes from './query/pivot.js';
+import cubeRoutes from './query/cube.js';
 import sqlPassthroughRoutes from './query/sql-passthrough.js';
 
 export { buildRouteCacheKey } from './query/shared.js';
@@ -65,6 +66,7 @@ router.use(patrolRoutes);
 router.use(policyGeoRoutes);
 router.use(renewalTrackerRoutes);
 router.use(pivotRoutes);
+router.use(cubeRoutes);
 router.use(sqlPassthroughRoutes);
 
 export default router;

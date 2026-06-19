@@ -31,6 +31,7 @@ export const repairMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'repair_shop_total_count',
+    additive: false,
     version: '1.0.0',
     name: '合作网点总数',
     category: 'repair',
@@ -61,6 +62,7 @@ export const repairMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'repair_4s_share',
+    additive: false,
     version: '1.0.0',
     name: '4S店占比',
     category: 'repair',
@@ -92,6 +94,7 @@ export const repairMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'repair_cooperation_active_rate',
+    additive: false,
     version: '1.0.0',
     name: '合作启用率',
     category: 'repair',
@@ -123,6 +126,7 @@ export const repairMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'repair_to_premium_ratio',
+    additive: false,
     version: '1.0.0',
     name: '修保比',
     category: 'repair',
@@ -157,6 +161,7 @@ export const repairMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'repair_damage_amount_total',
+    additive: true,
     version: '1.0.0',
     name: '维修产值合计',
     category: 'repair',
@@ -186,6 +191,7 @@ export const repairMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'repair_net_premium_total',
+    additive: true,
     version: '1.0.0',
     name: '网点签单净保费合计',
     category: 'repair',

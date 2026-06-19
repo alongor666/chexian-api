@@ -480,3 +480,30 @@
 - **harness 自纠**: 软链主仓 warehouse 数据时初次误把 claims_detail 当单文件 latest.parquet（实为分区 claims_2019..2026.parquet）→ ClaimsAgg←ClaimsDetail 构建失败污染查询管道；改软链全部分区文件后 ClaimsDetail 288198 行/ClaimsAgg 243007 行正常。另误软链覆盖两个**已跟踪**的 `业务员归属与规划/*.json`（产生 git T 类型变更）→ git restore 还原。教训：软链补数据前先 `git check-ignore` 确认目标 gitignored，分区域看真实文件结构
 - needs_automation: false（route-field-legend SSOT 守卫单测 + formatLegend 单测已成闸；新路由加图例在 ROUTE_OUTPUT_COLUMNS 加一行绑定 + SQL 生成器导出列表即可）
 - **下一实验**: P0.5 branch_code 列补齐（山西 onboarding 前硬前置）；P2 语义层 cx cube 可组合查询（接续 B290）；P3 cx query --explain
+
+### 2026-06-19 — evidence-loop scorecard: cx-cli P2 语义层（cx cube 可组合查询 · 续保锚点优先）
+
+- **背景**: cx-cli 全面升级计划 P2（接续 P0/P0.5/P1 已上线）。结构墙「黑箱路由——路由未预置切片就做不出」：续保 24 层固定 GROUPING SETS 只覆盖 5 个维度层，换一个组合（如续保率×是否新车）就做不出。用户三选一选定 **Option A 续保域锚点优先**（全 additive 标记 + 泛化续保生成器 + cx cube 分派，单内聚 PR；非全域语义层一次到位）。
+- **合同**: 让 cx 对续保域实现「选指标 × 任意维度子集」可组合查询，PolicyFact 域复用既有 pivot。oracle = 可组合结果 = 等价直查 SQL/既有路由零差异（cube-shadow 容差语义）。
+- **设计（精读 /pivot 后定）**: /pivot 已做 PolicyFact 1-2 维 × 可加/单层比率指标聚合（isPivotSafeMetric 守卫），但 PolicyFact-only + ≤2 维，做不出续保 L4。关键洞察：对「恰好按请求维度子集」做**直接单层 GROUP BY**，无论可加与否都正确（比率算 SUM(分子)/SUM(分母)、续保算 COUNT(DISTINCT vin) 逐组重算，不涉 roll-up 求和）；additive 真正用于 cube 物化加速，非直接 GROUP BY 正确性前提。故 = 泛化续保 GROUPING SETS 成「维度子集→单层 GROUP BY」生成器 + additive 元数据 + cx cube 服务端按域分派（续保→新生成器，PolicyFact→复用 generatePivotQuery）。
+- **成果（工作树，21 改 + 4 新）**:
+  - `metric-registry/types.ts` 加可选 `additive` 字段 + `validation.ts` 加「每指标必声明 additive」闸；全 55 指标补标记（**仅 5 个 true**：total_premium/earned_premium/baseline_earned_premium/repair_damage_amount_total/repair_net_premium_total；50 个 false=比率/COUNT DISTINCT/差值/L4/增长率，**保守判定**：拿不准一律 false，误判 true 才会让 cube 错误求和率值——车险铁律 [[feedback_rate_aggregation_law]]）；`discover.ts` /metrics 暴露 additive（AI agent 自描述）。
+  - `sql/renewal-tracker.ts`：抽 `renewalCountSelectSql(cutoff)` 共享 A-E 口径助手，**重构主查询复用**（口径 SSOT 单一定义，零漂移）+ 新增 `generateRenewalCubeQuery`（任意维度子集单层 GROUP BY）+ `RENEWAL_CUBE_DIMENSIONS` 白名单（续保宽表真实列，**无 insurance_grade** → 续保率×风险等级须走 PolicyFact）。
+  - `routes/query/cube.ts`（新 /api/query/cube）：服务端按域分派；续保路径**镜像 renewal-tracker 路由的 buildRenewalExtraConditions（11 字段 + permissionFilter RLS 逐条一致）** + createDomainMiddleware 预热惰性域；PolicyFact 路径复用 generatePivotQuery + parseFiltersAndBuildWhere。续保影响度（需窗口合计分母）/L4/跨源/增长率 → 400 指引。
+  - CLI `cx cube --metric --dims --start/--end/--cutoff [--<筛选>=值]`（cli/src/commands/cube.ts + index.ts），透传范式同 cx query，退出码契约一致。
+  - 四处登记：api-routes.ts / 前端 routes.ts / query-routes-metadata.ts(CUBE entry) / route-param-contracts.ts(/cube 契约)。
+  - 测试：renewal-cube.test.ts(11) + additive.test.ts(4)。
+  - **续保率 C/A 口径裁决**：renewal.ts SSOT 注释显式把「C/A 是否注册为独立指标」延后给用户（避免与 ratio 域 renewal_rate 同名歧义）。本 PR **不注册**新指标，cube 输出 A-E 五个已注册计数 + 派生 renewal_rate_pct(C/A)/unquoted_rate_pct/lost_rate_pct（C/A 是 renewal.ts 文档化口径「由下游用 A、C 计算」，非臆测，标注续保追踪口径）。
+- **本地全栈 oracle（federation ON / BRANCH_RLS OFF，真 server:3939 + 真 cx + 真 PAT + 独立 duckdb 直查 parquet）**:
+  - **overall 三方零差异**: duckdb A=9933/B=8624/C=4053 ≡ cx cube（D=1309=A−B、E=5880=A−C、续保率 40.8%=C/A 全自洽）。
+  - **12 机构三方零差异**: cx cube --dims=org_level_3 ≡ duckdb 直查 ≡ 既有路由 RENEWAL_TRACKER orgRows（天府 4512/3899/1862…达州 54/45/19，逐机构 A/B/C 0 差异）——即固定切片路由的 shadow 对账。
+  - **新组合（固定 24 层未预置）零差异**: cx cube --dims=org_level_3,is_new_car vs duckdb top5 全中——证明解锁了原路由做不出的组合（动机痛点根除）。
+  - **RLS 越权隔离**: tianfu(org_user=天府) PAT 查 cube 仅返回天府一行，其余 11 机构零泄漏。
+  - **PolicyFact 路径**: cx cube --metric=total_premium --dims=org_level_3 ≡ cx query PIVOT 同参 15 机构零差异（同生成器）。
+  - **边界拒绝**: renewal_impact_rate（窗口合计）/insurance_grade（白名单外维度）/growth_rate_yoy（需外层 CTE）/缺 metric(exit 4)/续保缺 start 全部 ✘ 正确拒绝。
+- **verifier（fresh-context evidence-verifier）裁定通过**: 独立复跑 typecheck/governance 42/42/全量单测 3370/validate.ts 全绿；逐一核 5 个 additive=true 真可加 + 无比率/DISTINCT 误标 true（grep additive: =55、true=5 精确匹配）；renewalCountSelectSql 全仓单一定义无漂移；cube RLS 与续保路由逐条一致无 fail-open 新增；四处登记一致；无 scope creep。唯一提示=CLI 帮助示例措辞「可加指标」实际接受比率指标 → 已校正为「可加/比率指标」。无实质缺陷。
+- **零回归**: typecheck(root+server+cli) · 全量单测 **3370 passed/243 文件**（baseline 3355/241 → +renewal-cube 11 + additive 4，+2 文件）· CLI 76 · governance 42/42 · validate.ts 55 指标 · `ux:check` 0 漂移（cube 进顶层帮助基线，`ux:write` 重生成）。
+- **harness 自纠**: 软链 warehouse 用 `git ls-files --others --ignored` 精确列出 gitignored 文件 + 逐文件软链「绝不覆盖已存在文件」，避免上次（P1续）误覆盖跟踪文件的坑；验后 `find -type l -delete` + git restore 还原，git status 仅余代码改动。
+- **决策**: promote。纯代码（不碰部署链 ecosystem/deploy.yml/sync-vps），PR 可 ready 直合。本地全栈 oracle = 生产部署前等价证据；LIVE 仅剩生产开 SQL_FEDERATION_ENABLED（已 LIVE，#678）即可用。
+- needs_automation: false（additive 由 validation.ts 闸常态守；新指标加条目须声明 additive，缺失即 governance 红。续保 cube 维度白名单/口径 SSOT 由 renewal-cube 单测守）。
+- **下一实验**: P2 续——若用户要全域语义层（PolicyFact >2 维 / 跨域统一端点 / 续保率 C/A 注册口径裁决）再扩；P0.5 branch_code 补齐；P3 cx query --explain。

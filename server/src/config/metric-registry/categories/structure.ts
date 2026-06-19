@@ -12,6 +12,7 @@ import type { MetricDefinition } from '../types.js';
 export const structureMetrics: readonly MetricDefinition[] = [
   {
     id: 'household_share_pct',
+    additive: false,
     version: '1.0.0',
     name: '家自车占比',
     category: 'structure',
