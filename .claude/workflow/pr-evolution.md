@@ -444,3 +444,21 @@
 - **decision**: promote（生产 error-path 增强，对合法查询零影响，纯改报错文案）。
 - needs_automation: false（分类器有单测闸；新增 DuckDB 错误类型时在白名单加一条 + 一个用例）。
 - **下一实验**: P0.5 branch_code 列补齐（山西 onboarding 前的硬前置）；P1 自描述（cx describe / 续保 L4 注册）
+
+### 2026-06-19 — evidence-loop scorecard: cx-cli P1 自描述（续保 L4 注册 + cx describe 视图自省）
+
+- **背景**: cx-cli 结构墙「口径不自描述」——`cx metrics --category renewal` 返回空（续保口径散落 foundation/ratio 无 renewal 分类）、无法自省视图 schema。用户指定两个验收点：`cx metrics --category renewal` 与 `cx describe RenewalTrackerFact` 可用。
+- **deliverable A — 续保口径注册到 renewal 域**:
+  - types.ts MetricCategory 加 'renewal'（领域分类，与 cross_sell/repair/plan 同属域分类）
+  - 新建 categories/renewal.ts：新增 A 应续/B 报价/C 已续件数（口径取 renewal-tracker.ts SSOT 头注，非臆测）+ 迁入 D 未报价/E 流失/续保影响度（自 foundation/ratio，口径不变，changelog 记归类调整 1.0.0→1.1.0）= 6 指标
+  - **口径辨析（车险红线·不混用）**: ratio 域 `renewal_rate`（PolicyFact is_renewal 占比，KPI 面板快速口径）保留**不迁**——其 notes 明确「非续保分析板块的精确续保率（后者基于到期判断 C/A）」，与续保追踪族是两个口径。是否注册 C/A 续保率待用户口径裁决（避免同名歧义）
+- **deliverable B — cx describe**:
+  - 后端 `GET /api/discover/schema?relation=`：复用 sql-federation-policy 白名单准入（未授权 403）+ lazyDomain 预热 + 受控 DESCRIBE（canonical 来自注册表非用户输入，无注入），仅返回 schema 元数据零行数据
+  - CLI 新增 `cx describe <relation>` 命令 + index.ts 注册；metrics --category 帮助补 renewal
+- **oracle（本地全栈 federation ON，真 server + 真 cx + 真 PAT）**:
+  - `cx metrics --category renewal` → 6 续保指标全列出（renewal 分类）
+  - `cx describe RenewalTrackerFact` → 完整 schema（source_policy_no/vehicle_frame_no/expiry_date/org_level_3… 含 type+nullable，lazyDomain 预热 + DESCRIBE 生效）
+  - 边界：describe PolicyFact 52 列（授权）；RepairDim / information_schema.tables → 403 拒绝
+- **零回归**: 全量单测 3342 passed（240 文件）· CLI 72 · metric-registry 220（含金丝雀总数 52→55、L4 白名单补 A/B/C 3 id）· typecheck（root+server+cli）· governance 42/42 · validate.ts 通过 · frontend-map 重新生成
+- needs_automation: false（validate.ts + 金丝雀 + L4 白名单已成闸；新增续保指标在 renewal.ts 加条目 + 同步金丝雀/白名单）
+- **下一实验**: P0.5 branch_code 列补齐（山西前）；P1 续 renewal-tracker.ts 引用注册表口径成单一事实源 + cx query --describe 图例；P2 语义层

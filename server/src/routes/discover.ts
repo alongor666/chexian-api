@@ -9,11 +9,17 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { asyncHandler } from '../middleware/error.js';
+import { asyncHandler, AppError } from '../middleware/error.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { withRouteCache, QUERY_CACHE, HTTP_MAX_AGE } from './query/shared.js';
+import { withRouteCache, QUERY_CACHE, HTTP_MAX_AGE, duckdbService } from './query/shared.js';
 import { getAllMetrics, getMetricsByCategory } from '../config/metric-registry/index.js';
 import type { MetricCategory } from '../config/metric-registry/types.js';
+import {
+  isRelationAllowed,
+  getRelationPolicy,
+  isFederationEnabled,
+} from '../config/sql-federation-policy.js';
+import { getBootstrapper } from '../services/bootstrapper-registry.js';
 import {
   commonFilterSchema,
   VEHICLE_QUICK_FILTER_VALUES,
@@ -120,6 +126,48 @@ router.get(
         vehicleQuickFilters: VEHICLE_QUICK_FILTER_VALUES,
       },
     });
+  })
+);
+
+/**
+ * GET /api/discover/schema?relation=<view>
+ * 对联邦白名单内的关系跑受控 DESCRIBE，返回列名/类型（schema 自省）。
+ * `cx describe <view>` 的后端。仅返回 schema 元数据，不返回任何行数据。
+ *
+ * 准入：复用 sql-federation-policy 白名单（开关关闭仅 PolicyFact；开启含派生视图 + exempt 参照表）。
+ * 未授权关系一律 403，绝不对任意表 DESCRIBE。
+ */
+router.get(
+  '/schema',
+  asyncHandler(async (req: Request, res: Response) => {
+    const relation = String(req.query.relation ?? '').trim();
+    if (!relation) {
+      throw new AppError(400, 'schema: 缺少 relation 参数');
+    }
+    if (!isRelationAllowed(relation)) {
+      throw new AppError(
+        403,
+        isFederationEnabled()
+          ? `不允许 describe 该关系：${relation}（仅限已授权视图；用 cx routes 查可用域）`
+          : `不允许 describe 该关系：${relation}（默认仅 PolicyFact；派生视图需开启 SQL_FEDERATION_ENABLED）`
+      );
+    }
+    const policy = getRelationPolicy(relation)!;
+    // 惰性域预热：DESCRIBE 需关系已物化（sql-passthrough 同款机制）
+    const bootstrapper = getBootstrapper();
+    if (policy.lazyDomain && bootstrapper) {
+      await bootstrapper.ensureDomainLoaded(policy.lazyDomain);
+    }
+    // policy.canonical 来自注册表（可信常量，非用户输入）→ 无注入面
+    const rows = await duckdbService.query<{ column_name: string; column_type: string; null: string }>(
+      `DESCRIBE ${policy.canonical}`
+    );
+    const columns = rows.map((r) => ({
+      name: r.column_name,
+      type: r.column_type,
+      nullable: String(r.null).toUpperCase() === 'YES',
+    }));
+    res.json({ success: true, data: { relation: policy.canonical, columns } });
   })
 );
 

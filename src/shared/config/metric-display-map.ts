@@ -2,8 +2,8 @@
  * 指标展示映射 — 从注册表自动生成
  *
  * 生成命令：bun scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-06-12T00:27:01.003Z
- * 指标数量：52
+ * 生成时间：2026-06-19T14:45:12.767Z
+ * 指标数量：55
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成
  */
@@ -16,8 +16,6 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   "salesman_count": "业务员数",
   "per_capita_premium": "人均保费",
   "per_vehicle_premium": "车均保费",
-  "renewal_unquoted_count": "未报价件数",
-  "renewal_lost_count": "流失件数",
   "transfer_rate": "过户占比",
   "telesales_rate": "电销占比",
   "renewal_rate": "续保占比",
@@ -27,7 +25,6 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   "quality_business_rate": "优质业务占比",
   "commercial_insurance_rate": "商业险投保率",
   "underwriting_rate": "承保率",
-  "renewal_impact_rate": "续保影响度",
   "earned_claim_ratio": "赔付率",
   "expense_ratio": "费用率",
   "avg_claim_amount": "案均赔款",
@@ -62,6 +59,12 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   "repair_net_premium_total": "网点净保费",
   "plan_completion_pct": "计划达成率",
   "household_share_pct": "家自车占比",
+  "renewal_due_count": "应续件数",
+  "renewal_quoted_count": "报价件数",
+  "renewal_renewed_count": "已续件数",
+  "renewal_unquoted_count": "未报价件数",
+  "renewal_lost_count": "流失件数",
+  "renewal_impact_rate": "续保影响度",
 } as const;
 
 /** 指标 ID → 格式化配置 */
@@ -76,8 +79,6 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   "salesman_count": { formatter: "count", unit: "人" },
   "per_capita_premium": { formatter: "premiumWan", unit: "万元" },
   "per_vehicle_premium": { formatter: "average", unit: "元", decimals: 0 },
-  "renewal_unquoted_count": { formatter: "count", unit: "件" },
-  "renewal_lost_count": { formatter: "count", unit: "件" },
   "transfer_rate": { formatter: "percent", unit: "%" },
   "telesales_rate": { formatter: "percent", unit: "%" },
   "renewal_rate": { formatter: "percent", unit: "%" },
@@ -87,7 +88,6 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   "quality_business_rate": { formatter: "percent", unit: "%" },
   "commercial_insurance_rate": { formatter: "percent", unit: "%" },
   "underwriting_rate": { formatter: "percent", unit: "%" },
-  "renewal_impact_rate": { formatter: "percent", unit: "%", decimals: 1 },
   "earned_claim_ratio": { formatter: "percent", unit: "%", decimals: 1 },
   "expense_ratio": { formatter: "percent", unit: "%", decimals: 1 },
   "avg_claim_amount": { formatter: "premiumWan", unit: "万元" },
@@ -122,6 +122,12 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   "repair_net_premium_total": { formatter: "premiumWan", unit: "万元" },
   "plan_completion_pct": { formatter: "percent", unit: "%", decimals: 2 },
   "household_share_pct": { formatter: "percent", unit: "%", decimals: 2 },
+  "renewal_due_count": { formatter: "count", unit: "件" },
+  "renewal_quoted_count": { formatter: "count", unit: "件" },
+  "renewal_renewed_count": { formatter: "count", unit: "件" },
+  "renewal_unquoted_count": { formatter: "count", unit: "件" },
+  "renewal_lost_count": { formatter: "count", unit: "件" },
+  "renewal_impact_rate": { formatter: "percent", unit: "%", decimals: 1 },
 } as const;
 
 /** 指标 ID → 公式描述 */
@@ -132,8 +138,6 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   "salesman_count": "去重业务员计数",
   "per_capita_premium": "保费总额 / 业务员数",
   "per_vehicle_premium": "保费总额 / 去重车架号数（含商业险+交强险）",
-  "renewal_unquoted_count": "应续车中至今无任何有效报价的件数 = 应续件数 − 已报价件数",
-  "renewal_lost_count": "应续车中尚未续保的件数（含未报价 + 已报价未成交）= 应续件数 − 已续保件数",
   "transfer_rate": "过户保单数 / 总保单数",
   "telesales_rate": "电销保单数 / 总保单数",
   "renewal_rate": "续保保单数 / 总保单数",
@@ -143,7 +147,6 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   "quality_business_rate": "优质业务保单数 / 总保单数",
   "commercial_insurance_rate": "商业险件数 / 交强险件数",
   "underwriting_rate": "承保件数 / 报价件数（单据级）",
-  "renewal_impact_rate": "该分类流失导致整体续保缺口扩大的占比；可加和，各分类之和 = 整体续保缺口（1 − 续保率）",
   "earned_claim_ratio": "已报告赔款 / 满期保费（闰年感知）",
   "expense_ratio": "费用金额 / 签单保费（保单明细域 fee_amount，不混同综合费用率/综合成本率）",
   "avg_claim_amount": "已报告赔款 / 赔案件数",
@@ -178,4 +181,10 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   "repair_net_premium_total": "RepairDim 中所有网点签单净保费合计",
   "plan_completion_pct": "年初累计签单保费 × 100 ÷ (业务员年计划合计 × 时间进度)；时间进度 = 数据内最新签单日是当年第几天 ÷ 全年天数（闰年感知）",
   "household_share_pct": "客户类别='非营业个人客车' 的保单数 × 100 ÷ 全部保单数",
+  "renewal_due_count": "续保窗口内应续保的车辆件数（按车架号去重）",
+  "renewal_quoted_count": "应续车中截至观察时点已有有效报价的件数（报价为真实时点事件，按 cutoff 切片）",
+  "renewal_renewed_count": "应续车中已签单成交续保的件数（匹配到续保单号）",
+  "renewal_unquoted_count": "应续车中至今无任何有效报价的件数 = 应续件数 − 已报价件数",
+  "renewal_lost_count": "应续车中尚未续保的件数（含未报价 + 已报价未成交）= 应续件数 − 已续保件数",
+  "renewal_impact_rate": "该分类流失导致整体续保缺口扩大的占比；可加和，各分类之和 = 整体续保缺口（1 − 续保率）",
 } as const;
