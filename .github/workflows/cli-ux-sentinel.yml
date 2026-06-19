@@ -1,0 +1,34 @@
+name: cli-ux-sentinel
+
+# cx CLI 用户体验哨兵：PR 触发跑 UX 黄金标准校验（ux:check）。
+# 渲染快照零漂移 + 无新增一致性违规 + 报错可操作率不下降 → 否则阻断 merge。
+# 与 cli-perf-sentinel（守"快不快"）对称，本哨兵守"好不好用"。
+# 标准定义见 cli/UX-STANDARD.md，基线 cli/ux-baseline.json，本地 `bun run ux:check`。
+# 注：基线以 runner=tsx 采集，故 CI 不 build:bin，用 tsx 跑以匹配基线、避免渲染漂移。
+
+on:
+  pull_request:
+    paths:
+      - 'cli/**'
+      - '.github/workflows/cli-ux-sentinel.yml'
+  workflow_dispatch:
+
+jobs:
+  ux-contract:
+    name: cx UX 黄金标准（快照零漂移 + 一致性/可发现性棘轮）
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Install cli deps
+        working-directory: cli
+        run: bun install --registry=https://registry.npmmirror.com
+
+      - name: ux:check（渲染快照零漂移 + 无新增一致性违规 + 可发现性不下降）
+        working-directory: cli
+        run: bun run ux:check

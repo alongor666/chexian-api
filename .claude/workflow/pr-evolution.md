@@ -346,3 +346,29 @@
 - **自进化循环**: 复用现成 `pr-evolution.md` + `checkPrEvolutionExpired` 触发器 + 新 2 闸常态守（eager-load error 防回退 + 计数防漂移 warning）。持续复核项：体系每新增 rule 优先 `paths:` 门控，eager-load 区不得无限膨胀；新漂移计数模式靠 review 补进 `findStaleCounts`。
 - needs_automation: false
 - rationale: A+B 全套机制已落地（2 道 governance 闸 + 6 文件门控 + 计数指针化），黄金标准由闸常态守，无需进一步机制化；持续复核靠 review + 闸双轨。
+
+### 2026-06-18 — evidence-loop scorecard: cx CLI 用户体验黄金标准 harness（PR #674）
+
+- **背景**: 用户 `/chexian-evidence-loop 建立 cx-cli 用户体验的黄金标准`。承接 PR #662 复盘教训（cx wizard 选型凭直觉，缺使用频率支撑）——本轮 Step 0.5 用户痛点调研先行，痛点真实但分散 → 按协议 AskUserQuestion 澄清方向，用户选「四个兼顾」
+- **合同**: 给 cx-cli「好 UX」一个可度量、可回归的定义并落 harness，对标已有 `cli/perf-baseline.json`/`bench:check`（性能维度黄金标准）。四维：①一致性 ②渲染 ③旅程 ④可发现性
+- **成果**（工作树，未 commit）:
+  - `cli/scripts/ux-baseline.mjs`（新）+ `cli/ux-baseline.json`（新基线）+ `cli/UX-STANDARD.md`（新规范）+ `cli/package.json`（+`ux`/`ux:write`/`ux:check` 3 脚本）
+  - ① 一致性：lint R1–R5，23 快照；②渲染：黄金快照逐字节；④可发现性：报错可操作率（棘轮）——三维已建基线、`ux:check` 连跑 0 diff
+  - **第一次跑就钉出真实缺陷**：commander 内置参数/命令校验绕过 `failWith` 退出码契约 → 用法错误返 `exit 1`（应 4）+ 报错用 `error:` 前缀（应 `✘ `），共 6 条 known_violations（棘轮债务），可发现性 50%（3/6）
+- **verifier（fresh-context evidence-verifier）抓 2 硬缺陷 + 1 风险，本轮全闭环**:
+  1. （中）`normalize()` 漏剥 `bunx` 首次安装噪声 → CI 冷启动必漂移 → 加 `Resolving dependencies|Saved lockfile` 等过滤
+  2. （低）`actionableRe` 裸词 `available` 过宽 → 锚定到 `available values?:`/`可用值`
+  3. （风险）`--check` 不比对 runner → 加 runner mismatch 提示
+- **未验证声明已自纠**: Phase A 我看到 config.json 有 `token` 字段就断言"本地 PAT 有效" → 实测 whoami **exit 2 token expired**。"有 token 字段 ≠ token 有效"。教训同 §3 证据七项：状态推断必须实跑验证
+- **BLOCKED（§6 测试数据缺失）**: ③ 旅程维度需有效 PAT，本地 token 已过期 → harness 正确判 `unavailable` 未伪造 0ms 数据（verifier 隔离原则生效）。用户 `cx login` 换新 PAT 后 `bun run ux:write -- --journey` 补齐
+- **零回归**: cli 单测 72 passed · governance 40/40 · scope 无 creep（未动 CLI 源码）
+- needs_automation: true
+- rationale: `ux:check` 已可手动跑，但尚未挂 CI/governance 闸（下一步：仿 bench:check 接入 cli 测试链或 governance-check.yml）；旅程维度待 PAT 解 BLOCKED
+
+**—— 同会话收口更新（用户重置 PAT + 选「修债务 + 接 CI + 提 PR」）**:
+- ③ 旅程 BLOCKED 解除：用户 `cx login` 换新 PAT（whoami exit 0，xuechenglong/branch_admin）→ `ux:write --journey` 测得首次成功 ✓。⚠️ time-to-first-success **CV 1.43 ≫ 0.10**（冷连接 TLS 离群 p95 11s），按 §6 标"噪声大"——故计时只记录不硬闸，仅功能门禁参与判定
+- 6 条退出码债务**已修**（`cli/src/index.ts` `applyExitContract`：递归 exitOverride + writeErr 重渲染 ✘ + 提示 + catch 映射 exit 4）。棘轮 `ux:check` 全程护航：改后 check 精确报「仅 3 条用法快照漂移 + 6 违规消失 + 可发现性 0.5→1.0」，help-* 零波及证明修复外科精准 → `ux:write` 收紧到 **0 违规 / 可发现性 100%**
+- CI 闸已接：新增 `.github/workflows/cli-ux-sentinel.yml`（cli/** 触发跑 `ux:check`，与 cli-perf-sentinel 对称）；基线 runner=tsx，CI 同 tsx 跑避免 bin 漂移
+- 零回归复验（改 index.ts 源码后）：cli 单测 **72 passed** · typecheck 通过 · 最终 `ux:check` 0 diff exit 0
+- 已提交 PR #674：7 文件（4 新增 harness/基线/规范/workflow + 3 改 index.ts/package.json/pr-evolution）
+- review 结论「未发现阻断问题，可以合并」；CI 全绿（含 cx UX 黄金标准哨兵 ubuntu 实测通过）；rebase 撞 PR #675 的 pr-evolution append 冲突，保留双方 entry 解决
