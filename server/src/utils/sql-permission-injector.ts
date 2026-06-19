@@ -176,6 +176,11 @@ function relationPresenceRegex(relationName: string): RegExp {
 /**
  * 从已通过 isValidPermissionFilter 校验的权限过滤条件中提取被引用列名（小写）。
  * 形如 `field = 'v'` / `field LIKE '%v%'` / `field IN (...)` / `field = true`，以 AND/OR 切分。
+ *
+ * ⚠️ 安全不变量（勿删依赖）：本函数仅用于注入前的**快速 fail-closed 预检**（判断视图是否声明了
+ * 过滤所需列）。**安全下界不依赖其完备性**——`permissionFilter` 始终被**原样**注入 WHERE
+ * （wrapRelationRefs），且 DuckDB 要求列存在；故即便此提取遗漏某列，最坏也只是 DuckDB 报错
+ * （fail-closed），绝不会越权。这是设计的纵深防御兜底，扩展时不可移除"原样注入 + 列必存在"这一层。
  */
 function extractPermissionFilterColumns(filter: string): string[] {
   const cols: string[] = [];

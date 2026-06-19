@@ -373,7 +373,7 @@
 - 已提交 PR #674：7 文件（4 新增 harness/基线/规范/workflow + 3 改 index.ts/package.json/pr-evolution）
 - review 结论「未发现阻断问题，可以合并」；CI 全绿（含 cx UX 黄金标准哨兵 ubuntu 实测通过）；rebase 撞 PR #675 的 pr-evolution append 冲突，保留双方 entry 解决
 
-### 2026-06-18 — evidence-loop scorecard: cx sql 派生域联邦 P0（cx-cli 全面升级计划 P0）
+### 2026-06-19 — evidence-loop scorecard: cx sql 派生域联邦 P0（cx-cli 全面升级计划 P0）
 
 - **背景**: 用户 `/evidence-loop-core 制定全面升级的计划，彻底实现cx-cli的能力`。承接本会话实测——cx-cli 分析内核是「单表牢笼 + 黑箱路由 + 零自省 + 错误不透明」，续保率无法在工具内独立验算。计划见 `.claude/plans/cx-cli-swift-pudding.md`（全 5 阶段，用户选「全规划·P0 先执行」）
 - **合同**: P0 把 `cx sql` 准入从单一 PolicyFact 扩展为「已实证权限列的派生视图」，每视图 fail-closed RLS。验收锚点：联邦后 `cx sql` 直查 RenewalTrackerFact 复算续保率 = 路由返回逐机构零差异
