@@ -25,20 +25,14 @@ import {
   commonFilterSchema,
   VEHICLE_QUICK_FILTER_VALUES,
 } from '../utils/filter-params.js';
+import {
+  buildFieldsView,
+  type FieldsJsonEntry,
+  type DescribeColumn,
+} from './discover-fields-view.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-interface FieldsJsonEntry {
-  id: string;
-  label: string;
-  sourceColumn?: string | null;
-  required?: boolean;
-  derived?: boolean;
-  dataTypes: string[];
-  aliases: string[];
-  description?: string;
-}
 
 const FIELDS_JSON_PATH = path.resolve(__dirname, '../config/field-registry/fields.json');
 let fieldsCache: FieldsJsonEntry[] | null = null;
@@ -53,33 +47,38 @@ function loadFields(): FieldsJsonEntry[] {
 const router = Router();
 router.use(authMiddleware);
 
-const GROUPABLE_TYPES = new Set(['VARCHAR', 'TEXT', 'STRING']);
-
-function isGroupable(dataTypes: readonly string[]): boolean {
-  return dataTypes.some((t) => GROUPABLE_TYPES.has(t.toUpperCase()));
-}
-
 /**
  * GET /api/discover/fields
- * 返回字段注册表（56 个字段）的精简视图。
+ * 返回字段注册表的精简视图（字段数以 fields.json 为准）。
+ *
+ * 每个字段附 PolicyFact「可查真值」：column（= 唯一可 SELECT 的列名）、queryable
+ * （是否真实存在于 PolicyFact）、actualType（真实 DuckDB 类型）。这样 `cx fields`
+ * 输出可直接用于 `cx sql`，消灭「别名陷阱」（详见 discover-fields-view.ts）。
+ *   - groupable=true 仅返回可分组（字符串）字段
+ *   - verbose=true   附带 ETL 入库元数据（ingestTypes / ingestAliases，不可 SELECT）
  */
 router.get(
   '/fields',
   withRouteCache('discover_fields', QUERY_CACHE.hotspotLong, HTTP_MAX_AGE.query),
   asyncHandler(async (req: Request, res: Response) => {
     const groupableOnly = req.query.groupable === 'true';
+    const verbose = req.query.verbose === 'true';
     const all = loadFields();
-    const data = all
-      .map((f) => ({
-        id: f.id,
-        label: f.label,
-        dataTypes: f.dataTypes,
-        aliases: f.aliases,
-        description: f.description ?? '',
-        groupable: isGroupable(f.dataTypes),
-        derived: Boolean(f.derived),
-      }))
-      .filter((f) => (groupableOnly ? f.groupable : true));
+
+    // 取 PolicyFact 真实 schema 作为「可查真值」。PolicyFact 启动即建、始终可达；
+    // DESCRIBE 失败时降级为 queryable=null（schema 暂不可用），不阻断端点。
+    let describeColumns: DescribeColumn[] | null = null;
+    try {
+      const rows = await duckdbService.query<{ column_name: string; column_type: string }>(
+        'DESCRIBE PolicyFact'
+      );
+      describeColumns = rows.map((r) => ({ name: r.column_name, type: r.column_type }));
+    } catch {
+      describeColumns = null;
+    }
+
+    const view = buildFieldsView(all, describeColumns, { verbose });
+    const data = groupableOnly ? view.filter((f) => f.groupable) : view;
     res.json({ success: true, data });
   })
 );

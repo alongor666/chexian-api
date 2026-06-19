@@ -109,6 +109,7 @@ export async function buildDiscoveryTools(cfg: McpConfig): Promise<DiscoveryTool
     .slice(0, 15)
     .map((f) => f.id)
     .join(', ');
+  const fieldCount = fieldsResp?.data?.length ?? 0;
   const metricCount = metricsResp?.data?.length ?? 0;
   const metricCategories = metricsResp?.data
     ? Array.from(new Set(metricsResp.data.map((m) => m.category))).join(', ')
@@ -120,11 +121,12 @@ export async function buildDiscoveryTools(cfg: McpConfig): Promise<DiscoveryTool
       endpoint: '/api/discover/fields',
       tool: {
         name: 'cx_discover_fields',
-        description: `列出字段注册表（56 个字段）。groupable=true 仅返回可分组（VARCHAR/TEXT）字段。常用可分组字段：${groupableFieldIds || '(N/A)'}。`,
+        description: `列出字段注册表（${fieldCount || '若干'} 个字段，含 column 可查列名 / queryable / 真实类型）。groupable=true 仅返回可分组（VARCHAR/TEXT）字段；verbose=true 附 ETL 入库别名。常用可分组字段：${groupableFieldIds || '(N/A)'}。`,
         inputSchema: {
           type: 'object',
           properties: {
             groupable: { type: 'boolean', description: '是否仅列出可分组字段' },
+            verbose: { type: 'boolean', description: '附带 ETL 入库元数据（ingestTypes/ingestAliases，不可 SELECT）' },
           },
         },
       },
