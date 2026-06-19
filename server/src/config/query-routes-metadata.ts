@@ -169,9 +169,9 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
   {
     key: 'TREND', path: '/trend', method: 'GET',
     summary: '时间趋势分析',
-    description: '按周或月返回核心指标的时间序列，用于走势图。',
+    description: '按日/周/月返回核心指标的时间序列，用于走势图。',
     parameters: [...TS_COMMON, ...ORG_FILTER,
-      { name: 'granularity', type: 'string', description: '粒度', enum: ['week', 'month'] }],
+      { name: 'granularity', type: 'string', description: '粒度', enum: ['day', 'week', 'month'] }],
     timeWindow: 'window',
     dataScope: 'any',
     tags: ['trend'],
