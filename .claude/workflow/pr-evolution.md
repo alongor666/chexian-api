@@ -462,3 +462,21 @@
 - **零回归**: 全量单测 3342 passed（240 文件）· CLI 72 · metric-registry 220（含金丝雀总数 52→55、L4 白名单补 A/B/C 3 id）· typecheck（root+server+cli）· governance 42/42 · validate.ts 通过 · frontend-map 重新生成
 - needs_automation: false（validate.ts + 金丝雀 + L4 白名单已成闸；新增续保指标在 renewal.ts 加条目 + 同步金丝雀/白名单）
 - **下一实验**: P0.5 branch_code 列补齐（山西前）；P1 续 renewal-tracker.ts 引用注册表口径成单一事实源 + cx query --describe 图例；P2 语义层
+
+### 2026-06-19 — evidence-loop scorecard: cx-cli P1 续（续保口径单一事实源 + cx query --describe 路由图例）
+
+- **背景**: 承接 P1 自描述（#681）的"下一实验"。用户三选一选定方向 1。闭合 cx-cli 结构墙「响应裸 A-E 无图例」最后一块——续保追踪路由 `/api/query/renewal-tracker` 输出列是裸字母 A/B/C/D/E，调用方拿 JSON 无从得知含义；同时让续保口径成单一事实源（消除 renewal-tracker.ts 头注与 metric-registry 的口径重复）。
+- **合同**: ① `sql/renewal-tracker.ts` 输出列 A-E 绑定 metric-registry 续保域指标 id，口径文本单一事实源；② `cx query <route> --describe` 输出 A-E 中文图例（列+名称+口径+单位 走 stderr）+ 路由级时间口径 + 生效参数(含 cutoff)，消灭裸字母，数据照常走 stdout。
+- **设计（评审要点）**: 口径 SSOT 分层——口径文本=metric-registry（categories/renewal.ts，#681 已建）· 列↔指标绑定=`RENEWAL_OUTPUT_COLUMNS`（renewal-tracker.ts 导出）· 路由级时间口径=query-routes-metadata。新增 `config/route-field-legend.ts` 只做"解析编排"零口径文本。图例由**独立 discover 端点** `GET /api/discover/legend?route=`（/schema 同级）服务，**不改任何 query 路由数据路径** → golden-baseline 零差异 by construction；图例走 stderr 不污染 stdout 管道。
+- **成果（工作树，本记分卡随同 commit 落盘）**: 8 文件——`sql/renewal-tracker.ts`(头注引用注册表+RENEWAL_OUTPUT_COLUMNS) · `config/route-field-legend.ts`(新,buildRouteLegend+SSOT 守卫) · `routes/discover.ts`(/legend 端点) · `config/__tests__/route-field-legend.test.ts`(新 9 用例) · `cli/src/commands/query.ts`(--describe+formatLegend+printRouteLegend) · `cli/src/index.ts`(注册选项+示例) · `cli/__tests__/query.test.ts`(+4 formatLegend) · `cli/ux-baseline.json`(重生成 help-query)。
+- **oracle（本地全栈 federation ON / BRANCH_RLS OFF，真 server:3939 + 真 cx + 真 PAT + 独立 duckdb）**:
+  - **图例渲染**: `cx query RENEWAL_TRACKER --describe --start=2026-06-01 --end=2026-06-30 --cutoff=2026-06-18` → stderr 显「字段图例 RENEWAL_TRACKER + 时间口径(到期窗口) + 生效参数 cutoff=2026-06-18 + A-E 全表(列/名称/口径/单位)」，裸字母全消灭
+  - **数据路径零影响**: 带/不带 --describe 的 stdout **逐字节一致（1375174 bytes）**——图例只写 stderr
+  - **数值正确（独立 duckdb 直查 parquet 同谓词）**: overall A=9933 C=4053、高新 A=1451 C=510 与 cx 返回零差异
+  - **无图例路由优雅降级**: `cx query KPI --describe` → stderr「(路由 KPI 暂无字段图例)」+ KPI 数据正常返回；`/legend?route=KPI` → data:null
+  - **端点安全**: /legend 仅返回指标元数据零行数据，authMiddleware（router 级），不挂 permissionMiddleware（与 /fields/metrics/presets 一致）
+- **verifier（fresh-context evidence-verifier）实质检查全过**: 口径绑定逐列核对正确（A→renewal_due_count…E→renewal_lost_count 与 SQL 别名语义一致，无错绑）· route-field-legend.ts/discover.ts grep 确认零硬编码中文口径（真 SSOT）· 回归数字全复现 · /legend 无泄漏鉴权正确 · 数据路径零影响。verifier 唯一"不通过"=改动尚未 commit（evidence-loop 正常 pre-commit 态，本 commit 即落盘解除；其把 #681 已合并文件误算"范围蔓延"，实际本次改动干净 8 文件）
+- **零回归**: typecheck(root+server+cli) · 全量单测 **3355 passed/241 文件**（baseline 3342/240 → +route-field-legend 9 + formatLegend 4）· CLI 76 · governance 42/42 · `ux:check` 0 diff（一致性 0 违规 / 可发现性 100%，改 query 帮助后 `ux:write` 重生成 help-query 快照）
+- **harness 自纠**: 软链主仓 warehouse 数据时初次误把 claims_detail 当单文件 latest.parquet（实为分区 claims_2019..2026.parquet）→ ClaimsAgg←ClaimsDetail 构建失败污染查询管道；改软链全部分区文件后 ClaimsDetail 288198 行/ClaimsAgg 243007 行正常。另误软链覆盖两个**已跟踪**的 `业务员归属与规划/*.json`（产生 git T 类型变更）→ git restore 还原。教训：软链补数据前先 `git check-ignore` 确认目标 gitignored，分区域看真实文件结构
+- needs_automation: false（route-field-legend SSOT 守卫单测 + formatLegend 单测已成闸；新路由加图例在 ROUTE_OUTPUT_COLUMNS 加一行绑定 + SQL 生成器导出列表即可）
+- **下一实验**: P0.5 branch_code 列补齐（山西 onboarding 前硬前置）；P2 语义层 cx cube 可组合查询（接续 B290）；P3 cx query --explain

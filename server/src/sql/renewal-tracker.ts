@@ -11,14 +11,19 @@
  *   is_renewed, renewed_policy_no, renewed_date,
  *   is_quoted, first_quote_time, quote_count
  *
- * 指标：
- *   A = 应续件数（VIN 去重）
- *   B = 报价件数（first_quote_time ≤ cutoff，报价为真实时点事件，按 cutoff 切片）
- *   C = 已续件数（is_renewed，匹配到续保单号即已签单成交；renewed_date 是续保单保险起期=原保单到期次日，
- *       非签单时点，不可用于「截至 cutoff 是否已续」切片 —— 未到期保单已签单但起保日在未来仍属已续，故不按 cutoff 过滤）
- *   D = 未报价件数（A − B；应续中至今无有效报价。metric-registry: renewal_unquoted_count）
- *   E = 流失件数（A − C；应续中尚未续保。metric-registry: renewal_lost_count）
- *       ⚠️ 仅「已到期窗口」E 为真实流失；未到期窗口 E 为「待续件数」（尚未到续保动作时点，非流失）
+ * 输出指标 A-E（口径单一事实源 = metric-registry 续保域 categories/renewal.ts，
+ *   本文件不重复口径文本；「输出列 ↔ 指标 id」绑定见下方 RENEWAL_OUTPUT_COLUMNS）：
+ *   A 应续件数    renewal_due_count
+ *   B 报价件数    renewal_quoted_count
+ *   C 已续件数    renewal_renewed_count
+ *   D 未报价件数  renewal_unquoted_count（= A − B）
+ *   E 流失件数    renewal_lost_count（= A − C）
+ *
+ * SQL 实现要点（属本生成器实现细节，非口径）：
+ *   - B：first_quote_time 为真实时点事件，按 cutoff 切片（first_quote_time ≤ cutoff）
+ *   - C：renewed_date 是续保单保险起期（=原保单到期次日）非签单时点，不可用于「截至 cutoff 是否已续」
+ *       切片 —— 未到期保单已签单但起保日在未来仍属已续，故 is_renewed 不按 cutoff 过滤
+ *   - E：⚠️ 仅「已到期窗口」为真实流失；未到期窗口为「待续件数」（尚未到续保动作时点，非流失）
  *
  * 续保影响度（L4，metric-registry: renewal_impact_rate）= E ÷ 合计应续件数（窗口聚合分母，
  *   遵循「什么分类按什么合计」），由诊断脚本 diagnose_renewal_branch.py 按合计行计算，
@@ -32,6 +37,33 @@
  */
 
 import { isValidDateFormat } from '../utils/sql-sanitizer.js';
+
+/**
+ * 续保追踪主查询输出列 → metric-registry 指标 id 绑定。
+ *
+ * 口径文本（中文名 / 释义 / 单位）的**唯一事实源**是 metric-registry 续保域
+ * （server/src/config/metric-registry/categories/renewal.ts）。本表只声明
+ * 「SQL 输出列别名 ↔ 注册表指标 id」的机器可读绑定，绝不重复口径文本——
+ * 这正是「renewal-tracker.ts 引用 metric-registry 成单一事实源」的落地形态。
+ *
+ * 消费方：config/route-field-legend.ts 据此绑定 + 注册表解析出 `cx query --describe`
+ * 的中文字段图例。SSOT 守卫：每个 metricId 必须在注册表可解析
+ * （route-field-legend.test.ts 回归断言，漂移即红）。
+ */
+export interface RenewalOutputColumn {
+  /** SQL SELECT 输出列别名（与生成的查询一致） */
+  readonly column: 'A' | 'B' | 'C' | 'D' | 'E';
+  /** metric-registry 指标 id（口径事实源） */
+  readonly metricId: string;
+}
+
+export const RENEWAL_OUTPUT_COLUMNS: readonly RenewalOutputColumn[] = [
+  { column: 'A', metricId: 'renewal_due_count' },
+  { column: 'B', metricId: 'renewal_quoted_count' },
+  { column: 'C', metricId: 'renewal_renewed_count' },
+  { column: 'D', metricId: 'renewal_unquoted_count' },
+  { column: 'E', metricId: 'renewal_lost_count' },
+] as const;
 
 export interface RenewalTrackerQueryParams {
   /** expiry_date 范围起（YYYY-MM-DD） */

@@ -19,6 +19,7 @@ import {
   getRelationPolicy,
   isFederationEnabled,
 } from '../config/sql-federation-policy.js';
+import { buildRouteLegend } from '../config/route-field-legend.js';
 import { getBootstrapper } from '../services/bootstrapper-registry.js';
 import {
   commonFilterSchema,
@@ -168,6 +169,30 @@ router.get(
       nullable: String(r.null).toUpperCase() === 'YES',
     }));
     res.json({ success: true, data: { relation: policy.canonical, columns } });
+  })
+);
+
+/**
+ * GET /api/discover/legend?route=<key>
+ * 返回查询路由的字段图例（裸输出列 → 中文名 / 口径 / 单位），消灭 A-E 裸字母。
+ * `cx query <route> --describe` 的后端。口径文本源自 metric-registry（单一事实源），
+ * 本端点只做解析编排，仅返回元数据零行数据。
+ *
+ * 鉴权：authMiddleware（router 级，PAT/JWT 均可）。返回的是静态能力元数据，
+ * 不挂 permissionMiddleware（与 fields/metrics/presets 一致）。
+ * 未登记图例的路由返回 data:null（调用方据此回退「无图例」，非错误）。
+ */
+router.get(
+  '/legend',
+  withRouteCache('discover_legend', QUERY_CACHE.hotspotLong, HTTP_MAX_AGE.query),
+  asyncHandler(async (req: Request, res: Response) => {
+    const route = String(req.query.route ?? '').trim();
+    if (!route) {
+      throw new AppError(400, 'legend: 缺少 route 参数');
+    }
+    // buildRouteLegend 在绑定的 metricId 缺失时抛错（SSOT 守卫）→ asyncHandler 转 500（配置 bug 应显性暴露）
+    const legend = buildRouteLegend(route);
+    res.json({ success: true, data: legend });
   })
 );
 
