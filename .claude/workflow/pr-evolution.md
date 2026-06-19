@@ -372,3 +372,28 @@
 - 零回归复验（改 index.ts 源码后）：cli 单测 **72 passed** · typecheck 通过 · 最终 `ux:check` 0 diff exit 0
 - 已提交 PR #674：7 文件（4 新增 harness/基线/规范/workflow + 3 改 index.ts/package.json/pr-evolution）
 - review 结论「未发现阻断问题，可以合并」；CI 全绿（含 cx UX 黄金标准哨兵 ubuntu 实测通过）；rebase 撞 PR #675 的 pr-evolution append 冲突，保留双方 entry 解决
+
+### 2026-06-18 — evidence-loop scorecard: cx sql 派生域联邦 P0（cx-cli 全面升级计划 P0）
+
+- **背景**: 用户 `/evidence-loop-core 制定全面升级的计划，彻底实现cx-cli的能力`。承接本会话实测——cx-cli 分析内核是「单表牢笼 + 黑箱路由 + 零自省 + 错误不透明」，续保率无法在工具内独立验算。计划见 `.claude/plans/cx-cli-swift-pudding.md`（全 5 阶段，用户选「全规划·P0 先执行」）
+- **合同**: P0 把 `cx sql` 准入从单一 PolicyFact 扩展为「已实证权限列的派生视图」，每视图 fail-closed RLS。验收锚点：联邦后 `cx sql` 直查 RenewalTrackerFact 复算续保率 = 路由返回逐机构零差异
+- **基线/oracle**（本地，duckdb CLI + warehouse parquet，无需起服务）:
+  - 直查 `renewal_tracker/latest.parquet` 复算续保数 = 生产路由（天府 3601/1590…达州 42/15，逐机构一致）——本地 oracle 成立
+  - **数据级 RLS oracle**：注入后 SQL 形态 `FROM (SELECT * FROM <parquet> WHERE org_level_3='天府') AS RenewalTrackerFact` → 仅返回天府（越权零泄漏 + 数值正确）
+- **成果**（工作树，未 commit）:
+  - 新增 `server/src/config/sql-federation-policy.ts`（联邦策略注册表 SSOT，ground-truth 权限列经 duckdb DESCRIBE 实测）
+  - 改 `server/src/utils/sql-validator.ts`（validatePolicyFactBoundary → validateRelationBoundary，联邦感知）
+  - 改 `server/src/utils/sql-permission-injector.ts`（injectPermissionIntoAnySql 多视图感知 + 每视图 fail-closed：过滤列缺失即拒绝，绝不丢弃过滤）
+  - 加 `server/src/config/env.ts` flag `SQL_FEDERATION_ENABLED`（默认 false=零行为变更，调用时直读 process.env 便于 PM2 reload/测试）
+  - 新增 `server/src/utils/__tests__/sql-federation.test.ts`（21 用例：注册表 + 边界两态 + RLS 矩阵）
+  - 纳入：RenewalTrackerFact / QuoteConversion / CrossSellFact / NewEnergyClaims（direct）+ BrandDim / PlateRegionMap（exempt 全局参照）
+- **verifier（fresh-context evidence-verifier）抓 1 高危真缺陷，本轮全闭环**:
+  - **（高·越权）RepairDim 误标 exempt**：其 parquet 含 org_level_3（各支公司）+ 损失评估金额/净保费等机构级敏感数据，开启态下任意用户可越权读全机构修理数据。根因=我假设"维度表=全局无机构"未 DESCRIBE 核实 → **教训：exempt 归类必须 duckdb DESCRIBE 实证无任何机构列，宁缺毋滥**
+  - 修复：RepairDim 移出联邦注册表（保持拒绝）；其 org_level_3 为编码格式（'011019乐山中心支公司'）与标准 RLS 过滤不匹配，留待后续专门设计。新增越权拦截回归测试
+  - 附带：QuoteConversion.is_telemarketing 为 varchar 与布尔过滤类型不匹配 → 从权限列移除（电销查该视图 fail-closed，安全无泄漏）
+  - 8 条 RLS 绕过攻击向量（大小写/注释/子查询/第2 JOIN/CTE/逗号/LATERAL/UNION）全被正确注入，残留扫描无漏网
+- **零回归**: sql-validator 31 + permission(RLS) 17 + sql-passthrough 11（现有 59 全绿，关闭态逐字节兼容）+ federation 21 = **80 passed** · typecheck 通过 · governance 42/42
+- **决策**: promote 到代码层（flag 默认关 = 生产零风险）。**LIVE e2e oracle（cx sql 生产复算路由）需部署 flag ON 才能验，属下一步授权动作——本轮不声称已通过**
+- needs_automation: false（已有 governance + 测试闸；联邦视图新增时须 DESCRIBE 实证权限列，已写入策略文件注释）
+- rationale: 安全关键 RLS 改动，本地三重验证（单测 + 数据级 RLS oracle + 对抗式 verifier）已闭环；生产推广走灰度 flag + 多分公司回滚 SOP 范式
+- **下一实验**: 部署 flag ON 灰度，跑 LIVE 锚点（`cx sql` vs `cx query RENEWAL_TRACKER` 逐机构零差异）；通过后接 P0.5 错误透明化
