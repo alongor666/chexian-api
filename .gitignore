@@ -94,6 +94,9 @@ PASSWORDS.local.txt
 # 本地设置（不提交）
 .claude/settings.local.json
 
+# user-only 写入授权哨兵（AGENTS.md §8.3 可授权档，仅用户本人 touch/rm，本地状态不入库）
+.claude/.user-only-write-ok
+
 # sync-vps 同步清单（本地状态，不提交）
 .last-sync-manifest.json
 
