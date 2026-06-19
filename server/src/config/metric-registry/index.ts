@@ -14,6 +14,7 @@ import { growthMetrics } from './categories/growth.js';
 import { repairMetrics } from './categories/repair.js';
 import { planMetrics } from './categories/plan.js';
 import { structureMetrics } from './categories/structure.js';
+import { renewalMetrics } from './categories/renewal.js';
 
 // ==================== 注册表构建 ====================
 
@@ -26,6 +27,7 @@ const ALL_METRICS: readonly MetricDefinition[] = [
   ...repairMetrics,
   ...planMetrics,
   ...structureMetrics,
+  ...renewalMetrics,
 ];
 
 const METRIC_MAP = new Map<string, MetricDefinition>(
