@@ -4,8 +4,8 @@ import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, withR
 import { generateSalesmanAllBusinessRankingQuery, generateSalesmanQualityBusinessRankingQuery } from '../../sql/salesman-ranking.js';
 import { isSalesmanCubeServable, generateSalesmanRankingCubeQuery } from '../../sql/cube/salesman-cube.js';
 import { ensureSalesmanCubeFresh } from '../../services/duckdb-cube.js';
-import { runShadowCompare } from '../../services/cube-shadow.js';
-import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor } from '../../services/cube-routing.js';
+import { runShadowCompare, runPostCutoverShadowSample } from '../../services/cube-shadow.js';
+import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor, shouldSamplePostCutoverShadow } from '../../services/cube-routing.js';
 
 const router = Router();
 
@@ -28,7 +28,12 @@ async function trySalesmanCube(
 
   const cubeSql = generateSalesmanRankingCubeQuery(rankingType, whereClause, limit);
   if (cubeRouting) {
-    return duckdbService.query(cubeSql);
+    const cubeRows = await duckdbService.query<Record<string, unknown>>(cubeSql);
+    // 切流后采样影子（R3/bf2c4e）：对外已返 cube，后台跑 legacy 对账
+    if (shouldSamplePostCutoverShadow('salesman-ranking')) {
+      runPostCutoverShadowSample('salesman-ranking', cubeRows, legacyRunner);
+    }
+    return cubeRows;
   }
   // 影子对账：先取原路径结果返回调用方，后台比对立方体结果
   const legacyResult = await legacyRunner();

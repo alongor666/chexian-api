@@ -164,6 +164,15 @@ export const dbEnv = {
    */
   CUBE_ROUTING_ROUTES: process.env.CUBE_ROUTING_ROUTES ?? '',
   /**
+   * 立方体切流后采样影子对账率（R3 缺口闭环，BACKLOG bf2c4e）。
+   * 取值 0~1 小数（如 '0.01' = 1%）。仅对【已切流】路由生效：采样命中的请求
+   * 对外仍直返 cube（不伤时延），路由层后台 fire-and-forget 跑 legacy 并与已返回
+   * 的 cube 结果对账 —— 切流后 isCubeShadowEnabledFor 对该路由返回 false（影子期
+   * 双跑已停），本采样是切流后唯一的 cube-vs-legacy 数值背离持续探测网，
+   * 兜住改写器语义漂移/类型回归（如 issue #608）。缺省 '0' = 不采样，零行为变更。
+   */
+  CUBE_SHADOW_SAMPLE_RATE: process.env.CUBE_SHADOW_SAMPLE_RATE ?? '0',
+  /**
    * cx sql 派生域联邦（设计：.claude/plans/cx-cli-swift-pudding.md P0）。
    * - 'true'：`cx sql` 准入白名单从单一 PolicyFact 扩展为「已实证权限列的派生视图」
    *   （RenewalTrackerFact / QuoteConversion / CrossSellFact / NewEnergyClaims）+ 参照维度表

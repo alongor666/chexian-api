@@ -116,3 +116,46 @@ export function runShadowCompare(
       console.error(`[CubeShadow] 影子查询执行失败 route=${route}: ${message}`);
     });
 }
+
+/**
+ * 切流后采样影子（R3 缺口闭环，BACKLOG bf2c4e）。
+ *
+ * 切流后该路由对外直返 cube 结果、影子期双跑已停。本函数对【采样命中】的请求
+ * 后台 fire-and-forget 跑 legacy，并与已返回前端的 cube 结果对账，计数并入同一
+ * statsByRoute（哨兵 / cube-promote 可见，与影子期共用计数器）。
+ *
+ * 与 runShadowCompare 的方向差异：影子期对外返回 legacy、后台跑 cube；切流后
+ * 对外返回 cube、后台跑 legacy。diffRows(legacy, cube) 入参顺序保持一致，
+ * match/mismatch 语义不变。
+ *
+ * @param route          - 路由标识（与影子期共用计数器）
+ * @param servedCubeRows - 已返回给前端的立方体结果
+ * @param runLegacyQuery - 原路径查询执行闭包
+ */
+export function runPostCutoverShadowSample(
+  route: string,
+  servedCubeRows: Array<Record<string, unknown>>,
+  runLegacyQuery: () => Promise<Array<Record<string, unknown>>>
+): void {
+  void runLegacyQuery()
+    .then((legacyRows) => {
+      const s = statsFor(route);
+      const diff = diffRows(legacyRows, servedCubeRows);
+      if (diff === null) {
+        s.match++;
+      } else {
+        s.mismatch++;
+        s.lastMismatchDetail = diff;
+        console.error(`[CubeShadow] ❌ 切流后采样 MISMATCH route=${route}: ${diff}`);
+      }
+      if ((s.match + s.mismatch) % 50 === 1) {
+        console.log(`[CubeShadow] (切流后采样) route=${route} match=${s.match} mismatch=${s.mismatch} error=${s.error}`);
+      }
+    })
+    .catch((err: unknown) => {
+      const s = statsFor(route);
+      s.error++;
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[CubeShadow] 切流后采样 legacy 查询失败 route=${route}: ${message}`);
+    });
+}

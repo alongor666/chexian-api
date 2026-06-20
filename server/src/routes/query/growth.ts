@@ -16,8 +16,8 @@ import {
 } from '../../sql/growth.js';
 import { isGrowthCubeServable, rewriteGrowthSqlForCube } from '../../sql/cube/growth-cube.js';
 import { ensureTrendCubeFresh } from '../../services/duckdb-cube.js';
-import { runShadowCompare } from '../../services/cube-shadow.js';
-import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor } from '../../services/cube-routing.js';
+import { runShadowCompare, runPostCutoverShadowSample } from '../../services/cube-shadow.js';
+import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor, shouldSamplePostCutoverShadow } from '../../services/cube-routing.js';
 
 const router = Router();
 
@@ -40,7 +40,12 @@ async function tryGrowthCube(
 
   const cubeSql = rewriteGrowthSqlForCube(legacySql);
   if (cubeRouting) {
-    return duckdbService.query(cubeSql, cacheTtl);
+    const cubeRows = await duckdbService.query<Record<string, unknown>>(cubeSql, cacheTtl);
+    // 切流后采样影子（R3/bf2c4e）：对外已返 cube，后台跑 legacy 对账
+    if (shouldSamplePostCutoverShadow('growth')) {
+      runPostCutoverShadowSample('growth', cubeRows, legacyRunner);
+    }
+    return cubeRows;
   }
   // 影子对账：先取原路径结果返回调用方，后台比对立方体结果
   const legacyResult = await legacyRunner();

@@ -14,6 +14,7 @@ import { dbEnv } from '../../config/env.js';
 import {
   isCubeRoutingEnabledFor,
   isCubeShadowEnabledFor,
+  shouldSamplePostCutoverShadow,
   type CubeRouteKey,
 } from '../cube-routing.js';
 
@@ -21,25 +22,27 @@ const ALL_ROUTES: CubeRouteKey[] = ['trend', 'growth', 'cost', 'kpi', 'salesman-
 
 type DbEnvMutable = Record<string, string>;
 
-const setFlags = (routing: string, shadow: string, routes: string = '') => {
+const setFlags = (routing: string, shadow: string, routes: string = '', sampleRate: string = '0') => {
   (dbEnv as unknown as DbEnvMutable).CUBE_ROUTING_ENABLED = routing;
   (dbEnv as unknown as DbEnvMutable).CUBE_SHADOW_COMPARE = shadow;
   (dbEnv as unknown as DbEnvMutable).CUBE_ROUTING_ROUTES = routes;
+  (dbEnv as unknown as DbEnvMutable).CUBE_SHADOW_SAMPLE_RATE = sampleRate;
 };
 
 describe('cube-routing helper', () => {
-  let saved: { routing: string; shadow: string; routes: string };
+  let saved: { routing: string; shadow: string; routes: string; sampleRate: string };
 
   beforeEach(() => {
     saved = {
       routing: dbEnv.CUBE_ROUTING_ENABLED,
       shadow: dbEnv.CUBE_SHADOW_COMPARE,
       routes: dbEnv.CUBE_ROUTING_ROUTES,
+      sampleRate: dbEnv.CUBE_SHADOW_SAMPLE_RATE,
     };
   });
 
   afterEach(() => {
-    setFlags(saved.routing, saved.shadow, saved.routes);
+    setFlags(saved.routing, saved.shadow, saved.routes, saved.sampleRate);
   });
 
   describe('isCubeRoutingEnabledFor', () => {
@@ -144,6 +147,40 @@ describe('cube-routing helper', () => {
         expect(isCubeRoutingEnabledFor(r)).toBe(true);
         expect(isCubeShadowEnabledFor(r)).toBe(false);
       }
+    });
+  });
+
+  describe('shouldSamplePostCutoverShadow（切流后采样影子 · bf2c4e）', () => {
+    it('缺省采样率 0：即使已切流也不采样（零行为变更）', () => {
+      setFlags('true', 'false', 'trend', '0');
+      expect(shouldSamplePostCutoverShadow('trend')).toBe(false);
+    });
+
+    it('采样率 1 + 已切流路由：必采样', () => {
+      setFlags('true', 'false', 'trend,growth,salesman-ranking', '1');
+      expect(shouldSamplePostCutoverShadow('trend')).toBe(true);
+      expect(shouldSamplePostCutoverShadow('growth')).toBe(true);
+      expect(shouldSamplePostCutoverShadow('salesman-ranking')).toBe(true);
+    });
+
+    it('采样率 1 + 未切流路由（不在白名单）：不采样（仅已切流路由才需采样网）', () => {
+      setFlags('true', 'false', 'trend', '1');
+      expect(shouldSamplePostCutoverShadow('cost')).toBe(false);
+      expect(shouldSamplePostCutoverShadow('kpi')).toBe(false);
+    });
+
+    it('总闸 CUBE_ROUTING_ENABLED=false：采样率 1 也不采样', () => {
+      setFlags('false', 'false', '', '1');
+      for (const r of ALL_ROUTES) {
+        expect(shouldSamplePostCutoverShadow(r)).toBe(false);
+      }
+    });
+
+    it('非法 / 负采样率：保守不采样', () => {
+      setFlags('true', 'false', 'trend', 'abc');
+      expect(shouldSamplePostCutoverShadow('trend')).toBe(false);
+      setFlags('true', 'false', 'trend', '-0.5');
+      expect(shouldSamplePostCutoverShadow('trend')).toBe(false);
     });
   });
 });
