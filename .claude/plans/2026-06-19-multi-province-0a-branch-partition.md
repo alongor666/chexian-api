@@ -34,14 +34,14 @@
 | — | 计划 v3（隔离模型） | — | ✅ | `411e3c5f` |
 | 1 | 重叠检测按省分组 | ✅ | ✅ | `77e65745`（19/19 测试 + governance 42） |
 | 2 | quick_reference 分片数按省（保 SC 整数兼容） | ✅ | ⏸ 缓（GATED 上线预备；0a 期 current/ SC-only，零影响，不空转） | — |
-| 3 | daily.mjs `BRANCH_CODE` + 隔离输出根 | 纯函数✅ / 接线需数据 | 🟡 纯函数 done | `f40bb858`（branchSourceDir/branchOutputRoot+硬护栏，5 测试） |
+| 3 | daily.mjs `BRANCH_CODE` + 隔离输出根 | 纯函数✅ / 接线需数据 | ✅ | `f40bb858`（纯函数 5 测试）+ `59eff5fb`（接线：SC 路径等价证明 + SC ETL 实跑 current/ sha256 零差异 + governance 42） |
 | 4 | sync-vps 纵深防御（默认不推非 SC） | ✅ | ⏸ 缓（GATED 上线预备） | — |
 | 5 | 登记 GATED 上线命名库扩展（BACKLOG） | ✅ | ⏳ | — |
 | 6 | 山西源落位 staging/SX | 需数据环境 | ⏳ 主目录 | — |
 | 7 | SX premium ETL → validation/SX + 口径对账 | 需数据环境 | ⏳ 主目录 | — |
 | V | 端到端验证（单测/governance worktree；golden-baseline 需数据） | 部分 | 🟡 单测/governance 已绿；golden-baseline 待主目录 | — |
 
-**当前断点**：worktree 内"既 0a 核心又可验证"的已做完（Task 1 + Task 3 纯函数原语）。Task 2/4 是 GATED 上线预备、0a 期零影响，已缓。**下一步是数据相关核心，须转主目录**：Task 3 daily.mjs 接线（用 `branchOutputRoot`/`branchSourceDir`）+ Task 6/7（山西 premium ETL 隔离验证）+ golden-baseline 四川零差异。worktree 数据湖为空（实测 0 分片），无法在此验证。
+**当前断点**（2026-06-19 主目录续传更新）：Task 1 + Task 3（纯函数 **+ 接线**）已完成并验证（SC 零差异闸通过，commit `59eff5fb`）。Task 2/4 是 GATED 上线预备、0a 期零影响，已缓。**下一步**：golden-baseline 四川零差异确认（回归网）→ Task 6（山西源落位 staging/SX）→ Task 7（SX premium ETL 隔离验证 + 口径对账）。本会话在带数据湖的主目录（分支 `claude/mp-0a-etl-wiring`）执行。
 
 ---
 
