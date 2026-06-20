@@ -77,6 +77,33 @@ export function requireBranchAdmin(req: Request, _res: Response, next: NextFunct
   next();
 }
 
+/**
+ * 派生/维度视图的「org 作用域」权限子句（安全降级）。
+ *
+ * 背景：部分派生视图（RenewalTrackerFact / RepairDim 等）只含 org_level_3，
+ * **不含 is_telemarketing / branch_code**。直接把 req.permissionFilter 追加到针对
+ * 这些视图的查询，对电销用户（filter='is_telemarketing = true'）或多分公司用户
+ * （含 branch_code）会触发 DuckDB Binder Error（列不存在）→ 500。
+ *
+ * 安全降级（与 routes/query/repair.ts buildRepairPermissionWhere 同款模式——只保留视图
+ * 真实存在的 org_level_3 条件，绝不静默丢弃它）：
+ *   - branch_admin（'1=1'）→ '1=1'（不限制）
+ *   - org_user（含 org_level_3='...'）→ 提取该条件（视图有此列，照常隔离）
+ *   - telemarketing_user（'is_telemarketing=true'，无 org_level_3）→ '1=1'（视图无电销维度，
+ *     与 repair.ts 既定口径一致：电销在此类派生视图看 org 范围内全部数据，非泄漏放大）
+ *   - 多分公司（org_level_3=X AND branch_code=Y）→ 仅保留 org_level_3 段
+ *     （branch_code 真正下推依赖 P0.5 派生域补列，BACKLOG 跟踪）
+ *
+ * repair.ts 现有同名局部函数为等价实现；后续可统一到本函数（DRY，未在本变更内合并以控范围）。
+ */
+export function buildOrgScopedPermissionWhere(req: Request): string {
+  const pf = req.permissionFilter;
+  if (!pf || pf === '1=1') return '1=1';
+  // 提取 org_level_3 = '...' 段（支持转义单引号 ''）；无该列条件则降为 '1=1'，绝不追加视图缺失的列
+  const match = pf.match(/org_level_3\s*=\s*'(?:[^']|'')*'/);
+  return match ? match[0] : '1=1';
+}
+
 const NON_SEMANTIC_QUERY_PARAMS = new Set(['_t', '_', 'cacheBust', 'cachebuster', 'timestamp']);
 
 export function buildRouteCacheKey(req: Request, routeName: string): string {

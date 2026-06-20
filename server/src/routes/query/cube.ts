@@ -24,6 +24,7 @@ import {
   sendWithEtag,
   withRouteCache,
   parseFiltersAndBuildWhere,
+  buildOrgScopedPermissionWhere,
 } from './shared.js';
 import { buildInCondition } from '../../utils/sql-sanitizer.js';
 import {
@@ -108,10 +109,14 @@ function buildRenewalExtraConditions(req: import('express').Request): string[] {
     if (cond) extra.push(cond);
   }
 
-  // 权限过滤（RLS）：与 /renewal-tracker 路由一致，permissionFilter 非 '1=1' 时追加
-  const permissionFilter = req.permissionFilter;
-  if (permissionFilter && permissionFilter !== '1=1') {
-    extra.push(`(${permissionFilter})`);
+  // 权限过滤（RLS）：RenewalTrackerFact 只含 org_level_3（无 is_telemarketing/branch_code），
+  // 故用安全降级助手——电销用户的 'is_telemarketing = true' / 多分公司的 branch_code 直接追加
+  // 会 Binder Error 500（评审发现）。buildOrgScopedPermissionWhere 只保留视图真实存在的
+  // org_level_3 段，对齐 repair.ts 既定模式（注：renewal-tracker 路由仍是朴素追加，同款
+  // 既存 bug 已单独登 BACKLOG，不在本 PR 偷修）。
+  const orgScoped = buildOrgScopedPermissionWhere(req);
+  if (orgScoped !== '1=1') {
+    extra.push(`(${orgScoped})`);
   }
 
   return extra;

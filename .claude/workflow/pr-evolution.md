@@ -507,3 +507,10 @@
 - **决策**: promote。纯代码（不碰部署链 ecosystem/deploy.yml/sync-vps），PR 可 ready 直合。本地全栈 oracle = 生产部署前等价证据；LIVE 仅剩生产开 SQL_FEDERATION_ENABLED（已 LIVE，#678）即可用。
 - needs_automation: false（additive 由 validation.ts 闸常态守；新指标加条目须声明 additive，缺失即 governance 红。续保 cube 维度白名单/口径 SSOT 由 renewal-cube 单测守）。
 - **下一实验**: P2 续——若用户要全域语义层（PolicyFact >2 维 / 跨域统一端点 / 续保率 C/A 注册口径裁决）再扩；P0.5 branch_code 补齐；P3 cx query --explain。
+
+**—— PR #685 auto-review 修复（receiving-code-review）**:
+- **review 发现（P2 级·真缺陷）**: 电销用户（telemarketing_user，`permissionFilter='is_telemarketing = true'`）调 cube 续保路径 → 朴素追加到无该列的 RenewalTrackerFact → **DuckDB Binder Error 500**，电销完全不可用。我镜像 renewal-tracker 路由时把这个潜在 bug 一并带进了新代码。
+- **核实（验证不声称）**: permission.ts:50 确生成纯 `is_telemarketing=true`（无 org 段）；duckdb 直查证 `... AND (is_telemarketing = true)` on renewal parquet → `Binder Error: Referenced column "is_telemarketing" not found`；ORG_ROLE_ALLOWED_ROUTES 是前端页面路由不门控 /api/query/* → bug 真实可达。
+- **修复**: 新增 `query/shared.ts buildOrgScopedPermissionWhere`（对齐 repair.ts 既定降级模式——正则提取 `org_level_3='...'` 段，电销/纯 branch_code → 1=1，绝不追加视图缺失列）；cube 续保路径改用之。**修一类不修一处 + prod bug 不偷修**（feedback_codex_review_fix_sop）：cube（新代码）修正；renewal-tracker 同款既存 bug 单独登 BACKLOG `2026-06-20-claude-10c9e9`，不在本 PR 偷修。
+- **全栈验修**: 电销 PAT cube 续保 → **200 返 12 机构**（降级 1=1，无 500）；tianfu(org_user) → **仍仅天府**（org_user 隔离零回归）；helper 5 单测（电销→1=1 / org_user 提取 / 多分公司只留 org / 转义引号）。typecheck · governance 42/42 · 相关测试 20/20。
+- **教训**: 「镜像生产路由」会连同照搬其潜在缺陷——新增派生视图查询前必查目标视图真实列集（duckdb DESCRIBE）与 permissionFilter 列是否匹配，缺列用安全降级而非朴素追加。续保族（renewal_tracker）/维度视图（RepairDim）/报价（QuoteConversion）均缺 is_telemarketing，是同一类盲区。
