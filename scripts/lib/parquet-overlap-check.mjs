@@ -23,6 +23,15 @@ export function parseDateRangeFromFilename(filename) {
   return null;
 }
 
+/**
+ * 从文件名提取省份编码（CHAR(2)）。多省物理隔离用：不同省份的同期分片不构成数据翻倍。
+ * 约定：省份前缀 `<BRANCH>_...`（如 SX_）；无前缀＝四川裸名（向后兼容），回退 'SC'。
+ */
+export function parseBranchFromFilename(filename) {
+  const m = filename.match(/^([A-Z]{2})_/);
+  return m ? m[1] : 'SC';
+}
+
 export function isComplementaryPair(a, b) {
   const aTuomo = /_剔摩_/.test(a);
   const aXianmo = /_限摩_/.test(a);
@@ -49,19 +58,30 @@ export function detectPolicyCurrentOverlap(currentDir) {
     return { count: 0, files: parquetFiles.length, overlaps: [], skipped: false };
   }
 
+  // 多省物理隔离：按省份分组，仅在同省组内做两两重叠比对。
+  // 不同省份的同期分片（如 SC 与 SX 都覆盖 2021-2026）是独立数据，不构成数据翻倍。
+  const byBranch = new Map();
+  for (const f of parquetFiles) {
+    const branch = parseBranchFromFilename(f.name);
+    if (!byBranch.has(branch)) byBranch.set(branch, []);
+    byBranch.get(branch).push(f);
+  }
+
   const overlaps = [];
-  for (let i = 0; i < parquetFiles.length; i++) {
-    for (let j = i + 1; j < parquetFiles.length; j++) {
-      const a = parquetFiles[i];
-      const b = parquetFiles[j];
-      if (a.range.start <= b.range.end && b.range.start <= a.range.end) {
-        if (isComplementaryPair(a.name, b.name)) continue;
-        overlaps.push({
-          a: a.name,
-          b: b.name,
-          aRange: [a.range.start, a.range.end],
-          bRange: [b.range.start, b.range.end],
-        });
+  for (const group of byBranch.values()) {
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const a = group[i];
+        const b = group[j];
+        if (a.range.start <= b.range.end && b.range.start <= a.range.end) {
+          if (isComplementaryPair(a.name, b.name)) continue;
+          overlaps.push({
+            a: a.name,
+            b: b.name,
+            aRange: [a.range.start, a.range.end],
+            bRange: [b.range.start, b.range.end],
+          });
+        }
       }
     }
   }

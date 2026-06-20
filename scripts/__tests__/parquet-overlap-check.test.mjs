@@ -13,6 +13,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   parseDateRangeFromFilename,
+  parseBranchFromFilename,
   isComplementaryPair,
   detectPolicyCurrentOverlap,
   assertNoPolicyCurrentOverlap,
@@ -51,6 +52,17 @@ describe('parseDateRangeFromFilename', () => {
 
   it('非 parquet 后缀返回 null', () => {
     expect(parseDateRangeFromFilename('01_签单清单_20240101_20260504.xlsx')).toBeNull();
+  });
+});
+
+describe('parseBranchFromFilename', () => {
+  it('裸名（四川）→ SC', () => {
+    expect(parseBranchFromFilename('20210101-20260617_01_签单清单_定稿.parquet')).toBe('SC');
+    expect(parseBranchFromFilename('每日数据_20240101_20260610.parquet')).toBe('SC');
+  });
+
+  it('省份前缀 → 对应 CHAR(2)', () => {
+    expect(parseBranchFromFilename('SX_20210101-20260617_01_签单清单_定稿.parquet')).toBe('SX');
   });
 });
 
@@ -116,6 +128,24 @@ describe('detectPolicyCurrentOverlap', () => {
     const r = detectPolicyCurrentOverlap(dir);
     expect(r.count).toBe(0);
     expect(r.files).toBe(3);
+  });
+
+  it('SC 裸名 + SX 前缀 同期 → 跨省不算重叠（多省物理隔离）', () => {
+    dir = makeDir([
+      '20210101-20260617_01_签单清单_定稿.parquet',       // SC 裸名
+      'SX_20210101-20260617_01_签单清单_定稿.parquet',    // SX 前缀
+    ]);
+    const r = detectPolicyCurrentOverlap(dir);
+    expect(r.count).toBe(0);
+  });
+
+  it('同省内真实重叠仍检出（SX 组内，非互补）', () => {
+    dir = makeDir([
+      'SX_20210101-20260617_01_签单清单_定稿.parquet',
+      'SX_20250101-20260617_01_签单清单_定稿.parquet',
+    ]);
+    const r = detectPolicyCurrentOverlap(dir);
+    expect(r.count).toBeGreaterThan(0);
   });
 
   it('目录不存在 → skipped', () => {
