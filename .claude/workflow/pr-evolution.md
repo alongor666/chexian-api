@@ -514,3 +514,17 @@
 - **修复**: 新增 `query/shared.ts buildOrgScopedPermissionWhere`（对齐 repair.ts 既定降级模式——正则提取 `org_level_3='...'` 段，电销/纯 branch_code → 1=1，绝不追加视图缺失列）；cube 续保路径改用之。**修一类不修一处 + prod bug 不偷修**（feedback_codex_review_fix_sop）：cube（新代码）修正；renewal-tracker 同款既存 bug 单独登 BACKLOG `2026-06-20-claude-10c9e9`，不在本 PR 偷修。
 - **全栈验修**: 电销 PAT cube 续保 → **200 返 12 机构**（降级 1=1，无 500）；tianfu(org_user) → **仍仅天府**（org_user 隔离零回归）；helper 5 单测（电销→1=1 / org_user 提取 / 多分公司只留 org / 转义引号）。typecheck · governance 42/42 · 相关测试 20/20。
 - **教训**: 「镜像生产路由」会连同照搬其潜在缺陷——新增派生视图查询前必查目标视图真实列集（duckdb DESCRIBE）与 permissionFilter 列是否匹配，缺列用安全降级而非朴素追加。续保族（renewal_tracker）/维度视图（RepairDim）/报价（QuoteConversion）均缺 is_telemarketing，是同一类盲区。
+
+### 2026-06-19 — evidence-loop scorecard: cx-cli P0.5（派生视图 branch_code RLS 列 + m1 fail-closed）
+
+- **背景/现状审计纠偏**: 接 P1 续"下一实验"。开工审计发现计划 P0.5 四子项**已部分合并、计划文件过时**：错误透明化（#1）已合并 PR #679（duckdb-error-classifier.ts 7 类分类）；CLI 透传（#3）就绪；日期列（#2）DESCRIBE 实测**实质已解**（PolicyFact 4 日期列中 3 已 TIMESTAMP，唯一 VARCHAR first_registration_date 为规范 ISO、`>= DATE` 硬错且被 #679 分类器翻成「类型不匹配…可用 CAST」）。**真正剩余 = #4 派生视图权限列 + m1 fail-closed**。教训：接力计划开工先核 origin/main 真实落地态（计划文件滞后于已合并 PR）。
+- **合同**: ① 4 个 direct 派生视图（RenewalTrackerFact/QuoteConversion/CrossSellFact/NewEnergyClaims）补 branch_code，使 BRANCH_RLS_ENABLED 开启后分公司用户不被 fail-closed 拒（闭合 review M2，是开 flag 前硬前置——否则连 SC 用户也 fail-closed）；② sql-passthrough m1 fail-open（`?? '1=1'`）→ fail-closed；③ is_telemarketing 缺口登记 BACKLOG。
+- **关键判断（用户两次拍板）**: ① is_telemarketing 三无源派生域（parquet 无 terminal_source 列）+ QuoteConversion（归一 boolean 会打断 typed 报价路由 sql/quote-conversion.ts:72 按字符串 '电销'/'非电销' 消费 + 前端筛选契约）→ 全部 BACKLOG（2026-06-20-claude-c21667）；② 实现走**视图层补列**而非改 parquet（跨 ETL 持久 / 零数据变更 / 可逆，循 loadCustomerFlow 先例），优于 0C backfill（后者下次 ETL 会冲掉、留耐久性地雷）。
+- **成果（工作树，5 文件）**: `config/sql-federation-policy.ts`（4 视图 permissionColumns +branch_code · 新增 getDeploymentBranchCode 直读 env BRANCH_CODE、^[A-Z]{2}$ 校验默认 'SC'）· `services/duckdb-domain-loaders.ts`（新增 selectWithBranchCode：DESCRIBE 守卫，仅 parquet 缺列时追加 `'<bc>' AS branch_code`，防未来 ETL 落列重复 · 4 loader 视图定义引用）· `utils/sql-permission-injector.ts`（新增类型守卫 isPermissionFilterMissing）· `routes/query/sql-passthrough.ts`（m1：undefined→403，'1=1' 仍放行）· `utils/__tests__/sql-federation.test.ts`（branch_code 断言翻转 + 全 4 视图覆盖 + m1 不变量，+7 用例）。
+- **oracle（live 全栈：worktree 真实 loader+注入器 × 主目录真实数据 260 万行级）**:
+  - 4 视图均 branch_code 列经 DESCRIBE 守卫真实产生（VARCHAR）
+  - `branch_code='SC'`→全量（续保 128016 / 交叉 420899 / 新能源 901 / 报价 880489）· `='SX'`→**0 行**（越权归空，无泄漏、无报错、非 fail-closed）· 电销 `is_telemarketing=true`→**fail-closed 抛错**（缺列回归未破）
+  - duckdb 直查 parquet 交叉验证：first_registration_date `>= DATE` 硬错复现、`>= '2022-01-01'` 字符串比较与 TRY_CAST 同为 311408 行（异常格式 0 行 / 2600421 行）
+- **零回归**: typecheck（root+server+cli，类型守卫收窄生效）· 全量单测 **3372 passed/242 文件**（baseline 3365 → +7）· cli 76 · governance 42/42 · ux:check 0 diff
+- needs_automation: false（federation policy RLS 矩阵单测 + isPermissionFilterMissing 不变量 + selectWithBranchCode DESCRIBE 守卫已成闸；新派生视图补 branch_code = loader 套 selectWithBranchCode + policy 加列 + 测试一行）
+- **下一实验**: is_telemarketing 派生视图 RLS（BACKLOG 2026-06-20-claude-c21667，需 ETL 携带 + QuoteConversion 报价路由迁移到 boolean+标签约定）；P3 cx query --explain（P2 语义层 cx cube 已落地 PR #685）
