@@ -32,9 +32,9 @@
 |---|------|:---:|------|--------|
 | — | ADR 决策 + 两轮评审校准 | — | ✅ | `c99e35b9` / `017a46da` |
 | — | 计划 v3（隔离模型） | — | ✅ | `411e3c5f` |
-| 1 | 重叠检测按省分组 | ✅ | ✅ | `5150e6d4`（19/19 测试 + governance 42） |
+| 1 | 重叠检测按省分组 | ✅ | ✅ | `77e65745`（19/19 测试 + governance 42） |
 | 2 | quick_reference 分片数按省（保 SC 整数兼容） | ✅ | ⏸ 缓（GATED 上线预备；0a 期 current/ SC-only，零影响，不空转） | — |
-| 3 | daily.mjs `BRANCH_CODE` + 隔离输出根 | 纯函数✅ / 接线需数据 | 🟡 纯函数 done | `94f29b97`（branchSourceDir/branchOutputRoot+硬护栏，5 测试） |
+| 3 | daily.mjs `BRANCH_CODE` + 隔离输出根 | 纯函数✅ / 接线需数据 | 🟡 纯函数 done | `f40bb858`（branchSourceDir/branchOutputRoot+硬护栏，5 测试） |
 | 4 | sync-vps 纵深防御（默认不推非 SC） | ✅ | ⏸ 缓（GATED 上线预备） | — |
 | 5 | 登记 GATED 上线命名库扩展（BACKLOG） | ✅ | ⏳ | — |
 | 6 | 山西源落位 staging/SX | 需数据环境 | ⏳ 主目录 | — |
@@ -55,8 +55,8 @@
 【已完成·勿重做】分支 claude/zen-booth-c2fadd（worktree 已提交，主目录先 git fetch + checkout 或 cherry-pick 这些 commit）：
 - ADR + 两轮对抗评审校准：开发文档/multi-branch/全国多省架构决策_2026-06-19.md（读 §11 校准账，避免重蹈已修的洞）
 - 计划 SSOT：.claude/plans/2026-06-19-multi-province-0a-branch-partition.md（读"执行状态与断点续传"节）
-- Task 1 重叠检测按省分组：scripts/lib/parquet-overlap-check.mjs（commit 5150e6d4，19/19 测试+governance 42 通过）
-- Task 3 纯函数 branchSourceDir/branchOutputRoot：数据管理/lib/branch-naming.mjs（commit 94f29b97，5 测试）
+- Task 1 重叠检测按省分组：scripts/lib/parquet-overlap-check.mjs（commit 77e65745，19/19 测试+governance 42 通过）
+- Task 3 纯函数 branchSourceDir/branchOutputRoot：数据管理/lib/branch-naming.mjs（commit f40bb858，5 测试）
 
 【铁律护栏·必须守住】
 1. 数据管理/warehouse/fact/policy/current/ 在 0a 期保持 SC-only；SX premium ETL 产物只落 warehouse/validation/SX（用 branchOutputRoot 计算，非 current/）。每次 SX 操作前后 git status 双查 current/ 无 SX。
