@@ -11,6 +11,40 @@
 
 ---
 
+## 执行状态与断点续传（SSOT — 每完成一任务即更新本节并提交）
+
+> **为什么有本节**：单会话上下文会满、聊天记录不持久。本节是**唯一的执行状态事实源**，落在 git 里。任何新会话只需读「本计划 + ADR §11 校准账」即可热启动，无需翻聊天。
+
+**热启动步骤（新会话照做）**：
+1. 读本文件全文 + `开发文档/multi-branch/全国多省架构决策_2026-06-19.md`（尤其 §11 两轮评审校准，避免重蹈已修的洞）。
+2. `git log --oneline -10` 看已落地的任务 commit，对照下表"状态/commit"列。
+3. 从下表第一个 ⏳ 任务续做。**worktree 内只做"可验证"列为✅的任务**；标"需数据环境"的转主目录跑。
+4. 完成一任务：跑其验证 → `git commit`（带 `Co-Authored-By: Claude` trailer）→ 回填下表"状态/commit"→ 提交本计划。
+
+**铁律护栏（续传时务必守住，来自两轮评审）**：
+- 🔴 `数据管理/warehouse/fact/policy/current/` 在 0a 期**保持 SC-only**；SX 产物只落 `warehouse/validation/SX/`。每次 SX 相关操作前后 `git status` 双查 current/ 无 SX。
+- 🔴 SX 源用**普通命名**放 `staging/SX/`、靠 `BRANCH_CODE` env 贴省份，**不靠文件名前缀** → 不改 `shard-classify.mjs`。
+- 🔴 不改 frozen 文件 `.claude/rules/data-pipeline.md`（需 `[policy-override]`）。
+
+**任务状态表**：
+
+| # | 任务 | 可在 worktree 验证 | 状态 | commit |
+|---|------|:---:|------|--------|
+| — | ADR 决策 + 两轮评审校准 | — | ✅ | `c99e35b9` / `017a46da` |
+| — | 计划 v3（隔离模型） | — | ✅ | `411e3c5f` |
+| 1 | 重叠检测按省分组 | ✅ | ✅ | `5150e6d4`（19/19 测试 + governance 42） |
+| 2 | quick_reference 分片数按省（保 SC 整数兼容） | ✅ | ⏳ 下一个 | — |
+| 3 | daily.mjs `BRANCH_CODE` + 隔离输出根 | 纯函数✅ / 零差异闸需数据 | ⏳ | — |
+| 4 | sync-vps 纵深防御（默认不推非 SC） | ✅ | ⏳ | — |
+| 5 | 登记 GATED 上线命名库扩展（BACKLOG） | ✅ | ⏳ | — |
+| 6 | 山西源落位 staging/SX | 需数据环境 | ⏳ | — |
+| 7 | SX premium ETL → validation/SX + 口径对账 | 需数据环境 | ⏳ | — |
+| V | 端到端验证（单测/governance worktree；golden-baseline 需数据） | 部分 | ⏳ | — |
+
+**当前断点**：Task 2（quick_reference 按省）。Task 3 零差异闸 + Task 6/7 + golden-baseline 需转**主目录（带数据湖）**执行——worktree 数据湖为空（实测 0 分片）。
+
+---
+
 ## 0. v3 核心纠正（执行前必读）
 
 **round-2 评审证实 v2 仍违反自己的 D5**：v2 Task3 让 SX 写进 `current/`，而服务端本地优先加载 `current/`（`server/src/config/paths.ts:28`）→ SX 仍进本地共享 runtime。v3 的根本纠正：
