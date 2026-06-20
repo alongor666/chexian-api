@@ -34,14 +34,21 @@
 | — | 计划 v3（隔离模型） | — | ✅ | `411e3c5f` |
 | 1 | 重叠检测按省分组 | ✅ | ✅ | `77e65745`（19/19 测试 + governance 42） |
 | 2 | quick_reference 分片数按省（保 SC 整数兼容） | ✅ | ⏸ 缓（GATED 上线预备；0a 期 current/ SC-only，零影响，不空转） | — |
-| 3 | daily.mjs `BRANCH_CODE` + 隔离输出根 | 纯函数✅ / 接线需数据 | 🟡 纯函数 done | `f40bb858`（branchSourceDir/branchOutputRoot+硬护栏，5 测试） |
+| 3 | daily.mjs `BRANCH_CODE` + 隔离输出根 | 纯函数✅ / 接线需数据 | ✅ | `f40bb858`（纯函数 5 测试）+ `59eff5fb`（接线：SC 路径等价证明 + SC ETL 实跑 current/ sha256 零差异 + governance 42） |
 | 4 | sync-vps 纵深防御（默认不推非 SC） | ✅ | ⏸ 缓（GATED 上线预备） | — |
 | 5 | 登记 GATED 上线命名库扩展（BACKLOG） | ✅ | ⏳ | — |
-| 6 | 山西源落位 staging/SX | 需数据环境 | ⏳ 主目录 | — |
-| 7 | SX premium ETL → validation/SX + 口径对账 | 需数据环境 | ⏳ 主目录 | — |
-| V | 端到端验证（单测/governance worktree；golden-baseline 需数据） | 部分 | 🟡 单测/governance 已绿；golden-baseline 待主目录 | — |
+| 6 | 山西源落位 staging/SX | 需数据环境 | ✅ | `e6470c3c`（symlink 普通命名 `20210101-20260617_01_签单清单_定稿.xlsx`，gitignore 覆盖） |
+| 7 | SX premium ETL → validation/SX + 口径对账 | 需数据环境 | ✅ 数据完整性（机构口径→G5） | `e6470c3c`（branch_code 全 SX·行数 1,830,603=Excel·保费 15.28亿 0ppm·current/ 隔离；机构列别名+口径发现见 口径对齐_山西.md §5/§6） |
+| V | 端到端验证（单测/governance worktree；golden-baseline 需数据） | 部分 | 🟡 单测/governance/branch-naming 绿；golden-baseline ⏸ BLOCKED on E2E_PASSWORD（SC 零差异已由 current/ sha256 直证，server 代码零改动） | — |
 
-**当前断点**：worktree 内"既 0a 核心又可验证"的已做完（Task 1 + Task 3 纯函数原语）。Task 2/4 是 GATED 上线预备、0a 期零影响，已缓。**下一步是数据相关核心，须转主目录**：Task 3 daily.mjs 接线（用 `branchOutputRoot`/`branchSourceDir`）+ Task 6/7（山西 premium ETL 隔离验证）+ golden-baseline 四川零差异。worktree 数据湖为空（实测 0 分片），无法在此验证。
+**当前断点**（2026-06-19 主目录续传更新 v2）：Task 1 + Task 3（纯函数+接线，`59eff5fb`）+ Task 6 + Task 7 数据完整性（`e6470c3c`）已完成并验证。0a 管道层 + SX 隔离验证**核心已闭环**：SX premium ETL 产 validation/SX，branch_code 全 SX、行数/保费与 Excel 零差异、current/ 逐字节隔离。
+
+**已暴露的 0a 范围外事项（待业务/授权）**：
+1. **机构口径（G5/G6）**：山西机构列 `机构`（61 原始编码全称）→ 11 经营单元的规范化映射待业务签字，地理类已候选映射、太原一部/二部拆分+经代车商重客+停用机构 3 处歧义待补全（详见 `口径对齐_山西.md` §6）。transform.py 已加 SC 安全的 `机构→三级机构` 列别名，0a 保留原始值。
+2. **golden-baseline**：BLOCKED on `E2E_PASSWORD`（未在 env/.env.local）。SC 零差异已由 current/ sha256 逐字节 + server 代码零改动 + 四川分片数据级对比直证，golden-baseline 为 API 层确认（对纯 ETL 改动同义反复）。需 `E2E_PASSWORD` 后可补跑。
+3. **Task 2/4/5**：GATED 上线预备，0a 期零影响，仍缓。
+
+本会话在带数据湖的主目录（分支 `claude/mp-0a-etl-wiring`）执行。
 
 ---
 
