@@ -33,15 +33,48 @@
 | — | ADR 决策 + 两轮评审校准 | — | ✅ | `c99e35b9` / `017a46da` |
 | — | 计划 v3（隔离模型） | — | ✅ | `411e3c5f` |
 | 1 | 重叠检测按省分组 | ✅ | ✅ | `5150e6d4`（19/19 测试 + governance 42） |
-| 2 | quick_reference 分片数按省（保 SC 整数兼容） | ✅ | ⏳ 下一个 | — |
-| 3 | daily.mjs `BRANCH_CODE` + 隔离输出根 | 纯函数✅ / 零差异闸需数据 | ⏳ | — |
-| 4 | sync-vps 纵深防御（默认不推非 SC） | ✅ | ⏳ | — |
+| 2 | quick_reference 分片数按省（保 SC 整数兼容） | ✅ | ⏸ 缓（GATED 上线预备；0a 期 current/ SC-only，零影响，不空转） | — |
+| 3 | daily.mjs `BRANCH_CODE` + 隔离输出根 | 纯函数✅ / 接线需数据 | 🟡 纯函数 done | `94f29b97`（branchSourceDir/branchOutputRoot+硬护栏，5 测试） |
+| 4 | sync-vps 纵深防御（默认不推非 SC） | ✅ | ⏸ 缓（GATED 上线预备） | — |
 | 5 | 登记 GATED 上线命名库扩展（BACKLOG） | ✅ | ⏳ | — |
-| 6 | 山西源落位 staging/SX | 需数据环境 | ⏳ | — |
-| 7 | SX premium ETL → validation/SX + 口径对账 | 需数据环境 | ⏳ | — |
-| V | 端到端验证（单测/governance worktree；golden-baseline 需数据） | 部分 | ⏳ | — |
+| 6 | 山西源落位 staging/SX | 需数据环境 | ⏳ 主目录 | — |
+| 7 | SX premium ETL → validation/SX + 口径对账 | 需数据环境 | ⏳ 主目录 | — |
+| V | 端到端验证（单测/governance worktree；golden-baseline 需数据） | 部分 | 🟡 单测/governance 已绿；golden-baseline 待主目录 | — |
 
-**当前断点**：Task 2（quick_reference 按省）。Task 3 零差异闸 + Task 6/7 + golden-baseline 需转**主目录（带数据湖）**执行——worktree 数据湖为空（实测 0 分片）。
+**当前断点**：worktree 内"既 0a 核心又可验证"的已做完（Task 1 + Task 3 纯函数原语）。Task 2/4 是 GATED 上线预备、0a 期零影响，已缓。**下一步是数据相关核心，须转主目录**：Task 3 daily.mjs 接线（用 `branchOutputRoot`/`branchSourceDir`）+ Task 6/7（山西 premium ETL 隔离验证）+ golden-baseline 四川零差异。worktree 数据湖为空（实测 0 分片），无法在此验证。
+
+---
+
+## 主目录热启动提示词（新会话复制即用）
+
+> 当本会话上下文将满 / 需切到带数据的主目录继续时，把下面整段贴给新会话。
+
+```
+我在 chexian-api 主目录（/Users/alongor666/Downloads/底层数据湖DUD/chexian-api，带数据湖）继续"山西多省接入 0a"。
+
+【已完成·勿重做】分支 claude/zen-booth-c2fadd（worktree 已提交，主目录先 git fetch + checkout 或 cherry-pick 这些 commit）：
+- ADR + 两轮对抗评审校准：开发文档/multi-branch/全国多省架构决策_2026-06-19.md（读 §11 校准账，避免重蹈已修的洞）
+- 计划 SSOT：.claude/plans/2026-06-19-multi-province-0a-branch-partition.md（读"执行状态与断点续传"节）
+- Task 1 重叠检测按省分组：scripts/lib/parquet-overlap-check.mjs（commit 5150e6d4，19/19 测试+governance 42 通过）
+- Task 3 纯函数 branchSourceDir/branchOutputRoot：数据管理/lib/branch-naming.mjs（commit 94f29b97，5 测试）
+
+【铁律护栏·必须守住】
+1. 数据管理/warehouse/fact/policy/current/ 在 0a 期保持 SC-only；SX premium ETL 产物只落 warehouse/validation/SX（用 branchOutputRoot 计算，非 current/）。每次 SX 操作前后 git status 双查 current/ 无 SX。
+2. SX 源用普通命名（无 SX_ 前缀）放 数据管理/staging/SX/，靠 BRANCH_CODE=SX env 注入省份列；不靠文件名前缀 → 不改 shard-classify.mjs。
+3. 不改 frozen 文件 .claude/rules/data-pipeline.md（需 [policy-override]）。
+4. 不启用 BRANCH_RLS_ENABLED（那是 GATED 上线 + 口径签字 G5 之后的事）。
+
+【剩余步骤·按序】
+1. Task 3 接线：daily.mjs premium 函数顶部读 const BRANCH_CODE=process.env.BRANCH_CODE||'SC'，源目录用 branchSourceDir(scriptDir,BRANCH_CODE)、输出根用 branchOutputRoot(join(__dirname,'warehouse'),BRANCH_CODE)。每改一处先 Read 当前行。改完先 BRANCH_CODE=SC node 数据管理/daily.mjs premium 跑，确认 current/ 文件名/数量逐字节不变（四川零差异）。
+2. golden-baseline 四川零差异：在 0a 改动前 commit 上 bun run dev:full 等 ready → node scripts/golden-baseline.mjs --build（落 .planning/golden-baseline/，77 活跃端点）；应用 0a 改动后 --compare 期望零差异。
+3. Task 6 山西源落位：mkdir 数据管理/staging/SX；先用 pandas/duckdb 读 /Users/alongor666/Downloads/山西车险数据/山西_签单清单_2021-2026.xlsx 真实 MIN/MAX 签单日期，按真实区间用普通命名落位（<min>-<max>_01_签单清单_定稿.xlsx）。确认 .gitignore 覆盖 数据管理/staging/。
+4. Task 7 SX premium ETL 隔离验证：git status 基线 → BRANCH_CODE=SX node 数据管理/daily.mjs premium（产物落 warehouse/validation/SX）→ git status 确认 current/ 无新增 → duckdb 查 validation/SX/*.parquet：branch_code 全 SX、行数/保费 vs 山西原始 Excel 误差≤万分之一 → 字段枚举对比记入 口径对齐_山西.md 供业务签字。
+5. 每完成一步：跑验证 → git commit（带 Co-Authored-By: Claude trailer）→ 回填计划"任务状态表"commit 列 → 提交计划。
+
+【不在 0a 范围】Task 2/4（GATED 上线预备）、G3-G8、非 premium 域 branch_code 注入、0b、第2层。这些等口径签字 G5 + RLS-on 再做（Day-1 SOP）。
+
+【要回避的坑·两轮评审】① 别把 SX 写进 current/（v2 犯过，违反 D5）② 别只改 daily.mjs 局部正则而漏 shard-classify（v3 用"普通命名+env"绕开，故不用改它，但别又给 SX 源加前缀）③ quick_reference 改格式会撞 parser/governance#15/既有测试（0a 不动它）④ golden-baseline 是 77 活跃端点、仅 admin=SC 视角、基线须改动前 commit 抓。
+```
 
 ---
 
