@@ -15,7 +15,7 @@
 import { Router } from 'express';
 import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, withRouteCache } from './shared.js';
 import { validateSQL } from '../../utils/sql-validator.js';
-import { injectPermissionIntoAnySql } from '../../utils/sql-permission-injector.js';
+import { injectPermissionIntoAnySql, isPermissionFilterMissing } from '../../utils/sql-permission-injector.js';
 import { getReferencedLazyDomains } from '../../config/sql-federation-policy.js';
 import { getBootstrapper } from '../../services/bootstrapper-registry.js';
 
@@ -51,9 +51,15 @@ router.get(
       }
     }
 
+    // m1 fail-closed（plan 风险表 m1）：permissionMiddleware 必生成 permissionFilter；undefined =
+    // 中间件未跑 = bug，绝不退化为 '1=1' 放行全表（federation 下 = 跨机构越权泄漏）。
+    // '1=1'（branch_admin 合法无限制）由 injectPermissionIntoAnySql 短路放行，不在此拦截。
+    if (isPermissionFilterMissing(req.permissionFilter)) {
+      throw new AppError(403, 'SQL 权限过滤缺失（权限中间件未生成 permissionFilter）— fail-closed 拒绝执行');
+    }
     let safeSql: string;
     try {
-      safeSql = injectPermissionIntoAnySql(sql, req.permissionFilter ?? '1=1');
+      safeSql = injectPermissionIntoAnySql(sql, req.permissionFilter);
     } catch (err) {
       throw new AppError(400, `SQL 权限注入失败: ${(err as Error).message}`);
     }

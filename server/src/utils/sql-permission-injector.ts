@@ -12,6 +12,23 @@ import {
 } from '../config/sql-federation-policy.js';
 
 /**
+ * m1 fail-closed 不变量（plan 风险表 m1）：permissionMiddleware 必为**每个**已认证请求生成
+ * req.permissionFilter（branch_admin='1=1' / org='org_level_3=...' / 电销='is_telemarketing=true'）。
+ *
+ * 若 permissionFilter 为 `undefined` → 说明权限中间件**未执行**（路由装配回归 / 绕过）= bug，
+ * 调用方（sql-passthrough）必须 fail-closed 拒绝，**绝不**退化为 `?? '1=1'` 放行全表
+ * （federation 下 = 跨机构越权泄漏面）。
+ *
+ * 关键区分：`'1=1'` 是 branch_admin 的**合法**值（injectPermissionIntoAnySql 短路放行），不算缺失；
+ * 只有 `undefined` 才是「中间件没跑」。类型守卫使调用方 throw 后 permissionFilter 收窄为 string。
+ */
+export function isPermissionFilterMissing(
+  permissionFilter: string | undefined,
+): permissionFilter is undefined {
+  return permissionFilter === undefined;
+}
+
+/**
  * 移除 SQL 注释（防止注释中的关键字干扰解析）
  * @param sql - 原始 SQL
  * @returns 移除注释后的 SQL

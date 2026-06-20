@@ -6,6 +6,7 @@
 
 import type { DuckDBQueryable } from './duckdb-types.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { getDeploymentBranchCode } from '../config/sql-federation-policy.js';
 
 // ============================================
 // 业务员主数据 + 计划数据
@@ -403,13 +404,36 @@ export async function buildAchievementView(db: DuckDBQueryable, planYear: number
 // Legacy renewal loaders removed; use RenewalTrackerFact.
 
 /**
+ * 派生域视图的 SELECT 投影：在视图层补 `branch_code` 常量列（P0.5，闭合 federation review M2）。
+ *
+ * 续保/报价/交叉销售/新能源 4 个派生域 parquet **均不含 branch_code**（DESCRIBE 实测 2026-06-19）；
+ * 而 federation RLS 在 BRANCH_RLS_ENABLED 下会注入 `branch_code='SC'` 过滤——视图缺该列则整个
+ * 分公司用户（含 SC branch_admin）被 fail-closed 拒（功能不可用）。故在视图层补
+ * `'<BRANCH_CODE>' AS branch_code`，使派生视图与 PolicyFact（ETL 落列）对齐。常量值经
+ * getDeploymentBranchCode 白名单校验（^[A-Z]{2}$），可安全内插。
+ *
+ * 守卫：若某域未来 ETL 落了真实 branch_code 列，则**不再追加**（避免 `SELECT *, ...` 重复列报错）——
+ * 以 DESCRIBE 实测列集判断，零假设。
+ */
+async function selectWithBranchCode(db: DuckDBQueryable, safePath: string): Promise<string> {
+  const cols = await db.query<{ column_name: string }>(
+    `DESCRIBE SELECT * FROM read_parquet('${safePath}')`,
+  );
+  const hasBranchCode = cols.some((c) => c.column_name?.toLowerCase() === 'branch_code');
+  if (hasBranchCode) {
+    return `SELECT * FROM read_parquet('${safePath}')`;
+  }
+  return `SELECT *, '${getDeploymentBranchCode()}' AS branch_code FROM read_parquet('${safePath}')`;
+}
+
+/**
  * 加载报价转化 Parquet → QuoteConversion 视图
  */
 export async function loadQuoteConversion(db: DuckDBQueryable, parquetPath: string): Promise<void> {
   const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
   await db.query(`
     CREATE OR REPLACE VIEW QuoteConversion AS
-    SELECT * FROM read_parquet('${safePath}')
+    ${await selectWithBranchCode(db, safePath)}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM QuoteConversion');
   console.log(`[DuckDB] QuoteConversion view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -469,7 +493,7 @@ export async function loadCrossSell(db: DuckDBQueryable, parquetPath: string): P
   const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
   await db.query(`
     CREATE OR REPLACE VIEW CrossSellFact AS
-    SELECT * FROM read_parquet('${safePath}')
+    ${await selectWithBranchCode(db, safePath)}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CrossSellFact');
   console.log(`[DuckDB] CrossSellFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -540,7 +564,7 @@ export async function loadNewEnergyClaims(db: DuckDBQueryable, parquetPath: stri
   const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
   await db.query(`
     CREATE OR REPLACE VIEW NewEnergyClaims AS
-    SELECT * FROM read_parquet('${safePath}')
+    ${await selectWithBranchCode(db, safePath)}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM NewEnergyClaims');
   console.log(`[DuckDB] NewEnergyClaims view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -556,7 +580,7 @@ export async function loadRenewalTracker(db: DuckDBQueryable, parquetPath: strin
   const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
   await db.query(`
     CREATE OR REPLACE VIEW RenewalTrackerFact AS
-    SELECT * FROM read_parquet('${safePath}')
+    ${await selectWithBranchCode(db, safePath)}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalTrackerFact');
   console.log(`[DuckDB] RenewalTrackerFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);

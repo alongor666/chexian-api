@@ -14,7 +14,7 @@
  */
 import { describe, expect, it, afterEach } from 'vitest';
 import { validateSQL } from '../sql-validator.js';
-import { injectPermissionIntoAnySql } from '../sql-permission-injector.js';
+import { injectPermissionIntoAnySql, isPermissionFilterMissing } from '../sql-permission-injector.js';
 import {
   isFederationEnabled,
   isRelationAllowed,
@@ -77,9 +77,29 @@ describe('sql-federation-policy 注册表', () => {
     const renewal = getRelationPolicy('RenewalTrackerFact')!;
     expect(relationSupportsFilterColumns(renewal, ['org_level_3'])).toBe(true);
     expect(relationSupportsFilterColumns(renewal, ['salesman_name'])).toBe(true);
-    // RenewalTrackerFact 无 is_telemarketing / branch_code
+    // branch_code（P0.5 视图层补列）已纳入；is_telemarketing 仍未纳入（留 BACKLOG）
+    expect(relationSupportsFilterColumns(renewal, ['branch_code'])).toBe(true);
     expect(relationSupportsFilterColumns(renewal, ['is_telemarketing'])).toBe(false);
-    expect(relationSupportsFilterColumns(renewal, ['branch_code'])).toBe(false);
+  });
+
+  it('P0.5：branch_code 纳入全部 4 个 direct 派生视图（视图层补常量列）', () => {
+    enableFederation();
+    for (const view of ['RenewalTrackerFact', 'QuoteConversion', 'CrossSellFact', 'NewEnergyClaims']) {
+      const policy = getRelationPolicy(view)!;
+      expect(relationSupportsFilterColumns(policy, ['branch_code'])).toBe(true);
+      // 组合：BRANCH_RLS 开启时 permission.ts 合成 `(org_level_3='X') AND branch_code='SC'`
+      if (view !== 'NewEnergyClaims') {
+        expect(relationSupportsFilterColumns(policy, ['org_level_3', 'branch_code'])).toBe(true);
+      }
+    }
+  });
+
+  it('P0.5：is_telemarketing 仍未纳入任一派生视图（QuoteConversion 含 varchar 列但留 BACKLOG）', () => {
+    enableFederation();
+    for (const view of ['RenewalTrackerFact', 'QuoteConversion', 'CrossSellFact', 'NewEnergyClaims']) {
+      const policy = getRelationPolicy(view)!;
+      expect(relationSupportsFilterColumns(policy, ['is_telemarketing'])).toBe(false);
+    }
   });
 });
 
@@ -210,14 +230,32 @@ describe('injectPermissionIntoAnySql — 联邦 RLS 矩阵（开关开启）', (
     ).toThrow(/缺少权限列.*is_telemarketing/);
   });
 
-  it('分公司过滤 branch_code 作用于 RenewalTrackerFact → fail-closed 抛错（缺列）', () => {
+  it('P0.5：分公司过滤 branch_code 作用于 RenewalTrackerFact → 正常注入（视图层已补列，不再 fail-closed）', () => {
     enableFederation();
-    expect(() =>
-      injectPermissionIntoAnySql(
-        'SELECT COUNT(*) FROM RenewalTrackerFact',
-        "branch_code = 'SC'",
-      ),
-    ).toThrow(/缺少权限列.*branch_code/);
+    const out = injectPermissionIntoAnySql(
+      'SELECT COUNT(*) FROM RenewalTrackerFact',
+      "branch_code = 'SC'",
+    );
+    expect(out).toContain("(SELECT * FROM RenewalTrackerFact WHERE branch_code = 'SC') AS RenewalTrackerFact");
+  });
+
+  it('P0.5：branch_code 过滤作用于其余 3 派生视图 → 各自包裹过滤内联视图', () => {
+    enableFederation();
+    for (const view of ['CrossSellFact', 'NewEnergyClaims', 'QuoteConversion']) {
+      const out = injectPermissionIntoAnySql(`SELECT COUNT(*) FROM ${view}`, "branch_code = 'SC'");
+      expect(out).toContain(`(SELECT * FROM ${view} WHERE branch_code = 'SC') AS ${view}`);
+    }
+  });
+
+  it('P0.5：组合过滤 (org_level_3) AND branch_code 作用于 QuoteConversion → 正常注入', () => {
+    enableFederation();
+    const out = injectPermissionIntoAnySql(
+      'SELECT COUNT(*) FROM QuoteConversion',
+      "(org_level_3 = '乐山') AND branch_code = 'SC'",
+    );
+    expect(out).toContain(
+      "(SELECT * FROM QuoteConversion WHERE (org_level_3 = '乐山') AND branch_code = 'SC') AS QuoteConversion",
+    );
   });
 
   it('org 过滤作用于 QuoteConversion（有 org_level_3 列）→ 正常注入', () => {
@@ -266,5 +304,21 @@ describe('injectPermissionIntoAnySql — 联邦 RLS 矩阵（开关开启）', (
     enableFederation();
     const sql = 'SELECT COUNT(*) FROM RenewalTrackerFact';
     expect(injectPermissionIntoAnySql(sql, '1=1')).toBe(sql);
+  });
+});
+
+describe('isPermissionFilterMissing — m1 fail-closed 不变量（sql-passthrough 据此拒绝）', () => {
+  it('undefined（权限中间件未跑 = bug）→ 缺失（调用方 fail-closed 拒绝，绝不退化 1=1）', () => {
+    expect(isPermissionFilterMissing(undefined)).toBe(true);
+  });
+
+  it("'1=1'（branch_admin 合法无限制）→ 不算缺失（正常放行，由注入器短路）", () => {
+    expect(isPermissionFilterMissing('1=1')).toBe(false);
+  });
+
+  it('具体过滤串（org / 电销）→ 不算缺失', () => {
+    expect(isPermissionFilterMissing("org_level_3 = '乐山'")).toBe(false);
+    expect(isPermissionFilterMissing('is_telemarketing = true')).toBe(false);
+    expect(isPermissionFilterMissing("branch_code = 'SC'")).toBe(false);
   });
 });

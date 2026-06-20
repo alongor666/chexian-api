@@ -19,6 +19,11 @@
  *
  * permissionColumns 为 ground-truth：由 `duckdb DESCRIBE` 直查各域 latest.parquet 实测
  * （2026-06-18），不靠推断。新增关系前必须实测其权限列，宁缺毋滥。
+ *
+ * branch_code 例外（P0.5，2026-06-19）：派生视图 parquet **均不含 branch_code**（DESCRIBE 实测）。
+ * 由 loader（duckdb-domain-loaders.ts selectWithBranchCode）在视图层补 `'<BRANCH_CODE>' AS branch_code`
+ * 常量列，使其与 PolicyFact（ETL 落列）对齐、可被 BRANCH_RLS 的 `branch_code='SC'` 过滤命中。
+ * 故此处 branch_code 的 ground-truth 由「loader 保证视图必含该列」构造性成立，而非 parquet 实测。
  */
 
 /** 关系联邦策略 */
@@ -75,28 +80,32 @@ const POLICY_FACT_POLICY: RelationPolicy = {
 const FEDERATED_REGISTRY: Readonly<Record<string, RelationPolicy>> = {
   RENEWALTRACKERFACT: {
     canonical: 'RenewalTrackerFact',
-    permissionColumns: new Set(['org_level_3', 'salesman_name']),
+    // branch_code 由 loader 在视图层补常量列（parquet 不含；见 duckdb-domain-loaders selectWithBranchCode）。
+    permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code']),
     strategy: 'direct',
     lazyDomain: 'RenewalTracker',
   },
   QUOTECONVERSION: {
     canonical: 'QuoteConversion',
-    // 注：parquet 中 is_telemarketing 为 varchar（非 boolean），与权限过滤的布尔字面量
-    // `is_telemarketing = true` 类型不匹配，故**不**纳入 RLS 列——电销用户查该视图 fail-closed
-    // 拒绝（安全无泄漏），待 P0.5 列类型归一后再启用。
-    permissionColumns: new Set(['org_level_3', 'salesman_name']),
+    // branch_code 由 loader 在视图层补常量列。
+    // is_telemarketing **仍不纳入**：parquet 中为 varchar（'电销'/'非电销'），且 typed 报价路由
+    // （sql/quote-conversion.ts）按字符串消费该列、前端筛选契约依赖之；归一为 boolean 会打断该路由。
+    // 故电销用户查本视图维持 fail-closed（安全无泄漏）；归一 + 报价路由迁移留 BACKLOG（见 plan P0.5）。
+    permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code']),
     strategy: 'direct',
     lazyDomain: 'QuoteConversion',
   },
   CROSSSELLFACT: {
     canonical: 'CrossSellFact',
-    permissionColumns: new Set(['org_level_3', 'salesman_name']),
+    // branch_code 由 loader 在视图层补常量列。
+    permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code']),
     strategy: 'direct',
     lazyDomain: 'CrossSell',
   },
   NEWENERGYCLAIMS: {
     canonical: 'NewEnergyClaims',
-    permissionColumns: new Set(['org_level_3']),
+    // branch_code 由 loader 在视图层补常量列（salesman_name 该域 parquet 本就缺，维持不纳入）。
+    permissionColumns: new Set(['org_level_3', 'branch_code']),
     strategy: 'direct',
     lazyDomain: 'NewEnergyClaims',
   },
@@ -117,6 +126,19 @@ const FEDERATED_REGISTRY: Readonly<Record<string, RelationPolicy>> = {
  */
 export function isFederationEnabled(): boolean {
   return process.env.SQL_FEDERATION_ENABLED === 'true';
+}
+
+/**
+ * 部署级分公司编码（CHAR(2)：'SC'=四川 / 'SX'=山西），派生视图视图层补 branch_code 常量列时使用。
+ *
+ * 与 0C 多分公司字段注册表同源：fields.json branch_code 派生字段 `derivation.envVar='BRANCH_CODE'`，
+ * defaultValue='SC'。直读 `process.env`（仿 isFederationEnabled，避开 env.ts 加载期快照，PM2 reload 即时生效）。
+ * 严格白名单校验 `^[A-Z]{2}$`：非法 / 缺省一律回退 'SC'。返回值仅用于受控视图 DDL 内插，
+ * 已被该正则约束为两位大写字母，无 SQL 注入面。
+ */
+export function getDeploymentBranchCode(): string {
+  const raw = process.env.BRANCH_CODE;
+  return raw && /^[A-Z]{2}$/.test(raw) ? raw : 'SC';
 }
 
 /**
