@@ -166,6 +166,17 @@ export const ROUTE_PARAM_CONTRACTS: Record<string, RouteParamContract> = {
 
   // ── 透视 / SQL 直通 ─────────────────────────────
   '/pivot': { useCommon: true, extraKeys: ['dimensions', 'metrics', 'limit'] },
+  // ── 语义层 cube（PolicyFact 路径 parseFiltersAndBuildWhere=useCommon；续保路径散读受限字段）──
+  '/cube': {
+    useCommon: true,
+    extraKeys: [
+      'metric', 'dimensions', 'dims', 'limit',
+      'start', 'end', 'cutoff',
+      'salesmanNames', 'coverageCombinations', 'fuelCategories',
+      'usedTransferTypes', 'renewalTypes',
+      'isNev', 'isNewCar', 'isTransfer', 'isRenewal',
+    ],
+  },
   '/sql': { extraKeys: ['sql'] },
 
   // ── 巡检（仅 path 参数） ─────────────────────────

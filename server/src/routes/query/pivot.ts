@@ -30,7 +30,7 @@ const router = Router();
  */
 const NON_POLICYFACT_COLUMNS = new Set(['current_value', 'previous_value', 'is_underwritten']);
 
-function isPivotSafeMetric(id: string): boolean {
+export function isPivotSafeMetric(id: string): boolean {
   const metric = getMetric(id);
   if (!metric) return false;
   if (metric.sql.expression.trim().startsWith('--')) return false;
@@ -39,10 +39,13 @@ function isPivotSafeMetric(id: string): boolean {
 }
 
 /**
- * 可分组维度白名单。
+ * 可分组维度白名单（PolicyFact 单层聚合）。
  * 布尔字段用 CASE 包成可读字符串，避免 GROUP BY true/false 输出难以理解。
+ *
+ * 同时被 /api/query/cube 的 PolicyFact 路径复用（cx cube 按域分派时 PolicyFact 指标
+ * 走 pivot 生成器），故导出为 PIVOT_DIM_WHITELIST。
  */
-const DIM_WHITELIST: Record<string, string> = {
+export const PIVOT_DIM_WHITELIST: Record<string, string> = {
   org_level_3: 'org_level_3',
   salesman_name: 'salesman_name',
   customer_category: 'customer_category',
@@ -79,10 +82,10 @@ router.get(
       throw new AppError(400, `PIVOT: dimensions 须为 1-${MAX_DIMENSIONS} 项（逗号分隔）`);
     }
     for (const d of dimNames) {
-      if (!(d in DIM_WHITELIST)) {
+      if (!(d in PIVOT_DIM_WHITELIST)) {
         throw new AppError(
           400,
-          `PIVOT: 不支持的维度 "${d}"。可用维度: ${Object.keys(DIM_WHITELIST).join(', ')}`
+          `PIVOT: 不支持的维度 "${d}"。可用维度: ${Object.keys(PIVOT_DIM_WHITELIST).join(', ')}`
         );
       }
     }
@@ -111,7 +114,7 @@ router.get(
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
 
-    const dimensions = dimNames.map((id) => ({ id, sqlExpr: DIM_WHITELIST[id] }));
+    const dimensions = dimNames.map((id) => ({ id, sqlExpr: PIVOT_DIM_WHITELIST[id] }));
     const sql = generatePivotQuery({ dimensions, metricIds, whereClause, limit });
     const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
 

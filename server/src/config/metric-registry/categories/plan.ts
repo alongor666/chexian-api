@@ -28,6 +28,7 @@ import type { MetricDefinition } from '../types.js';
 export const planMetrics: readonly MetricDefinition[] = [
   {
     id: 'plan_completion_pct',
+    additive: false,
     version: '2.0.0',
     name: '计划达成率',
     category: 'plan',

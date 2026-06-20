@@ -65,6 +65,29 @@ export const RENEWAL_OUTPUT_COLUMNS: readonly RenewalOutputColumn[] = [
   { column: 'E', metricId: 'renewal_lost_count' },
 ] as const;
 
+/**
+ * A-E 计数列 SELECT 片段（口径 SSOT，固定 GROUPING SETS 主查询与 P2 可组合 cube
+ * 生成器共用，杜绝两处口径漂移）。
+ *
+ * 口径定义见本文件头注与 metric-registry 续保域（renewal_due_count… renewal_lost_count）。
+ * 返回片段第一行无前导缩进（由调用方模板的 `      ${...}` 提供），后续行内置 6 空格缩进。
+ */
+function renewalCountSelectSql(cutoff: string): string {
+  return `COUNT(DISTINCT vehicle_frame_no) AS A,
+      COUNT(DISTINCT CASE
+        WHEN is_quoted AND CAST(first_quote_time AS DATE) <= DATE '${cutoff}' THEN vehicle_frame_no
+      END) AS B,
+      COUNT(DISTINCT CASE
+        WHEN is_renewed THEN vehicle_frame_no
+      END) AS C,
+      COUNT(DISTINCT vehicle_frame_no) - COUNT(DISTINCT CASE
+        WHEN is_quoted AND CAST(first_quote_time AS DATE) <= DATE '${cutoff}' THEN vehicle_frame_no
+      END) AS D,
+      COUNT(DISTINCT vehicle_frame_no) - COUNT(DISTINCT CASE
+        WHEN is_renewed THEN vehicle_frame_no
+      END) AS E`;
+}
+
 export interface RenewalTrackerQueryParams {
   /** expiry_date 范围起（YYYY-MM-DD） */
   start: string;
@@ -158,19 +181,7 @@ export function generateRenewalTrackerQuery(params: RenewalTrackerQueryParams): 
       fuel_category,
       used_transfer_type,
       renewal_type,
-      COUNT(DISTINCT vehicle_frame_no) AS A,
-      COUNT(DISTINCT CASE
-        WHEN is_quoted AND CAST(first_quote_time AS DATE) <= DATE '${cutoff}' THEN vehicle_frame_no
-      END) AS B,
-      COUNT(DISTINCT CASE
-        WHEN is_renewed THEN vehicle_frame_no
-      END) AS C,
-      COUNT(DISTINCT vehicle_frame_no) - COUNT(DISTINCT CASE
-        WHEN is_quoted AND CAST(first_quote_time AS DATE) <= DATE '${cutoff}' THEN vehicle_frame_no
-      END) AS D,
-      COUNT(DISTINCT vehicle_frame_no) - COUNT(DISTINCT CASE
-        WHEN is_renewed THEN vehicle_frame_no
-      END) AS E
+      ${renewalCountSelectSql(cutoff)}
     FROM RenewalTrackerFact
     WHERE ${whereSql}
     GROUP BY GROUPING SETS (
@@ -199,6 +210,103 @@ export function generateRenewalTrackerQuery(params: RenewalTrackerQueryParams): 
       (org_level_3, team_name, renewal_type),
       (org_level_3, team_name, salesman_name, renewal_type)
     )
+  `.trim();
+}
+
+/**
+ * 续保可组合立方体维度白名单（P2 语义层）。
+ *
+ * 维度 id → SQL 列 / 表达式（RenewalTrackerFact schema 上真实存在的可分组列）。
+ * 布尔列用 CASE 包成可读中文（与 /pivot 的 DIM_WHITELIST 同款），避免 GROUP BY true/false
+ * 输出难读。把固定 24 层 GROUPING SETS 泛化为「选指标 × 任意维度子集」即复用本表。
+ *
+ * ⚠️ 本派生域**无** insurance_grade（风险等级）等 PolicyFact 专属列，故
+ * 「续保率 × 风险等级」不能在续保域服务（需走 PolicyFact 域 /pivot）。维度集严格限于
+ * RenewalTrackerFact 列，新增维度前须确认该列在续保宽表中存在（warehouse/fact/renewal_tracker）。
+ */
+export const RENEWAL_CUBE_DIMENSIONS: Readonly<Record<string, string>> = {
+  org_level_3: 'org_level_3',
+  team_name: 'team_name',
+  salesman_name: 'salesman_name',
+  customer_category: 'customer_category',
+  coverage_combination: 'coverage_combination',
+  fuel_category: 'fuel_category',
+  used_transfer_type: 'used_transfer_type',
+  renewal_type: 'renewal_type',
+  expiry_month: 'expiry_month',
+  is_nev: "CASE WHEN is_nev THEN '新能源' ELSE '非新能源' END",
+  is_new_car: "CASE WHEN is_new_car THEN '新车' ELSE '旧车' END",
+  is_transfer: "CASE WHEN is_transfer THEN '过户' ELSE '非过户' END",
+  is_renewal: "CASE WHEN is_renewal THEN '续保' ELSE '新保' END",
+};
+
+export interface RenewalCubeQueryParams {
+  /** expiry_date 范围起（YYYY-MM-DD） */
+  start: string;
+  /** expiry_date 范围止（YYYY-MM-DD） */
+  end: string;
+  /** 报价/续保截至日（YYYY-MM-DD），B 报价件数按此 cutoff 切片 */
+  cutoff: string;
+  /** 维度子集（0..N 个，均须 ∈ RENEWAL_CUBE_DIMENSIONS）。空 = 仅整体一行 */
+  dims: readonly string[];
+  /** 非时间 WHERE 片段（org/salesman/category/... + 权限过滤），路由层用安全工具预构建 */
+  extraConditions?: readonly string[];
+  /** 返回行数上限（正整数） */
+  limit: number;
+}
+
+/**
+ * 生成续保「选指标 × 任意维度子集」可组合查询 SQL（P2 语义层）。
+ *
+ * 与 generateRenewalTrackerQuery（固定 24 层 GROUPING SETS）的区别：本生成器按调用方
+ * 指定的**任意维度子集**做单层 GROUP BY，输出 A-E 计数列（口径与主查询共用
+ * renewalCountSelectSql，零漂移）。续保率/未报价率/流失率（C/A、D/A、E/A）为派生值，
+ * 由路由层用 A-E 计算（与既有续保消费方一致），SQL 只产 universe 计数。
+ *
+ * 安全：日期 YYYY-MM-DD 正则校验；dims 严格白名单校验（拒绝表外标识符）；
+ * extraConditions 由路由层 buildInCondition 等安全工具构建。
+ *
+ * @example dims=['org_level_3','is_new_car'] → 各机构 × 新旧车 的续保 universe，
+ *          这是固定 24 层切片**未预置**的新组合（24 层维度层仅 category/coverage/fuel/
+ *          used_transfer/renewal_type 单维 × 4 基础层）。
+ */
+export function generateRenewalCubeQuery(params: RenewalCubeQueryParams): string {
+  const { start, end, cutoff, dims, extraConditions = [], limit } = params;
+
+  if (!isValidDateFormat(start)) throw new Error(`Invalid start date: ${start}`);
+  if (!isValidDateFormat(end)) throw new Error(`Invalid end date: ${end}`);
+  if (!isValidDateFormat(cutoff)) throw new Error(`Invalid cutoff date: ${cutoff}`);
+  for (const d of dims) {
+    if (!Object.prototype.hasOwnProperty.call(RENEWAL_CUBE_DIMENSIONS, d)) {
+      throw new Error(`RENEWAL_CUBE: 未知维度 "${d}"（可用：${Object.keys(RENEWAL_CUBE_DIMENSIONS).join(', ')}）`);
+    }
+  }
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error(`RENEWAL_CUBE: limit 必须为正整数，实际 ${limit}`);
+  }
+
+  const whereClauses = [
+    `expiry_date >= DATE '${start}'`,
+    `expiry_date <= DATE '${end}'`,
+    ...extraConditions,
+  ];
+  const whereSql = whereClauses.join('\n    AND ');
+
+  const dimSelects = dims.map((d) => `${RENEWAL_CUBE_DIMENSIONS[d]} AS ${d}`);
+  const selectLines = [...dimSelects, renewalCountSelectSql(cutoff)].join(',\n      ');
+  // 维度子集非空 → 按序号 GROUP BY（序号引用前 dims.length 个 SELECT 表达式）；
+  // 空维度 → 无 GROUP BY，整体聚合一行。
+  const groupBySql = dims.length > 0
+    ? `\n    GROUP BY ${dims.map((_, i) => String(i + 1)).join(', ')}`
+    : '';
+
+  return `
+    SELECT
+      ${selectLines}
+    FROM RenewalTrackerFact
+    WHERE ${whereSql}${groupBySql}
+    ORDER BY A DESC
+    LIMIT ${limit}
   `.trim();
 }
 

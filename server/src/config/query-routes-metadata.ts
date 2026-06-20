@@ -503,6 +503,36 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
     tags: ['pivot', 'agent'],
   },
 
+  // ── CUBE 语义层可组合查询 ─────────────────────────
+  {
+    key: 'CUBE', path: '/cube', method: 'GET',
+    summary: '语义层「选指标 × 任意维度子集」可组合查询',
+    description:
+      '把「续保 24 层固定切片」泛化为「选指标 × 任意维度子集」。服务端按指标域分派：' +
+      '续保族计数指标（renewal_due_count/renewal_quoted_count/renewal_renewed_count/' +
+      'renewal_unquoted_count/renewal_lost_count）→ RenewalTrackerFact 任意维度子集聚合，' +
+      '输出 A-E universe + 派生续保率/未报价率/流失率（续保追踪口径 C÷A 等），' +
+      '维度白名单 org_level_3/team_name/salesman_name/customer_category/coverage_combination/' +
+      'fuel_category/used_transfer_type/renewal_type/expiry_month/is_nev/is_new_car/is_transfer/' +
+      'is_renewal（≤4 维，需 start/end/cutoff）；PolicyFact 可加/比率指标 → 复用 pivot 生成器' +
+      '（1-2 维，维度同 /pivot 白名单）。续保影响度（需窗口合计分母）与 L4/跨源/增长率指标不支持。',
+    parameters: [
+      { name: 'metric', type: 'string', required: true, description: '单个指标 id（续保 renewal_*_count 或 PolicyFact 可加/比率指标，参考 /api/discover/metrics）' },
+      { name: 'dimensions', type: 'string', required: true, description: '逗号分隔维度子集（续保 0-4 维 / PolicyFact 1-2 维）' },
+      { name: 'start', type: 'date', description: '续保路径：到期窗口起 YYYY-MM-DD' },
+      { name: 'end', type: 'date', description: '续保路径：到期窗口止 YYYY-MM-DD' },
+      { name: 'cutoff', type: 'date', description: '续保路径：观察截止日 YYYY-MM-DD（B 报价件数按此切片）' },
+      { name: 'limit', type: 'number', description: '返回行数，默认 100，上限 500' },
+      COMMON_PARAMS.orgNames,
+      COMMON_PARAMS.salesmanNames,
+      COMMON_PARAMS.customerCategories,
+    ],
+    timeWindow: 'window',
+    timeWindowNote: '续保路径 start/end 为保单【到期】窗口 + cutoff 观察截止；PolicyFact 路径走签单窗口标准筛选器',
+    dataScope: 'any',
+    tags: ['cube', 'semantic-layer', 'agent'],
+  },
+
   // ── SQL 直通 ─────────────────────────────────────
   {
     key: 'SQL', path: '/sql', method: 'GET',

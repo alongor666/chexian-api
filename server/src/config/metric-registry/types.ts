@@ -105,6 +105,22 @@ export interface MetricDefinition {
   // ===== 时间窗口语义（可选，缺省 'any'） =====
   readonly timeWindow?: MetricTimeWindow;
 
+  // ===== 可加性（cube 语义层聚合路由，P2）=====
+  /**
+   * 该指标是否「可加」（roll-up additive）：跨不相交分区各自聚合后**直接求和**等于整体值。
+   *
+   * - `true`：顶层是 `SUM(...)`（含 `ROUND(SUM(...))`）的逐行求和，如 total_premium / earned_premium。
+   *   可由立方体预聚合分区相加加速。
+   * - `false`：比率（分子分母两段聚合相除）/ 均值 / `COUNT(DISTINCT ...)` / 增长率 / L4 复合占位。
+   *   **禁止对率值或 DISTINCT 计数求和**（车险铁律：率值聚合永远 SUM(分子)/SUM(分母)），
+   *   cube 必须按目标维度子集**重算**或回退原路径。
+   *
+   * 判定保守：拿不准一律 `false`（false = 重算，永远正确；误判 true 会让 cube 错误求和）。
+   * 注册表层校验（validation.ts）强制每个指标显式声明，避免静默缺省。类型上保持可选
+   * 仅为兼容注册表外的 MetricDefinition 构造点（如 agent registry）。
+   */
+  readonly additive?: boolean;
+
   // ===== 公式 =====
   readonly formula: {
     readonly description: string;  // 公式语义："已报告赔款 / 满期保费"

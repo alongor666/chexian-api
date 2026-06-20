@@ -12,6 +12,7 @@ import type { MetricDefinition } from '../types.js';
 export const growthMetrics: readonly MetricDefinition[] = [
   {
     id: 'growth_rate_yoy',
+    additive: false,
     version: '1.0.0',
     name: '同比增长率',
     category: 'growth',
@@ -49,6 +50,7 @@ export const growthMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'premium_growth_pct',
+    additive: false,
     version: '1.0.0',
     name: '保费增长率',
     category: 'growth',
@@ -102,6 +104,7 @@ export const growthMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'growth_rate_mom',
+    additive: false,
     version: '1.0.0',
     name: '环比增长率',
     category: 'growth',

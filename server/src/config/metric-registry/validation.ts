@@ -84,6 +84,17 @@ export function validateRegistry(): {
       errors.push({ metricId: m.id, field: 'changelog', message: '变更历史不能为空' });
     }
 
+    // additive 可加性标记（cube 语义层聚合路由必需，每指标必须显式声明）
+    // 类型上 additive 可选（兼容注册表外构造点），但注册表内强制声明，避免静默缺省导致
+    // cube 误判可加性。判定见 types.ts MetricDefinition.additive 注释。
+    if (typeof m.additive !== 'boolean') {
+      errors.push({
+        metricId: m.id,
+        field: 'additive',
+        message: 'additive 可加性标记缺失（cube 语义层必需：true=SUM 可 roll-up / false=比率/DISTINCT/L4 需重算）',
+      });
+    }
+
     // thresholds 单调性（可选字段）
     if (m.thresholds) {
       const { direction, notice, warn, danger } = m.thresholds;

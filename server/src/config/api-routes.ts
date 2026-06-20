@@ -138,6 +138,9 @@ export const QUERY_ROUTES = {
   // PIVOT 维度×指标交叉聚合（Agent 自由编排）
   PIVOT: '/pivot',
 
+  // CUBE 语义层「选指标 × 任意维度子集」可组合查询（P2，续保域 + PolicyFact 分派）
+  CUBE: '/cube',
+
   // SQL 直通（复杂查询安全兜底）
   SQL: '/sql',
 

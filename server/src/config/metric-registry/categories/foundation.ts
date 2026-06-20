@@ -9,6 +9,7 @@ import type { MetricDefinition } from '../types.js';
 export const foundationMetrics: readonly MetricDefinition[] = [
   {
     id: 'total_premium',
+    additive: true,
     version: '1.0.0',
     name: '总保费',
     category: 'foundation',
@@ -39,6 +40,7 @@ export const foundationMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'policy_count',
+    additive: false,
     version: '1.0.0',
     name: '保单件数',
     category: 'foundation',
@@ -69,6 +71,7 @@ export const foundationMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'org_count',
+    additive: false,
     version: '1.0.0',
     name: '机构数',
     category: 'foundation',
@@ -99,6 +102,7 @@ export const foundationMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'salesman_count',
+    additive: false,
     version: '1.0.0',
     name: '业务员数',
     category: 'foundation',
@@ -129,6 +133,7 @@ export const foundationMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'per_capita_premium',
+    additive: false,
     version: '1.0.0',
     name: '人均保费',
     category: 'foundation',
@@ -161,6 +166,7 @@ export const foundationMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'per_vehicle_premium',
+    additive: false,
     version: '1.0.0',
     name: '车均保费',
     category: 'foundation',
