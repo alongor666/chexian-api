@@ -46,6 +46,8 @@ import { collectPolicyCurrentStats, syncQuickReferenceFile } from './pipelines/q
 import { assertNoPolicyCurrentOverlap } from '../scripts/lib/parquet-overlap-check.mjs';
 // 分片判定纯函数抽到 lib/shard-classify.mjs（可单测，daily.mjs 顶层执行 main() 无法被 import）
 import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
+// 多省 ETL 路由纯函数（0a：非 SC 省 premium 源走 staging/<省>、产物隔离到 warehouse/validation/<省>，绝不进 current/；ADR D5）
+import { branchSourceDir, branchOutputRoot } from './lib/branch-naming.mjs';
 // claims 报案截止日新鲜度判定纯函数（同模式抽 lib/ 便于单测）
 import {
   claimsReportLagDays,
@@ -1367,10 +1369,19 @@ async function main() {
     // premium 继续走下面的分片逻辑，其他域在分片完成后执行
   }
 
-  // 路径定义
-  const currentDir = join(scriptDir, 'warehouse/fact/policy/current');
-  const stagingDir = join(scriptDir, 'warehouse/fact/policy/staging');
-  const archiveDir = join(__dirname, '.archive');
+  // 多省 0a：BRANCH_CODE 路由（ADR D5 — 非 SC 省 premium 产物隔离到 warehouse/validation/<省>，绝不进 current/）
+  const BRANCH_CODE = process.env.BRANCH_CODE || 'SC';
+  const sourceDir = branchSourceDir(scriptDir, BRANCH_CODE);                       // SC: scriptDir；非 SC: staging/<省>
+  const outputRoot = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE);  // SC: warehouse/fact/policy/current；非 SC: warehouse/validation/<省>
+
+  // 路径定义（currentDir 即 outputRoot：SC 逐字节同现状，非 SC 落隔离目录）
+  const currentDir = outputRoot;
+  const stagingDir = BRANCH_CODE === 'SC'
+    ? join(scriptDir, 'warehouse/fact/policy/staging')
+    : join(outputRoot, 'staging');
+  const archiveDir = BRANCH_CODE === 'SC'
+    ? join(__dirname, '.archive')
+    : join(outputRoot, '.archive');
 
   ensureDir(currentDir);
   ensureDir(stagingDir);
@@ -1385,34 +1396,36 @@ async function main() {
   const config = JSON.parse(readFileSync(configPath, 'utf-8'));
   log('green', `分片配置: static_cutoff=${config.static_cutoff}, weekly_start=${config.weekly_start}`);
 
-  // 0. 迁移旧格式文件
-  const policyDir = join(scriptDir, 'warehouse/fact/policy');
-  if (existsSync(policyDir)) {
-    const oldFiles = readdirSync(policyDir)
-      .filter(f => f.startsWith('车险保单综合明细表') && f.endsWith('.parquet'));
-    if (oldFiles.length > 0) {
-      log('yellow', '📦 发现旧格式文件，迁移到 archive/');
-      for (const f of oldFiles) {
-        renameSync(join(policyDir, f), join(archiveDir, f));
+  // 0. 迁移旧格式文件（纯四川历史命名格式清理；非 SC 省无此历史且不应触碰 SC 目录，跳过）
+  if (BRANCH_CODE === 'SC') {
+    const policyDir = join(scriptDir, 'warehouse/fact/policy');
+    if (existsSync(policyDir)) {
+      const oldFiles = readdirSync(policyDir)
+        .filter(f => f.startsWith('车险保单综合明细表') && f.endsWith('.parquet'));
+      if (oldFiles.length > 0) {
+        log('yellow', '📦 发现旧格式文件，迁移到 archive/');
+        for (const f of oldFiles) {
+          renameSync(join(policyDir, f), join(archiveDir, f));
+          console.log(`   → ${f}`);
+        }
+      }
+    }
+
+    const old2426Files = readdirSync(currentDir)
+      .filter(f => f.startsWith('车险24-26年清单_') && f.endsWith('.parquet'));
+    if (old2426Files.length > 0) {
+      log('yellow', '📦 发现旧命名格式文件，迁移到 archive/');
+      for (const f of old2426Files) {
+        renameSync(join(currentDir, f), join(archiveDir, f));
         console.log(`   → ${f}`);
       }
     }
   }
 
-  const old2426Files = readdirSync(currentDir)
-    .filter(f => f.startsWith('车险24-26年清单_') && f.endsWith('.parquet'));
-  if (old2426Files.length > 0) {
-    log('yellow', '📦 发现旧命名格式文件，迁移到 archive/');
-    for (const f of old2426Files) {
-      renameSync(join(currentDir, f), join(archiveDir, f));
-      console.log(`   → ${f}`);
-    }
-  }
-
   // 1. 找续保源文件
   const sourceFiles = [
-    ...ls('续保业务类型匹配*.xlsx', scriptDir),
-    ...ls('续保类型匹配*.xlsx', scriptDir)
+    ...ls('续保业务类型匹配*.xlsx', sourceDir),
+    ...ls('续保类型匹配*.xlsx', sourceDir)
   ].sort((a, b) => b.name.localeCompare(a.name));
   const renewalSource = sourceFiles.length > 0 ? sourceFiles[0].path : null;
   if (renewalSource) {
@@ -1422,11 +1435,11 @@ async function main() {
   }
 
   // 2. 识别所有 xlsx 分片（新格式 + 旧格式 + 剔摩/限摩 + 新前缀 YYYYMMDD_01_* + 范围前缀 YYYYMMDD-YYYYMMDD_01_*）
-  const legacyXlsx = ls('每日数据_*.xlsx', scriptDir);
+  const legacyXlsx = ls('每日数据_*.xlsx', sourceDir);
   const newFormatXlsx = [
-    ...ls('01_签单清单_*.xlsx', scriptDir),
-    ...ls('????????_01_签单清单*.xlsx', scriptDir),
-    ...ls('????????-????????_01_签单清单*.xlsx', scriptDir),
+    ...ls('01_签单清单_*.xlsx', sourceDir),
+    ...ls('????????_01_签单清单*.xlsx', sourceDir),
+    ...ls('????????-????????_01_签单清单*.xlsx', sourceDir),
   ].filter(f => {
     // FineBI/Chrome 原始残留（无日期前缀、日期挂尾，如 01_签单清单_定稿_20260608.xlsx）
     // 与官方范围前缀文件同源但未经导出验收，禁止入 ETL（2026-06-10 上游交接 §4）
@@ -1461,7 +1474,7 @@ async function main() {
       losers.push(...list.slice(1).map(x => x.f));
     }
     if (losers.length > 0) {
-      const rangeArchiveDir = join(scriptDir, '.xlsx-archive', formatDate());
+      const rangeArchiveDir = join(sourceDir, '.xlsx-archive', formatDate());
       ensureDir(rangeArchiveDir);
       log('yellow', `📦 范围分片互斥：归档 ${losers.length} 个被更长窗口覆盖的旧范围 xlsx`);
       for (const f of losers) {
@@ -1646,6 +1659,17 @@ async function main() {
       '-i', `"${file.path}"`,
       '-o', `"${outputPath}"`
     ]);
+  }
+
+  // 多省 0a：非 SC 省 premium ETL 到此结束（产物已落隔离目录 outputRoot，branch_code 列由 transform.py 注入）。
+  // 刻意跳过所有 SC 专属副作用——data-sources.json/QUICK_REFERENCE.md 写入、current/ 重叠门禁、
+  // 短中长期报告、VPS 同步、企微集成、all 模式追加域——确保 current/ 与共享 runtime 保持 SC-only（ADR D5）。
+  if (BRANCH_CODE !== 'SC') {
+    console.log('');
+    log('green', `✅ [${BRANCH_CODE}] premium ETL 完成 → 隔离目录 ${currentDir}`);
+    log('cyan', `   验证: duckdb -c "SELECT DISTINCT branch_code FROM '${currentDir}/*.parquet'"`);
+    log('cyan', `   铁律: 本次产物不进 current/、不进共享 runtime、不 sync VPS（口径签字 G5 + RLS-on 前）`);
+    return;
   }
 
   // 更新 premium 域的 data-sources.json（汇总所有 current/ 分片行数）
