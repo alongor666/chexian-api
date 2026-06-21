@@ -670,3 +670,14 @@
 - **needs_automation: true** → 可探一条轻量 governance/lint 启发式闸：组件名匹配 `/Kpi(Board|Cards|Section)/` 且消费查询数据者，须 import `EmptyState` 或具空态早返（防新看板回退到静默零值）。**注意**：静态可靠性有限（纯展示型单卡会误报，需白名单），落地前评估误报率；未机制化则本条到期升级或撤项。
   - expires: 2026-09-21（GATED 多省上线前应机制化或撤项）
 - **下一实验**：填 R11 列出的剩余 RLS 漏洞（filters.ts /filters/options）/ G3·G4 服务端后续 / G7 SX 账号 cutover。**🔴 GATED cutover 须用户显式确认，本前端空态保护为纯防御 UI 不触发任何 cutover。**
+
+**R13 · Loop v2 编排协议（元任务 — loop 改 loop·首个跑 codex 双闸的任务）**
+- **触发**：用户在 3 会话并行实跑（G7/G8/RLS 零冲突合并）后复盘，点名 4 缺口：① 无总调度（各自完成后无人推进）② 规划后/完成后无 codex 对抗审计 ③ 无质量度量/记录 ④ 自进化项缺到期催办。要求"整体设计好 Loop v2"。用户定调：编排引擎=C·混合、范围=全部 5 机制一个 setup PR。backlog `2026-06-21-claude-ac6f4f` → DONE。
+- **成果（5 机制）**：① 调度 `scripts/loop/dispatch.mjs`（折叠 backlog→文件域冲突图→可并行前沿+状态板+会话提示词，SSOT 复用 BACKLOG_LOG.jsonl）② codex 双闸（写进 evidence-loop wrapper §4/§5 + SOP §2）③ 质量账本 `loop-quality-ledger.jsonl`(union)+`quality-report.mjs` ④ 自进化 `automation-due.mjs`（催办过期 needs_automation，补 #703 盲区）⑤ 终局 gated 闸。脊柱 `.claude/rules/loop-orchestration.md`。pr-evolution/ledger 全 `merge=union`。
+- **🌟 dogfood 闸-2 即抓真 bug（机制当场证明价值）**：codex 对抗审计本 setup → 0 P0 + **3 P1**：(P1-1) 我**自实现了 backlog 折叠**且语义错（物理行序 + 顶层 amend 字段），与权威 `scripts/backlog/lib.mjs` fold（(at,eid) 全序 + amend field/value LWW）分叉 → 会把 DONE 读回 OPEN/漏 amend 破坏调度；(P1-2) 文件域把 `N/A`/`同B244`/中文分号当伪域 → 误判可并行撞车；(P1-3) GATED 闸只靠不存在的 config → 失效。+2 P2（冲突扫描覆盖/strict 退出码）。全修：复用权威 fold、未知 token→null+分号分隔、精确 cutover 词+seed config。
+- **oracle**：loop 单测 20（覆盖权威 fold 委托/null 域/分号/gated 精确词/strict）；3 脚本真实数据实跑（前沿伪域残留=0、automation-due --strict exit=1）；typecheck；governance 42/42（冲突扫描 7 文件）；全量 CI 3491 全绿。
+- **重来更好**：① **最大教训 = "先搜再写"红线**：dispatch 折叠 backlog 前应先 grep `scripts/backlog/lib.mjs` 有无权威 fold——我重造轮子且造错，codex 才抓出。元工具尤其要复用既有 SSOT 而非自实现。② 字节/语义安全的"按构造"自证不足以覆盖"与既有实现语义对齐"——这类对齐缺口正是独立模型对抗审计的命中区，印证双闸的必要。③ gated 关键词差点用"GATED"（会误伤"GATED 上线前置"该做任务）——精确指向不可逆 cutover 动作才对。
+- **复用价值**：dispatch/quality/automation-due 三脚本 + SOP 是项目无关的 loop 编排基座骨架，可上提共享 skills 仓复用到其他多会话项目。「元工具复用 backlog 权威 fold」是通用教训。
+- **needs_automation: true** → ① 把 loop-quality-ledger 收尾追加做成 `bun scripts/loop/record.mjs`（避免手拼 JSON 行出错）；② meta-review 触发器（每 ~10 任务自动跑 quality+automation-due）可挂 Stop hook 或 cron。
+  - expires: 2026-09-21（下个多省 meta-review 周期前机制化或撤项）
+- **下一实验**：用 Loop v2 真正驱动一波并行（`bun run loop:dispatch` 取前沿 → 3 会话各跑 evidence-loop+双闸）；或填 G3/G4 服务端 RLS 后续。🔴 GATED cutover 须用户显式确认。
