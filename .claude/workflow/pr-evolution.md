@@ -654,3 +654,19 @@
 - **needs_automation: true** → governance 可加闸「preset-users 中各 branchCode 的 org_user.organization 集合必须等于 `branch-org-mapping/<branchCode>.json` 的 units」（防账号 organization 与 ETL 规范化口径漂移；当前靠单测，未进 governance 跨文件对账）。
   - expires: 2026-09-21（GATED 多省上线前应机制化为 governance 闸；未机制化则升级或撤项）
 - **下一实验**：🔴 GATED cutover（RLS-on → SX 进 current/ → sync VPS → 发账号 + RLS 隔离验证 SX token 不读 SC）须用户显式确认，本任务只加账号定义不做 cutover；或转 G8（前端空态）。
+
+**R12 · G8 后续 — 子页 KPI 看板空态保护推广（修一类·零后端）**
+- **承接**：R11·G8 主看板（PR #709）已为 `KpiSection` 落地空态守卫，其「复用价值」预告范式应平移到 4 个子页看板。本轮兑现该后续。backlog `2026-06-21-claude-3a4399` → DONE。仅改 `src/` 前端，零后端改动，不触发任何 GATED cutover（纯防御 UI）。
+- **合同**（ADR G8 / Day-1 SOP §5）：山西等新分公司数据装载中 / 缺数据时，子页 KPI 看板接口返回空对象 / 全零规模 → 必须显式提示「加载中 / 暂无数据·非真实零保费」，禁止静默渲染零值。
+- **调研定界（核心增量）**：4 候选 + grep 其他 KPI 看板/`useDataStatus` 消费方，分两类——
+  - **真·静默零值缺口（2，行为修复）**：① `CrossSellSummaryKpiBoard` 空 `rawData` 仅处理 `error` 分支，`dataByCoverage` 空 Map → 所有单元格 `?? 0` 静默零值；② quote-conversion `KpiCards` 后端 `res.json({ data: data[0] ?? {} })`（query/quote-conversion.ts:101）空范围返回 `{}` / 全零聚合行，原 `!data` 守卫**漏判空对象**（`{}` 为 truthy）→ 静默渲染 0.0% 转化率 / 0 件。
+  - **已守卫但裸文案（2，谐化统一）**：`VariableCostKpiBoard`（`orgRows.length===0` → 裸文本）、`GrowthKpiCards`（`!todayData` → 裸文本，**无 loading prop**）——非静默零值缺口，但未用共享 EmptyState/骨架、未点明「非真实零保费」。
+  - **正确排除**：`claims-detail/pending/KpiCard.tsx`、`widgets/kpi/KpiCard.tsx` 为纯展示型单卡（父级传 value/label，空态由父决定），不在范围——「先搜再写 + 不强行扩面」。
+- **成果**：① 新增纯判据 `quoteKpiState.isQuoteKpiEmpty`（报价总量/承保件数/承保保费三规模全零或 undefined/`{}` 即空，镜像 G8 `isKpiDataEmpty` 范式）；② CrossSell + quote KpiCards 套完整范式（`loading`→`KpiGridSkeleton`+「数据加载中」；空→`EmptyState`+「暂无数据·非真实零保费」），quote 守卫由 `isLoading || !data` 拆为 `isLoading` 单守 + `!data || isQuoteKpiEmpty(data)`（靠 `!data ||` 短路让 TS 收窄，免 `!` 断言）；③ VariableCost 谐化到 `KpiGridSkeleton`/`EmptyState`、Growth 谐化空态到 `EmptyState`（无 loading 故无骨架分支，如实保留不对称）。
+- **oracle**：TDD 5 轮红→绿（每轮先证 RED）；新增 20 断言（`quoteKpiState` 7 + quote `KpiCards` 4 + `CrossSell` 4 + `VariableCost` 3 + `Growth` 2）；`typecheck` PASS；全量单测 **255 文件 / 3471 全绿**（零回归）；`bun run build` 零 TS；`governance` **42/42**。
+- **live 截图限制（如实记录）**：worktree 纯代码检出无本地 parquet → 后端无数据 → `DataGuard` 重定向 `/data-import`，子页看板空态经正常导航不可达（需后端有山西分省数据，本地不具备且并行安全契约排除后端/数据操作）。故采用项目证据闭环首选的**确定性 oracle**——`@testing-library/react` 真实渲染各看板断言三态确切中文文案 + 无静默零值。符合 evidence-loop「correctness oracle 优先确定性脚本/单测，不靠眼看截图」。
+- **重来更好**：① 起手即 grep 后端 `data[0] ?? {}` 空返回语义是分类关键——若只看前端 `!data` 守卫会漏判 quote KpiCards 缺口（`{}` truthy）；**判"有无缺口"必须连读取数链路到后端空态返回形态**，呼应 `feedback_verify_before_assume`。② 4 看板数据形态各异（`KpiData`/`QuoteKpi`/`VariableCostData[]`/`GrowthData[]`），**未强行抽象统一判据**——按 `feedback_no_force_abstraction` 每域独立纯函数/内联判空更清晰，仅共享呈现层（EmptyState/KpiGridSkeleton）。③ 严守「对确有缺口者套用」与「修一类」的张力：2 真修复 + 2 谐化，PR 中如实区分两类，不把谐化伪装成缺陷修复。
+- **复用价值**：「`loading`→skeleton / 空→EmptyState·非真实零保费」守卫范式 + 「每域纯判据 `is*KpiEmpty`」现已覆盖主看板 + 4 子页看板；后续任一新 KPI 看板按此范式落地即可。`isQuoteKpiEmpty`/`isKpiDataEmpty` 的「三规模指标做锚」判据可复制到任意聚合型看板。
+- **needs_automation: true** → 可探一条轻量 governance/lint 启发式闸：组件名匹配 `/Kpi(Board|Cards|Section)/` 且消费查询数据者，须 import `EmptyState` 或具空态早返（防新看板回退到静默零值）。**注意**：静态可靠性有限（纯展示型单卡会误报，需白名单），落地前评估误报率；未机制化则本条到期升级或撤项。
+  - expires: 2026-09-21（GATED 多省上线前应机制化或撤项）
+- **下一实验**：填 R11 列出的剩余 RLS 漏洞（filters.ts /filters/options）/ G3·G4 服务端后续 / G7 SX 账号 cutover。**🔴 GATED cutover 须用户显式确认，本前端空态保护为纯防御 UI 不触发任何 cutover。**
