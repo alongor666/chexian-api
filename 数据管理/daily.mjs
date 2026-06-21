@@ -1359,9 +1359,9 @@ async function main() {
     // runStandardDomain/runRenewalTracker 尚未省份化，非 SC 运行会写入 SC 路径 → 硬拦截。
     // 每 branch 化一个域，把它加进 __branchReadyDomains（与 ALL_DOMAINS 同名）。
     const __branchSub = process.env.BRANCH_CODE || 'SC';
-    const __branchReadyDomains = new Set(['claims_detail', 'quotes']);
+    const __branchReadyDomains = new Set(['claims_detail', 'quotes', 'repair']);
     if (__branchSub !== 'SC' && !__branchReadyDomains.has(subcommand)) {
-      log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail / quotes`);
+      log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail / quotes / repair`);
       process.exit(1);
     }
     switch (subcommand) {
