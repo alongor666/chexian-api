@@ -2960,7 +2960,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '立方体版本绑定', fn: checkCubeVersionBinding },
   { name: 'shared-memory user-only', fn: checkSharedMemoryUserOnly },
   { name: 'evidence-loop SSOT 漂移', fn: checkEvidenceLoopSsotDrift },
-  { name: 'pr-evolution 沉淀超期', fn: checkPrEvolutionExpired },
+  { name: 'pr-evolution needs_automation expires 闸', fn: checkPrEvolutionExpired },
   { name: '.github/workflows YAML 语法', fn: checkWorkflowYamlSyntax },
 ];
 
@@ -3022,8 +3022,11 @@ function checkEvidenceLoopSsotDrift() {
  * PR #662 复盘：2026-06-16 entry 已写"预防：pr-evolution.md 作 scorecard 落位"，
  * 24h 后仍踩。说明纯文档沉淀不够，规则必须有 expire 机制 + governance 强制升级。
  *
- * 约定 schema：entry 内含 `needs_automation: true` 即声明该项需机制化；
- * 紧跟一行 `expires: YYYY-MM-DD`。超过 expires 仍未机制化 → warning（不 fail，让用户判断）。
+ * 约定 schema：entry 内含 `needs_automation: true` 即声明该项需机制化；必须紧跟一行 `expires: YYYY-MM-DD`。
+ * 校验（2026-06-20 校准——R4/R5 实测漏 expires 致改进项静默掉缝，印证"规则需代码兜底"）：
+ *   ① 本次新增的 needs_automation 缺 expires → error（硬闸，强制填截止日，杜绝静默漏）；
+ *   ② main 存量缺 expires → warning（grandfather，surfaced 供清理）；
+ *   ③ 有 expires 但已过期未机制化 → warning（让用户判断）。
  */
 // ============================================================
 // .github/workflows YAML 语法验证（防 PR #669 hotfix 复发）
@@ -3081,7 +3084,7 @@ except Exception as e:
 }
 
 function checkPrEvolutionExpired() {
-  info('检查 pr-evolution.md 沉淀超期未机制化项（PR #662 教训）...');
+  info('检查 pr-evolution.md needs_automation 的 expires 字段（PR #662 + 2026-06-20 expires 静默漏校准）...');
 
   const filePath = path.join(ROOT_DIR, '.claude/workflow/pr-evolution.md');
   if (!fs.existsSync(filePath)) {
@@ -3092,35 +3095,75 @@ function checkPrEvolutionExpired() {
   const lines = content.split('\n');
   const today = new Date().toISOString().slice(0, 10);
 
+  // 本次变更新增的行（committed range ∪ 工作树），用于区分"缺 expires"是本 PR 新引入（→ error）
+  // 还是 main 存量（→ warning grandfather）。两条 git diff 都失败（无 git / origin/main 不可用，
+  // 如 CI 浅克隆）→ addedLines=null → 无法判定新旧 → 缺 expires 一律降级为 warning，不硬 fail。
+  const collectAdded = (cmd) => {
+    try {
+      const diff = execSync(cmd, { cwd: ROOT_DIR, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      return diff.split('\n')
+        .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+        .map((l) => l.slice(1).trim())
+        .filter(Boolean);
+    } catch {
+      return null;
+    }
+  };
+  const committed = collectAdded('git diff origin/main...HEAD -- .claude/workflow/pr-evolution.md');
+  const working = collectAdded('git diff HEAD -- .claude/workflow/pr-evolution.md');
+  const addedLines = (committed === null && working === null)
+    ? null
+    : new Set([...(committed || []), ...(working || [])]);
+
   let currentEntry = '(unknown entry)';
-  const expired = [];
+  const expired = [];          // 有 expires 但已过期 → warning（原行为）
+  const missingExisting = [];  // 缺 expires 且为 main 存量 → warning（grandfather，供清理）
+  const missingNew = [];       // 缺 expires 且本次新增 → error（硬闸，杜绝静默漏）
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const entryMatch = line.match(/^### (\d{4}-\d{2}-\d{2}.*)/);
+    const entryMatch = line.match(/^#{2,3}\s+(\d{4}-\d{2}-\d{2}.*)/); // 实际 entry 用 ## 或 ###
     if (entryMatch) {
       currentEntry = entryMatch[1].trim();
       continue;
     }
     if (/needs_automation:\s*true/.test(line)) {
+      let foundExpires = false;
       for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
         const expMatch = lines[j].match(/expires:\s*(\d{4}-\d{2}-\d{2})/);
         if (expMatch) {
+          foundExpires = true;
           if (expMatch[1] < today) {
             expired.push(`${currentEntry} (expired ${expMatch[1]})`);
           }
           break;
         }
       }
+      if (!foundExpires) {
+        const isNew = addedLines !== null && addedLines.has(line.trim());
+        (isNew ? missingNew : missingExisting).push(`${currentEntry}: ${line.trim().slice(0, 70)}`);
+      }
     }
   }
 
-  if (expired.length === 0) {
-    success('pr-evolution.md 无超期未机制化项');
-    return true;
+  if (missingExisting.length > 0) {
+    warning(`pr-evolution.md 存量 ${missingExisting.length} 条 needs_automation 缺 expires（governance 追踪不到，建议补 expires 后清理）：`);
+    missingExisting.forEach((e) => console.log(`    - ${e}`));
   }
-  warning('pr-evolution.md 含超期未机制化的 needs_automation 项（须升级为 governance/hook）：');
-  expired.forEach((e) => console.log(`    - ${e}`));
-  warning('  规则说明：entry 含 `needs_automation: true` + `expires: YYYY-MM-DD` 即声明须机制化；超 expires 仍未做 → 触发本警告');
+  if (expired.length > 0) {
+    warning('pr-evolution.md 含超期未机制化的 needs_automation 项（须升级为 governance/hook）：');
+    expired.forEach((e) => console.log(`    - ${e}`));
+  }
+  if (missingNew.length > 0) {
+    error(`pr-evolution.md 本次新增 ${missingNew.length} 条 needs_automation 缺 expires（必须补 \`expires: YYYY-MM-DD\`）：`);
+    missingNew.forEach((e) => console.log(`    - ${e}`));
+    error('  规则：第三问结论"需自动化" → `needs_automation: true` 必须紧跟一行 `expires: YYYY-MM-DD`（机制化截止日）。');
+    error('  原因：本闸只追踪有 expires 的项；缺 expires 会静默掉缝（2026-06-20 R4/R5 实测漏 expires → 改进项永不被催办）。');
+    return false;
+  }
+
+  if (expired.length === 0 && missingExisting.length === 0) {
+    success('pr-evolution.md needs_automation 项 expires 字段齐全、无超期');
+  }
   return true;
 }
 
