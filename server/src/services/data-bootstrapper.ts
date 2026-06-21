@@ -29,6 +29,8 @@ import {
   getCustomerFlowPaths,
   getNewEnergyClaimsPaths,
   getRenewalTrackerPaths,
+  getValidationRootDir,
+  getBranchValidationDimPath,
 } from '../config/paths.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 import { isValidParquetFile } from '../utils/security.js';
@@ -341,6 +343,32 @@ export class DataBootstrapper {
   }
 
   // ============================================
+  // ADR G3: 多省维度隔离副本探测（GATED 多省共存能力预备）
+  // ============================================
+
+  /**
+   * 探测某维度域的非 SC 省份隔离副本（warehouse/validation/<省>/dim/<域>/latest.parquet）。
+   *
+   * 0a 期 validation 下无 dim 副本 → 返回空数组 → loader 单源 = 历史 SQL 逐字节一致（四川零变更）。
+   * GATED 多省上线后 SX dim 副本就位 → 返回 [{branchCode:'SX', path}]，loader UNION ALL BY NAME + branch_code。
+   * 省份码白名单 `^[A-Z]{2}$`（与 fields.json branch_code 派生字段、getDeploymentBranchCode 同源约束），
+   * 排除 SC（SC 走 current/ 标准 dim 路径，作为基准源由调用方传入）。返回按 branchCode 升序确定性排序。
+   */
+  private resolveBranchDimExtras(domain: string): Array<{ branchCode: string; path: string }> {
+    const validationRoot = getValidationRootDir();
+    if (!fs.existsSync(validationRoot)) return [];
+    const extras: Array<{ branchCode: string; path: string }> = [];
+    for (const entry of fs.readdirSync(validationRoot)) {
+      if (entry === 'SC' || !/^[A-Z]{2}$/.test(entry)) continue;
+      const dimPath = getBranchValidationDimPath(entry, domain);
+      if (fs.existsSync(dimPath)) {
+        extras.push({ branchCode: entry, path: dimPath });
+      }
+    }
+    return extras.sort((a, b) => a.branchCode.localeCompare(b.branchCode));
+  }
+
+  // ============================================
   // Stage 10: 维度表加载（Parquet 优先，JSON 回退）— 保持 eager
   // ============================================
 
@@ -352,8 +380,12 @@ export class DataBootstrapper {
     const planDimPath = getPlanDimPaths().find(p => fs.existsSync(p));
     if (salesmanDimPath && planDimPath) {
       try {
-        await domainLoaders.loadDimParquet(this.db, salesmanDimPath, planDimPath);
-        console.log('[Bootstrap] Dim tables loaded (Parquet):', salesmanDimPath, planDimPath);
+        // ADR G3 多省共存：探测 SX 等非 SC 省份的 dim 隔离副本（0a 期无 → 空 → 单源字节安全）
+        const salesmanExtras = this.resolveBranchDimExtras('salesman');
+        const planExtras = this.resolveBranchDimExtras('plan');
+        await domainLoaders.loadDimParquet(this.db, salesmanDimPath, planDimPath, salesmanExtras, planExtras);
+        console.log('[Bootstrap] Dim tables loaded (Parquet):', salesmanDimPath, planDimPath,
+          salesmanExtras.length ? `+${salesmanExtras.length} branch(es)` : '(SC-only)');
         dimLoaded = true;
       } catch (err) {
         console.warn('[Bootstrap] Dim Parquet load failed, falling back to JSON:', err);
@@ -441,7 +473,9 @@ export class DataBootstrapper {
     this.lazyRegistry.register('RepairDim', async () => {
       const p = getRepairDimPaths().find(p => fs.existsSync(p));
       if (!p) return;
-      await domainLoaders.loadRepairDim(db, p);
+      // ADR G3 多省共存：探测 SX 等非 SC 省份维修隔离副本（0a 期无 → 空 → 单源字节安全）
+      const extras = this.resolveBranchDimExtras('repair');
+      await domainLoaders.loadRepairDim(db, p, extras);
     });
 
     // BrandDim（13MB，必须惰性）

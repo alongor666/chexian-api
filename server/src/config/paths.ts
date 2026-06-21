@@ -53,6 +53,26 @@ export function getClaimsDetailPaths(): string[] {
   ];
 }
 
+// ── 多省维度隔离副本路径（ADR G3 · GATED 多省共存能力预备）──
+
+/**
+ * GATED 多省共存：维度/派生域隔离副本根目录（warehouse/validation）。
+ * 0a 期各省 SX premium/quotes/renewal 隔离产物落此（warehouse/validation/<省>/…），
+ * 绝不进 current/（ADR D5）。维度副本镜像 SC 的 dim/<域> 结构 → validation/<省>/dim/<域>/。
+ */
+export function getValidationRootDir(): string {
+  return path.resolve(SERVER_ROOT, '../数据管理/warehouse/validation');
+}
+
+/**
+ * 某省某维度域的 validation 隔离副本路径（warehouse/validation/<省>/dim/<域>/latest.parquet）。
+ * branchCode 由调用方（data-bootstrapper）以 `^[A-Z]{2}$` 校验；domain 为维度域名（salesman/plan/repair）。
+ * 0a 期该路径通常不存在 → data-bootstrapper 探测后不传，loader 单源 = 字节安全。
+ */
+export function getBranchValidationDimPath(branchCode: string, domain: string): string {
+  return path.resolve(getValidationRootDir(), branchCode, 'dim', domain, 'latest.parquet');
+}
+
 // ── 维度表 Parquet 路径（本地优先，VPS 回退）──
 
 export function getSalesmanDimPaths(): string[] {
