@@ -34,6 +34,8 @@
 - ❌ `Agent({isolation: "worktree"})` 只钉住子代理 cwd，**不重锚主会话**；主会话要交互改文件仍须 `EnterWorktree({path})`。
 - ❌ 别用 `EnterWorktree({name})` 默认落点 `.claude/worktrees/`（撞上 `Read(./.claude/worktrees/**)` deny）。
 
+> **自动提示（warn-only）**：`scripts/hooks/post-checkout` 在链接 worktree 的 branch checkout 时打印重锚提示（用 `git-dir != git-common-dir` 识别，不打扰主目录）。**提示 ≠ 强制**——git hook 无法替会话调 `EnterWorktree`（那是 harness 工具调用），故本节仍靠纪律执行；提示只降低遗忘概率。
+
 ### 反模式：禁止用 `git sparse-checkout` 物理执行"主目录只读"
 
 **历史事故**（2026-06-03 session `a241089d`）：有 AI 会话把"主目录禁开发"误执行为 `git sparse-checkout set server/src/config/metric-registry/`——后果是 `scripts/`、`src/`、`tests/`、`数据管理/{daily.mjs,pipelines,integrations}` 被物理裁掉 **1416/1492 个跟踪文件**，本地 governance / sync-vps / readiness 全部跑不了；该会话最后只能给出"转由 CI 跑"的妥协，单次反馈环 7-10 分钟，效率倒退。
