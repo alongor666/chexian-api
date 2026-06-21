@@ -104,6 +104,11 @@ def main():
         default='数据管理/warehouse/fact/quotes_conversion',
         help='输出 Parquet 目录',
     )
+    parser.add_argument(
+        '--branch-code', default=None,
+        help='多省 0a（ADR D5）：分公司编码（如 SX）。提供时注入 branch_code 常量列并跳过 '
+             'data-sources.json 写入；缺省（SC 默认链路）不传 → 不注入，四川产物字节安全。',
+    )
     args = parser.parse_args()
 
     # 1. 定位输入文件
@@ -269,6 +274,12 @@ def main():
         total = pd.to_numeric(result['final_quote_premium'], errors='coerce').sum()
         print(f"   最终报价合计: {total/1e8:.2f} 亿元")
 
+    # 11b-多省 0a：branch_code 常量列注入（仅 --branch-code 提供时；
+    #     SC 默认链路不传 → 不注入，四川产物字节安全。与 base_converter / convert_claims_detail 同语义）
+    if args.branch_code:
+        result['branch_code'] = args.branch_code
+        print(f"   🏢 注入 branch_code 常量列 = '{args.branch_code}'（{len(result):,} 行）")
+
     # 12. 输出 Parquet
     output_file = output_dir / 'latest.parquet'
     print(f'\n💾 写入 Parquet: {output_file}')
@@ -300,11 +311,16 @@ def main():
     print(f"   列: {len(result.columns)} → {list(result.columns)}")
 
     # 14. 更新 data-sources.json
-    try:
-        from pipelines.data_sources_updater import update_data_sources
-        update_data_sources('quotes_conversion', row_count=verify[0], field_count=len(result.columns))
-    except Exception as e:
-        print(f"  ⚠️ data-sources.json 更新跳过: {e}")
+    # 多省 0a：非 SC 省（--branch-code）跳过，避免把隔离省行数写进共享
+    # data-sources.json（SC 唯一事实源；ADR D5）。
+    if args.branch_code:
+        print(f"  ⏭ [{args.branch_code}] 跳过 data-sources.json 写入（隔离省不污染 SC 唯一事实源）")
+    else:
+        try:
+            from pipelines.data_sources_updater import update_data_sources
+            update_data_sources('quotes_conversion', row_count=verify[0], field_count=len(result.columns))
+        except Exception as e:
+            print(f"  ⚠️ data-sources.json 更新跳过: {e}")
 
     print(f"{'='*80}")
 
