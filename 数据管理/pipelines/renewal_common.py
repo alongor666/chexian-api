@@ -8,18 +8,35 @@
 口径只定义一次，杜绝漂移。本模块为依赖叶子：只依赖 diagnose_common，不依赖任何续保业务模块。
 """
 
+import os
+import re
 from pathlib import Path
 
 from diagnose_common import fc, fi, fp, light  # noqa: F401  对外统一从本模块再导出渲染原语
 
 HERE = Path(__file__).resolve().parent
-DATA_ROOT = HERE.parent
+# 数据根：默认脚本所在 数据管理/；环境变量 CHEXIAN_DATA_ROOT 可覆盖
+# （worktree 内跑、warehouse 数据只在主仓库时，指向主仓库 数据管理/ 读数据）。
+DATA_ROOT = Path(os.environ.get("CHEXIAN_DATA_ROOT") or HERE.parent)
 
-# ---- 数据源（全部只读 Parquet）----
-RT = str(DATA_ROOT / "warehouse" / "fact" / "renewal_tracker" / "latest.parquet")
-POL = str(DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet")
-Q = str(DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet")
-OUT_DIR = DATA_ROOT / "数据分析报告"
+# ---- 多省路由（ADR D5）：BRANCH_CODE=SC 读生产 fact/；非 SC 省读隔离区 validation/<省>/ ----
+# SC 行为完全不变（向后兼容，默认即 SC）；非 SC 省（如 SX 山西）续保试算产物全部隔离在
+# validation/<省>/，绝不碰 fact/current/。renewal_tracker / quotes 放子目录，避免与
+# POL 的顶层 *.parquet 通配冲突（签单清单在 validation/<省>/ 顶层，schema 不同不能混 glob）。
+BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+
+if BRANCH_CODE == "SC":
+    # ---- 数据源（全部只读 Parquet）----
+    RT = str(DATA_ROOT / "warehouse" / "fact" / "renewal_tracker" / "latest.parquet")
+    POL = str(DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet")
+    Q = str(DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet")
+    OUT_DIR = DATA_ROOT / "数据分析报告"
+else:
+    _VAL = DATA_ROOT / "warehouse" / "validation" / BRANCH_CODE
+    RT = str(_VAL / "renewal_tracker" / "latest.parquet")
+    POL = str(_VAL / "*.parquet")  # 签单清单（隔离区顶层，已按省机构规范化）
+    Q = str(_VAL / "quotes_conversion" / "latest.parquet")
+    OUT_DIR = DATA_ROOT / "数据分析报告" / BRANCH_CODE  # P2-1：报告产物按省隔离，不覆盖四川版
 DEFAULT_LIST = (
     Path.home()
     / "Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/四川5-7月 - 智能表.xlsx"
@@ -148,3 +165,25 @@ def impact_rate(lost, total_yc):
 def disp_team(t):
     """团队名展示：NULL / 'nan' / 空 → 「未分组」。"""
     return t if t and str(t).strip().lower() not in ("nan", "none", "") else "（未分组）"
+
+
+# ---- 业务员显示名清洗（单一事实源，用户 2026-06-07 / 06-08 / 06-21）----
+# 报告里业务员只显示中文名，禁止出现工号编码。policy.salesman_name = 「工号+姓名」（如
+# 200045244李晓琴）。清洗规则：① admin<机构>直接个代 → 「直接个代」（个代直营归并）；
+# ② 其余剥离全部数字 → 只留中文名。主报告（renewal_sections.build_base）与分公司/三级机构
+# 视角（diagnose_renewal_branch.raw）共用本口径，杜绝「有的清洗、有的不清洗」漂移。
+# 团队名（team_name）本身为中文（业务员维度表派生），由 disp_team 处理空值，无需去编码。
+def salesman_display_sql(col="salesman_name"):
+    """返回清洗业务员名的 DuckDB SQL 表达式（SELECT/GROUP BY 内联）。"""
+    return (f"CASE WHEN {col} LIKE 'admin%直接个代' THEN '直接个代' "
+            f"ELSE REGEXP_REPLACE({col}, '[0-9]', '', 'g') END")
+
+
+def clean_salesman(name):
+    """业务员名清洗（Python 版，与 salesman_display_sql 同口径，供非 SQL 渲染/后处理）。"""
+    if not name:
+        return name
+    s = str(name)
+    if s.startswith("admin") and s.endswith("直接个代"):
+        return "直接个代"
+    return re.sub(r"[0-9]", "", s)

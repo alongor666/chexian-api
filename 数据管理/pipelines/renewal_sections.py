@@ -31,6 +31,7 @@ from renewal_common import (
     light_q,
     light_r,
     rate,
+    salesman_display_sql,
 )
 from renewal_resp_mode import load_resp_mode_source
 
@@ -70,7 +71,9 @@ def build_base(con, where_sql) -> int:
                ANY_VALUE(source_policy_no) AS source_policy_no,
                ANY_VALUE(org_level_3) AS org_level_3,
                ANY_VALUE(team_name) AS team_name,
-               ANY_VALUE(salesman_name) AS salesman_name,
+               -- 业务员只显示中文名、去工号编码（用户 2026-06-21）：单一事实源 salesman_display_sql。
+               -- 此处清洗后，板块四下钻 / 板块六待跟进 / 业务员盯盘 CSV 全部用清洗名（均读自 base）。
+               ANY_VALUE({salesman_display_sql()}) AS salesman_name,
                ANY_VALUE(customer_category) AS customer_category,
                ANY_VALUE(coverage_combination) AS coverage_combination,
                MIN(expiry_date) AS expiry_date,

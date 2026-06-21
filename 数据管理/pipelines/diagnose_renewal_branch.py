@@ -47,6 +47,7 @@ from renewal_common import (
     light_r,
     pp,
     rate,
+    salesman_display_sql,
 )
 
 
@@ -435,11 +436,10 @@ def run_org_report(con, args, out_dir, ts):
     con.execute(f"""
         CREATE TEMP TABLE raw AS
         SELECT vehicle_frame_no, org_level_3,
-               -- 业务员姓名清洗：① admin<机构>直接个代 → 「直接个代」（个代直营归并，用户 2026-06-08）；
-               -- ② 其余去工号数字（如 200045244李晓琴 → 李晓琴，用户 2026-06-07）。
+               -- 业务员姓名清洗（单一事实源 renewal_common.salesman_display_sql，用户 2026-06-07/08/21）：
+               -- ① admin<机构>直接个代 → 「直接个代」（个代直营归并）；② 其余去工号数字（200045244李晓琴 → 李晓琴）。
                -- raw 层清洗 → topN 选取 / 表格展示 / 合计计数全程一致用清洗后名。
-               CASE WHEN salesman_name LIKE 'admin%直接个代' THEN '直接个代'
-                    ELSE REGEXP_REPLACE(salesman_name, '[0-9]', '', 'g') END AS salesman_name, expiry_date,
+               {salesman_display_sql()} AS salesman_name, expiry_date,
                is_quoted::INT AS quoted, is_renewed::INT AS renewed, first_quote_time AS fqt
         FROM read_parquet('{RT}')
         WHERE {where_sql}
