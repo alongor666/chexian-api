@@ -612,4 +612,5 @@
 - **重来更好**：① 范围抉择耗时大 —— "loader 层 vs 含 achievement_cache 传播+typed 路由过滤"边界，靠"落点=3 文件 + RepairDim 联邦排除是既有安全决策"两条硬约束才收敛；下次遇 runtime 设计抉择，先用"落点文件清单 + 既有安全测试不可破"两把尺子快速划界，少走分析弯路。② **字节安全证明法**：golden-baseline BLOCKED on `E2E_PASSWORD`，改用"单源短路 = SQL 形态恒等（按构造）+ 集成回归断言单省无 branch_code 列 + 既有 dim-dedup 回归 + 全量 CI"四重直证，比"跑不了就降级"更稳（呼应 memory `feedback_no_giveup_ask_authorization`：缺 E2E_PASSWORD 可向用户要，但本变更纯 loader、按构造已足）。
 - **复用价值**：`buildBranchDimSelect`/`resolveBranchDimSources`/`buildDimSelectSql` 是通用多省维度 SQL 构造器，后续任一 dim 域接 SX 仅需 data-bootstrapper 传 extra 源；`resolveBranchDimExtras` 探测约定（`validation/<省>/dim/<域>`）可被 G4 派生域复用。
 - **needs_automation: true** → ① `verify-branch-domain` harness 应扩 dim 域分支（单省零 branch_code 列 + 多省按省计数）；② 可加 governance 闸"维度 loader 单源路径不得引入 branch_code 列"防未来回归破坏字节安全。
+  - expires: 2026-09-21（届时 GATED 多省上线前应已机制化为 harness/governance 闸；未机制化则升级或撤项）
 - **下一实验（本任务后续，配 G4）**：`SalesmanTeamMapping`/`achievement_cache` 的 branch_code 传播 + typed 路由（premium-plan/repair）分省过滤；或转 G7/G8。**🔴 GATED cutover（RLS-on→SX 进 current/→sync VPS→发账号）须用户显式确认，禁自动执行。**
