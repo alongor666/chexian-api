@@ -227,6 +227,129 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     role: 'telemarketing_user',
     branchCode: 'SC',
   },
+  // ===== 山西分公司（SX）— G7 多省接入账号定义 =====
+  // BRANCH_RLS_ENABLED 默认关，加账号不改默认行为；RLS-on 时 permission.ts 按 branch_code='SX' 过滤。
+  // 全部 passwordHash 为 tombstone 占位（即弃随机口令哈希，不可登录、无明文硬编码）：
+  //   真实凭据于 🔴 GATED cutover 时由 USER_PASSWORDS 环境变量注入（同 admin 机制）。
+  // organization 取自 数据管理/config/branch-org-mapping/SX.json 的 11 经营单元（= ETL 规范化后 org_level_3），禁臆造。
+  yangjie0621: {
+    username: 'yangjie0621',
+    // tombstone 占位（不可登录）：山西超管凭据仅由 USER_PASSWORDS 环境变量提供。
+    passwordHash: '$2b$10$Zxa3dsY1HXkZfwpysO.XGeTYfmHTlfccDGgjfoaIwaOrVMyZURW76',
+    displayName: '山西管理员（杨杰）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+  },
+  sx_taiyuan1: {
+    username: 'sx_taiyuan1',
+    passwordHash: '$2b$10$AzI0gjEGLs8cbjhTNs2UN.4G4xooBnnj6qGdte1HNvlvLy10zXL46',
+    displayName: '山西-太原一部',
+    role: 'org_user',
+    organization: '太原一部',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_taiyuan2: {
+    username: 'sx_taiyuan2',
+    passwordHash: '$2b$10$bXRptG458/Il9nUkmnlcWOivj4r/GJHjUQmkHlhYcCHmXOufo83hi',
+    displayName: '山西-太原二部',
+    role: 'org_user',
+    organization: '太原二部',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_jdcszk: {
+    username: 'sx_jdcszk',
+    passwordHash: '$2b$10$wnDkAMH3iVMBrrsCK8LenuNqeozISSfRaPecDCvQhQJYoNS/q1L.a',
+    displayName: '山西-经代、车商、重客',
+    role: 'org_user',
+    organization: '经代、车商、重客',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_datong: {
+    username: 'sx_datong',
+    passwordHash: '$2b$10$P37GlPMyyRAA9d5mOpFgtOlrGrrTvuspDA0OcPt1JD7PBnA1ay5gK',
+    displayName: '山西-大同',
+    role: 'org_user',
+    organization: '大同',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_yangquan: {
+    username: 'sx_yangquan',
+    passwordHash: '$2b$10$aeqVdThH/IYLtFxwp7N19O3nicSClNp8aBXmsQnL9OWbrhUYqp4cC',
+    displayName: '山西-阳泉',
+    role: 'org_user',
+    organization: '阳泉',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_changzhi: {
+    username: 'sx_changzhi',
+    passwordHash: '$2b$10$hAbIswbZBd0WeNUPxoW6oOqstYzAsP6cISeTuJv42b7ARBS4w0z8u',
+    displayName: '山西-长治',
+    role: 'org_user',
+    organization: '长治',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_jincheng: {
+    username: 'sx_jincheng',
+    passwordHash: '$2b$10$53jN/NHOAb1cuBulRaUiUul5qyYbjlU98U/DqPJ2iNPMMjjGmiUUi',
+    displayName: '山西-晋城',
+    role: 'org_user',
+    organization: '晋城',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_jinzhong: {
+    username: 'sx_jinzhong',
+    passwordHash: '$2b$10$7gk9OPZSUZO2G8cRp4hla.pGxhdTh9rpJLaUxyTuXnz4lcoH15niC',
+    displayName: '山西-晋中',
+    role: 'org_user',
+    organization: '晋中',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_yuncheng: {
+    username: 'sx_yuncheng',
+    passwordHash: '$2b$10$VDYrudhzR8v2w1ADNvkOUuZoQnPiJGBsIFmJu9CFXmrYSRseZoE8C',
+    displayName: '山西-运城',
+    role: 'org_user',
+    organization: '运城',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_linfen: {
+    username: 'sx_linfen',
+    passwordHash: '$2b$10$S6fnwPB129BVJO0NQrUGw.mEMGzZ3thwqErOunttTDkbIr3ZWlvXa',
+    displayName: '山西-临汾',
+    role: 'org_user',
+    organization: '临汾',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
+  sx_lvliang: {
+    username: 'sx_lvliang',
+    passwordHash: '$2b$10$/fnP4DILPq5c2UaK8ji/m.Lcj5QsJzbecG2j08Pg/aV2nqvwokoSi',
+    displayName: '山西-吕梁',
+    role: 'org_user',
+    organization: '吕梁',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+  },
   test_org_user: {
     username: 'test_org_user',
     passwordHash: '$2b$10$JyCWJdWGvcPKjSBJ5/KcAeFQOryg6d6GbMcq5jdX99L2PCEsCMDOi',
@@ -265,8 +388,7 @@ export function getAllPermissionScopes(): string[] {
  * 避免单 branch admin token 预热的内容被另一 branch 用户误命中。
  *
  * 排序后返回（确定性），便于测试断言。
- * 当前返回 ['SC']（PR #492 把全部 20 个 preset 用户标 'SC'）；
- * 未来加 SX 用户后自动变 ['SC', 'SX']。
+ * 返回 ['SC', 'SX']（G7 多省接入加入山西 1 超管 + 11 经营单元 org_user，全部 branchCode='SX'）。
  */
 export function getAllBranchCodes(): string[] {
   const codes = new Set<string>();

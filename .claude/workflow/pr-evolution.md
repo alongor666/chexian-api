@@ -625,3 +625,13 @@
 - **needs_automation: true** → `verify-branch-domain` harness 应同时覆盖 dim 与 fact 域（单省字节/多省分省计数），与 R9 同一 harness 缺口合并。
   - expires: 2026-09-21（同 R9，GATED 上线前机制化）
 - **下一实验**：G3/G4 后续（achievement_cache/SalesmanTeamMapping 传播 + typed 路由分省过滤）需服务端运行时 + 多 route 文件，blast radius 较大；或转 G7（SX 账号·需用户名单）/G8（前端空态·独立小）。**🔴 GATED cutover 须用户显式确认。**
+
+**R11 · G7 山西账号定义（preset-users 加 SX，3 会话并行 loop 之一）**
+- **合同**：`preset-users.ts` 加山西 1 超管（`yangjie0621`，branch_admin，dataScope all）+ 11 经营单元 org_user（organization 取自 `数据管理/config/branch-org-mapping/SX.json` 的 11 units = ETL 规范化 org_level_3），全 branchCode='SX'；密码走 admin 同款机制（USER_PASSWORDS env + bcrypt tombstone，零明文）；`getAllBranchCodes()` 自动含 SX。只改 preset-users.ts(+其测试)，不碰前端/loaders/sql/routes（并行隔离）。backlog `2026-06-21-claude-acf188` → PARTIAL。
+- **成果**：12 个账号定义 + tombstone 哈希（即弃随机口令，明文丢弃永不记录）；org_user 全部复用 `ORG_ROLE_ALLOWED_ROUTES`/`ORG_ROLE_DEFAULT_ROUTE`；超管不绑 organization；org_user 用 `sx_` 前缀命名空间（多省共存防碰号，pinyin 沿用 SC 风格）。
+- **oracle**：`preset-users.test.ts` **8 passed**（新增 4 断言：超管存在+role+branchCode、11 org_user 数量+organization 集合严格等于 SX.json units+结构镜像 SC、SX 账号 tombstone bcrypt 格式、getAllBranchCodes 含 SX）；typecheck PASS；governance **42/42**。**SSOT 核实**：`access-control.ts` 用 `PRESET_USERS`，`organizations.ts:USER_CREDENTIALS` 在 server/src 内零 import（死备份），故只改 preset-users 即足够一致 —— §0「验证不声称」（grep 实证消费方而非假设）。
+- **重来更好**：① 任务文案写函数名 `getUniqueBranchCodes()` 实为 `getAllBranchCodes()` —— 先 grep 确认真实符号再动手（呼应 `feedback_verify_before_assume`），没盲信文案；② 命名「照 SC 风格」存歧义（SC org_user 是裸 pinyin，电销是 `scdianxiao` 前缀）→ 选 `sx_` 前缀（多省共存更安全），开工时若先把命名约定向用户确认一句可省一次心证；③ 超管 specialFeatures（cost/moto_cost）按字面最小化未加 —— 留作 cutover 可选项并在 PR 注明，符合「修补不拆除/最小变更」。
+- **复用价值**：tombstone 账号定义模式（即弃随机哈希 + USER_PASSWORDS 注入）对未来任一新分公司/新机构账号可直接复制；测试里「organization 集合严格等于 branch-org-mapping/<省>.json units」断言是任一省份账号接入的通用回归锚点。
+- **needs_automation: true** → governance 可加闸「preset-users 中各 branchCode 的 org_user.organization 集合必须等于 `branch-org-mapping/<branchCode>.json` 的 units」（防账号 organization 与 ETL 规范化口径漂移；当前靠单测，未进 governance 跨文件对账）。
+  - expires: 2026-09-21（GATED 多省上线前应机制化为 governance 闸；未机制化则升级或撤项）
+- **下一实验**：🔴 GATED cutover（RLS-on → SX 进 current/ → sync VPS → 发账号 + RLS 隔离验证 SX token 不读 SC）须用户显式确认，本任务只加账号定义不做 cutover；或转 G8（前端空态）。
