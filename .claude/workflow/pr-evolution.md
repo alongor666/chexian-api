@@ -614,3 +614,14 @@
 - **needs_automation: true** → ① `verify-branch-domain` harness 应扩 dim 域分支（单省零 branch_code 列 + 多省按省计数）；② 可加 governance 闸"维度 loader 单源路径不得引入 branch_code 列"防未来回归破坏字节安全。
   - expires: 2026-09-21（届时 GATED 多省上线前应已机制化为 harness/governance 闸；未机制化则升级或撤项）
 - **下一实验（本任务后续，配 G4）**：`SalesmanTeamMapping`/`achievement_cache` 的 branch_code 传播 + typed 路由（premium-plan/repair）分省过滤；或转 G7/G8。**🔴 GATED cutover（RLS-on→SX 进 current/→sync VPS→发账号）须用户显式确认，禁自动执行。**
+
+**R10 · G4 派生域多省 branch_code — loader 多省层落地（per-row·SC 字节安全）**
+- **用户选择（2026-06-21，#704 合并后）**：下一项做 G4 派生域补 branch_code。
+- **范围澄清（开工首要收获）**：派生视图 branch_code **常量列**早由 P0.5（原 `selectWithBranchCode`）覆盖；既有 backlog `00bac8`/`c21667`/`e2240c` 实为 org NULL / is_telemarketing / tonnage 等**非 branch_code** 子问题。本轮真正的 G4 = 把单省**部署常量**升级为多省**真实 per-row** branch_code（与 G3 平行）。→ 新建 backlog `8571a6` 精确记此里程碑（不混入既有子问题条目）。commit `c6f09fba` → DONE。
+- **成果**：`selectUnionWithBranchCode`（取代单源 `selectWithBranchCode`，移除死代码）：单源=P0.5 字节一致、多源 `UNION ALL BY NAME`；4 派生域 loader 接受 extra 源 + `resolveBranchFactExtras` 探测 `validation/<省>/<域>`（G1 已落 SX quotes/renewal）；customer_flow 派生自 PolicyFact 已含 branch_code 无需改。
+- **oracle**：集成 4（`duckdb-branch-fact`：单省 P0.5 字节回归 / 多源补常量 / SX 携真实省份 / 分省过滤）+ typecheck + governance 42/42 + 全量 CI 3423 全绿。**`domain-testcases` 5 失败先 stash 改动在 clean main 复跑确认为既有**（fixture 缺 endorsement_no/coverage_combination，非本变更）—— §0「验证不声称」的正确实践（疑似回归先证伪归属再下结论）。
+- **重来更好**：① G3/G4 是同一抽象的两面（dim 单源不补 vs 派生域单源恒补 branch_code），R9 若预判到这层对称，可一次性设计 `buildBranchDimSelect`+`selectUnionWithBranchCode` 共用骨架（差异仅"单源是否补常量"一个 flag），少一轮重读；② 范围澄清提前做（先 grep P0.5 是否已覆盖 branch_code）能避免"以为要补 branch_code、实则已有"的方向误判 —— 印证 memory `feedback_verify_before_assume`。
+- **复用价值**：dim/fact 两套多省 SQL 构造器 + 两个 `resolveBranch*Extras` 探测器已成型，覆盖 warehouse 下全部省份相关域；后续任一域接 SX 仅"放 validation 副本 + 0 代码"。
+- **needs_automation: true** → `verify-branch-domain` harness 应同时覆盖 dim 与 fact 域（单省字节/多省分省计数），与 R9 同一 harness 缺口合并。
+  - expires: 2026-09-21（同 R9，GATED 上线前机制化）
+- **下一实验**：G3/G4 后续（achievement_cache/SalesmanTeamMapping 传播 + typed 路由分省过滤）需服务端运行时 + 多 route 文件，blast radius 较大；或转 G7（SX 账号·需用户名单）/G8（前端空态·独立小）。**🔴 GATED cutover 须用户显式确认。**

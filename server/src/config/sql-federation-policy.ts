@@ -21,7 +21,7 @@
  * （2026-06-18），不靠推断。新增关系前必须实测其权限列，宁缺毋滥。
  *
  * branch_code 例外（P0.5，2026-06-19）：派生视图 parquet **均不含 branch_code**（DESCRIBE 实测）。
- * 由 loader（duckdb-domain-loaders.ts selectWithBranchCode）在视图层补 `'<BRANCH_CODE>' AS branch_code`
+ * 由 loader（duckdb-domain-loaders.ts selectUnionWithBranchCode）在视图层补 `'<BRANCH_CODE>' AS branch_code`
  * 常量列，使其与 PolicyFact（ETL 落列）对齐、可被 BRANCH_RLS 的 `branch_code='SC'` 过滤命中。
  * 故此处 branch_code 的 ground-truth 由「loader 保证视图必含该列」构造性成立，而非 parquet 实测。
  */
@@ -80,7 +80,7 @@ const POLICY_FACT_POLICY: RelationPolicy = {
 const FEDERATED_REGISTRY: Readonly<Record<string, RelationPolicy>> = {
   RENEWALTRACKERFACT: {
     canonical: 'RenewalTrackerFact',
-    // branch_code 由 loader 在视图层补常量列（parquet 不含；见 duckdb-domain-loaders selectWithBranchCode）。
+    // branch_code 由 loader 在视图层补常量列（parquet 不含；见 duckdb-domain-loaders selectUnionWithBranchCode）。
     permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code']),
     strategy: 'direct',
     lazyDomain: 'RenewalTracker',
