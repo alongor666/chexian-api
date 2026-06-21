@@ -52,6 +52,33 @@
 
 ---
 
+## 续传更新 v4（2026-06-20 · 机构规范化落地审计 + G5 口径解锁 + GATED 缺口登记）
+
+**1. 机构规范化已落地并独立审计通过（PR #690，分支 `claude/sx-org-normalization`，待合并）**
+- SX.json 61 原始机构 → 11 经营单元显式归属（按机构名近似）+ `transform.py:normalize_branch_org`（BRANCH_CODE=SX 应用，SC 字节级安全）。
+- 独立审计实跑复现（2026-06-20）：ETL `61 原始机构 → 11 经营单元` 零 unmapped；validation/SX 行数 1,830,603 = 源全 6 sheet 精确、保费 15.28 亿 vs Excel 差 0.01 元（6.5e-12）；current/ 4 parquet md5 重跑前后逐字节相同（四川零回归）；branch_code 全 SX、零泄漏；文档(§6.5/§2.1)-代码计数三方一致；未碰 frozen/RLS/shard。结论：通过，无 P0/P1。
+
+**2. G5 口径解锁（用户 2026-06-20 澄清）—— 关键路径大幅缩短**
+- **6 口径全部与四川一致**（客户分类/NCD/风险评级/续保窗口/满期系数α/推介率），无需逐项业务签字 → `口径对齐_山西.md §1` 应在 PR #690 合并后追加"用户确认=四川一致 @ 2026-06-20"收口 ⏳。
+- 唯一需业务方（山西营销管理部）的是**机构精确清分历史数据**（部门存续 + 业务员部门归属时序），仅用于把机构归属从"按现名近似"升级为"按业务员×签单日期精确清分 + 拆 01 经代/车商/重客"——**非阻断的迭代精化项**（已由 `2026-06-20-claude-2eccfa` 跟踪），当前 61→11 名义归属已可支撑上线。
+- **影响**：进生产硬闸 D5（"G5 口径签字 + RLS-on"）实际塌缩为**基本只剩 RLS-on + 工程**；GATED 阶段不再卡业务签字。
+
+**3. GATED 上线阶段缺口已登记 backlog（loop step 3）**
+| 缺口 | uid | 优先级 | 备注 |
+|---|---|:--:|---|
+| G1 非 premium 域接入(claims/quotes/repair/brand→validation/SX) | `2026-06-21-claude-4ec927` | P1 | 现仅 premium |
+| G3 维度表省份化(salesman/plan/brand/repair/plate_region) | `2026-06-21-claude-6ae4d7` | P1 | 派生域 branch_code 部分见下 |
+| G7 山西账号(preset-users SX) | `2026-06-21-claude-acf188` | P2 | 名单待用户定 |
+| G8 前端空态保护 | `2026-06-21-claude-9f4da8` | P2 | — |
+| G4 派生域补 branch_code | （已有）`c21667`/`00bac8`/`35998a` | — | 不重复登记 |
+| G6 机构白名单硬编码 kpi-detail.ts:85 | （已有）`2026-06-11-claude-fdbba5` | — | 不重复登记 |
+
+**4. 下一步（loop step 4 按优先级推进）+ 硬护栏**
+- 工程长杆：先 G1（claims 接入，pattern 同 premium）/ G3（维度表省份化），全程落 validation/SX、不进 current/。
+- 🔴 **GATED cutover（RLS-on → SX 进 current/ → sync VPS → 发账号）是 ADR D5 / Day-1 SOP 的刻意闸门事件，需用户显式确认，禁止自动执行**——"批准执行loop"不覆盖此对外不可逆动作。
+
+---
+
 ## 主目录热启动提示词（新会话复制即用）
 
 > 当本会话上下文将满 / 需切到带数据的主目录继续时，把下面整段贴给新会话。
