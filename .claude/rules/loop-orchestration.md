@@ -1,6 +1,14 @@
+---
+paths: ["scripts/loop/**", ".claude/workflow/**", "BACKLOG_LOG.jsonl"]
+---
+
 # Loop v2 编排协议（多会话并行调度 + 双对抗闸 + 质量度量 + 自进化）
 
 policy: append-only
+
+> **加载方式**：本文件带 `paths:` 门控（按需加载，不计入 eager-load 预算）——做 loop 工作
+> （触碰 `scripts/loop/**` / `.claude/workflow/**` / `BACKLOG_LOG.jsonl`）时自动注入。入口指针在
+> `CLAUDE.md` / `skills-map.md` / `chexian-evidence-loop` wrapper。
 
 > **来源**：2026-06-21 三会话并行实跑（G7/G8/RLS，PR #708/#709/#710/#712 零冲突合并）后复盘。
 > 暴露 4 缺口：① 无总调度（各自完成后无人推进）② 规划后/完成后无 codex 对抗审计闸
