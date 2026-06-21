@@ -109,4 +109,35 @@ describe('KpiSection 特征测试', () => {
     renderSection({ visibleKpisByGroup: { core: [], focus: [] } });
     expect(screen.getByText('未选择任何 KPI 指标')).toBeTruthy();
   });
+
+  /* -------- 多省接入空态保护（ADR G8 / Day-1 SOP §5） -------- */
+
+  it('KPI 数据空 + loading 时显示「数据加载中」而非静默零值', () => {
+    renderSection({ kpis: {}, kpiDetails: null, loading: true });
+    expect(screen.getByText('数据加载中，请稍候…')).toBeTruthy();
+    // 不渲染任何 KPI 卡
+    expect(screen.queryByText('车险保费')).toBeNull();
+  });
+
+  it('KPI 数据空 + 非 loading 时显示「暂无数据」并说明非真实零保费', () => {
+    renderSection({ kpis: {}, kpiDetails: null, loading: false });
+    expect(screen.getByText('暂无数据')).toBeTruthy();
+    expect(screen.getByText(/这不代表真实零保费/)).toBeTruthy();
+    expect(screen.queryByText('车险保费')).toBeNull();
+  });
+
+  it('规模全零（装载中假象）同样触发空态，禁止静默展示零 KPI', () => {
+    renderSection({
+      kpis: { total_premium: 0, vehicle_premium: 0, policy_count: 0 },
+      kpiDetails: null,
+      loading: false,
+    });
+    expect(screen.getByText('暂无数据')).toBeTruthy();
+  });
+
+  it('有规模数据时正常渲染 KPI 卡（不误触发空态）', () => {
+    renderSection();
+    expect(screen.getByText('车险保费')).toBeTruthy();
+    expect(screen.queryByText('暂无数据')).toBeNull();
+  });
 });

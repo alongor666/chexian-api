@@ -122,6 +122,10 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     enabled: isInitialized && (fallbackToLegacy || Boolean(dashboardBundle.error)),
   });
 
+  // bundle 模式下 useKpiData 走 prefetched 路径、自身 loading 恒为 false；bundle 拉取中
+  // 时需把 dashboardBundle.loading 并入，否则空态守卫会把「加载中」误判为「暂无数据」。
+  const kpiSectionLoading = kpiLoading || dashboardBundle.loading;
+
   // 趋势数据获取
   const planTotal = typeof kpis.vehicle_plan_wan === 'number' ? kpis.vehicle_plan_wan : undefined;
   const latestPolicyDate = typeof kpis.latest_policy_date === 'string' ? kpis.latest_policy_date : undefined;
@@ -224,7 +228,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
       <KpiSection
         kpis={kpis}
         kpiDetails={kpiDetails}
-        loading={kpiLoading}
+        loading={kpiSectionLoading}
         visibleKpisByGroup={visibleKpisByGroup}
       />
     ),
@@ -286,7 +290,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
       />
     ),
   }), [
-    kpis, kpiDetails, kpiLoading, visibleKpisByGroup,
+    kpis, kpiDetails, kpiSectionLoading, visibleKpisByGroup,
     isInitialized, timeView, setTimeView,
     trendData, qualityBusinessData, barChartData, trendLoading, qualityBusinessLoading,
     handleExportTrend, perspective, setPerspective, perspectiveConfig,

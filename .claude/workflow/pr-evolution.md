@@ -625,3 +625,12 @@
 - **needs_automation: true** → `verify-branch-domain` harness 应同时覆盖 dim 与 fact 域（单省字节/多省分省计数），与 R9 同一 harness 缺口合并。
   - expires: 2026-09-21（同 R9，GATED 上线前机制化）
 - **下一实验**：G3/G4 后续（achievement_cache/SalesmanTeamMapping 传播 + typed 路由分省过滤）需服务端运行时 + 多 route 文件，blast radius 较大；或转 G7（SX 账号·需用户名单）/G8（前端空态·独立小）。**🔴 GATED cutover 须用户显式确认。**
+
+**R11 · G8 前端空态保护（看板 KPI·零后端·并行 loop 之一）**
+- **合同**（ADR G8 / Day-1 SOP §5）：山西等新分公司数据装载中 / 缺数据时，KPI 接口返回空对象或全零规模 → 看板必须显式提示「加载中 / 暂无数据」，**禁止静默渲染零值 KPI**（避免业务方误判真实零保费）。仅改 `src/` 前端，零后端改动（与 G3/G4/G7 并行会话隔离）。backlog `2026-06-21-claude-9f4da8` → DONE。
+- **成果**：① 新增纯函数 `kpiDataState.isKpiDataEmpty`（判据：总保费/车险保费/保单件数三规模指标全零或缺失即空态，一并覆盖"接口未返回/装载中"与"该范围真实无业务量"两类空）；② `KpiSection` 在所有 hooks 后加早返守卫——`loading && 空`→复用 `KpiGridSkeleton`+「数据加载中，请稍候…」；`空`→复用 `EmptyState`+「暂无数据·当前机构数据可能正在装载…这不代表真实零保费」；③ `PremiumDashboard` 把 `dashboardBundle.loading` 并入传给 KpiSection 的 `loading`（bundle 模式下 `useKpiData` 走 prefetched 路径自身 loading 恒 false，不并入会把"加载中"误判成"暂无数据"）。
+- **oracle**：新增单测 16（`kpiDataState` 8：空对象/全零/null/bigint/仅占比指标 → 判据精确；`KpiSection` 新增 4：空+loading 显「加载中」、空+非 loading 显「暂无数据·非真实零保费」、全零触发空态、有数据正常渲染不误触发；原 4 特征测试不变）+ `bun run build` 零 TS + `typecheck` PASS + `governance` 42/42。
+- **重来更好**：① 起手先 grep 既有空态资产（`DataGuard`/`NoDataPlaceholder`/`EmptyState`/`KpiGridSkeleton`）—— 全部可复用，零自造组件，是「先搜再写」红线的正确实践；② **bundle 模式的 loading 来源陷阱**靠通读 `useKpiData`（prefetched 短路 loading=false）+ `useDashboardBundle`（独立 loading）调用链才发现，若只改 KpiSection 不并 bundle.loading 会在默认配置（`ENABLE_BUNDLE_ROUTES` 默认 true）下空态误判 —— 改前读完整数据流而非只读渲染层是关键。
+- **live 截图限制（如实记录）**：worktree 为纯代码检出**无本地 parquet**（0 个），后端无数据 → `isDataLoaded=false` → DataGuard 重定向 `/data-import`，KpiSection 空态在无数据 worktree 经正常导航**不可达**（到达需 `isDataLoaded=true` 但 KPI 空，即山西分省后端数据，本地不具备且后端/数据操作被并行安全契约排除）。故采用项目证据闭环首选的**确定性 oracle**：`@testing-library/react` 真实渲染 `<KpiSection>` 断言两态确切中文文案 + 无静默零值卡。符合 evidence-loop「correctness oracle 优先确定性脚本/单测，不靠眼看截图」。
+- **复用价值**：`isKpiDataEmpty` + 「loading→skeleton / empty→EmptyState」守卫范式可平移到其余 KPI 看板（`VariableCostKpiBoard`/`CrossSellSummaryKpiBoard`/`GrowthKpiCards`/quote-conversion `KpiCards`）；本 PR 按并行安全保持聚焦主看板，其余作后续 backlog（非阻断）。
+- **下一实验**：其余子页 KPI 看板套用同守卫（独立小）；或继续 G3/G4 服务端后续 / G7 SX 账号（需用户名单）。**🔴 GATED cutover（RLS-on→SX 进 current/→sync VPS→发账号）须用户显式确认，本前端空态保护为纯防御 UI 不触发任何 cutover。**
