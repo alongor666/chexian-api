@@ -5,8 +5,8 @@ import { generatePremiumTrendQuery, generateQualityBusinessTrendQuery, TimeView 
 import type { ViewPerspective } from '../../types/view-perspective.js';
 import { isTrendCubeServable, generatePremiumTrendCubeQuery } from '../../sql/cube/trend-cube.js';
 import { ensureTrendCubeFresh } from '../../services/duckdb-cube.js';
-import { runShadowCompare } from '../../services/cube-shadow.js';
-import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor } from '../../services/cube-routing.js';
+import { runShadowCompare, runPostCutoverShadowSample } from '../../services/cube-shadow.js';
+import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor, shouldSamplePostCutoverShadow } from '../../services/cube-routing.js';
 
 const router = Router();
 
@@ -72,8 +72,12 @@ router.get(
         );
         if (cubeRouting) {
           // 正式路由：直接走立方体（不可服务/未就绪场景已在上方条件自动回退）
-          const cubeResult = await duckdbService.query(cubeSql, QUERY_CACHE.hotspotMedium);
+          const cubeResult = await duckdbService.query<Record<string, unknown>>(cubeSql, QUERY_CACHE.hotspotMedium);
           sendWithEtag(req, res, { success: true, data: cubeResult }, HTTP_MAX_AGE.query);
+          // 切流后采样影子（R3/bf2c4e）：对外已返 cube，后台跑 legacy 对账持续探测背离
+          if (shouldSamplePostCutoverShadow('trend')) {
+            runPostCutoverShadowSample('trend', cubeResult, () => duckdbService.query<Record<string, unknown>>(sql, QUERY_CACHE.hotspotMedium));
+          }
           return;
         }
         // 影子对账：对外返回原路径结果，后台双跑比对（不影响时延）

@@ -66,3 +66,22 @@ export function isCubeShadowEnabledFor(route: CubeRouteKey): boolean {
   if (isCubeRoutingEnabledFor(route)) return false;
   return true;
 }
+
+/**
+ * 判定一次【已切流】请求是否要做切流后采样影子对账（R3 缺口闭环，BACKLOG bf2c4e）。
+ *
+ * 背景：切流后 isCubeShadowEnabledFor 对该路由返回 false（影子期双跑已停），
+ * cube-vs-legacy 的数值背离不再被持续探测 —— 改写器语义漂移 / 类型回归（如
+ * issue #608）将无生产 oracle 发现。本判定让【已切流】路由按 CUBE_SHADOW_SAMPLE_RATE
+ * 采样：命中的请求对外仍直返 cube（不伤时延），路由层后台跑 legacy 与已返回的
+ * cube 对账（cube-shadow.ts runPostCutoverShadowSample）。
+ *
+ * 仅对已切流路由生效（未切流路由由 isCubeShadowEnabledFor 全量影子覆盖）；
+ * 缺省采样率 0 → 始终 false，零行为变更。
+ */
+export function shouldSamplePostCutoverShadow(route: CubeRouteKey): boolean {
+  if (!isCubeRoutingEnabledFor(route)) return false;
+  const rate = Number(dbEnv.CUBE_SHADOW_SAMPLE_RATE ?? '0');
+  if (!(rate > 0)) return false;
+  return Math.random() < rate;
+}
