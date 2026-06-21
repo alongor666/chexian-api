@@ -593,3 +593,13 @@
 - **重来更好**：dim 表对账不能只看总行数，要分清"主键基数（必须精确）"与"依赖属性聚合（可能因去重 keep-first 有小差）"——本轮没有把 7275≠7277 当异常，而是先复刻 ETL 去重逻辑证伪"缺陷"假设，是 §0 的正确实践；可固化进 verify-branch-domain harness（dim 域对账按 dedup_key 基数而非裸 distinct）。
 - **里程碑**：★ G1 四个**有源**标准域（claims_detail / quotes / repair / brand）全部隔离接入完成。runStandardDomain + BaseConverter 一次省份化的杠杆兑现：后两域各仅一行白名单。余 cross_sell / customer_flow / new_energy 为**派生域**（依赖 policy+claims，非 Excel 源），排 G3 维度表省份化（6ae4d7）之后。
 - **复用价值**：multi_file_input(quotes) / multi_file_merge(repair) / single(brand) 三种 input_strategy 全部跑通 branch 路由 + archiveRoot 隔离，runStandardDomain 省份化已全策略覆盖验证。
+
+**R8 · G1 收官 + G3 scoping 交接**
+- **G1 状态**：4 个有源标准域全部 branch-aware 隔离接入并合并 —— claims_detail(#697) / quotes(#698) / repair(#699) / brand(#700)。backlog `2026-06-21-claude-4ec927` → DONE。本轮净产出 3 PR（#698/#699/#700），各 4 项 CI 全绿、duckdb×pandas 精确对账、SC 字节零触碰、governance 42/42。
+- **杠杆复盘**：真正的工程价值是 #698 把通用处理器 `runStandardDomain` + `BaseConverter` 一次省份化 → repair/brand 各仅一行白名单。三种 input_strategy（multi_file_input/multi_file_merge/single）+ archiveRoot 隔离全策略覆盖验证。
+- **本轮唯一事故**：auto-merge 竞态丢 meta 提交（已 rebase 补救 + 固化 memory `feedback_auto_merge_no_followup_push`，repair/brand 改 bundle 模式零复发）。
+- **G3 交接（6ae4d7，本轮不动手，待用户定调）**：性质从 ETL 升为**服务端 runtime + 设计抉择**——
+  1) salesman/plan/plate_region 维度表为单一全局 latest.parquet 无省份维度（brand/repair 的 SX 隔离副本已由 G1 落 validation/SX，可复用）；
+  2) 设计抉择：dim 表注入 branch_code vs 按省加载（影响 `duckdb-domain-loaders.ts`/`paths.ts`，触碰 GATED 共享 runtime 边界，需 BRANCH_RLS_ENABLED 门控保持 SC-safe）；
+  3) **信息缺口**：SX 的 salesman/plan dim 无独立源（G1 quotes ETL 实测 team 全'未分配'），plate_region 同理 → 需用户提供 SX 业务员归属/计划源或确认降级口径。
+- **下一实验**：待用户就 G3 设计抉择 + SX dim 源缺口定调后启动；或转 G7/G8 等其他 backlog。
