@@ -558,3 +558,30 @@
 - 复用价值：高。daily.mjs branch-routing 模式（branchSourceDir/Root + 非 SC 早退 + convert --branch-code）现 premium+claims 两域复用，是 quotes/repair/brand 的直接模板；非 branch-aware 域硬拦截护栏可推广。
 - needs_automation: true → `scripts/verify-branch-domain.mjs <省> <域>`（行数/金额 vs 源 ≤ 万分之一 + branch_code 全省 + SC 目录零新增 parquet）+ governance 闸"非 SC 域必须有早退护栏"。
 - 下一实验：G1 余域 quotes/repair/brand（套同模板）/ G3 维度表省份化。
+
+---
+
+## 2026-06-21 · 山西多省接入 loop（G1-quotes，runStandardDomain 省份化）+ 每轮三问复盘
+
+> 续 2026-06-20 loop，按用户 8 步 workflow 推进 G1 余域；每轮三问复盘（重来怎样更好 / 复用价值 / 如何更高质量自动化）。机制见 memory `feedback_per_round_retrospective`。
+
+**R5 · G1-quotes 接入（PR #698）**
+- 合同：把 daily.mjs **通用处理器 `runStandardDomain`**（manifest 驱动，cross_sell/quotes/brand/repair/customer_flow/new_energy 共用）做成 branch-aware，SX 报价 → `validation/SX/quotes_conversion`，SC 字节安全。
+- 成果：
+  - `runStandardDomain` BRANCH_CODE 路由：非 SC 源自 `branchSourceDir`(staging/<省>)、产物 `branchOutputRoot`/<域>、`archiveRoot` 隔离、`extraArgs` 注入 `--branch-code`、跳过 data-sources.json。
+  - `archiveRoot` 线程化到 4 个 strategy + `safeConvertDomain`（默认 `join(__dirname,'.archive')`，SC 不变）—— 闭合"非 SC 旧产物归档落进 SC `数据管理/.archive`"的隔离缺口。
+  - `base_converter.py` 加 `--branch-code`（**brand/repair 子类免费获得**，下两域零脚本改动）；`quote_etl.py` standalone 同语义手加。
+  - main 白名单 `__branchReadyDomains` 加 quotes。
+- oracle：validation/SX/quotes_conversion **570,355 行 × 33 列**、branch_code 全 SX 无 NULL、duckdb 产物 vs pandas 直读源 Excel **精确相等**（SUM(最终报价)633,141,426.29=633,141,426.29 / 承保 53,216=53,216 / 总量相等）、SC `current/` 零触碰、data-sources.json 未改、node --check + governance 42/42。
+- **重来更好**：本轮真正的工程价值在"通用处理器 + BaseConverter 一次省份化 → brand/repair 几乎零成本"，这一杠杆点开工时未预判，先读全调用图（谁继承 BaseConverter / 谁 standalone）能更早锁定最小改动面。SC 字节安全仍靠代码构造证（worktree 无 SC quote 源，未跑 SC 回归）→ 理想补 SC golden 对比。
+- **复用价值**：极高。`runStandardDomain` 一处省份化覆盖 5 个标准域；BaseConverter 的 `--branch-code` 让所有子类域（brand/repair/cross_sell/customer_flow/new_energy）天然 branch-aware，剩余域接入塌缩为"白名单 + 暂存源 + 验证"三步。
+- **needs_automation: true** → R4 已提的 `scripts/verify-branch-domain.mjs <省> <域>`（行数/金额 vs 源 ≤ 万分之一 + branch_code 全省 + SC 零新增 parquet）本轮再次手工复刻同一套 duckdb+pandas 对账，固化收益已确定；可顺带加 governance 闸"标准域非 SC 必经 `__branchReadyDomains` 白名单"。
+- **下一实验**：repair（multi_file_merge）→ brand（single），均仅需白名单+暂存源+验证；之后 G3 维度表省份化（6ae4d7）。派生域 cross_sell/customer_flow/new_energy 依赖 policy+claims，排其后。
+
+**R6 · G1-repair 接入（同 PR，携带 R5 quotes-meta）**
+- 合同：repair_resource 域（multi_file_merge）branch-aware，SX 维修资源 → `validation/SX/repair_resource`，SC 字节安全。
+- 成果：**几乎零成本** —— `RepairConverter` 继承 `base_converter.py`，R5 已给 BaseConverter 加 `--branch-code`（已随 #698 进 main），故 repair 仅需 daily.mjs `__branchReadyDomains` 白名单加 `repair` 一行。
+- oracle：validation/SX/repair_resource **21,166 行 × 14 列**、branch_code 全 SX、duckdb 产物 vs pandas 直读源 Excel **精确相等**（SUM(核损金额)21,460,875.29=21,460,875.29 / SUM(签单净保费)15,324,338.90=15,324,338.90 / 4S 10,076=10,076）、SC `dim/repair` 与 `数据管理/.archive` 均未创建（**archiveRoot 隔离首次实证**：multi_file_merge 的归档落 validation/SX/<域>/.archive 而非 SC）、current/ 与 data-sources.json 零触碰、governance 42/42。
+- **重来更好**：印证 R5 的杠杆判断 —— BaseConverter 一次省份化让 repair 从"一个域的工作量"塌缩为"一行白名单"。本可在 R5 PR 里顺带把 repair/brand 白名单一起开（反正 BaseConverter 已就绪），但逐域验证更稳、PR 更可追溯，权衡后保持一域一验。
+- **auto-merge 竞态教训（本轮事故）**：#698 启用 `--auto` 后我又 push 了 backlog/pr-evolution 跟进提交，CI 先过 → auto-merge 在 head=adc14c74 触发并删分支，跟进提交 8c87d2dc 滞留重建分支、未进 main。对策已执行：rebase 到新 main 携带该 meta，并改为**把 backlog+复盘 bundle 进代码提交、enable auto-merge 前一次推完**（本 R6 即如此）。→ 值得固化为 memory（auto-merge 后禁 follow-up push）。
+- **复用价值/自动化**：同 R5。brand 为最后一个有源标准域，路径与 repair 完全一致。
