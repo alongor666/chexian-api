@@ -41,14 +41,34 @@ const DEDUPED_SALESMAN_DIM_SQL = `
  *   - SalesmanTeamMapping 表：兼容旧 JOIN
  *   - SalesmanPlanFact 视图：兼容旧查询
  */
-export async function loadDimParquet(db: DuckDBQueryable, salesmanPath: string, planPath: string): Promise<void> {
-  const sf = escapeSqlValue(salesmanPath.replace(/\\/g, '/'));
-  const pf = escapeSqlValue(planPath.replace(/\\/g, '/'));
+export async function loadDimParquet(
+  db: DuckDBQueryable,
+  salesmanPath: string,
+  planPath: string,
+  extraSalesmanSources: ReadonlyArray<RawBranchDimSource> = [],
+  extraPlanSources: ReadonlyArray<RawBranchDimSource> = [],
+): Promise<void> {
+  // ADR G3 多省共存：业务员/计划维度按省加载并携带 branch_code。
+  // extra* 为空（默认 SC-only）→ buildDimSelectSql 单源短路 = 历史 SQL 逐字节一致（四川零变更）。
+  // extra* 非空（GATED 多省）→ UNION ALL BY NAME + 缺列补 branch_code 常量。
+  // ⚠️ 降级兜底（临时·GATED 前补齐）：SX 无业务员/计划源时，data-bootstrapper 不传 SX extra 源，
+  //    SX 保单的业务员经 buildAchievementView Part B 落「未归属团队/未归属机构」、计划缺省为 0
+  //    （= 决策"salesman team='未分配团队'/plan 缺省空"）。SalesmanTeamMapping/achievement_cache
+  //    的 branch_code 传播 + typed 路由分省过滤为本任务后续项（配 G4 派生域，见 PR 描述）。
+  const branchCode = getDeploymentBranchCode();
+  const salesmanSelect = await buildDimSelectSql(db, [
+    { branchCode, path: salesmanPath },
+    ...extraSalesmanSources,
+  ]);
+  const planSelect = await buildDimSelectSql(db, [
+    { branchCode, path: planPath },
+    ...extraPlanSources,
+  ]);
 
   // 1. 创建 SalesmanDim 表（完整业务员主数据）
   await db.query(`
     CREATE OR REPLACE TABLE SalesmanDim AS
-    SELECT * FROM read_parquet('${sf}')
+    ${salesmanSelect}
   `);
   const smCount = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM SalesmanDim');
   console.log(`[DuckDB] SalesmanDim loaded: ${smCount[0]?.cnt ?? 0} records from Parquet`);
@@ -56,7 +76,7 @@ export async function loadDimParquet(db: DuckDBQueryable, salesmanPath: string, 
   // 2. 创建 PlanFact 表（多年多级计划）
   await db.query(`
     CREATE OR REPLACE TABLE PlanFact AS
-    SELECT * FROM read_parquet('${pf}')
+    ${planSelect}
   `);
   const pfCount = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM PlanFact');
   console.log(`[DuckDB] PlanFact loaded: ${pfCount[0]?.cnt ?? 0} records from Parquet`);
@@ -121,6 +141,10 @@ export async function loadDimParquet(db: DuckDBQueryable, salesmanPath: string, 
  *
  * 数据源：warehouse/dim/plate_region/latest.parquet（411 行）
  * JOIN：SUBSTRING(plate_no, 1, 2) = PlateRegionMap.plate_prefix
+ *
+ * ADR G3：**保持全局、不省份化**（决策"plate_region 用现有全局表"）。车牌前缀→地区是
+ * 全国统一的省份无关查找（如 '川A'→四川成都、'晋A'→山西太原），各省用户都需查全表；
+ * 故不加 branch_code、不按省 UNION，federation 中维持 exempt（无机构作用域）。
  */
 export async function loadPlateRegionDim(db: DuckDBQueryable, parquetPath: string): Promise<void> {
   const pf = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
@@ -426,6 +450,112 @@ async function selectWithBranchCode(db: DuckDBQueryable, safePath: string): Prom
   return `SELECT *, '${getDeploymentBranchCode()}' AS branch_code FROM read_parquet('${safePath}')`;
 }
 
+// ============================================
+// 维度表多省共存（ADR G3 · GATED 上线能力预备）
+// ============================================
+
+/**
+ * 单个省份的维度 parquet 来源（ADR G3）。
+ *
+ * 多省共存（GATED 上线）时，业务员/计划/维修等省份相关维度表须按省加载并携带
+ * branch_code，否则山西用户 JOIN 到这些全局表会拿到混省/全局数据（ADR §5.1 G3）。
+ * 本类型描述「一个省一个 parquet 来源」，由 paths.getBranchDimSources 解析、
+ * resolveBranchDimSources 实测 hasBranchCode 后交 buildBranchDimSelect 拼 SQL。
+ */
+export interface BranchDimSource {
+  /** 省份码（CHAR(2)，'SC'/'SX'…）；由 paths 层 `^[A-Z]{2}$` 白名单约束，可安全内插 */
+  branchCode: string;
+  /** 已 escapeSqlValue + 正斜杠规整的 parquet 路径 */
+  safePath: string;
+  /** 该 parquet 是否已含 branch_code 列（DESCRIBE 实测；resolveBranchDimSources 填充） */
+  hasBranchCode: boolean;
+}
+
+/**
+ * 构造多省维度表的 read_parquet SELECT（纯函数，无 DuckDB → CI 单测）。
+ *
+ * 🔴 字节安全铁律（按构造证明 —— golden-baseline 当前 BLOCKED on E2E_PASSWORD，
+ *    见 ADR §8/计划阶段三，故不能靠 API 层回归证 SC 零差异，必须靠 SQL 形态恒等）：
+ *   - **单一来源**（SC-only 默认部署，sources.length===1）→ 返回
+ *     `SELECT * FROM read_parquet('<p>')`，与历史 loader 逐字节一致：
+ *     **不追加 branch_code、不 UNION**。四川行为零变更。
+ *   - **多来源**（GATED 多省共存，sources.length>1）→ 各源 `UNION ALL BY NAME` 合并；
+ *     缺 branch_code 列的源补 `'<branchCode>' AS branch_code` 常量列，已含者原样
+ *     （避免 `SELECT *, …` 重复列报错）。BY NAME 按列名对齐，免疫各省 parquet 列序/列集差异。
+ *
+ * 与派生域 selectWithBranchCode 的策略差异（刻意）：派生域单源也补 branch_code 常量
+ * （其为 federation RLS 视图，须恒含该列供 sql-permission-injector 注入）；维度表单源
+ * **不补**——字节安全按构造优先，多省 branch RLS 由 GATED 期多源 UNION 自然提供。
+ */
+export function buildBranchDimSelect(sources: ReadonlyArray<BranchDimSource>): string {
+  if (sources.length === 0) {
+    throw new Error('buildBranchDimSelect: 至少需要一个维度来源');
+  }
+  if (sources.length === 1) {
+    // 单源：逐字节等价历史行为（不加 branch_code、不 UNION）→ SC 默认字节安全
+    return `SELECT * FROM read_parquet('${sources[0].safePath}')`;
+  }
+  // 多源（GATED 多省）：UNION ALL BY NAME，缺列补 branch_code 常量
+  return sources
+    .map((s) =>
+      s.hasBranchCode
+        ? `SELECT * FROM read_parquet('${s.safePath}')`
+        : `SELECT *, '${s.branchCode}' AS branch_code FROM read_parquet('${s.safePath}')`,
+    )
+    .join('\n      UNION ALL BY NAME\n      ');
+}
+
+/**
+ * 实测各省维度 parquet 是否已含 branch_code 列（DESCRIBE），返回可交 buildBranchDimSelect 的来源列表。
+ * 与 selectWithBranchCode 同源的「DESCRIBE 实测、零假设」原则：SC current parquet 通常不含
+ * branch_code（ETL 未落该列），SX validation 副本含（G1 已注入）→ 各自正确处理。
+ */
+export async function resolveBranchDimSources(
+  db: DuckDBQueryable,
+  sources: ReadonlyArray<{ branchCode: string; safePath: string }>,
+): Promise<BranchDimSource[]> {
+  const resolved: BranchDimSource[] = [];
+  for (const s of sources) {
+    const cols = await db.query<{ column_name: string }>(
+      `DESCRIBE SELECT * FROM read_parquet('${s.safePath}')`,
+    );
+    resolved.push({
+      ...s,
+      hasBranchCode: cols.some((c) => c.column_name?.toLowerCase() === 'branch_code'),
+    });
+  }
+  return resolved;
+}
+
+/** 维度域多省原始来源（branchCode 由 paths 层 `^[A-Z]{2}$` 约束；path 未转义）。 */
+export interface RawBranchDimSource {
+  branchCode: string;
+  path: string;
+}
+
+/**
+ * 把「原始多省维度来源」拼成 read_parquet SELECT（loader 内部统一入口）。
+ *
+ * 单源短路（默认 SC-only / 多数维度域）：**不 DESCRIBE、不 UNION**，直接
+ * `SELECT * FROM read_parquet('<escaped>')` —— 与历史 loader 字节一致（按构造证字节安全）。
+ * 多源（GATED 多省共存）：DESCRIBE 实测各源 branch_code → buildBranchDimSelect 拼 UNION ALL BY NAME。
+ */
+export async function buildDimSelectSql(
+  db: DuckDBQueryable,
+  rawSources: ReadonlyArray<RawBranchDimSource>,
+): Promise<string> {
+  const escaped = rawSources.map((s) => ({
+    branchCode: s.branchCode,
+    safePath: escapeSqlValue(s.path.replace(/\\/g, '/')),
+  }));
+  if (escaped.length <= 1) {
+    // 单源：不 DESCRIBE、不 UNION，逐字节等价历史行为
+    return buildBranchDimSelect([{ ...escaped[0], hasBranchCode: false }]);
+  }
+  const resolved = await resolveBranchDimSources(db, escaped);
+  return buildBranchDimSelect(resolved);
+}
+
 /**
  * 加载报价转化 Parquet → QuoteConversion 视图
  */
@@ -501,12 +631,28 @@ export async function loadCrossSell(db: DuckDBQueryable, parquetPath: string): P
 
 /**
  * 加载维修资源 Parquet → RepairDim TABLE
+ *
+ * ADR G3 多省共存：维修资源含 org_level_3（机构级敏感），多省须携带 branch_code。
+ * extraSources 为空（默认 SC-only）→ 单源短路 = 历史 SQL 逐字节一致；非空（GATED 多省）
+ * → UNION ALL BY NAME + 缺列补 branch_code（SX validation 副本由 G1 ETL 已注入 branch_code）。
+ *
+ * ⚠️ RepairDim 仍**不纳入** cx sql 联邦白名单（sql-federation-policy.ts）：其 org_level_3 为编码
+ *    格式（如 '011019乐山中心支公司'）与标准 org RLS 过滤不匹配，对抗评审已论证（见该文件注释 +
+ *    sql-federation.test.ts 越权回归用例）。本增量仅在 loader 层补 branch_code 数据列，
+ *    typed 路由（routes/query/repair.ts）的分省过滤为后续项，不动联邦排除决策。
  */
-export async function loadRepairDim(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+export async function loadRepairDim(
+  db: DuckDBQueryable,
+  parquetPath: string,
+  extraSources: ReadonlyArray<RawBranchDimSource> = [],
+): Promise<void> {
+  const repairSelect = await buildDimSelectSql(db, [
+    { branchCode: getDeploymentBranchCode(), path: parquetPath },
+    ...extraSources,
+  ]);
   await db.query(`
     CREATE OR REPLACE TABLE RepairDim AS
-    SELECT * FROM read_parquet('${safePath}')
+    ${repairSelect}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RepairDim');
   console.log(`[DuckDB] RepairDim loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -514,6 +660,11 @@ export async function loadRepairDim(db: DuckDBQueryable, parquetPath: string): P
 
 /**
  * 加载品牌维度 Parquet → BrandDim TABLE
+ *
+ * ADR G3：**保持全局、不省份化**。BrandDim 是车型库（厂牌/车型代码→品牌/吨位/座位等），
+ * 属全国统一的省份无关参照数据——一个车型代码在四川/山西映射到同一品牌；各省用户都需查全表。
+ * 故不加 branch_code、不按省 UNION，federation 中维持 exempt（无机构作用域）。
+ * （G1 曾产 validation/SX/brand 隔离副本用于 ETL 完整性校验，非运行期分省隔离所需。）
  */
 export async function loadBrandDim(db: DuckDBQueryable, parquetPath: string): Promise<void> {
   const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));

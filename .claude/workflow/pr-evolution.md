@@ -603,3 +603,14 @@
   2) 设计抉择：dim 表注入 branch_code vs 按省加载（影响 `duckdb-domain-loaders.ts`/`paths.ts`，触碰 GATED 共享 runtime 边界，需 BRANCH_RLS_ENABLED 门控保持 SC-safe）；
   3) **信息缺口**：SX 的 salesman/plan dim 无独立源（G1 quotes ETL 实测 team 全'未分配'），plate_region 同理 → 需用户提供 SX 业务员归属/计划源或确认降级口径。
 - **下一实验**：待用户就 G3 设计抉择 + SX dim 源缺口定调后启动；或转 G7/G8 等其他 backlog。
+
+**R9 · G3 维度表省份化 — loader 数据层落地（branch_code 注入·SC 字节安全）**
+- **用户定调（2026-06-21）**：方向 = branch_code 注入 + loader 多省加载（沿用联邦 RLS 范式，`BRANCH_RLS_ENABLED=false` 默认时行为不变=SC 字节安全）；SX dim 源缺口=降级兜底（salesman team 未分配 / plan 缺省空 / plate_region 全局）；brand/repair 的 SX validation 副本可直接接。落点：`duckdb-domain-loaders.ts` + `paths.ts` + `sql-federation-policy.ts`。
+- **合同**：salesman/plan/repair 维度多省能力 + branch_code；brand/plate_region 保持全局；SC 默认逐字节不变。commit `5405cd8c`（分支 `claude/sx-standard-domains`，backlog 6ae4d7 → PARTIAL）。
+- **成果**：纯函数 `buildBranchDimSelect`（单源短路=历史 SQL 字节一致，多源 `UNION ALL BY NAME`+缺列补 branch_code）+ `loadDimParquet`/`loadRepairDim` 接受 extra 省份源 + `data-bootstrapper.resolveBranchDimExtras` 探测 `validation/<省>/dim/<域>`（0a 期空→单源字节安全）+ `paths.getBranchValidationDimPath`。
+- **oracle**：CI 单测 6（`buildBranchDimSelect` 含"单源不变形/多源 BY NAME/空源抛错"）+ 集成 4（**单省 SalesmanDim/RepairDim 不含 branch_code 列=字节回归** / 多省 SC 补常量·SX 原值·按省精确过滤）+ `duckdb-dim-dedup` 回归 7（向后兼容签名）+ 全量 CI 3423 全绿；typecheck；governance 42/42。
+- **重来更好**：① 范围抉择耗时大 —— "loader 层 vs 含 achievement_cache 传播+typed 路由过滤"边界，靠"落点=3 文件 + RepairDim 联邦排除是既有安全决策"两条硬约束才收敛；下次遇 runtime 设计抉择，先用"落点文件清单 + 既有安全测试不可破"两把尺子快速划界，少走分析弯路。② **字节安全证明法**：golden-baseline BLOCKED on `E2E_PASSWORD`，改用"单源短路 = SQL 形态恒等（按构造）+ 集成回归断言单省无 branch_code 列 + 既有 dim-dedup 回归 + 全量 CI"四重直证，比"跑不了就降级"更稳（呼应 memory `feedback_no_giveup_ask_authorization`：缺 E2E_PASSWORD 可向用户要，但本变更纯 loader、按构造已足）。
+- **复用价值**：`buildBranchDimSelect`/`resolveBranchDimSources`/`buildDimSelectSql` 是通用多省维度 SQL 构造器，后续任一 dim 域接 SX 仅需 data-bootstrapper 传 extra 源；`resolveBranchDimExtras` 探测约定（`validation/<省>/dim/<域>`）可被 G4 派生域复用。
+- **needs_automation: true** → ① `verify-branch-domain` harness 应扩 dim 域分支（单省零 branch_code 列 + 多省按省计数）；② 可加 governance 闸"维度 loader 单源路径不得引入 branch_code 列"防未来回归破坏字节安全。
+  - expires: 2026-09-21（届时 GATED 多省上线前应已机制化为 harness/governance 闸；未机制化则升级或撤项）
+- **下一实验（本任务后续，配 G4）**：`SalesmanTeamMapping`/`achievement_cache` 的 branch_code 传播 + typed 路由（premium-plan/repair）分省过滤；或转 G7/G8。**🔴 GATED cutover（RLS-on→SX 进 current/→sync VPS→发账号）须用户显式确认，禁自动执行。**
