@@ -111,6 +111,30 @@ def normalize_input_columns(df):
         df = df.drop(columns=['高速风险等级.1'])
         print(f"      去除重复列: 高速风险等级.1")
     return df
+
+def normalize_branch_org(df):
+    """多省机构值规范化（G5）：BRANCH_CODE != 'SC' 时，按
+    config/branch-org-mapping/<BRANCH_CODE>.json 把「三级机构」原始值（编码全称）
+    映射到经营单元短名。SC（默认）或无映射文件 → 原样返回（四川字节级安全）。
+    未在映射表中的机构保留原始值并告警（不静默丢数据）。"""
+    branch = os.environ.get('BRANCH_CODE', 'SC')
+    if branch == 'SC' or '三级机构' not in df.columns:
+        return df
+    mapping_path = Path(__file__).resolve().parent.parent / 'config' / 'branch-org-mapping' / f'{branch}.json'
+    if not mapping_path.exists():
+        print(f"\n   ⚠️ [{branch}] 机构规范化跳过：无映射文件 {mapping_path}（保留原始机构值）")
+        return df
+    cfg = json.loads(mapping_path.read_text(encoding='utf-8'))
+    org_map = cfg.get('org_to_unit', {})
+    src_orgs = set(df['三级机构'].dropna().unique())
+    unmapped = sorted(src_orgs - set(org_map.keys()))
+    df = df.copy()
+    df['三级机构'] = df['三级机构'].map(lambda v: org_map.get(v, v) if pd.notna(v) else v)
+    print(f"\n   🏢 [{branch}] 机构规范化: {len(src_orgs)} 原始机构 → {df['三级机构'].nunique()} 经营单元（映射表 {len(org_map)} 条）")
+    if unmapped:
+        print(f"   ⚠️ {len(unmapped)} 个机构未在映射表中，保留原始值（需补 {branch}.json）：{unmapped[:5]}{'...' if len(unmapped) > 5 else ''}")
+    return df
+
 RENEWAL_TYPE_ALIASES = ['续保业务类型', '续保类型', '业务类型', '续保分类']
 
 def first_existing_column(columns, candidates):
@@ -1146,6 +1170,7 @@ def main():
     dtype_map = {col: str for col in str_columns}
     df = load_target_excel(INPUT_FILE, dtype_map)
     df = normalize_input_columns(df)
+    df = normalize_branch_org(df)  # 多省 G5：BRANCH_CODE!=SC 时按 <省>.json 规范化机构值（SC 原样）
     df = merge_renewal_type_from_source(df, RENEWAL_SOURCE_FILE)
     df = normalize_identifier_columns(df)
 
