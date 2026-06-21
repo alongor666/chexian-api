@@ -101,6 +101,7 @@ function buildCacheWhere(
   filters: PlanDrilldownDimension['filters'],
   planYear: number,
   rlsOrgName?: string,
+  rlsBranchCode?: string,
 ): string {
   const conds: string[] = [`plan_year = ${Number(planYear)}`];
   // RLS：org_user 强制限本机构（优先于用户传入的 orgFilter，两者逻辑等价）
@@ -108,6 +109,9 @@ function buildCacheWhere(
   if (effectiveOrg) conds.push(`org_name = '${esc(effectiveOrg)}'`);
   if (filters?.team) conds.push(`team_name = '${esc(filters.team)}'`);
   if (filters?.salesman) conds.push(`full_name = '${esc(filters.salesman)}'`);
+  // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 多省时携带 branch_code，路由经
+  // resolveBranchRlsCode 双门控解析出 branchCode（flag off / 单省无列 → undefined → 不注入 → 字节安全）。
+  if (rlsBranchCode) conds.push(`branch_code = '${esc(rlsBranchCode)}'`);
   return `WHERE ${conds.join(' AND ')}`;
 }
 
@@ -175,9 +179,10 @@ export function generatePremiumPlanDrilldownQuery(
   sortOrder: SortOrder = 'desc',
   rlsOrgName?: string,
   policyFactWhereClause?: string,
+  rlsBranchCode?: string,
 ): string {
   const { level, filters = {} } = dimension;
-  const where = buildCacheWhere(filters, planYear, rlsOrgName);
+  const where = buildCacheWhere(filters, planYear, rlsOrgName, rlsBranchCode);
 
   // customer_category / coverage：无计划数据，直接查 PolicyFact
   if (level === 'customer_category' || level === 'coverage') {
@@ -256,8 +261,9 @@ export function generateKPICardQuery(
   planYear: number,
   dimension: PlanDrilldownDimension,
   rlsOrgName?: string,
+  rlsBranchCode?: string,
 ): string {
-  const where = buildCacheWhere(dimension.filters, planYear, rlsOrgName);
+  const where = buildCacheWhere(dimension.filters, planYear, rlsOrgName, rlsBranchCode);
   return `
     SELECT
       SUM(plan_vehicle)                                      AS total_plan_vehicle,
@@ -286,8 +292,9 @@ export function generateRateDistributionQuery(
   planYear: number,
   dimension: PlanDrilldownDimension,
   rlsOrgName?: string,
+  rlsBranchCode?: string,
 ): string {
-  const where = buildCacheWhere(dimension.filters, planYear, rlsOrgName);
+  const where = buildCacheWhere(dimension.filters, planYear, rlsOrgName, rlsBranchCode);
   return `
     SELECT
       CASE
@@ -330,13 +337,14 @@ export function generatePlanAchievementPanel(
   sortOrder: SortOrder = 'desc',
   rlsOrgName?: string,
   policyFactWhereClause?: string,
+  rlsBranchCode?: string,
 ): { childrenSql: string; summarySql: string; distributionSql: string } {
   return {
     childrenSql: generatePremiumPlanDrilldownQuery(
-      planYear, dimension, { enabled: false }, sortField, sortOrder, rlsOrgName, policyFactWhereClause
+      planYear, dimension, { enabled: false }, sortField, sortOrder, rlsOrgName, policyFactWhereClause, rlsBranchCode
     ),
-    summarySql: generateKPICardQuery(planYear, dimension, rlsOrgName),
-    distributionSql: generateRateDistributionQuery(planYear, dimension, rlsOrgName),
+    summarySql: generateKPICardQuery(planYear, dimension, rlsOrgName, rlsBranchCode),
+    distributionSql: generateRateDistributionQuery(planYear, dimension, rlsOrgName, rlsBranchCode),
   };
 }
 

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere,
-  extractOrgNames, extractSalesmanNames,
+  extractOrgNames, extractSalesmanNames, resolveBranchRlsCode,
   QUERY_CACHE, withRouteCache,
 } from './shared.js';
 import {
@@ -189,6 +189,8 @@ router.get(
     const planScope = {
       orgNames: extractOrgNames(filterData, req.permissionFilter),
       salesmanNames: extractSalesmanNames(filterData, req.permissionFilter),
+      // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 年计划按省过滤（双门控；flag off / 单省无列 → 不注入）
+      branchCode: await resolveBranchRlsCode(req, 'achievement_cache'),
     };
 
     const [summaryRows, drilldownRows] = await Promise.all([
@@ -259,6 +261,8 @@ router.get(
       drillFilter = [];
     }
 
+    // 分省 RLS（ADR G4 GATED 多省）：plan_by_dim 直查 SalesmanTeamMapping，多省时按省过滤（双门控）
+    const heatmapBranchCode = await resolveBranchRlsCode(req, 'SalesmanTeamMapping');
     const sql = generatePerformanceOrgHeatmapQuery(
       whereWithoutDate,
       segmentTag as PerformanceSegmentTag,
@@ -266,7 +270,8 @@ router.get(
       15,
       groupByDimension as HeatmapGroupDimension,
       drillFilter,
-      dateField
+      dateField,
+      heatmapBranchCode
     );
 
     const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
@@ -302,6 +307,8 @@ router.get(
     const planScope = {
       orgNames: extractOrgNames(filterData, req.permissionFilter),
       salesmanNames: extractSalesmanNames(filterData, req.permissionFilter),
+      // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 年计划按省过滤（双门控；flag off / 单省无列 → 不注入）
+      branchCode: await resolveBranchRlsCode(req, 'achievement_cache'),
     };
 
     const sql = generatePerformanceTopSalesmanQuery(

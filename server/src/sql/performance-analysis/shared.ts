@@ -353,6 +353,8 @@ export function buildYtdProgressCte(): string {
 export interface PerformancePlanScope {
   orgNames?: string[];
   salesmanNames?: string[];
+  /** 分省 RLS 码（ADR G4 GATED 多省）：路由经 resolveBranchRlsCode 双门控解析；undefined → 不注入 */
+  branchCode?: string;
 }
 
 /**
@@ -372,6 +374,10 @@ export function buildPlanScopeConds(
   }
   if (planScope?.salesmanNames && planScope.salesmanNames.length > 0) {
     conds.push(`full_name IN (${planScope.salesmanNames.map((n) => `'${esc(n)}'`).join(', ')})`);
+  }
+  // 分省 RLS（GATED 多省）：achievement_cache 多省时携 branch_code（flag off / 单省无列 → undefined → 不注入）
+  if (planScope?.branchCode) {
+    conds.push(`branch_code = '${esc(planScope.branchCode)}'`);
   }
   for (const step of drillPath) {
     if (step.dimension === 'org_level_3') {

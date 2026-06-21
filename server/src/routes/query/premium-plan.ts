@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, withRouteCache, parseFiltersAndBuildWhere } from './shared.js';
+import { asyncHandler, AppError, duckdbService, withRouteCache, parseFiltersAndBuildWhere, resolveBranchRlsCode } from './shared.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../../sql/premiumPlan.js';
 
 const router = Router();
@@ -40,6 +40,9 @@ router.get(
     const { whereClause } = parseFiltersAndBuildWhere(req);
     // achievement_cache 层需要单独映射 org_name（因该表无 org_level_3 / is_telemarketing 字段）
     const rlsOrgName = req.user?.role === 'org_user' ? (req.user?.organization ?? undefined) : undefined;
+    // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 多省时携 branch_code，双门控解析（flag off /
+    // 单省无列 → undefined → 不注入 → 字节安全）。同理处理 org_name 旁路无法覆盖的省级隔离。
+    const rlsBranchCode = await resolveBranchRlsCode(req, 'achievement_cache');
 
     // org_user 强制覆盖 orgFilter（与原逻辑等价，现已由 rlsOrgName 承接）
     if (req.user?.role === 'org_user' && !req.user?.organization) {
@@ -59,10 +62,10 @@ router.get(
     let sql: string;
     switch (queryType) {
       case 'kpi':
-        sql = generateKPICardQuery(planYear, dimension, rlsOrgName);
+        sql = generateKPICardQuery(planYear, dimension, rlsOrgName, rlsBranchCode);
         break;
       case 'distribution':
-        sql = generateRateDistributionQuery(planYear, dimension, rlsOrgName);
+        sql = generateRateDistributionQuery(planYear, dimension, rlsOrgName, rlsBranchCode);
         break;
       case 'drilldown':
       default:
@@ -79,6 +82,7 @@ router.get(
           sortOrder as PlanSortOrder,
           rlsOrgName,
           whereClause,
+          rlsBranchCode,
         );
         break;
     }
@@ -118,6 +122,8 @@ router.get(
     const { whereClause } = parseFiltersAndBuildWhere(req);
     // achievement_cache 层需要单独映射 org_name
     const rlsOrgName = req.user?.role === 'org_user' ? (req.user?.organization ?? undefined) : undefined;
+    // 分省 RLS（ADR G4 GATED 多省）：见上方 /premium-plan 同款双门控解析。
+    const rlsBranchCode = await resolveBranchRlsCode(req, 'achievement_cache');
 
     if (req.user?.role === 'org_user' && !req.user?.organization) {
       throw new AppError(403, 'Organization not specified for ORG_USER role');
@@ -140,6 +146,7 @@ router.get(
       sortOrder as PlanSortOrder,
       rlsOrgName,
       whereClause,
+      rlsBranchCode,
     );
 
     const [children, summaryRows, distribution] = await Promise.all([

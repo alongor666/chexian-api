@@ -7,7 +7,7 @@
 
 import { Router, Request } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache } from './shared.js';
+import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache, resolveBranchRlsCode } from './shared.js';
 import {
   generateRepairOverviewQuery,
   generateRepairDetailQuery,
@@ -36,8 +36,8 @@ import {
  *  - org_user（'org_level_3=...'）→ 直接用（RepairDim 有该字段）
  *  - telemarketing_user（'is_telemarketing=true'）→ 降为 '1=1'
  *    （维修资源无电销概念，允许全量查询）
- *  - 多分公司启用（含 branch_code）→ 只保留 org_level_3 部分
- *    （RepairDim 是全省维度表，不分分公司）
+ *  - 多分公司启用（含 branch_code）→ 只保留 org_level_3 部分；分省 branch_code 隔离由
+ *    buildRepairWhere 在本函数之上追加（ADR G3/G4 查询期收口）
  */
 function buildRepairPermissionWhere(req: Request): string {
   const pf = req.permissionFilter;
@@ -45,6 +45,23 @@ function buildRepairPermissionWhere(req: Request): string {
   // 提取 org_level_3 = '...' 部分（支持转义单引号 ''）
   const match = pf.match(/org_level_3\s*=\s*'(?:[^']|'')*'/);
   return match ? match[0] : '1=1';
+}
+
+/**
+ * RepairDim 完整权限子句 = org 作用域降级（buildRepairPermissionWhere，同步）+ 分省 RLS（异步·GATED 多省）。
+ *
+ * RepairDim 仍**不纳入** cx sql 联邦（org_level_3 编码格式安全决策，见 sql-federation-policy.ts），
+ * 本助手仅在 typed 路由层补 branch 过滤。branch 段经 resolveBranchRlsCode 双门控：
+ *   - flag off（BRANCH_RLS_ENABLED=false，默认/生产）→ permissionFilter 无 branch_code → undefined
+ *   - RepairDim 单省加载（无 branch_code 列）→ undefined（免 Binder Error）
+ * 两者任一 → 不追加 → 与历史行为逐字节一致（字节安全）。branchCode 经 `^[A-Z]{2}$` 校验，无注入面。
+ */
+async function buildRepairWhere(req: Request): Promise<string> {
+  const orgWhere = buildRepairPermissionWhere(req);
+  const branchCode = await resolveBranchRlsCode(req, 'RepairDim');
+  if (!branchCode) return orgWhere;
+  const branchClause = `branch_code = '${branchCode}'`;
+  return orgWhere === '1=1' ? branchClause : `(${orgWhere}) AND ${branchClause}`;
 }
 
 const router = Router();
@@ -84,7 +101,7 @@ router.get(
   withRouteCache('repair-overview'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const data = await duckdbService.query(generateRepairOverviewQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -96,7 +113,7 @@ router.get(
   withRouteCache('repair-detail'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize) || 200));
     const data = await duckdbService.query(
@@ -112,7 +129,7 @@ router.get(
   withRouteCache('repair-status'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const data = await duckdbService.query(generateRepairStatusQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -123,7 +140,7 @@ router.get(
   '/repair/metadata',
   withRouteCache('repair-metadata', 14_400_000),
   asyncHandler(async (req, res) => {
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const data = await duckdbService.query(generateRepairMetadataQuery(whereClause));
     res.json({ success: true, data: data[0] ?? {} });
   })
@@ -144,7 +161,7 @@ v2Router.get(
   withRouteCache('repair-city'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const data = await duckdbService.query(generateRepairCityQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -156,7 +173,7 @@ v2Router.get(
   withRouteCache('repair-channel'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const data = await duckdbService.query(generateRepairChannelQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -168,7 +185,7 @@ v2Router.get(
   withRouteCache('repair-coop-tier'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const data = await duckdbService.query(generateRepairCoopTierQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -180,7 +197,7 @@ v2Router.get(
   withRouteCache('repair-scatter'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const data = await duckdbService.query(generateRepairScatterQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -192,7 +209,7 @@ v2Router.get(
   withRouteCache('repair-local-resource'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const data = await duckdbService.query(generateRepairLocalResourceQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -204,7 +221,7 @@ v2Router.get(
   withRouteCache('repair-to-premium'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const data = await duckdbService.query(generateRepairToPremiumQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -216,7 +233,7 @@ v2Router.get(
   withRouteCache('repair-diversion-list'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(1000, Math.max(1, Number(req.query.pageSize) || 200));
     const data = await duckdbService.query(
@@ -232,7 +249,7 @@ v2Router.get(
   withRouteCache('repair-orphan-shops'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = buildRepairPermissionWhere(req);
+    const whereClause = await buildRepairWhere(req);
     const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
     const data = await duckdbService.query(generateRepairOrphanShopsQuery(filters, limit, whereClause));
     res.json({ success: true, data });

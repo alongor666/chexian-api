@@ -9,6 +9,8 @@ export { QUALITY_BUSINESS_CONDITION };
 interface KpiQueryOptions {
   orgNames?: string[];
   salesmanNames?: string[];
+  /** 分省 RLS 码（ADR G4 GATED 多省）：路由经 resolveBranchRlsCode 双门控解析；undefined → 不注入 */
+  branchCode?: string;
 }
 
 const esc = escapeSqlValue;
@@ -22,6 +24,10 @@ const buildAchievementCacheWhere = (options: KpiQueryOptions = {}): string => {
   if (options.salesmanNames && options.salesmanNames.length > 0) {
     const salesmanList = options.salesmanNames.map((item) => `'${esc(item)}'`).join(', ');
     conditions.push(`full_name IN (${salesmanList})`);
+  }
+  // 分省 RLS（GATED 多省）：achievement_cache 多省时携 branch_code（flag off / 单省无列 → undefined → 不注入）
+  if (options.branchCode) {
+    conditions.push(`branch_code = '${esc(options.branchCode)}'`);
   }
   if (conditions.length === 0) {
     return '';

@@ -5,6 +5,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { AppError } from '../../middleware/error.js';
+import { duckdbService } from '../../services/duckdb.js';
+import { sanitizeTableName, escapeSqlValue } from '../../utils/security.js';
 import { getRouteCache, getRouteCacheEntry, setRouteCache, computeEtag, sendWithEtag, sendCachedEntry } from '../../services/route-cache.js';
 import { markRequestCacheHit } from '../../utils/request-context.js';
 import { buildResponseMeta } from '../../utils/api-meta.js';
@@ -102,6 +104,52 @@ export function buildOrgScopedPermissionWhere(req: Request): string {
   // 提取 org_level_3 = '...' 段（支持转义单引号 ''）；无该列条件则降为 '1=1'，绝不追加视图缺失的列
   const match = pf.match(/org_level_3\s*=\s*'(?:[^']|'')*'/);
   return match ? match[0] : '1=1';
+}
+
+/**
+ * 解析针对「不含标准 RLS 列、但 GATED 多省时携带 branch_code」的关系
+ * （achievement_cache / SalesmanTeamMapping / RepairDim）的分省 RLS 码（ADR G3/G4 查询期收口）。
+ *
+ * 这些关系不含 org_level_3/is_telemarketing 标准 RLS 列（RepairDim 仅含编码格式 org_level_3），
+ * parseFiltersAndBuildWhere 的 whereClause 注入对它们无效（列不存在→Binder Error）；改由本助手
+ * 解析 branchCode，各 SQL 生成器单独拼 `branch_code='XX'` 等值过滤。
+ *
+ * 双门控（两者皆成立才返回 branchCode，否则 undefined → 不注入 → 行为不变）：
+ *  - gate a：req.permissionFilter 含 `branch_code='XX'`（⟺ BRANCH_RLS_ENABLED 且用户有 branchCode；
+ *    见 middleware/permission.ts）。flag=false（默认/生产）→ 无此段 → undefined → 逐字节字节安全。
+ *  - gate b：目标关系实测含 branch_code 列（⟺ GATED 多省加载已激活；information_schema 零假设实测）。
+ *    免疫 T-3 中间态（RLS-on + 未载 SX → 关系仍单省无 branch_code 列）：不注入 → 不 Binder Error，
+ *    SC 全量=零差异（与 premiumPlan rlsOrgName 旁路同款安全降级）。
+ *
+ * branchCode 经 `^[A-Z]{2}$` 校验后方内插（与 getDeploymentBranchCode 同源约束），无 SQL 注入面。
+ */
+export async function resolveBranchRlsCode(
+  req: Request,
+  relation: string,
+): Promise<string | undefined> {
+  const pf = req.permissionFilter;
+  if (!pf) return undefined;
+  const m = pf.match(/branch_code\s*=\s*'([A-Z]{2})'/); // gate a
+  if (!m) return undefined;
+  const code = m[1];
+  const hasCol = await relationHasBranchCode(relation); // gate b
+  return hasCol ? code : undefined;
+}
+
+/**
+ * 关系是否含 branch_code 列（gate b 的实测）。information_schema 查询：关系/列缺失返回 0 行
+ * （不抛错，免 DESCRIBE 在表不存在时的异常）。带 hotspotLong TTL 缓存——列结构仅 ETL reload 时变，
+ * 缓存随 duckdb 内部 cache epoch（invalidateCache）自动作废。
+ */
+async function relationHasBranchCode(relation: string): Promise<boolean> {
+  const safe = escapeSqlValue(sanitizeTableName(relation));
+  const rows = await duckdbService.query<{ cnt: number }>(
+    `SELECT COUNT(*) AS cnt FROM information_schema.columns
+     WHERE table_schema = current_schema()
+       AND table_name = '${safe}' AND lower(column_name) = 'branch_code'`,
+    QUERY_CACHE.hotspotLong,
+  );
+  return Number(rows[0]?.cnt ?? 0) > 0;
 }
 
 const NON_SEMANTIC_QUERY_PARAMS = new Set(['_t', '_', 'cacheBust', 'cachebuster', 'timestamp']);
