@@ -28,6 +28,15 @@ fi
 
 ROOT="$(git rev-parse --show-toplevel)" || exit 0
 
+# ── 2.0 worktree 重锚提示（cwd 漂移根治，见 .claude/rules/worktree-setup.md §A）──
+# 仅在「链接 worktree」里提示：主 checkout 的 git-dir == git-common-dir，链接 worktree 二者不同 → 不打扰主目录普通切分支。
+# git hook 无法替会话调用 harness 的 EnterWorktree，只能提醒（warn-only）；漏调会导致 cwd 回弹主目录、相对路径全落主目录。
+if [ "$(git rev-parse --git-dir 2>/dev/null)" != "$(git rev-parse --git-common-dir 2>/dev/null)" ]; then
+  printf >&2 "\n%s\n%s\n\n" \
+    "💡 [post-checkout] 已进入 worktree：$ROOT" \
+    "   若在已有会话中创建（会话仍锚在原目录），请调用 EnterWorktree({path: \"$ROOT\"}) 重锚，否则 cwd 回弹主目录、编辑易漏进 main（详见 .claude/rules/worktree-setup.md §A「cwd 漂移根治」）。"
+fi
+
 # 子项目清单：root workspace (cli/mcp 由 root bun install 联动) + server 独立 package
 SUBPACKAGES=("cli" "mcp" "server")
 
