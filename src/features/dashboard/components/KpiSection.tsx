@@ -11,8 +11,10 @@ import {
   type KpiGroup,
   type KpiCardId,
 } from '../dashboardLayoutConfig';
-import { cn, colorClasses, textStyles, comprehensiveTheme } from '../../../shared/styles';
+import { cn, colorClasses, textStyles, cardStyles, comprehensiveTheme } from '../../../shared/styles';
+import { EmptyState, KpiGridSkeleton } from '../../../shared/ui';
 import { buildKpiCardProps } from './kpiCardProps';
+import { isKpiDataEmpty } from './kpiDataState';
 
 interface KpiSectionProps {
   kpis: KpiData;
@@ -83,6 +85,34 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
       <EnhancedKpiCard key={id} {...props} {...getInteractiveProps(id)} />
     );
   };
+
+  // 多省接入「前端空态保护」（ADR G8 / Day-1 SOP §5）：
+  // 山西等新分公司数据装载中 / 缺数据时，KPI 接口返回空对象或全零规模，
+  // 必须显式提示「加载中 / 暂无数据」，禁止静默渲染零值 KPI（避免误判真实零保费）。
+  const dataEmpty = isKpiDataEmpty(kpis);
+
+  if (loading && dataEmpty) {
+    return (
+      <div className="space-y-3" aria-busy="true">
+        <p className={cn('text-[12px]', colorClasses.text.neutralMuted)}>
+          数据加载中，请稍候…
+        </p>
+        <KpiGridSkeleton count={6} />
+      </div>
+    );
+  }
+
+  if (dataEmpty) {
+    return (
+      <div className={cn(cardStyles.standard)}>
+        <EmptyState
+          size="lg"
+          title="暂无数据"
+          description="当前机构数据可能正在装载，请稍后刷新。若持续为空，请联系管理员确认数据状态——这不代表真实零保费。"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
