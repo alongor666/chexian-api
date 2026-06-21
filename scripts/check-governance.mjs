@@ -524,6 +524,9 @@ function checkMergeConflictMarkers() {
     'BACKLOG_LOG.jsonl',
     'PROGRESS.md',
     'CLAUDE.md',
+    // merge=union 的 append-only 文件：union 通常自动消解冲突，但非纯追加/半行残留仍可能留标记（codex 闸-2 P2-4）
+    '.claude/workflow/pr-evolution.md',
+    '.claude/workflow/loop-quality-ledger.jsonl',
   ];
 
   const conflictPattern = /^(<{7}\s|={7}$|>{7}\s)/;

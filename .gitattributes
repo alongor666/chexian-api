@@ -16,3 +16,6 @@ BACKLOG_ARCHIVE.md merge=union
 # 各自追加不同区块 → 文末同区域 3-way 合并会冲突。设 merge=union：纯追加场景自动保留各方新增区块、
 # 不产生冲突标记（与 BACKLOG_LOG.jsonl 同理）。本文件只追加、不改写历史区块，故 union 安全。
 .claude/workflow/pr-evolution.md merge=union
+# loop-quality-ledger.jsonl 是 Loop v2 质量账本（append-only，每任务收尾追加一行 JSON 指标）。
+# 多会话并行各自追加不同行 → merge=union 自动并、不冲突（同 BACKLOG_LOG.jsonl）。见 .claude/rules/loop-orchestration.md §3。
+.claude/workflow/loop-quality-ledger.jsonl merge=union
