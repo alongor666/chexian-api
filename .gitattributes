@@ -12,3 +12,7 @@ BACKLOG_LOG.jsonl merge=union
 # 禁用 union（会产生非法结构），它们冲突时同样走"重新生成而非手解"，见 .claude/rules/worktree-setup.md。
 BACKLOG.md merge=union
 BACKLOG_ARCHIVE.md merge=union
+# pr-evolution.md 是 append-only 自进化复盘日志（每轮追加一个 R 区块到文末）。多会话并行 loop
+# 各自追加不同区块 → 文末同区域 3-way 合并会冲突。设 merge=union：纯追加场景自动保留各方新增区块、
+# 不产生冲突标记（与 BACKLOG_LOG.jsonl 同理）。本文件只追加、不改写历史区块，故 union 安全。
+.claude/workflow/pr-evolution.md merge=union
