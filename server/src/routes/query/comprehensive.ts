@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
-  parseFiltersAndBuildBothWhere, extractOrgNames,
+  parseFiltersAndBuildBothWhere, extractOrgNames, resolveBranchRlsCode,
   isValidDateFormat, logger, createDomainMiddleware,
   QUERY_CACHE, HTTP_MAX_AGE,
   buildRouteCacheKey, getRouteCache, setRouteCache,
@@ -89,10 +89,12 @@ async function handleComprehensiveBundle(req: Request, res: Response): Promise<v
   ]);
 
   const orgNames = extractOrgNames(filterData, req.permissionFilter);
+  // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 年计划按省过滤（双门控；flag off / 单省无列 → 不注入）
+  const rlsBranchCode = await resolveBranchRlsCode(req, 'achievement_cache');
   let planRows: Array<{ dim_key: string; plan_premium: number }> = [];
   try {
     planRows = await duckdbService.query(
-      generateComprehensivePlanByOrgQuery(resolvedPlanYear, orgNames),
+      generateComprehensivePlanByOrgQuery(resolvedPlanYear, orgNames, rlsBranchCode),
       QUERY_CACHE.hotspotMedium
     );
   } catch (error) {

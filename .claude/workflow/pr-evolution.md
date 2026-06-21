@@ -626,6 +626,17 @@
   - expires: 2026-09-21（同 R9，GATED 上线前机制化）
 - **下一实验**：G3/G4 后续（achievement_cache/SalesmanTeamMapping 传播 + typed 路由分省过滤）需服务端运行时 + 多 route 文件，blast radius 较大；或转 G7（SX 账号·需用户名单）/G8（前端空态·独立小）。**🔴 GATED cutover 须用户显式确认。**
 
+**R11 · G3/G4 查询期收口 — typed 路由分省 RLS 落地（双门控·SC 字节安全）**
+- **承接**：R9（dim loader）+ R10（fact loader）只把 branch_code 注入到**数据层**；本轮把它**在查询期下推**到 typed 路由，闭合"SX 用户在 premium-plan/repair 等仍看混省数据"的真漏洞。分支 `claude/sx-rls-closeout`，backlog `6ae4d7` note 追加。
+- **合同**：① loader 对 `SalesmanTeamMapping`/`SalesmanPlanFact`/`achievement_cache` gated 注入 branch_code（multiProvince=DESCRIBE SalesmanDim 零假设；achievement_cache A1/A2=`m.branch_code`、Part B=`ytd_actual MAX(branch_code)` 不 fan-out；branchAware 二次守卫 PolicyFact 含列防 Binder）；② `resolveBranchRlsCode` 双门控（gate a=permissionFilter 含 branch_code；gate b=information_schema 实测关系含列）接入 premium-plan/kpi/comprehensive/performance(bundle+heatmap)/repair；③ `BRANCH_RLS_ENABLED=false` 默认逐字节不变。
+- **关键设计抉择（最大思考量）**：路由注入该门控在**标志**还是**列存在性**？查清生产 `BRANCH_RLS_ENABLED=false`（env.ts 默认 + ecosystem 未设）+ Day-1 SOP「先 RLS-on 再载 SX」⟹ 存在 **T-3 中间态（RLS-on + 单省无 branch_code 列）**，仅按标志注入会 Binder Error 破坏 golden-baseline 隔离证明。∴ 选**列存在性 ground-truth 双门控**（gate b），沿用 loader 既有 DESCRIBE 零假设范式，免疫 T-3。
+- **oracle**：CI 单测 **3435 全绿**（+12 `branch-rls-injection` 纯函数：传→含 `branch_code='SX'`/不传→零注入）；集成 `duckdb-branch-dim` **7/7**（+3：三表单省无列字节回归/多省分省隔离 SX≠SC）+ `duckdb-branch-rls-resolve` **5/5**（双门控 + T-3 gate b 免疫 + 关系不存在降级）；typecheck；governance 42/42。`domain-testcases` 5 失败先证伪归属为既有（diff 未触及该文件/cross_sell，clean main 同样失败）—— §0「验证不声称」实践。
+- **重来更好**：① 范围广度（5 路 achievement_cache 消费方 + SalesmanTeamMapping 独立查 + RepairDim）靠先派 Explore agent **精确测绘"STANDALONE 真漏洞 vs JOIN-PolicyFact 已约束"**才正确定界，避免盲目改全部消费方（JOIN 附属表已被 PolicyFact 的 whereClause 约束，无需重复过滤）——下次遇"给所有查 X 表的路由加过滤"先做用法分类测绘。② 中心化 `resolveBranchRlsCode` 一处实现、各 SQL 生成器加 `rlsBranchCode?` 一参，比散落 6 处正则提取更可维护、可单测。
+- **复用价值**：`resolveBranchRlsCode(req, relation)` 是「不含标准 RLS 列、GATED 多省时携 branch_code」类关系的通用分省过滤入口；后续任一此类关系（如 filters.ts /filters/options）接 RLS 仅"调用 helper + 生成器加一参"。
+- **needs_automation: true** → ① `verify-branch-domain` harness 应扩"运行期分省过滤"分支（多省 SX token 查 achievement_cache/repair 返回行 branch_code 全 SX）；② 可加 governance 闸"achievement_cache/SalesmanTeamMapping/RepairDim 单源路径不得引入 branch_code 列"防回归破坏字节安全（与 R9/R10 同一 harness 缺口合并）。
+  - expires: 2026-09-21（同 R9/R10，GATED 上线前机制化为 harness/governance 闸；未机制化则升级或撤项）
+- **剩余 RLS 漏洞（非本 PR·登记待办）**：`routes/filters.ts` /filters/options 直查 SalesmanTeamMapping（文件作用域外·并行安全）；`marketing-report`/`premium-report` 标签子查询（team_name 命名泄漏·非数据行·低优）。
+- **下一实验**：填上述剩余 RLS 漏洞（filters.ts 需协调文件作用域）；或转 G7（SX 账号·需用户名单）/G8（前端空态）。**🔴 GATED cutover（RLS-on→SX 进 current/→sync VPS→发账号）须用户显式确认，禁自动执行——本轮只做查询期过滤，不 cutover。**
 **R11 · G8 前端空态保护（看板 KPI·零后端·并行 loop 之一）**
 - **合同**（ADR G8 / Day-1 SOP §5）：山西等新分公司数据装载中 / 缺数据时，KPI 接口返回空对象或全零规模 → 看板必须显式提示「加载中 / 暂无数据」，**禁止静默渲染零值 KPI**（避免业务方误判真实零保费）。仅改 `src/` 前端，零后端改动（与 G3/G4/G7 并行会话隔离）。backlog `2026-06-21-claude-9f4da8` → DONE。
 - **成果**：① 新增纯函数 `kpiDataState.isKpiDataEmpty`（判据：总保费/车险保费/保单件数三规模指标全零或缺失即空态，一并覆盖"接口未返回/装载中"与"该范围真实无业务量"两类空）；② `KpiSection` 在所有 hooks 后加早返守卫——`loading && 空`→复用 `KpiGridSkeleton`+「数据加载中，请稍候…」；`空`→复用 `EmptyState`+「暂无数据·当前机构数据可能正在装载…这不代表真实零保费」；③ `PremiumDashboard` 把 `dashboardBundle.loading` 并入传给 KpiSection 的 `loading`（bundle 模式下 `useKpiData` 走 prefetched 路径自身 loading 恒 false，不并入会把"加载中"误判成"暂无数据"）。

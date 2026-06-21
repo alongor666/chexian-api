@@ -229,7 +229,8 @@ export function generatePerformanceOrgHeatmapQuery(
   periods = 15,
   groupByDimension: HeatmapGroupDimension = 'org_level_3',
   drillFilter: HeatmapDrillStep[] = [],
-  dateField: string = 'policy_date'
+  dateField: string = 'policy_date',
+  rlsBranchCode?: string
 ): string {
   const tableAlias = 'p.';
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, tableAlias);
@@ -242,6 +243,10 @@ export function generatePerformanceOrgHeatmapQuery(
   const drillAnd = drillWhereClause ? `AND ${drillWhereClause}` : '';
   const mappingDrillWhereClause = supportsAnnualPlan ? heatmapDrillToMappingWhere(drillFilter) : '';
   const mappingDrillAnd = mappingDrillWhereClause ? `AND ${mappingDrillWhereClause}` : '';
+  // 分省 RLS（ADR G4 GATED 多省）：plan_by_dim 直查 SalesmanTeamMapping（不 JOIN 已过滤的 PolicyFact），
+  // 多省时该表携 branch_code（路由双门控解析；flag off / 单省无列 → undefined → 不注入 → 字节安全）。
+  // 主热力图查询走 PolicyFact + whereWithoutDate（已含 branch RLS），仅此 CTE 需补省过滤。
+  const mappingBranchAnd = rlsBranchCode ? `AND m.branch_code = '${escapeSqlValue(rlsBranchCode)}'` : '';
 
   // 根据 timePeriod 动态生成 SQL 片段
   let truncExpr: string;        // 分组键：DATE_TRUNC 或原始日期
@@ -314,6 +319,7 @@ export function generatePerformanceOrgHeatmapQuery(
       FROM SalesmanTeamMapping m
       WHERE 1=1
         ${mappingDrillAnd}
+        ${mappingBranchAnd}
       GROUP BY 1
     ),
     plan_period AS (

@@ -278,12 +278,16 @@ ORDER BY p.time_period ASC
  */
 export function generateComprehensivePlanByOrgQuery(
   planYear: number,
-  orgNames: string[] = []
+  orgNames: string[] = [],
+  rlsBranchCode?: string
 ): string {
   const orgCondition =
     orgNames.length > 0
       ? `AND org_name IN (${orgNames.map((org) => `'${escapeSqlValue(org)}'`).join(', ')})`
       : '';
+  // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 多省时携 branch_code（路由双门控解析；
+  // flag off / 单省无列 → undefined → 不注入 → 字节安全）
+  const branchCondition = rlsBranchCode ? `AND branch_code = '${escapeSqlValue(rlsBranchCode)}'` : '';
 
   return `
 SELECT
@@ -292,6 +296,7 @@ SELECT
 FROM achievement_cache
 WHERE plan_year = ${Number(planYear)}
   ${orgCondition}
+  ${branchCondition}
 GROUP BY org_name
   `.trim();
 }

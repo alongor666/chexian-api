@@ -20,10 +20,15 @@ import { getDeploymentBranchCode } from '../config/sql-federation-policy.js';
  * （工号+姓名），与 achievement_cache 对 PolicyFact.salesman_name 的 JOIN 约定一致。
  * 整行重复（如徐小满×2）保留 tenure_months 最大行，business_no 兜底定序保证确定性。
  */
-const DEDUPED_SALESMAN_DIM_SQL = `
-      SELECT business_no, salesman_name, full_name, team, organization
+const dedupedSalesmanDimSql = (includeBranchCode: boolean): string => {
+  // ADR G3·G4 GATED 多省：multiProvince 时 SalesmanDim 携带 branch_code（buildDimSelectSql 多源
+  // UNION ALL BY NAME 注入），去重子查询透传该列供下游 SalesmanTeamMapping/SalesmanPlanFact 分省 RLS。
+  // 单省（默认）includeBranchCode=false → 与历史 SQL 逐字节一致（SalesmanDim 无 branch_code，不可选）。
+  const bc = includeBranchCode ? ', branch_code' : '';
+  return `
+      SELECT business_no, salesman_name, full_name, team, organization${bc}
       FROM (
-        SELECT business_no, salesman_name, full_name, team, organization,
+        SELECT business_no, salesman_name, full_name, team, organization${bc},
                ROW_NUMBER() OVER (
                  PARTITION BY full_name
                  ORDER BY tenure_months DESC NULLS LAST, business_no
@@ -31,6 +36,7 @@ const DEDUPED_SALESMAN_DIM_SQL = `
         FROM SalesmanDim
       )
       WHERE rn = 1`;
+};
 
 /**
  * 从 Parquet 维度表加载业务员主数据和计划数据
@@ -73,6 +79,15 @@ export async function loadDimParquet(
   const smCount = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM SalesmanDim');
   console.log(`[DuckDB] SalesmanDim loaded: ${smCount[0]?.cnt ?? 0} records from Parquet`);
 
+  // multiProvince 判定（零假设·DESCRIBE 实测，复用 G3 信号）：SalesmanDim 含 branch_code 列
+  // ⟺ salesmanSelect 是多源 UNION（extraSalesmanSources 非空）⟺ GATED 多省加载已激活。
+  // 据此 gated 决定 SalesmanTeamMapping / SalesmanPlanFact / achievement_cache 是否携带 branch_code，
+  // 使其与 PolicyFact（ETL 落列）对齐、供 typed 路由分省 RLS 过滤。
+  // 单省（默认 SC-only）→ false → 下游三表逐字节等价历史行为（字节安全；achievement_cache CREATE TABLE
+  // 加列会破坏单省字节安全，故必须 gated）。
+  const salesmanDimCols = await db.query<{ column_name: string }>('DESCRIBE SalesmanDim');
+  const multiProvince = salesmanDimCols.some((c) => c.column_name?.toLowerCase() === 'branch_code');
+
   // 2. 创建 PlanFact 表（多年多级计划）
   await db.query(`
     CREATE OR REPLACE TABLE PlanFact AS
@@ -92,8 +107,8 @@ export async function loadDimParquet(
       s.full_name,
       COALESCE(s.team, '未分配') AS team_name,
       COALESCE(s.organization, '未分配机构') AS organization,
-      COALESCE(p.plan_vehicle, 0.0) AS car_insurance_plan_2026
-    FROM (${DEDUPED_SALESMAN_DIM_SQL}
+      COALESCE(p.plan_vehicle, 0.0) AS car_insurance_plan_2026${multiProvince ? ',\n      s.branch_code' : ''}
+    FROM (${dedupedSalesmanDimSql(multiProvince)}
     ) s
     LEFT JOIN (
       -- 计划年动态取 PlanFact 内最新年（原硬编码 2026：跨年后新计划入库时
@@ -118,7 +133,7 @@ export async function loadDimParquet(
       COALESCE(s.organization, '未分配机构') AS org_name,
       p.plan_year,
       p.plan_vehicle,
-      p.plan_total
+      p.plan_total${multiProvince ? ',\n      s.branch_code' : ''}
     FROM (
       SELECT full_name, plan_year,
              SUM(plan_vehicle) AS plan_vehicle,
@@ -127,13 +142,13 @@ export async function loadDimParquet(
       WHERE level = 'salesman'
       GROUP BY full_name, plan_year
     ) p
-    LEFT JOIN (${DEDUPED_SALESMAN_DIM_SQL}
+    LEFT JOIN (${dedupedSalesmanDimSql(multiProvince)}
     ) s ON p.full_name = s.full_name
   `);
   console.log('[DuckDB] SalesmanPlanFact (compat) view created — multi-year support');
 
-  // 5. 预构建达成分析缓存表
-  await buildAchievementView(db, 2026);
+  // 5. 预构建达成分析缓存表（multiProvince 时携带 branch_code 供 typed 路由分省 RLS）
+  await buildAchievementView(db, 2026, multiProvince);
 }
 
 /**
@@ -246,8 +261,31 @@ export async function loadTeamMapping(db: DuckDBQueryable, jsonFilePath: string)
  * - 上年同期：精确日期匹配（max_date - INTERVAL 1 YEAR）
  * - 无计划业务员：出现（mapping 中 plan=0 的 + mapping 外有保单的均出现）
  */
-export async function buildAchievementView(db: DuckDBQueryable, planYear: number = 2026): Promise<void> {
+export async function buildAchievementView(
+  db: DuckDBQueryable,
+  planYear: number = 2026,
+  multiProvince: boolean = false,
+): Promise<void> {
   const prevYear = planYear - 1;
+
+  // ADR G4 GATED 多省：achievement_cache 携带 branch_code 供 typed 路由（premium-plan/kpi/
+  // comprehensive/performance）分省 RLS 过滤。守卫（零假设·DESCRIBE 实测）：
+  //   branchAware = multiProvince（SalesmanTeamMapping 已含 branch_code）∧ PolicyFact 实测含 branch_code 列
+  // 任一不满足 → 不加列：单省 = 历史 SQL 逐字节一致（字节安全）；防 PolicyFact 缺列时 Part B 的
+  // MAX(branch_code) Binder Error。分省码来源：A1/A2 取 SalesmanTeamMapping m.branch_code（业务员归属省）；
+  // Part B（有保单无映射业务员）取 PolicyFact 聚合 MAX(branch_code)（1 行/业务员，不 fan-out A1）。
+  const policyFactCols = multiProvince
+    ? await db.query<{ column_name: string }>('DESCRIBE PolicyFact')
+    : [];
+  const branchAware =
+    multiProvince && policyFactCols.some((c) => c.column_name?.toLowerCase() === 'branch_code');
+  const ytdBranchCol = branchAware ? ', MAX(branch_code) AS branch_code' : '';
+  const aBranchCol = branchAware
+    ? ',\n      m.branch_code                                              AS branch_code'
+    : '';
+  const bBranchCol = branchAware
+    ? ',\n      a.branch_code                                              AS branch_code'
+    : '';
 
   await db.query(`
     CREATE OR REPLACE TABLE achievement_cache AS
@@ -270,8 +308,9 @@ export async function buildAchievementView(db: DuckDBQueryable, planYear: number
       WHERE policy_date >= DATE '${planYear}-01-01'
     ),
     -- 2. 今年 YTD 实际（JOIN 键：PolicyFact.salesman_name = SalesmanTeamMapping.full_name）
+    --    branchAware（GATED 多省）时附 MAX(branch_code)：1 行/业务员不 fan-out，供 Part B 分省标签。
     ytd_actual AS (
-      SELECT salesman_name, SUM(premium) / 10000 AS actual_vehicle
+      SELECT salesman_name, SUM(premium) / 10000 AS actual_vehicle${ytdBranchCol}
       FROM PolicyFact
       WHERE policy_date >= DATE '${planYear}-01-01'
       GROUP BY salesman_name
@@ -344,7 +383,7 @@ export async function buildAchievementView(db: DuckDBQueryable, planYear: number
         WHEN COALESCE(pf.prev_full_year, 0) > 0
         THEN ROUND((COALESCE(m.car_insurance_plan_2026, 0) / pf.prev_full_year - 1) * 100.0, 2)
         ELSE NULL
-      END AS plan_growth_rate
+      END AS plan_growth_rate${aBranchCol}
     FROM SalesmanTeamMapping m
     LEFT JOIN ytd_actual  a  ON m.full_name = a.salesman_name
     LEFT JOIN prev_ytd    pv ON m.full_name = pv.salesman_name
@@ -372,7 +411,7 @@ export async function buildAchievementView(db: DuckDBQueryable, planYear: number
         THEN ROUND(((COALESCE(ao.actual_vehicle, 0) - po.prev_actual) / po.prev_actual) * 100.0, 2)
         ELSE NULL
       END AS yoy_rate,
-      NULL                                                       AS plan_growth_rate
+      NULL                                                       AS plan_growth_rate${aBranchCol}
     FROM SalesmanTeamMapping m
     JOIN ytd_by_org ao ON m.full_name = ao.salesman_name
     LEFT JOIN prev_ytd_by_org  po  ON m.full_name = po.salesman_name  AND ao.org_level_3 = po.org_level_3
@@ -400,7 +439,7 @@ export async function buildAchievementView(db: DuckDBQueryable, planYear: number
         THEN ROUND(((COALESCE(a.actual_vehicle, 0) - pv.prev_actual) / pv.prev_actual) * 100.0, 2)
         ELSE NULL
       END AS yoy_rate,
-      NULL                                                       AS plan_growth_rate
+      NULL                                                       AS plan_growth_rate${bBranchCol}
     FROM ytd_actual a
     LEFT JOIN prev_ytd  pv ON a.salesman_name = pv.salesman_name
     LEFT JOIN prev_full pf ON a.salesman_name = pf.salesman_name

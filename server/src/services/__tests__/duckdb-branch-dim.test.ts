@@ -79,11 +79,14 @@ describe('维度表多省共存加载（ADR G3）', () => {
       TO '${sxRepair}' (FORMAT PARQUET)
     `);
 
-    // buildAchievementView 依赖 PolicyFact（loadDimParquet 第 5 步）
+    // buildAchievementView 依赖 PolicyFact（loadDimParquet 第 5 步）。含 branch_code 列（ETL 落列实况）
+    // + 两省业务员保单，供多省 achievement_cache 分省断言（branchAware 守卫要求 PolicyFact 含该列）。
     await duckdbService.query(`
       CREATE OR REPLACE TABLE PolicyFact AS
-      SELECT DATE '2026-03-01' AS policy_date, '川业务员' AS salesman_name,
-             CAST(50000 AS DOUBLE) AS premium, '乐山' AS org_level_3
+      SELECT * FROM (VALUES
+        (DATE '2026-03-01', '川业务员', CAST(50000 AS DOUBLE), '乐山', 'SC'),
+        (DATE '2026-03-02', '晋业务员', CAST(30000 AS DOUBLE), '太原', 'SX')
+      ) AS t(policy_date, salesman_name, premium, org_level_3, branch_code)
     `);
   });
 
@@ -138,5 +141,65 @@ describe('维度表多省共存加载（ADR G3）', () => {
       "SELECT repair_shop_name AS shop FROM RepairDim WHERE branch_code = 'SX'",
     );
     expect(sx[0].shop).toBe('晋修理厂');
+  });
+
+  // ── ADR G4 查询期收口：SalesmanTeamMapping / SalesmanPlanFact / achievement_cache 分省传播 ──
+
+  it('🔴 单省（SC-only）：SalesmanTeamMapping/SalesmanPlanFact/achievement_cache 均不含 branch_code 列（字节安全回归）', async () => {
+    await loadDimParquet(duckdbService, scSalesman, scPlan);
+    for (const rel of ['SalesmanTeamMapping', 'SalesmanPlanFact', 'achievement_cache']) {
+      const cols = await duckdbService.query<{ column_name: string }>(`DESCRIBE ${rel}`);
+      expect(cols.some(c => c.column_name.toLowerCase() === 'branch_code'),
+        `${rel} 单省不应含 branch_code`).toBe(false);
+    }
+  });
+
+  it('多省（SC+SX）：SalesmanTeamMapping 含 branch_code，SC 业务员=SC、SX 业务员=SX，可按省过滤', async () => {
+    await loadDimParquet(
+      duckdbService, scSalesman, scPlan,
+      [{ branchCode: 'SX', path: sxSalesman }],
+      [{ branchCode: 'SX', path: sxPlan }],
+    );
+    const cols = await duckdbService.query<{ column_name: string }>('DESCRIBE SalesmanTeamMapping');
+    expect(cols.some(c => c.column_name.toLowerCase() === 'branch_code')).toBe(true);
+    const rows = await duckdbService.query<{ branch_code: string; full_name: string }>(
+      'SELECT branch_code, full_name FROM SalesmanTeamMapping ORDER BY branch_code',
+    );
+    expect(rows.find(r => r.branch_code === 'SC')?.full_name).toBe('川业务员');
+    expect(rows.find(r => r.branch_code === 'SX')?.full_name).toBe('晋业务员');
+    const sxOnly = await duckdbService.query<{ c: number }>(
+      "SELECT CAST(COUNT(*) AS INTEGER) AS c FROM SalesmanTeamMapping WHERE branch_code = 'SX'",
+    );
+    expect(Number(sxOnly[0].c)).toBe(1);
+    // SalesmanPlanFact 视图同样携带 branch_code
+    const spfCols = await duckdbService.query<{ column_name: string }>('DESCRIBE SalesmanPlanFact');
+    expect(spfCols.some(c => c.column_name.toLowerCase() === 'branch_code')).toBe(true);
+  });
+
+  it('多省（SC+SX）：achievement_cache 含 branch_code，分省过滤精确隔离（SX 不含 SC 业务员）', async () => {
+    await loadDimParquet(
+      duckdbService, scSalesman, scPlan,
+      [{ branchCode: 'SX', path: sxSalesman }],
+      [{ branchCode: 'SX', path: sxPlan }],
+    );
+    const cols = await duckdbService.query<{ column_name: string }>('DESCRIBE achievement_cache');
+    expect(cols.some(c => c.column_name.toLowerCase() === 'branch_code')).toBe(true);
+    // SX 过滤命中晋业务员（A1：organization='太原' → m.branch_code='SX'）
+    const sxNames = await duckdbService.query<{ full_name: string }>(
+      "SELECT DISTINCT full_name FROM achievement_cache WHERE branch_code = 'SX'",
+    );
+    expect(sxNames.map(r => r.full_name)).toContain('晋业务员');
+    expect(sxNames.every(r => r.full_name !== '川业务员')).toBe(true);
+    // SC 过滤命中川业务员，不含晋业务员
+    const scNames = await duckdbService.query<{ full_name: string }>(
+      "SELECT DISTINCT full_name FROM achievement_cache WHERE branch_code = 'SC'",
+    );
+    expect(scNames.map(r => r.full_name)).toContain('川业务员');
+    expect(scNames.every(r => r.full_name !== '晋业务员')).toBe(true);
+    // 全表行数 = SC + SX 之和（无 branch_code 为 NULL 的孤儿行）
+    const nullBranch = await duckdbService.query<{ c: number }>(
+      'SELECT CAST(COUNT(*) AS INTEGER) AS c FROM achievement_cache WHERE branch_code IS NULL',
+    );
+    expect(Number(nullBranch[0].c)).toBe(0);
   });
 });

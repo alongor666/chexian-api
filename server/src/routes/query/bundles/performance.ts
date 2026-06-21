@@ -7,7 +7,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere,
-  extractOrgNames, extractSalesmanNames,
+  extractOrgNames, extractSalesmanNames, resolveBranchRlsCode,
   QUERY_CACHE, HTTP_MAX_AGE,
   isBundleRoutesEnabled, buildRouteCacheKey,
   getRouteCache, setRouteCache,
@@ -181,6 +181,8 @@ router.get(
     const planScope = {
       orgNames: extractOrgNames(filterData, req.permissionFilter),
       salesmanNames: extractSalesmanNames(filterData, req.permissionFilter),
+      // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 年计划按省过滤（双门控；flag off / 单省无列 → 不注入）
+      branchCode: await resolveBranchRlsCode(req, 'achievement_cache'),
     };
     const trendGranularity = (granularity || mapPerformanceTimeToGranularity(timePeriod as PerformanceTimePeriod)) as PerformanceTrendGranularity;
     const periodBoundsSql = generatePerformancePeriodBoundsQuery(

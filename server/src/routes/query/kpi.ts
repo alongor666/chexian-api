@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
-import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, createDomainMiddleware, withRouteCache } from './shared.js';
+import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, createDomainMiddleware, withRouteCache, resolveBranchRlsCode } from './shared.js';
 import { generateKpiQuery } from '../../sql/kpi.js';
 import { generateKpiDetailQuery } from '../../sql/kpi-detail.js';
 import { RouteConcurrencyGate } from '../../services/route-concurrency.js';
@@ -98,11 +98,13 @@ router.get(
 
     const orgNames = extractOrgNames(filterData, req.permissionFilter);
     const salesmanNames = extractSalesmanNames(filterData, req.permissionFilter);
+    // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 的 vehicle_plan CTE 携 branch_code 时按省过滤
+    const branchCode = await resolveBranchRlsCode(req, 'achievement_cache');
 
     const plan = planKpiCostCube(whereWithDate, dateField);
     const mainSql = generateKpiQuery(
       whereWithDate,
-      { orgNames, salesmanNames },
+      { orgNames, salesmanNames, branchCode },
       whereWithoutDate,
       dateField,
       plan?.mode === 'routing'
