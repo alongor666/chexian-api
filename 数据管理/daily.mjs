@@ -1071,6 +1071,14 @@ function findAllXlsx(dir) {
 function runClaimsDetail(python, scriptDir) {
   log('cyan', '\n═══ ClaimsDetail 域：赔案明细（分区 + CDC）═══\n');
 
+  // 多省 0a（ADR D5）：BRANCH_CODE 路由 — 非 SC 省源自 staging/<省>、产物隔离到 warehouse/validation/<省>/claims_detail，
+  // policy-dir 富集指向同省 premium（validation/<省>），绝不进 SC warehouse/fact。SC 默认链路所有路径与原值逐字节一致。
+  const BRANCH_CODE = process.env.BRANCH_CODE || 'SC';
+  const claimsSourceDir = branchSourceDir(scriptDir, BRANCH_CODE);                  // SC: scriptDir；非 SC: staging/<省>
+  const branchPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE); // SC: warehouse/fact/policy/current；非 SC: warehouse/validation/<省>
+  const claimsDetailDir = BRANCH_CODE === 'SC' ? CLAIMS_DETAIL_DIR : join(branchPolicyDir, 'claims_detail');
+  const claimsDetailPath = BRANCH_CODE === 'SC' ? CLAIMS_DETAIL_PATH : join(claimsDetailDir, 'latest.parquet');
+
   // manifest 驱动：优先使用 manifest.domains.claims_detail.files，避免误合入 legacy 02_*/车险报立结案清单_*
   const claimsSpec = _currentReleaseManifest?.domains?.claims_detail;
   const manifestFiles = claimsSpec
@@ -1084,12 +1092,12 @@ function runClaimsDetail(python, scriptDir) {
   // 2026-06-10 上游 BI 清单重构：理赔编号 02 → 05，且基线为日期范围前缀文件
   // （YYYYMMDD-YYYYMMDD_05_理赔明细.xlsx）；旧 02 模式保留向后兼容
   const newFiles = [
-    ...ls('02_理赔明细_*.xlsx', scriptDir),
-    ...ls('????????_02_理赔明细*.xlsx', scriptDir),
-    ...ls('????????_05_理赔明细*.xlsx', scriptDir),
-    ...ls('????????-????????_0?_理赔明细*.xlsx', scriptDir),
+    ...ls('02_理赔明细_*.xlsx', claimsSourceDir),
+    ...ls('????????_02_理赔明细*.xlsx', claimsSourceDir),
+    ...ls('????????_05_理赔明细*.xlsx', claimsSourceDir),
+    ...ls('????????-????????_0?_理赔明细*.xlsx', claimsSourceDir),
   ].sort((a, b) => a.name.localeCompare(b.name));
-  const legacyFiles = ls('车险报立结案清单_*.xlsx', scriptDir).sort((a, b) => a.name.localeCompare(b.name));
+  const legacyFiles = ls('车险报立结案清单_*.xlsx', claimsSourceDir).sort((a, b) => a.name.localeCompare(b.name));
   let sourceFiles = manifestFiles || [...newFiles, ...legacyFiles];
   if (sourceFiles.length === 0) {
     log('yellow', '⚠ 未找到 02/05_理赔明细 xlsx（含 YYYYMMDD-YYYYMMDD_ 范围前缀）或 车险报立结案清单_*.xlsx，跳过');
@@ -1147,11 +1155,11 @@ function runClaimsDetail(python, scriptDir) {
     log('green', `源文件: ${f.name} (${(statSync(f.path).size / 1024 / 1024).toFixed(1)} MB)`);
   }
 
-  ensureDir(CLAIMS_DETAIL_DIR);
+  ensureDir(claimsDetailDir);
 
-  const policyDir = join(scriptDir, 'warehouse/fact/policy/current');
+  const policyDir = branchPolicyDir;
   const convertScript = join(scriptDir, 'pipelines/convert_claims_detail.py');
-  const tmpOutput = join(CLAIMS_DETAIL_DIR, '_incoming.parquet');
+  const tmpOutput = join(claimsDetailDir, '_incoming.parquet');
   const inputPaths = sourceFiles.map(f => `"${f.path}"`);
 
   // 开头清理：如果上次运行异常残留 _incoming.parquet，先清掉
@@ -1168,11 +1176,12 @@ function runClaimsDetail(python, scriptDir) {
     runPythonScript(python, convertScript, [
       '-i', ...inputPaths,
       '-o', `"${tmpOutput}"`,
-      '--policy-dir', `"${policyDir}"`
+      '--policy-dir', `"${policyDir}"`,
+      ...(BRANCH_CODE !== 'SC' ? ['--branch-code', BRANCH_CODE] : [])
     ]);
 
     // Step 2: 检查是否已有分区文件
-    const hasPartitions = readdirSync(CLAIMS_DETAIL_DIR)
+    const hasPartitions = readdirSync(claimsDetailDir)
       .some(f => f.startsWith('claims_') && f.endsWith('.parquet'));
 
     if (hasPartitions && claimsSpec?.mode === 'replace_range') {
@@ -1180,7 +1189,7 @@ function runClaimsDetail(python, scriptDir) {
       log('green', `▶ Step 2: 日期窗替换 (${claimsSpec.report_start} ~ ${claimsSpec.report_end})`);
       runPythonScript(python, partitionManager, [
         'replace_range',
-        '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`,
+        '-i', `"${tmpOutput}"`, '-o', `"${claimsDetailDir}"`,
         '--report-start', claimsSpec.report_start,
         '--report-end', claimsSpec.report_end,
       ]);
@@ -1188,13 +1197,13 @@ function runClaimsDetail(python, scriptDir) {
       // CDC 模式：增量合入已有分区
       log('green', '▶ Step 2: CDC 更新（合入已有分区）');
       runPythonScript(python, partitionManager, [
-        'update', '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`
+        'update', '-i', `"${tmpOutput}"`, '-o', `"${claimsDetailDir}"`
       ]);
     } else {
       // 首次迁移：初始分区
       log('green', '▶ Step 2: 初始迁移（创建年度分区）');
       runPythonScript(python, partitionManager, [
-        'migrate', '-i', `"${tmpOutput}"`, '-o', `"${CLAIMS_DETAIL_DIR}"`
+        'migrate', '-i', `"${tmpOutput}"`, '-o', `"${claimsDetailDir}"`
       ]);
     }
   } finally {
@@ -1203,24 +1212,25 @@ function runClaimsDetail(python, scriptDir) {
   }
 
   // Step 4: 清理旧 latest.parquet（兼容迁移）
-  if (existsSync(CLAIMS_DETAIL_PATH)) {
+  if (existsSync(claimsDetailPath)) {
     const archiveDir = join(__dirname, '.archive');
     ensureDir(archiveDir);
-    renameSync(CLAIMS_DETAIL_PATH, join(archiveDir, `claims_detail_latest_${formatDateTime()}.parquet`));
+    renameSync(claimsDetailPath, join(archiveDir, `claims_detail_latest_${formatDateTime()}.parquet`));
     log('yellow', '  归档旧 latest.parquet → archive/');
   }
 
   // Step 5: 统计总行数 + 列数（从 parquet 实读，避免硬编码过时）
-  const totalRows = getPartitionedRowCount(python, CLAIMS_DETAIL_DIR);
-  const fieldCount = getPartitionedColumnCount(python, CLAIMS_DETAIL_DIR);
+  const totalRows = getPartitionedRowCount(python, claimsDetailDir);
+  const fieldCount = getPartitionedColumnCount(python, claimsDetailDir);
   // manifest 声明 claims_detail 时由 refresh_metadata.py 统一写入
-  if (!_currentReleaseManifest?.domains?.claims_detail) {
+  // 多省 0a：非 SC 省产物在隔离目录，不写共享 data-sources.json（保持 SC-only，ADR D5）
+  if (BRANCH_CODE === 'SC' && !_currentReleaseManifest?.domains?.claims_detail) {
     updateDataSources('claims_detail', { rowCount: totalRows, fieldCount });
   }
 
   // Step 5.5: 报案截止日新鲜度检查（B191e0f）——防喂旧快照致满期赔付率系统性偏低。
   // 理赔金额是动态的，只喂窄窗增量会让历史赔案金额停在旧值；见 data-pipeline.md 存量更新铁律。
-  const maxReportDate = getPartitionedMaxReportDate(python, CLAIMS_DETAIL_DIR);
+  const maxReportDate = getPartitionedMaxReportDate(python, claimsDetailDir);
   const lagDays = claimsReportLagDays(maxReportDate, localTodayISO());
   if (shouldWarnClaimsFreshness(lagDays)) {
     log('red', `⚠️ claims 报案截止日 ${maxReportDate} 落后当日 ${lagDays} 天（阈值 ${CLAIMS_REPORT_LAG_WARN_DAYS} 天）`);
@@ -1234,7 +1244,7 @@ function runClaimsDetail(python, scriptDir) {
 
   // Step 6: 显示分区状态
   try {
-    runPythonScript(python, partitionManager, ['status', '-o', `"${CLAIMS_DETAIL_DIR}"`]);
+    runPythonScript(python, partitionManager, ['status', '-o', `"${claimsDetailDir}"`]);
   } catch { /* non-fatal */ }
 
   log('green', '✅ ClaimsDetail 域完成（分区模式）');
@@ -1331,6 +1341,13 @@ async function main() {
   // 子命令模式：单域处理
   if (subcommand && subcommand !== 'premium' && subcommand !== 'all') {
     const python = findPython();
+    // 多省 0a（ADR D5）：非 SC 省目前仅 premium / claims_detail 已 branch-aware；
+    // 其余单域 runStandardDomain/runRenewalTracker 尚未省份化，非 SC 运行会写入 SC 路径 → 硬拦截。
+    const __branchSub = process.env.BRANCH_CODE || 'SC';
+    if (__branchSub !== 'SC' && subcommand !== 'claims_detail') {
+      log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail`);
+      process.exit(1);
+    }
     switch (subcommand) {
       case 'claims':
         log('red', '❌ claims 域已删除，赔付数据统一由 claims_detail 提供。请使用: node 数据管理/daily.mjs claims_detail');
@@ -1347,6 +1364,14 @@ async function main() {
       case 'new_energy':
       case 'new_energy_claims': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims')); break;
       case 'renewal_tracker': runRenewalTracker(python, scriptDir); break;
+    }
+    // 多省 0a（ADR D5）：非 SC 省单域 ETL 到此结束 —— 产物已落隔离目录，刻意跳过所有 SC 副作用
+    // （data-sources.json / 短中长期报告 / VPS 同步 / 企微集成），保持 current/ 与共享 runtime SC-only。
+    if (__branchSub !== 'SC') {
+      console.log('');
+      log('green', `✅ [${__branchSub}] ${subcommand} ETL 完成 → 隔离目录 warehouse/validation/${__branchSub}`);
+      log('cyan', `   铁律: 本次产物不进 current/、不进共享 runtime、不 sync VPS（口径签字 G5 + RLS-on 前）`);
+      return;
     }
     // manifest 驱动：该域完成后单点写入 metadata（替代 subroutine 内的 updateDataSources）
     if (_currentReleaseManifest) {
