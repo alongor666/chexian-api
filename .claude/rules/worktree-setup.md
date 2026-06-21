@@ -15,11 +15,26 @@
 | 规则 | 做法 |
 |------|------|
 | 主目录锁 `main` 只读 | 主目录 `chexian-api/` 永远停在 `main`，作集成 / 基线区，**禁止在主目录直接 checkout 业务分支开发**（曾出现主目录卡在他人 WIP 分支） |
-| 每会话进独立 worktree | 开工第一步：`git worktree add -b <branch> ../chexian-api-<task> origin/main`，全程在该兄弟目录工作 |
-| worktree 放**兄弟目录** | 放 `../chexian-api-<task>`（与主目录同级，如现有 `chexian-api-postal-policy-dedupe`）。**不要**放 `.claude/worktrees/`——该路径被工具权限 deny，Read/Edit/cd 全部失败 |
+| 每会话进独立 worktree | 开工第一步：`git worktree add -b <branch> ../chexian-api-<task> origin/main`，**随即 `EnterWorktree({path: <兄弟目录绝对路径>})` 重锚会话**（否则 cwd 每次 Bash 调用回弹主目录、相对路径全落主目录——见下「cwd 漂移根治」小节），之后全程在该兄弟目录工作 |
+| worktree 放**兄弟目录** | 放 `../chexian-api-<task>`（与主目录同级，如现有 `chexian-api-postal-policy-dedupe`）。**不要**放 `.claude/worktrees/`——该路径有现行权限 deny `Read(./.claude/worktrees/**)`（`.claude/settings.json`，**非历史遗留**），Read 被拦。因此**也别用 harness 默认的 `EnterWorktree({name})`**（其落点正是 `.claude/worktrees/`）；要重锚一律走「兄弟目录 + `EnterWorktree({path})`」（见下「cwd 漂移根治」小节）——兄弟目录不在该 deny 之下，不受影响 |
 | 提交前查重 | commit / push 前必 `git fetch origin main` + 搜同名 open/merged PR（防重复劳动：2026-05-30 sync-and-reload 守卫修复撞上已合并的 PR #448，白做） |
 | 派生文件冲突**重新生成不手解** | `data-sources.json` / `QUICK_REFERENCE.md` / `转换质量报告.json` 是 ETL 派生（结构稳定，仅 row_count / 规模数字变）。merge 冲突时跑 `node 数据管理/daily.mjs`（或对应生成器）重新生成 + `git add`，**禁止手解**。三者均有 governance / ETL 配置消费方（daily.mjs 读 data-sources.json 取域配置；check-governance.mjs 读另两者校验），**禁止移出 git 追踪** |
 | BACKLOG 冲突已结构性消除（event-log） | BACKLOG 已是「append-only 事件日志 + 派生视图」模型（详见 [backlog-eventlog.md](./backlog-eventlog.md)）：新增/流转任务一律 `bun scripts/backlog.mjs add\|status\|note\|amend`，**写入方永不挑号**（无 max+1，故无碰号）；真相文件 `BACKLOG_LOG.jsonl` 设 `merge=union`（每行唯一 → 永不产生重复行），`BACKLOG.md`/`BACKLOG_ARCHIVE.md` 是派生视图，冲突时 `bun scripts/governance-backlog-curate.mjs --apply` 重渲染、**禁止手解** |
+
+### cwd 漂移根治：`EnterWorktree({path})` 重锚（RED LINE）
+
+**症状（多次复发）**：`git worktree add` 建好兄弟 worktree 后，下一次 Bash 调用 cwd 回弹主目录；Read / Edit / Grep 的相对路径也全落主目录，被迫"全程用绝对路径"——一旦漏写一处相对路径，编辑就泄漏进 `main`，踩"主目录只读"红线。
+
+**根因**：会话锚点（primary working directory）在会话启动时焊死在主目录，是 **harness 层状态**；`git worktree add` + `cd` 是 **shell 层操作**，跨不了层、改不动锚点。两层不同步 → 一切相对操作回落锚点（= 主目录）。一句话：**「创建 worktree」≠「重锚会话」**（历史佐证：上次 worktree 落在 `.claude/worktrees/sweet-gauss-a7fc96`、会话却仍停 `main`）。
+
+**指定机制**：兄弟目录建好 worktree 后，调用 harness 原生 `EnterWorktree({path: <兄弟目录绝对路径>})`，把会话工作目录 + cwd 相关缓存整体迁入 worktree。此后 Bash / Read / Edit / Grep 自然落在 worktree，**无需绝对路径纪律**；收尾用 `ExitWorktree({action: "keep"|"remove"})`。
+
+- `path` 模式要求该 worktree 已在 `git worktree list`（`git worktree add` 建的兄弟目录满足）；首次从主目录进入接受兄弟路径。
+- ❌ 别用「全程绝对路径」兜底——那是带病干活，非治本。
+- ❌ `Agent({isolation: "worktree"})` 只钉住子代理 cwd，**不重锚主会话**；主会话要交互改文件仍须 `EnterWorktree({path})`。
+- ❌ 别用 `EnterWorktree({name})` 默认落点 `.claude/worktrees/`（撞上 `Read(./.claude/worktrees/**)` deny）。
+
+> **自动提示（warn-only）**：`scripts/hooks/post-checkout` 在链接 worktree 的 branch checkout 时打印重锚提示（用 `git-dir != git-common-dir` 识别，不打扰主目录）。**提示 ≠ 强制**——git hook 无法替会话调 `EnterWorktree`（那是 harness 工具调用），故本节仍靠纪律执行；提示只降低遗忘概率。
 
 ### 反模式：禁止用 `git sparse-checkout` 物理执行"主目录只读"
 
