@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { GrowthData } from '../hooks/useGrowthAnalysis';
 import { formatRate } from '../../../shared/utils/formatters';
-import { cn, getTrendColorClass, colorClasses } from '../../../shared/styles';
+import { cn, getTrendColorClass } from '../../../shared/styles';
+import { EmptyState } from '../../../shared/ui';
 
 
 interface GrowthKpiCardsProps {
@@ -52,8 +53,16 @@ export const GrowthKpiCards: React.FC<GrowthKpiCardsProps> = ({
     return match;
   }, [data, cutoffDate]);
 
+  // 多省接入「前端空态保护」（ADR G8 / Day-1 SOP §5）：
+  // 新分公司 data 为空数组时禁止静默渲染零值卡，避免业务方误判真实零保费。
   if (!todayData) {
-    return <div className={cn('p-4 text-center', colorClasses.text.neutralLight)}>暂无选中日期的KPI数据</div>;
+    return (
+      <EmptyState
+        size="lg"
+        title="暂无数据"
+        description="当前选中日期 / 机构暂无可展示的增长 KPI，数据可能正在装载，请稍后刷新。若持续为空，请联系管理员确认数据状态——这不代表真实零保费。"
+      />
+    );
   }
 
   // 辅助组件：趋势指示器

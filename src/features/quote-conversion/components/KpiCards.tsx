@@ -1,6 +1,8 @@
 import { cardStyles, fontStyles, colorClasses, numericStyles, cn } from '../../../shared/styles';
+import { EmptyState } from '../../../shared/ui';
 import { formatCount, formatPremiumWan } from '../../../shared/utils/formatters';
 import type { QuoteKpi } from '../types';
+import { isQuoteKpiEmpty } from './quoteKpiState';
 
 interface Props {
   data: QuoteKpi | undefined;
@@ -24,7 +26,8 @@ function computeAveragePremiumWan(totalPremium: number, totalCount: number): str
 }
 
 export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
-  if (isLoading || !data) {
+  // loading 态：骨架屏（多省接入 ADR G8 / Day-1 SOP §5）
+  if (isLoading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className={`${cardStyles.base} animate-pulse h-40 lg:col-span-2`} />
@@ -33,6 +36,21 @@ export function KpiCards({ data, isLoading, variant = 'default' }: Props) {
             <div key={i} className={`${cardStyles.base} animate-pulse h-20`} />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  // 空态保护（多省接入 ADR G8 / Day-1 SOP §5）：
+  // 新分公司数据装载中 / 缺数据时，报价 KPI 端点返回空对象 {} 或全零聚合行（data[0] ?? {}）。
+  // 原 `!data` 守卫无法识别空对象（{} 为 truthy），会静默渲染 0.0% 转化率 / 0 件 → 误判真实零报价。
+  if (!data || isQuoteKpiEmpty(data)) {
+    return (
+      <div className={cardStyles.base}>
+        <EmptyState
+          size="lg"
+          title="暂无数据"
+          description="当前筛选范围或机构暂无报价转化数据，可能正在装载，请稍后刷新。若持续为空，请联系管理员确认数据状态——这不代表真实零报价。"
+        />
       </div>
     );
   }
