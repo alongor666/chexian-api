@@ -9,10 +9,11 @@ name: Cube Grayscale Sentinel
 
 on:
   schedule:
-    # 每小时跑一次（UTC）。灰度阶段宁可勤报。
-    # 改 cron 前先跑：node scripts/release/cube-promote.mjs --history-issue <num> --gh-token "$GH_TOKEN"
-    # 该脚本读哨兵 7 天历史自动判定是否可推进；canAdvance=true 才改。
+    # 每小时跑一次（UTC）观测哨兵。灰度阶段宁可勤报。
     - cron: '15 * * * *'
+    # 每天 01:30 UTC 跑一次晋级判定（promote-check job）：cube-promote 读哨兵 7 天
+    # 历史 + /health 自动判 canAdvance；达标在追踪 issue 通知人工起切流 PR。
+    - cron: '30 1 * * *'
   workflow_dispatch:
     inputs:
       api_base:
@@ -29,7 +30,9 @@ permissions:
   issues: write
 
 jobs:
+  # 每小时观测哨兵（盯「有没有出问题」）。每日 01:30 cron 只跑下方 promote-check。
   sentinel:
+    if: github.event.schedule != '30 1 * * *'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -98,3 +101,88 @@ jobs:
             cat "$SUMMARY_PATH"
           } | gh issue comment "$ISSUE" --body-file -
           echo "posted anomaly (severity=$SEVERITY) to issue #$ISSUE"
+
+  # ── 每日晋级判定：cube-promote 确定性判定器，canAdvance 时通知人工起切流 PR ──
+  # 与哨兵互补：哨兵每小时盯「有没有出问题」，本 job 每天判「能不能推进」。
+  # 起 PR + 合并都人工（部署链红线 pr-checklist §4 / deploy-chain-sop 禁 auto-merge）。
+  promote-check:
+    if: github.event.schedule == '30 1 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 定位灰度哨兵追踪 issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="立方体灰度哨兵追踪"
+          NUM=$(gh issue list --state open --search "in:title $TITLE" --json number,title \
+            --jq ".[] | select(.title==\"$TITLE\") | .number" | head -n1)
+          echo "num=${NUM}" >> "$GITHUB_OUTPUT"
+          echo "追踪 issue: ${NUM:-（尚无，promote 会判样本不足）}"
+
+      - name: 跑 cube-promote 晋级判定
+        id: promote
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_BASE: ${{ inputs.api_base || vars.SENTINEL_API_BASE || 'https://chexian.cretvalu.com' }}
+        run: |
+          set +e
+          ARGS=(--health-url "$API_BASE/health" --ecosystem-file server/ecosystem.config.cjs --gh-token "$GH_TOKEN")
+          if [ -n "${{ steps.issue.outputs.num }}" ]; then
+            ARGS+=(--history-issue "${{ steps.issue.outputs.num }}")
+          fi
+          node scripts/release/cube-promote.mjs "${ARGS[@]}" | tee promote-verdict.json
+          CAN=$(node -e 'try{process.stdout.write(JSON.parse(require("fs").readFileSync("promote-verdict.json","utf8")).canAdvance?"true":"false")}catch{process.stdout.write("false")}')
+          echo "can_advance=$CAN" >> "$GITHUB_OUTPUT"
+          echo "判定 canAdvance=$CAN"
+
+      - name: Print verdict to log
+        if: always()
+        run: cat promote-verdict.json 2>/dev/null || echo "(no verdict)"
+
+      - name: canAdvance → 通知追踪 issue（已有 open 切流 PR 则跳过防刷屏）
+        if: steps.promote.outputs.can_advance == 'true' && steps.issue.outputs.num != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          OPEN_PR=$(gh pr list --state open --search "CUBE_ROUTING_ENABLED in:body" --json number --jq 'length')
+          if [ "${OPEN_PR:-0}" -gt 0 ]; then
+            echo "已有 open 切流 PR（${OPEN_PR} 个），跳过通知"
+            exit 0
+          fi
+          {
+            echo "**✅ 立方体灰度晋级门槛达成（cube-promote canAdvance=true）**"
+            echo ""
+            echo "影子对账连续观测达标，首批切流（trend / growth / salesman-ranking）可起部署链 PR。"
+            echo "建议 \`server/ecosystem.config.cjs\` 配置："
+            echo ""
+            echo '```js'
+            echo "CUBE_ROUTING_ENABLED: 'true',"
+            echo "CUBE_ROUTING_ROUTES: 'trend,growth,salesman-ranking',  // 排除搁置的 cost/kpi"
+            echo "CUBE_SHADOW_SAMPLE_RATE: '0.01',  // 切流后采样影子安全网（bf2c4e）"
+            echo '```'
+            echo ""
+            echo "⚠️ **部署链 PR 禁 auto-merge**，人工低峰窗口合并并盯前 5 分钟（pr-checklist §4 / deploy-chain-sop）。"
+            echo ""
+            echo "<details><summary>promote verdict</summary>"
+            echo ""
+            echo '```json'
+            cat promote-verdict.json
+            echo '```'
+            echo ""
+            echo "</details>"
+          } | gh issue comment "${{ steps.issue.outputs.num }}" --body-file -
+          echo "已通知 issue #${{ steps.issue.outputs.num }}"
