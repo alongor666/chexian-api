@@ -676,16 +676,30 @@ function runStandardDomain(python, scriptDir, manifest) {
     ? trigger.input_globs
     : (trigger.input_globs ? [trigger.input_globs] : [trigger.input_glob]).filter(Boolean);
 
-  log('cyan', `\n═══ ${id} 域：${name || id}（${input_strategy}）═══\n`);
+  // 多省 0a（ADR D5）：BRANCH_CODE 路由 — 非 SC 省源自 staging/<省>、产物隔离到
+  // warehouse/validation/<省>/<域>，绝不进 current/；--branch-code 注入 branch_code 常量列。
+  // SC（默认）：sourceRoot=scriptDir、outputAbs/archiveRoot=原常量、不传 --branch-code → 四川产物逐字节等价。
+  const BRANCH_CODE = process.env.BRANCH_CODE || 'SC';
+  const isBranch = BRANCH_CODE !== 'SC';
+  const sourceRoot = branchSourceDir(scriptDir, BRANCH_CODE);
+  const outputAbs = isBranch
+    ? join(branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE), id, basename(output))
+    : join(scriptDir, output);
+  const archiveRoot = isBranch
+    ? join(branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE), id, '.archive')
+    : join(__dirname, '.archive');
+
+  log('cyan', `\n═══ ${id} 域：${name || id}（${input_strategy}）${isBranch ? ` [${BRANCH_CODE}]` : ''}═══\n`);
 
   // manifest 驱动：该域被 release manifest 声明时，跳过 BaseConverter 与 Node 端 metadata 写入，
   // 由流程末尾的 refresh_metadata.py 统一单点写入
   const skipMetadata = _currentReleaseManifest?.domains?.[id] != null;
   const extraArgs = skipMetadata ? ['--no-metadata'] : [];
+  if (isBranch) extraArgs.push('--branch-code', BRANCH_CODE);
 
-  const { sourceFiles, batchDate } = resolveSourceFilesForTrigger(id, inputGlobs, scriptDir, trigger);
+  const { sourceFiles, batchDate } = resolveSourceFilesForTrigger(id, inputGlobs, sourceRoot, trigger);
   if (sourceFiles.length === 0) {
-    log('yellow', `⚠ 未找到 ${inputGlobs.join(' / ')}，跳过`);
+    log('yellow', `⚠ 未找到 ${inputGlobs.join(' / ')}（源根 ${sourceRoot}），跳过`);
     return;
   }
   for (const f of sourceFiles) {
@@ -695,7 +709,8 @@ function runStandardDomain(python, scriptDir, manifest) {
   const ctx = {
     python, id, scriptDir, sourceFiles, trigger, batchDate,
     scriptPath: join(scriptDir, etl_script),
-    outputAbs: join(scriptDir, output),
+    outputAbs,
+    archiveRoot,
     extraArgs,
   };
   ensureDir(dirname(ctx.outputAbs));
@@ -716,13 +731,14 @@ function runStandardDomain(python, scriptDir, manifest) {
   // 行数 + 列数从 parquet 实读（避免 manifest 中可能过时的 field_count）+ data-sources.json 回写
   const rowCount = getParquetRowCount(python, ctx.outputAbs);
   const fieldCount = getParquetColumnCount(python, ctx.outputAbs);
-  if (!skipMetadata) {
+  // 多省 0a：非 SC 省跳过 data-sources.json（隔离省不污染 SC 唯一事实源；Python 端同样跳过）
+  if (!skipMetadata && !isBranch) {
     updateDataSources(id, { rowCount, fieldCount });
   }
-  log('green', `✅ ${id} 域完成`);
+  log('green', `✅ ${id} 域完成${isBranch ? ` → 隔离目录 ${dirname(ctx.outputAbs)}（${rowCount.toLocaleString()} 行 × ${fieldCount} 列）` : ''}`);
 }
 
-function runStrategySingle({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
+function runStrategySingle({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [], archiveRoot }) {
   // 多 glob 并存时按 mtime 取最新文件（避免历史旧命名文件长期占据声明顺序首位、屏蔽新命名更新）
   const latest = sourceFiles
     .slice()
@@ -738,18 +754,18 @@ function runStrategySingle({ python, id, scriptPath, sourceFiles, outputAbs, tri
     trigger.archive_prefix,
     extraArgs,
     candidatePath => validateDomainCandidate(python, id, candidatePath, trigger.validation),
+    archiveRoot,
   );
 }
 
-function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] }) {
+function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [], archiveRoot = join(__dirname, '.archive') }) {
   const { archive_prefix, output_is_dir } = trigger;
   const inputArgs = ['-i', ...sourceFiles.map(f => `"${f.path}"`)];
   const outputArg = output_is_dir ? dirname(outputAbs) : outputAbs;
   if (output_is_dir) {
     if (existsSync(outputAbs)) {
-      const archiveDir = join(__dirname, '.archive');
-      ensureDir(archiveDir);
-      renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
+      ensureDir(archiveRoot);
+      renameSync(outputAbs, join(archiveRoot, `${archive_prefix}_${formatDateTime()}.parquet`));
       log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDateTime()}.parquet`);
     }
     runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${outputArg}"`, ...extraArgs]);
@@ -761,9 +777,8 @@ function runStrategyMultiInput({ python, id, scriptPath, sourceFiles, outputAbs,
   runPythonScript(python, scriptPath, [...inputArgs, '-o', `"${tmpOutput}"`, ...extraArgs]);
   validateDomainCandidate(python, id, tmpOutput, trigger.validation);
   if (existsSync(outputAbs)) {
-    const archiveDir = join(__dirname, '.archive');
-    ensureDir(archiveDir);
-    renameSync(outputAbs, join(archiveDir, `${archive_prefix}_${formatDateTime()}.parquet`));
+    ensureDir(archiveRoot);
+    renameSync(outputAbs, join(archiveRoot, `${archive_prefix}_${formatDateTime()}.parquet`));
     log('yellow', `  归档旧 ${id} → ${archive_prefix}_${formatDateTime()}.parquet`);
   }
   renameSync(tmpOutput, outputAbs);
@@ -829,7 +844,7 @@ function runStrategyFullSnapshot({ python, id, scriptDir, scriptPath, sourceFile
 }
 
 function runStrategyMultiMerge(ctx) {
-  const { python, id, scriptDir, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [] } = ctx;
+  const { python, id, scriptDir, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [], archiveRoot = join(__dirname, '.archive') } = ctx;
   const { archive_prefix, merge_dedup_key, merge_order_by } = trigger;
   const hasHistory = trigger.merge_with_history === true && existsSync(outputAbs);
 
@@ -861,7 +876,7 @@ function runStrategyMultiMerge(ctx) {
     return false;
   }
 
-  const archiveDir = join(__dirname, '.archive');
+  const archiveDir = archiveRoot;
   const validateCandidate = candidatePath => validateDomainCandidate(python, id, candidatePath, trigger.validation);
   // 短路：单文件 + 不合并历史 → 直接替换（避免起 DuckDB 进程）
   if (tmpFiles.length === 1 && !hasHistory) {
@@ -1252,22 +1267,21 @@ function runClaimsDetail(python, scriptDir) {
 
 // ── 安全域转换（先写 tmp，成功后再归档旧文件+原子替换）──
 
-function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePrefix, extraArgs = [], validateCandidate = null) {
+function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePrefix, extraArgs = [], validateCandidate = null, archiveRoot = join(__dirname, '.archive')) {
   const tmpPath = outputPath + '.tmp';
   ensureDir(dirname(outputPath));
 
-  // 先转换到临时文件（extraArgs 透传给 BaseConverter 子脚本，如 --no-metadata）
+  // 先转换到临时文件（extraArgs 透传给 BaseConverter 子脚本，如 --no-metadata / --branch-code）
   runPythonScript(python, scriptPath, [
     '-i', `"${inputPath}"`, '-o', `"${tmpPath}"`, ...extraArgs
   ]);
 
   if (validateCandidate) validateCandidate(tmpPath);
 
-  // 转换成功后才归档旧文件
+  // 转换成功后才归档旧文件（多省 0a：archiveRoot 隔离到 validation/<省>/<域>/.archive）
   if (existsSync(outputPath)) {
-    const archiveDir = join(__dirname, '.archive');
-    ensureDir(archiveDir);
-    renameSync(outputPath, join(archiveDir, `${archivePrefix}_${formatDateTime()}.parquet`));
+    ensureDir(archiveRoot);
+    renameSync(outputPath, join(archiveRoot, `${archivePrefix}_${formatDateTime()}.parquet`));
   }
 
   // 原子替换
@@ -1341,11 +1355,13 @@ async function main() {
   // 子命令模式：单域处理
   if (subcommand && subcommand !== 'premium' && subcommand !== 'all') {
     const python = findPython();
-    // 多省 0a（ADR D5）：非 SC 省目前仅 premium / claims_detail 已 branch-aware；
-    // 其余单域 runStandardDomain/runRenewalTracker 尚未省份化，非 SC 运行会写入 SC 路径 → 硬拦截。
+    // 多省 0a（ADR D5）：非 SC 省仅已 branch-aware 的域可运行；其余单域
+    // runStandardDomain/runRenewalTracker 尚未省份化，非 SC 运行会写入 SC 路径 → 硬拦截。
+    // 每 branch 化一个域，把它加进 __branchReadyDomains（与 ALL_DOMAINS 同名）。
     const __branchSub = process.env.BRANCH_CODE || 'SC';
-    if (__branchSub !== 'SC' && subcommand !== 'claims_detail') {
-      log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail`);
+    const __branchReadyDomains = new Set(['claims_detail', 'quotes']);
+    if (__branchSub !== 'SC' && !__branchReadyDomains.has(subcommand)) {
+      log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail / quotes`);
       process.exit(1);
     }
     switch (subcommand) {

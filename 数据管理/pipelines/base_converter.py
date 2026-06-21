@@ -174,7 +174,13 @@ class BaseConverter(ABC):
                 if len(df) < before:
                     print(f"   过滤无 {col}: {before - len(df):,} 行")
 
-        # 6c. pre-write 钩子（如 customer_flow 与旧 parquet 做 diff 对比）
+        # 6c-多省 0a：branch_code 常量列注入（仅 --branch-code 提供时；
+        #   SC 默认链路不传 → 不注入，四川产物字节安全。与 convert_claims_detail.py 同语义）
+        if args.branch_code:
+            df["branch_code"] = args.branch_code
+            print(f"   🏢 注入 branch_code 常量列 = '{args.branch_code}'（{len(df):,} 行）")
+
+        # 6d. pre-write 钩子（如 customer_flow 与旧 parquet 做 diff 对比）
         self.pre_write_hook(df, output_file)
 
         # 7. 写 Parquet
@@ -194,8 +200,10 @@ class BaseConverter(ABC):
 
         # 9. 元数据回写（基类统一执行，修复历史缺口）
         # manifest 驱动流程传入 --no-metadata，跳过此处写入；
-        # 由 refresh_metadata.py 在所有域完成后统一单点写入，消除 #4 双写漂移
-        if not args.no_metadata:
+        # 由 refresh_metadata.py 在所有域完成后统一单点写入，消除 #4 双写漂移。
+        # 多省 0a：非 SC 省（--branch-code）同样跳过，避免把隔离省行数写进共享
+        # data-sources.json（SC 唯一事实源；ADR D5）。
+        if not args.no_metadata and not args.branch_code:
             update_data_sources(
                 self.get_domain_id(),
                 row_count=len(df),
@@ -216,5 +224,11 @@ class BaseConverter(ABC):
             "--no-metadata",
             action="store_true",
             help="跳过 data-sources.json 写入（manifest 驱动流程专用，由 refresh_metadata.py 统一写）",
+        )
+        parser.add_argument(
+            "--branch-code",
+            default=None,
+            help="多省 0a（ADR D5）：分公司编码（如 SX）。提供时注入 branch_code 常量列并跳过 "
+                 "data-sources.json 写入；缺省（SC 默认链路）不传 → 不注入，四川产物字节安全。",
         )
         return parser.parse_args()
