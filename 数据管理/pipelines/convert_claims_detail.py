@@ -152,6 +152,8 @@ def parse_args():
     parser.add_argument('-o', '--output', required=True, help='输出 Parquet 文件')
     parser.add_argument('--policy-dir', default=None,
                         help='PolicyFact parquet 目录，用于 JOIN 获取 insurance_start_date（可选，回退到 policy_no 提取）')
+    parser.add_argument('--branch-code', default=None,
+                        help='多省 0a：分公司编码（如 SX）。提供时注入 branch_code 常量列；缺省（SC 默认链路）不注入，保持四川产物字节安全。')
     return parser.parse_args()
 
 
@@ -296,6 +298,11 @@ def main():
         print(f"   出险原因TOP5: {top_causes.to_dict()}")
     if 'reserve_amount' in df.columns:
         print(f"   立案金额: 总计 {df['reserve_amount'].sum()/1e8:.2f} 亿, 均值 {df['reserve_amount'].mean():,.0f} 元")
+
+    # ── 多省 0a：branch_code 常量列注入（仅 --branch-code 提供时；SC 默认链路不传 → 不注入，四川产物字节安全）──
+    if args.branch_code:
+        df['branch_code'] = args.branch_code
+        print(f"   🏢 注入 branch_code 常量列 = '{args.branch_code}'（{len(df):,} 行）")
 
     # ── 输出 Parquet ──
     output_file.parent.mkdir(parents=True, exist_ok=True)

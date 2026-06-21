@@ -528,3 +528,33 @@
 - **零回归**: typecheck（root+server+cli，类型守卫收窄生效）· 全量单测 **3372 passed/242 文件**（baseline 3365 → +7）· cli 76 · governance 42/42 · ux:check 0 diff
 - needs_automation: false（federation policy RLS 矩阵单测 + isPermissionFilterMissing 不变量 + selectWithBranchCode DESCRIBE 守卫已成闸；新派生视图补 branch_code = loader 套 selectWithBranchCode + policy 加列 + 测试一行）
 - **下一实验**: is_telemarketing 派生视图 RLS（BACKLOG 2026-06-20-claude-c21667，需 ETL 携带 + QuoteConversion 报价路由迁移到 boolean+标签约定）；P3 cx query --explain（P2 语义层 cx cube 已落地 PR #685）
+
+---
+
+## 2026-06-20 · 山西多省接入 loop（审计→backlog→合并→G1-claims）+ 每轮三问复盘
+
+> 按用户 8 步 loop workflow 推进山西接入，并按用户要求**每轮三问复盘**（重来怎样更好 / 复用价值 / 如何更高质量自动化），供最终复盘与下轮改善。机制见 memory `feedback_per_round_retrospective`。
+
+**R1 · 审计 PR #690（机构规范化 61→11）**
+- 成果：独立实跑复现，无 P0/P1。ETL 61→11 零 unmapped、validation/SX 1,830,603 行/15.28 亿与源零差异、current/ md5 字节零回归、文档-代码三方一致。
+- 重来更好：直读源 Excel 第一次只读首 sheet（114K vs 183 万）→ 应先 openpyxl 看全 sheet 结构再聚合，避免假异常绕路。
+- 复用价值：高。"rm validation/SX → BRANCH_CODE=SX 重跑 → duckdb 对账 vs 源 Excel"是多省审计标准动作。
+- 自动化：对账可固化 `scripts/verify-branch-domain.mjs`。
+
+**R2 · 登记 backlog + plan 续传 → PR #695（merged）**
+- 成果：G1/G3/G7/G8 入 backlog（G4=c21667/G6=fdbba5 已有不重复），plan 续传 v4，governance 42/42。
+- 重来更好：查重应更早（差点重复登记 G4/G6）→ add 前先 grep 现有同主题。
+- 自动化：backlog.mjs add 前可加同主题相似度提示。
+
+**R3 · 合并 #690 + #695**
+- 成果：merge 确认；main 含全部地基（SX.json / normalize_branch_org / §6.5）。
+- 重来更好：gh graphql 端点 EOF 闪断 → 早用 REST（gh api）兜底，少绕一次。
+
+**R4 · G1-claims 接入（本 PR）**
+- 合同：claims_detail 域 branch-aware，SX claims → validation/SX/claims_detail，SC 字节安全。
+- 成果：convert_claims_detail.py 加 `--branch-code` 注入 + daily.mjs runClaimsDetail 路径省份化（branchSourceDir/branchOutputRoot，policy-dir 指向同省 premium 富集）+ main 子命令非 SC 双护栏（仅 claims_detail 放行 + 非 SC 跳过 sync/report/企微，**闭合"单域子命令路径会 syncToVps"的 D5 漏洞**）。
+- oracle：validation/SX/claims_detail 13,156 行、branch_code 全 SX、已决 31,860,134.81/未决 22,271,615.27 与源 Excel **精确相等**、SC warehouse/fact/claims_detail 零 parquet 新增、node --check + governance 42/42。
+- 重来更好：以为"跑命令"，实为编排手术（policy-dir 富集 + CDC + sync 副作用护栏）→ ETL 域接入开工先画"源→convert→partition→副作用"全链路再估工。SC 字节安全靠代码构造证（受数据环境争用限制未跑 SC claims 回归）→ 理想应补 SC claims golden 对比。
+- 复用价值：高。daily.mjs branch-routing 模式（branchSourceDir/Root + 非 SC 早退 + convert --branch-code）现 premium+claims 两域复用，是 quotes/repair/brand 的直接模板；非 branch-aware 域硬拦截护栏可推广。
+- needs_automation: true → `scripts/verify-branch-domain.mjs <省> <域>`（行数/金额 vs 源 ≤ 万分之一 + branch_code 全省 + SC 目录零新增 parquet）+ governance 闸"非 SC 域必须有早退护栏"。
+- 下一实验：G1 余域 quotes/repair/brand（套同模板）/ G3 维度表省份化。
