@@ -46,6 +46,9 @@ afterEach(async () => {
 });
 
 describe('audit-log rotation / GC / stats', () => {
+  // 写 50MB+1 字节触发滚动 → 全量并发资源紧张时 I/O 耗时 ~7.9s（隔离跑仅 ~2.8s），
+  // 超默认 5s testTimeout 致间歇 flaky（本文件已用独立 AUDIT_LOG_DIR 隔离，非跨文件
+  // 竞态）。给 30s 容忍慢 I/O，不改任何判定逻辑。
   it('当单个 jsonl 超过 50MB 时滚动到 {date}.{seq}.jsonl，读取仍能跨文件命中 runId', async () => {
     const date = new Date().toISOString().slice(0, 10);
     await fs.mkdir(getAuditDir(), { recursive: true });
@@ -67,7 +70,7 @@ describe('audit-log rotation / GC / stats', () => {
 
     const events = await readAuditEventsForRun(RUN_ID);
     expect(events.map((e) => e.eventType)).toContain('workflow-started');
-  });
+  }, 30_000);
 
   it('GC 先 dry-run 记录待删清单；dry-run 不删除，正式执行才删除 90 天前 jsonl', async () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
