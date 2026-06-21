@@ -61,6 +61,21 @@ last_updated: "2026-06-16"
 
 ---
 
+### 4. 对抗审计双闸（Loop v2 · codex）
+
+> 来源：2026-06-21 三会话并行复盘 —— 规划后无人证伪设计、完成后无独立模型对抗审计完成质量。
+> 固化为单任务闭环内的**两道强制闸**（详见 [.claude/rules/loop-orchestration.md §2](../rules/loop-orchestration.md)）。
+
+- **🛡 闸-1（计划对抗）**：合同/计划（阶段 A 后、动手前）→ 调 `codex` skill 对抗审查**设计**（缺陷/遗漏/更优解/边界）→ 修 P0/P1 再实现。结论计入质量账本 `codex_plan`。
+- **🛡 闸-2（完成对抗）**：实现 + 确定性闸（verify:full/governance）绿后、**enable --auto 前** → 调 `codex` skill 审 **diff 完成质量** + `evidence-verifier` agent 证伪（fresh context）+ `claude-code.yml` CI auto-review；三源 P0/P1 全修 + 复审通过才合并。计入 `codex_done` / `verifier_refuted`。
+- codex CLI 不可用 → 降级为 evidence-verifier + CI auto-review 双源，账本标 `codex_*:{"unavailable":true}`，**不得静默跳过对抗**（`feedback_no_giveup_ask_authorization`）。
+
+### 5. 收尾三件套（与基座 scorecard 同步）
+
+阶段 C 收尾，**一次 commit 同时**写：① backlog 状态流转（`bun scripts/backlog.mjs status`）② `pr-evolution.md` 三问复盘（`needs_automation:true` 紧跟 `expires:YYYY-MM-DD`）③ `loop-quality-ledger.jsonl` 追加一行结构化指标（schema 见 loop-orchestration §3）。多任务编排/并行调度见 [loop-orchestration.md](../rules/loop-orchestration.md)。
+
+---
+
 ## 降级（基座不可读时）
 
 若 `~/.claude/skills/evidence-loop-core/SKILL.md` 未安装 / 不可读：
