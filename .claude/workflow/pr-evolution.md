@@ -585,3 +585,11 @@
 - **重来更好**：印证 R5 的杠杆判断 —— BaseConverter 一次省份化让 repair 从"一个域的工作量"塌缩为"一行白名单"。本可在 R5 PR 里顺带把 repair/brand 白名单一起开（反正 BaseConverter 已就绪），但逐域验证更稳、PR 更可追溯，权衡后保持一域一验。
 - **auto-merge 竞态教训（本轮事故）**：#698 启用 `--auto` 后我又 push 了 backlog/pr-evolution 跟进提交，CI 先过 → auto-merge 在 head=adc14c74 触发并删分支，跟进提交 8c87d2dc 滞留重建分支、未进 main。对策已执行：rebase 到新 main 携带该 meta，并改为**把 backlog+复盘 bundle 进代码提交、enable auto-merge 前一次推完**（本 R6 即如此）。→ 值得固化为 memory（auto-merge 后禁 follow-up push）。
 - **复用价值/自动化**：同 R5。brand 为最后一个有源标准域，路径与 repair 完全一致。
+
+**R7 · G1-brand 接入（最后一个有源标准域）**
+- 合同：brand 域（single）branch-aware，SX 厂牌车型 → `validation/SX/brand`，SC 字节安全。
+- 成果：同 repair —— `BrandDimConverter` 继承 BaseConverter，仅 daily.mjs `__branchReadyDomains` 白名单加 `brand` 一行。
+- oracle：validation/SX/brand **371,359 行 × 16 列**、branch_code 全 SX、**主键对账精确**（产物行数 = 源「车辆型号（上传平台）」去重非空数 371,359、null_code=0）。品牌 distinct 7,275 vs 源 7,277 差 2 —— 按 §0「验证不声称」复刻 ETL 去重 keep-first 后精确得 7,275，证明差异是**依赖属性在 keep-first 去重下的固有行为**（与 SC 同逻辑、非本次改动引入），非缺陷。SC `dim/brand`/`.archive` 未创建、current/ 与 data-sources.json 零触碰、governance 42/42。
+- **重来更好**：dim 表对账不能只看总行数，要分清"主键基数（必须精确）"与"依赖属性聚合（可能因去重 keep-first 有小差）"——本轮没有把 7275≠7277 当异常，而是先复刻 ETL 去重逻辑证伪"缺陷"假设，是 §0 的正确实践；可固化进 verify-branch-domain harness（dim 域对账按 dedup_key 基数而非裸 distinct）。
+- **里程碑**：★ G1 四个**有源**标准域（claims_detail / quotes / repair / brand）全部隔离接入完成。runStandardDomain + BaseConverter 一次省份化的杠杆兑现：后两域各仅一行白名单。余 cross_sell / customer_flow / new_energy 为**派生域**（依赖 policy+claims，非 Excel 源），排 G3 维度表省份化（6ae4d7）之后。
+- **复用价值**：multi_file_input(quotes) / multi_file_merge(repair) / single(brand) 三种 input_strategy 全部跑通 branch 路由 + archiveRoot 隔离，runStandardDomain 省份化已全策略覆盖验证。
