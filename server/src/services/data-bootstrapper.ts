@@ -31,6 +31,7 @@ import {
   getRenewalTrackerPaths,
   getValidationRootDir,
   getBranchValidationDimPath,
+  getBranchValidationFactPath,
 } from '../config/paths.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 import { isValidParquetFile } from '../utils/security.js';
@@ -368,6 +369,27 @@ export class DataBootstrapper {
     return extras.sort((a, b) => a.branchCode.localeCompare(b.branchCode));
   }
 
+  /**
+   * 探测某派生域的非 SC 省份隔离副本（warehouse/validation/<省>/<域>/latest.parquet）（ADR G4）。
+   *
+   * 与 resolveBranchDimExtras 同逻辑，仅路径模板不同（派生域无 dim 子层）。G1 已落 SX 的
+   * quotes_conversion/renewal_tracker → GATED 多省时 loader UNION ALL BY NAME 携真实 branch_code；
+   * 0a 期缺者 → 空 → loader 单源 = 历史 selectWithBranchCode 等价（字节安全）。
+   */
+  private resolveBranchFactExtras(domain: string): Array<{ branchCode: string; path: string }> {
+    const validationRoot = getValidationRootDir();
+    if (!fs.existsSync(validationRoot)) return [];
+    const extras: Array<{ branchCode: string; path: string }> = [];
+    for (const entry of fs.readdirSync(validationRoot)) {
+      if (entry === 'SC' || !/^[A-Z]{2}$/.test(entry)) continue;
+      const factPath = getBranchValidationFactPath(entry, domain);
+      if (fs.existsSync(factPath)) {
+        extras.push({ branchCode: entry, path: factPath });
+      }
+    }
+    return extras.sort((a, b) => a.branchCode.localeCompare(b.branchCode));
+  }
+
   // ============================================
   // Stage 10: 维度表加载（Parquet 优先，JSON 回退）— 保持 eager
   // ============================================
@@ -464,7 +486,7 @@ export class DataBootstrapper {
       const p = getCrossSellPaths().find(p => fs.existsSync(p));
       if (!p) { console.warn('[Bootstrap:Lazy] CrossSell: no file found'); return; }
       console.time('[Bootstrap:Lazy] CrossSell');
-      await domainLoaders.loadCrossSell(db, p);
+      await domainLoaders.loadCrossSell(db, p, this.resolveBranchFactExtras('cross_sell'));
       await materialization.createCrossSellRealtimeView(db);
       console.timeEnd('[Bootstrap:Lazy] CrossSell');
     });
@@ -496,14 +518,14 @@ export class DataBootstrapper {
     this.lazyRegistry.register('NewEnergyClaims', async () => {
       const p = getNewEnergyClaimsPaths().find(p => fs.existsSync(p));
       if (!p) return;
-      await domainLoaders.loadNewEnergyClaims(db, p);
+      await domainLoaders.loadNewEnergyClaims(db, p, this.resolveBranchFactExtras('new_energy_claims'));
     });
 
     // QuoteConversion（仅报价转化页）
     this.lazyRegistry.register('QuoteConversion', async () => {
       const p = getQuoteConversionPaths().find(p => fs.existsSync(p));
       if (!p) return;
-      await domainLoaders.loadQuoteConversion(db, p);
+      await domainLoaders.loadQuoteConversion(db, p, this.resolveBranchFactExtras('quotes_conversion'));
     });
 
     // RenewalTracker（派生域，仅续保追踪页）
@@ -511,7 +533,7 @@ export class DataBootstrapper {
       const p = getRenewalTrackerPaths().find(p => fs.existsSync(p));
       if (!p) { console.warn('[Bootstrap:Lazy] RenewalTracker: no file found'); return; }
       console.time('[Bootstrap:Lazy] RenewalTracker');
-      await domainLoaders.loadRenewalTracker(db, p);
+      await domainLoaders.loadRenewalTracker(db, p, this.resolveBranchFactExtras('renewal_tracker'));
       console.timeEnd('[Bootstrap:Lazy] RenewalTracker');
     });
 

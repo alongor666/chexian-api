@@ -73,6 +73,16 @@ export function getBranchValidationDimPath(branchCode: string, domain: string): 
   return path.resolve(getValidationRootDir(), branchCode, 'dim', domain, 'latest.parquet');
 }
 
+/**
+ * 某省某派生域的 validation 隔离副本路径（warehouse/validation/<省>/<域>/latest.parquet）（ADR G4）。
+ * 派生域（quotes_conversion/cross_sell/new_energy_claims/renewal_tracker）镜像 SC 的 fact/<域> 结构，
+ * 但落隔离根 validation/<省>/<域>（无 dim 子层，与维度路径区分）。G1 已落 SX 的 quotes_conversion/renewal_tracker。
+ * 0a 期缺者 → data-bootstrapper 探测后不传，loader 单源 = 字节安全。
+ */
+export function getBranchValidationFactPath(branchCode: string, domain: string): string {
+  return path.resolve(getValidationRootDir(), branchCode, domain, 'latest.parquet');
+}
+
 // ── 维度表 Parquet 路径（本地优先，VPS 回退）──
 
 export function getSalesmanDimPaths(): string[] {

@@ -428,26 +428,61 @@ export async function buildAchievementView(db: DuckDBQueryable, planYear: number
 // Legacy renewal loaders removed; use RenewalTrackerFact.
 
 /**
- * 派生域视图的 SELECT 投影：在视图层补 `branch_code` 常量列（P0.5，闭合 federation review M2）。
+ * 派生域视图的 SELECT 投影：在视图层补 `branch_code` 常量列（P0.5 闭合 federation review M2 +
+ * ADR G4 · GATED 多省共存能力预备）。取代原 `selectWithBranchCode`（单源），泛化为多省 UNION。
  *
- * 续保/报价/交叉销售/新能源 4 个派生域 parquet **均不含 branch_code**（DESCRIBE 实测 2026-06-19）；
- * 而 federation RLS 在 BRANCH_RLS_ENABLED 下会注入 `branch_code='SC'` 过滤——视图缺该列则整个
- * 分公司用户（含 SC branch_admin）被 fail-closed 拒（功能不可用）。故在视图层补
- * `'<BRANCH_CODE>' AS branch_code`，使派生视图与 PolicyFact（ETL 落列）对齐。常量值经
- * getDeploymentBranchCode 白名单校验（^[A-Z]{2}$），可安全内插。
+ * 背景（P0.5）：续保/报价/交叉销售/新能源 4 个派生域 parquet **均不含 branch_code**（DESCRIBE 实测 2026-06-19）；
+ * federation RLS 在 BRANCH_RLS_ENABLED 下注入 `branch_code='<省>'` 过滤——视图缺该列则整个分公司用户
+ * （含 SC branch_admin）被 fail-closed 拒。故在视图层补 `'<省>' AS branch_code`，使派生视图与 PolicyFact
+ * （ETL 落列）对齐。常量值经 paths 层 / getDeploymentBranchCode 白名单校验（`^[A-Z]{2}$`），可安全内插。
  *
- * 守卫：若某域未来 ETL 落了真实 branch_code 列，则**不再追加**（避免 `SELECT *, ...` 重复列报错）——
- * 以 DESCRIBE 实测列集判断，零假设。
+ * 与维度表 buildBranchDimSelect 的差异（刻意）：派生域为 federation RLS 视图，**恒含 branch_code**；
+ * 维度表单源不补（按构造字节安全优先）。故本函数：
+ *   - **单一来源**（SC-only 默认）→ 与 P0.5 历史单源补列行为**逐字节一致**：
+ *     parquet 含 branch_code → `SELECT * FROM read_parquet('<p>')`（守卫：避免 `SELECT *, …` 重复列）；
+ *     不含 → `SELECT *, '<部署省>' AS branch_code FROM read_parquet('<p>')`。
+ *   - **多来源**（GATED 多省）→ 各源同上映射后 `UNION ALL BY NAME` 合并（缺列补对应省份常量、
+ *     已含者原样；SX validation 副本由 G1 ETL 注入 branch_code → 携真实 per-row 省份）。
+ *
+ * 守卫：以 DESCRIBE 实测列集判断是否已含 branch_code，零假设。
  */
-async function selectWithBranchCode(db: DuckDBQueryable, safePath: string): Promise<string> {
-  const cols = await db.query<{ column_name: string }>(
-    `DESCRIBE SELECT * FROM read_parquet('${safePath}')`,
-  );
-  const hasBranchCode = cols.some((c) => c.column_name?.toLowerCase() === 'branch_code');
-  if (hasBranchCode) {
-    return `SELECT * FROM read_parquet('${safePath}')`;
+export async function selectUnionWithBranchCode(
+  db: DuckDBQueryable,
+  rawSources: ReadonlyArray<RawBranchDimSource>,
+): Promise<string> {
+  if (rawSources.length === 0) {
+    throw new Error('selectUnionWithBranchCode: 至少需要一个派生域来源');
   }
-  return `SELECT *, '${getDeploymentBranchCode()}' AS branch_code FROM read_parquet('${safePath}')`;
+  const parts: string[] = [];
+  for (const s of rawSources) {
+    const safePath = escapeSqlValue(s.path.replace(/\\/g, '/'));
+    const cols = await db.query<{ column_name: string }>(
+      `DESCRIBE SELECT * FROM read_parquet('${safePath}')`,
+    );
+    const hasBranchCode = cols.some((c) => c.column_name?.toLowerCase() === 'branch_code');
+    parts.push(
+      hasBranchCode
+        ? `SELECT * FROM read_parquet('${safePath}')`
+        : `SELECT *, '${s.branchCode}' AS branch_code FROM read_parquet('${safePath}')`,
+    );
+  }
+  return parts.join('\n    UNION ALL BY NAME\n    ');
+}
+
+/**
+ * loader 入口：把派生域单文件路径 + 可选多省 extra 源拼成 SELECT。
+ * extra 为空（默认 SC-only）→ 单源 = selectWithBranchCode 等价（字节安全）。
+ * 省份基准码用 getDeploymentBranchCode()。
+ */
+async function buildFactSelectSql(
+  db: DuckDBQueryable,
+  parquetPath: string,
+  extraSources: ReadonlyArray<RawBranchDimSource>,
+): Promise<string> {
+  return selectUnionWithBranchCode(db, [
+    { branchCode: getDeploymentBranchCode(), path: parquetPath },
+    ...extraSources,
+  ]);
 }
 
 // ============================================
@@ -558,12 +593,18 @@ export async function buildDimSelectSql(
 
 /**
  * 加载报价转化 Parquet → QuoteConversion 视图
+ *
+ * ADR G4 多省共存：extraSources 为空（默认 SC-only）→ 单源 = 历史 selectWithBranchCode 等价
+ * （字节安全）；非空（GATED 多省）→ UNION ALL BY NAME + 缺列补 branch_code（SX validation 副本携真实省份）。
  */
-export async function loadQuoteConversion(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+export async function loadQuoteConversion(
+  db: DuckDBQueryable,
+  parquetPath: string,
+  extraSources: ReadonlyArray<RawBranchDimSource> = [],
+): Promise<void> {
   await db.query(`
     CREATE OR REPLACE VIEW QuoteConversion AS
-    ${await selectWithBranchCode(db, safePath)}
+    ${await buildFactSelectSql(db, parquetPath, extraSources)}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM QuoteConversion');
   console.log(`[DuckDB] QuoteConversion view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -618,12 +659,17 @@ export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<vo
 
 /**
  * 加载交叉销售 Parquet → CrossSellFact VIEW
+ *
+ * ADR G4 多省共存：同 loadQuoteConversion。extraSources 默认空 = 单源字节安全。
  */
-export async function loadCrossSell(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+export async function loadCrossSell(
+  db: DuckDBQueryable,
+  parquetPath: string,
+  extraSources: ReadonlyArray<RawBranchDimSource> = [],
+): Promise<void> {
   await db.query(`
     CREATE OR REPLACE VIEW CrossSellFact AS
-    ${await selectWithBranchCode(db, safePath)}
+    ${await buildFactSelectSql(db, parquetPath, extraSources)}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CrossSellFact');
   console.log(`[DuckDB] CrossSellFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -710,12 +756,17 @@ export async function loadCustomerFlow(db: DuckDBQueryable): Promise<void> {
 
 /**
  * 加载新能源出险信息 Parquet → NewEnergyClaims VIEW
+ *
+ * ADR G4 多省共存：同 loadQuoteConversion。extraSources 默认空 = 单源字节安全。
  */
-export async function loadNewEnergyClaims(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+export async function loadNewEnergyClaims(
+  db: DuckDBQueryable,
+  parquetPath: string,
+  extraSources: ReadonlyArray<RawBranchDimSource> = [],
+): Promise<void> {
   await db.query(`
     CREATE OR REPLACE VIEW NewEnergyClaims AS
-    ${await selectWithBranchCode(db, safePath)}
+    ${await buildFactSelectSql(db, parquetPath, extraSources)}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM NewEnergyClaims');
   console.log(`[DuckDB] NewEnergyClaims view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -727,11 +778,14 @@ export async function loadNewEnergyClaims(db: DuckDBQueryable, parquetPath: stri
  * 数据源：warehouse/fact/renewal_tracker/latest.parquet（ETL 预计算产物）
  * 口径：2025 起保 + 2026 到期商业险 universe，dual-key 续保匹配，VIN 粒度
  */
-export async function loadRenewalTracker(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+export async function loadRenewalTracker(
+  db: DuckDBQueryable,
+  parquetPath: string,
+  extraSources: ReadonlyArray<RawBranchDimSource> = [],
+): Promise<void> {
   await db.query(`
     CREATE OR REPLACE VIEW RenewalTrackerFact AS
-    ${await selectWithBranchCode(db, safePath)}
+    ${await buildFactSelectSql(db, parquetPath, extraSources)}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalTrackerFact');
   console.log(`[DuckDB] RenewalTrackerFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
