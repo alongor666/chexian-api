@@ -16,6 +16,10 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+// P1-1（codex 闸-2）：复用 backlog **权威折叠**，不自己实现。
+// 权威 fold 按 (at,eid) 全序排序、amend 用 {field,value} schema（LWW）、分支无关；
+// 自实现的物理行序 + 顶层 amend 字段会漏读 amend → 可能把 DONE 读回 OPEN、破坏 deps/冲突图。
+import { parseLog, fold, loadLog } from '../backlog/lib.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..', '..');
@@ -28,35 +32,13 @@ export const OPEN_STATUSES = new Set([
 ]);
 
 /**
- * 折叠事件日志 → 每 uid 的当前状态（create 填元数据；status 覆盖状态；amend 改字段）。
+ * 折叠事件日志 → 每 uid 的当前任务态。**委托 backlog/lib.mjs 权威 fold**（单一事实源），
+ * 仅把 Map 转数组，保留本模块/单测的数组 API。
  * @param {string[]} lines BACKLOG_LOG.jsonl 行
- * @returns {Array<{uid,desc,code,docs,section,priority,actor,status}>} 按首次出现顺序
+ * @returns {Array<object>} lib.fold 的任务对象（uid/desc/code/docs/section/priority/status…）
  */
 export function foldBacklog(lines) {
-  const order = [];
-  const state = new Map();
-  for (const line of lines) {
-    const s = line.trim();
-    if (!s) continue;
-    let d;
-    try { d = JSON.parse(s); } catch { continue; }
-    const u = d.uid;
-    if (!u) continue;
-    if (!state.has(u)) { state.set(u, { uid: u, status: undefined }); order.push(u); }
-    const t = state.get(u);
-    if (d.kind === 'create') {
-      t.desc = d.desc || ''; t.code = d.code || ''; t.docs = d.docs || '';
-      t.section = d.section || ''; t.priority = d.priority || 'P9'; t.actor = d.actor || '';
-    } else if (d.kind === 'status') {
-      t.status = d.status;
-    } else if (d.kind === 'amend') {
-      if (d.priority) t.priority = d.priority;
-      if (d.section) t.section = d.section;
-      if (d.desc) t.desc = d.desc;
-      if (d.code) t.code = d.code;
-    }
-  }
-  return order.map((u) => state.get(u));
+  return [...fold(parseLog(lines.join('\n'))).values()];
 }
 
 /** 把一条 code 路径映射到粗粒度域桶（宁粗勿细：误判可并行→冲突，故偏保守）。
@@ -87,14 +69,18 @@ export function bucketOf(p) {
     [/^\.claude\//, 'meta'],
   ];
   for (const [re, b] of rules) if (re.test(s)) return b;
-  return s.split('/').slice(0, 2).join('/') || 'misc';
+  // P1-2（codex 闸-2）：未知 token（N/A、同B244、自由文本、未识别前缀路径）**返回 null**，
+  // **绝不臆造伪域**——臆造会让自由文本任务进前沿、漏检真实重叠 → 并行撞车。
+  // 仅当看似真实路径（含 / 且含扩展名）才回退到「前两段」作粗域；否则 null（→ 调用方推迟、待人工指派）。
+  if (s.includes('/') && /\.[a-zA-Z0-9]+$/.test(s)) return s.split('/').slice(0, 2).join('/');
+  return null;
 }
 
-/** 任务触碰的域桶集合（config.tasks.<uid>.domain 可覆盖）。 */
+/** 任务触碰的域桶集合（config.tasks.<uid>.domain 可覆盖）。分隔符含中文/英文分号（旧 backlog 用「；」「;」）。 */
 export function taskDomains(task, override = {}) {
   const o = override[task.uid];
   if (o && Array.isArray(o.domain) && o.domain.length) return new Set(o.domain);
-  const codes = String(task.code || '').split(/[,\s]+/).filter(Boolean);
+  const codes = String(task.code || '').split(/[,\s；;]+/).filter(Boolean);
   const set = new Set();
   for (const c of codes) { const b = bucketOf(c); if (b) set.add(b); }
   return set;
@@ -111,12 +97,20 @@ export function computeFrontier(tasks, config = {}) {
   const deps = config.deps || {};
   const done = new Set(tasks.filter((t) => t.status === 'DONE').map((t) => t.uid));
 
+  // P1-3（codex 闸-2）：GATED 双判 = 显式 config（tasks.<uid>.gated）∪ 精确 cutover 关键词。
+  // ⚠️ 关键词必须**精确指向不可逆 cutover 动作**（RLS-on 上线 / sync VPS 发账号 / cutover），
+  //   **不可用「GATED」**——多省「GATED 上线前置」任务是该做的前置，含「GATED」字样若被排除会误伤。
+  const gatedKeywords = config.gatedKeywords || ['cutover', 'RLS-on 上线', 'sync VPS 发账号', 'RLS-on→', '进 current/ →'];
+  const isGated = (t) =>
+    override[t.uid]?.gated === true
+    || gatedKeywords.some((kw) => String(t.desc || '').includes(kw) || String(t.section || '').includes(kw));
+
   const candidates = tasks.filter((t) => {
     const st = t.status || 'PROPOSED';
     if (!OPEN_STATUSES.has(st)) return false;          // DONE / BLOCKED / 未知 → 不候选
     if (inflight.has(t.uid)) return false;             // 在飞 → 不重复派单
     if (override[t.uid]?.exclude) return false;
-    if (override[t.uid]?.gated) return false;          // 🔴 GATED：永不自动进前沿
+    if (isGated(t)) return false;                      // 🔴 GATED cutover：永不自动进前沿（须用户确认）
     const ds = deps[t.uid] || [];
     if (!ds.every((d) => done.has(d))) return false;   // 前置未完成 → 不就绪
     return true;

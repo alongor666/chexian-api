@@ -1,0 +1,13 @@
+{
+  "_doc": "Loop v2 调度器配置（scripts/loop/dispatch.mjs 读取）。SSOT 任务来自 BACKLOG_LOG.jsonl；本文件仅做调度覆盖。见 .claude/rules/loop-orchestration.md §1/§5。",
+  "_fields": {
+    "gatedKeywords": "🔴 desc/section 命中任一即 GATED cutover（永不自动进前沿，须用户显式确认）。必须精确指向不可逆 cutover，禁用『GATED』(会误伤『GATED 上线前置』该做任务)。",
+    "deps": "uid -> [前置 uid...]；前置全 DONE 才就绪。",
+    "inflight": "[uid...] 当前已有会话在做（防重复派单）。会话开工时加入、合并后移除。",
+    "tasks": "uid -> { domain:[域桶覆盖], gated:true 显式终局闸, exclude:true 排除 }。code 字段噪声大或跨域时用 domain 覆盖。"
+  },
+  "gatedKeywords": ["cutover", "RLS-on 上线", "sync VPS 发账号", "RLS-on→", "进 current/ →", "发山西账号"],
+  "deps": {},
+  "inflight": [],
+  "tasks": {}
+}

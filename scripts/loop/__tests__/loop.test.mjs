@@ -11,20 +11,21 @@ import { scanEntries, classify, isoAddDays } from '../automation-due.mjs';
 
 const J = (o) => JSON.stringify(o);
 
-describe('dispatch.foldBacklog', () => {
-  it('create→status→amend 折叠为当前态', () => {
+describe('dispatch.foldBacklog（委托 backlog/lib 权威 fold）', () => {
+  it('create→status→amend(field/value LWW) 折叠为当前态', () => {
+    // 权威 fold：amend 用 {field,value} schema（非顶层字段）。这正是 codex 闸-2 P1-1 修复点：
+    // 旧自实现只认顶层 amend 字段会漏读 → 这里用真实 schema 验证委托后正确。
     const lines = [
-      J({ uid: 'a', kind: 'create', desc: 'A', code: 'src/x.ts', priority: 'P2', section: 's' }),
-      J({ uid: 'b', kind: 'create', desc: 'B', code: 'server/src/sql/y.ts', priority: 'P1' }),
-      J({ uid: 'a', kind: 'status', status: 'DONE' }),
-      J({ uid: 'b', kind: 'amend', priority: 'P0' }),
-      '',
-      'not-json',
+      J({ uid: 'a', kind: 'create', desc: 'A', code: 'src/x.ts', priority: 'P2', section: 's', at: '2026-06-21T01:00:00.000Z' }),
+      J({ uid: 'b', kind: 'create', desc: 'B', code: 'server/src/sql/y.ts', priority: 'P1', at: '2026-06-21T01:00:01.000Z' }),
+      J({ uid: 'a', kind: 'status', status: 'DONE', at: '2026-06-21T02:00:00.000Z', eid: 'e1' }),
+      J({ uid: 'b', kind: 'amend', field: 'priority', value: 'P0', at: '2026-06-21T02:00:01.000Z', eid: 'e2' }),
     ];
     const t = foldBacklog(lines);
-    expect(t.map((x) => x.uid)).toEqual(['a', 'b']);
-    expect(t[0].status).toBe('DONE');
-    expect(t[1].priority).toBe('P0');
+    const byUid = Object.fromEntries(t.map((x) => [x.uid, x]));
+    expect(byUid.a.status).toBe('DONE');
+    expect(byUid.b.priority).toBe('P0'); // amend(field/value) 生效
+    expect(byUid.b.status).toBe('PROPOSED'); // 权威 fold 默认态
   });
 });
 
@@ -44,6 +45,25 @@ describe('dispatch.bucketOf', () => {
     expect(bucketOf('**server/src/routes/query/x.ts**')).toBe('be-routes');
     expect(bucketOf('src/a.tsx<br>')).toBe('frontend');
     expect(bucketOf('server/src/config/env.ts:127')).toBe('be-config');
+  });
+  it('P1-2：未知 token 返回 null（绝不臆造伪域）', () => {
+    expect(bucketOf('N/A')).toBe(null);
+    expect(bucketOf('同B244')).toBe(null);
+    expect(bucketOf('一些中文描述')).toBe(null);
+    // 看似真实路径（含 / 且含扩展名）的未识别前缀 → 回退前两段粗域
+    expect(bucketOf('weirdtop/sub/file.ts')).toBe('weirdtop/sub');
+  });
+});
+
+describe('dispatch.taskDomains 分隔符', () => {
+  it('支持中文/英文分号 + 花括号路径前缀', () => {
+    expect([...taskDomains({ uid: 'x', code: 'src/a.tsx；server/src/sql/b.ts;数据管理/c.py' })].sort())
+      .toEqual(['be-sql', 'etl', 'frontend']);
+    expect([...taskDomains({ uid: 'y', code: 'src/features/{growth,quote-conversion}' })])
+      .toEqual(['frontend']);
+  });
+  it('全为非路径 token → 空域集（→ computeFrontier 推迟）', () => {
+    expect(taskDomains({ uid: 'z', code: 'N/A' }).size).toBe(0);
   });
 });
 
@@ -94,6 +114,25 @@ describe('dispatch.computeFrontier', () => {
     const r = computeFrontier([{ uid: 'nocode', code: '', priority: 'P1', status: 'PROPOSED' }], {});
     expect(r.frontier).toHaveLength(0);
     expect(r.deferred[0].reason).toMatch(/no-domain/);
+  });
+
+  it('P1-3：GATED cutover 关键词命中 → 永不进前沿（精确词，不误伤"GATED 前置"）', () => {
+    const t = [
+      { uid: 'cut', code: 'server/src/config/x.ts', priority: 'P0', status: 'PROPOSED', desc: 'RLS-on 上线 → SX 进 current/ → sync VPS 发账号' },
+      { uid: 'prep', code: 'server/src/sql/y.ts', priority: 'P1', status: 'PROPOSED', desc: 'G3 维度省份化（GATED 上线前置，该做）' },
+    ];
+    const r = computeFrontier(t, {});
+    const f = r.frontier.map((x) => x.task.uid);
+    expect(f).not.toContain('cut');   // cutover 词命中 → 排除
+    expect(f).toContain('prep');      // "GATED 上线前置" 不被误伤 → 仍可派
+  });
+
+  it('P1-3：显式 config tasks.<uid>.gated 也排除', () => {
+    const r = computeFrontier(
+      [{ uid: 'g', code: 'src/a.tsx', priority: 'P1', status: 'PROPOSED', desc: '普通任务' }],
+      { tasks: { g: { gated: true } } },
+    );
+    expect(r.frontier).toHaveLength(0);
   });
 });
 

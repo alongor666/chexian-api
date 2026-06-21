@@ -97,10 +97,12 @@ function main() {
   const items = scanEntries(content);
   const c = classify(items, today, days);
 
-  if (args.includes('--json')) { process.stdout.write(JSON.stringify({ today, ...c }, null, 2) + '\n'); return; }
+  if (args.includes('--json')) { process.stdout.write(JSON.stringify({ today, strict: args.includes('--strict'), ...c }, null, 2) + '\n'); return; }
   console.log(render(c, today));
-  // 已过期 → 非零退出，便于 meta-review CI/钩子感知（不阻断普通流程，仅本命令）
+  // 退出码：已过期 → 2（meta-review 必须处置）；--strict 下缺 expires 也 → 1（CI 可据此卡存量缺口）。
+  // 默认非 strict：缺 expires 仅信息性（新增由 governance #703 硬拦，存量 grandfather）。
   if (c.expired.length) process.exitCode = 2;
+  else if (args.includes('--strict') && c.missing.length) process.exitCode = 1;
 }
 
 // 入口守卫：fileURLToPath 解码比较（仓库路径含非 ASCII 时直接拼 file://${argv[1]} 会失配）。
