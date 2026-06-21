@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatCount, formatPercent, formatPremiumWan } from '../../../shared/utils/formatters';
 import { cardStyles, cn, colorClasses, textStyles } from '../../../shared/styles';
+import { EmptyState, KpiGridSkeleton } from '../../../shared/ui';
 import type {
   VariableCostData,
   VariableCostKpiData,
@@ -108,18 +109,27 @@ export const VariableCostKpiBoard: React.FC<VariableCostKpiBoardProps> = ({
     setDrillLevel('branch');
   }, [data]);
 
+  // 多省接入「前端空态保护」（ADR G8 / Day-1 SOP §5）：
+  // 装载中 / 缺数据时禁止静默渲染零值卡，避免业务方误判真实零保费。
   if (loading && orgRows.length === 0) {
     return (
-      <div className={cardStyles.standard}>
-        <div className={textStyles.caption}>变动成本率KPI看板加载中...</div>
+      <div className="space-y-3" aria-busy="true">
+        <p className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
+          数据加载中，请稍候…
+        </p>
+        <KpiGridSkeleton count={6} />
       </div>
     );
   }
 
-  if (!loading && orgRows.length === 0) {
+  if (orgRows.length === 0) {
     return (
-      <div className={cardStyles.standard}>
-        <div className={textStyles.caption}>暂无KPI数据</div>
+      <div className={cn(cardStyles.standard)}>
+        <EmptyState
+          size="lg"
+          title="暂无数据"
+          description="当前分公司或筛选范围暂无变动成本率数据，可能正在装载，请稍后刷新。若持续为空，请联系管理员确认数据状态——这不代表真实零保费。"
+        />
       </div>
     );
   }

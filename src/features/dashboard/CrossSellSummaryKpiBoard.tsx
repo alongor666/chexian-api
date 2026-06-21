@@ -10,6 +10,7 @@
 import { memo, useMemo } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { textStyles, cardStyles, numericStyles, cn, colorClasses, getTrendColorClassByPolarity } from '@/shared/styles';
+import { EmptyState, KpiGridSkeleton } from '@/shared/ui';
 import type { MetricPolarity } from '@/shared/styles';
 import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { useCrossSellTimePeriod, type SeatCoverageLevel, type VehicleCategory } from './hooks/useCrossSellTimePeriod';
@@ -298,6 +299,34 @@ export const CrossSellSummaryKpiBoard = memo(function CrossSellSummaryKpiBoard({
     return (
       <div className="bg-danger-bg border border-danger-border rounded-xl p-4">
         <p className="text-danger text-sm">加载失败: {error}</p>
+      </div>
+    );
+  }
+
+  // 多省接入「前端空态保护」（ADR G8 / Day-1 SOP §5）：
+  // 新分公司数据装载中 / 缺数据时 rawData 为空，dataByCoverage 为空 Map，
+  // 所有单元格落 `?? 0` 静默渲染零值 → 业务方误判真实零保费。显式提示「加载中 / 暂无数据」。
+  const dataEmpty = !rawData || rawData.length === 0;
+
+  if (loading && dataEmpty) {
+    return (
+      <div className="space-y-3" aria-busy="true">
+        <p className={cn(textStyles.caption, colorClasses.text.neutralMuted)}>
+          数据加载中，请稍候…
+        </p>
+        <KpiGridSkeleton count={6} />
+      </div>
+    );
+  }
+
+  if (dataEmpty) {
+    return (
+      <div className={cn(cardStyles.standard)}>
+        <EmptyState
+          size="lg"
+          title="暂无数据"
+          description="当前机构或筛选范围暂无驾意险推介数据，可能正在装载，请稍后刷新。若持续为空，请联系管理员确认数据状态——这不代表真实零保费。"
+        />
       </div>
     );
   }
