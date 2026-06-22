@@ -43,6 +43,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { createRequire } from 'module';
 import { execFileSync, execSync } from 'child_process';
 import {
   collectPolicyCurrentStats,
@@ -2921,6 +2922,191 @@ function walkDir(dir, cb) {
   }
 }
 
+// ============================================================
+// 前端分层依赖边界（B330 防回归 · follow-up 2026-06-15-claude-2e017d）
+// ============================================================
+//
+// B330（架构依赖违规修复，PR #641/#642/#643 已修复合并）守的是 ARCHITECTURE.md §2.2
+// 分层：L1 共享层（shared/widgets）不得依赖 L2 特性层（features/*），各 L2 域禁横向互引，
+// 前端禁 import 后端 server/src。已修复但无闸 → 会静默回退（CLAUDE.md「规则必须自动化执行」）。
+//
+// 与既有 codex 审查（gate-1）对齐的设计要点：
+//   - 用 TypeScript AST 解析模块说明符，覆盖 import / import type / export...from /
+//     动态 import() / require()，不靠脆弱的 `from '...features...'` 文本正则（漏 export from、
+//     多行 import，且易被别名/相对路径绕过）。
+//   - 别名 @/features、@/、相对路径 ../../features、server/src 归一识别。
+//   - 5 条边界（含 feature→feature 定向 denylist，守 B330 原始 growth→dashboard /
+//     quote-conversion→filters 两处横向违规）。
+//   - 逃生阀 marker 必须带 backlog/PR 引用，裸 marker 无效（防回归后门）。
+// 规则 SSOT 文档：.claude/rules/architecture.md（path-scoped，引用 ARCHITECTURE.md §2.2）。
+
+const ARCH_BOUNDARY_RULES = [
+  // from = 文件所在层（前缀，POSIX 路径）；to = 禁止解析到的目标层；desc 报错文案
+  { from: 'src/widgets/', to: 'features', desc: 'src/widgets 禁依赖 features（依赖倒置）' },
+  { from: 'src/shared/', to: 'features', desc: 'src/shared 禁依赖 features（依赖倒置）' },
+  // 前后端越界：全前端（features/shared/widgets）禁实值/类型 import server/src
+  // （codex gate-2 P1：原仅守 features，与 architecture.md「前端禁 server」口径不符 → 收齐三层）
+  { from: 'src/features/', to: 'server', desc: 'src/features 禁依赖 server/src（前后端越界）' },
+  { from: 'src/shared/', to: 'server', desc: 'src/shared 禁依赖 server/src（前后端越界）' },
+  { from: 'src/widgets/', to: 'server', desc: 'src/widgets 禁依赖 server/src（前后端越界）' },
+  { from: 'src/features/growth/', to: 'features/dashboard', desc: 'growth 禁横向依赖 dashboard（L2→L2）' },
+  { from: 'src/features/quote-conversion/', to: 'features/filters', desc: 'quote-conversion 禁横向依赖 filters（L2→L2）' },
+];
+
+export const ARCH_BOUNDARY_RULES_EXPORT = ARCH_BOUNDARY_RULES;
+
+const ARCH_ALLOW_MARK = 'governance-allow: arch-boundary';
+// 逃生阀必须带 backlog uid / PR 号 / B 编号引用，裸 marker 无效（防回归后门）
+const ARCH_ALLOW_REF = /(B\d{2,4}|\d{4}-\d{2}-\d{2}-[\w-]+|#\d+)/;
+
+/**
+ * 逃生阀 marker 是否有效。要求三件套（codex gate-2 P2 收紧）：
+ *   1) 含 'governance-allow: arch-boundary' 关键字
+ *   2) 带 backlog uid / PR 号 / B 编号引用
+ *   3) 引用之后还有非空「一句理由」（≥2 个非空白字符），裸引用不予豁免
+ * 供单测复用。
+ */
+export function isValidArchAllowMark(line) {
+  if (!line.includes(ARCH_ALLOW_MARK)) return false;
+  const m = line.match(ARCH_ALLOW_REF);
+  if (!m) return false;
+  const after = line.slice(m.index + m[0].length).trim();
+  return after.replace(/\s+/g, '').length >= 2;
+}
+
+/**
+ * 纯函数：给定「文件相对路径」「归一后的目标层」，判定是否违反某条边界规则。
+ * 返回命中的规则描述数组（空 = 不违规）。供单测直接喂字符串验证 5 条规则。
+ */
+export function classifyArchViolations(relPosix, normalizedTarget) {
+  const hits = [];
+  for (const rule of ARCH_BOUNDARY_RULES) {
+    if (!relPosix.startsWith(rule.from)) continue;
+    const hit = rule.to === 'server'
+      ? (normalizedTarget.startsWith('server/') || normalizedTarget === 'server' || normalizedTarget.includes('/server/src/'))
+      : (normalizedTarget === rule.to || normalizedTarget.startsWith(`${rule.to}/`));
+    if (hit) hits.push(rule.desc);
+  }
+  return hits;
+}
+
+/**
+ * 把模块说明符归一为「逻辑层标识」：
+ * - @/features/... 或 features 相对路径 → 含 'features/<域>'
+ * - server/src/... 或 ../server 相对路径 → 含 'server'
+ * 返回用于 startsWith/includes 匹配的归一字符串（不解析磁盘路径，按目录段语义判定）。
+ */
+export function normalizeArchTarget(spec, fileAbsPath) {
+  // 别名形式：@/features/dashboard → features/dashboard
+  if (spec.startsWith('@/')) return spec.slice(2);
+  // 相对路径：相对当前文件解析为仓库内 POSIX 相对路径
+  if (spec.startsWith('.')) {
+    const resolved = path.resolve(path.dirname(fileAbsPath), spec);
+    const rel = path.relative(ROOT_DIR, resolved).split(path.sep).join('/');
+    // 去掉 src/ 前缀，使其与别名形式（features/...）可比
+    return rel.startsWith('src/') ? rel.slice(4) : rel;
+  }
+  // 裸包名（含 server/src 直引这种少见但 B330 列出的越界）
+  return spec;
+}
+
+/** 用 TS AST 抽取文件里所有模块说明符（import/export from/dynamic import/require）。 */
+export function extractModuleSpecifiers(ts, sourceText, fileName) {
+  const sf = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true,
+    /\.tsx$/.test(fileName) ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const specs = []; // { spec, line }
+  const lineOf = (node) => sf.getLineAndCharacterOfPosition(node.getStart(sf)).line; // 0-based
+  const push = (specNode, anchorNode) => {
+    // 接受普通字符串字面量 + 无插值模板字符串（`...`）——二者语义等价，
+    // 防 import(`@/features/...`) / require(`server/src/...`) 反引号绕过（codex gate-2 P1）
+    if (specNode && (ts.isStringLiteral(specNode) || ts.isNoSubstitutionTemplateLiteral(specNode))) {
+      specs.push({ spec: specNode.text, line: lineOf(anchorNode || specNode) });
+    }
+  };
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node)) push(node.moduleSpecifier, node);
+    else if (ts.isExportDeclaration(node) && node.moduleSpecifier) push(node.moduleSpecifier, node);
+    else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+      push(node.moduleReference.expression, node);
+    } else if (ts.isCallExpression(node)) {
+      // 动态 import('...') / require('...')
+      const isDynImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      if ((isDynImport || isRequire) && node.arguments.length > 0) push(node.arguments[0], node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return specs;
+}
+
+function checkArchLayerBoundaries() {
+  info('检查前端分层依赖边界（B330 防回归：shared/widgets↛features、features↛server、L2 横向）...');
+
+  const require = createRequire(import.meta.url);
+  let ts;
+  try {
+    ts = require('typescript');
+  } catch {
+    error('typescript 未安装，无法做 AST 边界扫描（应在 devDependencies）');
+    return false;
+  }
+
+  const srcRoot = path.join(ROOT_DIR, 'src');
+  if (!fs.existsSync(srcRoot)) {
+    warning('src 不存在，跳过分层边界检查');
+    return true;
+  }
+
+  const violations = [];
+  let scanned = 0;
+
+  walkDir(srcRoot, (full) => {
+    if (!/\.(ts|tsx)$/.test(full)) return;
+    if (full.includes(`${path.sep}node_modules${path.sep}`)) return;
+    const relPosix = path.relative(ROOT_DIR, full).split(path.sep).join('/');
+    // 只扫被某条规则的 from 覆盖的文件，省时
+    const applicable = ARCH_BOUNDARY_RULES.filter((r) => relPosix.startsWith(r.from));
+    if (applicable.length === 0) return;
+    scanned += 1;
+
+    const text = fs.readFileSync(full, 'utf-8');
+    const lines = text.split('\n');
+    let specs;
+    try {
+      specs = extractModuleSpecifiers(ts, text, full);
+    } catch (e) {
+      warning(`AST 解析失败（跳过该文件）：${relPosix} — ${e.message}`);
+      return;
+    }
+
+    for (const { spec, line } of specs) {
+      const target = normalizeArchTarget(spec, full);
+      const hitDescs = classifyArchViolations(relPosix, target);
+      if (hitDescs.length === 0) continue;
+      // 逃生阀：命中行或上一行带合法 marker（marker + backlog/PR 引用）
+      const cur = lines[line] || '';
+      const prev = line > 0 ? lines[line - 1] || '' : '';
+      if (isValidArchAllowMark(cur) || isValidArchAllowMark(prev)) continue;
+      for (const desc of hitDescs) {
+        violations.push(`${relPosix}:${line + 1}  →  '${spec}'  （违反：${desc}）`);
+      }
+    }
+  });
+
+  if (violations.length > 0) {
+    error(`发现架构分层依赖违规 = ${violations.length} 处（B330 已修复，禁回退）：`);
+    for (const v of violations) console.log(`    - ${v}`);
+    console.log('    修复：被引用的 hook/组件/类型上提 src/shared/；前端需后端类型走 src/shared/types/ 镜像');
+    console.log('    确有正当理由保留：命中行或上一行加 `// governance-allow: arch-boundary <B编号/PR号> <理由>`');
+    console.log('    依据：.claude/rules/architecture.md · ARCHITECTURE.md §2.2 · BACKLOG B330');
+    return false;
+  }
+
+  success(`前端分层依赖边界检查通过（扫描 ${scanned} 文件，0 违规）`);
+  return true;
+}
+
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件', fn: checkRequiredFiles },
@@ -2965,6 +3151,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'evidence-loop SSOT 漂移', fn: checkEvidenceLoopSsotDrift },
   { name: 'pr-evolution needs_automation expires 闸', fn: checkPrEvolutionExpired },
   { name: '.github/workflows YAML 语法', fn: checkWorkflowYamlSyntax },
+  { name: '分层依赖边界', fn: checkArchLayerBoundaries },
 ];
 
 // ============================================================
