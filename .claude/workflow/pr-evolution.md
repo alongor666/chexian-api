@@ -823,3 +823,15 @@
 - **验证**：43 单测全绿（含 6 新例：uidToken/branchMatchesUid/PR 信号高置信/scanStale 注入）；governance 44/44；实跑命中 b261/b299/b290/b322/b332 共 5 项「合并未回填 DONE」任务（活证据）。
 - **边界纪律（用户 2026-06-22 确认）**：网络抖动 / 判定器 503 是环境不可抗力（天），不计入「问题」、不优化，只容错共处；本 PR 只根治可控的逻辑盲区。
 - needs_automation: false（本身即把"现实核查"自动化的一环）
+
+---
+
+**R20 · b332 premium-report 2 hooks 纯逻辑提取 + 单测（Loop v2 续推·路线 B 提取重构·三源全过·golden 由确定性等价证明）**
+- **触发**：#742（R19 expense-development）合并后续推 b332。R18「双源零测试盘点」结论=真零测试 8 个，R18/R19 已清 comprehensive(浅测补强)/expense-development；premium-report 是唯一含 `.ts` 逻辑文件(2 hooks)的剩余模块，余 6 个(admin/customer-flow/file/moto-cost/repair/report)纯组件无纯函数。
+- **路线决策（B 提取 vs A renderHook+mock）**：用户给 A/B 二选一并推荐 B。选 B（calculateSummary/sortData/normalize*/drill 层级逻辑提取到 utils/ 纯函数直测）。**关键推理**：R19「下一轮」把 premium-report 标为「renderHook 稍重」(路线 A 心智)；但路线 B 提取后**本轮转为与 R18/R19 同构**(纯函数直测、零 mock)——用户给的「跑闸-1」理由是「hooks+mock 不同构于前两轮」，该理由在路线 B 下消失。故按 R17/R19 先例免闸-1 + R19 要求的「分支矩阵自查」补偿；路线 B 新引入的「提取保真」风险交给**更有效的闸-2 审 diff**(R16:「审 diff > 审计划」对重构尤甚)。
+- **成果（提取重构 + 纯增测试，hook 净缩减、golden 不变）**：新建 utils/premiumReportCalc.ts(4 函数)+utils/premiumPlanDrill.ts(6 符号)，两 hooks 删内联改 import(usePremiumReport -94/usePremiumPlan -64 行,典型代码简化)。44 单测：浮点四舍五入(去尾差 1.1+2.2→3.3 / 三位截断 1.111+2.222→3.33 / avg 1.65)、`??` vs `||`(空串保留锁 nullish 语义)、`== null`(null+undefined 同捕获)、localeCompare zh-CN(ASCII+拼音甲<乙)、null/undefined 排序方向、不可变(返回新数组 / 空 column 返回同引用)、normalize 逐字段(0 保留 vs null 回退 vs 数字串转型)、drill 层级映射全 6 档+越界 null+钳位、面包屑标签(业务员美化分支)。
+- **三源（闸-1 免）**：确定性闸 verify:full(governance44+typecheck+3747 单测)全绿；闸-2 codex(exec 经 stdin)无 P0/P1、确认与 origin/main 内联逐字符等价，3 P2(采纳 2:null/空串 dedup + undefined 排序；1 记残留:hook 级 golden)；evidence-verifier fresh-context(sonnet)**CONFIRMED**(逐函数对 diff 等价、5 断言推演无误、亲跑 3747 单测)。
+- **重来更好**：① **路线选择会重定义「同构」判断**——R19 把 premium-report 预判为「renderHook 稍重」=非同构据此建议跑闸-1；实际选路线 B 后变同构，闸-1 决策应随路线重判而非沿用上轮预判。② **路线 B 的 golden 保真不靠「新测试」(它们只测提取后代码)，靠「提取逐字符等价(人工+codex+verifier 三方对 diff) + typecheck(接线) + 全量套件(无回归)」**——本轮无既有 premium-report 测试作 golden 回归锚，故等价证明全压在 diff 对比，这是路线 B(提取无既有测试模块)的固有约束，必须显式声明而非假装「测试证明了 golden」。③ 闸-2 的 P2-3(hook 级 golden 需 renderHook)是路线 A/B 的本质权衡点而非可补缺口：补它=引回路线 B 刻意规避的 mock 脆性。
+- **复用价值**：① 「纯逻辑从 hook 提取到 utils/」打法=同目录(utils 与 hooks 同在 features/<mod>/下,`../../../shared` 相对深度一致零改写)抽纯函数、hook 改 `.map(normalizeX)`/`computeX()` 调用、useCallback 依赖移除已提取的稳定模块函数(原 `useCallback(...,[])` 提取后天然稳定,从依赖数组删除安全)；零生产行为变更而 hook 显著简化。可把 R19「纯函数分布扫描」里判为 hooks 的模块从路线 A 转路线 B。② 「`??` vs `||` 用空串(非 null)区分」「`== null` 用 undefined(非 null)区分」是锁「易被误改的判等运算符」标准测法。③ vitest exclude 含 `**/.claude/**`——测试**禁落 `.claude/worktrees/`**(否则静默 skip=假 passed)，本轮特意用兄弟目录 worktree 规避(呼应 feedback_e2e_silent_skip_false_positive)。
+  - needs_automation: false（沿用 R18 已登记的「双源零测试盘点 + 纯函数分布扫描」脚本项 expires 2026-09-22；本轮新增「路线 A/B 同构判断随路线重判」是决策纪律非可自动化项）
+- **下一轮**：真零测试余 6 个**纯组件**模块(admin/customer-flow/file/moto-cost/repair/report,仅 .tsx+barrel 无纯函数)——须转「组件 smoke(DOM/@testing-library)」路线，与本纯函数策略不同，是 b332 既定**策略分叉点**；premium-report 已清零，b332 整体仍 IN_PROGRESS。
