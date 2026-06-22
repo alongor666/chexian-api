@@ -337,4 +337,35 @@ describe('quote-conversion SQL contract', () => {
     const sql = generateQuoteRankingQuery({}, 'customer_category');
     expect(sql).not.toContain('is_telemarketing');
   });
+
+  // ── codex 二轮 P1 严格三态：非法 isTelemarketing 值返回空（不静默放大）──────────────
+  it('codex 二轮 P1：isTelemarketing 非法值（全部）生成 1=0 不可能命中条件', () => {
+    const filters: QuoteConversionFilters = { isTelemarketing: '全部' as '电销' };
+    const sql = generateQuoteKpiQuery(filters);
+    // 非法值应生成 1 = 0，而非 is_telemarketing = FALSE（防止静默放大为全部非电销数据）
+    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('is_telemarketing = FALSE');
+    expect(sql).not.toContain('is_telemarketing = TRUE');
+  });
+
+  it('codex 二轮 P1：isTelemarketing typo 值也生成 1=0（防止静默放大）', () => {
+    const filters: QuoteConversionFilters = { isTelemarketing: 'dianxiao' as '电销' };
+    const sql = generateQuoteKpiQuery(filters);
+    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('is_telemarketing = FALSE');
+  });
+
+  // ── codex 二轮 P2 维度输出侧 NULL 保护 ───────────────────────────────────────────
+  it('codex 二轮 P2：heatmap is_telemarketing 维度输出含 IS NULL 保护（不折叠 NULL 为非电销）', () => {
+    const sql = generateQuoteHeatmapQuery({}, 'is_telemarketing');
+    // 必须显式处理 NULL，防止 ELSE 折叠成 '非电销'
+    expect(sql).toContain('is_telemarketing IS NULL');
+    expect(sql).toContain("THEN NULL");
+  });
+
+  it('codex 二轮 P2：ranking is_telemarketing 维度输出含 IS NULL 保护', () => {
+    const sql = generateQuoteRankingQuery({}, 'is_telemarketing');
+    expect(sql).toContain('is_telemarketing IS NULL');
+    expect(sql).toContain("THEN NULL");
+  });
 });

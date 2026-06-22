@@ -655,10 +655,17 @@ export async function loadQuoteConversion(
   // 但为兼容性使用 EXCLUDE + 显式投影更安全。此处采用子查询 + REPLACE 语法：
   //   SELECT * REPLACE (CASE WHEN is_telemarketing = '电销' THEN TRUE ELSE FALSE END AS is_telemarketing)
   // 这样除 is_telemarketing 之外所有列原样保留（含 branch_code），无需穷举列名。
+  // P2 NULL 保护（codex 二轮 P2）：源 varchar is_telemarketing 可能含 NULL 或非标准枚举值
+  // （ETL 使用 astype(str) 处理，空单元格变为字符串 'nan' 而非真 NULL，但仍加保护更稳）。
+  // 显式处理 NULL：NULL→NULL，'电销'→TRUE，其余（含 '非电销' / 'nan' / 空串）→FALSE。
+  // 禁止将 NULL 折叠成 FALSE（ELSE FALSE 会破坏字节安全，改前 varchar NULL 输出原值 NULL）。
   await db.query(`
     CREATE OR REPLACE VIEW QuoteConversion AS
     SELECT * REPLACE (
-      CASE WHEN is_telemarketing = '电销' THEN TRUE ELSE FALSE END AS is_telemarketing
+      CASE WHEN is_telemarketing IS NULL THEN NULL
+           WHEN is_telemarketing = '电销' THEN TRUE
+           ELSE FALSE
+      END AS is_telemarketing
     )
     FROM (
       ${innerSelect}
