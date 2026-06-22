@@ -1,10 +1,8 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EChartsOption } from 'echarts';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import type { AdvancedFilterState } from '@/shared/types/data';
 import { Tabs } from '@/shared/ui/Tabs';
 import type { TabItem } from '@/shared/ui/Tabs';
 import {
-  StickyTableFrame,
   DrilldownBreadcrumb,
   DrilldownCell,
   DrilldownLoadingOverlay,
@@ -15,11 +13,9 @@ import { SectionTitle, SectionBlock } from '@/shared/ui/SectionTitle';
 import { useDataStatus } from '@/shared/contexts/DataContext';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { useScopeLabel } from '@/shared/hooks/useScopeLabel';
-import { echarts } from '@/shared/utils/echarts';
 import { formatCount, formatPercent, formatWanAdaptive, formatTeamName, formatSalesmanName } from '@/shared/utils/formatters';
-import { useTheme } from '@/shared/theme';
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { buttonStyles, cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles, toggleButtonStyles } from '@/shared/styles';
+import { buttonStyles, cardStyles, cn, colorClasses, textStyles, toggleButtonStyles } from '@/shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
 import {
   classifyAchievementBand,
@@ -28,15 +24,11 @@ import {
   getAchievementTextClass,
   getGrowthTextClass,
   getQuadrantLabel,
-  PERFORMANCE_ACHIEVEMENT_THRESHOLD,
-  PERFORMANCE_GROWTH_THRESHOLD,
-  PERFORMANCE_QUADRANT_META,
 } from './performanceStatus';
 import {
   PERFORMANCE_DIMENSION_LABELS,
   usePerformanceDrilldown,
   type PerformanceDimension,
-  type PerformanceRow,
 } from './hooks/usePerformanceDrilldown';
 import {
   usePerformanceSummary,
@@ -63,6 +55,8 @@ import {
 import { getConditionalDimensions } from '@/shared/config/drilldown-dimensions';
 import { PerformanceOrgHeatmapV2, HeatmapFocusPanel } from './performance/PerformanceOrgHeatmapV2';
 import type { HeatmapMetric } from './performance/PerformanceOrgHeatmapV2';
+import { PerformanceDistributionChart } from './performance/PerformanceDistributionChart';
+import { PerformanceSummaryTable } from './performance/PerformanceSummaryTable';
 
 interface PerformanceAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -199,15 +193,7 @@ export const PerformanceHeaderActions: React.FC<{
   </div>
 );
 
-const EXPAND_DIMS_TABS: TabItem[] = [
-  { key: 'none', label: '不展开' },
-  { key: 'energy', label: '油电' },
-  { key: 'business_nature', label: '新转续' },
-  { key: 'energy_business_nature', label: '油电+新转续' },
-];
-
-
-const SUMMARY_ORDER = ['整体', '主全', '交三', '单交'];
+// EXPAND_DIMS_TABS 和 SUMMARY_ORDER 已移至 ./performance/PerformanceSummaryTable.tsx
 
 function mapTimePeriodToTrendGranularity(timePeriod: PerformanceTimePeriod): 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' {
   switch (timePeriod) {
@@ -232,10 +218,6 @@ function formatPremiumWanDisplay(value: number | null | undefined): string {
   return formatWanAdaptive(value);
 }
 
-function formatAvgPremiumDisplay(value: number): string {
-  return `${formatCount(value)}元`;
-}
-
 function safeNumber(value: number | null | undefined): number {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return 0;
@@ -257,275 +239,10 @@ function sortWithNull(value: number | null, order: 'asc' | 'desc'): number {
   return value;
 }
 
-function DistributionChart({
-  rows,
-  loading,
-  error,
-}: {
-  rows: PerformanceRow[];
-  loading: boolean;
-  error: string | null;
-}) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
-  const { resolvedTheme } = useTheme();
+// DistributionChart 已拆分至 ./performance/PerformanceDistributionChart.tsx
+// 此处保留占位以便 git blame 追溯
 
-  const points = useMemo(() => {
-    const filtered = rows.filter((row) => row.achievement_rate !== null && row.growth_rate !== null);
-    const maxCount = Math.max(...filtered.map((item) => safeNumber(item.auto_count)), 1);
 
-    return filtered.map((row) => {
-      const achievement = safeNumber(row.achievement_rate);
-      const growth = safeNumber(row.growth_rate);
-      const autoCount = Math.max(0, safeNumber(row.auto_count));
-      const quadrant = classifyPerformanceQuadrant(achievement, growth);
-      const symbolSize = 12 + (autoCount / maxCount) * 18;
-      const color = quadrant === 'unknown'
-        ? colors.neutral[400]
-        : PERFORMANCE_QUADRANT_META[quadrant].color;
-
-      return {
-        name: row.group_name,
-        value: [achievement, growth, autoCount],
-        quadrant,
-        itemStyle: {
-          color,
-          opacity: 0.86,
-        },
-        symbolSize,
-      };
-    });
-  }, [rows]);
-
-  const axisRange = useMemo(() => {
-    if (points.length === 0) {
-      return { xMin: 80, xMax: 120, yMin: -5, yMax: 20 };
-    }
-    const xs = points.map((p) => Number(p.value[0] || 0));
-    const ys = points.map((p) => Number(p.value[1] || 0));
-    return {
-      xMin: Math.min(80, Math.floor(Math.min(...xs) - 5)),
-      xMax: Math.max(120, Math.ceil(Math.max(...xs) + 5)),
-      yMin: Math.min(-5, Math.floor(Math.min(...ys) - 2)),
-      yMax: Math.max(20, Math.ceil(Math.max(...ys) + 2)),
-    };
-  }, [points]);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-    if (!chartInstanceRef.current) {
-      chartInstanceRef.current = echarts.init(chartRef.current);
-    }
-    const chart = chartInstanceRef.current;
-    if (!chart) return;
-    if (loading) return;
-
-    if (error) {
-      chart.clear();
-      chart.setOption({
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: {
-            text: `加载失败: ${error}`,
-            fill: colors.danger.DEFAULT,
-            fontSize: 13,
-          },
-        },
-      });
-      return;
-    }
-
-    if (points.length === 0) {
-      chart.clear();
-      chart.setOption({
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: {
-            text: '暂无达成率/增长率分布数据',
-            fill: colors.neutral[400],
-            fontSize: 13,
-          },
-        },
-      });
-      return;
-    }
-
-    const bucket = {
-      high_growth_high_achievement: points.filter((item) => item.quadrant === 'high_growth_high_achievement'),
-      high_growth_low_achievement: points.filter((item) => item.quadrant === 'high_growth_low_achievement'),
-      low_growth_high_achievement: points.filter((item) => item.quadrant === 'low_growth_high_achievement'),
-      low_growth_low_achievement: points.filter((item) => item.quadrant === 'low_growth_low_achievement'),
-    };
-
-    const scatterSymbolSize = (_value: unknown, params: any) => {
-      const data = params?.data;
-      if (typeof data?.symbolSize === 'number') return data.symbolSize;
-      return 16;
-    };
-
-    const isDark = resolvedTheme === 'dark';
-    const textColor = isDark ? '#f0f0f0' : '#333';
-    const subTextColor = isDark ? '#a3a3a3' : '#666';
-
-    const option: EChartsOption = {
-      textStyle: { color: textColor },
-      tooltip: {
-        trigger: 'item',
-        formatter: (params: any) => {
-          const value = params?.value || [0, 0, 0];
-          const achievement = Number(value[0] || 0);
-          const growth = Number(value[1] || 0);
-          const count = Number(value[2] || 0);
-          const quadrant = params?.data?.quadrant;
-          const quadrantLabel = typeof quadrant === 'string' ? getQuadrantLabel(quadrant as any) : '-';
-          return [
-            `<div style="font-size:12px;line-height:1.6;">`,
-            `<div style="font-weight:600;">${params?.name || ''}</div>`,
-            `<div>达成率：${formatPercent(achievement)}</div>`,
-            `<div>增长率：${formatPercent(growth)}</div>`,
-            `<div>车险件数：${formatCount(count)}</div>`,
-            `<div>象限：${quadrantLabel}</div>`,
-            `</div>`,
-          ].join('');
-        },
-      },
-      legend: {
-        top: 0,
-        type: 'scroll',
-        textStyle: { color: subTextColor },
-        data: ['高增长高达成（优秀）', '高增长低达成（异常）', '低增长高达成（预警）', '低增长低达成（危险）'],
-      },
-      grid: {
-        left: '7%',
-        right: '6%',
-        top: 54,
-        bottom: 46,
-        containLabel: true,
-      },
-      xAxis: {
-        type: 'value',
-        name: '达成率',
-        nameTextStyle: { color: subTextColor },
-        min: axisRange.xMin,
-        max: axisRange.xMax,
-        axisLabel: { formatter: '{value}%', color: subTextColor },
-        splitLine: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        name: '增长率',
-        nameTextStyle: { color: subTextColor },
-        min: axisRange.yMin,
-        max: axisRange.yMax,
-        axisLabel: { formatter: '{value}%', color: subTextColor },
-        splitLine: { show: false },
-      },
-      series: [
-        {
-          name: '背景',
-          type: 'scatter',
-          data: [],
-          symbolSize: scatterSymbolSize,
-          markArea: {
-            silent: true,
-            itemStyle: { opacity: 0.08 },
-            data: [
-              [
-                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: PERFORMANCE_GROWTH_THRESHOLD, itemStyle: { color: colors.success.DEFAULT } },
-                { xAxis: axisRange.xMax, yAxis: axisRange.yMax },
-              ],
-              [
-                { xAxis: axisRange.xMin, yAxis: PERFORMANCE_GROWTH_THRESHOLD, itemStyle: { color: colors.warning.DEFAULT } },
-                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: axisRange.yMax },
-              ],
-              [
-                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: axisRange.yMin, itemStyle: { color: '#fa8c16' } },
-                { xAxis: axisRange.xMax, yAxis: PERFORMANCE_GROWTH_THRESHOLD },
-              ],
-              [
-                { xAxis: axisRange.xMin, yAxis: axisRange.yMin, itemStyle: { color: colors.danger.DEFAULT } },
-                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: PERFORMANCE_GROWTH_THRESHOLD },
-              ],
-            ],
-          },
-        },
-        {
-          name: '高增长高达成（优秀）',
-          type: 'scatter',
-          data: bucket.high_growth_high_achievement,
-          symbolSize: scatterSymbolSize,
-        },
-        {
-          name: '高增长低达成（异常）',
-          type: 'scatter',
-          data: bucket.high_growth_low_achievement,
-          symbolSize: scatterSymbolSize,
-        },
-        {
-          name: '低增长高达成（预警）',
-          type: 'scatter',
-          data: bucket.low_growth_high_achievement,
-          symbolSize: scatterSymbolSize,
-        },
-        {
-          name: '低增长低达成（危险）',
-          type: 'scatter',
-          data: bucket.low_growth_low_achievement,
-          symbolSize: scatterSymbolSize,
-          markLine: {
-            silent: true,
-            symbol: 'none',
-            lineStyle: {
-              type: 'dashed',
-              color: colors.neutral[500],
-              width: 1,
-            },
-            data: [
-              { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD },
-              { yAxis: PERFORMANCE_GROWTH_THRESHOLD },
-            ],
-          },
-        },
-      ],
-    };
-
-    chart.setOption(option, true);
-  }, [axisRange, error, loading, points, resolvedTheme]);
-
-  // ResizeObserver 仅需挂载时注册一次。此前与 setOption 同处一个 effect，
-  // 导致每次数据/主题变化都 disconnect + 重建 observer（无谓 DOM 操作）。
-  // resize 回调按调用时读取实例 ref，与图表 init 的时序无关。
-  useEffect(() => {
-    const el = chartRef.current;
-    if (!el) return;
-    const resizeObserver = new ResizeObserver(() => {
-      chartInstanceRef.current?.resize();
-    });
-    resizeObserver.observe(el);
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      chartInstanceRef.current?.dispose();
-      chartInstanceRef.current = null;
-    };
-  }, []);
-
-  return (
-    <section className={cn(cardStyles.standard, 'space-y-3')}>
-      <h3 className={textStyles.titleSmall}>达成率+增长率分布图</h3>
-      <div className={cn(textStyles.caption, colorClasses.text.neutralLight)}>
-        分界线：达成率 {PERFORMANCE_ACHIEVEMENT_THRESHOLD}% / 增长率 {PERFORMANCE_GROWTH_THRESHOLD}%。
-      </div>
-      <div ref={chartRef} className="h-[360px] w-full" />
-    </section>
-  );
-}
 
 function DimensionPicker({
   available,
@@ -616,7 +333,6 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const { prefix: scopePrefix } = useScopeLabel(filters, salesmanTeamMap);
 
   const [expandDims, setExpandDims] = useState<PerformanceSummaryExpandDims>('none');
-  const [expandedCoverage, setExpandedCoverage] = useState<Record<string, boolean>>({});
 
   const [showPicker, setShowPicker] = useState(false);
 
@@ -731,10 +447,6 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   });
 
   useEffect(() => {
-    setExpandedCoverage({});
-  }, [expandDims, segmentTag, timePeriod, growthMode]);
-
-  useEffect(() => {
     setHasDrillInteraction(false);
     setShowPicker(false);
     setHeatmapSelection(null);
@@ -743,28 +455,6 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
   const drilldownLoading = useLegacyDrilldown ? drilldownQuery.loading : performanceBundle.loading;
   const drilldownError = useLegacyDrilldown ? drilldownQuery.error : null;
-
-  const parentSummaryRows = useMemo(() => {
-    const rows = summaryQuery.rows.filter((row) => row.row_level === 0);
-    const rowMap = new Map(rows.map((row) => [row.coverage_combination, row]));
-    const ordered = SUMMARY_ORDER
-      .map((key) => rowMap.get(key))
-      .filter((item): item is PerformanceSummaryRow => Boolean(item));
-    const rest = rows.filter((row) => !SUMMARY_ORDER.includes(row.coverage_combination));
-    return [...ordered, ...rest];
-  }, [summaryQuery.rows]);
-
-  const childSummaryMap = useMemo(() => {
-    const map = new Map<string, PerformanceSummaryRow[]>();
-    summaryQuery.rows
-      .filter((row) => row.row_level === 1)
-      .forEach((row) => {
-        const list = map.get(row.coverage_combination) || [];
-        list.push(row);
-        map.set(row.coverage_combination, list);
-      });
-    return map;
-  }, [summaryQuery.rows]);
 
   const sortedGroupRows = useMemo(() => {
     const rows = [...drilldownQuery.rows];
@@ -861,10 +551,6 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const currentDimensionLabel = drilldownQuery.currentGroupBy
     ? PERFORMANCE_DIMENSION_LABELS[drilldownQuery.currentGroupBy]
     : '维度';
-
-  const toggleCoverageExpand = (coverage: string) => {
-    setExpandedCoverage((prev) => ({ ...prev, [coverage]: !prev[coverage] }));
-  };
 
   const segmentLabel = String(SEGMENT_TABS.find((item) => item.key === segmentTag)?.label || '全部');
   const timeLabel = String(TIME_PERIOD_TABS.find((item) => item.key === timePeriod)?.label || '日');
@@ -1028,105 +714,17 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
 
       <SectionBlock id="performance-summary">
       <SectionTitle title={summaryTitle} />
-      <section className={cn(cardStyles.standard, 'p-0 overflow-hidden')}>
-        <div className="px-4 pt-3">
-          <Tabs
-            items={EXPAND_DIMS_TABS}
-            activeKey={expandDims}
-            onChange={(key) => setExpandDims(key as PerformanceSummaryExpandDims)}
-            variant="pills"
-            size="small"
-          />
-        </div>
-        {summaryQuery.error ? (
-          <div className={cn('p-4', colorClasses.text.danger)}>加载失败: {summaryQuery.error}</div>
-        ) : (
-          <StickyTableFrame maxHeight={620}>
-            <table className="w-full text-sm">
-              <thead className={cn('bg-neutral-50 dark:bg-surface-2 border-b border-neutral-200 dark:border-subtle', stickyTableStyles.header)}>
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-neutral-600">险别组合</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">车险保费(万元)</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">车险计划(万元)</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">车险件数</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">件均保费</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">达成率</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">增长率</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">新能源占比</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">续保占比</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">转保占比</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">新保占比</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">过户转保占比</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summaryQuery.loading && (
-                  <tr>
-                    <td colSpan={12} className="px-4 py-8 text-center text-neutral-400">数据加载中...</td>
-                  </tr>
-                )}
-                {!summaryQuery.loading && parentSummaryRows.length === 0 && (
-                  <tr>
-                    <td colSpan={12} className="px-4 py-8 text-center text-neutral-400">暂无数据</td>
-                  </tr>
-                )}
-                {!summaryQuery.loading && parentSummaryRows.map((row, index) => {
-                  const childRows = childSummaryMap.get(row.coverage_combination) || [];
-                  const canExpand = expandDims !== 'none' && childRows.length > 0;
-                  const isExpanded = Boolean(expandedCoverage[row.coverage_combination]);
-                  return (
-                    <React.Fragment key={`${row.coverage_combination}-${index}`}>
-                      <tr className="border-b border-neutral-100">
-                        <td
-                          className={cn('px-4 py-3 font-medium text-neutral-800', canExpand && 'cursor-pointer')}
-                          onClick={() => canExpand && toggleCoverageExpand(row.coverage_combination)}
-                        >
-                          {canExpand ? `${isExpanded ? '▾' : '▸'} ` : ''}{row.row_label}
-                        </td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.plan_premium)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(row.avg_premium)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric, getRateTextClass('achievement', row.achievement_rate))}>
-                          {row.achievement_rate === null ? '-' : formatPercent(row.achievement_rate)}
-                        </td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric, getGrowthTextClass(classifyGrowthBand(row.growth_rate)), 'font-semibold')}>
-                          {row.growth_rate === null ? '-' : formatPercent(row.growth_rate)}
-                        </td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.nev_rate)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.renewal_rate)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.transfer_business_rate)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.new_car_rate)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPercent(row.transfer_rate)}</td>
-                      </tr>
-                      {isExpanded && childRows.map((child) => (
-                        <tr key={`${row.coverage_combination}-${child.expand_key}`} className="border-b border-neutral-100 bg-neutral-50/40">
-                          <td className={cn('px-4 py-2 pl-8', colorClasses.text.neutralDark)}>{child.row_label}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(child.premium)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(child.plan_premium)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatCount(child.auto_count)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(child.avg_premium)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric, getRateTextClass('achievement', child.achievement_rate))}>
-                            {child.achievement_rate === null ? '-' : formatPercent(child.achievement_rate)}
-                          </td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric, getGrowthTextClass(classifyGrowthBand(child.growth_rate)), 'font-semibold')}>
-                            {child.growth_rate === null ? '-' : formatPercent(child.growth_rate)}
-                          </td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.nev_rate)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.renewal_rate)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.transfer_business_rate)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.new_car_rate)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPercent(child.transfer_rate)}</td>
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </StickyTableFrame>
-        )}
-      </section>
+      {/* 险别组合业绩汇总表：已拆分至 ./performance/PerformanceSummaryTable.tsx */}
+      <PerformanceSummaryTable
+        rows={summaryQuery.rows}
+        loading={summaryQuery.loading}
+        error={summaryQuery.error}
+        expandDims={expandDims}
+        onExpandDimsChange={setExpandDims}
+        segmentTag={segmentTag}
+        timePeriod={timePeriod}
+        growthMode={growthMode}
+      />
       </SectionBlock>
 
       <SectionBlock id="performance-trend">
@@ -1155,7 +753,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         currentDimensionLabel,
         heatmapSelection
       )} />
-      <DistributionChart rows={drilldownQuery.rows} loading={drilldownLoading} error={drilldownError} />
+      <PerformanceDistributionChart rows={drilldownQuery.rows} loading={drilldownLoading} error={drilldownError} />
 
       <section className={cn(cardStyles.standard, 'space-y-3')}>
         <p className={cn(textStyles.caption, colorClasses.text.neutralLight)}>
