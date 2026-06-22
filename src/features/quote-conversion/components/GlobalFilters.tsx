@@ -30,7 +30,7 @@ const FILTER_OPTIONS = {
   insuranceCombos: ['主全', '交三'] as const,
   yesNo: ['是', '否'] as const,
   telemarketingOptions: ['电销', '非电销'] as const,
-  riskGrades: ['A', 'B', 'C', 'D'],
+  riskGrades: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'X'],
 } as const;
 
 function getQuickDateRange(key: 'month' | 'quarter' | 'year'): { dateStart: string; dateEnd: string } {

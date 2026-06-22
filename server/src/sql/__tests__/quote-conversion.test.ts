@@ -4,6 +4,7 @@ import quoteConversionRouter from '../../routes/query/quote-conversion.js';
 import { AppError } from '../../routes/query/shared.js';
 import { duckdbService } from '../../services/duckdb.js';
 import {
+  generateQuoteFunnelQuery,
   generateQuoteHeatmapQuery,
   generateQuoteKpiQuery,
   generateQuoteRankingQuery,
@@ -303,6 +304,32 @@ describe('quote-conversion SQL contract', () => {
     expect((err as AppError).statusCode).toBe(400);
   });
 
+  it('riskGrade 扩展到 E/F/G/X 后 KPI 路由能正确生成 SQL 筛选条件', async () => {
+    // B261: riskGrade 枚举扩展到 A-G/X，E/F/G/X 等级的已评级客户应可筛选
+    const handler = getKpiRouteHandler();
+    const json = vi.fn();
+
+    for (const grade of ['E', 'F', 'G', 'X'] as const) {
+      vi.clearAllMocks();
+      const req = {
+        query: { riskGrade: grade },
+      } as unknown as Request;
+      const res = { json } as unknown as Response;
+
+      await handler(req, res, vi.fn() as unknown as NextFunction);
+
+      expect(duckdbQuery).toHaveBeenCalledTimes(1);
+      const sql = duckdbQuery.mock.calls[0]?.[0] as string;
+      expect(sql).toContain(`insurance_grade = '${grade}'`);
+      expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    }
+  });
+
+  it('L3 quality SQL 包含 A-G/X 全量已评级风险等级（B261 扩展）', () => {
+    // 验证漏斗 SQL 已扩展到 A-G/X，确保质量报价定义包含所有已评级客户
+    const sql = generateQuoteFunnelQuery();
+    expect(sql).toContain("insurance_grade IN ('A','B','C','D','E','F','G','X')");
+  });
   // ── P1 c21667 字节安全：维度输出侧兼容层 ─────────────────────────────────
   // QuoteConversion 视图 is_telemarketing 已是 boolean，
   // 但对外的 dim_value 输出契约必须仍为中文枚举 '电销'/'非电销'。

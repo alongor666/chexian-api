@@ -184,7 +184,7 @@ export const QuoteConversionDiagnosisFilterSchema = z.object({
   isTelemarketing: QuoteOptionalEnumSchema(['电销', '非电销']),
   isNewEnergy: QuoteOptionalEnumSchema(['是', '否']),
   isTransferred: QuoteOptionalEnumSchema(['是', '否']),
-  riskGrade: QuoteOptionalEnumSchema(['A', 'B', 'C', 'D']),
+  riskGrade: QuoteOptionalEnumSchema(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'X']),
   ncdMin: z.preprocess(blankToUndefined, z.coerce.number().optional()),
   ncdMax: z.preprocess(blankToUndefined, z.coerce.number().optional()),
 });
