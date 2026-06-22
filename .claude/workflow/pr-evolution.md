@@ -877,3 +877,13 @@
 - **重来更好/复用价值**：① **scoping 纠偏是高杠杆**——"6 纯组件无纯函数"是有损盘点(只看文件类型 .tsx)，实际组件内联 useMemo/helper 是可提取纯逻辑富矿；判"组件 smoke vs 提取"应看**内联逻辑密度**(useMemo×N/数组链/顶层 helper)而非文件后缀。② **premium-report 的提取打法对 .tsx 组件同样成立**(源从 hooks 换成组件)，且组件里"已是独立 function 的 helper"(fmtDate/maskTokenId/isExpired)提取=纯搬移零风险，"重复内联逻辑"(两处 toggle)提取=顺带去重。③ 收尾分组里能走提取路线的优先提取(零 mock 稳)，组件 smoke 仅留给真无逻辑的展示壳。
   - needs_automation: false（沿用 R18「双源零测试盘点 + 纯函数分布扫描」脚本项；本轮新增"按内联逻辑密度判路线"是 scoping 启发式，并入该项）
 - **下一轮**：PR-2 repair(5 useMemo 数据塑形提取)→ PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。
+
+---
+
+**R22 · b332 收尾 PR-2：repair 纯逻辑提取（逻辑密度最高模块·图表 useMemo 提取·三源全过）**
+- **触发**：PR-1 admin(#751)合并后续推。repair 是 6 剩余模块里逻辑密度最高(useMemo×5 / 数组链×12)，含 RepairPage 的 KPI 计算 + RepairScatter 的 ECharts option 数据塑形。
+- **成果（提取 + 纯增测试）**：utils/repairKpi.ts(buildRepairParams/findTierRow/computeToPremiumTotals + 移入类型 TimeWindow/CoopTierFilter/CoopTierRow)+utils/repairScatter.ts(buildScatterAxes/scatterSymbolSize/buildTierSeriesData)；RepairPage/RepairScatter 删内联改 import。21 单测覆盖查询参数条件包含、层级补零(含 none_shadow)、除零→null、轴去重排序、symbolSize 钳位[8,40]+sqrt 缩放、坐标映射+空值回退。type-only 循环导入(util import 组件类型、组件 import util 值)安全。
+- **三源（闸-1 免）**：verify:full(governance44+typecheck+**3789 单测**)全绿；闸-2 codex 无 P0/P1(**亲自跑函数**确认 40000→12 等输出，非仅读代码)+2 P2(采纳 none_shadow；组件 option 测试记路线 B 残留)；evidence-verifier(fresh,sonnet)**CONFIRMED**(逐函数 git show 对比、5 断言推演、亲跑 3789)。
+- **重来更好/复用价值**：① **图表组件 useMemo 是高价值提取目标**——把 ECharts option 里的纯数据塑形(轴去重/点尺寸/坐标映射)抽出，既测了易错的钳位/sqrt/indexOf 回退逻辑(组件 smoke 测不到)，又让 useMemo 体大幅瘦身；option 外壳(legend/grid/tooltip)留组件。② "图表数学"(symbolSize 钳位、坐标 indexOf)提取后能精确锁边界值，是本轮最高信息密度的测试。③ **codex 亲自跑函数验证输出**(本轮它用 bun -e 直接 import util 跑 golden 样例)是审 diff 的更强形态，比纯读代码更可信。
+  - needs_automation: false（沿用 R18 脚本项；图表 useMemo 提取打法并入 R21「按内联逻辑密度判路线」）
+- **下一轮**：PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。
