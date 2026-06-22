@@ -693,20 +693,33 @@ export const CLAIMS_REPORTED_AMOUNT_CASE = `SUM(CASE
  * 实证（YTD 2026 截至 5/16）：
  *   修前总赔款 +2.85% / 赔付率 +7.30% → 修后总赔款 +1.22% / 赔付率 +1.28%
  *
- * ⚠️ B299：本静态表**无出险日期(accident_time)过滤**（全量快照），刻意保持以满足字节安全。
+ * ⚠️ B299：本静态表默认**无出险日期(accident_time)过滤**（全量快照），刻意保持以满足字节安全。
  *    静态单例 ClaimsAgg 被 kpi/comprehensive/forecast/cube/skills 等 8+ 消费方共享 JOIN，
  *    给它加 cutoff 会污染整个连接的共享表（codex gate-1 P0-1）。**多 cutoff / 历史 YTD**
  *    场景的窗口化赔款须用 buildWindowedClaimsAggCTE（局部 CTE，不动静态表），消费侧切换是
  *    绑定时间机器特性的用户决策项（BACKLOG B299）。详见 memory feedback_claims_window_aligned_to_earned。
+ *
+ * @param asOfDate（可选）出险日期上限 YYYY-MM-DD。默认 null=全量快照（看板现有行为零变化）。
+ *   非 null 时追加 `accident_time < asOfDate + INTERVAL 1 DAY` 半开区间过滤（与
+ *   buildWindowedClaimsAggCTE 同口径），防止早期 cutoff 场景赔款分子泄入未来出险。
+ *   ⚠️ 本参数仅作预防性接口，当前启动路径（data-bootstrapper.ts）始终传 null（全量），
+ *   消费侧切换为历史 cutoff 时由调用方显式传入合法日期（须已 isValidDateFormat 校验）。
  */
-export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<void> {
+export async function createClaimsAggFromDetail(
+  db: DuckDBQueryable,
+  asOfDate: string | null = null,
+): Promise<void> {
+  const accidentTimeFilter =
+    asOfDate != null
+      ? `  AND accident_time < DATE '${escapeSqlValue(asOfDate)}' + INTERVAL 1 DAY`
+      : '';
   await db.query(`
     CREATE OR REPLACE TABLE ClaimsAgg AS
     SELECT policy_no,
            COUNT(DISTINCT claim_no) AS claim_cases,
            ${CLAIMS_REPORTED_AMOUNT_CASE}
     FROM ClaimsDetail
-    WHERE policy_no IS NOT NULL
+    WHERE policy_no IS NOT NULL${accidentTimeFilter}
     GROUP BY policy_no
   `);
   const cnt = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsAgg');
