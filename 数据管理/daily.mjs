@@ -57,6 +57,11 @@ import {
   localTodayISO,
   CLAIMS_REPORT_LAG_WARN_DAYS,
 } from './lib/claims-freshness.mjs';
+// full_snapshot 缓存键（纯逻辑抽到 lib/ 便于单测；含 extraArgs + --policy-dir 内容指纹，见 tests/full-snapshot-cache-key.test.ts）
+import {
+  buildFullSnapshotCacheKey,
+  fullSnapshotOutputName,
+} from './lib/full-snapshot-cache-key.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -483,38 +488,10 @@ function rawFullSnapshotDir(scriptDir, id, batchDate) {
   return join(scriptDir, 'raw/full_snapshot', id, `batch_date=${batchDate}`);
 }
 
-function fullSnapshotOutputName(id, trigger) {
-  return trigger.snapshot_output || `${id}.parquet`;
-}
-
-function buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger }) {
-  const dependencies = fullSnapshotDependencyPaths(dirname(scriptPath), scriptPath)
-    .filter(p => existsSync(p))
-    .map(p => {
-      const fp = fileFingerprint(p);
-      return { name: fp.name, size: fp.size, sha256: fp.sha256 };
-    });
-  const material = {
-    id,
-    batchDate,
-    snapshotMode: trigger.snapshot_mode,
-    outputName: fullSnapshotOutputName(id, trigger),
-    dependencies,
-    sources: sourceFingerprints
-      .map(f => ({ name: f.name, size: f.size, sha256: f.sha256 }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-  };
-  return createHash('sha256').update(JSON.stringify(material)).digest('hex');
-}
-
-function fullSnapshotDependencyPaths(pipelineDir, scriptPath) {
-  return [
-    scriptPath,
-    join(pipelineDir, 'base_converter.py'),
-    join(pipelineDir, 'etl_validation.py'),
-    join(pipelineDir, 'parquet_utils.py'),
-  ];
-}
+// fullSnapshotOutputName / buildFullSnapshotCacheKey / fullSnapshotDependencyPaths
+// 已抽到 ./lib/full-snapshot-cache-key.mjs（daily.mjs 顶层执行 main() 无法被 import 单测，
+// 同 lib/shard-classify.mjs / claims-freshness.mjs 模式）。缓存键现额外覆盖 extraArgs 与
+// --policy-dir 指向的 policy/current 内容指纹，避免命中陈旧快照。
 
 function removeDirRecursive(dir) {
   if (!existsSync(dir)) return;
@@ -805,7 +782,7 @@ function runStrategyFullSnapshot({ python, id, scriptDir, scriptPath, sourceFile
   const snapshotOutput = join(snapDir, fullSnapshotOutputName(id, trigger));
   const snapshotManifest = join(snapDir, 'snapshot-manifest.json');
   const tmpOutput = outputAbs + '.tmp';
-  const cacheKey = buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger });
+  const cacheKey = buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger, extraArgs });
 
   writeFullSnapshotSourceArchive(scriptDir, id, batchDate, sourceFiles, sourceFingerprints);
   try { if (existsSync(tmpOutput)) unlinkSync(tmpOutput); } catch (e) {}
