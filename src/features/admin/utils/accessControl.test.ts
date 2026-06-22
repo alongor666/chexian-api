@@ -1,0 +1,69 @@
+import { describe, it, expect } from 'vitest';
+import { splitIpList, joinList, toggleSelection } from './accessControl';
+
+describe('splitIpList · IP 白名单解析', () => {
+  it('空串 → []', () => {
+    expect(splitIpList('')).toEqual([]);
+  });
+
+  it('单个 IP', () => {
+    expect(splitIpList('1.1.1.1')).toEqual(['1.1.1.1']);
+  });
+
+  it('英文逗号 / 中文逗号 / 换行均为分隔符', () => {
+    expect(splitIpList('1.1.1.1,2.2.2.2')).toEqual(['1.1.1.1', '2.2.2.2']);
+    expect(splitIpList('1.1.1.1，2.2.2.2')).toEqual(['1.1.1.1', '2.2.2.2']);
+    expect(splitIpList('1.1.1.1\n2.2.2.2')).toEqual(['1.1.1.1', '2.2.2.2']);
+  });
+
+  it('去首尾空格 + 滤空项（多余分隔符不产生空字符串）', () => {
+    expect(splitIpList(' 1.1.1.1 ,  2.2.2.2 ')).toEqual(['1.1.1.1', '2.2.2.2']);
+    expect(splitIpList(',1.1.1.1,,')).toEqual(['1.1.1.1']);
+    expect(splitIpList('  ,  ')).toEqual([]);
+  });
+});
+
+describe('joinList · 数组 → 展示串', () => {
+  it('undefined / 空数组 → 空串', () => {
+    expect(joinList(undefined)).toBe('');
+    expect(joinList([])).toBe('');
+  });
+
+  it('逗号空格连接', () => {
+    expect(joinList(['a'])).toBe('a');
+    expect(joinList(['a', 'b', 'c'])).toBe('a, b, c');
+  });
+});
+
+describe('toggleSelection · 复选不可变更新', () => {
+  it('勾选 → 追加（保持原顺序）', () => {
+    expect(toggleSelection(['a'], 'b', true)).toEqual(['a', 'b']);
+    expect(toggleSelection([], 'a', true)).toEqual(['a']);
+  });
+
+  it('勾选已存在项 → 重复追加（不去重，锁原 `[...selected, x]` 语义）', () => {
+    expect(toggleSelection(['a'], 'a', true)).toEqual(['a', 'a']);
+  });
+
+  it('取消 → 移除', () => {
+    expect(toggleSelection(['a', 'b', 'c'], 'b', false)).toEqual(['a', 'c']);
+  });
+
+  it('取消不存在的项 → 内容不变（但返回新数组）', () => {
+    const input = ['a', 'b'];
+    const out = toggleSelection(input, 'x', false);
+    expect(out).toEqual(['a', 'b']);
+    expect(out).not.toBe(input);
+  });
+
+  it('取消时移除全部等于 item 的项（去重副作用）', () => {
+    expect(toggleSelection(['a', 'b', 'a'], 'a', false)).toEqual(['b']);
+  });
+
+  it('不可变：入参数组不被修改', () => {
+    const input = ['a', 'b'];
+    toggleSelection(input, 'c', true);
+    toggleSelection(input, 'a', false);
+    expect(input).toEqual(['a', 'b']);
+  });
+});
