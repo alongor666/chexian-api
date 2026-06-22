@@ -818,6 +818,16 @@
 
 ---
 
+**R21 · B244 零赔付专项分析（Loop 单任务·常规 dispatch 取 P2·只读分析零生产改动·PR 待建）**
+- **触发**：B255 完成后按用户「再走常规 dispatch」。`loop:dispatch` 前沿 9 个，应用并发碰撞教训筛选：b332 烫（#739/#741/#742 刚合，避开）/ b261 已 `state==MERGED`(#723，按主题查重拦下)/ f1c991 立方体切流=部署链 GATED（跳过）→ 取 **b244（零赔付专项分析，be-sql，纯分析）**，`gh pr list --search` 按主题确认无并发 PR（#388/#693 是不同主题）。
+- **成果（只读分析报告）**：`开发文档/reviews/2026-06-22-零赔付专项分析_B244.md`。核心拆分=**已结案 285,309 件 27.0% 零赔付，但只有"立案有准备金(reserve>0)+结案零赔付"的 12,748 件(4.47%)才产生准备金释放(1,818.7万元，占已决 1.34%)**；另 64,388 件从无正准备金、释放≈0——**把这两类混算会把释放效应虚高 5 倍以上**（本分析最关键的拆分）。主体"零结"10,326件/1,475.8万(81%)，"拒赔"34件案均最高5.48万；释放子集中位结案 2 天、89.8% 在 30 天内零结→释放集中在最早发展期；零赔付率近年 29.8%→21.3% 改善；待结案在险池 2,792件/11,359.5万。
+- **方法学（沿用 R20 的"列归属核实"模板）**：claims_detail 无 latest.parquet、按年分区 `claims_*.parquet`（先 ls+DESCRIBE 核实再查，避免 read_parquet 路径假设错）；总赔付口径严格遵 SCHEMA.md §4「已结取 settled/未结取 reserve」。
+- **重来更好**：① **"零赔付"这类聚合任务必须先拆"是否有准备金"再谈释放**——立项描述的"68,511件(27%)零赔付"是粗口径，真正影响发展三角形的是"有准备金后释放"子集，差一个 reserve>0 条件结论量级差 5 倍。聚合分析的第 0 步=先想清楚"哪个子集才对目标命题成立"，再写 GROUP BY。② 分析型任务的"对抗验证"=可复现 SQL 嵌进报告附录(任何人重跑可证) + headline 与立项独立观察(27%)交叉核对，等价于 evidence-loop 的 oracle；本轮未跑 codex 闸（无代码 diff），与 R20/B255 同标准。
+- **复用价值**：① 「准备金释放」量化模板=四象限拆分(已结案 × 零赔付 × 有无准备金) + 释放子集案件类型/时延特征 + 在险池前瞻；可复用到任何"准备金充足度/有利发展"分析。② 现行总赔付口径(已结 settled/未结 reserve)已正确处理零赔付，**无需改 claims-detail.ts**——又一个"疑似待修其实已正确"的核实结论（同 R20 B255）。
+  - needs_automation: false（一次性分析，结论与复现 SQL 已固化进报告；准备金释放逐发展期曲线列为可选续作，非自动化项）
+- **下一轮 dispatch 候选**：b290(时间口径消歧,be-config)/16ab1c(报告托管 phase-2 org_user,be-routes,安全相关)/b320(CSP unsafe-eval,待E2E) 均经查重未做；b332 持续烫(并发会话密集)建议非本会话碰。
+- **codex gate-2 修订（用户要求对 #746 跑对抗审查后）**：codex CLI(read-only) P0=0，但抓到**核心 P1 并已 v2 修正**——**最高杠杆教训：分析任务的口径不能只用 SCHEMA.md 通用公式外推，必须核对"生产 SQL 实际口径"**。v1 断言"释放子集对生产发展三角形产生 1.3% 早期回撤"，但 `claims-detail.ts:519-535`/`claims-heatmap.ts:405-412`(B302) 的金额分子外层 `CASE` 已过滤 `case_type∈(零结,注销,拒赔)+无责`，释放子集 99.98%(12745/12748) 正属这些类型→生产口径下从所有 cutoff 即计 0，**生产释放影响≈0**（释放仅存在于未过滤的通用公式视角）。另修：677万算法(件数率 5.96% 误乘金额→应金额率 1.26%≈143万)、"虚高5倍"限件数口径非金额、reserve 不清零证据用错象限、"改善"加成熟度 caveat、附录补 median/30天/年度/分母 SQL + NULL 口径说明。
+  - **复用价值（补 R20/R21 共性）**："疑似口径待修"类分析的第 0 步：**列归属核实(R20) + 生产 SQL 实际口径核实(R21)**——两次都得出"现行生产已正确处理、无需改码"，但若只看通用文档/SCHEMA 会误判。codex 窄范围对抗审查在分析任务上同样高杠杆（不止代码任务）。
 **R20 · B255 报价口径差异分析（Loop 单任务·只读分析零生产改动·源文件定位纠偏·PR #744）**
 - **触发**：用户指定本轮先做 B255（报价数据「是否报价」字段不可靠，评估改用「续保单号非空」判定）。用户已决策——先出全口径差异报告、不切换；AI 不得改字段含义/SQL/ETL。
 - **关键纠偏（任务描述/上轮排查把源文件定位错了）**：任务与上轮断言「是否报价/续保单号」是 `04_报价清单_商业险.xlsx` 的 ETL 前源字段。实测 04 报价清单 33 列**根本无此两列**；`是否报价` 实为历史"签单清单"宽表字段。进一步用流式 iterparse 读 4 个签单清单（2021-01~2026-06）表头：**均 44 列、无一含「是否报价」、全部含「续保单号」**——该字段已从所有在盘源数据移除（`shard-config.json` 显式忽略，备注"口径不可靠，待用户修正"）。
@@ -847,3 +857,24 @@
 - **复用价值**：① 「CSP/安全 header 收紧」任务模板：作用域图 → 抽 config 模块（cors.ts 模式）→ 对象层+响应头层双断言（共用真实 options 对象防假阳性）→ Playwright bypassCSP=false E2E（自检对照证 header 生效 + 真实依赖路径跑通）。② 验证「前端依赖是否触发 eval」的可复用探针法：Vite 单文件构建真实模块 → 收紧 CSP 静态托管 → Playwright 捕 securitypolicyviolation（避开 MCP 浏览器 bypassCSP 陷阱）。③ 教训：**MCP 浏览器（chrome-devtools-mcp）可能默认 setBypassCSP(true)，做 CSP 相关 E2E 必须用 bypassCSP=false 的 Playwright 自写脚本，并以「页面源脚本 eval 被 BLOCKED」对照证 CSP 真实生效**。
   - needs_automation: false（一次性安全加固；csp.test.ts 已把"scriptSrc 永不含 unsafe-eval"机制化为回归闸）
 - **后续 backlog**：给 Nginx 托管的 SPA 下发 CSP（当前完全无 CSP）+ 评估收紧 unsafe-inline（dist/index.html 实测无内联脚本→脚本层可上严格 CSP，但需 nonce/hash 跨 Nginx+Vite，属独立较大任务）。
+---
+
+**R20 · b332 premium-report 2 hooks 纯逻辑提取 + 单测（Loop v2 续推·路线 B 提取重构·三源全过·golden 由确定性等价证明）**
+- **触发**：#742（R19 expense-development）合并后续推 b332。R18「双源零测试盘点」结论=真零测试 8 个，R18/R19 已清 comprehensive(浅测补强)/expense-development；premium-report 是唯一含 `.ts` 逻辑文件(2 hooks)的剩余模块，余 6 个(admin/customer-flow/file/moto-cost/repair/report)纯组件无纯函数。
+- **路线决策（B 提取 vs A renderHook+mock）**：用户给 A/B 二选一并推荐 B。选 B（calculateSummary/sortData/normalize*/drill 层级逻辑提取到 utils/ 纯函数直测）。**关键推理**：R19「下一轮」把 premium-report 标为「renderHook 稍重」(路线 A 心智)；但路线 B 提取后**本轮转为与 R18/R19 同构**(纯函数直测、零 mock)——用户给的「跑闸-1」理由是「hooks+mock 不同构于前两轮」，该理由在路线 B 下消失。故按 R17/R19 先例免闸-1 + R19 要求的「分支矩阵自查」补偿；路线 B 新引入的「提取保真」风险交给**更有效的闸-2 审 diff**(R16:「审 diff > 审计划」对重构尤甚)。
+- **成果（提取重构 + 纯增测试，hook 净缩减、golden 不变）**：新建 utils/premiumReportCalc.ts(4 函数)+utils/premiumPlanDrill.ts(6 符号)，两 hooks 删内联改 import(usePremiumReport -94/usePremiumPlan -64 行,典型代码简化)。44 单测：浮点四舍五入(去尾差 1.1+2.2→3.3 / 三位截断 1.111+2.222→3.33 / avg 1.65)、`??` vs `||`(空串保留锁 nullish 语义)、`== null`(null+undefined 同捕获)、localeCompare zh-CN(ASCII+拼音甲<乙)、null/undefined 排序方向、不可变(返回新数组 / 空 column 返回同引用)、normalize 逐字段(0 保留 vs null 回退 vs 数字串转型)、drill 层级映射全 6 档+越界 null+钳位、面包屑标签(业务员美化分支)。
+- **三源（闸-1 免）**：确定性闸 verify:full(governance44+typecheck+3747 单测)全绿；闸-2 codex(exec 经 stdin)无 P0/P1、确认与 origin/main 内联逐字符等价，3 P2(采纳 2:null/空串 dedup + undefined 排序；1 记残留:hook 级 golden)；evidence-verifier fresh-context(sonnet)**CONFIRMED**(逐函数对 diff 等价、5 断言推演无误、亲跑 3747 单测)。
+- **重来更好**：① **路线选择会重定义「同构」判断**——R19 把 premium-report 预判为「renderHook 稍重」=非同构据此建议跑闸-1；实际选路线 B 后变同构，闸-1 决策应随路线重判而非沿用上轮预判。② **路线 B 的 golden 保真不靠「新测试」(它们只测提取后代码)，靠「提取逐字符等价(人工+codex+verifier 三方对 diff) + typecheck(接线) + 全量套件(无回归)」**——本轮无既有 premium-report 测试作 golden 回归锚，故等价证明全压在 diff 对比，这是路线 B(提取无既有测试模块)的固有约束，必须显式声明而非假装「测试证明了 golden」。③ 闸-2 的 P2-3(hook 级 golden 需 renderHook)是路线 A/B 的本质权衡点而非可补缺口：补它=引回路线 B 刻意规避的 mock 脆性。
+- **复用价值**：① 「纯逻辑从 hook 提取到 utils/」打法=同目录(utils 与 hooks 同在 features/<mod>/下,`../../../shared` 相对深度一致零改写)抽纯函数、hook 改 `.map(normalizeX)`/`computeX()` 调用、useCallback 依赖移除已提取的稳定模块函数(原 `useCallback(...,[])` 提取后天然稳定,从依赖数组删除安全)；零生产行为变更而 hook 显著简化。可把 R19「纯函数分布扫描」里判为 hooks 的模块从路线 A 转路线 B。② 「`??` vs `||` 用空串(非 null)区分」「`== null` 用 undefined(非 null)区分」是锁「易被误改的判等运算符」标准测法。③ vitest exclude 含 `**/.claude/**`——测试**禁落 `.claude/worktrees/`**(否则静默 skip=假 passed)，本轮特意用兄弟目录 worktree 规避(呼应 feedback_e2e_silent_skip_false_positive)。
+  - needs_automation: false（沿用 R18 已登记的「双源零测试盘点 + 纯函数分布扫描」脚本项 expires 2026-09-22；本轮新增「路线 A/B 同构判断随路线重判」是决策纪律非可自动化项）
+- **下一轮**：真零测试余 6 个**纯组件**模块(admin/customer-flow/file/moto-cost/repair/report,仅 .tsx+barrel 无纯函数)——须转「组件 smoke(DOM/@testing-library)」路线，与本纯函数策略不同，是 b332 既定**策略分叉点**；premium-report 已清零，b332 整体仍 IN_PROGRESS。
+
+---
+
+**R21 · b332 收尾分组 PR-1：admin 纯逻辑提取 + 单测（scoping 纠偏后启动·提取路线复用·三源全过）**
+- **触发**：用户认可"一个会话做完 b332 + 先 scoping + 分组 PR"路径。scoping 复核 6 个剩余"纯组件"模块：3 个 `.ts` 全是 barrel（无逻辑），但 `.tsx` 内 useMemo/helper 含可提取纯逻辑——**纠正"6 个只能组件 smoke"的预判**：多数能走已三轮验证的"提取路线"（零 mock、最稳），只有 file 偏 IO、moto-cost(29 行)该降级。admin 作旗舰：ApiTokensPanel 有现成纯 helper、AccessControlPage 有 IP 解析 + 重复 toggle。
+- **成果（提取 + 纯增测试）**：新建 utils/tokenDisplay.ts(fmtDate/maskTokenId/isExpired)+utils/accessControl.ts(splitIpList/joinList/toggleSelection)；两组件删内联改 import，AccessControlPage 两处内联 toggle(原变量名 r/f 不同、语义同)统一改用 toggleSelection。21 单测覆盖边界(maskTokenId len≤6)、三态(isExpired revokedAt 优先)、正则分隔(中英文逗号/换行)、catch 分支(stub toLocaleString 抛错)、不可变/去重副作用。
+- **三源（闸-1 免，同 R20 路线 B 同构理由）**：verify:full(governance44+typecheck+**3768 单测**)全绿；闸-2 codex 无 P0/P1(确认逐字符等价、仅 export+prettier 括号差异)+2 P2 全采纳(fmtDate catch stub / toggleSelection 重复追加锁 `[...selected,x]` 语义)；evidence-verifier(fresh,sonnet)**CONFIRMED**(逐函数对 diff 等价、5 断言推演、亲跑 3768)。
+- **重来更好/复用价值**：① **scoping 纠偏是高杠杆**——"6 纯组件无纯函数"是有损盘点(只看文件类型 .tsx)，实际组件内联 useMemo/helper 是可提取纯逻辑富矿；判"组件 smoke vs 提取"应看**内联逻辑密度**(useMemo×N/数组链/顶层 helper)而非文件后缀。② **premium-report 的提取打法对 .tsx 组件同样成立**(源从 hooks 换成组件)，且组件里"已是独立 function 的 helper"(fmtDate/maskTokenId/isExpired)提取=纯搬移零风险，"重复内联逻辑"(两处 toggle)提取=顺带去重。③ 收尾分组里能走提取路线的优先提取(零 mock 稳)，组件 smoke 仅留给真无逻辑的展示壳。
+  - needs_automation: false（沿用 R18「双源零测试盘点 + 纯函数分布扫描」脚本项；本轮新增"按内联逻辑密度判路线"是 scoping 启发式，并入该项）
+- **下一轮**：PR-2 repair(5 useMemo 数据塑形提取)→ PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。

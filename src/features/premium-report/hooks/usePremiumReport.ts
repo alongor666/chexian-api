@@ -10,8 +10,13 @@
 import { useState, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { createLogger } from '../../../shared/utils/logger';
-import { formatSalesmanName, formatTeamName } from '../../../shared/utils/formatters';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
+import {
+  calculateSummary,
+  sortData,
+  normalizeOrgReportRow,
+  normalizeSalesmanReportRow,
+} from '../utils/premiumReportCalc';
 
 const logger = createLogger('usePremiumReport');
 import type {
@@ -19,7 +24,6 @@ import type {
   SalesmanPremiumReportRow,
   PremiumReportFilters,
   PremiumReportData,
-  PremiumReportSummary,
   SortState,
 } from '../types/premiumReport';
 
@@ -80,30 +84,6 @@ export function usePremiumReport(): UsePremiumReportReturn {
   });
 
   /**
-   * 计算汇总数据
-   */
-  const calculateSummary = useCallback(
-    (orgReport: OrgPremiumReportRow[], salesmanReport: SalesmanPremiumReportRow[]): PremiumReportSummary => {
-      const totalPremium = orgReport.reduce((sum, row) => sum + row.车险保费, 0);
-      const totalPolicies = orgReport.reduce((sum, row) => sum + row.车险件数, 0);
-      const orgCount = orgReport.length;
-      const salesmanCount = new Set(
-        salesmanReport.map((row) => String(row.raw_salesman_name ?? row.salesman_name))
-      ).size;
-      const avgPremium = orgCount > 0 ? totalPremium / orgCount : 0;
-
-      return {
-        totalPremium: Math.round(totalPremium * 100) / 100,
-        totalPolicies,
-        orgCount,
-        salesmanCount,
-        avgPremium: Math.round(avgPremium * 100) / 100,
-      };
-    },
-    []
-  );
-
-  /**
    * 加载机构保费报表数据
    */
   const loadOrgReport = useCallback(
@@ -125,18 +105,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
 
       const result = await apiClient.premium.report(params);
 
-      return (result || []).map((row: Record<string, unknown>) => ({
-        org_level_3: String(row.org_level_3 || ''),
-        车险保费: Number(row['车险保费'] || 0),
-        商业险保费: Number(row['商业险保费'] || 0),
-        交强险保费: Number(row['交强险保费'] || 0),
-        车险件数: Number(row['车险件数'] || 0),
-        商业险件数: Number(row['商业险件数'] || 0),
-        交强险件数: Number(row['交强险件数'] || 0),
-        人均保费: Number(row['人均保费'] || 0),
-        业务员数: Number(row['业务员数'] || 0),
-        同比增长率: row['同比增长率'] != null ? Number(row['同比增长率']) : null,
-      }));
+      return (result || []).map(normalizeOrgReportRow);
     },
     [isOrgUser, userOrg]
   );
@@ -164,20 +133,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
 
       const result = await apiClient.premium.report(params);
 
-      return (result || []).map((row: Record<string, unknown>) => ({
-        salesman_name: formatSalesmanName(String(row.salesman_name || '')),
-        raw_salesman_name: String(row.salesman_name || ''),
-        org_level_3: String(row.org_level_3 || ''),
-        team_name: formatTeamName(row.team_name as string),
-        车险保费: Number(row['车险保费'] || 0),
-        商业险保费: Number(row['商业险保费'] || 0),
-        交强险保费: Number(row['交强险保费'] || 0),
-        车险件数: Number(row['车险件数'] || 0),
-        商业险件数: Number(row['商业险件数'] || 0),
-        交强险件数: Number(row['交强险件数'] || 0),
-        续保率: Number(row['续保率'] || 0),
-        非过户率: Number(row['非过户率'] || 0),
-      }));
+      return (result || []).map(normalizeSalesmanReportRow);
     },
     [isOrgUser, userOrg]
   );
@@ -215,7 +171,7 @@ export function usePremiumReport(): UsePremiumReportReturn {
         }));
       }
     },
-    [loadOrgReport, loadSalesmanReport, calculateSummary]
+    [loadOrgReport, loadSalesmanReport]
   );
 
   /**
@@ -226,38 +182,6 @@ export function usePremiumReport(): UsePremiumReportReturn {
       await loadData(currentFilters);
     }
   }, [currentFilters, loadData]);
-
-  /**
-   * 排序函数
-   */
-  const sortData = <T extends Record<string, unknown>>(
-    data: T[],
-    sort: SortState
-  ): T[] => {
-    if (!sort.column) return data;
-
-    return [...data].sort((a, b) => {
-      const aValue = a[sort.column];
-      const bValue = b[sort.column];
-
-      // 处理 null/undefined
-      if (aValue == null && bValue == null) return 0;
-      if (aValue == null) return sort.direction === 'asc' ? -1 : 1;
-      if (bValue == null) return sort.direction === 'asc' ? 1 : -1;
-
-      // 数字比较
-      if (typeof aValue === 'number' && typeof bValue === 'number') {
-        return sort.direction === 'asc' ? aValue - bValue : bValue - aValue;
-      }
-
-      // 字符串比较
-      const aStr = String(aValue);
-      const bStr = String(bValue);
-      return sort.direction === 'asc'
-        ? aStr.localeCompare(bStr, 'zh-CN')
-        : bStr.localeCompare(aStr, 'zh-CN');
-    });
-  };
 
   // 排序后的数据
   const sortedOrgReport = sortData(state.orgReport, orgReportSort);

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { apiClient, ApiTokenInfo, CreatedToken } from '../../shared/api/client';
 import { Button, Card, FormItem, Input, Select, ConfirmDialog, useConfirmDialog } from '../../shared/ui';
 import { colorClasses } from '../../shared/styles';
+import { fmtDate, maskTokenId, isExpired } from './utils/tokenDisplay';
 
 type TtlChoice = 30 | 90 | 180 | 365;
 
@@ -11,26 +12,6 @@ const TTL_OPTIONS: { value: string; label: string }[] = [
   { value: '180', label: '180 天' },
   { value: '365', label: '365 天' },
 ];
-
-function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString('zh-CN', { hour12: false });
-  } catch {
-    return iso;
-  }
-}
-
-function maskTokenId(id: string): string {
-  if (id.length <= 6) return id;
-  return `${id.slice(0, 4)}…${id.slice(-2)}`;
-}
-
-function isExpired(t: ApiTokenInfo): boolean {
-  if (t.revokedAt) return true;
-  return new Date(t.expiresAt).getTime() < Date.now();
-}
 
 export const ApiTokensPanel: React.FC = () => {
   const [tokens, setTokens] = useState<ApiTokenInfo[]>([]);

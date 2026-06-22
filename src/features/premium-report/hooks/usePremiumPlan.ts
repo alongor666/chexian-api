@@ -11,7 +11,6 @@
 import { useState, useCallback } from 'react';
 import { apiClient, isRequestAbortError } from '../../../shared/api/client';
 import { createLogger } from '../../../shared/utils/logger';
-import { formatSalesmanName } from '../../../shared/utils/formatters';
 import type {
   PlanDrilldownLevel,
   PlanDrilldownRow,
@@ -20,23 +19,14 @@ import type {
   DrillPathStep,
   SortState,
 } from '../types/premiumReport';
+import {
+  buildFiltersFromPath,
+  computeDrillDownTarget,
+  computeDrillUpDisplayLevel,
+  makeDrillStepLabel,
+} from '../utils/premiumPlanDrill';
 
 const logger = createLogger('usePremiumPlan');
-
-/** 下钻层级顺序 */
-const LEVEL_ORDER: PlanDrilldownLevel[] = [
-  'company', 'org', 'team', 'salesman', 'customer_category', 'coverage',
-];
-
-/** 层级中文标签 */
-const LEVEL_LABELS: Record<PlanDrilldownLevel, string> = {
-  company: '分公司整体',
-  org: '三级机构',
-  team: '团队',
-  salesman: '业务员',
-  customer_category: '客户类别',
-  coverage: '险别',
-};
 
 interface UsePremiumPlanReturn {
   /** 下钻表格数据 */
@@ -89,29 +79,6 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
 
   /** 当前层级 = 面包屑最后一步 */
   const currentLevel = drillPath[drillPath.length - 1].level;
-
-  /** 从面包屑路径构建 API 筛选参数 */
-  const buildFiltersFromPath = useCallback((path: DrillPathStep[]): Record<string, string> => {
-    const filters: Record<string, string> = {};
-    for (const step of path) {
-      if (step.value === undefined) continue;
-      switch (step.level) {
-        case 'org':
-          filters.orgFilter = step.value;
-          break;
-        case 'team':
-          filters.teamFilter = step.value;
-          break;
-        case 'salesman':
-          filters.salesmanFilter = step.value;
-          break;
-        case 'customer_category':
-          filters.customerCategoryFilter = step.value;
-          break;
-      }
-    }
-    return filters;
-  }, []);
 
   /**
    * 加载面板所有数据（合并端点：1 次请求返回 children + summary + distribution）
@@ -190,7 +157,7 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [buildFiltersFromPath]);
+  }, []);
 
   /** 初始加载 */
   const loadInitial = useCallback(async (year: number = 2026) => {
@@ -202,18 +169,14 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
 
   /** 下钻到下一层 */
   const drillDown = useCallback(async (groupName: string) => {
-    const currentIdx = LEVEL_ORDER.indexOf(currentLevel);
-    // 当前显示的数据 level 是 currentLevel 的下一层
-    // 点击行后，需要再下一层
-    const nextIdx = currentIdx + 2;
-    if (nextIdx >= LEVEL_ORDER.length) return; // 已到最底层
-
-    const nextLevel = LEVEL_ORDER[nextIdx];
-    const filterLevel = LEVEL_ORDER[currentIdx + 1];
+    // 当前显示的数据 level 是 currentLevel 的下一层；点击行后再下一层
+    const target = computeDrillDownTarget(currentLevel);
+    if (!target) return; // 已到最底层
+    const { nextLevel, filterLevel } = target;
 
     const newStep: DrillPathStep = {
       level: filterLevel,
-      label: `${LEVEL_LABELS[filterLevel]}: ${filterLevel === 'salesman' ? formatSalesmanName(groupName) : groupName}`,
+      label: makeDrillStepLabel(filterLevel, groupName),
       value: groupName,
     };
 
@@ -231,8 +194,7 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
 
     // 当前显示的层级 = 上一步路径最后一步的 level 的下一层
     const parentLevel = newPath[newPath.length - 1].level;
-    const parentIdx = LEVEL_ORDER.indexOf(parentLevel);
-    const displayLevel = LEVEL_ORDER[Math.min(parentIdx + 1, LEVEL_ORDER.length - 1)];
+    const displayLevel = computeDrillUpDisplayLevel(parentLevel);
 
     await loadAllData(displayLevel, newPath, planYear, sortState);
   }, [drillPath, planYear, sortState, loadAllData]);
