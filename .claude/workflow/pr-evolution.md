@@ -857,3 +857,13 @@
 - **复用价值**：① 「纯逻辑从 hook 提取到 utils/」打法=同目录(utils 与 hooks 同在 features/<mod>/下,`../../../shared` 相对深度一致零改写)抽纯函数、hook 改 `.map(normalizeX)`/`computeX()` 调用、useCallback 依赖移除已提取的稳定模块函数(原 `useCallback(...,[])` 提取后天然稳定,从依赖数组删除安全)；零生产行为变更而 hook 显著简化。可把 R19「纯函数分布扫描」里判为 hooks 的模块从路线 A 转路线 B。② 「`??` vs `||` 用空串(非 null)区分」「`== null` 用 undefined(非 null)区分」是锁「易被误改的判等运算符」标准测法。③ vitest exclude 含 `**/.claude/**`——测试**禁落 `.claude/worktrees/`**(否则静默 skip=假 passed)，本轮特意用兄弟目录 worktree 规避(呼应 feedback_e2e_silent_skip_false_positive)。
   - needs_automation: false（沿用 R18 已登记的「双源零测试盘点 + 纯函数分布扫描」脚本项 expires 2026-09-22；本轮新增「路线 A/B 同构判断随路线重判」是决策纪律非可自动化项）
 - **下一轮**：真零测试余 6 个**纯组件**模块(admin/customer-flow/file/moto-cost/repair/report,仅 .tsx+barrel 无纯函数)——须转「组件 smoke(DOM/@testing-library)」路线，与本纯函数策略不同，是 b332 既定**策略分叉点**；premium-report 已清零，b332 整体仍 IN_PROGRESS。
+
+---
+
+**R21 · b332 收尾分组 PR-1：admin 纯逻辑提取 + 单测（scoping 纠偏后启动·提取路线复用·三源全过）**
+- **触发**：用户认可"一个会话做完 b332 + 先 scoping + 分组 PR"路径。scoping 复核 6 个剩余"纯组件"模块：3 个 `.ts` 全是 barrel（无逻辑），但 `.tsx` 内 useMemo/helper 含可提取纯逻辑——**纠正"6 个只能组件 smoke"的预判**：多数能走已三轮验证的"提取路线"（零 mock、最稳），只有 file 偏 IO、moto-cost(29 行)该降级。admin 作旗舰：ApiTokensPanel 有现成纯 helper、AccessControlPage 有 IP 解析 + 重复 toggle。
+- **成果（提取 + 纯增测试）**：新建 utils/tokenDisplay.ts(fmtDate/maskTokenId/isExpired)+utils/accessControl.ts(splitIpList/joinList/toggleSelection)；两组件删内联改 import，AccessControlPage 两处内联 toggle(原变量名 r/f 不同、语义同)统一改用 toggleSelection。21 单测覆盖边界(maskTokenId len≤6)、三态(isExpired revokedAt 优先)、正则分隔(中英文逗号/换行)、catch 分支(stub toLocaleString 抛错)、不可变/去重副作用。
+- **三源（闸-1 免，同 R20 路线 B 同构理由）**：verify:full(governance44+typecheck+**3768 单测**)全绿；闸-2 codex 无 P0/P1(确认逐字符等价、仅 export+prettier 括号差异)+2 P2 全采纳(fmtDate catch stub / toggleSelection 重复追加锁 `[...selected,x]` 语义)；evidence-verifier(fresh,sonnet)**CONFIRMED**(逐函数对 diff 等价、5 断言推演、亲跑 3768)。
+- **重来更好/复用价值**：① **scoping 纠偏是高杠杆**——"6 纯组件无纯函数"是有损盘点(只看文件类型 .tsx)，实际组件内联 useMemo/helper 是可提取纯逻辑富矿；判"组件 smoke vs 提取"应看**内联逻辑密度**(useMemo×N/数组链/顶层 helper)而非文件后缀。② **premium-report 的提取打法对 .tsx 组件同样成立**(源从 hooks 换成组件)，且组件里"已是独立 function 的 helper"(fmtDate/maskTokenId/isExpired)提取=纯搬移零风险，"重复内联逻辑"(两处 toggle)提取=顺带去重。③ 收尾分组里能走提取路线的优先提取(零 mock 稳)，组件 smoke 仅留给真无逻辑的展示壳。
+  - needs_automation: false（沿用 R18「双源零测试盘点 + 纯函数分布扫描」脚本项；本轮新增"按内联逻辑密度判路线"是 scoping 启发式，并入该项）
+- **下一轮**：PR-2 repair(5 useMemo 数据塑形提取)→ PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。
