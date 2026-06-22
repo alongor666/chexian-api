@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import quoteConversionRouter from '../../routes/query/quote-conversion.js';
 import { AppError } from '../../routes/query/shared.js';
 import { duckdbService } from '../../services/duckdb.js';
-import { generateQuoteKpiQuery, type QuoteConversionFilters } from '../quote-conversion.js';
+import {
+  generateQuoteHeatmapQuery,
+  generateQuoteKpiQuery,
+  generateQuoteRankingQuery,
+  type QuoteConversionFilters,
+} from '../quote-conversion.js';
 
 vi.mock('../../services/duckdb.js', () => ({
   duckdbService: {
@@ -296,5 +301,40 @@ describe('quote-conversion SQL contract', () => {
     const err = next.mock.calls[0]?.[0] as Error;
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(400);
+  });
+
+  // ── P1 c21667 字节安全：维度输出侧兼容层 ─────────────────────────────────
+  // QuoteConversion 视图 is_telemarketing 已是 boolean，
+  // 但对外的 dim_value 输出契约必须仍为中文枚举 '电销'/'非电销'。
+  // 四川（federation 关闭）的输出逐字节与改动前一致。
+
+  it('P1 c21667：heatmap 以 is_telemarketing 为列维度时 dim_value 输出中文枚举而非 boolean', () => {
+    const sql = generateQuoteHeatmapQuery({}, 'is_telemarketing');
+    // 输出表达式应含 CASE WHEN … THEN '电销' ELSE '非电销' END
+    expect(sql).toContain("THEN '电销'");
+    expect(sql).toContain("ELSE '非电销'");
+    // 不应直接裸输出 boolean 字段
+    expect(sql).not.toMatch(/SELECT[\s\S]*is_telemarketing AS dim_value/);
+    // 兼容层使用 boolean 比较而非字符串枚举直查
+    expect(sql).toContain('is_telemarketing = TRUE');
+  });
+
+  it('P1 c21667：ranking 以 is_telemarketing 为维度时 dim_value 输出中文枚举而非 boolean', () => {
+    const sql = generateQuoteRankingQuery({}, 'is_telemarketing');
+    expect(sql).toContain("THEN '电销'");
+    expect(sql).toContain("ELSE '非电销'");
+    expect(sql).not.toMatch(/SELECT[\s\S]*is_telemarketing AS dim_value/);
+    expect(sql).toContain('is_telemarketing = TRUE');
+  });
+
+  it('P1 c21667：heatmap 使用其他维度时 is_telemarketing 不出现在 dim_value 列（回归）', () => {
+    const sql = generateQuoteHeatmapQuery({}, 'renewal_status');
+    // 选择 renewal_status 为列维度时，不应引入 is_telemarketing 相关表达式
+    expect(sql).not.toContain('is_telemarketing');
+  });
+
+  it('P1 c21667：rankig 使用其他维度时 is_telemarketing 不出现在 dim_value 列（回归）', () => {
+    const sql = generateQuoteRankingQuery({}, 'customer_category');
+    expect(sql).not.toContain('is_telemarketing');
   });
 });

@@ -202,7 +202,9 @@ export function generateQuoteHeatmapQuery(
     'commercial_ncd': "CAST(commercial_ncd AS VARCHAR)",
     'coverage_combination': 'coverage_combination',
     'customer_category': 'customer_category',
-    'is_telemarketing': 'is_telemarketing',
+    // 后端兼容层（P1 c21667）：QuoteConversion 视图的 is_telemarketing 已归一为 boolean；
+    // 维度输出侧必须还原为中文枚举，保持前端/四川输出字节安全（与改动前完全一致）。
+    'is_telemarketing': "CASE WHEN is_telemarketing = TRUE THEN '电销' ELSE '非电销' END",
     'is_nev': 'is_nev',
     'traffic_risk_grade': 'traffic_risk_grade',
   };
@@ -258,7 +260,9 @@ export function generateQuoteRankingQuery(
     'is_nev': 'is_nev',
     'tonnage_segment': 'tonnage_segment',
     'traffic_risk_grade': 'traffic_risk_grade',
-    'is_telemarketing': 'is_telemarketing',
+    // 后端兼容层（P1 c21667）：QuoteConversion 视图的 is_telemarketing 已归一为 boolean；
+    // 维度输出侧必须还原为中文枚举，保持前端/四川输出字节安全（与改动前完全一致）。
+    'is_telemarketing': "CASE WHEN is_telemarketing = TRUE THEN '电销' ELSE '非电销' END",
     'is_transfer': 'is_transfer',
   };
   const dimExpr = allowedDims[esc(dimension)] ?? 'customer_category';
