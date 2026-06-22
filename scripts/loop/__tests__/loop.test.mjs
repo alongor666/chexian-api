@@ -5,7 +5,7 @@
  * 安全核心：调度的「域互斥独立集」「deps/inflight/gated 排除」「过期分类」必须确定可复现。
  */
 import { describe, it, expect } from 'vitest';
-import { foldBacklog, bucketOf, taskDomains, computeFrontier } from '../dispatch.mjs';
+import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate } from '../dispatch.mjs';
 import { parseLedger, aggregate } from '../quality-report.mjs';
 import { scanEntries, classify, isoAddDays } from '../automation-due.mjs';
 import { scanNotes, classifyStale, scanStale } from '../stale-scan.mjs';
@@ -145,6 +145,55 @@ describe('dispatch.computeFrontier', () => {
       { tasks: { g: { gated: true } } },
     );
     expect(r.frontier).toHaveLength(0);
+  });
+});
+
+describe('dispatch.mergeGate（合并门串行化闸）', () => {
+  const tasks = [
+    { uid: 'a', priority: 'P1', status: 'IN_PROGRESS', desc: 'A' },
+    { uid: 'b', priority: 'P0', status: 'DOING', desc: 'B' },
+    { uid: 'c', priority: 'P1', status: 'PARTIAL', desc: 'C' },
+    { uid: 'd', priority: 'P1', status: 'DONE', desc: 'D' },
+  ];
+
+  it('在飞集空 → slot=null、queue/skipped 皆空（无 PR 排队）', () => {
+    const g = mergeGate(tasks, {});
+    expect(g.slot).toBe(null);
+    expect(g.queue).toEqual([]);
+    expect(g.skipped).toEqual([]);
+  });
+
+  it('单个在飞 → 该任务即 slot holder、无排队', () => {
+    const g = mergeGate(tasks, { inflight: ['a'] });
+    expect(g.slot.uid).toBe('a');
+    expect(g.queue).toEqual([]);
+  });
+
+  it('多个在飞 → 按 priority 升序→uid 升序定合并次序；slot=首、queue=其余', () => {
+    // b(P0) < a(P1,uid a) < c(P1,uid c) → 次序 b,a,c
+    const g = mergeGate(tasks, { inflight: ['c', 'a', 'b'] });
+    expect(g.slot.uid).toBe('b');           // 只放一个过门
+    expect(g.queue.map((t) => t.uid)).toEqual(['a', 'c']); // 其余按序排队
+  });
+
+  it('DONE 在飞项剔除（应移出 inflight）→ 不占 slot', () => {
+    const g = mergeGate(tasks, { inflight: ['d', 'a'] });
+    expect(g.slot.uid).toBe('a');
+    expect(g.queue).toEqual([]);
+    expect(g.skipped.some((s) => s.includes('d') && s.includes('DONE'))).toBe(true);
+  });
+
+  it('不在 backlog 的 uid 剔除（防脏 inflight 卡门）', () => {
+    const g = mergeGate(tasks, { inflight: ['ghost', 'c'] });
+    expect(g.slot.uid).toBe('c');
+    expect(g.skipped.some((s) => s.includes('ghost') && s.includes('不在 backlog'))).toBe(true);
+  });
+
+  it('缺 priority → 视作 P9 排最后（确定可复现）', () => {
+    const t = [{ uid: 'z', status: 'DOING' }, { uid: 'y', priority: 'P2', status: 'DOING' }];
+    const g = mergeGate(t, { inflight: ['z', 'y'] });
+    expect(g.slot.uid).toBe('y');           // P2 < P9(默认)
+    expect(g.queue.map((x) => x.uid)).toEqual(['z']);
   });
 });
 
