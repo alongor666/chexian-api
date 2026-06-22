@@ -664,7 +664,17 @@ function runRefreshMetadata(python, scriptDir, releaseManifest) {
  *   - 'multi_file_input'    多文件 xlsx 一次性传给 ETL（quote_etl.py 模式）
  *   - 'multi_file_merge'    每个 xlsx 转 parquet → merge_parquet.py dedup 合并
  */
-function runStandardDomain(python, scriptDir, manifest) {
+/**
+ * 标准域 ETL 运行器（manifest 驱动）。
+ *
+ * @param {string}   python      Python 可执行路径
+ * @param {string}   scriptDir   数据管理目录绝对路径
+ * @param {object}   manifest    data-sources.json 中的域配置对象
+ * @param {string[]} [extraArgsOverride=[]]  调用方额外注入的命令行参数（追加在 --no-metadata/--branch-code 之后）。
+ *   用于域专属参数（如 new_energy_claims 的 --policy-dir）而不破坏通用函数逻辑。
+ *   注意：此参数存在不代表所有域都需要，默认为空数组不影响现有行为。
+ */
+function runStandardDomain(python, scriptDir, manifest, extraArgsOverride = []) {
   if (!manifest || !manifest.trigger) {
     log('red', `❌ manifest 缺失或无 trigger 字段: ${manifest?.id || '(unknown)'}`);
     return;
@@ -696,6 +706,8 @@ function runStandardDomain(python, scriptDir, manifest) {
   const skipMetadata = _currentReleaseManifest?.domains?.[id] != null;
   const extraArgs = skipMetadata ? ['--no-metadata'] : [];
   if (isBranch) extraArgs.push('--branch-code', BRANCH_CODE);
+  // 调用方额外注入（域专属参数，如 new_energy_claims 的 --policy-dir）
+  if (extraArgsOverride.length > 0) extraArgs.push(...extraArgsOverride);
 
   const { sourceFiles, batchDate } = resolveSourceFilesForTrigger(id, inputGlobs, sourceRoot, trigger);
   if (sourceFiles.length === 0) {
@@ -1408,7 +1420,16 @@ async function main() {
       case 'repair': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'repair_resource')); break;
       case 'customer_flow': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'customer_flow')); break;
       case 'new_energy':
-      case 'new_energy_claims': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims')); break;
+      case 'new_energy_claims': {
+        // new_energy_claims 的 policy_no 100% 为 NULL；通过 vehicle_frame_no JOIN policy 回填 org_level_3。
+        // policy_dir 用 branchOutputRoot 动态解析（本地与 VPS 路径不同，禁止硬编码）。
+        const necPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE);
+        runStandardDomain(
+          python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims'),
+          ['--policy-dir', `"${necPolicyDir}"`],
+        );
+        break;
+      }
       case 'renewal_tracker': runRenewalTracker(python, scriptDir); break;
     }
     // 多省 0a（ADR D5）：非 SC 省单域 ETL 到此结束 —— 产物已落隔离目录，刻意跳过所有 SC 副作用
@@ -1778,9 +1799,17 @@ async function main() {
   };
   if (subcommand === 'all') {
     __timeDomain('claims_detail', () => runClaimsDetail(python, scriptDir));
-    for (const id of ['cross_sell', 'quotes_conversion', 'brand', 'repair_resource', 'customer_flow', 'new_energy_claims']) {
+    for (const id of ['cross_sell', 'quotes_conversion', 'brand', 'repair_resource', 'customer_flow']) {
       __timeDomain(id, () => runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, id)));
     }
+    // new_energy_claims 需要 --policy-dir 用于 VIN JOIN 回填 org_level_3（policy_no 全 NULL）
+    __timeDomain('new_energy_claims', () => {
+      const necPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE);
+      runStandardDomain(
+        python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims'),
+        ['--policy-dir', `"${necPolicyDir}"`],
+      );
+    });
     // 派生域放末尾（依赖 policy + quotes_conversion + salesman 已产出）
     __timeDomain('renewal_tracker', () => runRenewalTracker(python, scriptDir));
     // ETL 阶段总结 — 一目了然识别瓶颈
