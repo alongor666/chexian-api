@@ -48,6 +48,8 @@ import { assertNoPolicyCurrentOverlap } from '../scripts/lib/parquet-overlap-che
 import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
 // 多省 ETL 路由纯函数（0a：非 SC 省 premium 源走 staging/<省>、产物隔离到 warehouse/validation/<省>，绝不进 current/；ADR D5）
 import { branchSourceDir, branchOutputRoot } from './lib/branch-naming.mjs';
+// argv 最外层双引号剥离抽到 lib/arg-quotes.mjs（可单测；裸 spawn 引号安全闸的不变量源）
+import { stripArgQuotes } from './lib/arg-quotes.mjs';
 // claims 报案截止日新鲜度判定纯函数（同模式抽 lib/ 便于单测）
 import {
   claimsReportLagDays,
@@ -55,6 +57,11 @@ import {
   localTodayISO,
   CLAIMS_REPORT_LAG_WARN_DAYS,
 } from './lib/claims-freshness.mjs';
+// full_snapshot 缓存键（纯逻辑抽到 lib/ 便于单测；含 extraArgs + --policy-dir 内容指纹，见 tests/full-snapshot-cache-key.test.ts）
+import {
+  buildFullSnapshotCacheKey,
+  fullSnapshotOutputName,
+} from './lib/full-snapshot-cache-key.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -173,10 +180,8 @@ function runPythonScript(python, scriptPath, args) {
   // spawnSync 数组传参不经过 shell：彻底消除文件名含 $ / 反引号 / 空格 触发的注入与拆分。
   // 历史调用点用 `"${path}"` 包裹参数以适配旧的 shell 字符串拼接；这里剥离每个参数最外层
   // 的一对双引号（spawnSync 按字面量传递，剥离后即为真实路径，对未加引号的 flag 是 no-op）。
-  const cleanArgs = args.map(a => {
-    const s = String(a);
-    return s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
-  });
+  // 剥离逻辑抽到 lib/arg-quotes.mjs（可单测）；⚠️ 绕过本函数的裸 spawn 不会剥离，禁照搬 `"${path}"`。
+  const cleanArgs = stripArgQuotes(args);
   log('blue', `执行: ${python} ${scriptPath} ${cleanArgs.join(' ')}`);
   const result = spawnSync(python, [scriptPath, ...cleanArgs], {
     stdio: 'inherit',
@@ -483,38 +488,10 @@ function rawFullSnapshotDir(scriptDir, id, batchDate) {
   return join(scriptDir, 'raw/full_snapshot', id, `batch_date=${batchDate}`);
 }
 
-function fullSnapshotOutputName(id, trigger) {
-  return trigger.snapshot_output || `${id}.parquet`;
-}
-
-function buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger }) {
-  const dependencies = fullSnapshotDependencyPaths(dirname(scriptPath), scriptPath)
-    .filter(p => existsSync(p))
-    .map(p => {
-      const fp = fileFingerprint(p);
-      return { name: fp.name, size: fp.size, sha256: fp.sha256 };
-    });
-  const material = {
-    id,
-    batchDate,
-    snapshotMode: trigger.snapshot_mode,
-    outputName: fullSnapshotOutputName(id, trigger),
-    dependencies,
-    sources: sourceFingerprints
-      .map(f => ({ name: f.name, size: f.size, sha256: f.sha256 }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-  };
-  return createHash('sha256').update(JSON.stringify(material)).digest('hex');
-}
-
-function fullSnapshotDependencyPaths(pipelineDir, scriptPath) {
-  return [
-    scriptPath,
-    join(pipelineDir, 'base_converter.py'),
-    join(pipelineDir, 'etl_validation.py'),
-    join(pipelineDir, 'parquet_utils.py'),
-  ];
-}
+// fullSnapshotOutputName / buildFullSnapshotCacheKey / fullSnapshotDependencyPaths
+// 已抽到 ./lib/full-snapshot-cache-key.mjs（daily.mjs 顶层执行 main() 无法被 import 单测，
+// 同 lib/shard-classify.mjs / claims-freshness.mjs 模式）。缓存键现额外覆盖 extraArgs 与
+// --policy-dir 指向的 policy/current 内容指纹，避免命中陈旧快照。
 
 function removeDirRecursive(dir) {
   if (!existsSync(dir)) return;
@@ -664,7 +641,17 @@ function runRefreshMetadata(python, scriptDir, releaseManifest) {
  *   - 'multi_file_input'    多文件 xlsx 一次性传给 ETL（quote_etl.py 模式）
  *   - 'multi_file_merge'    每个 xlsx 转 parquet → merge_parquet.py dedup 合并
  */
-function runStandardDomain(python, scriptDir, manifest) {
+/**
+ * 标准域 ETL 运行器（manifest 驱动）。
+ *
+ * @param {string}   python      Python 可执行路径
+ * @param {string}   scriptDir   数据管理目录绝对路径
+ * @param {object}   manifest    data-sources.json 中的域配置对象
+ * @param {string[]} [extraArgsOverride=[]]  调用方额外注入的命令行参数（追加在 --no-metadata/--branch-code 之后）。
+ *   用于域专属参数（如 new_energy_claims 的 --policy-dir）而不破坏通用函数逻辑。
+ *   注意：此参数存在不代表所有域都需要，默认为空数组不影响现有行为。
+ */
+function runStandardDomain(python, scriptDir, manifest, extraArgsOverride = []) {
   if (!manifest || !manifest.trigger) {
     log('red', `❌ manifest 缺失或无 trigger 字段: ${manifest?.id || '(unknown)'}`);
     return;
@@ -696,6 +683,8 @@ function runStandardDomain(python, scriptDir, manifest) {
   const skipMetadata = _currentReleaseManifest?.domains?.[id] != null;
   const extraArgs = skipMetadata ? ['--no-metadata'] : [];
   if (isBranch) extraArgs.push('--branch-code', BRANCH_CODE);
+  // 调用方额外注入（域专属参数，如 new_energy_claims 的 --policy-dir）
+  if (extraArgsOverride.length > 0) extraArgs.push(...extraArgsOverride);
 
   const { sourceFiles, batchDate } = resolveSourceFilesForTrigger(id, inputGlobs, sourceRoot, trigger);
   if (sourceFiles.length === 0) {
@@ -793,7 +782,7 @@ function runStrategyFullSnapshot({ python, id, scriptDir, scriptPath, sourceFile
   const snapshotOutput = join(snapDir, fullSnapshotOutputName(id, trigger));
   const snapshotManifest = join(snapDir, 'snapshot-manifest.json');
   const tmpOutput = outputAbs + '.tmp';
-  const cacheKey = buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger });
+  const cacheKey = buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger, extraArgs });
 
   writeFullSnapshotSourceArchive(scriptDir, id, batchDate, sourceFiles, sourceFingerprints);
   try { if (existsSync(tmpOutput)) unlinkSync(tmpOutput); } catch (e) {}
@@ -1408,7 +1397,17 @@ async function main() {
       case 'repair': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'repair_resource')); break;
       case 'customer_flow': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'customer_flow')); break;
       case 'new_energy':
-      case 'new_energy_claims': runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims')); break;
+      case 'new_energy_claims': {
+        // new_energy_claims 的 policy_no 100% 为 NULL；通过 vehicle_frame_no JOIN policy 回填 org_level_3。
+        // SC 分支：branchOutputRoot 返回 warehouse/fact/policy/current（即 policy 分片所在目录）。
+        // 数组传参时 Python argparse 直接收到裸路径，禁止在此手工加引号（加了 Path.exists() 会失败）。
+        const necPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE);
+        runStandardDomain(
+          python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims'),
+          ['--policy-dir', necPolicyDir],
+        );
+        break;
+      }
       case 'renewal_tracker': runRenewalTracker(python, scriptDir); break;
     }
     // 多省 0a（ADR D5）：非 SC 省单域 ETL 到此结束 —— 产物已落隔离目录，刻意跳过所有 SC 副作用
@@ -1618,6 +1617,11 @@ async function main() {
   log('green', `使用 Python: ${python}`);
   const transformScript = join(scriptDir, 'pipelines/transform.py');
 
+  // 多省 0a：非 SC 省向 transform.py 注入 --branch-code，使质量报告写入隔离目录
+  // 数据分析报告/<省>/转换质量报告.json（SC 默认链路不传 → 路径不变，四川字节安全）
+  const _premiumIsBranch = BRANCH_CODE !== 'SC';
+  const _premiumBranchArgs = _premiumIsBranch ? ['--branch-code', BRANCH_CODE] : [];
+
   // 3. 处理静态分片（存在就跳过）
   for (const file of shards.static) {
     const range = extractDateRange(file.name);
@@ -1649,7 +1653,8 @@ async function main() {
     log('green', `▶ 转换静态分片: ${file.name} → ${outputName}`);
     runPythonScript(python, transformScript, [
       '-i', `"${file.path}"`,
-      '-o', `"${convertTarget}"`
+      '-o', `"${convertTarget}"`,
+      ..._premiumBranchArgs,
     ]);
     if (staleReplace) renameSync(convertTarget, outputPath); // 同目录原子替换
   }
@@ -1713,6 +1718,9 @@ async function main() {
       log('green', `  续保匹配: ${basename(renewalSource)}`);
     }
 
+    // 多省 0a：向 transform.py 注入 --branch-code，使质量报告写入隔离目录（SC 默认链路不传）
+    args.push(..._premiumBranchArgs);
+
     runPythonScript(python, transformScript, args);
 
     // 清空 staging（日增量已合入周更 xlsx）
@@ -1733,7 +1741,8 @@ async function main() {
     log('green', `▶ 转换日增量: ${file.name} → staging/${outputName}`);
     runPythonScript(python, transformScript, [
       '-i', `"${file.path}"`,
-      '-o', `"${outputPath}"`
+      '-o', `"${outputPath}"`,
+      ..._premiumBranchArgs,
     ]);
   }
 
@@ -1778,9 +1787,18 @@ async function main() {
   };
   if (subcommand === 'all') {
     __timeDomain('claims_detail', () => runClaimsDetail(python, scriptDir));
-    for (const id of ['cross_sell', 'quotes_conversion', 'brand', 'repair_resource', 'customer_flow', 'new_energy_claims']) {
+    for (const id of ['cross_sell', 'quotes_conversion', 'brand', 'repair_resource', 'customer_flow']) {
       __timeDomain(id, () => runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, id)));
     }
+    // new_energy_claims 需要 --policy-dir 用于 VIN JOIN 回填 org_level_3（policy_no 全 NULL）
+    // 数组传参时 Python argparse 直接收到裸路径，禁止加字面引号（否则 Path.exists() 判 false 静默跳过）。
+    __timeDomain('new_energy_claims', () => {
+      const necPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE);
+      runStandardDomain(
+        python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims'),
+        ['--policy-dir', necPolicyDir],
+      );
+    });
     // 派生域放末尾（依赖 policy + quotes_conversion + salesman 已产出）
     __timeDomain('renewal_tracker', () => runRenewalTracker(python, scriptDir));
     // ETL 阶段总结 — 一目了然识别瓶颈

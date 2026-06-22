@@ -1,8 +1,5 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EChartsOption } from 'echarts';
-import type { AdvancedFilterState } from '@/shared/types/data';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Tabs } from '@/shared/ui/Tabs';
-import type { TabItem } from '@/shared/ui/Tabs';
 import {
   StickyTableFrame,
   DrilldownBreadcrumb,
@@ -15,34 +12,24 @@ import { SectionTitle, SectionBlock } from '@/shared/ui/SectionTitle';
 import { useDataStatus } from '@/shared/contexts/DataContext';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { useScopeLabel } from '@/shared/hooks/useScopeLabel';
-import { echarts } from '@/shared/utils/echarts';
-import { formatCount, formatPercent, formatWanAdaptive, formatTeamName, formatSalesmanName } from '@/shared/utils/formatters';
-import { useTheme } from '@/shared/theme';
-import { RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { buttonStyles, cardStyles, cn, colorClasses, colors, stickyTableStyles, textStyles, toggleButtonStyles } from '@/shared/styles';
+import { formatCount, formatPercent, formatTeamName, formatSalesmanName } from '@/shared/utils/formatters';
+import { cardStyles, cn, colorClasses, stickyTableStyles, textStyles, toggleButtonStyles } from '@/shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
 import {
-  classifyAchievementBand,
   classifyGrowthBand,
   classifyPerformanceQuadrant,
-  getAchievementTextClass,
   getGrowthTextClass,
   getQuadrantLabel,
-  PERFORMANCE_ACHIEVEMENT_THRESHOLD,
-  PERFORMANCE_GROWTH_THRESHOLD,
-  PERFORMANCE_QUADRANT_META,
 } from './performanceStatus';
 import {
   PERFORMANCE_DIMENSION_LABELS,
   usePerformanceDrilldown,
   type PerformanceDimension,
-  type PerformanceRow,
 } from './hooks/usePerformanceDrilldown';
 import {
   usePerformanceSummary,
   type PerformanceGrowthMode,
   type PerformanceTimePeriod,
-  type PerformanceSegmentTag,
   type PerformanceSummaryExpandDims,
   type PerformanceSummaryRow,
 } from './hooks/usePerformanceSummary';
@@ -62,545 +49,39 @@ import {
 } from './utils/performanceHeatmapSelection';
 import { getConditionalDimensions } from '@/shared/config/drilldown-dimensions';
 import { PerformanceOrgHeatmapV2, HeatmapFocusPanel } from './performance/PerformanceOrgHeatmapV2';
-import type { HeatmapMetric } from './performance/PerformanceOrgHeatmapV2';
 
-interface PerformanceAnalysisPanelProps {
-  filters: AdvancedFilterState;
-  segmentTag: PerformanceSegmentTag;
-  timePeriod: PerformanceTimePeriod;
-  growthMode: PerformanceGrowthMode;
-  onTimePeriodChange?: (v: PerformanceTimePeriod) => void;
-  onGrowthModeChange?: (v: PerformanceGrowthMode) => void;
-  defaultHeatmapMetric?: HeatmapMetric;
-}
+// ── b331 拆分（行为零变更）：类型/常量/纯 helper 与三个子组件抽到同目录文件；主组件保留于此。
+//    依赖方向单向：本文件 → ./performancePanel.* / ./PerformancePanel*；被抽文件禁止反向 import 本文件。
+import {
+  PERF_HEATMAP_DRILL_DIMENSIONS,
+  SEGMENT_TABS,
+  TIME_PERIOD_TABS,
+  GROWTH_MODE_TABS,
+  EXPAND_DIMS_TABS,
+  SUMMARY_ORDER,
+  mapTimePeriodToTrendGranularity,
+  formatPremiumWanDisplay,
+  formatAvgPremiumDisplay,
+  safeNumber,
+  getRateTextClass,
+  sortWithNull,
+  getPerformanceHeatmapTitle,
+  getPerformanceDrilldownTitle,
+  resolvePerformanceDrilldownPrefetched,
+  type PerformanceAnalysisPanelProps,
+  type PerformanceDrilldownPrefetchedData,
+  type GroupSortKey,
+  type TopSortKey,
+  type SortOrder,
+} from './performancePanel.shared';
+import { DistributionChart } from './PerformancePanelDistributionChart';
+import { DimensionPicker } from './PerformancePanelDimensionPicker';
 
-export interface PerformanceDrilldownPrefetchedData {
-  summary: Record<string, unknown> | null;
-  rows: Array<Record<string, unknown>>;
-}
-
-export function resolvePerformanceDrilldownPrefetched(
-  prefetched: PerformanceDrilldownPrefetchedData | undefined,
-  useLegacyDrilldown: boolean
-): PerformanceDrilldownPrefetchedData | undefined {
-  return useLegacyDrilldown ? undefined : prefetched;
-}
-
-export const PERFORMANCE_HEATMAP_PERIOD_COUNT = 15;
-
-/** 热力图下钻可选维度，静态常量（模块级，避免组件每次渲染重建数组） */
-const PERF_HEATMAP_DRILL_DIMENSIONS: { key: HeatmapDimension; label: string }[] = [
-  { key: 'org_level_3', label: '三级机构' },
-  { key: 'team', label: '团队' },
-  { key: 'salesman', label: '业务员' },
-  { key: 'customer_category', label: '客户类别' },
-  { key: 'coverage_combination', label: '险别组合' },
-  { key: 'energy_type', label: '能源类型' },
-  { key: 'business_nature', label: '新转续' },
-  { key: 'insurance_grade', label: '风险评分' },
-];
-
-function getPerformanceHeatmapPeriodUnit(timePeriod: PerformanceTimePeriod): string {
-  switch (timePeriod) {
-    case 'day':
-      return '天';
-    case 'week':
-      return '周';
-    case 'month':
-      return '月';
-    case 'quarter':
-      return '季度';
-    case 'year':
-      return '年';
-    default:
-      return '天';
-  }
-}
-
-export function getPerformanceHeatmapTitle(timePeriod: PerformanceTimePeriod, dimensionLabel = '三级机构'): string {
-  return `${dimensionLabel}连续${PERFORMANCE_HEATMAP_PERIOD_COUNT}${getPerformanceHeatmapPeriodUnit(timePeriod)}热力图`;
-}
-
-export function getPerformanceDrilldownTitle(
-  currentGroupBy: PerformanceDimension | null,
-  currentDimensionLabel: string,
-  heatmapSelection: PerformanceHeatmapSelection | null
-): string {
-  if (!currentGroupBy) {
-    return '下钻分析';
-  }
-
-  const details = [`已选维度：${currentDimensionLabel}`];
-  if (heatmapSelection?.org) {
-    details.push(`热力图机构：${heatmapSelection.org}`);
-  }
-  return `下钻分析（${details.join(' · ')}）`;
-}
-
-const SEGMENT_TABS: TabItem[] = [
-  { key: 'all', label: '全部' },
-  { key: 'non_business_passenger', label: '非营客' },
-  { key: 'business_passenger', label: '营客' },
-  { key: 'business_truck', label: '营货' },
-  { key: 'non_business_truck', label: '非营货' },
-  { key: 'motorcycle', label: '摩托车' },
-];
-
-const TIME_PERIOD_TABS: TabItem[] = [
-  { key: 'day', label: '日' },
-  { key: 'week', label: '周' },
-  { key: 'month', label: '月' },
-  { key: 'quarter', label: '季' },
-  { key: 'year', label: '年' },
-];
-
-const GROWTH_MODE_TABS: TabItem[] = [
-  { key: 'mom', label: '环比' },
-  { key: 'yoy', label: '同比' },
-];
-
-const SEGMENT_OPTIONS = [
-  { value: 'all', label: '全部客户' },
-  { value: 'non_business_passenger', label: '非营客' },
-  { value: 'business_passenger', label: '营客' },
-  { value: 'business_truck', label: '营货' },
-  { value: 'non_business_truck', label: '非营货' },
-  { value: 'motorcycle', label: '摩托车' },
-];
-
-export const PerformanceHeaderActions: React.FC<{
-  segmentTag: PerformanceSegmentTag;
-  onSegmentTagChange: (v: PerformanceSegmentTag) => void;
-  onReset: () => void;
-  onOpenAdvanced: () => void;
-  activeFilterCount: number;
-}> = ({ segmentTag, onSegmentTagChange, onReset, onOpenAdvanced, activeFilterCount }) => (
-  <div className="flex items-center gap-2">
-    <select
-      value={segmentTag}
-      onChange={(e) => onSegmentTagChange(e.target.value as PerformanceSegmentTag)}
-      className={cn(buttonStyles.base, buttonStyles.secondary, 'px-2 py-1.5 text-xs cursor-pointer')}
-    >
-      {SEGMENT_OPTIONS.map(opt => (
-        <option key={opt.value} value={opt.value}>{opt.label}</option>
-      ))}
-    </select>
-    <button type="button" onClick={onReset} className={cn(buttonStyles.base, buttonStyles.secondary, 'px-2 py-1.5 text-xs')}>
-      <RotateCcw size={14} className="mr-1" />重置
-    </button>
-    <button type="button" onClick={onOpenAdvanced} className={cn(buttonStyles.base, buttonStyles.primary, 'px-2 py-1.5 text-xs')}>
-      <SlidersHorizontal size={14} className="mr-1" />筛选
-      {activeFilterCount > 0 && (
-        <span className="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-white/20 px-1 text-[10px]">
-          {activeFilterCount}
-        </span>
-      )}
-    </button>
-  </div>
-);
-
-const EXPAND_DIMS_TABS: TabItem[] = [
-  { key: 'none', label: '不展开' },
-  { key: 'energy', label: '油电' },
-  { key: 'business_nature', label: '新转续' },
-  { key: 'energy_business_nature', label: '油电+新转续' },
-];
-
-
-const SUMMARY_ORDER = ['整体', '主全', '交三', '单交'];
-
-function mapTimePeriodToTrendGranularity(timePeriod: PerformanceTimePeriod): 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' {
-  switch (timePeriod) {
-    case 'day':
-      return 'daily';
-    case 'week':
-      return 'weekly';
-    case 'month':
-      return 'monthly';
-    case 'quarter':
-      return 'quarterly';
-    case 'year':
-      return 'yearly';
-    default:
-      return 'daily';
-  }
-}
-
-// SectionTitle 和 SectionBlock 已提取到 @/shared/ui/SectionTitle
-
-function formatPremiumWanDisplay(value: number | null | undefined): string {
-  return formatWanAdaptive(value);
-}
-
-function formatAvgPremiumDisplay(value: number): string {
-  return `${formatCount(value)}元`;
-}
-
-function safeNumber(value: number | null | undefined): number {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return 0;
-  }
-  return value;
-}
-
-function getRateTextClass(field: 'achievement' | 'growth', value: number | null): string {
-  if (field === 'achievement') {
-    return cn(getAchievementTextClass(classifyAchievementBand(value)), 'font-semibold');
-  }
-  return cn(getGrowthTextClass(classifyGrowthBand(value)), 'font-semibold');
-}
-
-function sortWithNull(value: number | null, order: 'asc' | 'desc'): number {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return order === 'asc' ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
-  }
-  return value;
-}
-
-function DistributionChart({
-  rows,
-  loading,
-  error,
-}: {
-  rows: PerformanceRow[];
-  loading: boolean;
-  error: string | null;
-}) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
-  const { resolvedTheme } = useTheme();
-
-  const points = useMemo(() => {
-    const filtered = rows.filter((row) => row.achievement_rate !== null && row.growth_rate !== null);
-    const maxCount = Math.max(...filtered.map((item) => safeNumber(item.auto_count)), 1);
-
-    return filtered.map((row) => {
-      const achievement = safeNumber(row.achievement_rate);
-      const growth = safeNumber(row.growth_rate);
-      const autoCount = Math.max(0, safeNumber(row.auto_count));
-      const quadrant = classifyPerformanceQuadrant(achievement, growth);
-      const symbolSize = 12 + (autoCount / maxCount) * 18;
-      const color = quadrant === 'unknown'
-        ? colors.neutral[400]
-        : PERFORMANCE_QUADRANT_META[quadrant].color;
-
-      return {
-        name: row.group_name,
-        value: [achievement, growth, autoCount],
-        quadrant,
-        itemStyle: {
-          color,
-          opacity: 0.86,
-        },
-        symbolSize,
-      };
-    });
-  }, [rows]);
-
-  const axisRange = useMemo(() => {
-    if (points.length === 0) {
-      return { xMin: 80, xMax: 120, yMin: -5, yMax: 20 };
-    }
-    const xs = points.map((p) => Number(p.value[0] || 0));
-    const ys = points.map((p) => Number(p.value[1] || 0));
-    return {
-      xMin: Math.min(80, Math.floor(Math.min(...xs) - 5)),
-      xMax: Math.max(120, Math.ceil(Math.max(...xs) + 5)),
-      yMin: Math.min(-5, Math.floor(Math.min(...ys) - 2)),
-      yMax: Math.max(20, Math.ceil(Math.max(...ys) + 2)),
-    };
-  }, [points]);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-    if (!chartInstanceRef.current) {
-      chartInstanceRef.current = echarts.init(chartRef.current);
-    }
-    const chart = chartInstanceRef.current;
-    if (!chart) return;
-    if (loading) return;
-
-    if (error) {
-      chart.clear();
-      chart.setOption({
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: {
-            text: `加载失败: ${error}`,
-            fill: colors.danger.DEFAULT,
-            fontSize: 13,
-          },
-        },
-      });
-      return;
-    }
-
-    if (points.length === 0) {
-      chart.clear();
-      chart.setOption({
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: {
-            text: '暂无达成率/增长率分布数据',
-            fill: colors.neutral[400],
-            fontSize: 13,
-          },
-        },
-      });
-      return;
-    }
-
-    const bucket = {
-      high_growth_high_achievement: points.filter((item) => item.quadrant === 'high_growth_high_achievement'),
-      high_growth_low_achievement: points.filter((item) => item.quadrant === 'high_growth_low_achievement'),
-      low_growth_high_achievement: points.filter((item) => item.quadrant === 'low_growth_high_achievement'),
-      low_growth_low_achievement: points.filter((item) => item.quadrant === 'low_growth_low_achievement'),
-    };
-
-    const scatterSymbolSize = (_value: unknown, params: any) => {
-      const data = params?.data;
-      if (typeof data?.symbolSize === 'number') return data.symbolSize;
-      return 16;
-    };
-
-    const isDark = resolvedTheme === 'dark';
-    const textColor = isDark ? '#f0f0f0' : '#333';
-    const subTextColor = isDark ? '#a3a3a3' : '#666';
-
-    const option: EChartsOption = {
-      textStyle: { color: textColor },
-      tooltip: {
-        trigger: 'item',
-        formatter: (params: any) => {
-          const value = params?.value || [0, 0, 0];
-          const achievement = Number(value[0] || 0);
-          const growth = Number(value[1] || 0);
-          const count = Number(value[2] || 0);
-          const quadrant = params?.data?.quadrant;
-          const quadrantLabel = typeof quadrant === 'string' ? getQuadrantLabel(quadrant as any) : '-';
-          return [
-            `<div style="font-size:12px;line-height:1.6;">`,
-            `<div style="font-weight:600;">${params?.name || ''}</div>`,
-            `<div>达成率：${formatPercent(achievement)}</div>`,
-            `<div>增长率：${formatPercent(growth)}</div>`,
-            `<div>车险件数：${formatCount(count)}</div>`,
-            `<div>象限：${quadrantLabel}</div>`,
-            `</div>`,
-          ].join('');
-        },
-      },
-      legend: {
-        top: 0,
-        type: 'scroll',
-        textStyle: { color: subTextColor },
-        data: ['高增长高达成（优秀）', '高增长低达成（异常）', '低增长高达成（预警）', '低增长低达成（危险）'],
-      },
-      grid: {
-        left: '7%',
-        right: '6%',
-        top: 54,
-        bottom: 46,
-        containLabel: true,
-      },
-      xAxis: {
-        type: 'value',
-        name: '达成率',
-        nameTextStyle: { color: subTextColor },
-        min: axisRange.xMin,
-        max: axisRange.xMax,
-        axisLabel: { formatter: '{value}%', color: subTextColor },
-        splitLine: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        name: '增长率',
-        nameTextStyle: { color: subTextColor },
-        min: axisRange.yMin,
-        max: axisRange.yMax,
-        axisLabel: { formatter: '{value}%', color: subTextColor },
-        splitLine: { show: false },
-      },
-      series: [
-        {
-          name: '背景',
-          type: 'scatter',
-          data: [],
-          symbolSize: scatterSymbolSize,
-          markArea: {
-            silent: true,
-            itemStyle: { opacity: 0.08 },
-            data: [
-              [
-                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: PERFORMANCE_GROWTH_THRESHOLD, itemStyle: { color: colors.success.DEFAULT } },
-                { xAxis: axisRange.xMax, yAxis: axisRange.yMax },
-              ],
-              [
-                { xAxis: axisRange.xMin, yAxis: PERFORMANCE_GROWTH_THRESHOLD, itemStyle: { color: colors.warning.DEFAULT } },
-                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: axisRange.yMax },
-              ],
-              [
-                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: axisRange.yMin, itemStyle: { color: '#fa8c16' } },
-                { xAxis: axisRange.xMax, yAxis: PERFORMANCE_GROWTH_THRESHOLD },
-              ],
-              [
-                { xAxis: axisRange.xMin, yAxis: axisRange.yMin, itemStyle: { color: colors.danger.DEFAULT } },
-                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: PERFORMANCE_GROWTH_THRESHOLD },
-              ],
-            ],
-          },
-        },
-        {
-          name: '高增长高达成（优秀）',
-          type: 'scatter',
-          data: bucket.high_growth_high_achievement,
-          symbolSize: scatterSymbolSize,
-        },
-        {
-          name: '高增长低达成（异常）',
-          type: 'scatter',
-          data: bucket.high_growth_low_achievement,
-          symbolSize: scatterSymbolSize,
-        },
-        {
-          name: '低增长高达成（预警）',
-          type: 'scatter',
-          data: bucket.low_growth_high_achievement,
-          symbolSize: scatterSymbolSize,
-        },
-        {
-          name: '低增长低达成（危险）',
-          type: 'scatter',
-          data: bucket.low_growth_low_achievement,
-          symbolSize: scatterSymbolSize,
-          markLine: {
-            silent: true,
-            symbol: 'none',
-            lineStyle: {
-              type: 'dashed',
-              color: colors.neutral[500],
-              width: 1,
-            },
-            data: [
-              { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD },
-              { yAxis: PERFORMANCE_GROWTH_THRESHOLD },
-            ],
-          },
-        },
-      ],
-    };
-
-    chart.setOption(option, true);
-  }, [axisRange, error, loading, points, resolvedTheme]);
-
-  // ResizeObserver 仅需挂载时注册一次。此前与 setOption 同处一个 effect，
-  // 导致每次数据/主题变化都 disconnect + 重建 observer（无谓 DOM 操作）。
-  // resize 回调按调用时读取实例 ref，与图表 init 的时序无关。
-  useEffect(() => {
-    const el = chartRef.current;
-    if (!el) return;
-    const resizeObserver = new ResizeObserver(() => {
-      chartInstanceRef.current?.resize();
-    });
-    resizeObserver.observe(el);
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      chartInstanceRef.current?.dispose();
-      chartInstanceRef.current = null;
-    };
-  }, []);
-
-  return (
-    <section className={cn(cardStyles.standard, 'space-y-3')}>
-      <h3 className={textStyles.titleSmall}>达成率+增长率分布图</h3>
-      <div className={cn(textStyles.caption, colorClasses.text.neutralLight)}>
-        分界线：达成率 {PERFORMANCE_ACHIEVEMENT_THRESHOLD}% / 增长率 {PERFORMANCE_GROWTH_THRESHOLD}%。
-      </div>
-      <div ref={chartRef} className="h-[360px] w-full" />
-    </section>
-  );
-}
-
-function DimensionPicker({
-  available,
-  onSelect,
-  onCancel,
-  title,
-}: {
-  available: PerformanceDimension[];
-  onSelect: (dim: PerformanceDimension) => void;
-  onCancel: () => void;
-  title: string;
-}) {
-  if (available.length === 0) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onCancel}>
-      <div
-        className={cn(cardStyles.spacious, 'min-w-[320px] max-w-[90vw]')}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h3 className={cn(textStyles.titleSmall, 'mb-4')}>{title}</h3>
-        <div className="grid grid-cols-2 gap-2">
-          {available.map((dim) => (
-            <button
-              key={dim}
-              onClick={() => onSelect(dim)}
-              className={cn(
-                'px-3 py-2 rounded-lg border text-left transition-colors',
-                colorClasses.border.neutral,
-                colorClasses.text.neutralDark,
-                'hover:bg-neutral-50'
-              )}
-            >
-              {PERFORMANCE_DIMENSION_LABELS[dim]}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={onCancel}
-          className={cn('mt-4 w-full px-3 py-2 rounded-lg border transition-colors', colorClasses.border.neutral)}
-        >
-          取消
-        </button>
-      </div>
-    </div>
-  );
-}
-
-type GroupSortKey =
-  | 'group_name'
-  | 'premium'
-  | 'plan_premium'
-  | 'auto_count'
-  | 'achievement_rate'
-  | 'growth_rate'
-  | 'nev_rate'
-  | 'renewal_rate'
-  | 'transfer_business_rate'
-  | 'new_car_rate'
-  | 'transfer_rate';
-
-type TopSortKey =
-  | 'dimension_name'
-  | 'premium'
-  | 'plan_premium'
-  | 'auto_count'
-  | 'achievement_rate'
-  | 'growth_rate'
-  | 'nev_rate'
-  | 'renewal_rate'
-  | 'transfer_business_rate'
-  | 'new_car_rate'
-  | 'transfer_rate';
-
-type SortOrder = 'asc' | 'desc';
+// 兼容旧入口：重导出曾从本文件导出的公共符号（PerformanceAnalysisPage / tests 仍从此处 import）。
+export { PerformanceHeaderActions } from './PerformanceHeaderActions';
+export { PERFORMANCE_HEATMAP_PERIOD_COUNT } from './performancePanel.shared';
+export type { PerformanceDrilldownPrefetchedData } from './performancePanel.shared';
+export { getPerformanceHeatmapTitle, getPerformanceDrilldownTitle, resolvePerformanceDrilldownPrefetched };
 
 export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> = ({
   filters,

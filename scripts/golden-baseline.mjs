@@ -33,6 +33,10 @@ const ROOT_DIR = join(__dirname, '..');
 const BASELINE_DIR = join(ROOT_DIR, '.planning/golden-baseline');
 const SERVER_URL = process.env.SNAPSHOT_SERVER_URL || 'http://localhost:3000';
 
+// 抓取并发上限：DuckDB 连接池有限，71 端点全并发会 "ConnectionPool: queue full / acquire timeout"
+// → 大量 500，基线不完整。限流到小并发既保护池又足够快。可用 BASELINE_CONCURRENCY 覆盖。
+const FETCH_CONCURRENCY = Number(process.env.BASELINE_CONCURRENCY) || 4;
+
 // ── ANSI 颜色 ────────────────────────────────
 const colors = {
   green: '\x1b[32m',
@@ -64,7 +68,7 @@ const ENDPOINT_DEFINITIONS = [
   // ── /api/query/trend ──────────────────────
   { slug: 'trend', path: '/api/query/trend', params: {}, deprecated: false },
   { slug: 'quality-business-trend', path: '/api/query/quality-business-trend', params: {}, deprecated: false },
-  { slug: 'test', path: '/api/query/test', params: {}, deprecated: false },
+  { slug: 'test', path: '/api/query/test', params: {}, deprecated: false, volatile: true }, // 回显本次 login 的 user/session，每次重登不同→非确定性
 
   // ── /api/query/truck ──────────────────────
   { slug: 'truck', path: '/api/query/truck', params: {}, deprecated: false },
@@ -104,7 +108,7 @@ const ENDPOINT_DEFINITIONS = [
 
   // ── /api/query/report ─────────────────────
   { slug: 'marketing-report', path: '/api/query/marketing-report', params: {}, deprecated: false },
-  { slug: 'holiday-drilldown', path: '/api/query/holiday-drilldown', params: {}, deprecated: false },
+  { slug: 'holiday-drilldown', path: '/api/query/holiday-drilldown', params: { groupBy: 'org_level_3' }, deprecated: false },
   { slug: 'premium-report', path: '/api/query/premium-report', params: {}, deprecated: false },
 
   // ── /api/query/premium-plan ───────────────
@@ -169,16 +173,17 @@ const ENDPOINT_DEFINITIONS = [
   },
 
   // ── /api/query/patrol（动态路由，用 premium 域测试）
-  { slug: 'patrol-premium', path: '/api/query/patrol/premium', params: {}, deprecated: false },
-  { slug: 'patrol-premium-narrative', path: '/api/query/patrol/premium/narrative', params: {}, deprecated: false },
+  // 注：patrol/:domain 与 narrative 是「读取已生成巡检报告文件」的文件托管端点（patrol.ts），
+  // 非查询/计算端点：① 无报告文件即 404（环境依赖、不可复现）② 报告内容随数据/时间变（非确定性，
+  // --compare 必假阳）。对 SQL/perf 重构 oracle 无价值，故**不纳入黄金基线**（原 'premium' 还是无效域）。
 
   // ── /api/filters ──────────────────────────
   { slug: 'filters-options', path: '/api/filters/options', params: {}, deprecated: false },
 
   // ── /api/data（GET only）─────────────────
-  { slug: 'data-metadata', path: '/api/data/metadata', params: {}, deprecated: false },
+  { slug: 'data-metadata', path: '/api/data/metadata', params: {}, deprecated: false, volatile: true }, // 含运行时元信息→非确定性
   { slug: 'data-files', path: '/api/data/files', params: {}, deprecated: false },
-  { slug: 'data-version', path: '/api/data/version', params: {}, deprecated: false },
+  { slug: 'data-version', path: '/api/data/version', params: {}, deprecated: false, volatile: true }, // 含 buildTime/serverStartTime 实时戳→非确定性
   { slug: 'data-kpi-plan-config', path: '/api/data/kpi-plan-config', params: {}, deprecated: false },
 
   // ── /api/auth（GET only）─────────────────
@@ -271,8 +276,9 @@ function runDryRun() {
 
   const total = ENDPOINT_DEFINITIONS.length;
   const deprecated = ENDPOINT_DEFINITIONS.filter((e) => e.deprecated).length;
+  const volatileCount = ENDPOINT_DEFINITIONS.filter((e) => e.volatile).length;
 
-  log('cyan', `  总端点数: ${total}（含 ${deprecated} 个 deprecated）`);
+  log('cyan', `  总端点数: ${total}（含 ${deprecated} 个 deprecated + ${volatileCount} 个 volatile，均不纳入基线）`);
   console.log('');
 
   let idx = 1;
@@ -281,7 +287,8 @@ function runDryRun() {
     const paramsStr = Object.entries(ep.params).length
       ? Object.entries(ep.params).map(([k, v]) => `${k}=${v}`).join('&')
       : '（无参数）';
-    const depTag = ep.deprecated ? colors.yellow + ' [DEPRECATED]' + colors.reset : '';
+    const depTag = ep.deprecated ? colors.yellow + ' [DEPRECATED]' + colors.reset
+      : ep.volatile ? colors.yellow + ' [VOLATILE]' + colors.reset : '';
     console.log(
       `  ${String(idx).padStart(3)}. slug=${ep.slug}  path=${ep.path}  params=${paramsStr}  hash=${paramHash}${depTag}`
     );
@@ -289,8 +296,31 @@ function runDryRun() {
   }
 
   console.log('');
-  log('green', `  共 ${total} 个端点（--build 将抓取全部，--compare 跳过 deprecated）`);
+  log('green', `  共 ${total} 个端点（--build/--compare 仅处理 ${total - deprecated - volatileCount} 个 oracle 端点，跳过 deprecated + volatile）`);
   process.exit(0);
+}
+
+/**
+ * 限流并发执行，返回与 Promise.allSettled 同构的结果数组（{status,value}|{status,reason}）。
+ * 保护 DuckDB 连接池：固定 `limit` 个 worker 轮流取任务，不一次性发射全部。
+ */
+async function mapSettledWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      try {
+        results[i] = { status: 'fulfilled', value: await fn(items[i], i) };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  }
+  const n = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: n }, worker));
+  return results;
 }
 
 // ── 模式：--build ─────────────────────────────
@@ -322,12 +352,15 @@ async function runBuild() {
     process.exit(1);
   }
 
-  // 3. 并行抓取所有端点
-  log('yellow', `\n▶ 抓取 ${ENDPOINT_DEFINITIONS.length} 个端点...`);
+  // 3. 限流抓取所有端点。跳过 deprecated（路由已删，抓取必失败）+ volatile（返回实时戳/会话态，
+  //    --compare 必假阳，非 SQL/perf 重构 oracle）。两类都不纳入黄金基线。
+  const buildTargets = ENDPOINT_DEFINITIONS.filter((ep) => !ep.deprecated && !ep.volatile);
+  const skipped = ENDPOINT_DEFINITIONS.length - buildTargets.length;
+  log('yellow', `\n▶ 抓取 ${buildTargets.length} 个端点${skipped ? `（跳过 ${skipped} 个 deprecated/volatile）` : ''}...`);
   const buildTime = new Date().toISOString();
 
-  const fetchResults = await Promise.allSettled(
-    ENDPOINT_DEFINITIONS.map(async (ep) => {
+  const fetchResults = await mapSettledWithConcurrency(
+    buildTargets, FETCH_CONCURRENCY, async (ep) => {
       const paramHash = computeParamHash(ep.params);
       const data = await fetchEndpoint(ep.path, ep.params, token);
 
@@ -345,7 +378,7 @@ async function runBuild() {
       const filePath = join(BASELINE_DIR, ep.slug, `${paramHash}.json`);
       atomicWrite(filePath, JSON.stringify(snapshot, null, 2));
       return { ep, filePath, paramHash };
-    })
+    }
   );
 
   // 4. 统计结果
@@ -416,7 +449,11 @@ async function runCompare() {
   }
 
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-  const activeEndpoints = manifest.endpoints.filter((ep) => !ep.deprecated);
+  // 防旧 manifest：按当前定义剔除 deprecated + volatile（manifest 不带 volatile 标记，需回查定义）
+  const excludedSlugs = new Set(
+    ENDPOINT_DEFINITIONS.filter((e) => e.deprecated || e.volatile).map((e) => e.slug)
+  );
+  const activeEndpoints = manifest.endpoints.filter((ep) => !ep.deprecated && !excludedSlugs.has(ep.slug));
 
   log('cyan', `  加载基线: ${manifest.endpoints.length} 个端点（跳过 ${manifest.endpoints.length - activeEndpoints.length} 个 deprecated）`);
 
@@ -446,8 +483,8 @@ async function runCompare() {
   log('yellow', `\n▶ 比对 ${activeEndpoints.length} 个端点（D-02 严格精确匹配）...`);
   console.log('');
 
-  const compareResults = await Promise.allSettled(
-    activeEndpoints.map(async (ep) => {
+  const compareResults = await mapSettledWithConcurrency(
+    activeEndpoints, FETCH_CONCURRENCY, async (ep) => {
       const baselinePath = join(BASELINE_DIR, ep.slug, `${ep.paramHash}.json`);
       if (!existsSync(baselinePath)) {
         throw new Error(`基线文件不存在: ${ep.slug}/${ep.paramHash}.json`);
@@ -458,9 +495,15 @@ async function runCompare() {
 
       const current = await fetchEndpoint(ep.path, ep.params, token);
 
-      assert.deepStrictEqual(current, baseline);
+      try {
+        assert.deepStrictEqual(current, baseline);
+      } catch (err) {
+        // 附上 slug：否则 allSettled 的 AssertionError 不含端点身份，FAIL 无法定位
+        err.endpointSlug = ep.slug;
+        throw err;
+      }
       return { ep };
-    })
+    }
   );
 
   // 5. 输出结果
@@ -473,9 +516,9 @@ async function runCompare() {
       log('green', `  PASS  ${result.value.ep.slug}`);
     } else {
       failCount++;
-      // 提取端点 slug（从错误上下文）
+      const slug = result.reason?.endpointSlug ? `[${result.reason.endpointSlug}] ` : '';
       const errorMsg = result.reason?.message || String(result.reason);
-      log('red', `  FAIL  ${errorMsg.slice(0, 120)}`);
+      log('red', `  FAIL  ${slug}${errorMsg.slice(0, 120)}`);
       if (result.reason?.code === 'ERR_ASSERTION') {
         // assert.deepStrictEqual 错误，打印差异摘要
         console.error(colors.dim + '         ' + (result.reason.message || '').slice(0, 200) + colors.reset);

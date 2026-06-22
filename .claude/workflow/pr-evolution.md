@@ -724,3 +724,72 @@
   - expires: 2026-09-19
 
 **量化**：并行波1 codex 双闸 — b330(闸1 3P0/5P1→闸2 0P0/2P1) · b299(3P0/3P1→0/0/0) · b249(4P0/6P1→0P0/3P1)；3 PR(#716/#717/#718)全经源数据/静态验证。b299 源数据验证 满期赔付率 176.48%(全快照虚高)→61.51%(窗口正确)、最新日窗口=全快照逐分钱一致(字节安全 no-op)，按红线停 partial 未盲改理赔 SSOT。
+
+---
+
+**R15 · Loop v2 入口设计 — codex 闸-1 砍掉过度工程（闸用在「计划」而非「代码」上）**
+- **触发**：用户问"Loop v2 激发/启动机制是什么？要不要做成 agent/skill/slash"。我初拟方案=新建 `/chexian-loop` 总控命令（含 quality/due/stale 子命令 + `--workflow` fan-out）。用户："制定计划，安排 codex 做对抗性评审后再定"——把闸-1 用在**纯设计决策**上（无一行代码）。
+- **codex 闸-1 结论「改后再建」，核实零误差**（6×P0/P1）：① slash 本质单会话 prompt 注入，**指挥不了多会话并行**，名实不符；② `--workflow` 是未落地承诺、越 Workflow 工具 opt-in 红线；③ slash 命令在 `.claude/commands/**`，**不触发** loop-orchestration 的 `paths:` 门控注入，"只放指针"会绕过协议；④ `stale` 子命令造第二份入口表(SSOT 漂移)；⑤ dispatch 已引导走 `/chexian-evidence-loop` + skills-map 已列 → "不可发现"被高估，泛名命令反抢入口；⑥ 发现**既存 bug**：`dispatch.mjs:162` 硬编码 `governance 42+/42`，实际已漂移到 43(R14 新增 checkArchLayerBoundaries)。
+- **决策（用户选「修真问题·不建命令」）+ 成果**：不建任何 slash/agent/skill。改 3 处真问题：① `dispatch.mjs:162` `42+/42`→`全过`(不再漂移)；② `loop:stale-scan` 补进 loop-orchestration §6 命令速查(SSOT 补全)；③ skills-map evidence-loop 行加「跨任务调度先 `bun run loop:dispatch`」指针(并压顶部 blockquote 净减 6B 抵预算)。验证：`loop:dispatch` 跑通(228 任务/前沿 9)、提示词已无硬编码 42。
+- **重来更好**：① 我的"分层推荐"对(slash 入口/Workflow 引擎/rules 协议/agent 执行者)，但**把维护面(quality/due/stale)和未落地的 --workflow 塞进入口**是过度工程——入口就该只做一件事。② 闸-1 的最大价值这次体现在**拦截"假想需求"**：把"不可发现"当 P1 缺口是夸大，真缺口是 dispatch 输入(backlog status)维护 + 硬编码漂移(承接 R14 三问)。③ 对抗审计用在**计划阶段**比代码阶段更省——砍掉的是还没写的代码。
+- **复用价值**：确立"新建任何 wrapper/命令前先问『现有入口是否已覆盖 + 这个壳是否名实相符 + 是否绕过 SSOT 门控』"——codex 闸-1 三连问。元工具(dispatch)提示词**禁硬编码易漂移状态**(governance 计数/PR 号)，用"全过/全绿"等不漂移措辞。
+  - needs_automation: false（本轮即"少建一个东西"+ 修既存漂移；无新增待自动化项）
+
+---
+
+**R16 · 山西并入收尾 5 任务并行实现 — codex 闸-2 抓 3/5 真 P1，现实核查防 2 处返工**
+- **触发**：用户"聚焦山西数据并入系统，loop:stale-scan → 清理假阳性 → loop:dispatch 取干净前沿 → Workflow fan-out"，决策"codex 对抗审查后自动合并"。Workflow 规划 fan-out → 5 任务实现 fan-out（隔离 worktree）→ codex 闸-2 逐 PR → auto-merge。5 PR 全合：#726(15d8fd P1)/#725(10c9e9)/#727(681eee)/#729(00bac8)/#728(c21667)。
+- **codex 闸-2 量化（用户要求的核心闸）**：5 PR 中 3 个需返工才 ENDORSE，抓到的都是实现自评低估/漏掉的真 P1：
+  - **00bac8**（3 轮）：① 同 VIN 多保单用 `ROW_NUMBER() OVER ()` 物理序 → 机构变更静默归错（改 `ORDER BY insurance_start_date DESC`）；② `daily.mjs` 的 **`all` 路径** `--policy-dir` 带字面引号 → 日常 ETL 静默跳过回填（单域路径已改、`all` 漏改）；③ `except Exception` 静默吞 schema/Binder 错（改重新抛出）。**P1-1（policy-dir 传错目录）经核实是 codex 误读 `branchOutputRoot('SC')` 语义 → 撤销**（核实分歧而非盲从）。
+  - **c21667**（3 轮）：① boolean 迁移只改筛选、漏维度输出 → heatmap/ranking 输出 `true/false` 而非中文枚举，**federation 关闭时也破四川字节安全**；② 筛选侧对非法值放大为全部非电销（改严格三态，非法→`1=0`）；③ `ELSE 非电销` 折叠 NULL（加 `IS NULL THEN NULL`）。
+  - **10c9e9**（3 轮）：测试意图失真（声称测路由实际测 helper）→ 补真路由级测试，但 `vi.mock` factory 捕获顶层 `const` 致 TDZ（改 `vi.hoisted()`）。
+  - **15d8fd / 681eee**：首轮 ENDORSE。
+- **重来更好**：① **实现子代理的 self_review_p0p1 系统性低估真问题**——00bac8 把"物理序不稳"列为"可能性"（实为 P1）、完全漏掉 `all` 路径引号；c21667 漏掉维度输出侧。实现 prompt 对 ETL/SQL 改动应强制"枚举所有调用点（单域+all 路径）+ 区分筛选侧 vs 输出侧契约"。② **strict 分支保护 + 并发 loop 会话（本轮同时 7 个 open PR）→ 合并串行化抖动**，监控循环跑 8 轮反复 update-branch 才落地——无 merge queue 时多会话并行合并是结构性瓶颈。
+- **复用价值**：① **现实核查 first（规划 fan-out 阶段）防返工**——00bac8 实测 `policy_no` 全 NULL（policy_no JOIN 回填 0%）、`vehicle_frame_no` 100%，把"参 policy JOIN"具体化为 VIN JOIN；15d8fd 实测 filters.ts 已注入 → gap 收窄。stale-scan「逐任务现实核查」教训前移到规划阶段。② **审 diff（闸-2）比审计划更能抓具体 bug**：本轮真 P1 全是"代码与契约/数据现实的偏差"（all 路径漏改、输出侧漏改、JOIN 键错），计划阶段看不出。③ codex 与子代理分歧时**亲自读代码裁决**（00bac8 P1-1：codex 误读、子代理对）。
+- **needs_automation**：
+  - **dispatch.mjs gatedKeywords「cutover」误伤「cutover 前置」**：15d8fd（P1 RLS 收口，desc 含"GATED cutover 前置"）被 isGated 排除出前沿——它是 cutover 的*前置*（该做、字节安全）非 cutover 本身。修法：gated 判定排除含"前置/前提"的命中，或仅匹配不可逆动作短语（"进 current/"、"发账号"）。
+    - needs_automation: true
+    - expires: 2026-07-22
+  - **启用 GitHub merge queue**：消除 strict + 多并发 loop 会话的串行化抖动（本轮监控循环手动 update-branch 8 轮）。
+    - needs_automation: true
+    - expires: 2026-09-22
+
+**量化**：codex 闸-2 抓 P1 合计 5（00bac8×2 + c21667×2 + 10c9e9×1）+ 撤销误报 1（00bac8 P1-1），全部 by-construction 字节安全（BRANCH_RLS_ENABLED=false 四川零行为变更）；现实核查推翻 2 处实现假设。GATED 的 acf188 账号+cutover 未触碰（须用户显式确认）。
+**R16 · b331 PerformanceAnalysisPanel 拆分（1401→882 行·codex 双闸·纯搬移行为零变更）**
+- **触发**：用户"按推荐办"驱 b331（前沿 top-1 P1）。**现实核查先救一命**：前沿原 top-1 是 7a2849，查其 note 发现 PR #640 已合并一周（commit 353aa7f5 在 main），仅状态没翻——差点重做。翻 DONE + 登记 stale-scan 增强 47c2a5（补"note 引用 PR 已 MERGED→高置信陈旧"信号，stale-scan 这次漏了它）。再核 b331 本身：client.ts 早于 Phase 2 已拆，仅 PerformanceAnalysisPanel.tsx 1401 行未拆（真实可做）。
+- **闸-1（改后实施·全核实零误差）**：3P0=oracle 写错(`build`≠tsc，须显式 typecheck)/barrel 无 DAG 约束恐循环依赖/引用清单漏 `tests/performance-drilldown-prefetch.test.ts` 从主文件 import（我只搜 src/ 漏 tests/）；4P1=不抽 controller hook(主组件 10+ 耦合 state)/不复用既漂移的 PerformanceDistributionChart/行为保真须加定向 vitest/拆 6 文件过细→4 文件。全采纳。
+- **成果**：抽 `performancePanel.shared.ts`(类型+常量+纯helper) + `PerformanceHeaderActions`/`PerformancePanelDistributionChart`/`PerformancePanelDimensionPicker`，主文件 1401→882。**同目录落位**(非闸-1 原议 performance/ 子目录)→被搬移代码 `./` 相对 import **零改写**，消除最大风险源。barrel 重导出全部 6 个原对外符号+默认导出→PerformanceAnalysisPage + test 旧入口**零改动**。
+- **oracle**：typecheck ✓ / build ✓ / governance 43/43（分层边界扫 421 文件 0 违规）/ 全量 **3550 测试全过** / 定向 prefetch gating+title 测试 4/4。**闸-2 codex 可合并 0P0/0P1**（仅 1 P2 理论 HMR 风险，非前置）。verifier=确定性闸（纯 move 宜确定性脚本非 LLM，符合 evidence-loop §特例）。
+- **重来更好**：① **现实核查必须前置于"动手"**：连续两轮(7a2849 第三方会话已合并/b331 部分早已做)证明 dispatch 前沿不等于"真待办"——派单前先查 note 里的 PR 状态 + 实测目标现状(行数/文件)。这是 stale-scan 47c2a5 要自动化的。② 同目录落位 > 子目录落位（当搬移代码有大量相对 import 时）——闸-1 没料到这点，我在实现时优化了，降风险。③ 纯搬移重构的 oracle 是"确定性闸全绿"，无需新增测试也无需 LLM verifier；但定向回归测试(prefetch)是验 barrel 不断链的关键锚。
+- **复用价值**：①「1000+行组件拆分」可复用打法=同目录抽 shared(类型/常量/纯helper)+子组件、barrel 重导出保旧入口零爆炸半径、`noUnusedLocals` 下精确剪枝靠 typecheck 迭代。② follow-up 登记纪律：大重构里"想做但风险高/超范围"的(hook 抽取 03f6f0、chart 去重 21c578)即时登记 backlog，不混进本 PR。
+  - needs_automation: false（本轮无新增待自动化项；stale-scan 增强已独立登记 47c2a5 带其自身 expires 由 #703 闸管）
+
+---
+
+**R17 · 1f3bc1 golden-baseline oracle 修复（17→72/72 build+compare·codex 闸-2）**
+- **触发**：用户问"1f3bc1 需密码吗？cx-cli 已有 PAT"。连环现实核查推翻多个既有判断：① **"缺 E2E_PASSWORD"是误判**——`auth.ts` 有 `DEV_SKIP_AUTH=1`（非生产）使 `verifyPassword` 恒真，login 接受任意密码签发真 token，**免密码**。② cx-cli 的 PAT 是**生产域**（chexian.cretvalu.com），golden-baseline 打 localhost，PAT 跨 auth store 用不上。③ `USER_PASSWORDS` 是 bcrypt 哈希，不可反推明文（我一度误判"可派生"，已纠正）。④ **真因不是鉴权**：原 baseline 17/78 成功，server 日志 `ConnectionPool: queue full / acquire timeout` —— 脚本 `Promise.allSettled` 把 71 端点**全并发**打爆 DuckDB 连接池。
+- **成果（修 golden-baseline.mjs）**：① `mapSettledWithConcurrency` 限流（默认 4，`BASELINE_CONCURRENCY` 可配）替代全并发 → 17→74。② build 跳过 deprecated（coefficient 路由已删 404）→ 排除。③ holiday-drilldown 补必填 `groupBy`（z.enum 无默认）。④ patrol×2 是**文件托管端点**（读生成报告，无文件即 404、内容随时变）→ 移除（非 SQL/perf oracle）。⑤ test/data-version/data-metadata 标 `volatile`（回显 session/buildTime/serverStartTime 实时态，compare 必假阳）→ build+compare 跳过。⑥ compare FAIL 附 `endpointSlug`（原 AssertionError 不含端点身份，无法定位）。**build 72/72 + compare 72/72 零差异 = oracle 端到端可用**（远胜原 BACKLOG note 的 66/71 带 5 坏）。
+- **闸**：闸-1 未单跑（根因由连接池错误**实证**锁定，"plan"= 修该 bug，无设计空间）；闸-2 codex 可合并 0P0/0P1，2 P2（dry-run 未标 volatile / compare 不防旧 manifest）**全修**。codex 还实测了 mapSettledWithConcurrency 结构与 allSettled 同构。
+- **重来更好**：① **现实核查再次是最高杠杆**——本轮在动手前连推翻 4 个既有假设（密码/PAT/USER_PASSWORDS/真因），全靠"读代码+读日志+读 BACKLOG note"而非信任任务描述。任务描述（"需 E2E_PASSWORD"）本身就是过时假设。② **报错日志直指根因**——`ConnectionPool: queue full` 一句话定位真因，胜过盲目加 params。先读 server 日志再动手（呼应 memory `feedback_startup_log_first_not_source`）。③ 区分"oracle 端点"与"基础设施/文件/实时端点"是 golden-baseline 设计的核心——不是所有 API 都该进回归基线。
+- **复用价值**：① **并发型 harness 默认限流**——任何"批量打本地服务"的脚本（baseline/bench/巡检）都该限流而非全并发，DuckDB 池小。`mapSettledWithConcurrency`（worker 池 + allSettled 同构返回）可复用。② golden-baseline 现可作所有 perf/refactor 任务的零差异 oracle（解锁后续重构对账），且对任意机器/CI 可复现（限流 + DEV_SKIP_AUTH 免密码）。③ 「volatile/deprecated 不纳入基线」的判据可复用到任何快照对账系统。
+  - needs_automation: false（本轮即修复 harness 使其可用；无新增待自动化项。后续 perf/refactor 任务应在 §4 harness 表标注 golden-baseline 现已可用）
+**R17 · claims_detail「字面引号 bug」误报排查 → 据实关闭 + 固化 foot-gun 护栏（PR #732·无功能变更）**
+- **触发**：派单称 daily.mjs claims_detail / 字段覆盖率的 `'--policy-dir', \`"${policyDir}"\`` 是 new_energy_claims（PR #729）同款字面引号 bug，要求改裸路径。
+- **据实判定非 bug（核实零误差）**：① `runPythonScript`（daily.mjs:176）中央剥离 argv 最外层双引号（`d197b431` execSync→spawnSync 迁移补丁），claims_detail 全程经它 → 实测 `"${p}"`→裸路径；② 字段覆盖率 `runFieldCoverageReport` 用**空数组**调用 `field_coverage.py`、且该脚本无 `--policy-dir` → 描述对象不存在；③ PR #729 的 `e9507542`（同提交保留 claims_detail 引号未动）佐证；④ 进一步核实：new_energy 的 `--policy-dir` 同样经 runStrategyFullSnapshot→runPythonScript 剥离（`d197b431` 是 `e9507542` 祖先），故 e9507542 那处去引号在该控制流下实为冗余 no-op，其「Path.exists 静默跳过」根因叙事在该路径不成立——站不住的根因又派生出本次误报任务。
+- **根因（真问题）**：① pattern-grep ≠ data-flow：把「类成员资格」用表面语法（见 `"${...}"` 即归同类）判定，违反「grep 是有损代理 / 验证不声称」；② foot-gun：`"${path}"` 经 runPythonScript 安全、走裸 spawn 即坏，调用点视觉无法区分，安全全靠用了哪个 helper。
+- **根治（PR #732）**：抽 `数据管理/lib/arg-quotes.mjs` 纯函数（与原内联逐字等价）+ `tests/arg-quotes.test.ts` 14 例契约单测锁不变量（防误删剥离）+ governance AST 闸「spawn参数引号安全」禁裸 spawnSync/execFileSync 照搬 `"${path}"`（防复发）。**负向验证**：注入 daily.mjs:925 → 闸精确 FAIL → 已还原。oracle：单测 14/14 · verify:quick（governance 44 含新闸 + typecheck）· CI Governance+Production Gate 双绿 · rebase origin/main（含 e9507542/fa4c98d6）32 提交零冲突。
+- **重来更好**：派生「在别处修同款」任务前，必须端到端追一条代表性调用链（调用点→helper→Python argparse/Path）证明类成员资格 + 给最小复现，再动手——是 `feedback_codex_review_fix_sop`「修一处≠修一类」的逆向护栏（修一类前先证成员资格）。
+- **复用价值**：「中央 shim 兼容旧写法」型迁移（execSync→spawnSync 的剥引号）必配「契约单测 + 禁绕过 shim 的 AST 闸」，否则旧写法成视觉无差别 foot-gun，反复诱发误报与冗余修复。
+  - needs_automation: false（本轮已落地护栏闸 + 契约单测，无新增待自动化项）
+
+---
+
+**R18 · full_snapshot 缓存键漏 --policy-dir 内容指纹（PR #732 codex 另一发现·陈旧缓存隐患·task_6d1e8053）**
+- **触发**：PR #732 codex 闸-2 除「字面引号」（R17）外独立揪出的正交既存隐患（loop-orchestration §4 meta 已登记 task_6d1e8053）——`buildFullSnapshotCacheKey` material 漏掉调用方注入的 `extraArgs`（典型 new_energy_claims 的 `--policy-dir`）。评为低于 P1 后续项，单独成任务。
+- **systematic-debugging 先证后修（RED 复现）**：缓存键逻辑抽到 `数据管理/lib/full-snapshot-cache-key.mjs`（daily.mjs 顶层 main() 无法 import，同 R17/lib 既有模式），写 `tests/full-snapshot-cache-key.test.ts`：构造 id/batchDate/sources/deps 不变、policy-dir parquet 内容变化场景 → 当前代码 key 不变（3 例 RED）→ 证实「命中陈旧快照、服务旧 policy 回填的 org_level_3」真实可达。
+- **关键修正——任务原议「JSON 化 extraArgs 字符串」对所述场景不足**：`necPolicyDir`（`branchOutputRoot` SC）在同 worktree/同 SC 分支两次运行间是**恒定字符串**，仅把路径字符串塞进 key 则 key 不变、仍命中陈旧缓存。真正变化的是 `--policy-dir` 目录下 parquet 的**内容**。承重修复 = 对该目录 `*.parquet` 做内容指纹（与 convert 的 `read_parquet('<dir>/*.parquet')` JOIN 输入集严格对齐）；extraArgs 整组仍纳入（捕获 --branch-code/路径变更，保守正确）。
+- **oracle**：缓存键单测 9/9（RED→GREEN + P2 加固）· Python full_snapshot 7/7（依赖断言跟随 lib 重定向 + 新增 policy/extraArgs 覆盖，不回归）· 全量 3609 单测全过 · verify:quick（governance 44/44 + typecheck）· rebase origin/main（含 #732 e9507542/fa4c98d6）零冲突，自动合并 daily.mjs 后逐项重核完好。
+- **codex 闸-2（对抗审 diff·`codex exec` 经 stdin）= 无 P0/P1**：独立确认核心判断（路径恒定→必须内容指纹 / sha256 取舍正确 / 非递归 glob 对齐）。4 个 P2 中本 PR 修 3 个：① quoted `--policy-dir` 鲁棒性（复用 #732 `lib/arg-quotes.mjs` 剥引号，防 R17 同类 foot-gun 复活）② `--no-metadata` 内容中性（base_converter.py:206 仅门控 data-sources.json 写入，证安全）→ denylist 剔除避免 manifest/直接运行反复重算 ③ `withFileTypes` 只纳常规文件，防 `.parquet` 目录/FIFO 在缓存键计算阶段抛错。均补对应 vitest 用例。codex_done: {P0:0,P1:0,P2:4→已处理3+1测试覆盖}。
+- **重来更好**：收到「最小改动」式建议时，先端到端验证它是否真覆盖所述场景——这里「路径字符串 vs 目录内容」之差决定修复成败，是 systematic-debugging「症状描述 ≠ 根因」的实证。`dependencies` 只指纹 .py、`sources` 只指纹域自身 xlsx → 经 extraArgs 注入的外部数据依赖是缓存键盲区。
+- **复用价值**：full_snapshot 缓存键须覆盖「所有影响产物内容的输入」，含经 extraArgs 注入的外部目录依赖（--policy-dir）的**内容指纹**而非仅参数字符串；新增「convert 时读外部目录回填」型 full_snapshot 域时，该外部目录必须进缓存材料。
+  - needs_automation: false（回归测试 tests/full-snapshot-cache-key.test.ts 已锁内容敏感性不变量）

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, QUERY_CACHE, withRouteCache } from './shared.js';
+import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, QUERY_CACHE, withRouteCache, resolveBranchRlsCode } from './shared.js';
 import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery, generateHolidayFreeDrilldownQuery, type HolidayDrillDimension, type HolidayDrillStep } from '../../sql/marketing-report.js';
 import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../../sql/premium-report.js';
 
@@ -84,12 +84,16 @@ router.get(
     const { filterData, whereClause: finalWhereClause } = parseFiltersAndBuildWhere(req);
     const dateField = filterData.dateField || 'policy_date';
 
+    // 分省 RLS（ADR G4 GATED 多省）：SalesmanTeamMapping team_mapping CTE 按省过滤（双门控）
+    const holidayDrillBranchCode = await resolveBranchRlsCode(req, 'SalesmanTeamMapping');
+
     const sql = generateHolidayFreeDrilldownQuery(
       finalWhereClause,
       dates,
       groupBy as HolidayDrillDimension,
       drillPath,
       dateField,
+      holidayDrillBranchCode,
     );
 
     const result = await duckdbService.query(sql);
@@ -124,7 +128,9 @@ router.get(
     if (reportType === 'org') {
       sql = generateOrgPremiumReportQuery(finalWhereClause, dateField);
     } else {
-      sql = generateSalesmanPremiumReportQuery(finalWhereClause, planYear);
+      // 分省 RLS（ADR G4 GATED 多省）：SalesmanPlanFact 子查询按省过滤（双门控）
+      const premiumPlanBranchCode = await resolveBranchRlsCode(req, 'SalesmanPlanFact');
+      sql = generateSalesmanPremiumReportQuery(finalWhereClause, planYear, premiumPlanBranchCode);
     }
 
     const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
