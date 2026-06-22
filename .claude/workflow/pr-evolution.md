@@ -748,6 +748,13 @@
 
 ---
 
+**R17 · 1f3bc1 golden-baseline oracle 修复（17→72/72 build+compare·codex 闸-2）**
+- **触发**：用户问"1f3bc1 需密码吗？cx-cli 已有 PAT"。连环现实核查推翻多个既有判断：① **"缺 E2E_PASSWORD"是误判**——`auth.ts` 有 `DEV_SKIP_AUTH=1`（非生产）使 `verifyPassword` 恒真，login 接受任意密码签发真 token，**免密码**。② cx-cli 的 PAT 是**生产域**（chexian.cretvalu.com），golden-baseline 打 localhost，PAT 跨 auth store 用不上。③ `USER_PASSWORDS` 是 bcrypt 哈希，不可反推明文（我一度误判"可派生"，已纠正）。④ **真因不是鉴权**：原 baseline 17/78 成功，server 日志 `ConnectionPool: queue full / acquire timeout` —— 脚本 `Promise.allSettled` 把 71 端点**全并发**打爆 DuckDB 连接池。
+- **成果（修 golden-baseline.mjs）**：① `mapSettledWithConcurrency` 限流（默认 4，`BASELINE_CONCURRENCY` 可配）替代全并发 → 17→74。② build 跳过 deprecated（coefficient 路由已删 404）→ 排除。③ holiday-drilldown 补必填 `groupBy`（z.enum 无默认）。④ patrol×2 是**文件托管端点**（读生成报告，无文件即 404、内容随时变）→ 移除（非 SQL/perf oracle）。⑤ test/data-version/data-metadata 标 `volatile`（回显 session/buildTime/serverStartTime 实时态，compare 必假阳）→ build+compare 跳过。⑥ compare FAIL 附 `endpointSlug`（原 AssertionError 不含端点身份，无法定位）。**build 72/72 + compare 72/72 零差异 = oracle 端到端可用**（远胜原 BACKLOG note 的 66/71 带 5 坏）。
+- **闸**：闸-1 未单跑（根因由连接池错误**实证**锁定，"plan"= 修该 bug，无设计空间）；闸-2 codex 可合并 0P0/0P1，2 P2（dry-run 未标 volatile / compare 不防旧 manifest）**全修**。codex 还实测了 mapSettledWithConcurrency 结构与 allSettled 同构。
+- **重来更好**：① **现实核查再次是最高杠杆**——本轮在动手前连推翻 4 个既有假设（密码/PAT/USER_PASSWORDS/真因），全靠"读代码+读日志+读 BACKLOG note"而非信任任务描述。任务描述（"需 E2E_PASSWORD"）本身就是过时假设。② **报错日志直指根因**——`ConnectionPool: queue full` 一句话定位真因，胜过盲目加 params。先读 server 日志再动手（呼应 memory `feedback_startup_log_first_not_source`）。③ 区分"oracle 端点"与"基础设施/文件/实时端点"是 golden-baseline 设计的核心——不是所有 API 都该进回归基线。
+- **复用价值**：① **并发型 harness 默认限流**——任何"批量打本地服务"的脚本（baseline/bench/巡检）都该限流而非全并发，DuckDB 池小。`mapSettledWithConcurrency`（worker 池 + allSettled 同构返回）可复用。② golden-baseline 现可作所有 perf/refactor 任务的零差异 oracle（解锁后续重构对账），且对任意机器/CI 可复现（限流 + DEV_SKIP_AUTH 免密码）。③ 「volatile/deprecated 不纳入基线」的判据可复用到任何快照对账系统。
+  - needs_automation: false（本轮即修复 harness 使其可用；无新增待自动化项。后续 perf/refactor 任务应在 §4 harness 表标注 golden-baseline 现已可用）
 **R17 · claims_detail「字面引号 bug」误报排查 → 据实关闭 + 固化 foot-gun 护栏（PR #732·无功能变更）**
 - **触发**：派单称 daily.mjs claims_detail / 字段覆盖率的 `'--policy-dir', \`"${policyDir}"\`` 是 new_energy_claims（PR #729）同款字面引号 bug，要求改裸路径。
 - **据实判定非 bug（核实零误差）**：① `runPythonScript`（daily.mjs:176）中央剥离 argv 最外层双引号（`d197b431` execSync→spawnSync 迁移补丁），claims_detail 全程经它 → 实测 `"${p}"`→裸路径；② 字段覆盖率 `runFieldCoverageReport` 用**空数组**调用 `field_coverage.py`、且该脚本无 `--policy-dir` → 描述对象不存在；③ PR #729 的 `e9507542`（同提交保留 claims_detail 引号未动）佐证；④ 进一步核实：new_energy 的 `--policy-dir` 同样经 runStrategyFullSnapshot→runPythonScript 剥离（`d197b431` 是 `e9507542` 祖先），故 e9507542 那处去引号在该控制流下实为冗余 no-op，其「Path.exists 静默跳过」根因叙事在该路径不成立——站不住的根因又派生出本次误报任务。
