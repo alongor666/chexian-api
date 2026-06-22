@@ -803,3 +803,15 @@
 - **重来更好**：收到「最小改动」式建议时，先端到端验证它是否真覆盖所述场景——这里「路径字符串 vs 目录内容」之差决定修复成败，是 systematic-debugging「症状描述 ≠ 根因」的实证。`dependencies` 只指纹 .py、`sources` 只指纹域自身 xlsx → 经 extraArgs 注入的外部数据依赖是缓存键盲区。
 - **复用价值**：full_snapshot 缓存键须覆盖「所有影响产物内容的输入」，含经 extraArgs 注入的外部目录依赖（--policy-dir）的**内容指纹**而非仅参数字符串；新增「convert 时读外部目录回填」型 full_snapshot 域时，该外部目录必须进缓存材料。
   - needs_automation: false（回归测试 tests/full-snapshot-cache-key.test.ts 已锁内容敏感性不变量）
+
+---
+
+**R19 · b332 expense-development 规则引擎测试（Loop v2 续推·闸-1 免跑权衡·闸-2 抓覆盖洞·纯增测试零生产改动）**
+- **触发**：#739（R18 comprehensive）合并后用户「需要」续推 b332。对剩余真零测试模块做**纯函数分布扫描**：仅 expense-development（`utils/expenseDevInsightRules.ts`）+ premium-report（2 个 hooks）有 `.ts` 逻辑文件；余 6 个（admin/customer-flow/file/moto-cost/repair/report）是纯组件（仅 `.tsx`+barrel）、无纯函数。锁定 expense-development utils。
+- **成果（纯增测试）**：新建 `expenseDevInsightRules.test.ts` 29 测试，覆盖 `generateExpenseDevInsights` 规则引擎——成熟/早期年分类（minDevForAlert=6 边界）/ 费用率阈值告警（erHigh=20 danger、erModerate=16 warning，**er=20 落 warning**）/ 三 metric 趋势（trendDeltaPp=3、avgFeeGrowthPct=30、dev_fee_wan 20%，恰好线）/ 三类同期对比（compareDeltaPp=5、avgFeeComparePct=20，恰好线）/ TYPE_ORDER 排序锚 / info / null 跳过 / 除零保护 / danger+moderate 共存。CohortData 私有类型用结构化 helper（cohort/single）构造。
+- **闸-1 免跑的权衡（本轮关键学习）**：范式与 comprehensive（已过闸-1）同构，按 R17 先例免跑闸-1。**代价显性化**：闸-2 codex 抓到 2 个 P1 **覆盖洞**（同期对比正例没用恰好线 5/20 而用 10/25；`dev_fee_wan` 的 appendCompare 同期对比整条漏测）。即"免闸-1 省一次 codex(~1.5min)，但把覆盖完整性问题推迟到闸-2 才暴露、多一轮返工"。**结论**：同构范式可免闸-1，但必须自查「源码每个分支都有对应测试」——本轮恰好漏了 feeAmountInsights 里那条 appendCompare 调用。
+- **三源（闸-1 免）**：闸-2 codex P0=0 + 2 P1 + 3 P2 全采纳；evidence-verifier fresh-context **confirmed**（8 断言逐条对源码无误、范围最小、3686 单测独立复现）。verify:full（governance 44+typecheck+3681 单测）全绿。
+- **重来更好**：① 多 metric × 多规则（阈值/趋势/对比/info）的引擎，测试设计应**先列「分支矩阵」(metric × 规则类型)** 再写——本轮漏的 dev_fee_wan×compare 正是矩阵里一个未填的 cell。② 「免闸-1」决策应配「分支矩阵自查」作补偿，否则把闸-1 的覆盖职责无人接手地丢给闸-2。
+- **复用价值**：① 「规则引擎测试」范式=阈值边界三件套 × 每条规则 + 排序锚 + null/除零守卫 + 分支矩阵防漏；可套用任何 metric×rule 型洞察/告警引擎。② 「纯函数分布扫描」（区分 utils 纯函数 / hooks / 纯组件）是 R18「双源零测试盘点」的下一层细化——决定一个零测试模块走「纯逻辑测试」还是「组件 smoke」路线。
+  - needs_automation: false（并入 R18 已登记的「双源零测试盘点」脚本项 expires 2026-09-22，新增「纯函数分布扫描」维度，不另立）
+- **下一轮**：premium-report（2 hooks，renderHook 稍重但仍属纯逻辑）；余 6 纯组件模块须转「组件 smoke（DOM/testing-library）」路线，与本纯函数策略不同——b332 的一个**策略分叉点**，建议后续明确。
