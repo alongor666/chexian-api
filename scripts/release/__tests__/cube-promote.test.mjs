@@ -102,18 +102,28 @@ describe('detectSwitches — ecosystem 文本解析', () => {
     expect(routing).toBe(false);
   });
 
-  it('注释行含 CUBE_SHADOW_COMPARE: true，实际行设 false → regex 匹配注释中的完整键值对返回 true（已知行为：行内注释不被特殊处理）', () => {
-    // 注意：detectSwitches 使用简单 regex，不解析注释语法。
-    // 注释中出现完整的 CUBE_SHADOW_COMPARE: 'true' 键值对时，regex 会命中注释行。
-    // 这是当前已知行为（而非 bug，因为 ecosystem.config.cjs 生产环境不会真正有注释残留旧值）。
+  it('注释行含 CUBE_SHADOW_COMPARE: true、实际行设 false → 剥离注释后取真值行 false（f9af68：注释不再误判）', () => {
+    // 修复前：detectSwitches 全文 regex 会命中注释里的 'true' → 误报 true。
+    // 修复后：先逐行剥离 `//` 注释，只认真值行 CUBE_SHADOW_COMPARE: 'false'。
     const src = `env: {
   // CUBE_SHADOW_COMPARE: 'true', // 曾用过
   CUBE_SHADOW_COMPARE: 'false',
   CUBE_ROUTING_ENABLED: 'false',
 }`;
-    const { shadow } = detectSwitches(src);
-    // regex 先匹配到注释行的 CUBE_SHADOW_COMPARE: 'true'，返回 true（已知行为）
+    const { shadow, routing } = detectSwitches(src);
+    expect(shadow).toBe(false);
+    expect(routing).toBe(false);
+  });
+
+  it("真实 ecosystem 注释『改 CUBE_ROUTING_ENABLED: 'true' 切流』不被误判为已切流（阶段1而非阶段2·f9af68 生产复现）", () => {
+    // 复现 server/ecosystem.config.cjs 的验收注释致 cube-promote 误报 phase 2/routing=true 的生产 bug。
+    const src = `env: {
+  // 验收（设计文档 §4 阶段 1）：连续 7 天 mismatch=0 → 改 CUBE_ROUTING_ENABLED: 'true' 切流。
+  CUBE_SHADOW_COMPARE: 'true',
+}`;
+    const { shadow, routing } = detectSwitches(src);
     expect(shadow).toBe(true);
+    expect(routing).toBe(false);
   });
 
   it('变量值周围有多余空白：CUBE_SHADOW_COMPARE:   "true" → 正常解析', () => {

@@ -35,10 +35,18 @@ export const SHADOW_ROUTES = SHADOW_KEYS;
  * 从 ecosystem.config.cjs 文本中解析两个立方体开关。
  * 用 regex 匹配 env 块的 `CUBE_SHADOW_COMPARE: 'true'/'false'`
  * 与 `CUBE_ROUTING_ENABLED: 'true'/'false'`，缺失视为 false。
+ *
+ * 先逐行剥离 `//` 注释再匹配：ecosystem.config.cjs 的验收注释里写有示例值
+ * `// …改 CUBE_ROUTING_ENABLED: 'true' 切流。`，旧实现全文 regex 会命中该注释、
+ * 把阶段 1（影子期）误判为阶段 2（已切流）。开关真值行不含 `//`，逐行剥离对其无副作用。
  */
 export function detectSwitches(ecosystemSrc) {
-  const shadow = /CUBE_SHADOW_COMPARE:\s*['"](true|false)['"]/.exec(ecosystemSrc)?.[1] === 'true';
-  const routing = /CUBE_ROUTING_ENABLED:\s*['"](true|false)['"]/.exec(ecosystemSrc)?.[1] === 'true';
+  const code = String(ecosystemSrc || '')
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*/, ''))
+    .join('\n');
+  const shadow = /CUBE_SHADOW_COMPARE:\s*['"](true|false)['"]/.exec(code)?.[1] === 'true';
+  const routing = /CUBE_ROUTING_ENABLED:\s*['"](true|false)['"]/.exec(code)?.[1] === 'true';
   return { shadow, routing };
 }
 
