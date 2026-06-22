@@ -115,6 +115,7 @@ policy: append-only
 | `bun run loop:dispatch` | 算可并行前沿 + 状态板 + 会话提示词 |
 | `bun run loop:quality` | 质量账本聚合报告（北极星 + 趋势） |
 | `bun run loop:automation-due` | 到期/临期/缺 expires 的 needs_automation 清单 |
+| `bun run loop:stale-scan [--churn]` | 列疑似陈旧任务（note 完成信号 + git churn 旁路改动） |
 
 ## 7. 关联
 

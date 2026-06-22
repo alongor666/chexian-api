@@ -86,11 +86,21 @@ ORDER BY c.车险保费 DESC
  *
  * 返回：salesman_name, org_level_3, team_name, 车险保费, 商业险保费, 交强险保费,
  *       车险件数, 商业险件数, 交强险件数, 续保率, 非过户率
+ *
+ * @param rlsBranchCode 分省 RLS 省份码（由路由层 resolveBranchRlsCode 双门控解析；
+ *   BRANCH_RLS_ENABLED=false 或单省无 branch_code 列时为 undefined → 不注入 → 字节安全）。
  */
 export function generateSalesmanPremiumReportQuery(
   whereClause: string,
-  planYear: number = 2026
+  planYear: number = 2026,
+  rlsBranchCode?: string,
 ): string {
+  // 分省 RLS（ADR G4 GATED 多省）：SalesmanPlanFact 子查询按省过滤（双门控；flag off / 单省无列 → 不注入）。
+  // 注：过滤条件在子查询 WHERE 内，引用 SalesmanPlanFact 自身的列，无表别名前缀。
+  const planBranchAnd = rlsBranchCode
+    ? `AND branch_code = '${escapeSqlValue(rlsBranchCode)}'`
+    : '';
+
   return `
 SELECT
   p.salesman_name,
@@ -114,12 +124,19 @@ SELECT
   END AS "非过户率"
 FROM PolicyFact p
 LEFT JOIN (
-  SELECT DISTINCT salesman_name, team_name
+  SELECT DISTINCT salesman_name, team_name${rlsBranchCode ? ', branch_code' : ''}
   FROM SalesmanPlanFact
-  WHERE plan_year = ${planYear}
+  WHERE plan_year = ${planYear} ${planBranchAnd}
 ) s ON p.salesman_name = s.salesman_name
 WHERE ${whereClause}
 GROUP BY p.salesman_name, p.org_level_3, COALESCE(s.team_name, '未分配团队')
 ORDER BY "车险保费" DESC
   `.trim();
+}
+
+/**
+ * 转义 SQL 字符串中的单引号（防 SQL 注入，仅用于等值匹配内插）
+ */
+function escapeSqlValue(val: string): string {
+  return val.replace(/'/g, "''");
 }
