@@ -763,3 +763,15 @@
 - **重来更好**：派生「在别处修同款」任务前，必须端到端追一条代表性调用链（调用点→helper→Python argparse/Path）证明类成员资格 + 给最小复现，再动手——是 `feedback_codex_review_fix_sop`「修一处≠修一类」的逆向护栏（修一类前先证成员资格）。
 - **复用价值**：「中央 shim 兼容旧写法」型迁移（execSync→spawnSync 的剥引号）必配「契约单测 + 禁绕过 shim 的 AST 闸」，否则旧写法成视觉无差别 foot-gun，反复诱发误报与冗余修复。
   - needs_automation: false（本轮已落地护栏闸 + 契约单测，无新增待自动化项）
+
+---
+
+**R18 · full_snapshot 缓存键漏 --policy-dir 内容指纹（PR #732 codex 另一发现·陈旧缓存隐患·task_6d1e8053）**
+- **触发**：PR #732 codex 闸-2 除「字面引号」（R17）外独立揪出的正交既存隐患（loop-orchestration §4 meta 已登记 task_6d1e8053）——`buildFullSnapshotCacheKey` material 漏掉调用方注入的 `extraArgs`（典型 new_energy_claims 的 `--policy-dir`）。评为低于 P1 后续项，单独成任务。
+- **systematic-debugging 先证后修（RED 复现）**：缓存键逻辑抽到 `数据管理/lib/full-snapshot-cache-key.mjs`（daily.mjs 顶层 main() 无法 import，同 R17/lib 既有模式），写 `tests/full-snapshot-cache-key.test.ts`：构造 id/batchDate/sources/deps 不变、policy-dir parquet 内容变化场景 → 当前代码 key 不变（3 例 RED）→ 证实「命中陈旧快照、服务旧 policy 回填的 org_level_3」真实可达。
+- **关键修正——任务原议「JSON 化 extraArgs 字符串」对所述场景不足**：`necPolicyDir`（`branchOutputRoot` SC）在同 worktree/同 SC 分支两次运行间是**恒定字符串**，仅把路径字符串塞进 key 则 key 不变、仍命中陈旧缓存。真正变化的是 `--policy-dir` 目录下 parquet 的**内容**。承重修复 = 对该目录 `*.parquet` 做内容指纹（与 convert 的 `read_parquet('<dir>/*.parquet')` JOIN 输入集严格对齐）；extraArgs 整组仍纳入（捕获 --branch-code/路径变更，保守正确）。
+- **oracle**：缓存键单测 9/9（RED→GREEN + P2 加固）· Python full_snapshot 7/7（依赖断言跟随 lib 重定向 + 新增 policy/extraArgs 覆盖，不回归）· 全量 3609 单测全过 · verify:quick（governance 44/44 + typecheck）· rebase origin/main（含 #732 e9507542/fa4c98d6）零冲突，自动合并 daily.mjs 后逐项重核完好。
+- **codex 闸-2（对抗审 diff·`codex exec` 经 stdin）= 无 P0/P1**：独立确认核心判断（路径恒定→必须内容指纹 / sha256 取舍正确 / 非递归 glob 对齐）。4 个 P2 中本 PR 修 3 个：① quoted `--policy-dir` 鲁棒性（复用 #732 `lib/arg-quotes.mjs` 剥引号，防 R17 同类 foot-gun 复活）② `--no-metadata` 内容中性（base_converter.py:206 仅门控 data-sources.json 写入，证安全）→ denylist 剔除避免 manifest/直接运行反复重算 ③ `withFileTypes` 只纳常规文件，防 `.parquet` 目录/FIFO 在缓存键计算阶段抛错。均补对应 vitest 用例。codex_done: {P0:0,P1:0,P2:4→已处理3+1测试覆盖}。
+- **重来更好**：收到「最小改动」式建议时，先端到端验证它是否真覆盖所述场景——这里「路径字符串 vs 目录内容」之差决定修复成败，是 systematic-debugging「症状描述 ≠ 根因」的实证。`dependencies` 只指纹 .py、`sources` 只指纹域自身 xlsx → 经 extraArgs 注入的外部数据依赖是缓存键盲区。
+- **复用价值**：full_snapshot 缓存键须覆盖「所有影响产物内容的输入」，含经 extraArgs 注入的外部目录依赖（--policy-dir）的**内容指纹**而非仅参数字符串；新增「convert 时读外部目录回填」型 full_snapshot 域时，该外部目录必须进缓存材料。
+  - needs_automation: false（回归测试 tests/full-snapshot-cache-key.test.ts 已锁内容敏感性不变量）
