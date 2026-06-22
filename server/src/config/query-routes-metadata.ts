@@ -17,6 +17,8 @@
  * RED LINE：不可删除已有条目，只可追加；删除路由需走 BACKLOG.md 流程。
  */
 
+import { composeAskBackHint } from './disambiguation-protocol.js';
+
 export interface QueryRouteParam {
   /** 参数名（query string key） */
   name: string;
@@ -426,7 +428,7 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
       { name: 'sortOrder', type: 'string', description: '排序方向' },
     ],
     timeWindow: 'ytd-progress',
-    timeWindowNote: '达成率 = 实际保费 ÷ (年度计划 × 时间进度)；月度计划为年计划/12 的派生口径。回答任意日期窗口的完成情况请改用 /kpi + startDate/endDate',
+    timeWindowNote: `达成率 = 实际保费 ÷ (年度计划 × 时间进度)；月度计划为年计划/12 的派生口径。回答任意日期窗口的完成情况请改用 /kpi + startDate/endDate。${composeAskBackHint('ytd-progress')}`,
     dataScope: 'any',
     tags: ['plan'],
   },

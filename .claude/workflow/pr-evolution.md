@@ -823,3 +823,20 @@
 - **验证**：43 单测全绿（含 6 新例：uidToken/branchMatchesUid/PR 信号高置信/scanStale 注入）；governance 44/44；实跑命中 b261/b299/b290/b322/b332 共 5 项「合并未回填 DONE」任务（活证据）。
 - **边界纪律（用户 2026-06-22 确认）**：网络抖动 / 判定器 503 是环境不可抗力（天），不计入「问题」、不优化，只容错共处；本 PR 只根治可控的逻辑盲区。
 - needs_automation: false（本身即把"现实核查"自动化的一环）
+
+## 2026-06-22 · B290 时间口径语义层 v0.1 收尾（盘点发现核心已落地→只做剩余决策项·两决策抛用户·codex 双闸全收敛）
+
+- **触发/关键盘点发现**：loop 派单按 B290 标题描述「实现中量方案」，但开工首步盘点（Explore agent）即发现 **中量方案核心 ~70% 已于 2026-06-10 落地**（uid 2026-06-10-claude-8964d3：65 路由 timeWindow 七枚举全量标注 + MCP/CLI 消费层 + plan-achievement 标 ytd-progress；Phase 1 参数契约 commit 83f7754f 已 DONE）。**B290 真正剩余 = 那三个用户决策项 + be-config 收尾**——恰好与派单「⚠先出计划把两决策抛用户、勿自行假设」吻合。教训：**loop 派单描述可能滞后于 main 已落地工作，开工必先盘点现状再定范围**（红线「先搜再写」的语义层版；亦印证 47c2a5 stale-scan 把 b290 列「合并未回填 DONE」的活证据）。
+- **两决策抛用户（GATED，不自行假设）**：(1) 月度计划口径 → 用户选「年计划÷12 定为官方派生口径」(不引真实逐月数据)；(2) LLM 反问触发 → 用户选「4 类全纳入」(窗口×进度/分母周期/跨口径/日期锚点)。
+- **实现（仅 be-config + 允许文档，TDD RED→GREEN，17 新测试）**：
+  - **A 指标全量 timeWindow**：比照既有 `additive` 惯例（类型保持可选 + validation.ts 注册表内强制 + 镜像测试）——codex 闸-1 P2.3 采纳，避免改 TS 必填扩散到注册表外构造点。44 个 codemod 补显式 `'any'`、plan_completion_pct 改 `'cutoff-based'`(2.0.0→2.1.0+changelog；拓宽 cutoff-based 语义涵盖「计划进度锚点」)。
+  - **B 编译期不变量**：`route-helpers.ts findYtdProgressWindowParamViolations` 纯函数（注入路由元数据+参数解析器，可单测合规/违规两路）锁死 ytd-progress 禁自由窗口参数=原始事故防回归闸。codex 闸-1 P2.4 采纳「仅锁 ytd-progress、不 blanket snapshot/policy-year」(避免误伤合法 endDate 快照)。
+  - **C/D 文档+SSOT**：disambiguation-protocol.ts 4 触发机器可读 SSOT，`composeAskBackHint('ytd-progress')` 被 query-routes-metadata timeWindowNote **import 真实拼装**→既有 MCP build-tools/CLI --describe 透出（codex 闸-1 P1.1「死 SSOT」采纳，零 mcp/ 越界）；业务规则字典 §计划与时间进度口径(v3.2) + .claude/rules/time-caliber-disambiguation.md。
+- **codex 双闸 + verifier（§2 降级分层：skill 缺失但 /opt/homebrew/bin/codex 在→tier-2 直接 codex exec）**：闸-1 审计划=0 P0 + 4 P1(全收敛进计划)+4 P2；闸-2 审 diff=**0 P0/P1** + 1 P2(metric-display-map 时间戳噪音→还原)；evidence-verifier fresh-context **未找到反例**(独立复跑 3720 测试/governance44/typecheck，实证 composeAskBackHint 运行时返回 232 字符非死代码)。
+- **诚实边界声明（codex 闸-1 P1.3）**：v0.1 = 提示+防回归，**不声称完整根治**——无法运行时强制 LLM 反问/拒答(GLM 遵从率非 100%，参 memory feedback_prompt_needs_code_backup)；运行时强制拒绝路径属 follow-up，已在协议文档+计划标注。
+- **每轮三问复盘**：
+  - **重来更好**：开工盘点应**更早 `git log --grep b290 origin/main`** 1 步定位 6-10 已落地的 70%，而非靠 Explore 全量扫。派单滞后于 main 是 loop 常态，应作默认前提。
+  - **复用价值**：①「派单描述滞后 main 已落地工作」是 loop 结构性现象→任何 loop 开工先盘点现状定范围，别照派单字面实现。②「类型可选+validation 强制+镜像测试」是 metric-registry 加语义维度的**标准三件套**（additive/timeWindow 同构），下个语义字段照搬。③「SSOT 被既有消费面 import 拼装」避免死代码且零越界，是「机器可读化」诉求在严格范围约束下的通用解法。
+  - **needs_automation: false**（expires n/a）：timeWindow 完整性已由 validation.ts CI 闸 + timewindow.test.ts 双锁；不变量已由 time-window-invariants.test.ts 锁；无需新自动化。
+- **follow-up（已在协议文档+计划登记，未自建 backlog 以免越界）**：/api/discover 透出 disambiguation-protocol + 运行时强制拒绝路径（ytd-progress 收窗口参数即 400）——B290 重量方案/dbt 语义层方向，待踩坑频度再启。
+- **PR 合并方式**：派单明确 ❌ 不 enable --auto，建 ready PR 由用户手动合（非 draft）。

@@ -9,6 +9,7 @@ import type { MetricDefinition } from '../types.js';
 export const crossSellMetrics: readonly MetricDefinition[] = [
   {
     id: 'cross_sell_total_rate',
+    timeWindow: 'any',
     additive: false,
     version: '2.0.0',
     name: '整体推介率',
@@ -61,6 +62,7 @@ export const crossSellMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'cross_sell_danjiao_rate',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '单交推介率',
@@ -98,6 +100,7 @@ export const crossSellMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'cross_sell_jiaosan_rate',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '交三推介率',
@@ -135,6 +138,7 @@ export const crossSellMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'cross_sell_zhuquan_rate',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '主全推介率',
