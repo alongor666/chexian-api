@@ -6,14 +6,19 @@
  * （工作已在别的 PR 落地，status 没维护）→ dispatch 持续假阳性、险些重做已上线代码。本扫描器
  * 把「逐任务现实核查」机制化，输出疑似已完成清单供人工逐个确认（不自动改状态——状态流转需人定夺）。
  *
- * 两类信号：
- *  1. note-完成信号（纯函数·强）：任务自身 notes 含完成语（完成/已落地/已交付/已合并…）+ 引用 PR 号。
+ * 三类信号：
+ *  1. PR-合并信号（gh·最强·默认开）：任务的实现 PR 已 MERGED（head 分支含任务 uid 末段标识）→ 工作已落地、
+ *     应置 DONE。补「note 仅说『PR #N 待合并』、合并后没人回填 DONE」的盲区（实证 7a2849：#640 已合一周
+ *     仍在前沿被重复派单；b299/b261 合并后滞留 IN_PROGRESS）。一次 `gh pr list --state merged` 批量取，
+ *     网络/gh 不可用（环境不可抗力）则降级跳过、不崩。
+ *  2. note-完成信号（纯函数·强）：任务自身 notes 含完成语（完成/已落地/已交付/已合并…）+ 引用 PR 号。
  *     命中 status-lag（90a92c=IN_PROGRESS+6 批次完成 note；6ae4d7=PARTIAL+closeout note）。
- *  2. code-churn 信号（git·弱·--churn 开）：任务的 code 域文件自 create 后被 N+ 次已合并提交改动，
+ *  3. code-churn 信号（git·弱·--churn 开）：任务的 code 域文件自 create 后被 N+ 次已合并提交改动，
  *     疑被「旁路工作」覆盖（b246 的 kpi.ts 被立方体 PR 改；b330 的 features 被 #641-643 改）。低置信，需人核。
  *
  * 用法：
- *   bun run loop:stale-scan            # note 信号扫描（快）
+ *   bun run loop:stale-scan            # PR-合并信号(gh) + note 信号扫描（默认）
+ *   bun run loop:stale-scan --no-pr    # 跳过 PR-合并信号（离线 / 无 gh 时）
  *   bun run loop:stale-scan --churn    # 叠加 git churn 信号（慢，逐任务 git log）
  *   bun run loop:stale-scan --json     # 机读
  *
@@ -47,10 +52,11 @@ export function scanNotes(text) {
 }
 
 /**
- * 判定单个任务是否疑似陈旧。纯函数（churnCount 由调用方算好传入，便于单测）。
+ * 判定单个任务是否疑似陈旧。纯函数（churnCount / mergedPrRefs 由调用方算好传入，便于单测）。
+ * @param {number[]} mergedPrRefs 该任务「实现 PR 已 MERGED」的 PR 号清单（CLI 经 gh 核实，head 分支含任务标识）。
  * @returns {object|null} null=不疑似 / 对象=疑似（含 confidence high|medium|low + reasons）
  */
-export function classifyStale(task, noteText, churnCount = 0) {
+export function classifyStale(task, noteText, churnCount = 0, mergedPrRefs = []) {
   const status = task.status || 'PROPOSED';
   if (!SCANNABLE.has(status)) return null; // DONE / BLOCKED / 未知 → 不扫
 
@@ -59,13 +65,16 @@ export function classifyStale(task, noteText, churnCount = 0) {
   // 已在推进态：1 条完成语即足；纯 PROPOSED：需 ≥2 条完成语才算 note 信号（更保守）。
   const noteSignal = (inProgress && completionHits >= 1) || completionHits >= 2;
   const churnSignal = churnCount >= CHURN_THRESHOLD;
-  if (!noteSignal && !churnSignal) return null;
+  const prMergedSignal = mergedPrRefs.length > 0; // 实现 PR 已合 = 最强陈旧信号（工作已落地）
+  if (!noteSignal && !churnSignal && !prMergedSignal) return null;
 
+  // PR 已合 → 最高置信；note+引用 PR 亦高；仅 note 中；仅 churn 低。
   let confidence = 'low';
-  if (noteSignal && prRefs.length) confidence = 'high';
+  if (prMergedSignal || (noteSignal && prRefs.length)) confidence = 'high';
   else if (noteSignal) confidence = 'medium';
 
   const reasons = [];
+  if (prMergedSignal) reasons.push(`实现 PR ${mergedPrRefs.map((n) => '#' + n).join(',')} 已 MERGED（head 分支含任务标识）→ 工作已落地，应置 DONE`);
   if (noteSignal) reasons.push(`notes 含完成语(${markers.join('/')})` + (prRefs.length ? ` + 引用 ${prRefs.map((n) => '#' + n).join(',')}` : ''));
   if (churnSignal) reasons.push(`code 域近 ${churnCount} 次已合并提交改动（疑被旁路工作覆盖，需人核）`);
 
@@ -76,6 +85,7 @@ export function classifyStale(task, noteText, churnCount = 0) {
     confidence,
     completionHits,
     prRefs,
+    mergedPrRefs,
     churnCount,
     reasons,
     desc: String(task.desc || '').slice(0, 90),
@@ -83,14 +93,14 @@ export function classifyStale(task, noteText, churnCount = 0) {
 }
 
 /**
- * 扫描全部任务。纯函数：notesByUid（Map<uid,string>）与 churnByUid（Map<uid,number>）由调用方备好。
+ * 扫描全部任务。纯函数：notesByUid / churnByUid / mergedPrsByUid（均 Map<uid,...>）由调用方备好。
  * @returns {Array<object>} 疑似陈旧清单，按 confidence(high>medium>low) 再按 churn 降序。
  */
-export function scanStale(tasks, notesByUid, churnByUid = new Map()) {
+export function scanStale(tasks, notesByUid, churnByUid = new Map(), mergedPrsByUid = new Map()) {
   const rank = { high: 0, medium: 1, low: 2 };
   const out = [];
   for (const t of tasks) {
-    const hit = classifyStale(t, notesByUid.get(t.uid) || '', churnByUid.get(t.uid) || 0);
+    const hit = classifyStale(t, notesByUid.get(t.uid) || '', churnByUid.get(t.uid) || 0, mergedPrsByUid.get(t.uid) || []);
     if (hit) out.push(hit);
   }
   return out.sort((a, b) => (rank[a.confidence] - rank[b.confidence]) || (b.churnCount - a.churnCount) || (a.uid < b.uid ? -1 : 1));
@@ -127,6 +137,39 @@ function churnFor(task) {
   return count;
 }
 
+/** 任务 uid 的末段标识（如 2026-05-30-user-b299 → b299；非 loop 分支 claude/fix-...-7a2849 也含之）。<4 字符太易误配 → 弃用。纯函数。 */
+export function uidToken(uid) {
+  const t = String(uid || '').split('-').pop() || '';
+  return t.length >= 4 ? t : '';
+}
+
+/** 分支名是否以分隔符边界包含任务 uid 末段标识（边界匹配避免子串误配，如 b332 误命中无关分支）。纯函数。 */
+export function branchMatchesUid(headRefName, uid) {
+  const token = uidToken(uid);
+  if (!token) return false;
+  const esc = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[/_-])${esc}($|[/_-])`).test(String(headRefName || ''));
+}
+
+/** best-effort：一次 gh 查近期已合 PR 的 head 分支，按任务 uidToken 匹配出「实现 PR 已合」清单。
+ *  网络/gh 不可用（环境不可抗力）→ 返回空 Map 优雅降级，不抛错、不阻断扫描。仅 SCANNABLE 任务参与匹配。 */
+function loadMergedPrsByUid(tasks) {
+  const byUid = new Map();
+  let merged = [];
+  try {
+    const out = execSync('gh pr list --state merged --limit 400 --json number,headRefName', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    merged = JSON.parse(out);
+  } catch {
+    return byUid; // 离线 / 无 gh / 限流 → 降级跳过 PR 信号
+  }
+  for (const t of tasks) {
+    if (!SCANNABLE.has(t.status || 'PROPOSED')) continue;
+    const nums = merged.filter((p) => branchMatchesUid(p.headRefName, t.uid)).map((p) => p.number);
+    if (nums.length) byUid.set(t.uid, [...new Set(nums)]);
+  }
+  return byUid;
+}
+
 function render(hits) {
   const L = [];
   L.push('# Loop 陈旧任务扫描（stale-scan）');
@@ -138,7 +181,7 @@ function render(hits) {
   for (const c of ['high', 'medium', 'low']) {
     const g = byConf(c);
     if (!g.length) continue;
-    L.push(`## ${c === 'high' ? '🔴 高置信（notes 明示完成 + 引用 PR）' : c === 'medium' ? '🟡 中置信（notes 含完成语）' : '🔵 低置信（code 域被旁路改动）'}`);
+    L.push(`## ${c === 'high' ? '🔴 高置信（实现 PR 已合 或 notes 明示完成+引用 PR）' : c === 'medium' ? '🟡 中置信（notes 含完成语）' : '🔵 低置信（code 域被旁路改动）'}`);
     for (const h of g) {
       L.push(`- \`${h.uid}\` [${h.priority}/${h.status}] — ${h.desc}`);
       for (const r of h.reasons) L.push(`    ↳ ${r}`);
@@ -154,6 +197,9 @@ function main() {
   const lines = fs.readFileSync(LOG_PATH, 'utf-8').split('\n');
   const { tasks, notesByUid } = loadTasksAndNotes(lines);
 
+  // PR-合并信号（默认开，--no-pr 关）：一次 gh 取近期已合 PR，按 uidToken 匹配实现分支。网络不可用自动降级。
+  const mergedPrsByUid = args.includes('--no-pr') ? new Map() : loadMergedPrsByUid(tasks);
+
   const churnByUid = new Map();
   if (args.includes('--churn')) {
     for (const t of tasks) {
@@ -162,7 +208,7 @@ function main() {
     }
   }
 
-  const hits = scanStale(tasks, notesByUid, churnByUid);
+  const hits = scanStale(tasks, notesByUid, churnByUid, mergedPrsByUid);
 
   if (args.includes('--json')) {
     process.stdout.write(JSON.stringify(hits, null, 2) + '\n');
