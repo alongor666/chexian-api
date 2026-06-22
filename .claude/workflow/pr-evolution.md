@@ -692,3 +692,14 @@
 - **needs_automation: true** → 可探 governance 启发式：检测对静态物化表(CREATE OR REPLACE TABLE)的 loader 函数若新增日期/cutoff 形参 → 警示"共享单例表勿塞 per-query 参数，改 CTE helper"。静态识别有限(需匹配 CREATE TABLE + 形参)，落地前评估误报。
   - expires: 2026-09-21
 - **下一实验（交用户决策）**：是否把 cost-ratios 三处 JOIN 切到 `buildWindowedClaimsAggCTE`？须同步评估 cube/cost-cube 是否一并窗口化(否则 cutoff<最新时影子对账差异)，及 kpi/comprehensive/forecast 是否纳入。建议绑定"时间机器/历史快照"特性排期。🔴 不触发任何 GATED cutover。
+
+## 2026-06-21 · Loop v2 并行波1 + backlog 卫生（stale-scan）
+
+**三问复盘**
+- 重来怎样更好：派单前必做逐任务现实核查。本波"用户确认的 3 个"里 90a92c/b246 是陈旧、b330 的违规也早被 #641-643 修复——dispatch 仅凭 status+code 字段无法识别"实际已完成但状态未流转"。教训=元工具(dispatch)的输入(backlog status)若不维护，元工具就持续假阳性（与 6ae4d7 同源，累计本会话已遇 7 个陈旧任务）。
+- 复用价值：新增 scripts/loop/stale-scan.mjs（note-完成信号[强：完成语+引用 PR] + git churn 信号[弱：code 域被旁路提交改动]），`bun run loop:stale-scan [--churn]` 一键列疑似陈旧。本波实测除 90a92c/b246 外又揪出 8964d3/4641ef/2eccfa，共 5 项。
+- 如何自动化：stale-scan 已是该洞察的自动化落地（9 单测）。下一步=dispatch 算前沿时自动叠加 stale-scan 高置信告警（前沿任务若被标高置信→提示"疑似已完成，先核实"再派单）。
+  - needs_automation: true
+  - expires: 2026-09-19
+
+**量化**：并行波1 codex 双闸 — b330(闸1 3P0/5P1→闸2 0P0/2P1) · b299(3P0/3P1→0/0/0) · b249(4P0/6P1→0P0/3P1)；3 PR(#716/#717/#718)全经源数据/静态验证。b299 源数据验证 满期赔付率 176.48%(全快照虚高)→61.51%(窗口正确)、最新日窗口=全快照逐分钱一致(字节安全 no-op)，按红线停 partial 未盲改理赔 SSOT。
