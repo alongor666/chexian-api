@@ -5,6 +5,11 @@ on:
     branches: [ main ]
   push:
     branches: [ main ]
+  # 合并队列（merge queue）：PR 进队后 GitHub 在临时分支 gh-readonly-queue/main/*
+  # 上触发 merge_group，必需检查须在此事件产出同名 status，否则队列永远等不到检查 → 合并门卡死。
+  # 注：merge_group 跑在队列分支（非 main），deploy.yml 的 workflow_run branches:[main] 会过滤掉，
+  # 不会触发部署；合并落 main 的 push 仍触发本 workflow → deploy，链路不变。
+  merge_group:
   workflow_dispatch:
 
 jobs:
