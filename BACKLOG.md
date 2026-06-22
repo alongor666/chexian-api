@@ -16,16 +16,15 @@
 
 ---
 
-## 📋 活跃任务速查（80 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（79 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（7 项）**
+**P1（6 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
-- 2026-06-16-claude-1f3bc1 `PARTIAL` — evidence-loop perf/refactor 类 oracle (.plann
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 - 2026-06-22-claude-15d8fd — 多省 RLS 查询层残留漏洞收口（G3/G4 closeout 拆出·GATED 前置）
@@ -181,7 +180,6 @@
 | 2026-06-14-claude-4641ef | 2026-06-14 | 数据架构治理 | @claude | 冻结源长期方案定板 + memory 同步 — customer_flow(08)/cross_sell(03) 上游 2026-06-10 起停止下载，data-sources.json 标 frozen 但「未来改从签单域派生」搁置；签单清单已新增 previous_insurer/next_insurer 与 cross_sell_*_jy 列。任务：(1) 评估口径等价性，决定 (A) 推进签单域派生并下线冻结 parquet 还是 (B) 长期维持冻结存量+admin-only RLS；(2) 同步 B86d10f 任务前提（其「08 xlsx 加机构列」长期修法已因源停更不可行）；(3) memory 同步：domain_customer_flow.md 数据源加「已停止更新」标记，project_8domain_architecture.md 改写为当前 15 域（3 deprecated+12 active）。 | P2 | BLOCKED | 数据管理/data-sources.json,BACKLOG.md | server/src/sql/customer-flow/,server/src/sql/cross-sell/ | 进度记录：子任务 (2)(3) 已完成 — (2) B86d10f note eid=c2906bb4 标记「ETL 端补 08_客户来源去向 xlsx 机构归属列」长期修法假设失效；(3) memory 同步落地 — domain_customer_flow.md 数据源演化三层（原始已停更 / 当前 frozen parquet / 派生方向 PolicyFact JOIN）+ 业务逻辑不变兜底；project_8domain_architecture.md 改写为当前 16 域（4 deprecated: renewal_funnel/quotes_status/quotes_v2/renewal_v2+ 12 active）。两份 memory 在 ~/.claude/projects/.../memory/ 与 ~/.claude/shared-memory/chexian/ 是硬链接（inode 一致 46815655 / 46815756），改一处两处同步。剩余 (1) 口径等价性评估 + 长期方案选型（A 推进签单域派生 / B 长期维持 admin-only），待业务决策推进。 <br>stale-scan核查(2026-06-21)：子任务(2)(3)已完成；核心交付物(1)冻结源长期方案定板需owner决策——方案A(签单域派生previous_insurer/next_insurer并下线冻结parquet) vs 方案B(长期维持冻结存量+admin-only RLS)。待owner定夺。 |
 | 2026-06-15-claude-b38dcc | 2026-06-15 | Chore | @claude | PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，server/src/config/metric-registry/categories/ratio.ts 中的 transfer_rate/renewal_rate/nev_rate/new_car_rate 指标引用 endorsement_no，但 CubeCostDay.policy_dedup CTE 的 SELECT 列表未含此字段，导致 api-error.log 自 2026-06-12 09:02 起持续 Binder Error。与 cost OOM (d72e4717) 是独立两个 Bug。修复方向：扩展 policy_dedup CTE 加 ANY_VALUE(endorsement_no) 或改指标公式避开该字段。 | P1 | PROPOSED | N/A | N/A |  |
 | 2026-06-15-claude-edbd61 | 2026-06-15 | Refactor/Frontend | @claude | B330 follow-up：components/layout → features 依赖倒置（TopNavigation/PageFilterPanel）。当前 TopNavigation 直接 import features/file 的 3 个 Modal、PageFilterPanel 直接 import features/filters 的 2 个组件。修复需把 layout 改为 shell+slot：App.tsx 顶层负责把具体 Modal/Panel 作为 children/slot 传入。属重构而非搬迁，独立 PR。验收：grep components/layout/ 无 features import；build 绿；2921 单测全过。 | P2 | PROPOSED | ARCHITECTURE.md §2.2 | src/components/layout/TopNavigation.tsx;src/components/layout/PageFilterPanel.tsx;src/App.tsx | PR #643 同时关闭了 shared→features 第 6 处（orgSalesman），但 layout→features 倒置（TopNavigation 用 features/file 的 3 个 Modal、PageFilterPanel 用 features/filters 的 2 个组件）仍属本 follow-up 范围 — 是更深的 shell+slot 重构。 |
-| 2026-06-16-claude-1f3bc1 | 2026-06-16 | harness缺口/E2E阶段A体检发现 | @claude | evidence-loop perf/refactor 类 oracle (.planning/golden-baseline/) 当前未构建 — golden-baseline.mjs --compare 事实上不可用，需先 --build 抓 71 端点快照（需 dev:full 运行 + E2E_PASSWORD 环境变量），否则 perf/refactor 改动无正确性保证 | P1 | PARTIAL | .claude/rules/evidence-loop.md#4,scripts/golden-baseline.mjs | scripts/golden-baseline.mjs | 本地 baseline 66/71 已构建（成功率 93%），落 .planning/golden-baseline/（7.6MB / 68 JSON 文件 / meta + manifest 完整）；剩 5 个端点（coefficient 404 / cost holiday-drilldown patrol/premium patrol/narrative 400）是 baseline 脚本本身的 endpoint 参数定义结构性问题，登记新 BACKLOG 跟踪。本地 oracle (golden-baseline.mjs --compare) 现可用于 66 个端点的零差异比对 |
 | 2026-06-17-claude-291788 | 2026-06-17 | harness完善/baseline 脚本端点定义 | @claude | evidence-loop e2e dry-run 重建 baseline 时发现 5 个端点持续失败（非冷启动，重跑 3 次稳定）：coefficient 404（路由可能废弃）/ cost+holiday-drilldown+patrol/premium+patrol/premium/narrative 4 个 400（必需参数未传）。修法：补 ENDPOINT_DEFINITIONS 必需参数 + 移除/更新废弃路由 | P2 | PROPOSED | scripts/golden-baseline.mjs | scripts/golden-baseline.mjs |  |
 | 2026-06-19-claude-00355f | 2026-06-19 | cx-cli 语义层 | @claude | P2 语义层 cx cube 可组合查询（续保域锚点优先）：泛化续保 GROUPING SETS 成「选指标×任意维度子集」生成器 + 全指标 additive 标记 + /api/query/cube 按域分派（续保→新生成器/PolicyFact→pivot）+ cx cube CLI。接续 B290 语义层重量方案。本地全栈 oracle 三方零差异 + RLS 隔离 + 边界拒绝已闭环，evidence-verifier 通过。 | P2 | PROPOSED | .claude/plans/cx-cli-swift-pudding.md | server/src/routes/query/cube.ts |  |
 | 2026-06-19-claude-00bac8 | 2026-06-19 | 数据/ETL | @claude | new_energy_claims 域 org_level_3 全为 NULL（901 行）→ federation 下 org 用户查 NewEnergyClaims 恒空（安全无泄漏，但功能仅 admin/branch_admin 可用）。根因在 new_energy_claims ETL 未填充机构维度。修复方向：ETL 落 org_level_3 真实值（参 policy JOIN 或源字段）。federation 注册保留 org_level_3 为权限列正确（列存在、RLS 注入有效） | P2 | PROPOSED | N/A | 数据管理/warehouse/fact/new_energy_claims |  |

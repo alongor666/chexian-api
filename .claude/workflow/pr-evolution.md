@@ -745,3 +745,13 @@
 - **重来更好**：① **现实核查必须前置于"动手"**：连续两轮(7a2849 第三方会话已合并/b331 部分早已做)证明 dispatch 前沿不等于"真待办"——派单前先查 note 里的 PR 状态 + 实测目标现状(行数/文件)。这是 stale-scan 47c2a5 要自动化的。② 同目录落位 > 子目录落位（当搬移代码有大量相对 import 时）——闸-1 没料到这点，我在实现时优化了，降风险。③ 纯搬移重构的 oracle 是"确定性闸全绿"，无需新增测试也无需 LLM verifier；但定向回归测试(prefetch)是验 barrel 不断链的关键锚。
 - **复用价值**：①「1000+行组件拆分」可复用打法=同目录抽 shared(类型/常量/纯helper)+子组件、barrel 重导出保旧入口零爆炸半径、`noUnusedLocals` 下精确剪枝靠 typecheck 迭代。② follow-up 登记纪律：大重构里"想做但风险高/超范围"的(hook 抽取 03f6f0、chart 去重 21c578)即时登记 backlog，不混进本 PR。
   - needs_automation: false（本轮无新增待自动化项；stale-scan 增强已独立登记 47c2a5 带其自身 expires 由 #703 闸管）
+
+---
+
+**R17 · 1f3bc1 golden-baseline oracle 修复（17→72/72 build+compare·codex 闸-2）**
+- **触发**：用户问"1f3bc1 需密码吗？cx-cli 已有 PAT"。连环现实核查推翻多个既有判断：① **"缺 E2E_PASSWORD"是误判**——`auth.ts` 有 `DEV_SKIP_AUTH=1`（非生产）使 `verifyPassword` 恒真，login 接受任意密码签发真 token，**免密码**。② cx-cli 的 PAT 是**生产域**（chexian.cretvalu.com），golden-baseline 打 localhost，PAT 跨 auth store 用不上。③ `USER_PASSWORDS` 是 bcrypt 哈希，不可反推明文（我一度误判"可派生"，已纠正）。④ **真因不是鉴权**：原 baseline 17/78 成功，server 日志 `ConnectionPool: queue full / acquire timeout` —— 脚本 `Promise.allSettled` 把 71 端点**全并发**打爆 DuckDB 连接池。
+- **成果（修 golden-baseline.mjs）**：① `mapSettledWithConcurrency` 限流（默认 4，`BASELINE_CONCURRENCY` 可配）替代全并发 → 17→74。② build 跳过 deprecated（coefficient 路由已删 404）→ 排除。③ holiday-drilldown 补必填 `groupBy`（z.enum 无默认）。④ patrol×2 是**文件托管端点**（读生成报告，无文件即 404、内容随时变）→ 移除（非 SQL/perf oracle）。⑤ test/data-version/data-metadata 标 `volatile`（回显 session/buildTime/serverStartTime 实时态，compare 必假阳）→ build+compare 跳过。⑥ compare FAIL 附 `endpointSlug`（原 AssertionError 不含端点身份，无法定位）。**build 72/72 + compare 72/72 零差异 = oracle 端到端可用**（远胜原 BACKLOG note 的 66/71 带 5 坏）。
+- **闸**：闸-1 未单跑（根因由连接池错误**实证**锁定，"plan"= 修该 bug，无设计空间）；闸-2 codex 可合并 0P0/0P1，2 P2（dry-run 未标 volatile / compare 不防旧 manifest）**全修**。codex 还实测了 mapSettledWithConcurrency 结构与 allSettled 同构。
+- **重来更好**：① **现实核查再次是最高杠杆**——本轮在动手前连推翻 4 个既有假设（密码/PAT/USER_PASSWORDS/真因），全靠"读代码+读日志+读 BACKLOG note"而非信任任务描述。任务描述（"需 E2E_PASSWORD"）本身就是过时假设。② **报错日志直指根因**——`ConnectionPool: queue full` 一句话定位真因，胜过盲目加 params。先读 server 日志再动手（呼应 memory `feedback_startup_log_first_not_source`）。③ 区分"oracle 端点"与"基础设施/文件/实时端点"是 golden-baseline 设计的核心——不是所有 API 都该进回归基线。
+- **复用价值**：① **并发型 harness 默认限流**——任何"批量打本地服务"的脚本（baseline/bench/巡检）都该限流而非全并发，DuckDB 池小。`mapSettledWithConcurrency`（worker 池 + allSettled 同构返回）可复用。② golden-baseline 现可作所有 perf/refactor 任务的零差异 oracle（解锁后续重构对账），且对任意机器/CI 可复现（限流 + DEV_SKIP_AUTH 免密码）。③ 「volatile/deprecated 不纳入基线」的判据可复用到任何快照对账系统。
+  - needs_automation: false（本轮即修复 harness 使其可用；无新增待自动化项。后续 perf/refactor 任务应在 §4 harness 表标注 golden-baseline 现已可用）
