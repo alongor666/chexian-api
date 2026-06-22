@@ -816,6 +816,28 @@
   - needs_automation: false（并入 R18 已登记的「双源零测试盘点」脚本项 expires 2026-09-22，新增「纯函数分布扫描」维度，不另立）
 - **下一轮**：premium-report（2 hooks，renderHook 稍重但仍属纯逻辑）；余 6 纯组件模块须转「组件 smoke（DOM/testing-library）」路线，与本纯函数策略不同——b332 的一个**策略分叉点**，建议后续明确。
 
+---
+
+**R21 · B244 零赔付专项分析（Loop 单任务·常规 dispatch 取 P2·只读分析零生产改动·PR 待建）**
+- **触发**：B255 完成后按用户「再走常规 dispatch」。`loop:dispatch` 前沿 9 个，应用并发碰撞教训筛选：b332 烫（#739/#741/#742 刚合，避开）/ b261 已 `state==MERGED`(#723，按主题查重拦下)/ f1c991 立方体切流=部署链 GATED（跳过）→ 取 **b244（零赔付专项分析，be-sql，纯分析）**，`gh pr list --search` 按主题确认无并发 PR（#388/#693 是不同主题）。
+- **成果（只读分析报告）**：`开发文档/reviews/2026-06-22-零赔付专项分析_B244.md`。核心拆分=**已结案 285,309 件 27.0% 零赔付，但只有"立案有准备金(reserve>0)+结案零赔付"的 12,748 件(4.47%)才产生准备金释放(1,818.7万元，占已决 1.34%)**；另 64,388 件从无正准备金、释放≈0——**把这两类混算会把释放效应虚高 5 倍以上**（本分析最关键的拆分）。主体"零结"10,326件/1,475.8万(81%)，"拒赔"34件案均最高5.48万；释放子集中位结案 2 天、89.8% 在 30 天内零结→释放集中在最早发展期；零赔付率近年 29.8%→21.3% 改善；待结案在险池 2,792件/11,359.5万。
+- **方法学（沿用 R20 的"列归属核实"模板）**：claims_detail 无 latest.parquet、按年分区 `claims_*.parquet`（先 ls+DESCRIBE 核实再查，避免 read_parquet 路径假设错）；总赔付口径严格遵 SCHEMA.md §4「已结取 settled/未结取 reserve」。
+- **重来更好**：① **"零赔付"这类聚合任务必须先拆"是否有准备金"再谈释放**——立项描述的"68,511件(27%)零赔付"是粗口径，真正影响发展三角形的是"有准备金后释放"子集，差一个 reserve>0 条件结论量级差 5 倍。聚合分析的第 0 步=先想清楚"哪个子集才对目标命题成立"，再写 GROUP BY。② 分析型任务的"对抗验证"=可复现 SQL 嵌进报告附录(任何人重跑可证) + headline 与立项独立观察(27%)交叉核对，等价于 evidence-loop 的 oracle；本轮未跑 codex 闸（无代码 diff），与 R20/B255 同标准。
+- **复用价值**：① 「准备金释放」量化模板=四象限拆分(已结案 × 零赔付 × 有无准备金) + 释放子集案件类型/时延特征 + 在险池前瞻；可复用到任何"准备金充足度/有利发展"分析。② 现行总赔付口径(已结 settled/未结 reserve)已正确处理零赔付，**无需改 claims-detail.ts**——又一个"疑似待修其实已正确"的核实结论（同 R20 B255）。
+  - needs_automation: false（一次性分析，结论与复现 SQL 已固化进报告；准备金释放逐发展期曲线列为可选续作，非自动化项）
+- **下一轮 dispatch 候选**：b290(时间口径消歧,be-config)/16ab1c(报告托管 phase-2 org_user,be-routes,安全相关)/b320(CSP unsafe-eval,待E2E) 均经查重未做；b332 持续烫(并发会话密集)建议非本会话碰。
+- **codex gate-2 修订（用户要求对 #746 跑对抗审查后）**：codex CLI(read-only) P0=0，但抓到**核心 P1 并已 v2 修正**——**最高杠杆教训：分析任务的口径不能只用 SCHEMA.md 通用公式外推，必须核对"生产 SQL 实际口径"**。v1 断言"释放子集对生产发展三角形产生 1.3% 早期回撤"，但 `claims-detail.ts:519-535`/`claims-heatmap.ts:405-412`(B302) 的金额分子外层 `CASE` 已过滤 `case_type∈(零结,注销,拒赔)+无责`，释放子集 99.98%(12745/12748) 正属这些类型→生产口径下从所有 cutoff 即计 0，**生产释放影响≈0**（释放仅存在于未过滤的通用公式视角）。另修：677万算法(件数率 5.96% 误乘金额→应金额率 1.26%≈143万)、"虚高5倍"限件数口径非金额、reserve 不清零证据用错象限、"改善"加成熟度 caveat、附录补 median/30天/年度/分母 SQL + NULL 口径说明。
+  - **复用价值（补 R20/R21 共性）**："疑似口径待修"类分析的第 0 步：**列归属核实(R20) + 生产 SQL 实际口径核实(R21)**——两次都得出"现行生产已正确处理、无需改码"，但若只看通用文档/SCHEMA 会误判。codex 窄范围对抗审查在分析任务上同样高杠杆（不止代码任务）。
+**R20 · B255 报价口径差异分析（Loop 单任务·只读分析零生产改动·源文件定位纠偏·PR #744）**
+- **触发**：用户指定本轮先做 B255（报价数据「是否报价」字段不可靠，评估改用「续保单号非空」判定）。用户已决策——先出全口径差异报告、不切换；AI 不得改字段含义/SQL/ETL。
+- **关键纠偏（任务描述/上轮排查把源文件定位错了）**：任务与上轮断言「是否报价/续保单号」是 `04_报价清单_商业险.xlsx` 的 ETL 前源字段。实测 04 报价清单 33 列**根本无此两列**；`是否报价` 实为历史"签单清单"宽表字段。进一步用流式 iterparse 读 4 个签单清单（2021-01~2026-06）表头：**均 44 列、无一含「是否报价」、全部含「续保单号」**——该字段已从所有在盘源数据移除（`shard-config.json` 显式忽略，备注"口径不可靠，待用户修正"）。
+- **核心结论（证据闭环）**：① 现行 `is_renewal` 直接由「续保单号非空」派生（`transform.py:383`），对 260 万行保单**实测 0 行不一致**——B255 提议口径**已是现行实现**；② 报价转化率/交叉销售/续保追踪**均不引用「是否报价」**（`is_quote` 在 renewal-tracker.ts 是 `is_quoted` 子串误命中），现行影响=0；③ 原始口径交叉表因字段已移除**不可计算**，已诚实声明（红线：验证不声称）。④ 迁移在数据/口径层已自然完成，建议关闭为「已在架构层落地」。
+- **重来更好（两条最高杠杆教训）**：① **派单/任务描述里的「源文件路径 + 字段归属」是待验证假设，不是事实**。动手前用 `DESCRIBE`/表头直读亲眼核实列归属，一次纠偏；本轮若沿用"04 报价清单"假设直接写交叉表脚本会全盘错。是 `feedback_verify_before_assume` + 「grep 是有损代理」在**数据字段归属**上的实例——"分析某字段口径"任务第 0 步固定=列归属核实。② **写 `.claude/workflow/**` 等跨 worktree 共享文件时，Edit 的绝对路径必须带 `/worktrees/<name>/`**；本轮 Edit 误用主仓库路径把 R20 写进**主目录工作树**（触"主目录只读"红线），靠 `git -C <主> restore` 还原 + 重写 worktree 副本补救。根因=主目录与 worktree 各有独立工作副本，路径差一段 `/worktrees/<name>` 就落主目录。
+- **复用价值**：① 「字段口径分析」任务模板首步=列归属核实（04报价清单/签单清单/policy parquet 各有什么列，先 DESCRIBE）；② harness 创建的 `.claude/worktrees/<name>` worktree **不触发** post-checkout 原生模块自愈（仅 `git worktree add` 触发）→ 离线兜底=主仓库 cp `bcrypt_lib.node`（mkdir -p + 单文件 cp，避 `cp -R 目录` 改名陷阱）；③ worktree 内写共享文件先确认绝对路径含 `/worktrees/<name>/`。
+  - needs_automation: true → worktree 原生模块离线兜底：post-checkout（或 pre-push 前置）增「健康检查失败且无网络时，从主 git-common-dir 仓库 cp `*/node_modules/{bcrypt,better-sqlite3,@duckdb}` 的 `.node` 二进制」分支。**注**：属 loop-meta/hook 改动，按 §4 wave-2 元教训由单 owner 会话串行落地，本轮仅登记不并发硬化。
+  - expires: 2026-09-22
+- **codex gate-2 修订（用户要求对 #744 跑对抗审查后）**：codex CLI(read-only) P0=0（三条目标 SQL 未引用旧 is_quote 成立），但抓 4 个 P1 **过度声称**已校准报告：① "260万0不一致"是循环论证（验证派生结果=派生规则，非源数据零误差）→改"现行实现已按该规则派生"；② "无任何生产 ETL 消费"过度——is_quote 仍在 mapping.ts/column-normalizer.ts/fields.json→PolicyFact 物化链→改"三条目标 SQL 未引用"；③ "交叉销售影响=0"需降级——cross-sell.ts 用 is_renewal(=续保单号非空) 作维度→改"不受旧 is_quote 影响"；④ 业务规则字典 SSOT(:413) 仍把 is_quote 描述为可用→关闭建议改"核心已落地、残留治理待清理"。P2 校准：历史绝对断言可证据化、检索范围列明、refine_verify.py 已做 is_renewed×is_quoted 交叉(避免误导"所有报价交叉不可算")。
+  - **跨 R20/R21 共性教训**：分析报告极易**过度声称**（"0误差/无消费方/影响=0/不可计算"）——codex 窄范围对抗审在**分析任务**上同样高杠杆（不止代码任务）；分析结论的措辞应配"派生一致性≠质量证明""目标 SQL 未引用≠全局无消费""现行口径 vs 通用公式"三类区分。
 ## 2026-06-22 · 47c2a5 stale-scan 增 PR-合并信号（根治「已合任务被重复派单 + DONE 滞后」）
 
 - **背景/根因**：本轮 loop 复盘暴露 P1——stale-scan 仅看完成语+git churn，看不到「任务实现 PR 已 MERGED」，致 7a2849（#640 已合一周仍被重复派单）、b299/b261（合并后滞留 IN_PROGRESS 未回填 DONE）。
@@ -840,3 +862,14 @@
   - **needs_automation: false**（expires n/a）：timeWindow 完整性已由 validation.ts CI 闸 + timewindow.test.ts 双锁；不变量已由 time-window-invariants.test.ts 锁；无需新自动化。
 - **follow-up（已在协议文档+计划登记，未自建 backlog 以免越界）**：/api/discover 透出 disambiguation-protocol + 运行时强制拒绝路径（ytd-progress 收窗口参数即 400）——B290 重量方案/dbt 语义层方向，待踩坑频度再启。
 - **PR 合并方式**：派单明确 ❌ 不 enable --auto，建 ready PR 由用户手动合（非 draft）。
+---
+
+**R20 · b332 premium-report 2 hooks 纯逻辑提取 + 单测（Loop v2 续推·路线 B 提取重构·三源全过·golden 由确定性等价证明）**
+- **触发**：#742（R19 expense-development）合并后续推 b332。R18「双源零测试盘点」结论=真零测试 8 个，R18/R19 已清 comprehensive(浅测补强)/expense-development；premium-report 是唯一含 `.ts` 逻辑文件(2 hooks)的剩余模块，余 6 个(admin/customer-flow/file/moto-cost/repair/report)纯组件无纯函数。
+- **路线决策（B 提取 vs A renderHook+mock）**：用户给 A/B 二选一并推荐 B。选 B（calculateSummary/sortData/normalize*/drill 层级逻辑提取到 utils/ 纯函数直测）。**关键推理**：R19「下一轮」把 premium-report 标为「renderHook 稍重」(路线 A 心智)；但路线 B 提取后**本轮转为与 R18/R19 同构**(纯函数直测、零 mock)——用户给的「跑闸-1」理由是「hooks+mock 不同构于前两轮」，该理由在路线 B 下消失。故按 R17/R19 先例免闸-1 + R19 要求的「分支矩阵自查」补偿；路线 B 新引入的「提取保真」风险交给**更有效的闸-2 审 diff**(R16:「审 diff > 审计划」对重构尤甚)。
+- **成果（提取重构 + 纯增测试，hook 净缩减、golden 不变）**：新建 utils/premiumReportCalc.ts(4 函数)+utils/premiumPlanDrill.ts(6 符号)，两 hooks 删内联改 import(usePremiumReport -94/usePremiumPlan -64 行,典型代码简化)。44 单测：浮点四舍五入(去尾差 1.1+2.2→3.3 / 三位截断 1.111+2.222→3.33 / avg 1.65)、`??` vs `||`(空串保留锁 nullish 语义)、`== null`(null+undefined 同捕获)、localeCompare zh-CN(ASCII+拼音甲<乙)、null/undefined 排序方向、不可变(返回新数组 / 空 column 返回同引用)、normalize 逐字段(0 保留 vs null 回退 vs 数字串转型)、drill 层级映射全 6 档+越界 null+钳位、面包屑标签(业务员美化分支)。
+- **三源（闸-1 免）**：确定性闸 verify:full(governance44+typecheck+3747 单测)全绿；闸-2 codex(exec 经 stdin)无 P0/P1、确认与 origin/main 内联逐字符等价，3 P2(采纳 2:null/空串 dedup + undefined 排序；1 记残留:hook 级 golden)；evidence-verifier fresh-context(sonnet)**CONFIRMED**(逐函数对 diff 等价、5 断言推演无误、亲跑 3747 单测)。
+- **重来更好**：① **路线选择会重定义「同构」判断**——R19 把 premium-report 预判为「renderHook 稍重」=非同构据此建议跑闸-1；实际选路线 B 后变同构，闸-1 决策应随路线重判而非沿用上轮预判。② **路线 B 的 golden 保真不靠「新测试」(它们只测提取后代码)，靠「提取逐字符等价(人工+codex+verifier 三方对 diff) + typecheck(接线) + 全量套件(无回归)」**——本轮无既有 premium-report 测试作 golden 回归锚，故等价证明全压在 diff 对比，这是路线 B(提取无既有测试模块)的固有约束，必须显式声明而非假装「测试证明了 golden」。③ 闸-2 的 P2-3(hook 级 golden 需 renderHook)是路线 A/B 的本质权衡点而非可补缺口：补它=引回路线 B 刻意规避的 mock 脆性。
+- **复用价值**：① 「纯逻辑从 hook 提取到 utils/」打法=同目录(utils 与 hooks 同在 features/<mod>/下,`../../../shared` 相对深度一致零改写)抽纯函数、hook 改 `.map(normalizeX)`/`computeX()` 调用、useCallback 依赖移除已提取的稳定模块函数(原 `useCallback(...,[])` 提取后天然稳定,从依赖数组删除安全)；零生产行为变更而 hook 显著简化。可把 R19「纯函数分布扫描」里判为 hooks 的模块从路线 A 转路线 B。② 「`??` vs `||` 用空串(非 null)区分」「`== null` 用 undefined(非 null)区分」是锁「易被误改的判等运算符」标准测法。③ vitest exclude 含 `**/.claude/**`——测试**禁落 `.claude/worktrees/`**(否则静默 skip=假 passed)，本轮特意用兄弟目录 worktree 规避(呼应 feedback_e2e_silent_skip_false_positive)。
+  - needs_automation: false（沿用 R18 已登记的「双源零测试盘点 + 纯函数分布扫描」脚本项 expires 2026-09-22；本轮新增「路线 A/B 同构判断随路线重判」是决策纪律非可自动化项）
+- **下一轮**：真零测试余 6 个**纯组件**模块(admin/customer-flow/file/moto-cost/repair/report,仅 .tsx+barrel 无纯函数)——须转「组件 smoke(DOM/@testing-library)」路线，与本纯函数策略不同，是 b332 既定**策略分叉点**；premium-report 已清零，b332 整体仍 IN_PROGRESS。
