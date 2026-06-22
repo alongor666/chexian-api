@@ -397,10 +397,13 @@ export const MOTO_COST_ALLOWED_USERS: readonly string[] = SUPER_USERS;
  * @param username 用户名
  */
 export function canAccessMotoCost(username: string | undefined, specialFeatures?: string[]): boolean {
+  // 超管不变量：admin / xuechenglong 始终拥有完整访问权（与 canAccessExpenseDevelopment 对齐），
+  // 即使其 specialFeatures 被显式改成不含 moto_cost 也不应被锁在门外。
+  if (isSuperUser(username)) return true;
   if (specialFeatures !== undefined) {
     return specialFeatures.includes('moto_cost');
   }
-  return isSuperUser(username);
+  return false;
 }
 
 /**
