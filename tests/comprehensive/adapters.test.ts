@@ -93,3 +93,66 @@ describe('comprehensive adapters', () => {
   });
 });
 
+describe('字段路由（每个 adapter 取对 section，防复制粘贴改错字段）', () => {
+  // 给每个 section 填唯一可区分的 dim_key / time_period，任何取错字段都会暴露
+  const routed: ComprehensiveBundleResponse = {
+    ...mockResponse,
+    overview: { ...mockResponse.overview, rows: [{ dim_key: 'OV' }] },
+    premium: { rows: [{ dim_key: 'PR' }] },
+    cost: { rows: [{ dim_key: 'CO' }] },
+    loss: { quadrantRows: [{ dim_key: 'LQ' }], trendRows: [{ time_period: 'LT' }] },
+    expense: { rows: [{ dim_key: 'EX' }], surplusRows: [{ dim_key: 'ES' }] },
+    roi: { rows: [{ dim_key: 'RO' }] },
+  };
+
+  it('overview / premium / cost rows 各取本 section', () => {
+    expect(adaptOverviewRows(routed)[0].dimKey).toBe('OV');
+    expect(adaptPremiumRows(routed)[0].dimKey).toBe('PR');
+    expect(adaptCostRows(routed)[0].dimKey).toBe('CO');
+  });
+
+  it('loss 象限 / 趋势分别取 quadrantRows / trendRows', () => {
+    expect(adaptLossQuadrantRows(routed)[0].dimKey).toBe('LQ');
+    expect(adaptLossTrendRows(routed)[0].timePeriod).toBe('LT');
+  });
+
+  it('expense rows / surplusRows 与 roi rows 各取本字段', () => {
+    expect(adaptExpenseRows(routed)[0].dimKey).toBe('EX');
+    expect(adaptExpenseSurplusRows(routed)[0].dimKey).toBe('ES');
+    expect(adaptRoiRows(routed)[0].dimKey).toBe('RO');
+  });
+});
+
+describe('adaptOverviewSummary · 缺省与字段语义', () => {
+  it('summary 为空对象 → 数值字段 0、可空字段 null', () => {
+    const empty: ComprehensiveBundleResponse = {
+      ...mockResponse,
+      overview: { ...mockResponse.overview, summary: {} },
+    };
+    const s = adaptOverviewSummary(empty);
+    expect(s.signedPremium).toBe(0);
+    expect(s.reportedClaims).toBe(0);
+    expect(s.expenseAmount).toBe(0);
+    expect(s.earnedClaimRatio).toBeNull();
+    expect(s.expenseRatio).toBeNull();
+    expect(s.variableCostRatio).toBeNull();
+    expect(s.achievementRate).toBeNull();
+    expect(s.comprehensiveExpenseRatio).toBeNull();
+    expect(s.perVehiclePremium).toBeNull();
+    expect(s.claimFrequency).toBeNull();
+  });
+
+  it('summary 运行时缺失（undefined）→ 走 `|| {}` 防御分支，仍产出 0 / null', () => {
+    const missing: ComprehensiveBundleResponse = {
+      ...mockResponse,
+      overview: {
+        ...mockResponse.overview,
+        summary: undefined as unknown as Record<string, number | null>,
+      },
+    };
+    const s = adaptOverviewSummary(missing);
+    expect(s.signedPremium).toBe(0);
+    expect(s.earnedClaimRatio).toBeNull();
+  });
+});
+

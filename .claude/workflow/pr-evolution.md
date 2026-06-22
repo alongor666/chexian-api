@@ -763,3 +763,16 @@
 - **重来更好**：派生「在别处修同款」任务前，必须端到端追一条代表性调用链（调用点→helper→Python argparse/Path）证明类成员资格 + 给最小复现，再动手——是 `feedback_codex_review_fix_sop`「修一处≠修一类」的逆向护栏（修一类前先证成员资格）。
 - **复用价值**：「中央 shim 兼容旧写法」型迁移（execSync→spawnSync 的剥引号）必配「契约单测 + 禁绕过 shim 的 AST 闸」，否则旧写法成视觉无差别 foot-gun，反复诱发误报与冗余修复。
   - needs_automation: false（本轮已落地护栏闸 + 契约单测，无新增待自动化项）
+
+---
+
+**R18 · b332 comprehensive-analysis 边界测试补强（Loop v2 单任务·三源对抗全过·纯增测试零生产改动）**
+- **触发**：Loop v2 单任务取 b332（测试覆盖补强 P1）。任务描述称 comprehensive-analysis 等 12 个 features 模块零测试。
+- **现实核查纠正盘点（codex 闸-1 顺带揪出）**：盘点命令 `find src/features/*/` 只扫同目录、漏项目根 `tests/`——comprehensive-analysis 自 PR #70(B300, 2026-02-27) 起就有 `tests/comprehensive/` 测试（同目录测试用 `./` import 不含 `features/<mod>/` 字串，根目录测试用 `../../src/...` 才含，两种 import 风格导致单源 grep 互相漏报）。**双源准确盘点**(同目录 test 文件 OR tests/根引用)后**真·全仓零测试仅 8 个**(admin/customer-flow/expense-development/file/moto-cost/premium-report/repair/report)，远少于历次"12/15/19"有损盘点。comprehensive-analysis 是 happy-path 浅测、缺边界——补强仍有真实回归价值，非重复劳动（区别于 R16/R17 的"目标已完成"stale）。
+- **成果（纯增测试）**：tests/comprehensive 4→52 测试(净增48)。rules.test.ts 补 mergeThresholds 边界+不可变/buildOverviewAlerts 阈值边界三件套(恰好线·线下·线上；premiumLag 用 `<`、其余三类用 `>`)+四类各自 slice(0,5)+告警顺序+dimType 过滤；新建 normalize.test.ts 锁 common.ts normalize* 逐字段(NaN/Infinity→0、Number(null)=0 vs toNullableNumber(null)=null、Math.max+round、dimKey 空串非 nullish)+camelCase??snake_case 回退(0 保留/null 回退/兄弟字段)；adapters.test.ts 补字段路由(防取错 section——既有测试所有 section 全空数组、无法验证路由)+summary `||{}` 缺省。
+- **三源对抗(全过)**：闸-1(计划)codex P0=0(核心期望值方向全对)+3P1(spread undefined 覆盖/0 左值 ??/import type 纯度)+5P2 全采纳；闸-2(diff)codex P0=P1=0+4P2(summary 缺省/兄弟字段/不可变 undefined/多类 slice)全采纳；evidence-verifier fresh-context **confirmed**(逐条复核 6 断言无误·git diff --cached 范围最小·3648 单测独立复现)。verify:full(governance44+typecheck)全绿。
+- **重来更好**：① **盘点命令本身是有损代理**——"零测试"判据必须双源(同目录 test 文件 + tests/ 根目录 import 引用)，单扫 src/features 同目录会把"测试落根目录"的模块误报零测试（CLAUDE.md §0「grep 是有损代理」在测试盘点上的具体实例）。② codex 闸-1 顺带抓到既有测试文件(P2 末条)再次印证"对抗审计用在计划阶段"的高杠杆——它直接促成现实核查纠偏，避免我在 src/features 同目录另起炉灶造成分裂/重复。③ 测试覆盖任务的 oracle 是"断言锁真实行为(哪怕含 spread undefined 覆盖这类陷阱)"，不是"应然行为"；codex+verifier 三源核对期望值 vs 源码是该 oracle 的落地。
+- **复用价值**：① 「双源零测试盘点」(同目录 find + tests/根 grep `features/<mod>/`)可固化为脚本，供 b332 后续模块取准确前沿，免每轮误报。② 「字段路由测试」范式(给每 section 唯一可区分标记，防薄包装 adapter 复制粘贴取错字段；既有测试全空数组=无法验证路由是常见盲点)适用任何多 section adapter。③ 「camelCase ?? snake_case 用 0 左值测」锁 `??` vs `||` 回归，是双键回退标准测法。
+  - needs_automation: true → 把「双源零测试盘点」做成 `scripts/` 脚本(同目录 find + tests/根 grep 并集)，供 b332 逐模块 PR 取准确前沿；可作 governance 过渡守卫"features/* 至少 1 处测试覆盖(含 tests/根引用)"。
+  - expires: 2026-09-22
+- **下一轮**：8 个真零测试模块逐模块独立 PR(优先 moto-cost/report 纯函数)；b332 整体仍 IN_PROGRESS。
