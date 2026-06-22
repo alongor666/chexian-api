@@ -14,6 +14,7 @@ import {
   useConfirmDialog,
 } from '../../shared/ui';
 import { ApiTokensPanel } from './ApiTokensPanel';
+import { splitIpList, joinList, toggleSelection } from './utils/accessControl';
 
 /**
  * 所有可通过路由白名单配置的路由列表。
@@ -79,22 +80,13 @@ const emptyRoleForm: RoleFormState = {
   defaultRoute: '',
 };
 
-const splitIpList = (value: string): string[] =>
-  value.split(/[,，\n]/).map(s => s.trim()).filter(Boolean);
-
-const joinList = (value?: string[]): string => {
-  if (!value || value.length === 0) return '';
-  return value.join(', ');
-};
-
 // 路由复选框组件
 const RouteCheckboxGroup: React.FC<{
   selected: string[];
   onChange: (routes: string[]) => void;
 }> = ({ selected, onChange }) => {
   const toggle = (path: string, checked: boolean) => {
-    const next = checked ? [...selected, path] : selected.filter(r => r !== path);
-    onChange(next);
+    onChange(toggleSelection(selected, path, checked));
   };
 
   return (
@@ -127,8 +119,7 @@ const SpecialFeaturesCheckboxGroup: React.FC<{
   onChange: (features: string[]) => void;
 }> = ({ selected, onChange }) => {
   const toggle = (key: string, checked: boolean) => {
-    const next = checked ? [...selected, key] : selected.filter(f => f !== key);
-    onChange(next);
+    onChange(toggleSelection(selected, key, checked));
   };
 
   return (

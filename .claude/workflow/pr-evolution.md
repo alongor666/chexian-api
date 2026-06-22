@@ -868,3 +868,12 @@
 - **复用价值**：`buildRsyncBranchFilterArgs(branchCode, knownBranches)`模式（null短路=旧行为，非null=分省保护）可推广到其他扁平目录假设站点（daily.mjs/parquet-overlap-check等）。`isFileInBranch`可被ETL侧的manifest/audit脚本复用。
   - needs_automation: true（VPS端就绪后需自动从`branchCode=null`升级为分省精确对比，触发条件：`/internal/data-fingerprint`支持`?branch=`参数）expires: 2026-12-31
 - **GATED残留**：真实多省同步验证需cutover时做（SX进current/的硬前置=G5口径签字+RLS-on）。VPS端分省指纹端点（`/internal/data-fingerprint?branch=SC`）待`server/src`侧实现后，assertLocalNotStaleVsVps多省路径才能从skip升级为精确对比。
+---
+
+**R21 · b332 收尾分组 PR-1：admin 纯逻辑提取 + 单测（scoping 纠偏后启动·提取路线复用·三源全过）**
+- **触发**：用户认可"一个会话做完 b332 + 先 scoping + 分组 PR"路径。scoping 复核 6 个剩余"纯组件"模块：3 个 `.ts` 全是 barrel（无逻辑），但 `.tsx` 内 useMemo/helper 含可提取纯逻辑——**纠正"6 个只能组件 smoke"的预判**：多数能走已三轮验证的"提取路线"（零 mock、最稳），只有 file 偏 IO、moto-cost(29 行)该降级。admin 作旗舰：ApiTokensPanel 有现成纯 helper、AccessControlPage 有 IP 解析 + 重复 toggle。
+- **成果（提取 + 纯增测试）**：新建 utils/tokenDisplay.ts(fmtDate/maskTokenId/isExpired)+utils/accessControl.ts(splitIpList/joinList/toggleSelection)；两组件删内联改 import，AccessControlPage 两处内联 toggle(原变量名 r/f 不同、语义同)统一改用 toggleSelection。21 单测覆盖边界(maskTokenId len≤6)、三态(isExpired revokedAt 优先)、正则分隔(中英文逗号/换行)、catch 分支(stub toLocaleString 抛错)、不可变/去重副作用。
+- **三源（闸-1 免，同 R20 路线 B 同构理由）**：verify:full(governance44+typecheck+**3768 单测**)全绿；闸-2 codex 无 P0/P1(确认逐字符等价、仅 export+prettier 括号差异)+2 P2 全采纳(fmtDate catch stub / toggleSelection 重复追加锁 `[...selected,x]` 语义)；evidence-verifier(fresh,sonnet)**CONFIRMED**(逐函数对 diff 等价、5 断言推演、亲跑 3768)。
+- **重来更好/复用价值**：① **scoping 纠偏是高杠杆**——"6 纯组件无纯函数"是有损盘点(只看文件类型 .tsx)，实际组件内联 useMemo/helper 是可提取纯逻辑富矿；判"组件 smoke vs 提取"应看**内联逻辑密度**(useMemo×N/数组链/顶层 helper)而非文件后缀。② **premium-report 的提取打法对 .tsx 组件同样成立**(源从 hooks 换成组件)，且组件里"已是独立 function 的 helper"(fmtDate/maskTokenId/isExpired)提取=纯搬移零风险，"重复内联逻辑"(两处 toggle)提取=顺带去重。③ 收尾分组里能走提取路线的优先提取(零 mock 稳)，组件 smoke 仅留给真无逻辑的展示壳。
+  - needs_automation: false（沿用 R18「双源零测试盘点 + 纯函数分布扫描」脚本项；本轮新增"按内联逻辑密度判路线"是 scoping 启发式，并入该项）
+- **下一轮**：PR-2 repair(5 useMemo 数据塑形提取)→ PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。
