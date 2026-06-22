@@ -138,7 +138,11 @@ export function PerformanceDistributionChart({
       return 16;
     };
 
+    const textColor = isDark ? '#f0f0f0' : '#333';
+    const subTextColor = isDark ? '#a3a3a3' : '#666';
+
     const option: EChartsOption = {
+      textStyle: { color: textColor },
       tooltip: {
         trigger: 'item',
         formatter: (params: any) => {
@@ -163,7 +167,7 @@ export function PerformanceDistributionChart({
         top: 0,
         type: 'scroll',
         data: ['高增长高达成（优秀）', '高增长低达成（异常）', '低增长高达成（预警）', '低增长低达成（危险）'],
-        textStyle: { color: isDark ? '#a3a3a3' : '#595959' },
+        textStyle: { color: subTextColor },
       },
       grid: {
         left: '7%',
@@ -175,17 +179,19 @@ export function PerformanceDistributionChart({
       xAxis: {
         type: 'value',
         name: '达成率',
+        nameTextStyle: { color: subTextColor },
         min: axisRange.xMin,
         max: axisRange.xMax,
-        axisLabel: { formatter: '{value}%' },
+        axisLabel: { formatter: '{value}%', color: subTextColor },
         splitLine: { show: false },
       },
       yAxis: {
         type: 'value',
         name: '增长率',
+        nameTextStyle: { color: subTextColor },
         min: axisRange.yMin,
         max: axisRange.yMax,
-        axisLabel: { formatter: '{value}%' },
+        axisLabel: { formatter: '{value}%', color: subTextColor },
         splitLine: { show: false },
       },
       series: [
