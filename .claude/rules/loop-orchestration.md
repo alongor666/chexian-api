@@ -111,6 +111,11 @@ policy: append-only
   - **进化**：启用 GitHub 合并队列。队列把每个 PR **投机性 rebase 到队列尾**、对"未来 main 状态"跑必需检查、按序合并 → `BEHIND` 从定义上消失，且**保住"组合被一起测过"的保证**（优于关 strict）。配套：`production-gate.yml` / `governance-check.yml` 加 `merge_group` 事件触发（否则队列等不到同名 status → 合并门卡死）；deploy.yml 不动（merge_group 跑队列分支被 `branches:[main]` 过滤，不触发部署）。
   - **落地语义变更（loop 端几乎零改动）**：⑦ 的 `gh pr merge --auto` 命令**不变**——队列启用后 `--auto` 自动变为"加入合并队列"。⑧ 合并探测**不再需要手动 update-branch**（队列负责串行 rebase + 合）。"enable --auto 后禁再 push"仍成立。
   - **回滚**：删除 merge queue ruleset 即恢复旧行为（workflow 的 merge_group 触发空跑无害，可保留）。
+- **meta（2026-06-22 · 更正上一条）· 合并队列对个人账号仓不可用 → 实际改走 `strict=false`**：
+  - **上一条 meta 的「启用 GitHub 合并队列」未能落地**：本仓 owner 是**个人账号（User，非 organization）**。`POST /repos/.../rulesets` 的 `merge_queue` rule 返回 422 `Invalid rule 'merge_queue'`；鉴别测试（同结构换 `non_fast_forward` rule 可成功创建）坐实**仅 merge_queue 被拒**——GitHub 合并队列只对 organization 仓开放，public 与否无关。教训：**推荐平台机制方案前必先核前置约束（此处 = 仓库 owner 类型），「public 就能用合并队列」是错的**。
+  - **实际修复**：关 main 分支保护的 `strict`（`required_status_checks.strict=false`，保留两必需检查 Production Readiness Gate + Governance Consistency Check）。BEHIND 活锁消除（双绿即可合，不再要求 up-to-date）；代价是放弃「组合一起测过」的保证，靠 ① dispatch 文件域隔离压低语义冲突 ② deploy/production-gate 的 push-main 后兜底。
+  - **merge_group 触发保留**：阶段1 给两 workflow 加的 `merge_group` 无害空跑（无队列不触发），为将来若迁 org 启用队列留路；届时只需建 merge_queue ruleset + 重新开启 strict（或交由队列接管）。
+  - **本条所属 PR 自身即方案 B 的端到端验证**：strict 已关后，本 PR 应双绿即合、不再卡 `state=BEHIND`。
 
 ---
 
