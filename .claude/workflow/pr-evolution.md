@@ -734,3 +734,24 @@
 - **重来更好**：① 我的"分层推荐"对(slash 入口/Workflow 引擎/rules 协议/agent 执行者)，但**把维护面(quality/due/stale)和未落地的 --workflow 塞进入口**是过度工程——入口就该只做一件事。② 闸-1 的最大价值这次体现在**拦截"假想需求"**：把"不可发现"当 P1 缺口是夸大，真缺口是 dispatch 输入(backlog status)维护 + 硬编码漂移(承接 R14 三问)。③ 对抗审计用在**计划阶段**比代码阶段更省——砍掉的是还没写的代码。
 - **复用价值**：确立"新建任何 wrapper/命令前先问『现有入口是否已覆盖 + 这个壳是否名实相符 + 是否绕过 SSOT 门控』"——codex 闸-1 三连问。元工具(dispatch)提示词**禁硬编码易漂移状态**(governance 计数/PR 号)，用"全过/全绿"等不漂移措辞。
   - needs_automation: false（本轮即"少建一个东西"+ 修既存漂移；无新增待自动化项）
+
+---
+
+**R16 · 山西并入收尾 5 任务并行实现 — codex 闸-2 抓 3/5 真 P1，现实核查防 2 处返工**
+- **触发**：用户"聚焦山西数据并入系统，loop:stale-scan → 清理假阳性 → loop:dispatch 取干净前沿 → Workflow fan-out"，决策"codex 对抗审查后自动合并"。Workflow 规划 fan-out → 5 任务实现 fan-out（隔离 worktree）→ codex 闸-2 逐 PR → auto-merge。5 PR 全合：#726(15d8fd P1)/#725(10c9e9)/#727(681eee)/#729(00bac8)/#728(c21667)。
+- **codex 闸-2 量化（用户要求的核心闸）**：5 PR 中 3 个需返工才 ENDORSE，抓到的都是实现自评低估/漏掉的真 P1：
+  - **00bac8**（3 轮）：① 同 VIN 多保单用 `ROW_NUMBER() OVER ()` 物理序 → 机构变更静默归错（改 `ORDER BY insurance_start_date DESC`）；② `daily.mjs` 的 **`all` 路径** `--policy-dir` 带字面引号 → 日常 ETL 静默跳过回填（单域路径已改、`all` 漏改）；③ `except Exception` 静默吞 schema/Binder 错（改重新抛出）。**P1-1（policy-dir 传错目录）经核实是 codex 误读 `branchOutputRoot('SC')` 语义 → 撤销**（核实分歧而非盲从）。
+  - **c21667**（3 轮）：① boolean 迁移只改筛选、漏维度输出 → heatmap/ranking 输出 `true/false` 而非中文枚举，**federation 关闭时也破四川字节安全**；② 筛选侧对非法值放大为全部非电销（改严格三态，非法→`1=0`）；③ `ELSE 非电销` 折叠 NULL（加 `IS NULL THEN NULL`）。
+  - **10c9e9**（3 轮）：测试意图失真（声称测路由实际测 helper）→ 补真路由级测试，但 `vi.mock` factory 捕获顶层 `const` 致 TDZ（改 `vi.hoisted()`）。
+  - **15d8fd / 681eee**：首轮 ENDORSE。
+- **重来更好**：① **实现子代理的 self_review_p0p1 系统性低估真问题**——00bac8 把"物理序不稳"列为"可能性"（实为 P1）、完全漏掉 `all` 路径引号；c21667 漏掉维度输出侧。实现 prompt 对 ETL/SQL 改动应强制"枚举所有调用点（单域+all 路径）+ 区分筛选侧 vs 输出侧契约"。② **strict 分支保护 + 并发 loop 会话（本轮同时 7 个 open PR）→ 合并串行化抖动**，监控循环跑 8 轮反复 update-branch 才落地——无 merge queue 时多会话并行合并是结构性瓶颈。
+- **复用价值**：① **现实核查 first（规划 fan-out 阶段）防返工**——00bac8 实测 `policy_no` 全 NULL（policy_no JOIN 回填 0%）、`vehicle_frame_no` 100%，把"参 policy JOIN"具体化为 VIN JOIN；15d8fd 实测 filters.ts 已注入 → gap 收窄。stale-scan「逐任务现实核查」教训前移到规划阶段。② **审 diff（闸-2）比审计划更能抓具体 bug**：本轮真 P1 全是"代码与契约/数据现实的偏差"（all 路径漏改、输出侧漏改、JOIN 键错），计划阶段看不出。③ codex 与子代理分歧时**亲自读代码裁决**（00bac8 P1-1：codex 误读、子代理对）。
+- **needs_automation**：
+  - **dispatch.mjs gatedKeywords「cutover」误伤「cutover 前置」**：15d8fd（P1 RLS 收口，desc 含"GATED cutover 前置"）被 isGated 排除出前沿——它是 cutover 的*前置*（该做、字节安全）非 cutover 本身。修法：gated 判定排除含"前置/前提"的命中，或仅匹配不可逆动作短语（"进 current/"、"发账号"）。
+    - needs_automation: true
+    - expires: 2026-07-22
+  - **启用 GitHub merge queue**：消除 strict + 多并发 loop 会话的串行化抖动（本轮监控循环手动 update-branch 8 轮）。
+    - needs_automation: true
+    - expires: 2026-09-22
+
+**量化**：codex 闸-2 抓 P1 合计 5（00bac8×2 + c21667×2 + 10c9e9×1）+ 撤销误报 1（00bac8 P1-1），全部 by-construction 字节安全（BRANCH_RLS_ENABLED=false 四川零行为变更）；现实核查推翻 2 处实现假设。GATED 的 acf188 账号+cutover 未触碰（须用户显式确认）。
