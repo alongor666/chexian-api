@@ -745,3 +745,14 @@
 - **重来更好**：① **现实核查必须前置于"动手"**：连续两轮(7a2849 第三方会话已合并/b331 部分早已做)证明 dispatch 前沿不等于"真待办"——派单前先查 note 里的 PR 状态 + 实测目标现状(行数/文件)。这是 stale-scan 47c2a5 要自动化的。② 同目录落位 > 子目录落位（当搬移代码有大量相对 import 时）——闸-1 没料到这点，我在实现时优化了，降风险。③ 纯搬移重构的 oracle 是"确定性闸全绿"，无需新增测试也无需 LLM verifier；但定向回归测试(prefetch)是验 barrel 不断链的关键锚。
 - **复用价值**：①「1000+行组件拆分」可复用打法=同目录抽 shared(类型/常量/纯helper)+子组件、barrel 重导出保旧入口零爆炸半径、`noUnusedLocals` 下精确剪枝靠 typecheck 迭代。② follow-up 登记纪律：大重构里"想做但风险高/超范围"的(hook 抽取 03f6f0、chart 去重 21c578)即时登记 backlog，不混进本 PR。
   - needs_automation: false（本轮无新增待自动化项；stale-scan 增强已独立登记 47c2a5 带其自身 expires 由 #703 闸管）
+
+---
+
+**R17 · claims_detail「字面引号 bug」误报排查 → 据实关闭 + 固化 foot-gun 护栏（PR #732·无功能变更）**
+- **触发**：派单称 daily.mjs claims_detail / 字段覆盖率的 `'--policy-dir', \`"${policyDir}"\`` 是 new_energy_claims（PR #729）同款字面引号 bug，要求改裸路径。
+- **据实判定非 bug（核实零误差）**：① `runPythonScript`（daily.mjs:176）中央剥离 argv 最外层双引号（`d197b431` execSync→spawnSync 迁移补丁），claims_detail 全程经它 → 实测 `"${p}"`→裸路径；② 字段覆盖率 `runFieldCoverageReport` 用**空数组**调用 `field_coverage.py`、且该脚本无 `--policy-dir` → 描述对象不存在；③ PR #729 的 `e9507542`（同提交保留 claims_detail 引号未动）佐证；④ 进一步核实：new_energy 的 `--policy-dir` 同样经 runStrategyFullSnapshot→runPythonScript 剥离（`d197b431` 是 `e9507542` 祖先），故 e9507542 那处去引号在该控制流下实为冗余 no-op，其「Path.exists 静默跳过」根因叙事在该路径不成立——站不住的根因又派生出本次误报任务。
+- **根因（真问题）**：① pattern-grep ≠ data-flow：把「类成员资格」用表面语法（见 `"${...}"` 即归同类）判定，违反「grep 是有损代理 / 验证不声称」；② foot-gun：`"${path}"` 经 runPythonScript 安全、走裸 spawn 即坏，调用点视觉无法区分，安全全靠用了哪个 helper。
+- **根治（PR #732）**：抽 `数据管理/lib/arg-quotes.mjs` 纯函数（与原内联逐字等价）+ `tests/arg-quotes.test.ts` 14 例契约单测锁不变量（防误删剥离）+ governance AST 闸「spawn参数引号安全」禁裸 spawnSync/execFileSync 照搬 `"${path}"`（防复发）。**负向验证**：注入 daily.mjs:925 → 闸精确 FAIL → 已还原。oracle：单测 14/14 · verify:quick（governance 44 含新闸 + typecheck）· CI Governance+Production Gate 双绿 · rebase origin/main（含 e9507542/fa4c98d6）32 提交零冲突。
+- **重来更好**：派生「在别处修同款」任务前，必须端到端追一条代表性调用链（调用点→helper→Python argparse/Path）证明类成员资格 + 给最小复现，再动手——是 `feedback_codex_review_fix_sop`「修一处≠修一类」的逆向护栏（修一类前先证成员资格）。
+- **复用价值**：「中央 shim 兼容旧写法」型迁移（execSync→spawnSync 的剥引号）必配「契约单测 + 禁绕过 shim 的 AST 闸」，否则旧写法成视觉无差别 foot-gun，反复诱发误报与冗余修复。
+  - needs_automation: false（本轮已落地护栏闸 + 契约单测，无新增待自动化项）

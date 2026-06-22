@@ -3107,6 +3107,86 @@ function checkArchLayerBoundaries() {
   return true;
 }
 
+/**
+ * 裸 spawn 参数引号安全（foot-gun 防回归）
+ *
+ * 病根：daily.mjs runPythonScript 内中央剥离 argv 最外层双引号（lib/arg-quotes.mjs），
+ * 故历史 `"${path}"` 写法经它调用时安全（剥离后是裸路径）。但任何 **绕过 runPythonScript**
+ * 的裸 spawnSync / execFileSync 若照搬 `"${path}"`，引号不会被剥离 → Python 端
+ * Path('"…"').exists() 判 false → 静默跳过（new_energy_claims 曾踩坑）。
+ *
+ * 规则：数据管理/daily.mjs 内 spawnSync(...) / execFileSync(...) 的 argv 数组字面量，
+ * 元素不得是「以双引号开头的反引号模板」（`"${...}"` 形态）。要传路径就传裸变量，
+ * 由调用方保证不带字面引号；确需引号处理则改走 runPythonScript。
+ *
+ * 用 AST 精确命中「直接 spawn 的 argv 数组里的带引号模板」——经 runPythonScript 的调用
+ * 其内部 spawnSync 只见 `...cleanArgs` 展开、无字面模板，故零误报。
+ */
+function checkSpawnArgQuoteSafety() {
+  info('检查裸 spawn 参数引号安全（daily.mjs 禁绕过 runPythonScript 照搬 `"${path}"`）...');
+
+  const require = createRequire(import.meta.url);
+  let ts;
+  try {
+    ts = require('typescript');
+  } catch {
+    error('typescript 未安装，无法做 AST 扫描（应在 devDependencies）');
+    return false;
+  }
+
+  const SCAN_FILES = ['数据管理/daily.mjs'];
+  const DIRECT_SPAWN = new Set(['spawnSync', 'execFileSync']);
+  const violations = [];
+
+  for (const rel of SCAN_FILES) {
+    const full = path.join(ROOT_DIR, rel);
+    if (!fs.existsSync(full)) {
+      violations.push(`${rel}（文件不存在，无法校验）`);
+      continue;
+    }
+    const text = fs.readFileSync(full, 'utf-8');
+    let sf;
+    try {
+      sf = ts.createSourceFile(full, text, ts.ScriptTarget.Latest, true);
+    } catch (e) {
+      error(`AST 解析失败：${rel} — ${e.message}`);
+      return false;
+    }
+
+    const visit = (node) => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        DIRECT_SPAWN.has(node.expression.text)
+      ) {
+        for (const arg of node.arguments) {
+          if (!ts.isArrayLiteralExpression(arg)) continue;
+          for (const el of arg.elements) {
+            // foot-gun 形态：以双引号开头的反引号模板，如 `"${tmpOutput}"`
+            if (el.getText(sf).trim().startsWith('`"')) {
+              const line = sf.getLineAndCharacterOfPosition(el.getStart(sf)).line + 1;
+              violations.push(`${rel}:${line}  →  ${node.expression.text}(...) argv 含字面引号模板 ${el.getText(sf).trim()}`);
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+  }
+
+  if (violations.length > 0) {
+    error(`发现裸 spawn argv 带字面引号 = ${violations.length} 处（绕过 runPythonScript 剥引号 → Python Path.exists 判 false 静默跳过）：`);
+    for (const v of violations) console.log(`    - ${v}`);
+    console.log('    修复：裸 spawnSync/execFileSync 传路径用裸变量（不加字面引号）；确需引号处理走 runPythonScript');
+    console.log('    依据：数据管理/lib/arg-quotes.mjs · tests/arg-quotes.test.ts');
+    return false;
+  }
+
+  success('裸 spawn 参数引号安全检查通过（daily.mjs 无绕过 runPythonScript 的带引号 argv）');
+  return true;
+}
+
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件', fn: checkRequiredFiles },
@@ -3152,6 +3232,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'pr-evolution needs_automation expires 闸', fn: checkPrEvolutionExpired },
   { name: '.github/workflows YAML 语法', fn: checkWorkflowYamlSyntax },
   { name: '分层依赖边界', fn: checkArchLayerBoundaries },
+  { name: 'spawn参数引号安全', fn: checkSpawnArgQuoteSafety },
 ];
 
 // ============================================================
