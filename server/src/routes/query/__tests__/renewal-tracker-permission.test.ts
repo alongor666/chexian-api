@@ -112,8 +112,12 @@ vi.mock('../shared.js', () => ({
 }));
 
 // ── mock：捕获 generateRenewalTrackerQuery 的调用参数 ──────────
-const mockGenerate = vi.fn().mockReturnValue('SELECT 1');
-const mockGenerateMeta = vi.fn().mockReturnValue('SELECT 1');
+// 使用 vi.hoisted 确保 mock fn 在 hoist 阶段（import 前）就绪，
+// 避免 factory 捕获普通顶层 const 时的 TDZ 脆弱性。
+const { mockGenerate, mockGenerateMeta } = vi.hoisted(() => ({
+  mockGenerate: vi.fn().mockReturnValue('SELECT 1'),
+  mockGenerateMeta: vi.fn().mockReturnValue('SELECT 1'),
+}));
 vi.mock('../../../sql/renewal-tracker.js', () => ({
   generateRenewalTrackerQuery: (...args: any[]) => mockGenerate(...args),
   generateRenewalTrackerMetaQuery: (...args: any[]) => mockGenerateMeta(...args),
