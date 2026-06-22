@@ -116,6 +116,11 @@ policy: append-only
   - **实际修复**：关 main 分支保护的 `strict`（`required_status_checks.strict=false`，保留两必需检查 Production Readiness Gate + Governance Consistency Check）。BEHIND 活锁消除（双绿即可合，不再要求 up-to-date）；代价是放弃「组合一起测过」的保证，靠 ① dispatch 文件域隔离压低语义冲突 ② deploy/production-gate 的 push-main 后兜底。
   - **merge_group 触发保留**：阶段1 给两 workflow 加的 `merge_group` 无害空跑（无队列不触发），为将来若迁 org 启用队列留路；届时只需建 merge_queue ruleset + 重新开启 strict（或交由队列接管）。
   - **本条所属 PR 自身即方案 B 的端到端验证**：strict 已关后，本 PR 应双绿即合、不再卡 `state=BEHIND`。
+- **meta（2026-06-22 · wave-2 复盘）· 跨会话重复劳动(P0) + 限流韧性(P0) + bucketOf 目录归桶(P1·本 PR 已修)**：
+  - **P0「跨会话重复劳动」（仍未解·待协调后单 owner 实现）**：wave-2 派 b331，6h 内**另一会话也做 b331 并先合并**（`1e19b486` 1401→882），我的 agent 工作孤儿化作废。根因=`computeFrontier` 的 `inflight` 仍是 `dispatch-config.json` **本地配置、非跨会话共享**；多会话各跑 dispatch 都见同任务"可派"，无认领锁。**根治方向**：认领即 `bun scripts/backlog.mjs status <uid> IN_PROGRESS --actor <session>` 并立即 push（event-log union 跨会话可见）；dispatch 先 `git fetch` 再折叠，排除"新鲜 IN_PROGRESS 认领"（带时效防死锁）。远程分支 `claude/loop-<slug>` 存在性是**辅助**信号（对方未 push 前无效），event-log 认领才是主锁。
+  - **P0「限流韧性」**：wave-2 两 high-effort agent 在 Anthropic 服务端限流窗口同时重试，跑 21.9M ms 后 `dev:[]` 零产出；b244 未到 push 即死=无 checkpoint。**根治**：① 并发 ≤2、effort 按任务难度而非一律 high、限流期不强推大并发波；② agent 尽早 commit/push（即便 WIP）留 checkpoint；③ 派大波前先轻量探一个 agent 试水再放大。
+  - **P1「bucketOf 目录归桶」（本 PR 已修 + 单测）**：边界用 `(?:\/|$)` 替硬尾斜杠——目录形式 code（`server/src/sql` 无尾斜杠）旧版误归 be-other，致域互斥漏判（b331 与 b244 在 `claims-detail.ts` 真重叠未被检出，险并行撞车，靠人工拦下）。
+  - **元教训**：本会话另一浪费源是「**多会话无协调地并发硬化 loop 机制**」本身——§4 出现 merge-queue→strict=false 的来回、本会话也险些重复别人已修的 BEHIND 活锁。**建议：loop-meta（本协议 / dispatch.mjs 等）改动由单一 owner 会话串行，功能任务才并行**。
 
 ---
 

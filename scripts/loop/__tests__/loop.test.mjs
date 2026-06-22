@@ -54,6 +54,17 @@ describe('dispatch.bucketOf', () => {
     // 看似真实路径（含 / 且含扩展名）的未识别前缀 → 回退前两段粗域
     expect(bucketOf('weirdtop/sub/file.ts')).toBe('weirdtop/sub');
   });
+  it('P1-3：目录形式 code（无尾斜杠/无文件）正确归桶——防域互斥漏判', () => {
+    // wave-2 实测：b331 的 `server/src/sql`（目录、无尾斜杠）旧版回退到 be-other，
+    // 漏掉与 b244 的 claims-detail.ts 真重叠。修复后须归 be-sql。
+    expect(bucketOf('server/src/sql')).toBe('be-sql');
+    expect(bucketOf('src/features/dashboard')).toBe('frontend');
+    expect(bucketOf('server/src/services')).toBe('be-services');
+    expect(bucketOf('数据管理')).toBe('etl');
+    expect(bucketOf('server')).toBe('be-other');
+    // 不误伤：同前缀但不同目录段（sqlfoo 非 sql/）→ 落到 be-other（^server）
+    expect(bucketOf('server/src/sqlfoo/x.ts')).toBe('be-other');
+  });
 });
 
 describe('dispatch.taskDomains 分隔符', () => {
