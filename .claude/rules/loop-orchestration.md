@@ -145,6 +145,7 @@ policy: append-only
   - **enable --auto 后禁再 push**（memory `feedback_auto_merge_no_followup_push`：跟进提交竞态丢失）→ codex 若抓 P0/P1，先全修 + 复审 + CI 再绿，**才** enable --auto；收尾 bundle（backlog/复盘/账本）也须在 enable 前一次推完。
   - **落地**：`sessionPrompt` 第 4 步标注「P0/P1 强制 codex 闸-2 + CLI 降级路径」，第 6 步改为「三源过清 + CI 双绿 + 非部署链 → `gh pr merge --auto --squash` 自动合并；部署链人工合」。本 PR 自身即首个按新流程执行者（P0 级 → 跑 codex CLI 对抗 → 三源清 → 自动合并）。
   - **needs_automation: false**（本条是把既有 §2 闸-2 + pr-checklist §4 部署链特例**显式编排进单任务收尾流**，非新机制；codex 调用已是 §2 降级分层覆盖的确定路径）。
+  - **本 PR codex 闸-2 实跑结果（首个按新流程执行，证「强制 codex 对抗」有价值）**：codex CLI（read-only）判 PARTIAL，抓 **1 P1 + 2 P2，已全修**——① **P1（认领锁 TTL 据「认领时刻」而非「最后活动」）**：旧 `latestClaims` 只取最新 status 的 at 算 TTL，致「认领 8h+ 但 7.5h 前还在 note 心跳」的**活跃**会话被误释放→重复派单（与文档「无后续事件才释放」不符）。修：`latestClaims` 增 `lastAt`=该 uid **任意事件**最新时刻，`computeFrontier` TTL 据 `lastAt`（任何 note/amend/status 刷新锁）；codex 原始复现（IN_PROGRESS@00:00+note@07:30,now=08:00,ttl=8）修后 frontier=[]、claimed=1（锁住）。② **P2 ttl 校验**：`claimTtlHours` 为 `'bad'/0/负` 时静默释放所有认领→加非正有限数回退默认 8h。③ **P2 ref 上限**：`.slice(0,80)` 无新鲜度序，超限静默漏认领→提到 200 + 超限 `console.error` 告警（不静默截断）。+4 单测（lastAt 心跳刷新 / 活跃锁 / 真陈旧释放 / ttl 非法回退），全量 3719/3719、governance 44/44。**教训**：evidence-verifier 闸-2 已判 CONFIRMED 无 P0/P1，但 codex 窄范围对抗仍抓出 1 个真 P1（spec-vs-impl 不符）——印证「P0/P1 强制 codex（多模型对抗）」的增量价值，单一 verifier 会漏。
 
 ---
 

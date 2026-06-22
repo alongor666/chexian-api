@@ -844,3 +844,11 @@
 - **三问复盘**：① 重来更好？根因 wave-2 已诊断清楚，本可同期落地而非延后一波——根因明确即应同 PR 修、勿只登记 P0。② 复用价值？`latestClaims`（事件日志取最新认领态）可被 stale-scan/其他 loop 工具复用，避免各自实现折叠。③ 自动化？认领锁即「把纪律变机制」；残留人工点=会话须真执行「认领先于实现」（sessionPrompt 已固化但仍依赖遵从）。
   - needs_automation: true → 认领遗漏硬闸：dispatch 检出「远程 loop 分支存在但无认领事件」时可升级为更强提示/pre-push 闸（属 loop-meta，单 owner 串行落地）。
   - expires: 2026-09-22
+
+## 2026-06-22 · loop 优化：单任务 P0/P1 PR 强制 codex 闸-2 + 三源过清自动合并（codex 抓 1 P1）
+
+- **用户指令**：单任务 loop 也应对 P0/P1 级复杂任务的 PR 跑 codex 对抗审查后**自动合并**。澄清「禁 auto-merge」仅限部署链 PR。
+- **优化**：sessionPrompt 第 4 步（P0/P1 强制 codex 闸-2 + §2 降级分层 CLI 路径）+ 第 6 步（三源 P0/P1 全清 + CI 双绿 + 非部署链 + slot holder → `gh pr merge --auto --squash`；部署链人工合）；loop-orchestration.md §4 meta 固化。
+- **首次按新流程执行（#748 自身）即抓到真 P1**：evidence-verifier 闸-2 先判 CONFIRMED 无 P0/P1，但 codex CLI 窄对抗抓出 **认领锁 TTL 据「认领时刻」而非「最后活动」**——「认领 8h+ 但 7.5h 前还在 note 心跳」的活跃会话被误释放→重复派单（与文档「无后续事件才释放」不符）。+2 P2（ttl 无校验静默释放 / ref 上限静默漏）。**全修**：latestClaims 增 lastAt（任意事件刷新锁）、ttl 非正回退默认、ref 上限 80→200+告警。codex 原始复现修后锁住；+4 单测；全量 3719/3719。
+- **核心教训**：**P0/P1 复杂任务「强制 codex（多模型对抗）」有不可替代的增量价值**——单一 evidence-verifier 判 CONFIRMED 仍漏掉 spec-vs-impl 不符的真 P1；多模型对抗是「证伪」的必要冗余，不是仪式。用户要求把它编排进单任务收尾流是对的。
+- needs_automation: false（闸-2 codex 已是 §2 降级分层确定路径；本条仅显式编排进单任务流）。

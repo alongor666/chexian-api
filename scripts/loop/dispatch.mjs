@@ -57,33 +57,47 @@ function toMs(v) {
 /**
  * 从事件数组提取「当前活跃认领」（跨会话锁的**主信号**）。纯函数（无时钟 / 无 fs / 无 git）。
  *
- * 对每个 uid 取其**最新 status 事件**（与 backlog/lib.fold 同序：(at||ts, eid) 全序、分支无关），
- * 若该状态 ∈ CLAIM_STATUSES 则记为认领并返回 {actor, at}。认领后流转到 DONE/PARTIAL/… 即自动失效。
+ * 对每个 uid 取其**最新 status 事件**（与 backlog/lib.fold 同序：(at||ts, eid) 全序、分支无关）判定认领态：
+ * 若该状态 ∈ CLAIM_STATUSES 则记为认领，返回 `{actor, at, lastAt}`。`at`=认领时刻（最新 status 的 at）；
+ * `lastAt`=该 uid **任意事件**（note/amend/status 皆算「推进」）的最新时刻——TTL 据 lastAt 算新鲜度，
+ * 故认领后只要有后续活动就刷新锁（codex 闸-2 P1：旧实现只看 status at，会把 7.5h 前还在 note 的活跃会话误释放）。
+ * 认领后流转到 DONE/PARTIAL/… 即自动失效（最新 status 不再是 CLAIM_STATUSES）。
  *
  * 跨会话可见性：会话开工即 `bun scripts/backlog.mjs status <uid> IN_PROGRESS --actor <session>` 写入
  * BACKLOG_LOG.jsonl（merge=union）并立即 push；别的会话 dispatch 收集多 ref 日志（CLI 侧 gatherClaimContext）
  * 后即见此认领，computeFrontier 据此把任务锁出前沿，根治「多会话排空同一前沿 → 重复劳动」（§4 P0）。
  * @param {Array<object>} events 已解析事件（可跨多个 ref 合并去重后传入）
- * @returns {Object<string,{actor:string,at:string}>}
+ * @returns {Object<string,{actor:string,at:string,lastAt:string}>}
  */
 export function latestClaims(events) {
-  const statusEvents = (events || [])
-    .map((e, i) => ({ e, i }))
-    .filter((x) => x.e && x.e.kind === 'status' && x.e.uid && x.e.status);
-  statusEvents.sort((a, b) => {
-    const ka = a.e.at || a.e.ts || '';
-    const kb = b.e.at || b.e.ts || '';
-    if (ka !== kb) return ka < kb ? -1 : 1;
-    const ea = a.e.eid || '';
-    const eb = b.e.eid || '';
-    if (ea !== eb) return ea < eb ? -1 : 1;
-    return a.i - b.i; // 兜底：(at,eid) 全等时按原序（带 eid 的事件不会走到）
-  });
-  const latest = new Map(); // uid -> 最新 status 事件（升序遍历，末写覆盖 = 最新）
-  for (const { e } of statusEvents) latest.set(e.uid, e);
+  const indexed = (events || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.uid);
+  // 每 uid「最后活动」时刻 = 任意事件 (at||ts) 的字典序最大（ISO/日期串可比；TTL 据此 → 任何后续事件刷新锁）
+  const lastAtByUid = new Map();
+  for (const { e } of indexed) {
+    const at = e.at || e.ts || '';
+    const prev = lastAtByUid.get(e.uid);
+    if (prev === undefined || at > prev) lastAtByUid.set(e.uid, at);
+  }
+  // 每 uid 最新 status 事件（与 fold 同 (at||ts, eid) 全序）→ 判定是否处于认领态 + 认领人 + 认领时刻
+  const statusSorted = indexed
+    .filter((x) => x.e.kind === 'status' && x.e.status)
+    .sort((a, b) => {
+      const ka = a.e.at || a.e.ts || '';
+      const kb = b.e.at || b.e.ts || '';
+      if (ka !== kb) return ka < kb ? -1 : 1;
+      const ea = a.e.eid || '';
+      const eb = b.e.eid || '';
+      if (ea !== eb) return ea < eb ? -1 : 1;
+      return a.i - b.i; // 兜底：(at,eid) 全等时按原序（带 eid 的事件不会走到）
+    });
+  const latestStatus = new Map(); // uid -> 最新 status 事件（升序遍历，末写覆盖 = 最新）
+  for (const { e } of statusSorted) latestStatus.set(e.uid, e);
   const claims = {};
-  for (const [uid, e] of latest) {
-    if (CLAIM_STATUSES.has(e.status)) claims[uid] = { actor: e.actor || '?', at: e.at || e.ts || '' };
+  for (const [uid, e] of latestStatus) {
+    if (CLAIM_STATUSES.has(e.status)) {
+      const at = e.at || e.ts || '';
+      claims[uid] = { actor: e.actor || '?', at, lastAt: lastAtByUid.get(uid) || at };
+    }
   }
   return claims;
 }
@@ -162,16 +176,21 @@ export function computeFrontier(tasks, config = {}) {
   const deps = config.deps || {};
   const done = new Set(tasks.filter((t) => t.status === 'DONE').map((t) => t.uid));
 
-  // 跨会话认领锁。缺时钟信息（无 now 或 at 不可解析）→ 保守视为新鲜（锁出，宁可串行勿重复派单）。
+  // 跨会话认领锁。缺时钟信息（无 now 或时间不可解析）→ 保守视为新鲜（锁出，宁可串行勿重复派单）。
   const claims = config.claims || {};
   const nowMs = toMs(config.now);
-  const ttlMs = (config.claimTtlHours ?? DEFAULT_CLAIM_TTL_HOURS) * 3600 * 1000;
+  // ttl 校验（codex 闸-2 P2）：非正有限数（'bad'/0/负/null）→ 回退默认，避免误配静默释放所有认领。
+  const ttlHoursRaw = config.claimTtlHours;
+  const ttlHours = (typeof ttlHoursRaw === 'number' && Number.isFinite(ttlHoursRaw) && ttlHoursRaw > 0)
+    ? ttlHoursRaw : DEFAULT_CLAIM_TTL_HOURS;
+  const ttlMs = ttlHours * 3600 * 1000;
   const claimInfo = (uid) => {
     const c = claims[uid];
     if (!c) return null;
-    const atMs = toMs(c.at);
-    if (nowMs == null || atMs == null) return { actor: c.actor || '?', at: c.at || '', ageMs: null, fresh: true };
-    const ageMs = nowMs - atMs;
+    // TTL 据「最后活动」lastAt（任何后续事件刷新锁，codex 闸-2 P1）；lastAt 缺省回退认领时刻 at（兼容直传 claims）。
+    const lastMs = toMs(c.lastAt != null ? c.lastAt : c.at);
+    if (nowMs == null || lastMs == null) return { actor: c.actor || '?', at: c.at || '', ageMs: null, fresh: true };
+    const ageMs = nowMs - lastMs;
     return { actor: c.actor || '?', at: c.at || '', ageMs, fresh: ageMs < ttlMs };
   };
 
@@ -391,7 +410,11 @@ function gatherClaimContext(localLines, { fetch = true } = {}) {
   // 安全：ref 名将插值进 `git show <ref>:...` shell 串。git 不禁 ref 名含 `;|$` 等元字符，恶意命名的
   // 远程分支可注入 → 严格字符白名单（合法 git 分支仅 \w./- ）过滤，非法 ref 直接丢弃（纵深防御）。
   const SAFE_REF = /^[\w./-]+$/;
-  const claimRefs = refs.filter((r) => SAFE_REF.test(r) && (r === 'origin/main' || r.startsWith('origin/claude/'))).slice(0, 80);
+  const matched = refs.filter((r) => SAFE_REF.test(r) && (r === 'origin/main' || r.startsWith('origin/claude/')));
+  // 上限防失控（codex 闸-2 P2）：ref 名无新鲜度序，超限截断可能漏活跃认领 → 不静默，超限即告警（建议清理已合 loop 分支）。
+  const REF_CAP = 200;
+  if (matched.length > REF_CAP) console.error(`⚠️ [dispatch] 认领扫描分支 ${matched.length} 超上限 ${REF_CAP}，截断后可能漏掉部分远程认领——建议 cleanup-worktrees 清理已合并 loop 分支`);
+  const claimRefs = matched.slice(0, REF_CAP);
   for (const r of claimRefs) {
     if (r.startsWith('origin/claude/')) branches.push(r.slice('origin/'.length));
     try { mergeText(git(`show ${r}:BACKLOG_LOG.jsonl`, { maxBuffer: 64 * 1024 * 1024 })); } catch { /* 该 ref 无此文件/不可读 → 跳过 */ }
