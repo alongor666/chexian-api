@@ -44,7 +44,7 @@ export const quoteFilterSchema = z.object({
   isTelemarketing: optionalEnumSchema(['电销', '非电销']),
   isNewEnergy: optionalEnumSchema(['是', '否']),
   isTransferred: optionalEnumSchema(['是', '否']),
-  riskGrade: optionalEnumSchema(['A', 'B', 'C', 'D']),
+  riskGrade: optionalEnumSchema(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'X']),
   ncdMin: z.preprocess(preprocessBlankToUndefined, z.coerce.number().optional()),
   ncdMax: z.preprocess(preprocessBlankToUndefined, z.coerce.number().optional()),
 });

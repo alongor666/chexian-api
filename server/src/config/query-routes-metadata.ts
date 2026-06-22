@@ -106,7 +106,7 @@ const QUOTE_PARAMS: QueryRouteParam[] = [
   { name: 'isTelemarketing', type: 'string', description: '是否电销', enum: ['电销', '非电销'] },
   { name: 'isNewEnergy', type: 'string', description: '是否新能源', enum: ['是', '否'] },
   { name: 'isTransferred', type: 'string', description: '是否过户', enum: ['是', '否'] },
-  { name: 'riskGrade', type: 'string', description: '风险等级', enum: ['A', 'B', 'C', 'D'] },
+  { name: 'riskGrade', type: 'string', description: '风险等级', enum: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'X'] },
   { name: 'ncdMin', type: 'number', description: 'NCD 系数下限' },
   { name: 'ncdMax', type: 'number', description: 'NCD 系数上限' },
 ];

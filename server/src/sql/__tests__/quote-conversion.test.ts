@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import quoteConversionRouter from '../../routes/query/quote-conversion.js';
 import { AppError } from '../../routes/query/shared.js';
 import { duckdbService } from '../../services/duckdb.js';
-import { generateQuoteKpiQuery } from '../quote-conversion.js';
+import { generateQuoteFunnelQuery, generateQuoteKpiQuery } from '../quote-conversion.js';
 
 vi.mock('../../services/duckdb.js', () => ({
   duckdbService: {
@@ -254,5 +254,32 @@ describe('quote-conversion SQL contract', () => {
     const err = next.mock.calls[0]?.[0] as Error;
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(400);
+  });
+
+  it('riskGrade 扩展到 E/F/G/X 后 KPI 路由能正确生成 SQL 筛选条件', async () => {
+    // B261: riskGrade 枚举扩展到 A-G/X，E/F/G/X 等级的已评级客户应可筛选
+    const handler = getKpiRouteHandler();
+    const json = vi.fn();
+
+    for (const grade of ['E', 'F', 'G', 'X'] as const) {
+      vi.clearAllMocks();
+      const req = {
+        query: { riskGrade: grade },
+      } as unknown as Request;
+      const res = { json } as unknown as Response;
+
+      await handler(req, res, vi.fn() as unknown as NextFunction);
+
+      expect(duckdbQuery).toHaveBeenCalledTimes(1);
+      const sql = duckdbQuery.mock.calls[0]?.[0] as string;
+      expect(sql).toContain(`insurance_grade = '${grade}'`);
+      expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    }
+  });
+
+  it('L3 quality SQL 包含 A-G/X 全量已评级风险等级（B261 扩展）', () => {
+    // 验证漏斗 SQL 已扩展到 A-G/X，确保质量报价定义包含所有已评级客户
+    const sql = generateQuoteFunnelQuery();
+    expect(sql).toContain("insurance_grade IN ('A','B','C','D','E','F','G','X')");
   });
 });

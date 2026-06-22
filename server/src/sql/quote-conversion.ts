@@ -34,7 +34,7 @@ export interface QuoteConversionFilters {
   isTelemarketing?: '电销' | '非电销';
   isNewEnergy?: '是' | '否';
   isTransferred?: '是' | '否';
-  riskGrade?: 'A' | 'B' | 'C' | 'D';
+  riskGrade?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'X';
   ncdMin?: number;
   ncdMax?: number;
 }
@@ -124,7 +124,7 @@ export function generateQuoteFunnelQuery(filters: QuoteConversionFilters = {}, w
       renewal_status AS renewal_type,
       COUNT(*) AS l1_total,
       COUNT(CASE WHEN final_quote_premium > 0 THEN 1 END) AS l2_valid,
-      COUNT(CASE WHEN final_quote_premium > 0 AND insurance_grade IN ('A','B','C','D') AND commercial_ncd <= 1.0 THEN 1 END) AS l3_quality,
+      COUNT(CASE WHEN final_quote_premium > 0 AND insurance_grade IN ('A','B','C','D','E','F','G','X') AND commercial_ncd <= 1.0 THEN 1 END) AS l3_quality,
       COUNT(CASE WHEN is_underwritten = '承保' THEN 1 END) AS l4_insured
     FROM QuoteConversion
     WHERE ${finalWhere}
