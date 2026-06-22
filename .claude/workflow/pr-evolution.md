@@ -815,3 +815,11 @@
 - **复用价值**：① 「规则引擎测试」范式=阈值边界三件套 × 每条规则 + 排序锚 + null/除零守卫 + 分支矩阵防漏；可套用任何 metric×rule 型洞察/告警引擎。② 「纯函数分布扫描」（区分 utils 纯函数 / hooks / 纯组件）是 R18「双源零测试盘点」的下一层细化——决定一个零测试模块走「纯逻辑测试」还是「组件 smoke」路线。
   - needs_automation: false（并入 R18 已登记的「双源零测试盘点」脚本项 expires 2026-09-22，新增「纯函数分布扫描」维度，不另立）
 - **下一轮**：premium-report（2 hooks，renderHook 稍重但仍属纯逻辑）；余 6 纯组件模块须转「组件 smoke（DOM/testing-library）」路线，与本纯函数策略不同——b332 的一个**策略分叉点**，建议后续明确。
+
+## 2026-06-22 · 47c2a5 stale-scan 增 PR-合并信号（根治「已合任务被重复派单 + DONE 滞后」）
+
+- **背景/根因**：本轮 loop 复盘暴露 P1——stale-scan 仅看完成语+git churn，看不到「任务实现 PR 已 MERGED」，致 7a2849（#640 已合一周仍被重复派单）、b299/b261（合并后滞留 IN_PROGRESS 未回填 DONE）。
+- **实现**：`classifyStale` 加注入参 `mergedPrRefs`（PR 已合=最强信号→high，独立于完成语）；CLI 一次 `gh pr list --state merged` 批量取 + 纯函数 `branchMatchesUid` 分隔符边界匹配（避免 b332 误命中无关分支子串）；网络/gh 不可用优雅降级（返回空 Map 不崩）；默认开 + `--no-pr` 关。
+- **验证**：43 单测全绿（含 6 新例：uidToken/branchMatchesUid/PR 信号高置信/scanStale 注入）；governance 44/44；实跑命中 b261/b299/b290/b322/b332 共 5 项「合并未回填 DONE」任务（活证据）。
+- **边界纪律（用户 2026-06-22 确认）**：网络抖动 / 判定器 503 是环境不可抗力（天），不计入「问题」、不优化，只容错共处；本 PR 只根治可控的逻辑盲区。
+- needs_automation: false（本身即把"现实核查"自动化的一环）

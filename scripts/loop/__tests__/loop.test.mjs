@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate } from '../dispatch.mjs';
 import { parseLedger, aggregate } from '../quality-report.mjs';
 import { scanEntries, classify, isoAddDays } from '../automation-due.mjs';
-import { scanNotes, classifyStale, scanStale } from '../stale-scan.mjs';
+import { scanNotes, classifyStale, scanStale, uidToken, branchMatchesUid } from '../stale-scan.mjs';
 
 const J = (o) => JSON.stringify(o);
 
@@ -309,5 +309,54 @@ describe('stale-scan.scanStale 排序', () => {
     const churn = new Map([['lowc', 7]]);
     const r = scanStale(tasks, notes, churn);
     expect(r.map((x) => x.uid)).toEqual(['high1', 'mid1', 'lowc']); // done1 被滤除
+  });
+});
+
+describe('stale-scan.uidToken / branchMatchesUid（47c2a5）', () => {
+  it('uidToken 取 uid 末段；<4 字符弃用（防误配）', () => {
+    expect(uidToken('2026-05-30-user-b299')).toBe('b299');
+    expect(uidToken('2026-06-11-claude-7a2849')).toBe('7a2849');
+    expect(uidToken('x-ab')).toBe(''); // 太短
+    expect(uidToken('')).toBe('');
+  });
+  it('branchMatchesUid 分隔符边界匹配（loop + 非 loop fix 分支命中；子串不误配）', () => {
+    expect(branchMatchesUid('claude/loop-2026-05-30-user-b299', '2026-05-30-user-b299')).toBe(true);
+    expect(branchMatchesUid('claude/fix-yoy-ytd-phantom-7a2849', '2026-06-11-claude-7a2849')).toBe(true);
+    expect(branchMatchesUid('claude/loop-2026-06-05-claude-b332-expense', '2026-06-05-claude-b332')).toBe(true); // 后接分隔符
+    expect(branchMatchesUid('claude/loop-xb299y', '2026-05-30-user-b299')).toBe(false); // 子串非边界 → 不误配
+    expect(branchMatchesUid('claude/loop-b332x', '2026-06-05-claude-b332')).toBe(false); // 后接非分隔符
+    expect(branchMatchesUid('', '2026-05-30-user-b299')).toBe(false);
+  });
+});
+
+describe('stale-scan.classifyStale · PR-合并信号（47c2a5）', () => {
+  it('实现 PR 已合 → 高置信（即便 PROPOSED、note 不足）', () => {
+    const h = classifyStale({ uid: '2026-05-30-user-b299', status: 'PROPOSED', priority: 'P2', desc: 'asOfDate' }, '实现完成，待合', 0, [721]);
+    expect(h).not.toBe(null);
+    expect(h.confidence).toBe('high');
+    expect(h.mergedPrRefs).toEqual([721]);
+    expect(h.reasons.some((r) => r.includes('#721') && r.includes('MERGED'))).toBe(true);
+  });
+  it('IN_PROGRESS + 实现 PR 已合 → 高置信（b261/b299 合并后未回填 DONE 形态）', () => {
+    const h = classifyStale({ uid: '2026-04-26-user-b261', status: 'IN_PROGRESS', priority: 'P3', desc: 'riskGrade' }, '待编排会话过闸后合', 0, [723]);
+    expect(h.confidence).toBe('high');
+  });
+  it('无 PR-合并 + 无 note + churn 未达阈 → null（PR 信号不误报）', () => {
+    expect(classifyStale({ uid: 'q', status: 'PROPOSED', desc: 'q' }, '待评估', 0, [])).toBe(null);
+  });
+  it('DONE 任务即便传 mergedPrRefs 也不扫 → null', () => {
+    expect(classifyStale({ uid: 'd', status: 'DONE', desc: 'd' }, '', 0, [999])).toBe(null);
+  });
+});
+
+describe('stale-scan.scanStale · 注入 mergedPrsByUid（47c2a5）', () => {
+  it('PR 已合任务进清单且高置信，排在仅 churn 的低置信前', () => {
+    const tasks = [
+      { uid: 'prdone', status: 'IN_PROGRESS', desc: 'p' },
+      { uid: 'lowc', status: 'PROPOSED', desc: 'l' },
+    ];
+    const r = scanStale(tasks, new Map(), new Map([['lowc', 7]]), new Map([['prdone', [721]]]));
+    expect(r.map((x) => x.uid)).toEqual(['prdone', 'lowc']);
+    expect(r[0].confidence).toBe('high');
   });
 });
