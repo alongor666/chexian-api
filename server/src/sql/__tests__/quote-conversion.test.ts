@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import quoteConversionRouter from '../../routes/query/quote-conversion.js';
 import { AppError } from '../../routes/query/shared.js';
 import { duckdbService } from '../../services/duckdb.js';
-import { generateQuoteKpiQuery } from '../quote-conversion.js';
+import { generateQuoteKpiQuery, type QuoteConversionFilters } from '../quote-conversion.js';
 
 vi.mock('../../services/duckdb.js', () => ({
   duckdbService: {
@@ -45,7 +45,26 @@ describe('quote-conversion SQL contract', () => {
     expect(sql).toContain('switch_insured_premium');
   });
 
-  it('KPI 路由支持旧车专属筛选参数', async () => {
+  it('P2 c21667：generateQuoteKpiQuery 中 isTelemarketing=电销 生成 boolean TRUE 条件', () => {
+    const filters: QuoteConversionFilters = { isTelemarketing: '电销' };
+    const sql = generateQuoteKpiQuery(filters);
+    expect(sql).toContain('is_telemarketing = TRUE');
+    expect(sql).not.toContain("is_telemarketing = '电销'");
+  });
+
+  it('P2 c21667：generateQuoteKpiQuery 中 isTelemarketing=非电销 生成 boolean FALSE 条件', () => {
+    const filters: QuoteConversionFilters = { isTelemarketing: '非电销' };
+    const sql = generateQuoteKpiQuery(filters);
+    expect(sql).toContain('is_telemarketing = FALSE');
+    expect(sql).not.toContain("is_telemarketing = '非电销'");
+  });
+
+  it('P2 c21667：isTelemarketing 未传时不生成 is_telemarketing 条件（无筛选行为不变）', () => {
+    const sql = generateQuoteKpiQuery({});
+    expect(sql).not.toContain('is_telemarketing =');
+  });
+
+  it('KPI 路由支持旧车专属筛选参数（后端兼容层：电销枚举→boolean SQL）', async () => {
     const handler = getKpiRouteHandler();
     const json = vi.fn();
     const req = {
@@ -66,12 +85,35 @@ describe('quote-conversion SQL contract', () => {
 
     expect(duckdbQuery).toHaveBeenCalledTimes(1);
     const sql = duckdbQuery.mock.calls[0]?.[0] as string;
-    expect(sql).toContain("is_telemarketing = '电销'");
+    // P2 c21667：后端兼容层将枚举 '电销' 映射为 boolean SQL 条件 `is_telemarketing = TRUE`
+    expect(sql).toContain('is_telemarketing = TRUE');
+    expect(sql).not.toContain("is_telemarketing = '电销'");  // 不再使用旧字符串比较
     expect(sql).toContain("is_nev = '是'");
     expect(sql).toContain("is_transfer = '否'");
     expect(sql).toContain("insurance_grade = 'B'");
     expect(sql).toContain('commercial_ncd >= 0.9');
     expect(sql).toContain('commercial_ncd <= 1.2');
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('P2 c21667：非电销枚举映射为 boolean FALSE', async () => {
+    const handler = getKpiRouteHandler();
+    const json = vi.fn();
+    const req = {
+      query: {
+        isTelemarketing: '非电销',
+      },
+    } as unknown as Request;
+    const res = {
+      json,
+    } as unknown as Response;
+
+    await handler(req, res, vi.fn() as unknown as NextFunction);
+
+    expect(duckdbQuery).toHaveBeenCalledTimes(1);
+    const sql = duckdbQuery.mock.calls[0]?.[0] as string;
+    expect(sql).toContain('is_telemarketing = FALSE');
+    expect(sql).not.toContain("is_telemarketing = '非电销'");
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 

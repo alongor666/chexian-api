@@ -69,7 +69,11 @@ function buildWhere(filters: QuoteConversionFilters): string {
     conds.push(`coverage_combination = '${esc(filters.insuranceCombo)}'`);
   }
   if (filters.isTelemarketing) {
-    conds.push(`is_telemarketing = '${esc(filters.isTelemarketing)}'`);
+    // 后端兼容层（P2 c21667）：前端 query param 仍传枚举值 '电销'/'非电销'（契约不变）；
+    // QuoteConversion 视图层已归一为 boolean，故此处映射为 `is_telemarketing = TRUE/FALSE`。
+    // '电销' → TRUE（电销保单）；'非电销' → FALSE（非电销保单）。
+    const boolVal = filters.isTelemarketing === '电销' ? 'TRUE' : 'FALSE';
+    conds.push(`is_telemarketing = ${boolVal}`);
   }
   if (filters.isNewEnergy) {
     conds.push(`is_nev = '${esc(filters.isNewEnergy)}'`);
