@@ -862,6 +862,16 @@
   - **needs_automation: false**（expires n/a）：timeWindow 完整性已由 validation.ts CI 闸 + timewindow.test.ts 双锁；不变量已由 time-window-invariants.test.ts 锁；无需新自动化。
 - **follow-up（已在协议文档+计划登记，未自建 backlog 以免越界）**：/api/discover 透出 disambiguation-protocol + 运行时强制拒绝路径（ytd-progress 收窗口参数即 400）——B290 重量方案/dbt 语义层方向，待踩坑频度再启。
 - **PR 合并方式**：派单明确 ❌ 不 enable --auto，建 ready PR 由用户手动合（非 draft）。
+## 2026-06-22 · 16ab1c B328 phase-2 报告托管 org_user 行级安全（sidecar 归属 + 双闸 + verifier 抓回归）
+
+- **背景/范围**：B328 phase-1 已 fail-closed 堵跨机构泄漏；phase-2 让 org_user 读**本机构**报告。**前置依赖核实优先**：生产方 push_html.py 单文件命名 `<日期>-<slug>-<hash>.html` 不含机构归属、无 metadata 机制 → 依赖未就位。按任务约定 scope = handler 侧解析 + 登记缺口（不碰生产方/diagnose skills，避免跨域撞车）。
+- **实现（只改 be-routes）**：reports.ts 引入 sidecar 归属约定（`<report>.meta.json` / `.report-meta.json` 含 ownerOrg/ownerBranch）；`resolveReportOwner`（路径限定+二次 validatePathWithinDirectory+严格 schema，fail-closed）→ `assertReportAccess`（org_level_3 等值 + branch RLS mirror）；`assertReportRoleAllowed` 粗闸防枚举；`normalizeReportError` 把 org_user 所有 4xx 归一同一 403。
+- **三源闭环**：codex 闸-1（方案）收紧 schema 校验/枚举归一/branch 语义；codex 闸-2（实现）抓 P1-a（RLS-on 漏 ownerBranch 仍按 org 放行→跨分公司读）+ P1-b（多文件 baseDir symlink 逃逸）+ P2（403 消息侧信道），**全采纳加固**；evidence-verifier fresh-context 抓 **P1 回归**——旧测试 `tests/api/reports.route-contract.test.ts` 用旧字符串签名调用改签名后的 assertReportAccess，致 verify:full 实际 1 failed。
+- **验证**：36 单测（access 矩阵 × RLS on/off × branch 组合）+ verify:full 3739 全过 + typecheck + governance 44/44 + **live HTTP 矩阵**（org_user 本机构 200 含 HTML 体 / 跨机构 403 / 无归属 403 / branch_admin 全放行 / telemarketing 403 / 无 token 401 / 枚举防护：org_user 不存在→403 与 branch_admin→404，且 org_user 跨机构 body == 不存在 body）。
+- **重来更好**：① **改函数签名必须全仓 grep（含 tests/）**——我只 grep `server/src` 漏了 `tests/api/`，被 verifier 兜住。签名变更 = pattern 级影响，按 codex-fix-sop「抽 pattern→全仓 grep」应含测试目录。② **声称完成前跑 verify:full 而非单测文件**——我开发循环只跑了目标测试文件+typecheck+governance，没跑全量 3739，回归被推迟到 verifier 才暴露。完整 oracle 应在自检阶段就跑。
+- **复用价值**：① 「文件服务路由行级安全」范式 = 粗闸防枚举 + sidecar 可信归属源（only-trust-minimal-schema，不从文件名反推）+ 细粒度授权 mirror RLS + 错误归一防存在性侧信道 + fail-closed 默认；可套任何「按归属托管静态敏感文件」场景。② 「前置依赖未就位 → handler 就绪 + 登记 GATED 缺口」是 phased rollout 的诚实打法，避免「为了端到端验收去改非本域生产方」的越界。③ 合成 fixture + 伪造 JWT（dev secret）做 live 验证，绕开「真实凭据/真实报告」依赖，仍证明 route+auth+flow 完整接线。
+  - needs_automation: false（「签名变更全仓 grep 含 tests/」「声称完成跑 verify:full」属纪律，已有 verify:full 门禁；本轮教训是「自检阶段就该跑全量门禁」，非新增脚本）
+- **GATED 续作**：生产方 emit sidecar（push_html.py --org/--branch + diagnose-* 机构报告）→ 缺口清单 B003 + backlog 2026-06-22-16ab1c-b842bc。补齐后用真实 org_user 凭据做生产端到端验收。
 ---
 
 **R20 · b332 premium-report 2 hooks 纯逻辑提取 + 单测（Loop v2 续推·路线 B 提取重构·三源全过·golden 由确定性等价证明）**
@@ -873,3 +883,13 @@
 - **复用价值**：① 「纯逻辑从 hook 提取到 utils/」打法=同目录(utils 与 hooks 同在 features/<mod>/下,`../../../shared` 相对深度一致零改写)抽纯函数、hook 改 `.map(normalizeX)`/`computeX()` 调用、useCallback 依赖移除已提取的稳定模块函数(原 `useCallback(...,[])` 提取后天然稳定,从依赖数组删除安全)；零生产行为变更而 hook 显著简化。可把 R19「纯函数分布扫描」里判为 hooks 的模块从路线 A 转路线 B。② 「`??` vs `||` 用空串(非 null)区分」「`== null` 用 undefined(非 null)区分」是锁「易被误改的判等运算符」标准测法。③ vitest exclude 含 `**/.claude/**`——测试**禁落 `.claude/worktrees/`**(否则静默 skip=假 passed)，本轮特意用兄弟目录 worktree 规避(呼应 feedback_e2e_silent_skip_false_positive)。
   - needs_automation: false（沿用 R18 已登记的「双源零测试盘点 + 纯函数分布扫描」脚本项 expires 2026-09-22；本轮新增「路线 A/B 同构判断随路线重判」是决策纪律非可自动化项）
 - **下一轮**：真零测试余 6 个**纯组件**模块(admin/customer-flow/file/moto-cost/repair/report,仅 .tsx+barrel 无纯函数)——须转「组件 smoke(DOM/@testing-library)」路线，与本纯函数策略不同，是 b332 既定**策略分叉点**；premium-report 已清零，b332 整体仍 IN_PROGRESS。
+
+---
+
+**R21 · b332 收尾分组 PR-1：admin 纯逻辑提取 + 单测（scoping 纠偏后启动·提取路线复用·三源全过）**
+- **触发**：用户认可"一个会话做完 b332 + 先 scoping + 分组 PR"路径。scoping 复核 6 个剩余"纯组件"模块：3 个 `.ts` 全是 barrel（无逻辑），但 `.tsx` 内 useMemo/helper 含可提取纯逻辑——**纠正"6 个只能组件 smoke"的预判**：多数能走已三轮验证的"提取路线"（零 mock、最稳），只有 file 偏 IO、moto-cost(29 行)该降级。admin 作旗舰：ApiTokensPanel 有现成纯 helper、AccessControlPage 有 IP 解析 + 重复 toggle。
+- **成果（提取 + 纯增测试）**：新建 utils/tokenDisplay.ts(fmtDate/maskTokenId/isExpired)+utils/accessControl.ts(splitIpList/joinList/toggleSelection)；两组件删内联改 import，AccessControlPage 两处内联 toggle(原变量名 r/f 不同、语义同)统一改用 toggleSelection。21 单测覆盖边界(maskTokenId len≤6)、三态(isExpired revokedAt 优先)、正则分隔(中英文逗号/换行)、catch 分支(stub toLocaleString 抛错)、不可变/去重副作用。
+- **三源（闸-1 免，同 R20 路线 B 同构理由）**：verify:full(governance44+typecheck+**3768 单测**)全绿；闸-2 codex 无 P0/P1(确认逐字符等价、仅 export+prettier 括号差异)+2 P2 全采纳(fmtDate catch stub / toggleSelection 重复追加锁 `[...selected,x]` 语义)；evidence-verifier(fresh,sonnet)**CONFIRMED**(逐函数对 diff 等价、5 断言推演、亲跑 3768)。
+- **重来更好/复用价值**：① **scoping 纠偏是高杠杆**——"6 纯组件无纯函数"是有损盘点(只看文件类型 .tsx)，实际组件内联 useMemo/helper 是可提取纯逻辑富矿；判"组件 smoke vs 提取"应看**内联逻辑密度**(useMemo×N/数组链/顶层 helper)而非文件后缀。② **premium-report 的提取打法对 .tsx 组件同样成立**(源从 hooks 换成组件)，且组件里"已是独立 function 的 helper"(fmtDate/maskTokenId/isExpired)提取=纯搬移零风险，"重复内联逻辑"(两处 toggle)提取=顺带去重。③ 收尾分组里能走提取路线的优先提取(零 mock 稳)，组件 smoke 仅留给真无逻辑的展示壳。
+  - needs_automation: false（沿用 R18「双源零测试盘点 + 纯函数分布扫描」脚本项；本轮新增"按内联逻辑密度判路线"是 scoping 启发式，并入该项）
+- **下一轮**：PR-2 repair(5 useMemo 数据塑形提取)→ PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。
