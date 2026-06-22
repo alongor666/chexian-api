@@ -846,6 +846,16 @@
 - **边界纪律（用户 2026-06-22 确认）**：网络抖动 / 判定器 503 是环境不可抗力（天），不计入「问题」、不优化，只容错共处；本 PR 只根治可控的逻辑盲区。
 - needs_automation: false（本身即把"现实核查"自动化的一环）
 
+## 2026-06-22 · 16ab1c B328 phase-2 报告托管 org_user 行级安全（sidecar 归属 + 双闸 + verifier 抓回归）
+
+- **背景/范围**：B328 phase-1 已 fail-closed 堵跨机构泄漏；phase-2 让 org_user 读**本机构**报告。**前置依赖核实优先**：生产方 push_html.py 单文件命名 `<日期>-<slug>-<hash>.html` 不含机构归属、无 metadata 机制 → 依赖未就位。按任务约定 scope = handler 侧解析 + 登记缺口（不碰生产方/diagnose skills，避免跨域撞车）。
+- **实现（只改 be-routes）**：reports.ts 引入 sidecar 归属约定（`<report>.meta.json` / `.report-meta.json` 含 ownerOrg/ownerBranch）；`resolveReportOwner`（路径限定+二次 validatePathWithinDirectory+严格 schema，fail-closed）→ `assertReportAccess`（org_level_3 等值 + branch RLS mirror）；`assertReportRoleAllowed` 粗闸防枚举；`normalizeReportError` 把 org_user 所有 4xx 归一同一 403。
+- **三源闭环**：codex 闸-1（方案）收紧 schema 校验/枚举归一/branch 语义；codex 闸-2（实现）抓 P1-a（RLS-on 漏 ownerBranch 仍按 org 放行→跨分公司读）+ P1-b（多文件 baseDir symlink 逃逸）+ P2（403 消息侧信道），**全采纳加固**；evidence-verifier fresh-context 抓 **P1 回归**——旧测试 `tests/api/reports.route-contract.test.ts` 用旧字符串签名调用改签名后的 assertReportAccess，致 verify:full 实际 1 failed。
+- **验证**：36 单测（access 矩阵 × RLS on/off × branch 组合）+ verify:full 3739 全过 + typecheck + governance 44/44 + **live HTTP 矩阵**（org_user 本机构 200 含 HTML 体 / 跨机构 403 / 无归属 403 / branch_admin 全放行 / telemarketing 403 / 无 token 401 / 枚举防护：org_user 不存在→403 与 branch_admin→404，且 org_user 跨机构 body == 不存在 body）。
+- **重来更好**：① **改函数签名必须全仓 grep（含 tests/）**——我只 grep `server/src` 漏了 `tests/api/`，被 verifier 兜住。签名变更 = pattern 级影响，按 codex-fix-sop「抽 pattern→全仓 grep」应含测试目录。② **声称完成前跑 verify:full 而非单测文件**——我开发循环只跑了目标测试文件+typecheck+governance，没跑全量 3739，回归被推迟到 verifier 才暴露。完整 oracle 应在自检阶段就跑。
+- **复用价值**：① 「文件服务路由行级安全」范式 = 粗闸防枚举 + sidecar 可信归属源（only-trust-minimal-schema，不从文件名反推）+ 细粒度授权 mirror RLS + 错误归一防存在性侧信道 + fail-closed 默认；可套任何「按归属托管静态敏感文件」场景。② 「前置依赖未就位 → handler 就绪 + 登记 GATED 缺口」是 phased rollout 的诚实打法，避免「为了端到端验收去改非本域生产方」的越界。③ 合成 fixture + 伪造 JWT（dev secret）做 live 验证，绕开「真实凭据/真实报告」依赖，仍证明 route+auth+flow 完整接线。
+  - needs_automation: false（「签名变更全仓 grep 含 tests/」「声称完成跑 verify:full」属纪律，已有 verify:full 门禁；本轮教训是「自检阶段就该跑全量门禁」，非新增脚本）
+- **GATED 续作**：生产方 emit sidecar（push_html.py --org/--branch + diagnose-* 机构报告）→ 缺口清单 B003 + backlog 2026-06-22-16ab1c-b842bc。补齐后用真实 org_user 凭据做生产端到端验收。
 ---
 
 **R20 · b332 premium-report 2 hooks 纯逻辑提取 + 单测（Loop v2 续推·路线 B 提取重构·三源全过·golden 由确定性等价证明）**
