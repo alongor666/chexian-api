@@ -816,6 +816,18 @@
   - needs_automation: false（并入 R18 已登记的「双源零测试盘点」脚本项 expires 2026-09-22，新增「纯函数分布扫描」维度，不另立）
 - **下一轮**：premium-report（2 hooks，renderHook 稍重但仍属纯逻辑）；余 6 纯组件模块须转「组件 smoke（DOM/testing-library）」路线，与本纯函数策略不同——b332 的一个**策略分叉点**，建议后续明确。
 
+---
+
+**R20 · B255 报价口径差异分析（Loop 单任务·只读分析零生产改动·源文件定位纠偏·PR #744）**
+- **触发**：用户指定本轮先做 B255（报价数据「是否报价」字段不可靠，评估改用「续保单号非空」判定）。用户已决策——先出全口径差异报告、不切换；AI 不得改字段含义/SQL/ETL。
+- **关键纠偏（任务描述/上轮排查把源文件定位错了）**：任务与上轮断言「是否报价/续保单号」是 `04_报价清单_商业险.xlsx` 的 ETL 前源字段。实测 04 报价清单 33 列**根本无此两列**；`是否报价` 实为历史"签单清单"宽表字段。进一步用流式 iterparse 读 4 个签单清单（2021-01~2026-06）表头：**均 44 列、无一含「是否报价」、全部含「续保单号」**——该字段已从所有在盘源数据移除（`shard-config.json` 显式忽略，备注"口径不可靠，待用户修正"）。
+- **核心结论（证据闭环）**：① 现行 `is_renewal` 直接由「续保单号非空」派生（`transform.py:383`），对 260 万行保单**实测 0 行不一致**——B255 提议口径**已是现行实现**；② 报价转化率/交叉销售/续保追踪**均不引用「是否报价」**（`is_quote` 在 renewal-tracker.ts 是 `is_quoted` 子串误命中），现行影响=0；③ 原始口径交叉表因字段已移除**不可计算**，已诚实声明（红线：验证不声称）。④ 迁移在数据/口径层已自然完成，建议关闭为「已在架构层落地」。
+- **重来更好（两条最高杠杆教训）**：① **派单/任务描述里的「源文件路径 + 字段归属」是待验证假设，不是事实**。动手前用 `DESCRIBE`/表头直读亲眼核实列归属，一次纠偏；本轮若沿用"04 报价清单"假设直接写交叉表脚本会全盘错。是 `feedback_verify_before_assume` + 「grep 是有损代理」在**数据字段归属**上的实例——"分析某字段口径"任务第 0 步固定=列归属核实。② **写 `.claude/workflow/**` 等跨 worktree 共享文件时，Edit 的绝对路径必须带 `/worktrees/<name>/`**；本轮 Edit 误用主仓库路径把 R20 写进**主目录工作树**（触"主目录只读"红线），靠 `git -C <主> restore` 还原 + 重写 worktree 副本补救。根因=主目录与 worktree 各有独立工作副本，路径差一段 `/worktrees/<name>` 就落主目录。
+- **复用价值**：① 「字段口径分析」任务模板首步=列归属核实（04报价清单/签单清单/policy parquet 各有什么列，先 DESCRIBE）；② harness 创建的 `.claude/worktrees/<name>` worktree **不触发** post-checkout 原生模块自愈（仅 `git worktree add` 触发）→ 离线兜底=主仓库 cp `bcrypt_lib.node`（mkdir -p + 单文件 cp，避 `cp -R 目录` 改名陷阱）；③ worktree 内写共享文件先确认绝对路径含 `/worktrees/<name>/`。
+  - needs_automation: true → worktree 原生模块离线兜底：post-checkout（或 pre-push 前置）增「健康检查失败且无网络时，从主 git-common-dir 仓库 cp `*/node_modules/{bcrypt,better-sqlite3,@duckdb}` 的 `.node` 二进制」分支。**注**：属 loop-meta/hook 改动，按 §4 wave-2 元教训由单 owner 会话串行落地，本轮仅登记不并发硬化。
+  - expires: 2026-09-22
+- **codex gate-2 修订（用户要求对 #744 跑对抗审查后）**：codex CLI(read-only) P0=0（三条目标 SQL 未引用旧 is_quote 成立），但抓 4 个 P1 **过度声称**已校准报告：① "260万0不一致"是循环论证（验证派生结果=派生规则，非源数据零误差）→改"现行实现已按该规则派生"；② "无任何生产 ETL 消费"过度——is_quote 仍在 mapping.ts/column-normalizer.ts/fields.json→PolicyFact 物化链→改"三条目标 SQL 未引用"；③ "交叉销售影响=0"需降级——cross-sell.ts 用 is_renewal(=续保单号非空) 作维度→改"不受旧 is_quote 影响"；④ 业务规则字典 SSOT(:413) 仍把 is_quote 描述为可用→关闭建议改"核心已落地、残留治理待清理"。P2 校准：历史绝对断言可证据化、检索范围列明、refine_verify.py 已做 is_renewed×is_quoted 交叉(避免误导"所有报价交叉不可算")。
+  - **跨 R20/R21 共性教训**：分析报告极易**过度声称**（"0误差/无消费方/影响=0/不可计算"）——codex 窄范围对抗审在**分析任务**上同样高杠杆（不止代码任务）；分析结论的措辞应配"派生一致性≠质量证明""目标 SQL 未引用≠全局无消费""现行口径 vs 通用公式"三类区分。
 ## 2026-06-22 · 47c2a5 stale-scan 增 PR-合并信号（根治「已合任务被重复派单 + DONE 滞后」）
 
 - **背景/根因**：本轮 loop 复盘暴露 P1——stale-scan 仅看完成语+git churn，看不到「任务实现 PR 已 MERGED」，致 7a2849（#640 已合一周仍被重复派单）、b299/b261（合并后滞留 IN_PROGRESS 未回填 DONE）。
