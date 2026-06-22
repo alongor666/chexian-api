@@ -177,6 +177,18 @@ def enrich_org_level_3_from_policy(
             f"（全表命中率 {filled / total * 100:.1f}%，剩余空值 {after_null:,} 行）"
         )
     except Exception as exc:
+        exc_msg = str(exc)
+        # Schema/Binder 类错误（policy parquet 缺必需列 insurance_start_date / policy_no 等）
+        # 说明 ETL 产出了不符合前提的 policy parquet，静默继续会导致 org_level_3 静默退化。
+        # 此类错误必须显式上抛，避免 all 模式继续生成错误的产物。
+        # "Binder Error" / "Referenced column" / "does not exist" 覆盖 DuckDB 列缺失场景。
+        schema_error_signals = ("Binder Error", "Referenced column", "does not exist", "No such column")
+        if any(sig in exc_msg for sig in schema_error_signals):
+            raise RuntimeError(
+                f"❌ PolicyFact VIN JOIN 因 schema 缺列中止（前提：policy parquet 必须含 "
+                f"insurance_start_date + policy_no），禁止静默退化。原始错误：{exc}"
+            ) from exc
+        # 其他运行时错误（I/O、内存、DuckDB 非 schema 错误）：警告并跳过回填，保持原 org_level_3。
         print(f"   ⚠ PolicyFact VIN JOIN 失败，保持原 org_level_3：{exc}")
 
     return result

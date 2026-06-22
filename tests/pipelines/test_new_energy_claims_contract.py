@@ -316,6 +316,30 @@ class OrgLevel3EnrichTest(unittest.TestCase):
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["org_level_3"], "测试分公司")
 
+    # ── 测试 9：policy parquet 缺 schema 列时抛 RuntimeError，禁止静默退化 ────────
+    def test_schema_binder_error_raises_not_silenced(self):
+        """
+        policy parquet 缺少 insurance_start_date 或 policy_no 时（ETL bug），
+        DuckDB 会抛 Binder Error；修复后 except 必须重新抛出为 RuntimeError，
+        禁止静默吞掉后继续输出退化的 org_level_3。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_dir = Path(tmp)
+            # 故意写一个缺少 insurance_start_date 和 policy_no 的 parquet（schema 不合约定）
+            df_broken = pd.DataFrame([
+                {"vehicle_frame_no": "VIN1", "org_level_3": "成都分公司"},
+            ])
+            pq.write_table(pa.Table.from_pandas(df_broken), policy_dir / "broken.parquet")
+
+            df_claims = self._make_claims_df([
+                {"claim_no": "R1", "vehicle_frame_no": "VIN1", "org_level_3": None},
+            ])
+
+            with self.assertRaises(RuntimeError) as ctx:
+                enrich_org_level_3_from_policy(df_claims, policy_dir=str(policy_dir))
+
+        self.assertIn("schema", str(ctx.exception).lower())
+
     # ── 测试 8：VIN 大小写/空格混合时仍能命中（P2-2 规范化）────────────────────
     def test_vin_case_insensitive_join(self):
         """

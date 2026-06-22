@@ -1804,11 +1804,12 @@ async function main() {
       __timeDomain(id, () => runStandardDomain(python, scriptDir, loadDomainManifest(scriptDir, id)));
     }
     // new_energy_claims 需要 --policy-dir 用于 VIN JOIN 回填 org_level_3（policy_no 全 NULL）
+    // 数组传参时 Python argparse 直接收到裸路径，禁止加字面引号（否则 Path.exists() 判 false 静默跳过）。
     __timeDomain('new_energy_claims', () => {
       const necPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE);
       runStandardDomain(
         python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims'),
-        ['--policy-dir', `"${necPolicyDir}"`],
+        ['--policy-dir', necPolicyDir],
       );
     });
     // 派生域放末尾（依赖 policy + quotes_conversion + salesman 已产出）
