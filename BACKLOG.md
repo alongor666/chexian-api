@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（70 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（71 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -28,7 +28,7 @@
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 
-**P2（39 项）**
+**P2（40 项）**
 
 - B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -69,6 +69,7 @@
 - 2026-06-20-claude-2eccfa `BLOCKED` — 山西机构规范化映射 (61 原始机构 → 11 经营单元)
 - 2026-06-20-claude-8870f5 — [口径裁决] reserve_wan(未决准备金) 在覆盖全状态案件的面板含零结/注销/
 - 2026-06-21-claude-acf188 `PARTIAL` — 山西账号（ADR G7）
+- 2026-06-22-b320-975a3e — 给 Nginx 托管的 SPA 下发 CSP + 评估收紧 scriptSrc 'uns
 
 **P3（26 项）**
 
@@ -177,5 +178,6 @@
 | 2026-06-20-claude-f1c991 | 2026-06-20 | 立方体加速 | @claude | 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214MB/任意签单日窗命中；cost/kpi 已搁置见 65f495）。前置：CUBE_SHADOW_COMPARE=true 影子期已启动。晋级门槛(cube-promote)：trend/growth/salesman-ranking 三路由 shadow match≥1000 + 连续7天 mismatch=0 + error=0 + 三立方体 builtVersion 跟版且 lastError=null + 哨兵7天有评论(total>0)。执行链：cube-burnin --tier basic PASS → cube-promote --history-issue <n> canAdvance=true → 部署链 PR 设 CUBE_ROUTING_ENABLED=true + CUBE_ROUTING_ROUTES=trend,growth,salesman-ranking(白名单排除已搁置 cost/kpi) → 低峰合并+reload+health。回退：cube-rollback --target routing。⚠ 建议 bf2c4e(切流后1%采样影子)先落地，否则切流后无 cube-vs-legacy 数值背离网 | P1 | PROPOSED | 开发文档/架构设计/通用立方体查询加速方案.md | ecosystem.config.cjs server/src/services/cube-routing.ts scripts/release/cube-promote.mjs | 2026-06-22 门槛核验(cube-promote+/health+哨兵issue#608)：切流未就绪——①影子样本 trend/salesman-ranking 仅 12~14≪门槛1000(PM2 reload 重置+并发部署频繁致累计不上去)②哨兵7天窗内有 CRITICAL(06-12 trend mismatch=12、06-17/06-21 /health 502)，连续7天 mismatch=0 streak 未建立③growth 路由影子仅偶现(match=1)④cost 立方体 lastError(已搁置65f495不影响)。另发现 cube-promote detectSwitches 注释误判 bug(已登记单独任务)。结论:切流需生产部署稳定7天+样本≥1000+streak干净,属运营前置非代码;promote 脚本不自动跨生产切流。 |
 | 2026-06-21-claude-acf188 | 2026-06-21 | Auth · 多省(山西)GATED | @claude | 山西账号（ADR G7）：preset-users.ts 加 SX 超管 + 山西机构用户（现 0 个 SX 账号，全 20 用户标 SC）。名单待用户定。启用前 RLS 隔离验证 SX token 不读 SC。Day-1 SOP §4，GATED 上线最后一步。 | P2 | PARTIAL | .claude/rules/multi-branch-day1-sop.md | server/src/config/preset-users.ts | preset-users.ts 加 SX 账号定义：1 超管 yangjie0621(branch_admin) + 11 经营单元 org_user(organization 取 SX.json units 11 单元)，全 branchCode=SX；密码全 tombstone(不可登录·无明文，真实凭据 GATED cutover 由 USER_PASSWORDS 注入)；getAllBranchCodes 自动含 SX。验证：preset-users.test.ts 8 passed(新增 SX 超管/11 org_user/organization 对齐/tombstone 格式断言)、typecheck PASS、governance 42/42。🔴 GATED cutover(RLS-on→SX 进 current/→sync VPS→发账号)+RLS 隔离验证(SX token 不读 SC) 待用户显式确认，本任务未做。 |
 | 2026-06-21-claude-f1a45c | 2026-06-21 | 工具与工作流 | @claude | cleanup-worktrees skill 与本项目兄弟目录约定 scope 错配：skill 仅纳管 .claude/worktrees/，而 .claude/rules/worktree-setup.md §A 规约 worktree 放兄弟目录 ../chexian-api-<task> → 已合并的兄弟 worktree（如 rls-closeout #710）不会被自动回收，需手动 git worktree remove。待调查：是 skill 缺'兄弟目录纳管'能力（fix 落跨仓 alongor666/alongor666-skills 的 cleanup-worktrees.sh in_scope()），还是 skill 可配置而本项目未配置纳管根。修复落点大概率在 skill 源仓（跨仓）。 | P3 | PROPOSED | .claude/rules/worktree-setup.md | N/A |  |
+| 2026-06-22-b320-975a3e | 2026-06-22 | Security/Frontend | b320 | **给 Nginx 托管的 SPA 下发 CSP + 评估收紧 scriptSrc 'unsafe-inline'**（B320 后续）：B320 移除 Express helmet 的 'unsafe-eval' 后发现——生产 SPA 由 Nginx (`deploy/nginx-fullstack.conf`) 托管且**完全未设 CSP**（仅 COOP/COEP/CORP），即 SPA 当前无任何 CSP 防护。应给 Nginx `location /` 下发 CSP。同时 `dist/index.html` 实测**无内联脚本**（Vite es2020+crossorigin 未注入 modulepreload polyfill）→ scriptSrc 层可上严格策略（去 'unsafe-inline'），但需 nonce/hash 跨 Nginx + 构建链协调，故独立成任务。 | P2 | PROPOSED | .claude/workflow/pr-evolution.md（B320 entry） | deploy/nginx-fullstack.conf, server/src/config/csp.ts |  |
 | 2026-06-22-claude-03f6f0 | 2026-06-22 | 前端重构 follow-up | @claude | PerformanceAnalysisPanel 主组件(~900行)抽 usePerformancePanelController hook —— b331 拆分后续。codex 闸-1 判此项需先补行为测试再动(主组件 10+ 耦合 state/handler)，故 b331 本轮不做。 | P3 | PROPOSED | N/A | src/features/dashboard/PerformanceAnalysisPanel.tsx |  |
 | 2026-06-22-claude-21c578 | 2026-06-22 | 前端重构 follow-up | @claude | 两个 distribution chart 去重：内部 DistributionChart(PerformancePanelDistributionChart) 与既有 performance/PerformanceDistributionChart.tsx option 已漂移，codex 闸-1 确认应另案统一。 | P3 | PROPOSED | N/A | src/features/dashboard/performance/PerformanceDistributionChart.tsx,src/features/dashboard/performance/PerformancePanelDistributionChart.tsx |  |
