@@ -663,23 +663,17 @@ export async function loadClaimsDetail(db: DuckDBQueryable, parquetPath: string)
 }
 
 /**
- * 从 ClaimsDetail VIEW 聚合创建 ClaimsAgg TABLE（唯一来源）
+ * ClaimsAgg「已报告赔款金额」的业务口径 CASE 表达式（唯一事实源 · B299/B302）。
  *
- * 2026-05-20 业务口径修正（与 xlsx 周报对账校准）：
- *   claim_cases  ── COUNT(DISTINCT claim_no) 不过滤，保持件数 cohort 与 xlsx 对齐
- *   reported_claims ── 在 SUM 内做 CASE 过滤，剔除以下案件的金额：
- *     1) liability_ratio = 0  (无责案件，本保单不构成赔款)
- *     2) case_type ∈ {零结, 注销, 拒赔}  (结案/撤案/拒赔后残留 reserve_amount 不应计入)
+ * 剔除以下案件的金额，与 claims-heatmap.ts / claims-detail.ts 的 B302 口径一致：
+ *   1) liability_ratio = 0  (无责案件，本保单不构成赔款)
+ *   2) case_type ∈ {零结, 注销, 拒赔}  (结案/撤案/拒赔后残留 reserve_amount 不应计入)
+ * 金额二选一：已结案（settlement_time 非空）取 settled_amount，否则取 reserve_amount（未决）。
  *
- * 实证（YTD 2026 截至 5/16）：
- *   修前总赔款 +2.85% / 赔付率 +7.30% → 修后总赔款 +1.22% / 赔付率 +1.28%
+ * 抽成共享常量供静态 ClaimsAgg 与窗口化赔款 CTE（buildWindowedClaimsAggCTE）复用，
+ * 防止两处内联复制后金额口径漂移（codex gate-1 P2-3）。
  */
-export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<void> {
-  await db.query(`
-    CREATE OR REPLACE TABLE ClaimsAgg AS
-    SELECT policy_no,
-           COUNT(DISTINCT claim_no) AS claim_cases,
-           SUM(CASE
+export const CLAIMS_REPORTED_AMOUNT_CASE = `SUM(CASE
                  WHEN COALESCE(liability_ratio, 100) > 0
                   AND (case_type IS NULL OR case_type NOT IN ('零结','注销','拒赔'))
                  THEN (CASE
@@ -687,13 +681,71 @@ export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<vo
                          ELSE COALESCE(reserve_amount, 0)
                        END)
                  ELSE 0
-               END) AS reported_claims
+               END) AS reported_claims`;
+
+/**
+ * 从 ClaimsDetail VIEW 聚合创建 ClaimsAgg TABLE（唯一来源）
+ *
+ * 2026-05-20 业务口径修正（与 xlsx 周报对账校准）：
+ *   claim_cases  ── COUNT(DISTINCT claim_no) 不过滤，保持件数 cohort 与 xlsx 对齐
+ *   reported_claims ── 金额口径见 CLAIMS_REPORTED_AMOUNT_CASE。
+ *
+ * 实证（YTD 2026 截至 5/16）：
+ *   修前总赔款 +2.85% / 赔付率 +7.30% → 修后总赔款 +1.22% / 赔付率 +1.28%
+ *
+ * ⚠️ B299：本静态表**无出险日期(accident_time)过滤**（全量快照），刻意保持以满足字节安全。
+ *    静态单例 ClaimsAgg 被 kpi/comprehensive/forecast/cube/skills 等 8+ 消费方共享 JOIN，
+ *    给它加 cutoff 会污染整个连接的共享表（codex gate-1 P0-1）。**多 cutoff / 历史 YTD**
+ *    场景的窗口化赔款须用 buildWindowedClaimsAggCTE（局部 CTE，不动静态表），消费侧切换是
+ *    绑定时间机器特性的用户决策项（BACKLOG B299）。详见 memory feedback_claims_window_aligned_to_earned。
+ */
+export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<void> {
+  await db.query(`
+    CREATE OR REPLACE TABLE ClaimsAgg AS
+    SELECT policy_no,
+           COUNT(DISTINCT claim_no) AS claim_cases,
+           ${CLAIMS_REPORTED_AMOUNT_CASE}
     FROM ClaimsDetail
     WHERE policy_no IS NOT NULL
     GROUP BY policy_no
   `);
   const cnt = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsAgg');
   console.log(`[DuckDB] ClaimsAgg created from ClaimsDetail: ${cnt[0]?.cnt ?? 0} rows`);
+}
+
+/**
+ * 构造「按出险日期窗口化」的赔款聚合 CTE 主体（B299）。
+ *
+ * 与静态 ClaimsAgg 同口径（claim_cases 不过滤件数 + reported_claims 金额口径复用
+ * CLAIMS_REPORTED_AMOUNT_CASE），**额外**追加 `accident_time <= cutoff` 出险日期过滤，
+ * 使满期类率值（满期赔付率/出险率/变动成本率）的赔款分子与满期保费分母**同窗口**。
+ *
+ * 解决的隐患（已 duckdb 直查 Parquet 实证，见 PR 描述）：
+ *   早期 cutoff 时静态 ClaimsAgg 含"未来出险"赔款 → 分子虚高（cutoff=2026-03-31：
+ *   满期赔付率 176.5%(全快照) → 61.5%(窗口)）；cutoff=最新数据日时窗口=全快照（逐分钱一致）。
+ *
+ * 设计要点（codex gate-1 对齐）：
+ *   - **不写静态单例表**：返回的是 CTE 主体（SELECT ... FROM ClaimsDetail ...），由调用方包成
+ *     `WITH claims_w AS (...)` 局部使用，绝不 CREATE OR REPLACE TABLE ClaimsAgg，避免污染共享表（P0-1）。
+ *   - cutoff 经 `accident_time < cutoff + INTERVAL 1 DAY` 半开区间过滤（含 cutoff 当天的全部出险，
+ *     且列侧不加 CAST，利于扫描优化；P2-4）。
+ *   - cutoff 仅接受真实合法日期，由调用方先 isValidDateFormat 校验后传入（P2-2）。
+ *
+ * ⚠️ 口径边界（codex gate-1 P1-3）：本过滤只截"未来出险"泄漏；金额仍取**当前快照**的
+ *    settled/reserve 状态，非历史 as-of 精算赔款。正确表述为"按出险发生日窗口 + 当前估损/结算状态"。
+ *
+ * @param cutoffDate YYYY-MM-DD（调用方须已校验合法）
+ * @returns CTE 主体 SQL（不含 `WITH name AS`，由调用方包裹）
+ */
+export function buildWindowedClaimsAggCTE(cutoffDate: string): string {
+  const safeCutoff = escapeSqlValue(cutoffDate);
+  return `SELECT policy_no,
+           COUNT(DISTINCT claim_no) AS claim_cases,
+           ${CLAIMS_REPORTED_AMOUNT_CASE}
+    FROM ClaimsDetail
+    WHERE policy_no IS NOT NULL
+      AND accident_time < DATE '${safeCutoff}' + INTERVAL 1 DAY
+    GROUP BY policy_no`;
 }
 
 /**

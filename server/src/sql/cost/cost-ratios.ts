@@ -13,6 +13,19 @@
  *    与 `cost/earned-premium.ts` 的【财务口径】（+INTERVAL 364 DAY + 险类系数
  *    α=0.82/0.94/0.90）**字段同名但公式不同**，禁止下游混用——会算错赔付率。
  *    详见 `cost/earned-premium.ts` 文件头对照表 + BACKLOG B304。
+ *
+ * ⚠️ 赔款分子窗口对齐（B299 · 消费侧）：本文件三处 `LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no`
+ *    JOIN 的是静态全量快照赔款（无出险日期过滤）。满期保费分母用 `earned_days` 截到 cutoffDate，
+ *    但赔款分子未同窗口——**多 cutoff / 历史 YTD 查询**时早期窗口会拿"未来出险赔款 ÷ 过去满期保费"
+ *    虚高数倍（duckdb 直查实证：cutoff=2026-03-31 满期赔付率 176.5%→61.5%；cutoff=最新数据日时
+ *    窗口=全快照逐分钱一致，看板恒为最新 cutoff 故现状被掩盖）。
+ *    根治需把这三处 JOIN 切换为 `domainLoaders.buildWindowedClaimsAggCTE(cutoffDate)` 产出的
+ *    局部窗口化 CTE（同口径 + accident_time<=cutoff）。**但该切换是用户决策项**（BACKLOG B299）：
+ *    cost 路由有 cube 影子路径，cube 构建期仍 JOIN 静态 ClaimsAgg（cube/cost-cube.ts，不在本任务域），
+ *    单改 legacy 会在 cutoff<最新数据日 时与 cube 影子对账出现差异（codex 审计 P1-1）。
+ *    完整修复须同步 cube/kpi/comprehensive/forecast 多模块或绑定时间机器特性排期，故本次仅落地
+ *    `buildWindowedClaimsAggCTE` 能力 + 单测 + 实证，消费切换待用户拍板。详见 memory
+ *    feedback_claims_window_aligned_to_earned。
  */
 
 import { getMetricSql } from '../../config/metric-registry/index.js';
