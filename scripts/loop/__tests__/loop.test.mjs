@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { foldBacklog, bucketOf, taskDomains, computeFrontier } from '../dispatch.mjs';
 import { parseLedger, aggregate } from '../quality-report.mjs';
 import { scanEntries, classify, isoAddDays } from '../automation-due.mjs';
+import { scanNotes, classifyStale, scanStale } from '../stale-scan.mjs';
 
 const J = (o) => JSON.stringify(o);
 
@@ -187,5 +188,66 @@ describe('automation-due', () => {
   it('临期窗口命中', () => {
     const c = classify(scanEntries(md), '2026-12-20', 14); // 距 12-31 仅 11 天 → soon
     expect(c.soon.map((x) => x.entry)).toEqual(['R2 · 任务二']);
+  });
+});
+
+describe('stale-scan.scanNotes', () => {
+  it('提取完成标记命中 + 去重 PR 号', () => {
+    const r = scanNotes('第四批次完成，已合并 PR #704 与 #710；又见 #704');
+    expect(r.completionHits).toBeGreaterThanOrEqual(2); // 完成 + 已合并
+    expect(r.prRefs).toEqual([704, 710]); // 去重
+  });
+  it('无完成语 → 零命中', () => {
+    const r = scanNotes('待评估报价口径，需用户拍板');
+    expect(r.completionHits).toBe(0);
+    expect(r.prRefs).toEqual([]);
+  });
+});
+
+describe('stale-scan.classifyStale', () => {
+  it('DONE/BLOCKED 不扫 → null', () => {
+    expect(classifyStale({ uid: 'a', status: 'DONE' }, '完成 #704')).toBe(null);
+    expect(classifyStale({ uid: 'b', status: 'BLOCKED' }, '完成 #704')).toBe(null);
+  });
+  it('IN_PROGRESS + 完成 note + PR → 高置信（90a92c 形态）', () => {
+    const h = classifyStale({ uid: '90a92c', status: 'IN_PROGRESS', priority: 'P1', desc: '立方体' }, '第四批次完成，接线 /api/query/kpi；生产闭环 #608→#609', 0);
+    expect(h).not.toBe(null);
+    expect(h.confidence).toBe('high');
+    expect(h.prRefs).toContain(608);
+  });
+  it('PARTIAL + closeout note + PR → 高置信（6ae4d7 形态）', () => {
+    const h = classifyStale({ uid: '6ae4d7', status: 'PARTIAL', priority: 'P1', desc: '维度表省份化' }, '查询期收口已落，#704 + #710 交付', 0);
+    expect(h.confidence).toBe('high');
+  });
+  it('PROPOSED + 仅 1 条完成语 → note 信号不足（保守）→ null', () => {
+    expect(classifyStale({ uid: 'x', status: 'PROPOSED', desc: 'x' }, '已落地一半', 0)).toBe(null);
+  });
+  it('PROPOSED 无 note 但 churn 超阈 → 低置信（b246/b330 旁路覆盖形态）', () => {
+    const h = classifyStale({ uid: 'b246', status: 'PROPOSED', priority: 'P1', desc: 'kpi CTE' }, '', 6);
+    expect(h).not.toBe(null);
+    expect(h.confidence).toBe('low');
+    expect(h.churnCount).toBe(6);
+  });
+  it('churn 未达阈 + 无 note → null', () => {
+    expect(classifyStale({ uid: 'y', status: 'PROPOSED', desc: 'y' }, '', 4)).toBe(null);
+  });
+});
+
+describe('stale-scan.scanStale 排序', () => {
+  it('按 confidence(high>medium>low) 再 churn 降序', () => {
+    const tasks = [
+      { uid: 'lowc', status: 'PROPOSED', desc: 'l' },
+      { uid: 'high1', status: 'PARTIAL', desc: 'h' },
+      { uid: 'mid1', status: 'IN_PROGRESS', desc: 'm' },
+      { uid: 'done1', status: 'DONE', desc: 'd' },
+    ];
+    const notes = new Map([
+      ['high1', '完成 #704'], // high (note + PR)
+      ['mid1', '已完成 已落地'], // medium (note 无 PR)
+      ['lowc', ''], // low (churn only)
+    ]);
+    const churn = new Map([['lowc', 7]]);
+    const r = scanStale(tasks, notes, churn);
+    expect(r.map((x) => x.uid)).toEqual(['high1', 'mid1', 'lowc']); // done1 被滤除
   });
 });

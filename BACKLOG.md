@@ -20,15 +20,13 @@
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（12 项）**
+**P1（10 项）**
 
-- B246 — VPS 分层查询改造（KPI variable_cost_ratio）
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - B330 — 架构依赖违规修复（21 目录排查 主题B）
 - B331 — 超大文件拆分（21 目录排查 主题C）
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
 - 2026-06-11-claude-7a2849 — 同比/YTD 查询产生重复期间行 + 虚假 -100% 增长（DuckDB 实证）
-- 2026-06-11-claude-90a92c `IN_PROGRESS` — 通用可加性立方体查询加速
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
 - 2026-06-16-claude-1f3bc1 `PARTIAL` — evidence-loop perf/refactor 类 oracle (.plann
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
@@ -85,8 +83,9 @@
 - 2026-06-21-claude-681eee — 多省 ETL『转换质量报告.json』未按省隔离
 - 2026-06-21-claude-acf188 `PARTIAL` — 山西账号（ADR G7）
 
-**P3（24 项）**
+**P3（25 项）**
 
+- B246 — VPS 分层查询改造（KPI variable_cost_ratio）
 - B247 — 图表 hex 色值审计
 - B251 — 输出风格与用户契约冲突
 - B253 — wecom_smartsheet schema 外部化为 schema.json
@@ -120,7 +119,7 @@
 |----|----------|------|----------|----------|--------|------|----------|----------|-----------|
 | B244 | 2026-04-11 | Analysis/Backend | @claude | **零赔付专项分析**：分析有多少赔案报案时有立案金额(reserve_amount>0)但最终结案赔款为零(settled_amount=0)的情况。数据验证显示68,511件(27%)已结案零赔付，需量化其对发展三角形"准备金释放"效应的影响 | P2 | PROPOSED | N/A | `server/src/sql/claims-detail.ts`<br>`数据管理/warehouse/fact/claims_detail/latest.parquet` | 输出零赔付占比、立案金额释放总量、时序特征 |
 | B245 | 2026-04-11 | Analysis/Backend | @claude | **零赔付专项分析维度展开**：基于B244结果，按四个维度交叉分析零赔付特征：(a)时间维度—按起保年份/结案月份(b)机构维度—各三级机构零赔付率(c)险别维度—交强/商业分别的零赔付模式(d)车辆类型维度—客户类别(营业/非营业/货车等)的零赔付差异 | P2 | PROPOSED | 同B244 | 同B244 | 四维交叉分析报告 |
-| B246 | 2026-04-17 | Refactor/Backend | @claude | **VPS 分层查询改造（KPI variable_cost_ratio）**：`server/src/sql/kpi.ts:58-63` 当前直接 FROM PolicyFact 构建 `variable_cost_base` CTE，违反 VPS 分层架构铁律（禁止在 VPS 查原始表）。本次铁律对齐仅修了口径，未动查询层级。需新增 `AggregatedVariableCostBase`（含 earned_days × policy_term 预聚合）或由 DailyAggregated 派生 | P1 | PROPOSED | `CLAUDE.md` §3 / `.claude/rules/data-pipeline.md` | `server/src/sql/kpi.ts`<br>`数据管理/pipelines/`（新增聚合导出） | VPS 内存使用稳定 + variable_cost_ratio API 返回一致 <br>90a92c 第四批次已实质完成基础设施：sql/kpi.ts 已加 excludeVariableCost 参数（true 时 skip variable_cost_base CTE），routes/query/kpi.ts 已接入 CubeCostDay 三态路由（routing/shadow/null）。代码改造完成，待生产 CUBE_ROUTING_ENABLED=true 切流激活（当前 shadow 对账中，7 天观察期 2026-06-12 起算）。无需独立改造，跟随 90a92c 灰度收尾后置 DONE。 |
+| B246 | 2026-04-17 | Refactor/Backend | @claude | **VPS 分层查询改造（KPI variable_cost_ratio）**：`server/src/sql/kpi.ts:58-63` 当前直接 FROM PolicyFact 构建 `variable_cost_base` CTE，违反 VPS 分层架构铁律（禁止在 VPS 查原始表）。本次铁律对齐仅修了口径，未动查询层级。需新增 `AggregatedVariableCostBase`（含 earned_days × policy_term 预聚合）或由 DailyAggregated 派生 | P3 | PROPOSED | `CLAUDE.md` §3 / `.claude/rules/data-pipeline.md` | `server/src/sql/kpi.ts`<br>`数据管理/pipelines/`（新增聚合导出） | VPS 内存使用稳定 + variable_cost_ratio API 返回一致 <br>90a92c 第四批次已实质完成基础设施：sql/kpi.ts 已加 excludeVariableCost 参数（true 时 skip variable_cost_base CTE），routes/query/kpi.ts 已接入 CubeCostDay 三态路由（routing/shadow/null）。代码改造完成，待生产 CUBE_ROUTING_ENABLED=true 切流激活（当前 shadow 对账中，7 天观察期 2026-06-12 起算）。无需独立改造，跟随 90a92c 灰度收尾后置 DONE。 <br>窄化(2026-06-21 hygiene 调研)：实现已被 90a92c 立方体吸收——同一 excludeVariableCost 开关，KPI 路由立方体开启路径(CUBE_ROUTING_ENABLED=true)已结构性消除 variable_cost_base CTE。剩余=立方体关闭(默认)时回退路径仍 FROM PolicyFact 建 CTE，违反 VPS 分层铁律；因 cost/KPI 立方体经决策A 搁置(OOM 65f495)，原始诉求生产未达成。已降为 P3 低优治理项，挂接 65f495：cost/KPI 立方体复活或回退路径优化时一并处理。不关闭。 |
 | B247 | 2026-04-17 | Chore/Hygiene | @claude | **图表 hex 色值审计**：`WaterfallChart.tsx` / `EnhancedKpiCard.tsx` / `quoteChartColors`（index.ts:644+）等处 ECharts option 中硬编码 hex（`#91CC75`, `#EE6666`, `#10B981` 等）。需评估能否统一导出为 CSS 变量或由 `semanticColors` 派生，并建立图表色 token 规范 | P3 | PROPOSED | `DESIGN.md` §2 / `CLAUDE.md` §1 | `src/shared/styles/index.ts`<br>相关图表组件 | 图表 hex 全部指向 token，无散落字面量 |
 | B250 | 2026-04-21 | Chore/Governance | @claude | **幽灵字段治理检查**：`bun run governance` 增加一条：扫描 `数据管理/pipelines/*.py` 与 `server/src/sql/**/*.ts` 引用的 Parquet 列名，与 `field-registry/fields.json` + `etl_fields.json` 比对，未知字段报错。**动机**：`moto_loss_ratio_development.py` 引用 `c.report_time`，但 claims_detail schema 实际是 `case_open_time`，字段已下线但代码仍残留，下次运行会挂 | P2 | PROPOSED | governance-check.yml | `scripts/check-governance.mjs`<br>`scripts/check-phantom-fields.mjs`(新) | 扫描脚本能抓出 report_time 这种残留引用 |
 | B251 | 2026-04-21 | Chore/Hygiene | @user | **输出风格与用户契约冲突**：SessionStart hook 推送 `learning` output style，但全局 memory `user_role.md` 明确「用户不写代码 AI 全权负责编码」。学习模式要求 AI 识别 5-10 行代码贡献点让用户写——两者相斥。**建议**：对本项目关闭 learning style，或在 hook 配置里对 chexian-api 路径排除 | P3 | PROPOSED | `~/.claude/settings.json` hooks | `~/.claude/settings.json`（或项目 `.claude/settings.json`） | hook 不再推送 learning style / AI 不再请求用户写代码 |
@@ -178,7 +177,6 @@
 | 2026-06-11-claude-7a2849 | 2026-06-11 | Bugfix/Backend | @claude | 同比/YTD 查询产生重复期间行 + 虚假 -100% 增长（DuckDB 实证）：yoy.ts/ytd.ts 用 FULL OUTER JOIN ON c.tp=DATE_ADD(p.tp,1year)，t+1 年无数据期间 p 侧 unmatch 输出 current=0/growth=-100% 幽灵行；weekly 视图 DATE_TRUNC('week')+1年不再周一对齐致整列 NULL/-100%。 | P1 | PROPOSED | N/A | server/src/sql/growth/yoy.ts,server/src/sql/growth/ytd.ts,server/src/routes/query/growth.ts | PR #640 已建：https://github.com/alongor666/chexian-api/pull/640 — fix(growth) yoy/ytd FULL OUTER JOIN 幽灵 -100% + weekly 周一漂移；39 单测 + 11 cube test + 656 SQL 全过；待合并后置 DONE。 |
 | 2026-06-11-claude-7dca99 | 2026-06-11 | Refactor/Frontend | @claude | StableContext/ExportContext value 未 memoize：StableContext.tsx:181、ExportContext.tsx:45 每次 Provider 渲染创建新 value 对象，使拆分稳定状态避免重渲染的设计落空，48 个 useGlobalFilters 消费者随上游渲染重渲染。 | P3 | PROPOSED | N/A | src/shared/contexts/StableContext.tsx,src/shared/export/ExportContext.tsx |  |
 | 2026-06-11-claude-84ea3a | 2026-06-11 | Chore/Hygiene | @claude | cleanup-reports 按 mtime 而非文件名日期保留最新：cleanup-reports.mjs:122 业务组内 sort((a,b)=>b.mtime-a.mtime) 保 mtime 最新，文件名自带日期前缀，若有人补生成/触碰旧日期报告(mtime 变新)，--apply 会删掉日期更新的保留旧日期的。sync-vps 每次同步前自动带 --apply 无人工确认。 | P3 | PROPOSED | N/A | scripts/cleanup-reports.mjs |  |
-| 2026-06-11-claude-90a92c | 2026-06-11 | 性能/Backend | @claude | **通用可加性立方体查询加速**：不依赖结果快照，立方体（签单日/起保日粒度 + 周月上卷）+ 指标可加性路由，任意参数组合查询降至毫秒级；基准原型 16 项等值校验通过，KPI 总览 276ms→7ms（39x），进程内月立方体 613µs（对照生产最坏冷路径≈16307x） | P1 | IN_PROGRESS | 开发文档/架构设计/通用立方体查询加速方案.md | scripts/perf/bench-universal-cube.mjs | 第一阶段试点落地：CubeTrendDay 物化（duckdb-cube.ts，新鲜度状态机规避 B311 竞态）+ /api/query/trend 双开关接线（CUBE_ROUTING_ENABLED / CUBE_SHADOW_COMPARE，默认关闭零行为变更）+ 影子对账（cube-shadow.ts）+ WHERE token 白名单可服务性判定 + SQL 改写器 fail-fast 断言。验证：25 单元 + 35 集成（30 数据级等值 + 路由三态 4 + 状态机 1）全过，typecheck/governance 绿 <br>第二批次落地：growth 路由（同比/环比/年累计/自定义/日对比上下文）接 CubeTrendDay，dual-metric（去重件数非可加）与业务员分组自动回退；WHERE token 白名单上提 servability.ts；趋势件数视角适配口径修复判定回退。37 单元 + 20 增长等值 + 全量 3008 单测全过 <br>第三批次完成：成本立方体 CubeCostDay（构建期 B252 去重+赔款一次归属+跨格保单探针，任意截止日满期重算）接线 /api/query/cost 四类成本分析；14 单元 + 31 数据级等值测试全过，双开关默认关闭零行为变更 <br>第四批次完成：KPI 路由 /api/query/kpi 接入 CubeCostDay（cost 三项立方体单行 + 主 SQL excludeVariableCost 并行 merge，结构性消除 P95 大头 variable_cost_base CTE）；顺手补 filtered CTE 漏 SELECT endorsement_no（metric registry v2.0.0 件数口径修复后未同步）。8 单元 + 6 KPI 路由级 e2e（含 26 列逐字段等值与影子对账）全过 <br>第五批次完成：业务员立方体 CubeSalesmanDay（行级可加无需探针）接线 /api/query/salesman-ranking 两类排名；7 单元 + 12 数据级等值全过，双开关默认关闭零行为变更 <br>第六批次（灰度启动+计划修订）：地理/报价立方体经取证取消（地理默认签单日窗100%回退、报价无压缩，用户拍板）；ecosystem.config.cjs 开 CUBE_SHADOW_COMPARE 影子对账，观测面挂 /health（cubes+cubeShadow）；报价视图物化待生产实测体量另立项 <br>新增立方体灰度哨兵 cube-grayscale-sentinel.mjs + workflow（每小时 cron 读 /health 的 cubes+cubeShadow，4 条确定性规则判定，CRITICAL→退出码 1+追踪 issue，WARN/INFO 静默记录）；产物 verdict.json+summary.md，artifact 保留 30 天 <br>生产首个 CRITICAL 闭环（issue #608→PR #609）：trend 影子 12/12 mismatch 根因=ETL 落盘 TIMESTAMP vs 立方体 CAST AS DATE 的列类型漂移（CAST AS VARCHAR 输出不同字符串，数值零差异）；修复=立方体列类型跟随源列（DESCRIBE 探测）+ TIMESTAMP 源 9 项等值测试钉死；合并部署后生产复测 trend 12/12 全 match，7 天观察期自 2026-06-12 重新起算 |
 | 2026-06-11-claude-9ba379 | 2026-06-11 | 数据质量 | @claude | claims 源文件拼接顺序使遗留清单覆盖最新全量：daily.mjs:1091 [...newFiles,...legacyFiles]+convert_claims_detail.py:181 drop_duplicates(keep='last')，车险报立结案清单_*.xlsx 遗留旧快照排在新格式之后，同赔案号旧快照金额覆盖新全量。文件名无8位日期的遗留文件逃过自动归档守卫。 | P2 | PROPOSED | N/A | 数据管理/daily.mjs,数据管理/pipelines/convert_claims_detail.py |  |
 | 2026-06-11-claude-a8d3df | 2026-06-11 | 指标口径 | @claude | [口径裁决]performance 负基数同比符号反转：drilldown.ts:197、top-salesman.ts:143 WHEN COALESCE(prev,0)=0 THEN NULL ELSE (c-p)/p，批改冲减使上期为负时除以负数 → 增长率符号反转。注册表 growth.ts 统一 WHEN prev>0...ELSE NULL，唯这两处不一致。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/drilldown.ts,server/src/sql/performance-analysis/top-salesman.ts |  |
 | 2026-06-11-claude-e9a906 | 2026-06-11 | 指标口径 | @claude | [口径裁决]地理跨区 sentinel 反转：claims-detail.ts:361 is_cross_region=(accident_city != CASE...ELSE 'MATCH' END)，内层只映射川A/B/C/E/F/Q 六前缀，其余（川D/H/J...渝/外省）落 ELSE 'MATCH' 而 accident_city 永不等于字面 'MATCH' → 恒判跨区域，cross_region_pct 系统性虚高。需补全车牌→城市码映射并定义未知前缀归类口径。 | P2 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
