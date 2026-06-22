@@ -69,12 +69,31 @@ class FullSnapshotManifestTest(unittest.TestCase):
         self.assertIn("sha256.slice(0, 12)", daily_source)
 
     def test_cache_key_includes_shared_pipeline_dependencies(self):
-        daily_source = (ROOT / "数据管理/daily.mjs").read_text()
+        # 缓存键逻辑已抽到 lib/full-snapshot-cache-key.mjs（daily.mjs 顶层执行 main() 无法 import 单测）。
+        cache_key_source = (DATA_ROOT / "lib/full-snapshot-cache-key.mjs").read_text()
 
-        self.assertIn("fullSnapshotDependencyPaths", daily_source)
-        self.assertIn("base_converter.py", daily_source)
-        self.assertIn("etl_validation.py", daily_source)
-        self.assertIn("parquet_utils.py", daily_source)
+        self.assertIn("fullSnapshotDependencyPaths", cache_key_source)
+        self.assertIn("base_converter.py", cache_key_source)
+        self.assertIn("etl_validation.py", cache_key_source)
+        self.assertIn("parquet_utils.py", cache_key_source)
+
+        # daily.mjs 须从 lib 导入并使用缓存键函数（接线未断）
+        daily_source = (ROOT / "数据管理/daily.mjs").read_text()
+        self.assertIn("buildFullSnapshotCacheKey", daily_source)
+        self.assertIn("lib/full-snapshot-cache-key.mjs", daily_source)
+
+    def test_cache_key_covers_policy_dir_content_and_extra_args(self):
+        # PR #732 codex 发现：缓存键漏掉 --policy-dir 指向的 policy/current 内容指纹与 extraArgs，
+        # 导致 new_energy_claims 在 policy 变化但 xlsx/batchDate 不变时命中陈旧快照。
+        cache_key_source = (DATA_ROOT / "lib/full-snapshot-cache-key.mjs").read_text()
+        self.assertIn("parsePolicyDir", cache_key_source)
+        self.assertIn("collectPolicyInputFingerprints", cache_key_source)
+        self.assertIn("policyInputs", cache_key_source)
+        self.assertIn("--policy-dir", cache_key_source)
+
+        # daily.mjs 调用处须把 extraArgs（含 --policy-dir）透传进缓存键
+        daily_source = (ROOT / "数据管理/daily.mjs").read_text()
+        self.assertIn("buildFullSnapshotCacheKey({ id, batchDate, sourceFingerprints, scriptPath, trigger, extraArgs })", daily_source)
 
     def test_full_snapshot_retention_is_enforced(self):
         daily_source = (ROOT / "数据管理/daily.mjs").read_text()
