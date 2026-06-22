@@ -48,6 +48,8 @@ import { assertNoPolicyCurrentOverlap } from '../scripts/lib/parquet-overlap-che
 import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
 // 多省 ETL 路由纯函数（0a：非 SC 省 premium 源走 staging/<省>、产物隔离到 warehouse/validation/<省>，绝不进 current/；ADR D5）
 import { branchSourceDir, branchOutputRoot } from './lib/branch-naming.mjs';
+// argv 最外层双引号剥离抽到 lib/arg-quotes.mjs（可单测；裸 spawn 引号安全闸的不变量源）
+import { stripArgQuotes } from './lib/arg-quotes.mjs';
 // claims 报案截止日新鲜度判定纯函数（同模式抽 lib/ 便于单测）
 import {
   claimsReportLagDays,
@@ -173,10 +175,8 @@ function runPythonScript(python, scriptPath, args) {
   // spawnSync 数组传参不经过 shell：彻底消除文件名含 $ / 反引号 / 空格 触发的注入与拆分。
   // 历史调用点用 `"${path}"` 包裹参数以适配旧的 shell 字符串拼接；这里剥离每个参数最外层
   // 的一对双引号（spawnSync 按字面量传递，剥离后即为真实路径，对未加引号的 flag 是 no-op）。
-  const cleanArgs = args.map(a => {
-    const s = String(a);
-    return s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
-  });
+  // 剥离逻辑抽到 lib/arg-quotes.mjs（可单测）；⚠️ 绕过本函数的裸 spawn 不会剥离，禁照搬 `"${path}"`。
+  const cleanArgs = stripArgQuotes(args);
   log('blue', `执行: ${python} ${scriptPath} ${cleanArgs.join(' ')}`);
   const result = spawnSync(python, [scriptPath, ...cleanArgs], {
     stdio: 'inherit',
