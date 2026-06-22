@@ -691,3 +691,24 @@
 - **复用价值**：`checkArchLayerBoundaries` 的「TS-AST 解析模块说明符 + 路径前缀规则表 + 归一别名/相对/模板字符串 + 带引用逃生阀」是项目无关的**分层边界闸骨架**，可参数化规则表后复用到任意前端分层项目（比 ESLint boundaries 轻、零额外依赖）。导出纯函数（`classifyArchViolations`/`normalizeArchTarget`/`extractModuleSpecifiers`/`isValidArchAllowMark`）让 governance 逻辑可单测，是治理脚本的好范式。
 - **needs_automation: false**（本轮产出本身即自动化闸；后续 ESLint boundaries/dependency-cruiser 落地后可把本纯文本/AST 闸切换为 lint 规则，但属 follow-up edbd61 之后的演进，非当前到期项）。
 - **下一实验**：B330 收尾的 layout→features shell+slot 重构（follow-up `2026-06-15-claude-edbd61`，需改 App.tsx 注入 Modal/Panel slot，独立 PR）；落地后可把闸规则表补 `components/layout↛features` 第 6 条。🔴 GATED cutover 须用户显式确认，本闸为纯静态治理不触发任何 cutover。
+**R14 · B299 ClaimsAgg 出险日期窗口化（Loop v2 双闸·partial 落地）**
+- **触发**：Loop v2 调度取 B299（@user 提的潜在隐患 P2）。`createClaimsAggFromDetail` 按 policy_no 聚合赔款无 accident_time 过滤，多 cutoff/历史 YTD 查询时早期窗口拿"未来出险赔款÷过去满期保费"虚高数倍。任务域限 `duckdb-domain-loaders.ts`+`cost-ratios.ts`。
+- **🌟 闸-1（计划）当场收窄范围 = 机制防止破坏性落地**：codex 对抗审计计划抓 **3 P0 + 3 P1**：(P0-1) 给静态单例 ClaimsAgg 加 cutoff 参数会污染整个连接的共享表（8+ 消费方）→ 改为抽局部 CTE helper，静态表不动；(P0-2) "loader 加参+注释"是死代码非修复；(P0-3) "看板 cutoff=max accident_time 故 no-op"证据链不成立——cost cutoffDate 是请求传入、非恒等最新出险日；(P1-1) 只改 cost-ratios 是半修复，cost 有 cube 影子路径仍 JOIN 静态 ClaimsAgg，cutoff<最新时影子对账出差异；(P1-2) kpi/comprehensive/forecast 同 JOIN 静态表，不能宣称全局根治；(P1-3) accident_time<=cutoff 只截未来出险，金额仍当前快照≠历史 as-of。采纳后判定：完整修复跨任务域(cube/kpi/comprehensive/forecast)且破坏 cube-shadow 锚 → 是 BACKLOG 明列的**用户决策项** → 落地降级为 partial。
+- **成果（非破坏性·字节安全）**：① 抽 `CLAIMS_REPORTED_AMOUNT_CASE` 共享金额口径常量（静态 ClaimsAgg 与窗口 CTE 复用，防漂移·codex P2-3）；② 新增 `buildWindowedClaimsAggCTE(cutoff)` 返回**局部 CTE 主体**（不 CREATE TABLE、不污染单例·P0-1），`accident_time < cutoff+INTERVAL 1 DAY` 半开区间(列侧不 CAST·P2-4)；③ cost-ratios.ts 仅加对齐文档(指向 helper+用户决策+BACKLOG)，JOIN 形态零改动。
+- **oracle（源数据验证·口径正确非仅"不一样"）**：duckdb 直查 Parquet——cutoff=2026-03-31 满期赔付率 全快照**176.48% → 窗口 61.51%**（含未来出险虚高根治，与 memory 183.6%→81.0% 同向同量级）；cutoff=最新数据日 2026-06-13 窗口赔款=全快照=**1,467,272,953.01 逐分钱一致**（证字节安全 no-op）；全量 claims **accident_time 0 行 NULL**（过滤不误伤）。测试：4 单测(SQL 字符串·CI 安全：断言静态表不含 accident_time/窗口含半开过滤/复用常量/转义防注入/不产 CREATE)+4 集成测试(合成数据·本地：早期 cutoff 排除未来出险/最新 cutoff==静态表/金额口径剔无责拒赔/已决未决二选一)全绿；typecheck；governance 42/42；cube-cost 影子对账 31 测试不退化(证 cost-ratios 字节未变)。闸-2(diff) P0/P1/P2=0。
+- **重来更好**：① 起手就该把"任务域=2 文件"与"完整修复跨 8 消费方"的张力摆到计划最前——闸-1 才点破"半修复+破锚"，若我先做架构爆炸半径 grep(ClaimsAgg 8 处 JOIN)再写计划能自检出范围矛盾。② 静态单例表 + per-query cutoff 的耦合是经典反模式，应一眼识别"不能给共享物化表塞动态参数"。③ 集成测试 VALUES 字面量被 Neo 驱动推断成 DECIMAL({width,scale,value} 对象)致 Number()→NaN——合成表必须显式 CREATE TABLE 列类型对齐生产 Parquet(double/bigint)，这是 DuckDB 测试通用坑。
+- **复用价值**：「静态物化表不塞动态 cutoff，改抽局部 CTE helper」是 ClaimsAgg/任何共享聚合表加时间窗口的通用范式；`CLAIMS_REPORTED_AMOUNT_CASE` 常量化是"业务口径 SSOT 防散落复制"的样板；「合成表显式列类型对齐生产 Parquet」入 DuckDB 测试避坑清单。
+- **needs_automation: true** → 可探 governance 启发式：检测对静态物化表(CREATE OR REPLACE TABLE)的 loader 函数若新增日期/cutoff 形参 → 警示"共享单例表勿塞 per-query 参数，改 CTE helper"。静态识别有限(需匹配 CREATE TABLE + 形参)，落地前评估误报。
+  - expires: 2026-09-21
+- **下一实验（交用户决策）**：是否把 cost-ratios 三处 JOIN 切到 `buildWindowedClaimsAggCTE`？须同步评估 cube/cost-cube 是否一并窗口化(否则 cutoff<最新时影子对账差异)，及 kpi/comprehensive/forecast 是否纳入。建议绑定"时间机器/历史快照"特性排期。🔴 不触发任何 GATED cutover。
+
+## 2026-06-21 · Loop v2 并行波1 + backlog 卫生（stale-scan）
+
+**三问复盘**
+- 重来怎样更好：派单前必做逐任务现实核查。本波"用户确认的 3 个"里 90a92c/b246 是陈旧、b330 的违规也早被 #641-643 修复——dispatch 仅凭 status+code 字段无法识别"实际已完成但状态未流转"。教训=元工具(dispatch)的输入(backlog status)若不维护，元工具就持续假阳性（与 6ae4d7 同源，累计本会话已遇 7 个陈旧任务）。
+- 复用价值：新增 scripts/loop/stale-scan.mjs（note-完成信号[强：完成语+引用 PR] + git churn 信号[弱：code 域被旁路提交改动]），`bun run loop:stale-scan [--churn]` 一键列疑似陈旧。本波实测除 90a92c/b246 外又揪出 8964d3/4641ef/2eccfa，共 5 项。
+- 如何自动化：stale-scan 已是该洞察的自动化落地（9 单测）。下一步=dispatch 算前沿时自动叠加 stale-scan 高置信告警（前沿任务若被标高置信→提示"疑似已完成，先核实"再派单）。
+  - needs_automation: true
+  - expires: 2026-09-19
+
+**量化**：并行波1 codex 双闸 — b330(闸1 3P0/5P1→闸2 0P0/2P1) · b299(3P0/3P1→0/0/0) · b249(4P0/6P1→0P0/3P1)；3 PR(#716/#717/#718)全经源数据/静态验证。b299 源数据验证 满期赔付率 176.48%(全快照虚高)→61.51%(窗口正确)、最新日窗口=全快照逐分钱一致(字节安全 no-op)，按红线停 partial 未盲改理赔 SSOT。

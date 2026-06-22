@@ -3306,6 +3306,11 @@ function checkPrEvolutionExpired() {
     : new Set([...(committed || []), ...(working || [])]);
 
   let currentEntry = '(unknown entry)';
+  // 「本次新增」按**所属 entry 标题是否新增**判定，而非按 needs_automation 行内容。
+  // 根因（2026-06-21 hygiene PR 实测）：`needs_automation: true` 是 boilerplate，多条 entry 文本全同；
+  // 旧版 `addedLines.has(line.trim())` 用行内容判新旧 → 新 PR 一旦 append 同款 plain 行，会与存量同款行
+  // 碰撞，把存量条目误判为「本次新增」→ 误报硬 fail。entry 标题含日期+标题近乎唯一，按标题判更健壮。
+  let currentEntryIsNew = false;
   const expired = [];          // 有 expires 但已过期 → warning（原行为）
   const missingExisting = [];  // 缺 expires 且为 main 存量 → warning（grandfather，供清理）
   const missingNew = [];       // 缺 expires 且本次新增 → error（硬闸，杜绝静默漏）
@@ -3314,6 +3319,7 @@ function checkPrEvolutionExpired() {
     const entryMatch = line.match(/^#{2,3}\s+(\d{4}-\d{2}-\d{2}.*)/); // 实际 entry 用 ## 或 ###
     if (entryMatch) {
       currentEntry = entryMatch[1].trim();
+      currentEntryIsNew = addedLines !== null && addedLines.has(line.trim()); // 标题行是否在本次 diff 新增
       continue;
     }
     if (/needs_automation:\s*true/.test(line)) {
@@ -3329,8 +3335,7 @@ function checkPrEvolutionExpired() {
         }
       }
       if (!foundExpires) {
-        const isNew = addedLines !== null && addedLines.has(line.trim());
-        (isNew ? missingNew : missingExisting).push(`${currentEntry}: ${line.trim().slice(0, 70)}`);
+        (currentEntryIsNew ? missingNew : missingExisting).push(`${currentEntry}: ${line.trim().slice(0, 70)}`);
       }
     }
   }
