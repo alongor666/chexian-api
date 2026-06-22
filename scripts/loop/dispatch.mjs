@@ -6,20 +6,29 @@
  * 不引入新数据源：任务的「文件域」来自 create 事件已有的 `code` 字段。
  *
  * 用法：
- *   bun run loop:dispatch            # 打印前沿 + 状态板 + 每个前沿任务的会话提示词
+ *   bun run loop:dispatch            # 打印前沿 + 状态板 + 每个前沿任务的会话提示词（默认 fetch 收集跨会话认领）
  *   bun run loop:dispatch --json     # 机读 JSON（供 Workflow 编排会话消费）
  *   bun run loop:dispatch --board    # 仅状态板
+ *   bun run loop:dispatch --no-fetch # 跳过 git fetch（用现有远程跟踪分支算认领，离线/省时）
+ *   bun run loop:dispatch --no-claims# 完全关闭跨会话认领锁（回退旧行为，仅本地 inflight）
  *
- * 纯函数（foldBacklog / bucketOf / taskDomains / computeFrontier）单独导出供单测，
- * 不碰文件系统；CLI main 仅做 I/O。
+ * 跨会话认领锁（§4 P0 根治）：认领事件（status IN_PROGRESS + push）可能在会话 feature 分支尚未并 main，
+ * 故 CLI gatherClaimContext 扫 origin/main + 所有 origin/claude/* 的 BACKLOG_LOG.jsonl（union 去重）算认领；
+ * computeFrontier 把「别会话新鲜认领」锁出前沿。详见 latestClaims / computeFrontier 注释。
+ *
+ * 纯函数（foldBacklog / bucketOf / taskDomains / computeFrontier / latestClaims / mergeGate）单独导出供单测，
+ * 不碰文件系统/网络；CLI main 与 gatherClaimContext 才做 I/O（git/网络不可用时优雅降级）。
  */
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 // P1-1（codex 闸-2）：复用 backlog **权威折叠**，不自己实现。
 // 权威 fold 按 (at,eid) 全序排序、amend 用 {field,value} schema（LWW）、分支无关；
 // 自实现的物理行序 + 顶层 amend 字段会漏读 amend → 可能把 DONE 读回 OPEN、破坏 deps/冲突图。
 import { parseLog, fold, loadLog } from '../backlog/lib.mjs';
+// 跨会话认领锁的「辅助信号」：远程 loop 分支存在性（边界匹配，复用 stale-scan 同一实现避免漂移）。
+import { branchMatchesUid } from './stale-scan.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..', '..');
@@ -30,6 +39,54 @@ const CONFIG_PATH = path.join(ROOT, 'scripts/loop/dispatch-config.json');
 export const OPEN_STATUSES = new Set([
   'PROPOSED', 'TRIAGED', 'TODO', 'DOING', 'IN_PROGRESS', 'PARTIAL',
 ]);
+
+/** 视为「活跃认领（某会话正在做）」的状态——最新 status 命中即认领，其 at 决定新鲜度。 */
+export const CLAIM_STATUSES = new Set(['IN_PROGRESS', 'DOING']);
+
+/** 默认认领时效（小时）：认领后超过此时长仍无后续事件 → 视为陈旧（会话疑似死亡），释放回前沿防死锁。 */
+export const DEFAULT_CLAIM_TTL_HOURS = 8;
+
+/** ISO 字符串 / 毫秒数 → 毫秒（无法解析 → null）。纯函数。 */
+function toMs(v) {
+  if (v == null) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const ms = Date.parse(v);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * 从事件数组提取「当前活跃认领」（跨会话锁的**主信号**）。纯函数（无时钟 / 无 fs / 无 git）。
+ *
+ * 对每个 uid 取其**最新 status 事件**（与 backlog/lib.fold 同序：(at||ts, eid) 全序、分支无关），
+ * 若该状态 ∈ CLAIM_STATUSES 则记为认领并返回 {actor, at}。认领后流转到 DONE/PARTIAL/… 即自动失效。
+ *
+ * 跨会话可见性：会话开工即 `bun scripts/backlog.mjs status <uid> IN_PROGRESS --actor <session>` 写入
+ * BACKLOG_LOG.jsonl（merge=union）并立即 push；别的会话 dispatch 收集多 ref 日志（CLI 侧 gatherClaimContext）
+ * 后即见此认领，computeFrontier 据此把任务锁出前沿，根治「多会话排空同一前沿 → 重复劳动」（§4 P0）。
+ * @param {Array<object>} events 已解析事件（可跨多个 ref 合并去重后传入）
+ * @returns {Object<string,{actor:string,at:string}>}
+ */
+export function latestClaims(events) {
+  const statusEvents = (events || [])
+    .map((e, i) => ({ e, i }))
+    .filter((x) => x.e && x.e.kind === 'status' && x.e.uid && x.e.status);
+  statusEvents.sort((a, b) => {
+    const ka = a.e.at || a.e.ts || '';
+    const kb = b.e.at || b.e.ts || '';
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    const ea = a.e.eid || '';
+    const eb = b.e.eid || '';
+    if (ea !== eb) return ea < eb ? -1 : 1;
+    return a.i - b.i; // 兜底：(at,eid) 全等时按原序（带 eid 的事件不会走到）
+  });
+  const latest = new Map(); // uid -> 最新 status 事件（升序遍历，末写覆盖 = 最新）
+  for (const { e } of statusEvents) latest.set(e.uid, e);
+  const claims = {};
+  for (const [uid, e] of latest) {
+    if (CLAIM_STATUSES.has(e.status)) claims[uid] = { actor: e.actor || '?', at: e.at || e.ts || '' };
+  }
+  return claims;
+}
 
 /**
  * 折叠事件日志 → 每 uid 的当前任务态。**委托 backlog/lib.mjs 权威 fold**（单一事实源），
@@ -90,15 +147,33 @@ export function taskDomains(task, override = {}) {
 }
 
 /**
- * 算可并行前沿：OPEN(非 DONE/BLOCKED) + deps 全 DONE + 非在飞 + 非 gated/exclude，
+ * 算可并行前沿：OPEN(非 DONE/BLOCKED) + deps 全 DONE + 非在飞 + 非 gated/exclude + 非「别会话新鲜认领」，
  * 按优先级贪心取「域桶互斥」的独立集。其余串行到后续波。
- * @returns {{frontier, candidates, blocked, deferred, inflight}}
+ *
+ * 跨会话认领锁（§4 P0「跨会话重复劳动」根治）：`config.claims`（{uid:{actor,at}}，由 CLI 从多 ref 日志
+ * 经 latestClaims 算好注入）+ `config.now`（ISO/ms）+ `config.claimTtlHours`（默认 8h）。某 uid 有**新鲜**
+ * 认领（age<TTL）→ 锁出候选（不重复派单）；**陈旧**认领（age≥TTL，会话疑似死亡）→ 释放回前沿防死锁。
+ * 纯函数：claims/now 全部注入，本函数不碰时钟/网络，便于单测。无 claims/now 时行为与旧版一致（向后兼容）。
+ * @returns {{frontier, candidates, blocked, deferred, inflight, claimed, released}}
  */
 export function computeFrontier(tasks, config = {}) {
   const override = config.tasks || {};
   const inflight = new Set(config.inflight || []);
   const deps = config.deps || {};
   const done = new Set(tasks.filter((t) => t.status === 'DONE').map((t) => t.uid));
+
+  // 跨会话认领锁。缺时钟信息（无 now 或 at 不可解析）→ 保守视为新鲜（锁出，宁可串行勿重复派单）。
+  const claims = config.claims || {};
+  const nowMs = toMs(config.now);
+  const ttlMs = (config.claimTtlHours ?? DEFAULT_CLAIM_TTL_HOURS) * 3600 * 1000;
+  const claimInfo = (uid) => {
+    const c = claims[uid];
+    if (!c) return null;
+    const atMs = toMs(c.at);
+    if (nowMs == null || atMs == null) return { actor: c.actor || '?', at: c.at || '', ageMs: null, fresh: true };
+    const ageMs = nowMs - atMs;
+    return { actor: c.actor || '?', at: c.at || '', ageMs, fresh: ageMs < ttlMs };
+  };
 
   // P1-3（codex 闸-2）：GATED 双判 = 显式 config（tasks.<uid>.gated）∪ 精确 cutover 关键词。
   // ⚠️ 关键词必须**精确指向不可逆 cutover 动作**（RLS-on 上线 / sync VPS 发账号 / cutover），
@@ -111,7 +186,9 @@ export function computeFrontier(tasks, config = {}) {
   const candidates = tasks.filter((t) => {
     const st = t.status || 'PROPOSED';
     if (!OPEN_STATUSES.has(st)) return false;          // DONE / BLOCKED / 未知 → 不候选
-    if (inflight.has(t.uid)) return false;             // 在飞 → 不重复派单
+    if (inflight.has(t.uid)) return false;             // 在飞（本地 config）→ 不重复派单
+    const ci = claimInfo(t.uid);
+    if (ci && ci.fresh) return false;                  // 🔒 别会话新鲜认领（跨会话锁）→ 不重复派单
     if (override[t.uid]?.exclude) return false;
     if (isGated(t)) return false;                      // 🔴 GATED cutover：永不自动进前沿（须用户确认）
     const ds = deps[t.uid] || [];
@@ -135,12 +212,25 @@ export function computeFrontier(tasks, config = {}) {
     frontier.push({ task: t, domains: [...ds] });
     ds.forEach((d) => used.add(d));
   }
+
+  // 认领报表：仅对 OPEN 任务（DONE/BLOCKED 残留认领不计）。新鲜→claimed（已锁出）；陈旧→released（已释放回前沿）。
+  const claimed = [];
+  const released = [];
+  for (const t of tasks) {
+    if (!OPEN_STATUSES.has(t.status || 'PROPOSED')) continue;
+    const ci = claimInfo(t.uid);
+    if (!ci) continue;
+    (ci.fresh ? claimed : released).push({ task: t, actor: ci.actor, at: ci.at, ageMs: ci.ageMs });
+  }
+
   return {
     frontier,
     candidates,
     deferred,
     blocked: tasks.filter((t) => t.status === 'BLOCKED'),
     inflight: [...inflight],
+    claimed,
+    released,
   };
 }
 
@@ -194,6 +284,11 @@ export function sessionPrompt({ task, domains }) {
     `cd /Users/alongor666/Downloads/底层数据湖DUD/chexian-api && git fetch origin main`,
     `git worktree add -b ${branch} ${dir} origin/main && cd ${dir}`,
     ``,
+    `【🔒 认领（跨会话锁·防重复劳动）——开工立即做，先于实现】`,
+    `bun scripts/backlog.mjs status ${task.uid} IN_PROGRESS --actor ${branch}`,
+    `git add BACKLOG_LOG.jsonl BACKLOG.md BACKLOG_ARCHIVE.md && git commit -m "chore(loop): 认领 ${task.uid}（跨会话锁）" && git push -u origin ${branch}`,
+    `（认领即推送 → 别的会话 dispatch 收集多 ref 日志会把本任务锁出前沿；认领后超 ${DEFAULT_CLAIM_TTL_HOURS}h 无后续事件会被自动释放。开工前先 \`bun run loop:dispatch\` 确认本任务未被别会话新鲜认领。）`,
+    ``,
     `【任务】${task.desc}`,
     `（关联代码域：${task.code || '(未声明 code，先 grep 确认落点)'}；文档：${task.docs || '-'}）`,
     ``,
@@ -216,12 +311,25 @@ export function renderBoard(result, tasks) {
   const L = [];
   L.push(`# Loop 调度状态板（dispatch）`);
   L.push('');
-  L.push(`- 任务总数 ${tasks.length} · DONE ${done} · 候选 ${result.candidates.length} · **可并行前沿 ${result.frontier.length}** · 推迟 ${result.deferred.length} · BLOCKED ${result.blocked.length} · 在飞 ${result.inflight.length}`);
+  const claimed = result.claimed || [];
+  const released = result.released || [];
+  const ageH = (ms) => (ms == null ? '时长未知' : `${Math.round(ms / 360000) / 10}h`);
+  L.push(`- 任务总数 ${tasks.length} · DONE ${done} · 候选 ${result.candidates.length} · **可并行前沿 ${result.frontier.length}** · 推迟 ${result.deferred.length} · BLOCKED ${result.blocked.length} · 在飞 ${result.inflight.length}${claimed.length ? ` · 🔒 跨会话认领 ${claimed.length}` : ''}${released.length ? ` · ♻️ 超时释放 ${released.length}` : ''}`);
   L.push('');
   L.push(`## 🟢 可并行前沿（本波派单，域互斥）`);
   if (result.frontier.length === 0) L.push('（空——队列无就绪且域互斥的任务）');
   for (const f of result.frontier) L.push(`- \`${f.task.uid}\` [${f.task.priority}] 域:${f.domains.join(',')} — ${String(f.task.desc).slice(0, 70)}`);
   L.push('');
+  if (claimed.length) {
+    L.push(`## 🔒 跨会话认领（别的会话在做·已锁出前沿，防重复劳动）`);
+    for (const c of claimed) L.push(`- \`${c.task.uid}\` 认领人 ${c.actor} · ${ageH(c.ageMs)} 前 — ${String(c.task.desc).slice(0, 60)}`);
+    L.push('');
+  }
+  if (released.length) {
+    L.push(`## ♻️ 认领超时释放（≥ TTL 无推进，已释放回前沿——请确认原会话是否仍在做，避免再次撞车）`);
+    for (const c of released) L.push(`- \`${c.task.uid}\` 原认领人 ${c.actor} · 认领于 ${ageH(c.ageMs)} 前 — ${String(c.task.desc).slice(0, 60)}`);
+    L.push('');
+  }
   L.push(`## 🟡 推迟（域冲突/缺域，待下一波或人工指派）`);
   for (const d of result.deferred.slice(0, 20)) L.push(`- \`${d.task.uid}\` [${d.task.priority}] — ${d.reason}`);
   L.push('');
@@ -253,17 +361,73 @@ function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
 }
 
+/**
+ * 收集跨 ref 的认领事件（主锁）+ 远程 loop 分支名（辅助信号）。best-effort，环境不可抗力（离线/限流/无 git）优雅降级。
+ * 认领可能 push 在会话 feature 分支（claude/loop-*）尚未并入 main，故需扫 origin/main + 所有 origin/claude/*；
+ * 各 ref 的 BACKLOG_LOG.jsonl 都 append-only + merge=union，按 eid 去重后并集仍可被 latestClaims 正确折叠。
+ * @returns {{events: object[], branches: string[]}}
+ */
+function gatherClaimContext(localLines, { fetch = true } = {}) {
+  let events = [];
+  try { events = parseLog(localLines.join('\n')); } catch { events = []; }
+  const seen = new Set(events.map((e) => e.eid).filter(Boolean));
+  const branches = [];
+  const mergeText = (text) => {
+    let evs;
+    try { evs = parseLog(text); } catch { return; }
+    for (const e of evs) {
+      if (e.eid && seen.has(e.eid)) continue; // union 去重（同事件跨 ref 重复）
+      if (e.eid) seen.add(e.eid);
+      events.push(e);
+    }
+  };
+  const git = (cmd, opts = {}) => execSync(`git -C "${ROOT}" ${cmd}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], ...opts });
+  if (fetch) { try { git('fetch origin --quiet', { timeout: 30000 }); } catch { /* 离线/限流 → 用现有远程跟踪分支 */ } }
+  let refs = [];
+  try {
+    refs = git("for-each-ref --format='%(refname:short)' refs/remotes/origin")
+      .split('\n').map((s) => s.trim()).filter(Boolean);
+  } catch { refs = []; }
+  // 安全：ref 名将插值进 `git show <ref>:...` shell 串。git 不禁 ref 名含 `;|$` 等元字符，恶意命名的
+  // 远程分支可注入 → 严格字符白名单（合法 git 分支仅 \w./- ）过滤，非法 ref 直接丢弃（纵深防御）。
+  const SAFE_REF = /^[\w./-]+$/;
+  const claimRefs = refs.filter((r) => SAFE_REF.test(r) && (r === 'origin/main' || r.startsWith('origin/claude/'))).slice(0, 80);
+  for (const r of claimRefs) {
+    if (r.startsWith('origin/claude/')) branches.push(r.slice('origin/'.length));
+    try { mergeText(git(`show ${r}:BACKLOG_LOG.jsonl`, { maxBuffer: 64 * 1024 * 1024 })); } catch { /* 该 ref 无此文件/不可读 → 跳过 */ }
+  }
+  return { events, branches };
+}
+
 function main() {
   const args = process.argv.slice(2);
-  const lines = fs.readFileSync(LOG_PATH, 'utf-8').split('\n');
-  const tasks = foldBacklog(lines);
+  const localLines = fs.readFileSync(LOG_PATH, 'utf-8').split('\n');
+  const tasks = foldBacklog(localLines); // 任务宇宙/状态以本地 main 日志为准（与 BACKLOG.md 视图一致）
   const config = loadConfig();
-  const result = computeFrontier(tasks, config);
+
+  // 跨会话认领锁：认领信号从多 ref 日志收集（别会话 feature 分支上的认领亦可见），任务宇宙仍用本地。
+  const useClaims = !args.includes('--no-claims');
+  const doFetch = !args.includes('--no-fetch') && !args.includes('--local');
+  let claims = {};
+  let branches = [];
+  if (useClaims) {
+    const ctx = gatherClaimContext(localLines, { fetch: doFetch });
+    claims = latestClaims(ctx.events);
+    branches = ctx.branches;
+  }
+  const now = new Date().toISOString();
+  const result = computeFrontier(tasks, { ...config, claims, now });
   const gate = mergeGate(tasks, config);
+
+  // 辅助信号：仍在前沿、却有匹配远程 loop 分支但无认领事件 → 疑似别会话已开工未认领（弱信号，软提示不硬锁）。
+  const branchOnly = result.frontier.filter((f) => branches.some((b) => branchMatchesUid(b, f.task.uid)));
 
   if (args.includes('--json')) {
     process.stdout.write(JSON.stringify({
       frontier: result.frontier.map((f) => ({ uid: f.task.uid, priority: f.task.priority, domains: f.domains, desc: f.task.desc, code: f.task.code })),
+      claimed: result.claimed.map((c) => ({ uid: c.task.uid, actor: c.actor, ageHours: c.ageMs == null ? null : +(c.ageMs / 3600000).toFixed(2) })),
+      released: result.released.map((c) => ({ uid: c.task.uid, actor: c.actor, ageHours: c.ageMs == null ? null : +(c.ageMs / 3600000).toFixed(2) })),
+      branchNoClaim: branchOnly.map((f) => f.task.uid),
       deferred: result.deferred.map((d) => ({ uid: d.task.uid, reason: d.reason })),
       blocked: result.blocked.map((b) => b.uid),
       mergeGate: {
@@ -279,6 +443,10 @@ function main() {
     return;
   }
   console.log(renderBoard(result, tasks));
+  if (branchOnly.length) {
+    console.log('\n## ⚠️ 远程分支存在但无认领事件（疑似别会话已开工未认领·弱信号，建议先 `bun scripts/backlog.mjs status <uid> IN_PROGRESS --actor <session>` 认领锁定）');
+    for (const f of branchOnly) console.log(`- \`${f.task.uid}\` — 有匹配远程 loop 分支，却未见 IN_PROGRESS 认领事件`);
+  }
   console.log('\n' + renderMergeGate(gate));
   if (!args.includes('--board') && result.frontier.length) {
     console.log('\n' + '='.repeat(70));

@@ -835,3 +835,12 @@
 - **验证**：43 单测全绿（含 6 新例：uidToken/branchMatchesUid/PR 信号高置信/scanStale 注入）；governance 44/44；实跑命中 b261/b299/b290/b322/b332 共 5 项「合并未回填 DONE」任务（活证据）。
 - **边界纪律（用户 2026-06-22 确认）**：网络抖动 / 判定器 503 是环境不可抗力（天），不计入「问题」、不优化，只容错共处；本 PR 只根治可控的逻辑盲区。
 - needs_automation: false（本身即把"现实核查"自动化的一环）
+
+## 2026-06-22 · loop-meta 跨会话认领锁（event-log claim lock + TTL）根治 §4 P0「跨会话重复劳动」
+
+- **背景/根因**：多会话无协调排空同一 BACKLOG 前沿 → 重复劳动 + 真冲突（wave-2 实证：派 b331，6h 内另一会话也做并先合并，agent 工作孤儿化）。上游根因=`computeFrontier` 的 `inflight` 仅本地 `dispatch-config.json`、非跨会话共享，无认领锁。下游缓解（#747 stale-scan PR-合并信号）能检出已合任务，但认领锁才是上游根治。
+- **实现（单 owner 串行，遵 §4 wave-2 元教训：loop-meta 改动不并发硬化）**：① 纯函数 `latestClaims(events)`（每 uid 最新 status 命中 `IN_PROGRESS/DOING` 即认领，与 `fold` 同 `(at,eid)` 全序）；② `computeFrontier` 新增 `claims/now/claimTtlHours`（默认 8h），新鲜认领锁出前沿、陈旧释放防死锁，返回 `claimed/released`，缺时钟保守锁；③ CLI `gatherClaimContext` 扫 `origin/main`+所有 `origin/claude/*` 的 `BACKLOG_LOG.jsonl`（认领常在 feature 分支未并 main）；④ 辅助信号=远程分支存在（复用 stale-scan `branchMatchesUid`，软提示不硬锁）；⑤ `sessionPrompt` 增「认领先于实现」步。详见 `.claude/rules/loop-orchestration.md` §4 末尾 meta 条。
+- **验证（证据闭环）**：12 新单测全绿（latestClaims 5 + computeFrontier 认领锁 7），全量 55/55；governance 44/44 + 全量 3715/3715 零回归；**实跑前后对比铁证**：默认 dispatch 见 b244(0.64h)/b255(1.13h) 新鲜认领锁出（`--no-claims` 旧行为下二者仍是候选会被重复派单），b332(430h)/35998a(88h) 陈旧释放，候选 64→62=恰好 2 个新鲜锁零误伤；evidence-verifier（fresh-context 闸-2）判 CONFIRMED 无 P0/P1（其 Nit「无 at 永久锁」经实跑证伪：validateLog 强制 ts、`latestClaims` 回退 `at||ts`，真实数据 0 个 null-age 认领，且失败方向是 under-dispatch=安全侧）。
+- **三问复盘**：① 重来更好？根因 wave-2 已诊断清楚，本可同期落地而非延后一波——根因明确即应同 PR 修、勿只登记 P0。② 复用价值？`latestClaims`（事件日志取最新认领态）可被 stale-scan/其他 loop 工具复用，避免各自实现折叠。③ 自动化？认领锁即「把纪律变机制」；残留人工点=会话须真执行「认领先于实现」（sessionPrompt 已固化但仍依赖遵从）。
+  - needs_automation: true → 认领遗漏硬闸：dispatch 检出「远程 loop 分支存在但无认领事件」时可升级为更强提示/pre-push 闸（属 loop-meta，单 owner 串行落地）。
+  - expires: 2026-09-22

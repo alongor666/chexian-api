@@ -128,6 +128,16 @@ policy: append-only
   - **与 strict=false 的关系**：strict=false 消除 BEHIND（活锁根治）；串行化闸补回 strict=false 放弃的「组合一起测过」。两者叠加 = 不迁 org 的足够好替代。
   - **将来若迁 org**：合并队列（投机 rebase 更强）可完全替代本闸，届时 `mergeGate` 可退役、`merge_group` 触发接管。本闸是「不迁 org 期间」的过渡机制，非永久。
   - **单测**：`scripts/loop/__tests__/loop.test.mjs` 加 6 个 mergeGate 用例（空在飞 / 单个 / 多个排序 / DONE 剔除 / 脏 uid 剔除 / 缺 priority 兜底）。
+- **meta（2026-06-22 · 本 PR · 单 owner 串行实现 loop-meta）· P0「跨会话重复劳动」根治落地：event-log 认领锁（带 TTL）**：
+  - **承接**：上文 wave-2 复盘登记的 P0「跨会话重复劳动（仍未解·待协调后单 owner 实现）」。按其根治方向落地，遵守「loop-meta 改动单 owner 串行」元教训（本 PR 即单会话串行实现，无并发硬化）。
+  - **上游根因（复述）**：`computeFrontier` 的 `inflight` 仅 `dispatch-config.json` **本地配置、非跨会话共享**——多会话各跑 dispatch 都见同任务「可派」，无认领锁。wave-2 实证：派 b331，6h 内另一会话也做并先合并，agent 工作孤儿化。
+  - **机制（三件套）**：① **主锁=event-log 认领**：会话开工即 `bun scripts/backlog.mjs status <uid> IN_PROGRESS --actor <branch>` 并立即 push（`BACKLOG_LOG.jsonl` merge=union 跨会话可见）；`sessionPrompt` 第 2 步已固化「认领先于实现」。② **dispatch 跨 ref 收集认领**：新增纯函数 `latestClaims(events)`（取每 uid 最新 status 事件，命中 `CLAIM_STATUSES={IN_PROGRESS,DOING}` 即认领，与 fold 同 `(at,eid)` 全序）；CLI `gatherClaimContext` 默认 `git fetch origin` 后扫 `origin/main` + **所有 `origin/claude/*`**（认领常在会话 feature 分支尚未并 main）的 `BACKLOG_LOG.jsonl`，union 去重后 `latestClaims` 折叠；`computeFrontier` 把**新鲜认领**（age<`claimTtlHours`，默认 8h）锁出候选/前沿。③ **辅助信号=远程分支存在**（复用 stale-scan `branchMatchesUid`）：前沿任务有匹配 `claude/loop-*` 分支但无认领事件 → 软提示「疑似已开工未认领」，**不硬锁**（对方未 push 认领前是弱信号）。
+  - **带时效防死锁**：认领后超 TTL 无后续事件（会话疑似死亡）→ 视为**陈旧认领**释放回前沿（`released`），状态板 ♻️ 段提示人工确认原会话是否仍在做。`computeFrontier` 纯函数注入 `claims/now/claimTtlHours`，缺时钟信息保守视为新鲜（宁串行勿重复派单）。
+  - **向后兼容**：无 `claims/now`（或 `--no-claims`）→ 行为与旧版完全一致（`IN_PROGRESS` 仍按 `OPEN_STATUSES` 候选）。`inflight` 字段保留作本地/单会话编排兜底 + 合并门串行化输入，与认领锁互补。
+  - **实测验证（本机当下并发态）**：默认 dispatch 见 `b244`(0.64h)/`b255`(1.13h) 新鲜认领 → 锁出前沿（旧 `--no-claims` 下二者仍是候选，会被重复派单）；`b332`(430h)/`35998a`(88h) 陈旧 → 释放。候选 64→62 = 恰好 2 个新鲜锁，零误伤。这正是 wave-2「另一会话先做」的实时拦截证据。
+  - **新增/变更**：纯函数 `latestClaims` + `computeFrontier`（新增 `config.claims/now/claimTtlHours`，返回新增 `claimed/released`）；CLI `gatherClaimContext` + `--no-fetch`/`--no-claims` 旗标；`dispatch-config.json` 增 `claimTtlHours`；`sessionPrompt` 增认领步。单测加 13 例（`latestClaims` 5 + `computeFrontier` 认领锁 7 + 边界）。`bun run governance` 44/44、全量单测 3715/3715 通过。
+  - **不 cd 主仓**：`gatherClaimContext` 用 `git -C "${ROOT}"`（worktree 内 fetch/show），不触发主目录守卫。
+  - **三问复盘**：① 重来更好？认领锁本可与 wave-2 同期落地（根因当时已诊断清楚），延后一波才补——根因明确即应同 PR 修，勿只登记。② 复用价值？`latestClaims`（事件日志取最新认领态）可被 stale-scan / 其他 loop 工具复用，避免各自实现折叠。③ 自动化？认领锁本身即「把纪律变机制」；残留人工点=会话必须真的执行「认领先于实现」步——`sessionPrompt` 已固化，但仍依赖会话遵从。`needs_automation: true`（认领遗漏的硬闸：dispatch 检出「远程分支存在但无认领」时可升级为更强提示/pre-push 闸）`expires: 2026-09-22`。
 
 ---
 

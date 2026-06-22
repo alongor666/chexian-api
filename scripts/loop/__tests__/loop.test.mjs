@@ -5,7 +5,7 @@
  * 安全核心：调度的「域互斥独立集」「deps/inflight/gated 排除」「过期分类」必须确定可复现。
  */
 import { describe, it, expect } from 'vitest';
-import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate } from '../dispatch.mjs';
+import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate, latestClaims } from '../dispatch.mjs';
 import { parseLedger, aggregate } from '../quality-report.mjs';
 import { scanEntries, classify, isoAddDays } from '../automation-due.mjs';
 import { scanNotes, classifyStale, scanStale, uidToken, branchMatchesUid } from '../stale-scan.mjs';
@@ -194,6 +194,113 @@ describe('dispatch.mergeGate（合并门串行化闸）', () => {
     const g = mergeGate(t, { inflight: ['z', 'y'] });
     expect(g.slot.uid).toBe('y');           // P2 < P9(默认)
     expect(g.queue.map((x) => x.uid)).toEqual(['z']);
+  });
+});
+
+describe('dispatch.latestClaims（事件日志 → 当前活跃认领·跨会话锁主信号）', () => {
+  it('最新 status=IN_PROGRESS → 记为认领（含 actor+at）', () => {
+    const events = [
+      { uid: 'a', kind: 'create', ts: '2026-06-22', at: '2026-06-22T01:00:00.000Z' },
+      { uid: 'a', kind: 'status', status: 'IN_PROGRESS', actor: '@sessionX', at: '2026-06-22T02:00:00.000Z', eid: 'e1' },
+    ];
+    expect(latestClaims(events).a).toEqual({ actor: '@sessionX', at: '2026-06-22T02:00:00.000Z' });
+  });
+  it('认领后流转 DONE → 不再是认领（锁随状态前进自动释放）', () => {
+    const events = [
+      { uid: 'a', kind: 'create', ts: '2026-06-22', at: '2026-06-22T01:00:00.000Z' },
+      { uid: 'a', kind: 'status', status: 'IN_PROGRESS', actor: '@x', at: '2026-06-22T02:00:00.000Z', eid: 'e1' },
+      { uid: 'a', kind: 'status', status: 'DONE', evidence: 'PR#9', actor: '@x', at: '2026-06-22T03:00:00.000Z', eid: 'e2' },
+    ];
+    expect(latestClaims(events).a).toBeUndefined();
+  });
+  it('DOING 也算认领；PROPOSED/PARTIAL/BLOCKED 不算（仅活跃认领态上锁）', () => {
+    const mk = (s) => [
+      { uid: 'a', kind: 'create', ts: '2026-06-22', at: '2026-06-22T01:00:00.000Z' },
+      { uid: 'a', kind: 'status', status: s, actor: '@x', at: '2026-06-22T02:00:00.000Z', eid: 'e1' },
+    ];
+    expect(latestClaims(mk('DOING')).a).toBeDefined();
+    expect(latestClaims(mk('PROPOSED')).a).toBeUndefined();
+    expect(latestClaims(mk('PARTIAL')).a).toBeUndefined();
+    expect(latestClaims(mk('BLOCKED')).a).toBeUndefined();
+  });
+  it('多次认领事件按 (at,eid) 全序取最新（分支无关·与 fold 同序，物理行序乱序不影响）', () => {
+    const events = [
+      { uid: 'a', kind: 'create', ts: '2026-06-22', at: '2026-06-22T01:00:00.000Z' },
+      { uid: 'a', kind: 'status', status: 'IN_PROGRESS', actor: '@late', at: '2026-06-22T05:00:00.000Z', eid: 'e2' },
+      { uid: 'a', kind: 'status', status: 'IN_PROGRESS', actor: '@early', at: '2026-06-22T03:00:00.000Z', eid: 'e1' },
+    ];
+    expect(latestClaims(events).a.actor).toBe('@late');
+  });
+  it('空/无 status 事件 → 空认领集', () => {
+    expect(latestClaims([])).toEqual({});
+    expect(latestClaims([{ uid: 'a', kind: 'create', ts: '2026-06-22' }])).toEqual({});
+  });
+});
+
+describe('dispatch.computeFrontier · 跨会话认领锁（P0「跨会话重复劳动」根治）', () => {
+  const now = '2026-06-22T10:00:00.000Z';
+  // fresh 本地看是 PROPOSED（wave-2 b331 形态：本地未见别会话的认领，仅靠 claims 注入锁出）
+  const baseTasks = [
+    { uid: 'fresh', code: 'src/a.tsx', priority: 'P1', status: 'PROPOSED', desc: 'A' },
+    { uid: 'stale', code: 'server/src/sql/b.ts', priority: 'P1', status: 'IN_PROGRESS', desc: 'B' },
+    { uid: 'free', code: 'server/src/routes/c.ts', priority: 'P1', status: 'PROPOSED', desc: 'C' },
+  ];
+
+  it('新鲜认领（age<TTL）→ 锁出前沿；陈旧认领（≥TTL）→ 释放回前沿（带时效防死锁）', () => {
+    const claims = {
+      fresh: { actor: '@A', at: '2026-06-22T09:00:00.000Z' }, // 1h 前 → 新鲜
+      stale: { actor: '@B', at: '2026-06-22T00:00:00.000Z' }, // 10h 前 → 陈旧(>8h)
+    };
+    const r = computeFrontier(baseTasks, { claims, now, claimTtlHours: 8 });
+    const f = r.frontier.map((x) => x.task.uid).sort();
+    expect(f).not.toContain('fresh');                  // 别的会话在做 → 锁出（防重复劳动）
+    expect(f).toContain('stale');                       // 陈旧认领 → 释放回前沿
+    expect(f).toContain('free');
+    expect(r.claimed.map((c) => c.task.uid)).toEqual(['fresh']);
+    expect(r.claimed[0].actor).toBe('@A');
+    expect(r.released.map((c) => c.task.uid)).toEqual(['stale']);
+  });
+
+  it('本地 PROPOSED 但远程已新鲜认领 → 锁出候选（wave-2 b331：本地视图看不到别会话进度，靠注入认领拦截）', () => {
+    const claims = { fresh: { actor: '@other-session', at: '2026-06-22T09:30:00.000Z' } };
+    const r = computeFrontier(baseTasks, { claims, now });
+    expect(r.frontier.map((x) => x.task.uid)).not.toContain('fresh');
+    expect(r.candidates.map((c) => c.uid)).not.toContain('fresh');
+  });
+
+  it('无 claims/now → 锁不生效（向后兼容：IN_PROGRESS 仍按 OPEN 候选进前沿）', () => {
+    const r = computeFrontier(baseTasks, {});
+    expect(r.claimed).toEqual([]);
+    expect(r.released).toEqual([]);
+    expect(r.frontier.map((x) => x.task.uid)).toContain('stale');
+  });
+
+  it('claims 有但缺 now → 保守视为新鲜（锁出，宁串行勿重复派单）', () => {
+    const claims = { fresh: { actor: '@A', at: '2026-06-22T00:00:00.000Z' } };
+    const r = computeFrontier(baseTasks, { claims }); // 无 now
+    expect(r.frontier.map((x) => x.task.uid)).not.toContain('fresh');
+    expect(r.claimed.map((c) => c.task.uid)).toEqual(['fresh']);
+  });
+
+  it('TTL 边界：age 恰好 == TTL → 视为陈旧释放（仅 age<ttl 才锁）', () => {
+    const claims = { fresh: { actor: '@A', at: '2026-06-22T02:00:00.000Z' } }; // 恰好 8h 前
+    const r = computeFrontier(baseTasks, { claims, now, claimTtlHours: 8 });
+    expect(r.frontier.map((x) => x.task.uid)).toContain('fresh');
+    expect(r.released.map((c) => c.task.uid)).toEqual(['fresh']);
+  });
+
+  it('at 不可解析 → 保守视为新鲜（锁出，防脏时间戳误释放）', () => {
+    const claims = { fresh: { actor: '@A', at: 'not-a-date' } };
+    const r = computeFrontier(baseTasks, { claims, now });
+    expect(r.claimed.map((c) => c.task.uid)).toEqual(['fresh']);
+  });
+
+  it('DONE 任务即便有认领残留也不计入 claimed/released（仅 OPEN 计）', () => {
+    const tasks = [{ uid: 'd', code: 'src/a.tsx', priority: 'P0', status: 'DONE', desc: 'D' }];
+    const claims = { d: { actor: '@A', at: '2026-06-22T09:00:00.000Z' } };
+    const r = computeFrontier(tasks, { claims, now });
+    expect(r.claimed).toEqual([]);
+    expect(r.released).toEqual([]);
   });
 });
 
