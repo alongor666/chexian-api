@@ -30,7 +30,7 @@
 
 **P2（41 项）**
 
-- B244 — 零赔付专项分析
+- B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
 - B250 — 幽灵字段治理检查
 - B255 — 报价数据「是否报价」字段不可靠 — 改用续保单号判定
@@ -108,7 +108,7 @@
 
 | ID | 提出时间 | 板块 | 归属对象 | 需求描述 | 优先级 | 状态 | 关联文档 | 关联代码 | 验收/证据 |
 |----|----------|------|----------|----------|--------|------|----------|----------|-----------|
-| B244 | 2026-04-11 | Analysis/Backend | @claude | **零赔付专项分析**：分析有多少赔案报案时有立案金额(reserve_amount>0)但最终结案赔款为零(settled_amount=0)的情况。数据验证显示68,511件(27%)已结案零赔付，需量化其对发展三角形"准备金释放"效应的影响 | P2 | PROPOSED | N/A | `server/src/sql/claims-detail.ts`<br>`数据管理/warehouse/fact/claims_detail/latest.parquet` | 输出零赔付占比、立案金额释放总量、时序特征 |
+| B244 | 2026-04-11 | Analysis/Backend | @claude | **零赔付专项分析**：分析有多少赔案报案时有立案金额(reserve_amount>0)但最终结案赔款为零(settled_amount=0)的情况。数据验证显示68,511件(27%)已结案零赔付，需量化其对发展三角形"准备金释放"效应的影响 | P2 | IN_PROGRESS | N/A | `server/src/sql/claims-detail.ts`<br>`数据管理/warehouse/fact/claims_detail/latest.parquet` | 零赔付专项分析报告：已结案285309件中27.0%(77136件)零赔付；准备金释放子集(立案>0且结案零赔付)=12748件释放1818.7万元(占已决136141万~1.3%);主体零结10326件/1475.8万,拒赔34件案均5.5万;零赔付率近年29.8%→21.3%改善;待结案在险释放池1641件/2693.6万。报告 开发文档/reviews/2026-06-22-零赔付专项分析_B244.md |
 | B245 | 2026-04-11 | Analysis/Backend | @claude | **零赔付专项分析维度展开**：基于B244结果，按四个维度交叉分析零赔付特征：(a)时间维度—按起保年份/结案月份(b)机构维度—各三级机构零赔付率(c)险别维度—交强/商业分别的零赔付模式(d)车辆类型维度—客户类别(营业/非营业/货车等)的零赔付差异 | P2 | PROPOSED | 同B244 | 同B244 | 四维交叉分析报告 |
 | B246 | 2026-04-17 | Refactor/Backend | @claude | **VPS 分层查询改造（KPI variable_cost_ratio）**：`server/src/sql/kpi.ts:58-63` 当前直接 FROM PolicyFact 构建 `variable_cost_base` CTE，违反 VPS 分层架构铁律（禁止在 VPS 查原始表）。本次铁律对齐仅修了口径，未动查询层级。需新增 `AggregatedVariableCostBase`（含 earned_days × policy_term 预聚合）或由 DailyAggregated 派生 | P3 | BLOCKED | `CLAUDE.md` §3 / `.claude/rules/data-pipeline.md` | `server/src/sql/kpi.ts`<br>`数据管理/pipelines/`（新增聚合导出） | 90a92c 第四批次已实质完成基础设施：sql/kpi.ts 已加 excludeVariableCost 参数（true 时 skip variable_cost_base CTE），routes/query/kpi.ts 已接入 CubeCostDay 三态路由（routing/shadow/null）。代码改造完成，待生产 CUBE_ROUTING_ENABLED=true 切流激活（当前 shadow 对账中，7 天观察期 2026-06-12 起算）。无需独立改造，跟随 90a92c 灰度收尾后置 DONE。 <br>窄化(2026-06-21 hygiene 调研)：实现已被 90a92c 立方体吸收——同一 excludeVariableCost 开关，KPI 路由立方体开启路径(CUBE_ROUTING_ENABLED=true)已结构性消除 variable_cost_base CTE。剩余=立方体关闭(默认)时回退路径仍 FROM PolicyFact 建 CTE，违反 VPS 分层铁律；因 cost/KPI 立方体经决策A 搁置(OOM 65f495)，原始诉求生产未达成。已降为 P3 低优治理项，挂接 65f495：cost/KPI 立方体复活或回退路径优化时一并处理。不关闭。 <br>stale-scan核查(2026-06-21)：依赖的65f495(成本/KPI立方体)已BLOCKED(1.5GB OOM,决策A搁置)→本任务原始诉求(生产消除variable_cost_base CTE回退路径)无法推进。立方体关闭(默认)回退仍FROM PolicyFact。65f495解封后回PROPOSED。 |
 | B247 | 2026-04-17 | Chore/Hygiene | @claude | **图表 hex 色值审计**：`WaterfallChart.tsx` / `EnhancedKpiCard.tsx` / `quoteChartColors`（index.ts:644+）等处 ECharts option 中硬编码 hex（`#91CC75`, `#EE6666`, `#10B981` 等）。需评估能否统一导出为 CSS 变量或由 `semanticColors` 派生，并建立图表色 token 规范 | P3 | PROPOSED | `DESIGN.md` §2 / `CLAUDE.md` §1 | `src/shared/styles/index.ts`<br>相关图表组件 | 图表 hex 全部指向 token，无散落字面量 |
