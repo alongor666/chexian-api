@@ -1618,6 +1618,11 @@ async function main() {
   log('green', `使用 Python: ${python}`);
   const transformScript = join(scriptDir, 'pipelines/transform.py');
 
+  // 多省 0a：非 SC 省向 transform.py 注入 --branch-code，使质量报告写入隔离目录
+  // 数据分析报告/<省>/转换质量报告.json（SC 默认链路不传 → 路径不变，四川字节安全）
+  const _premiumIsBranch = BRANCH_CODE !== 'SC';
+  const _premiumBranchArgs = _premiumIsBranch ? ['--branch-code', BRANCH_CODE] : [];
+
   // 3. 处理静态分片（存在就跳过）
   for (const file of shards.static) {
     const range = extractDateRange(file.name);
@@ -1649,7 +1654,8 @@ async function main() {
     log('green', `▶ 转换静态分片: ${file.name} → ${outputName}`);
     runPythonScript(python, transformScript, [
       '-i', `"${file.path}"`,
-      '-o', `"${convertTarget}"`
+      '-o', `"${convertTarget}"`,
+      ..._premiumBranchArgs,
     ]);
     if (staleReplace) renameSync(convertTarget, outputPath); // 同目录原子替换
   }
@@ -1713,6 +1719,9 @@ async function main() {
       log('green', `  续保匹配: ${basename(renewalSource)}`);
     }
 
+    // 多省 0a：向 transform.py 注入 --branch-code，使质量报告写入隔离目录（SC 默认链路不传）
+    args.push(..._premiumBranchArgs);
+
     runPythonScript(python, transformScript, args);
 
     // 清空 staging（日增量已合入周更 xlsx）
@@ -1733,7 +1742,8 @@ async function main() {
     log('green', `▶ 转换日增量: ${file.name} → staging/${outputName}`);
     runPythonScript(python, transformScript, [
       '-i', `"${file.path}"`,
-      '-o', `"${outputPath}"`
+      '-o', `"${outputPath}"`,
+      ..._premiumBranchArgs,
     ]);
   }
 
