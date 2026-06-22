@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import quoteConversionRouter from '../../routes/query/quote-conversion.js';
 import { AppError } from '../../routes/query/shared.js';
 import { duckdbService } from '../../services/duckdb.js';
-import { generateQuoteKpiQuery } from '../quote-conversion.js';
+import {
+  generateQuoteHeatmapQuery,
+  generateQuoteKpiQuery,
+  generateQuoteRankingQuery,
+  type QuoteConversionFilters,
+} from '../quote-conversion.js';
 
 vi.mock('../../services/duckdb.js', () => ({
   duckdbService: {
@@ -45,7 +50,26 @@ describe('quote-conversion SQL contract', () => {
     expect(sql).toContain('switch_insured_premium');
   });
 
-  it('KPI 路由支持旧车专属筛选参数', async () => {
+  it('P2 c21667：generateQuoteKpiQuery 中 isTelemarketing=电销 生成 boolean TRUE 条件', () => {
+    const filters: QuoteConversionFilters = { isTelemarketing: '电销' };
+    const sql = generateQuoteKpiQuery(filters);
+    expect(sql).toContain('is_telemarketing = TRUE');
+    expect(sql).not.toContain("is_telemarketing = '电销'");
+  });
+
+  it('P2 c21667：generateQuoteKpiQuery 中 isTelemarketing=非电销 生成 boolean FALSE 条件', () => {
+    const filters: QuoteConversionFilters = { isTelemarketing: '非电销' };
+    const sql = generateQuoteKpiQuery(filters);
+    expect(sql).toContain('is_telemarketing = FALSE');
+    expect(sql).not.toContain("is_telemarketing = '非电销'");
+  });
+
+  it('P2 c21667：isTelemarketing 未传时不生成 is_telemarketing 条件（无筛选行为不变）', () => {
+    const sql = generateQuoteKpiQuery({});
+    expect(sql).not.toContain('is_telemarketing =');
+  });
+
+  it('KPI 路由支持旧车专属筛选参数（后端兼容层：电销枚举→boolean SQL）', async () => {
     const handler = getKpiRouteHandler();
     const json = vi.fn();
     const req = {
@@ -66,12 +90,35 @@ describe('quote-conversion SQL contract', () => {
 
     expect(duckdbQuery).toHaveBeenCalledTimes(1);
     const sql = duckdbQuery.mock.calls[0]?.[0] as string;
-    expect(sql).toContain("is_telemarketing = '电销'");
+    // P2 c21667：后端兼容层将枚举 '电销' 映射为 boolean SQL 条件 `is_telemarketing = TRUE`
+    expect(sql).toContain('is_telemarketing = TRUE');
+    expect(sql).not.toContain("is_telemarketing = '电销'");  // 不再使用旧字符串比较
     expect(sql).toContain("is_nev = '是'");
     expect(sql).toContain("is_transfer = '否'");
     expect(sql).toContain("insurance_grade = 'B'");
     expect(sql).toContain('commercial_ncd >= 0.9');
     expect(sql).toContain('commercial_ncd <= 1.2');
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('P2 c21667：非电销枚举映射为 boolean FALSE', async () => {
+    const handler = getKpiRouteHandler();
+    const json = vi.fn();
+    const req = {
+      query: {
+        isTelemarketing: '非电销',
+      },
+    } as unknown as Request;
+    const res = {
+      json,
+    } as unknown as Response;
+
+    await handler(req, res, vi.fn() as unknown as NextFunction);
+
+    expect(duckdbQuery).toHaveBeenCalledTimes(1);
+    const sql = duckdbQuery.mock.calls[0]?.[0] as string;
+    expect(sql).toContain('is_telemarketing = FALSE');
+    expect(sql).not.toContain("is_telemarketing = '非电销'");
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
@@ -254,5 +301,71 @@ describe('quote-conversion SQL contract', () => {
     const err = next.mock.calls[0]?.[0] as Error;
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(400);
+  });
+
+  // ── P1 c21667 字节安全：维度输出侧兼容层 ─────────────────────────────────
+  // QuoteConversion 视图 is_telemarketing 已是 boolean，
+  // 但对外的 dim_value 输出契约必须仍为中文枚举 '电销'/'非电销'。
+  // 四川（federation 关闭）的输出逐字节与改动前一致。
+
+  it('P1 c21667：heatmap 以 is_telemarketing 为列维度时 dim_value 输出中文枚举而非 boolean', () => {
+    const sql = generateQuoteHeatmapQuery({}, 'is_telemarketing');
+    // 输出表达式应含 CASE WHEN … THEN '电销' ELSE '非电销' END
+    expect(sql).toContain("THEN '电销'");
+    expect(sql).toContain("ELSE '非电销'");
+    // 不应直接裸输出 boolean 字段
+    expect(sql).not.toMatch(/SELECT[\s\S]*is_telemarketing AS dim_value/);
+    // 兼容层使用 boolean 比较而非字符串枚举直查
+    expect(sql).toContain('is_telemarketing = TRUE');
+  });
+
+  it('P1 c21667：ranking 以 is_telemarketing 为维度时 dim_value 输出中文枚举而非 boolean', () => {
+    const sql = generateQuoteRankingQuery({}, 'is_telemarketing');
+    expect(sql).toContain("THEN '电销'");
+    expect(sql).toContain("ELSE '非电销'");
+    expect(sql).not.toMatch(/SELECT[\s\S]*is_telemarketing AS dim_value/);
+    expect(sql).toContain('is_telemarketing = TRUE');
+  });
+
+  it('P1 c21667：heatmap 使用其他维度时 is_telemarketing 不出现在 dim_value 列（回归）', () => {
+    const sql = generateQuoteHeatmapQuery({}, 'renewal_status');
+    // 选择 renewal_status 为列维度时，不应引入 is_telemarketing 相关表达式
+    expect(sql).not.toContain('is_telemarketing');
+  });
+
+  it('P1 c21667：rankig 使用其他维度时 is_telemarketing 不出现在 dim_value 列（回归）', () => {
+    const sql = generateQuoteRankingQuery({}, 'customer_category');
+    expect(sql).not.toContain('is_telemarketing');
+  });
+
+  // ── codex 二轮 P1 严格三态：非法 isTelemarketing 值返回空（不静默放大）──────────────
+  it('codex 二轮 P1：isTelemarketing 非法值（全部）生成 1=0 不可能命中条件', () => {
+    const filters: QuoteConversionFilters = { isTelemarketing: '全部' as '电销' };
+    const sql = generateQuoteKpiQuery(filters);
+    // 非法值应生成 1 = 0，而非 is_telemarketing = FALSE（防止静默放大为全部非电销数据）
+    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('is_telemarketing = FALSE');
+    expect(sql).not.toContain('is_telemarketing = TRUE');
+  });
+
+  it('codex 二轮 P1：isTelemarketing typo 值也生成 1=0（防止静默放大）', () => {
+    const filters: QuoteConversionFilters = { isTelemarketing: 'dianxiao' as '电销' };
+    const sql = generateQuoteKpiQuery(filters);
+    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('is_telemarketing = FALSE');
+  });
+
+  // ── codex 二轮 P2 维度输出侧 NULL 保护 ───────────────────────────────────────────
+  it('codex 二轮 P2：heatmap is_telemarketing 维度输出含 IS NULL 保护（不折叠 NULL 为非电销）', () => {
+    const sql = generateQuoteHeatmapQuery({}, 'is_telemarketing');
+    // 必须显式处理 NULL，防止 ELSE 折叠成 '非电销'
+    expect(sql).toContain('is_telemarketing IS NULL');
+    expect(sql).toContain("THEN NULL");
+  });
+
+  it('codex 二轮 P2：ranking is_telemarketing 维度输出含 IS NULL 保护', () => {
+    const sql = generateQuoteRankingQuery({}, 'is_telemarketing');
+    expect(sql).toContain('is_telemarketing IS NULL');
+    expect(sql).toContain("THEN NULL");
   });
 });

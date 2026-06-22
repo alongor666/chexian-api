@@ -635,15 +635,41 @@ export async function buildDimSelectSql(
  *
  * ADR G4 多省共存：extraSources 为空（默认 SC-only）→ 单源 = 历史 selectWithBranchCode 等价
  * （字节安全）；非空（GATED 多省）→ UNION ALL BY NAME + 缺列补 branch_code（SX validation 副本携真实省份）。
+ *
+ * **后端兼容层（P2 c21667）**：报价 parquet 的 is_telemarketing 是 varchar（'电销'/'非电销'）。
+ * 为使 federation RLS 能注入 `is_telemarketing = TRUE/FALSE` 的 boolean 过滤，视图层在外层
+ * SELECT 中将其归一为 BOOLEAN：`CASE WHEN is_telemarketing = '电销' THEN TRUE ELSE FALSE END`。
+ *
+ * 前端 query param 契约（isTelemarketing: '电销'|'非电销'）与 typed 报价路由的 buildWhere 同步
+ * 映射（'电销'→TRUE, '非电销'→FALSE），使前端筛选行为零感知、字节安全（RLS 仅在 BRANCH_RLS 开启
+ * 或联邦开启时才注入 boolean 过滤；四川默认关闭时四川行为逐字节不变）。
  */
 export async function loadQuoteConversion(
   db: DuckDBQueryable,
   parquetPath: string,
   extraSources: ReadonlyArray<RawBranchDimSource> = [],
 ): Promise<void> {
+  const innerSelect = await buildFactSelectSql(db, parquetPath, extraSources);
+  // 外层 SELECT：覆盖 varchar is_telemarketing → boolean。
+  // 使用 SELECT *（含 branch_code 常量列）再追加覆盖列；DuckDB 允许 SELECT * 后跟同名 EXCLUDE + REPLACE，
+  // 但为兼容性使用 EXCLUDE + 显式投影更安全。此处采用子查询 + REPLACE 语法：
+  //   SELECT * REPLACE (CASE WHEN is_telemarketing = '电销' THEN TRUE ELSE FALSE END AS is_telemarketing)
+  // 这样除 is_telemarketing 之外所有列原样保留（含 branch_code），无需穷举列名。
+  // P2 NULL 保护（codex 二轮 P2）：源 varchar is_telemarketing 可能含 NULL 或非标准枚举值
+  // （ETL 使用 astype(str) 处理，空单元格变为字符串 'nan' 而非真 NULL，但仍加保护更稳）。
+  // 显式处理 NULL：NULL→NULL，'电销'→TRUE，其余（含 '非电销' / 'nan' / 空串）→FALSE。
+  // 禁止将 NULL 折叠成 FALSE（ELSE FALSE 会破坏字节安全，改前 varchar NULL 输出原值 NULL）。
   await db.query(`
     CREATE OR REPLACE VIEW QuoteConversion AS
-    ${await buildFactSelectSql(db, parquetPath, extraSources)}
+    SELECT * REPLACE (
+      CASE WHEN is_telemarketing IS NULL THEN NULL
+           WHEN is_telemarketing = '电销' THEN TRUE
+           ELSE FALSE
+      END AS is_telemarketing
+    )
+    FROM (
+      ${innerSelect}
+    ) _raw
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM QuoteConversion');
   console.log(`[DuckDB] QuoteConversion view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -693,20 +719,33 @@ export const CLAIMS_REPORTED_AMOUNT_CASE = `SUM(CASE
  * 实证（YTD 2026 截至 5/16）：
  *   修前总赔款 +2.85% / 赔付率 +7.30% → 修后总赔款 +1.22% / 赔付率 +1.28%
  *
- * ⚠️ B299：本静态表**无出险日期(accident_time)过滤**（全量快照），刻意保持以满足字节安全。
+ * ⚠️ B299：本静态表默认**无出险日期(accident_time)过滤**（全量快照），刻意保持以满足字节安全。
  *    静态单例 ClaimsAgg 被 kpi/comprehensive/forecast/cube/skills 等 8+ 消费方共享 JOIN，
  *    给它加 cutoff 会污染整个连接的共享表（codex gate-1 P0-1）。**多 cutoff / 历史 YTD**
  *    场景的窗口化赔款须用 buildWindowedClaimsAggCTE（局部 CTE，不动静态表），消费侧切换是
  *    绑定时间机器特性的用户决策项（BACKLOG B299）。详见 memory feedback_claims_window_aligned_to_earned。
+ *
+ * @param asOfDate（可选）出险日期上限 YYYY-MM-DD。默认 null=全量快照（看板现有行为零变化）。
+ *   非 null 时追加 `accident_time < asOfDate + INTERVAL 1 DAY` 半开区间过滤（与
+ *   buildWindowedClaimsAggCTE 同口径），防止早期 cutoff 场景赔款分子泄入未来出险。
+ *   ⚠️ 本参数仅作预防性接口，当前启动路径（data-bootstrapper.ts）始终传 null（全量），
+ *   消费侧切换为历史 cutoff 时由调用方显式传入合法日期（须已 isValidDateFormat 校验）。
  */
-export async function createClaimsAggFromDetail(db: DuckDBQueryable): Promise<void> {
+export async function createClaimsAggFromDetail(
+  db: DuckDBQueryable,
+  asOfDate: string | null = null,
+): Promise<void> {
+  const accidentTimeFilter =
+    asOfDate != null
+      ? `  AND accident_time < DATE '${escapeSqlValue(asOfDate)}' + INTERVAL 1 DAY`
+      : '';
   await db.query(`
     CREATE OR REPLACE TABLE ClaimsAgg AS
     SELECT policy_no,
            COUNT(DISTINCT claim_no) AS claim_cases,
            ${CLAIMS_REPORTED_AMOUNT_CASE}
     FROM ClaimsDetail
-    WHERE policy_no IS NOT NULL
+    WHERE policy_no IS NOT NULL${accidentTimeFilter}
     GROUP BY policy_no
   `);
   const cnt = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsAgg');
@@ -752,15 +791,23 @@ export function buildWindowedClaimsAggCTE(cutoffDate: string): string {
  * 加载交叉销售 Parquet → CrossSellFact VIEW
  *
  * ADR G4 多省共存：同 loadQuoteConversion。extraSources 默认空 = 单源字节安全。
+ *
+ * **is_telemarketing 补列（P2 c21667）**：cross_sell parquet 无电销来源列，视图层补
+ * `false AS is_telemarketing` 常量，使 federation RLS 能注入 boolean 过滤。
+ * 电销用户查本域得空结果（安全·业务暂不可用·用户接受先上线）。
  */
 export async function loadCrossSell(
   db: DuckDBQueryable,
   parquetPath: string,
   extraSources: ReadonlyArray<RawBranchDimSource> = [],
 ): Promise<void> {
+  const innerSelect = await buildFactSelectSql(db, parquetPath, extraSources);
   await db.query(`
     CREATE OR REPLACE VIEW CrossSellFact AS
-    ${await buildFactSelectSql(db, parquetPath, extraSources)}
+    SELECT *, FALSE AS is_telemarketing
+    FROM (
+      ${innerSelect}
+    ) _raw
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM CrossSellFact');
   console.log(`[DuckDB] CrossSellFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -849,15 +896,23 @@ export async function loadCustomerFlow(db: DuckDBQueryable): Promise<void> {
  * 加载新能源出险信息 Parquet → NewEnergyClaims VIEW
  *
  * ADR G4 多省共存：同 loadQuoteConversion。extraSources 默认空 = 单源字节安全。
+ *
+ * **is_telemarketing 补列（P2 c21667）**：new_energy parquet 无电销来源列，视图层补
+ * `false AS is_telemarketing` 常量，使 federation RLS 能注入 boolean 过滤。
+ * 电销用户查本域得空结果（安全·业务暂不可用·用户接受先上线）。
  */
 export async function loadNewEnergyClaims(
   db: DuckDBQueryable,
   parquetPath: string,
   extraSources: ReadonlyArray<RawBranchDimSource> = [],
 ): Promise<void> {
+  const innerSelect = await buildFactSelectSql(db, parquetPath, extraSources);
   await db.query(`
     CREATE OR REPLACE VIEW NewEnergyClaims AS
-    ${await buildFactSelectSql(db, parquetPath, extraSources)}
+    SELECT *, FALSE AS is_telemarketing
+    FROM (
+      ${innerSelect}
+    ) _raw
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM NewEnergyClaims');
   console.log(`[DuckDB] NewEnergyClaims view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
@@ -868,15 +923,23 @@ export async function loadNewEnergyClaims(
  *
  * 数据源：warehouse/fact/renewal_tracker/latest.parquet（ETL 预计算产物）
  * 口径：2025 起保 + 2026 到期商业险 universe，dual-key 续保匹配，VIN 粒度
+ *
+ * **is_telemarketing 补列（P2 c21667）**：renewal_tracker parquet 无电销来源列，视图层补
+ * `false AS is_telemarketing` 常量，使 federation RLS 能注入 boolean 过滤。
+ * 电销用户查本域得空结果（安全·业务暂不可用·用户接受先上线）。
  */
 export async function loadRenewalTracker(
   db: DuckDBQueryable,
   parquetPath: string,
   extraSources: ReadonlyArray<RawBranchDimSource> = [],
 ): Promise<void> {
+  const innerSelect = await buildFactSelectSql(db, parquetPath, extraSources);
   await db.query(`
     CREATE OR REPLACE VIEW RenewalTrackerFact AS
-    ${await buildFactSelectSql(db, parquetPath, extraSources)}
+    SELECT *, FALSE AS is_telemarketing
+    FROM (
+      ${innerSelect}
+    ) _raw
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalTrackerFact');
   console.log(`[DuckDB] RenewalTrackerFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);

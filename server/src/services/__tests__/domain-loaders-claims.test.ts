@@ -6,6 +6,23 @@ import {
 } from '../duckdb-domain-loaders.js';
 import type { DuckDBQueryable } from '../duckdb-types.js';
 
+/** 创建用于捕获 SQL 的轻量 mock DB */
+function makeMockDb() {
+  const queries: string[] = [];
+  const db = {
+    query: vi.fn(async (sql: string) => {
+      queries.push(sql);
+      if (sql.includes('SELECT COUNT(*) AS cnt')) return [{ cnt: 1 }];
+      return [];
+    }),
+    getTableSchema: vi.fn(),
+    hasRelation: vi.fn(),
+    dropRelationIfExists: vi.fn(),
+    invalidateCache: vi.fn(),
+  } as unknown as DuckDBQueryable;
+  return { db, queries };
+}
+
 describe('createClaimsAggFromDetail', () => {
   it('reported_claims 按已决/未决二选一：已结案取 settled_amount，未结案取 reserve_amount', async () => {
     const queries: string[] = [];
@@ -103,5 +120,46 @@ describe('buildWindowedClaimsAggCTE (B299)', () => {
     const cte = buildWindowedClaimsAggCTE('2026-03-31');
     expect(cte).not.toMatch(/CREATE\s+OR\s+REPLACE/i);
     expect(cte).not.toMatch(/\bWITH\b/);
+  });
+});
+
+describe('createClaimsAggFromDetail — asOfDate 可选参数（B299 预防性接口）', () => {
+  it('asOfDate=null（默认）：SQL 不含 accident_time，看板行为零变化', async () => {
+    const { db, queries } = makeMockDb();
+    await createClaimsAggFromDetail(db, null);
+    const sql = queries.find((s) => s.includes('CREATE OR REPLACE TABLE ClaimsAgg')) ?? '';
+    expect(sql).not.toContain('accident_time');
+  });
+
+  it('asOfDate 未传（默认 null）：与显式传 null 行为完全一致', async () => {
+    const { db, queries } = makeMockDb();
+    await createClaimsAggFromDetail(db);
+    const sql = queries.find((s) => s.includes('CREATE OR REPLACE TABLE ClaimsAgg')) ?? '';
+    expect(sql).not.toContain('accident_time');
+  });
+
+  it('asOfDate 非空：SQL 含半开区间出险日期过滤（与 buildWindowedClaimsAggCTE 同口径）', async () => {
+    const { db, queries } = makeMockDb();
+    await createClaimsAggFromDetail(db, '2026-03-31');
+    const sql = queries.find((s) => s.includes('CREATE OR REPLACE TABLE ClaimsAgg')) ?? '';
+    expect(sql).toContain("accident_time < DATE '2026-03-31' + INTERVAL 1 DAY");
+    // 列侧不加 CAST（与 buildWindowedClaimsAggCTE 对齐）
+    expect(sql).not.toContain('CAST(accident_time');
+  });
+
+  it('asOfDate 注入防护：单引号被转义（防 SQL 注入）', async () => {
+    const { db, queries } = makeMockDb();
+    await createClaimsAggFromDetail(db, "2026-03-31'; DROP TABLE ClaimsDetail; --");
+    const sql = queries.find((s) => s.includes('CREATE OR REPLACE TABLE ClaimsAgg')) ?? '';
+    // 单引号被转义为两个单引号
+    expect(sql).toContain("''; DROP TABLE ClaimsDetail; --");
+    expect(sql).not.toMatch(/DATE '2026-03-31';\s*DROP/);
+  });
+
+  it('asOfDate 非空时仍创建 ClaimsAgg TABLE（非 CTE，静态单例行为保持）', async () => {
+    const { db, queries } = makeMockDb();
+    await createClaimsAggFromDetail(db, '2026-03-31');
+    const sql = queries.find((s) => s.includes('CREATE OR REPLACE TABLE ClaimsAgg')) ?? '';
+    expect(sql).toMatch(/CREATE\s+OR\s+REPLACE\s+TABLE\s+ClaimsAgg/i);
   });
 });

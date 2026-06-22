@@ -40,3 +40,21 @@ export function branchOutputRoot(warehouseRoot, branchCode) {
   }
   return out;
 }
+
+/**
+ * 转换质量报告路径（多省按分公司隔离）。
+ * @param reportBaseDir  质量报告根目录（相对/绝对均可，如 "./数据分析报告"）
+ * @param branchCode     CHAR(2)；SC/空＝四川默认链路
+ * @returns SC/空＝reportBaseDir/转换质量报告.json（现状，字节安全）；
+ *          其余省＝reportBaseDir/<省>/转换质量报告.json（隔离，不覆盖四川报告）
+ *
+ * 注：此函数只做路径计算，无文件系统副作用，可被 vitest 直接 import。
+ * Python 侧（transform.py）按相同逻辑独立实现（无需调用本函数）；两侧保持一致。
+ */
+export function branchQualityReportPath(reportBaseDir, branchCode) {
+  const FILENAME = '转换质量报告.json';
+  if (!branchCode || branchCode === 'SC') {
+    return join(reportBaseDir, FILENAME);
+  }
+  return join(reportBaseDir, branchCode, FILENAME);
+}

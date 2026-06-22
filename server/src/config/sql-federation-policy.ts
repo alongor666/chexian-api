@@ -81,31 +81,36 @@ const FEDERATED_REGISTRY: Readonly<Record<string, RelationPolicy>> = {
   RENEWALTRACKERFACT: {
     canonical: 'RenewalTrackerFact',
     // branch_code 由 loader 在视图层补常量列（parquet 不含；见 duckdb-domain-loaders selectUnionWithBranchCode）。
-    permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code']),
+    // is_telemarketing（P2 c21667）：parquet 无该列，loader 在视图层补 `FALSE AS is_telemarketing` 常量；
+    // 电销用户查本域得空结果（安全·业务暂不可用·用户接受先上线）。
+    permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code', 'is_telemarketing']),
     strategy: 'direct',
     lazyDomain: 'RenewalTracker',
   },
   QUOTECONVERSION: {
     canonical: 'QuoteConversion',
     // branch_code 由 loader 在视图层补常量列。
-    // is_telemarketing **仍不纳入**：parquet 中为 varchar（'电销'/'非电销'），且 typed 报价路由
-    // （sql/quote-conversion.ts）按字符串消费该列、前端筛选契约依赖之；归一为 boolean 会打断该路由。
-    // 故电销用户查本视图维持 fail-closed（安全无泄漏）；归一 + 报价路由迁移留 BACKLOG（见 plan P0.5）。
-    permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code']),
+    // is_telemarketing（P2 c21667）：parquet 原为 varchar（'电销'/'非电销'），loader 在视图层用
+    // `CASE WHEN is_telemarketing = '电销' THEN TRUE ELSE FALSE END` 归一为 boolean。
+    // typed 报价路由（sql/quote-conversion.ts）中 buildWhere 同步映射枚举→boolean SQL 条件
+    // （'电销'→TRUE, '非电销'→FALSE），前端 query param 契约（isTelemarketing:'电销'|'非电销'）零感知。
+    permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code', 'is_telemarketing']),
     strategy: 'direct',
     lazyDomain: 'QuoteConversion',
   },
   CROSSSELLFACT: {
     canonical: 'CrossSellFact',
     // branch_code 由 loader 在视图层补常量列。
-    permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code']),
+    // is_telemarketing（P2 c21667）：parquet 无该列，loader 在视图层补 `FALSE AS is_telemarketing` 常量。
+    permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code', 'is_telemarketing']),
     strategy: 'direct',
     lazyDomain: 'CrossSell',
   },
   NEWENERGYCLAIMS: {
     canonical: 'NewEnergyClaims',
     // branch_code 由 loader 在视图层补常量列（salesman_name 该域 parquet 本就缺，维持不纳入）。
-    permissionColumns: new Set(['org_level_3', 'branch_code']),
+    // is_telemarketing（P2 c21667）：parquet 无该列，loader 在视图层补 `FALSE AS is_telemarketing` 常量。
+    permissionColumns: new Set(['org_level_3', 'branch_code', 'is_telemarketing']),
     strategy: 'direct',
     lazyDomain: 'NewEnergyClaims',
   },
