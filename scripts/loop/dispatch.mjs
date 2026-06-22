@@ -159,7 +159,7 @@ export function sessionPrompt({ task, domains }) {
     `【按 Loop v2 协议（.claude/rules/loop-orchestration.md）执行】`,
     `1. 合同/计划（/chexian-evidence-loop）→ 🛡 闸-1：codex 审计计划，修 P0/P1。`,
     `2. TDD 实现，只改本任务域（${domains.join(',')}），不碰其他会话域。`,
-    `3. 确定性闸：bun run verify:full / governance 42+/42 / 字节安全证据。`,
+    `3. 确定性闸：bun run verify:full / governance 全过 / 字节安全证据。`,
     `4. 🛡 闸-2：codex 审 diff + evidence-verifier 证伪 + CI auto-review，三源 P0/P1 全修。`,
     `5. 收尾：backlog status 流转 + pr-evolution 三问复盘(needs_automation 紧跟 expires) + loop-quality-ledger 一行 → bundle 进代码提交 → PR → enable --auto MERGE（之后禁再 push）。`,
     ``,

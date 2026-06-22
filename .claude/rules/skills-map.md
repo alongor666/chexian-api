@@ -4,9 +4,9 @@
 >
 > **更新规则**：会话中发现"找一个 skill 又花 5K+ token"或"用户提到我没识别的 skill"——必须当场补登记。
 >
-> **上游同步**：B 段 `chexian-*`/A1 `rewrite-conclusion` 源在分享仓 `alongor666/alongor666-skills`（再同步 `npx skills add <repo> -g --skill <name>`）；`chexian-commit-push-pr` = 基座 `commit-push-pr-core` wrapper。
+> **上游同步**：B 段 `chexian-*`/A1 `rewrite-conclusion` 源在自有仓 `alongor666/alongor666-skills`（同步走 `crystallize-skill`）；`chexian-commit-push-pr` = `commit-push-pr-core` wrapper。
 >
-> **赔款口径治理**：5 个 diagnose/report skill 赔款 CTE 已对齐 SSOT `server/src/sql/cost/cost-ratios.ts`。详见 memory `feedback_claims_window_aligned_to_earned`、BACKLOG B299。
+> **赔款口径治理**：5 个 diagnose/report skill 赔款 CTE 已对齐 SSOT，详见 BACKLOG B299。
 
 ---
 
@@ -65,7 +65,7 @@
 | **sql-pro** | DuckDB 复杂 SQL 优化（窗口函数 / CTE / 执行计划） |
 | **chexian-crystallize-skill** | "沉淀成 skill / 固化成技能" → 五步流水线。铁律「改在仓库·装到本地·本地只读」，详见 memory `project_skills_maintenance_model` |
 | **cleanup-worktrees** | "清理/回收 worktree" → 安全回收器，默认只删零损失（`--dry-run` 盘点 / `--archive` 备份后清理） |
-| **/chexian-evidence-loop**（基座 `evidence-loop-core`） | "按证据闭环做 / evidence loop / 先建 harness 再动手" → 三阶段（harness 报告 → loop checkpoint → verifier 证伪）。本项目 §4 表见 `.claude/rules/evidence-loop.md` |
+| **/chexian-evidence-loop**（基座 `evidence-loop-core`） | "按证据闭环做 / evidence loop / 先建 harness 再动手" → 三阶段（harness 报告 → loop checkpoint → verifier 证伪）。本项目 §4 表见 `.claude/rules/evidence-loop.md`；**跨任务并行调度**先 `bun run loop:dispatch`（Loop v2，见 `.claude/rules/loop-orchestration.md`） |
 
 ---
 
