@@ -45,7 +45,6 @@
 | **chexian-im-push** | HTML→链接式 PPT 推飞书/企微（**首选**，替代已弃 `xcl-pdf2lark`/`xcl-ppt2im`） |
 | **magazine-web-ppt** | 杂志风/电子墨水风网页 PPT（发布会、对外分享） |
 | **pdf2wecom** | PDF 推企微（旧链路，新需求优先 chexian-im-push） |
-| **make-pdf** | HTML 转 PDF |
 
 ## D. 通道集成（按需 · 域=平台 skill 对照）
 
@@ -57,7 +56,6 @@
 | Skill | 触发场景 |
 |-------|---------|
 | **codex** | 第二意见 / 对抗式 review（"ask codex" / "codex review"） |
-| **browse** | 前端 QA / 视觉验证（"开浏览器测一下"），调用 gstack daemon |
 | **qa** / **qa-only** | 系统性 QA 并修 bug（生产前最后一道闸） |
 | **review** | Pre-landing PR review（SQL 安全 / LLM 信任边界 / 条件副作用） |
 | **security-review** | 处理用户输入 / 鉴权 / 敏感数据时强制触发 |
