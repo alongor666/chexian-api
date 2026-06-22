@@ -121,33 +121,45 @@ def enrich_org_level_3_from_policy(
     glob_pattern = str(policy_path / "*.parquet")
     print(f"   JOIN PolicyFact（VIN → org_level_3）: {glob_pattern}")
     try:
-        # 按 vehicle_frame_no 去重（防笛卡尔放大）：取 org_level_3 非空的最后一行
-        # LAST_VALUE + IGNORE NULLS 在 DuckDB 中可稳定取非空最新值
+        # 按 vehicle_frame_no 去重（防笛卡尔放大）：
+        # 同一车架号多条保单时，按 insurance_start_date 取最新保单的 org_level_3。
+        # 稳定 tie-breaker：policy_no DESC（字典序），确保结果完全确定，不依赖物理存储顺序。
+        # 两侧 vehicle_frame_no 均做 UPPER+TRIM 规范化，消除大小写/空格差异。
+        # 前提：生产 policy parquet 始终含 insurance_start_date（timestamp）+ policy_no（varchar）。
+        # 若 parquet 缺列（ETL bug）将在此处显式 Binder Error，避免静默归错机构（fail-fast）。
         vin_org_map = duckdb.sql(f"""
             SELECT vehicle_frame_no, org_level_3
             FROM (
                 SELECT
-                    vehicle_frame_no,
-                    LAST_VALUE(org_level_3 IGNORE NULLS) OVER (
-                        PARTITION BY vehicle_frame_no
-                        ORDER BY rowid ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                    ) AS org_level_3,
-                    ROW_NUMBER() OVER (PARTITION BY vehicle_frame_no ORDER BY rowid DESC) AS rn
-                FROM (
-                    SELECT vehicle_frame_no, org_level_3,
-                           ROW_NUMBER() OVER () AS rowid
-                    FROM read_parquet('{glob_pattern}')
-                    WHERE vehicle_frame_no IS NOT NULL
-                      AND TRIM(CAST(vehicle_frame_no AS VARCHAR)) <> ''
-                )
+                    UPPER(TRIM(CAST(vehicle_frame_no AS VARCHAR))) AS vehicle_frame_no,
+                    org_level_3,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY UPPER(TRIM(CAST(vehicle_frame_no AS VARCHAR)))
+                        ORDER BY insurance_start_date DESC NULLS LAST,
+                                 policy_no DESC NULLS LAST
+                    ) AS rn
+                FROM read_parquet('{glob_pattern}')
+                WHERE vehicle_frame_no IS NOT NULL
+                  AND TRIM(CAST(vehicle_frame_no AS VARCHAR)) <> ''
+                  AND org_level_3 IS NOT NULL
+                  AND TRIM(CAST(org_level_3 AS VARCHAR)) <> ''
             )
-            WHERE rn = 1 AND org_level_3 IS NOT NULL
+            WHERE rn = 1
         """).df()
         vin_org_map.columns = ["vehicle_frame_no", "_policy_org_level_3"]
-        vin_org_map = vin_org_map.drop_duplicates(subset=["vehicle_frame_no"], keep="last")
+        # vin_org_map 由 rn=1 保证每个 VIN 唯一，drop_duplicates 作双重保险
+        vin_org_map = vin_org_map.drop_duplicates(subset=["vehicle_frame_no"], keep="first")
 
         before_null = result["org_level_3"].isna().sum()
-        result = result.merge(vin_org_map, on="vehicle_frame_no", how="left")
+        # P2-2：claims 侧 vehicle_frame_no 做同样的 UPPER+TRIM 规范化，再与 vin_org_map JOIN。
+        # 用临时列 _vin_key 作 JOIN 键，merge 后丢弃，原 vehicle_frame_no 列保持不变。
+        result["_vin_key"] = result["vehicle_frame_no"].astype("string").str.upper().str.strip()
+        vin_org_map["_vin_key"] = vin_org_map["vehicle_frame_no"].astype(str).str.upper().str.strip()
+        result = result.merge(
+            vin_org_map[["_vin_key", "_policy_org_level_3"]],
+            on="_vin_key",
+            how="left",
+        ).drop(columns=["_vin_key"])
 
         # 仅回填为空的行（Excel 已有值的行保持原值）
         need_fill = result["org_level_3"].isna() & result["_policy_org_level_3"].notna()

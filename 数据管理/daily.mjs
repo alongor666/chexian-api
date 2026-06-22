@@ -1422,11 +1422,12 @@ async function main() {
       case 'new_energy':
       case 'new_energy_claims': {
         // new_energy_claims 的 policy_no 100% 为 NULL；通过 vehicle_frame_no JOIN policy 回填 org_level_3。
-        // policy_dir 用 branchOutputRoot 动态解析（本地与 VPS 路径不同，禁止硬编码）。
+        // SC 分支：branchOutputRoot 返回 warehouse/fact/policy/current（即 policy 分片所在目录）。
+        // 数组传参时 Python argparse 直接收到裸路径，禁止在此手工加引号（加了 Path.exists() 会失败）。
         const necPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE);
         runStandardDomain(
           python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims'),
-          ['--policy-dir', `"${necPolicyDir}"`],
+          ['--policy-dir', necPolicyDir],
         );
         break;
       }

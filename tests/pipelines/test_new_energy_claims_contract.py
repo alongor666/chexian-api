@@ -20,8 +20,26 @@ from pipelines.convert_new_energy_claims import (
 
 
 def _write_policy_parquet(path: Path, rows: list[dict]) -> None:
-    """写一个最小化 policy Parquet fixture（只含 VIN JOIN 所需字段）。"""
-    df = pd.DataFrame(rows)
+    """写一个最小化 policy Parquet fixture。
+
+    必须包含 insurance_start_date（timestamp）+ policy_no（varchar）+
+    vehicle_frame_no + org_level_3，与生产 policy parquet schema 保持一致。
+    SQL 中 ORDER BY insurance_start_date/policy_no 要求这两列存在；缺列
+    会触发 Binder Error（fail-fast），测试 fixture 须符合真实 schema。
+    """
+    # 为未提供 insurance_start_date/policy_no 的行注入默认值（兼容旧测试调用方）
+    ts_default = pd.Timestamp("2025-01-01")
+    pn_default = "P0000"
+    normalized = []
+    for i, row in enumerate(rows):
+        r = dict(row)
+        r.setdefault("insurance_start_date", ts_default)
+        r.setdefault("policy_no", f"{pn_default}_{i:04d}")
+        normalized.append(r)
+    df = pd.DataFrame(normalized)
+    # 确保 insurance_start_date 为 datetime64（pyarrow timestamp 兼容）
+    if "insurance_start_date" in df.columns:
+        df["insurance_start_date"] = pd.to_datetime(df["insurance_start_date"])
     pq.write_table(pa.Table.from_pandas(df), path)
 
 
@@ -125,8 +143,18 @@ class OrgLevel3EnrichTest(unittest.TestCase):
             _write_policy_parquet(
                 policy_dir / "policy_part1.parquet",
                 [
-                    {"vehicle_frame_no": "VIN1", "org_level_3": "成都分公司"},
-                    {"vehicle_frame_no": "VIN2", "org_level_3": "绵阳分公司"},
+                    {
+                        "vehicle_frame_no": "VIN1",
+                        "org_level_3": "成都分公司",
+                        "insurance_start_date": pd.Timestamp("2025-01-01"),
+                        "policy_no": "P2025_VIN1",
+                    },
+                    {
+                        "vehicle_frame_no": "VIN2",
+                        "org_level_3": "绵阳分公司",
+                        "insurance_start_date": pd.Timestamp("2025-01-01"),
+                        "policy_no": "P2025_VIN2",
+                    },
                 ],
             )
 
@@ -150,9 +178,19 @@ class OrgLevel3EnrichTest(unittest.TestCase):
             _write_policy_parquet(
                 policy_dir / "policy.parquet",
                 [
-                    # 同一 VIN，两条保单，org 一致
-                    {"vehicle_frame_no": "VIN1", "org_level_3": "成都分公司"},
-                    {"vehicle_frame_no": "VIN1", "org_level_3": "成都分公司"},
+                    # 同一 VIN，两条保单，org 一致（如同年多批改）
+                    {
+                        "vehicle_frame_no": "VIN1",
+                        "org_level_3": "成都分公司",
+                        "insurance_start_date": pd.Timestamp("2025-01-01"),
+                        "policy_no": "P2025_A",
+                    },
+                    {
+                        "vehicle_frame_no": "VIN1",
+                        "org_level_3": "成都分公司",
+                        "insurance_start_date": pd.Timestamp("2025-06-01"),
+                        "policy_no": "P2025_B",
+                    },
                 ],
             )
 
@@ -165,16 +203,31 @@ class OrgLevel3EnrichTest(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result.iloc[0]["org_level_3"], "成都分公司")
 
-    # ── 测试 4：一车架号多保单 org 不一致时，取最后出现的一条（确定性，不爆炸）──
-    def test_dedup_vin_with_conflicting_org_picks_one(self):
+    # ── 测试 4：一车架号多保单 org 不一致时，取最新 insurance_start_date 保单的 org（确定性，不爆炸）──
+    def test_dedup_vin_with_conflicting_org_picks_latest_policy(self):
+        """
+        同一车架号跨年续保机构变更场景：insurance_start_date 较晚的保单代表最新机构归属。
+        修复前使用 ROW_NUMBER()（物理存储序），机构变更时静默归错机构。
+        修复后按 insurance_start_date DESC 排序，始终取最新保单 org_level_3。
+        """
         with tempfile.TemporaryDirectory() as tmp:
             policy_dir = Path(tmp)
             _write_policy_parquet(
                 policy_dir / "policy.parquet",
                 [
-                    # 同一 VIN，两条保单，org 不同（如跨年续保机构变更）
-                    {"vehicle_frame_no": "VIN1", "org_level_3": "旧机构"},
-                    {"vehicle_frame_no": "VIN1", "org_level_3": "成都分公司"},
+                    # 同一 VIN，两条保单，insurance_start_date 不同，org 不同
+                    {
+                        "vehicle_frame_no": "VIN1",
+                        "org_level_3": "旧机构",
+                        "insurance_start_date": pd.Timestamp("2024-01-01"),
+                        "policy_no": "P2024",
+                    },
+                    {
+                        "vehicle_frame_no": "VIN1",
+                        "org_level_3": "最新机构",
+                        "insurance_start_date": pd.Timestamp("2025-01-01"),
+                        "policy_no": "P2025",
+                    },
                 ],
             )
 
@@ -185,8 +238,8 @@ class OrgLevel3EnrichTest(unittest.TestCase):
 
         # 不爆炸（行数必须保持 1）
         self.assertEqual(len(result), 1)
-        # org_level_3 被回填为某个非空值
-        self.assertFalse(pd.isna(result.iloc[0]["org_level_3"]))
+        # 必须取最新保单（insurance_start_date 最大）的 org_level_3
+        self.assertEqual(result.iloc[0]["org_level_3"], "最新机构")
 
     # ── 测试 5：policy_dir 不存在，优雅降级不抛异常 ─────────────────────────────
     def test_missing_policy_dir_graceful_fallback(self):
@@ -205,7 +258,14 @@ class OrgLevel3EnrichTest(unittest.TestCase):
             policy_dir = Path(tmp)
             _write_policy_parquet(
                 policy_dir / "policy.parquet",
-                [{"vehicle_frame_no": "VIN1", "org_level_3": "policy侧机构"}],
+                [
+                    {
+                        "vehicle_frame_no": "VIN1",
+                        "org_level_3": "policy侧机构",
+                        "insurance_start_date": pd.Timestamp("2025-01-01"),
+                        "policy_no": "P2025",
+                    },
+                ],
             )
 
             df = self._make_claims_df([
@@ -239,7 +299,14 @@ class OrgLevel3EnrichTest(unittest.TestCase):
             policy_dir.mkdir()
             _write_policy_parquet(
                 policy_dir / "policy.parquet",
-                [{"vehicle_frame_no": "VINTEST001", "org_level_3": "测试分公司"}],
+                [
+                    {
+                        "vehicle_frame_no": "VINTEST001",
+                        "org_level_3": "测试分公司",
+                        "insurance_start_date": pd.Timestamp("2025-01-01"),
+                        "policy_no": "PTEST001",
+                    },
+                ],
             )
 
             df = build_new_energy_claims_dataframe(
@@ -248,6 +315,36 @@ class OrgLevel3EnrichTest(unittest.TestCase):
 
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["org_level_3"], "测试分公司")
+
+    # ── 测试 8：VIN 大小写/空格混合时仍能命中（P2-2 规范化）────────────────────
+    def test_vin_case_insensitive_join(self):
+        """
+        claims 侧 VIN 含小写或前后空格时，UPPER+TRIM 规范化后仍能与 policy 侧命中。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_dir = Path(tmp)
+            _write_policy_parquet(
+                policy_dir / "policy.parquet",
+                [
+                    {
+                        "vehicle_frame_no": "ABC123XYZ",  # policy 侧全大写
+                        "org_level_3": "成都分公司",
+                        "insurance_start_date": pd.Timestamp("2025-01-01"),
+                        "policy_no": "P2025",
+                    },
+                ],
+            )
+
+            df = self._make_claims_df([
+                # claims 侧含小写和空格
+                {"claim_no": "R1", "vehicle_frame_no": " abc123xyz ", "org_level_3": None},
+            ])
+            result = enrich_org_level_3_from_policy(df, policy_dir=str(policy_dir))
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result.iloc[0]["org_level_3"], "成都分公司")
+        # 原始 vehicle_frame_no 列保持不变（不被 UPPER+TRIM 污染）
+        self.assertEqual(result.iloc[0]["vehicle_frame_no"], " abc123xyz ")
 
 
 if __name__ == "__main__":
