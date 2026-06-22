@@ -42,6 +42,7 @@
     "loop:dispatch": "node scripts/loop/dispatch.mjs",
     "loop:quality": "node scripts/loop/quality-report.mjs",
     "loop:automation-due": "node scripts/loop/automation-due.mjs",
+    "loop:stale-scan": "node scripts/loop/stale-scan.mjs",
     "verify:quick": "node scripts/test-preflight.mjs && bun run governance && bun run typecheck",
     "verify:full": "bun run verify:quick && bun run test --run",
     "hooks:install": "bash scripts/install-git-hooks.sh",
