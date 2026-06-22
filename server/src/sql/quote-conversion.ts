@@ -69,7 +69,21 @@ function buildWhere(filters: QuoteConversionFilters): string {
     conds.push(`coverage_combination = '${esc(filters.insuranceCombo)}'`);
   }
   if (filters.isTelemarketing) {
-    conds.push(`is_telemarketing = '${esc(filters.isTelemarketing)}'`);
+    // 后端兼容层（P2 c21667）：前端 query param 仍传枚举值 '电销'/'非电销'（契约不变）；
+    // QuoteConversion 视图层已归一为 boolean，故此处映射为 `is_telemarketing = TRUE/FALSE`。
+    // 严格三态（codex 二轮 P1）：
+    //   '电销'  → is_telemarketing = TRUE
+    //   '非电销' → is_telemarketing = FALSE
+    //   其他非法值（含 typo / '全部' / 数组序列化等）→ 1=0（不可能命中，返回空，对齐改前字符串等值比较语义）
+    // 路由层虽有 zod 枚举兜底，buildWhere 仍须自我防御，不得静默放大为非电销数据。
+    if (filters.isTelemarketing === '电销') {
+      conds.push(`is_telemarketing = TRUE`);
+    } else if (filters.isTelemarketing === '非电销') {
+      conds.push(`is_telemarketing = FALSE`);
+    } else {
+      // 非法值：生成不可能命中的条件，使查询返回空（防止静默放大）
+      conds.push(`1 = 0`);
+    }
   }
   if (filters.isNewEnergy) {
     conds.push(`is_nev = '${esc(filters.isNewEnergy)}'`);
@@ -198,7 +212,10 @@ export function generateQuoteHeatmapQuery(
     'commercial_ncd': "CAST(commercial_ncd AS VARCHAR)",
     'coverage_combination': 'coverage_combination',
     'customer_category': 'customer_category',
-    'is_telemarketing': 'is_telemarketing',
+    // 后端兼容层（P1 c21667）：QuoteConversion 视图的 is_telemarketing 已归一为 boolean；
+    // 维度输出侧必须还原为中文枚举，保持前端/四川输出字节安全（与改动前完全一致）。
+    // P2 NULL 保护（codex 二轮 P2）：显式处理 NULL，防止 ELSE 分支将 NULL 折叠成 '非电销'。
+    'is_telemarketing': "CASE WHEN is_telemarketing IS NULL THEN NULL WHEN is_telemarketing = TRUE THEN '电销' ELSE '非电销' END",
     'is_nev': 'is_nev',
     'traffic_risk_grade': 'traffic_risk_grade',
   };
@@ -254,7 +271,10 @@ export function generateQuoteRankingQuery(
     'is_nev': 'is_nev',
     'tonnage_segment': 'tonnage_segment',
     'traffic_risk_grade': 'traffic_risk_grade',
-    'is_telemarketing': 'is_telemarketing',
+    // 后端兼容层（P1 c21667）：QuoteConversion 视图的 is_telemarketing 已归一为 boolean；
+    // 维度输出侧必须还原为中文枚举，保持前端/四川输出字节安全（与改动前完全一致）。
+    // P2 NULL 保护（codex 二轮 P2）：显式处理 NULL，防止 ELSE 分支将 NULL 折叠成 '非电销'。
+    'is_telemarketing': "CASE WHEN is_telemarketing IS NULL THEN NULL WHEN is_telemarketing = TRUE THEN '电销' ELSE '非电销' END",
     'is_transfer': 'is_transfer',
   };
   const dimExpr = allowedDims[esc(dimension)] ?? 'customer_category';

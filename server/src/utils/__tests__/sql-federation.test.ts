@@ -77,9 +77,11 @@ describe('sql-federation-policy 注册表', () => {
     const renewal = getRelationPolicy('RenewalTrackerFact')!;
     expect(relationSupportsFilterColumns(renewal, ['org_level_3'])).toBe(true);
     expect(relationSupportsFilterColumns(renewal, ['salesman_name'])).toBe(true);
-    // branch_code（P0.5 视图层补列）已纳入；is_telemarketing 仍未纳入（留 BACKLOG）
+    // branch_code（P0.5 视图层补列）已纳入；is_telemarketing（P2 c21667 视图层补列）已纳入
     expect(relationSupportsFilterColumns(renewal, ['branch_code'])).toBe(true);
-    expect(relationSupportsFilterColumns(renewal, ['is_telemarketing'])).toBe(false);
+    expect(relationSupportsFilterColumns(renewal, ['is_telemarketing'])).toBe(true);
+    // 未注册的列仍拒绝
+    expect(relationSupportsFilterColumns(renewal, ['premium'])).toBe(false);
   });
 
   it('P0.5：branch_code 纳入全部 4 个 direct 派生视图（视图层补常量列）', () => {
@@ -94,11 +96,19 @@ describe('sql-federation-policy 注册表', () => {
     }
   });
 
-  it('P0.5：is_telemarketing 仍未纳入任一派生视图（QuoteConversion 含 varchar 列但留 BACKLOG）', () => {
+  it('P2 c21667：is_telemarketing 纳入全部 4 个 direct 派生视图（视图层补 boolean 列）', () => {
     enableFederation();
     for (const view of ['RenewalTrackerFact', 'QuoteConversion', 'CrossSellFact', 'NewEnergyClaims']) {
       const policy = getRelationPolicy(view)!;
-      expect(relationSupportsFilterColumns(policy, ['is_telemarketing'])).toBe(false);
+      expect(relationSupportsFilterColumns(policy, ['is_telemarketing'])).toBe(true);
+    }
+  });
+
+  it('P2 c21667：is_telemarketing 组合过滤（含 branch_code）在 4 个视图上均支持', () => {
+    enableFederation();
+    for (const view of ['RenewalTrackerFact', 'QuoteConversion', 'CrossSellFact', 'NewEnergyClaims']) {
+      const policy = getRelationPolicy(view)!;
+      expect(relationSupportsFilterColumns(policy, ['branch_code', 'is_telemarketing'])).toBe(true);
     }
   });
 });
@@ -220,14 +230,13 @@ describe('injectPermissionIntoAnySql — 联邦 RLS 矩阵（开关开启）', (
     expect(out).toContain("(SELECT * FROM RenewalTrackerFact WHERE org_level_3 = '乐山') AS RenewalTrackerFact");
   });
 
-  it('电销过滤 is_telemarketing=true 作用于 RenewalTrackerFact → fail-closed 抛错（缺列，绝不丢弃过滤）', () => {
+  it('P2 c21667：is_telemarketing = true 过滤作用于 RenewalTrackerFact → 正常注入（视图层已补 boolean 列）', () => {
     enableFederation();
-    expect(() =>
-      injectPermissionIntoAnySql(
-        'SELECT COUNT(*) FROM RenewalTrackerFact',
-        'is_telemarketing = true',
-      ),
-    ).toThrow(/缺少权限列.*is_telemarketing/);
+    const out = injectPermissionIntoAnySql(
+      'SELECT COUNT(*) FROM RenewalTrackerFact',
+      'is_telemarketing = true',
+    );
+    expect(out).toContain('(SELECT * FROM RenewalTrackerFact WHERE is_telemarketing = true) AS RenewalTrackerFact');
   });
 
   it('P0.5：分公司过滤 branch_code 作用于 RenewalTrackerFact → 正常注入（视图层已补列，不再 fail-closed）', () => {
@@ -267,11 +276,21 @@ describe('injectPermissionIntoAnySql — 联邦 RLS 矩阵（开关开启）', (
     expect(out).toContain("(SELECT * FROM QuoteConversion WHERE org_level_3 = '乐山') AS QuoteConversion");
   });
 
-  it('电销过滤作用于 QuoteConversion（is_telemarketing 为 varchar 未纳入 RLS 列）→ fail-closed 拒绝', () => {
+  it('P2 c21667：is_telemarketing = true 过滤作用于 QuoteConversion → 正常注入（视图层已归一 boolean）', () => {
     enableFederation();
-    expect(() =>
-      injectPermissionIntoAnySql('SELECT COUNT(*) FROM QuoteConversion', 'is_telemarketing = true'),
-    ).toThrow(/缺少权限列.*is_telemarketing/);
+    const out = injectPermissionIntoAnySql(
+      'SELECT COUNT(*) FROM QuoteConversion',
+      'is_telemarketing = true',
+    );
+    expect(out).toContain('(SELECT * FROM QuoteConversion WHERE is_telemarketing = true) AS QuoteConversion');
+  });
+
+  it('P2 c21667：is_telemarketing = false 过滤（电销用户得空结果）作用于三个补常量域', () => {
+    enableFederation();
+    for (const view of ['RenewalTrackerFact', 'CrossSellFact', 'NewEnergyClaims']) {
+      const out = injectPermissionIntoAnySql(`SELECT COUNT(*) FROM ${view}`, 'is_telemarketing = true');
+      expect(out).toContain(`(SELECT * FROM ${view} WHERE is_telemarketing = true) AS ${view}`);
+    }
   });
 
   it('越权缺陷回归：RepairDim（含 org_level_3 机构敏感数据）→ 未纳入联邦，validateSQL 直接拒绝', () => {
