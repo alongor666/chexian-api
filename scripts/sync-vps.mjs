@@ -302,6 +302,9 @@ function resolveRunConfig(parsedArgs) {
     helpMode: parsedArgs.helpMode,
     noCleanup: parsedArgs.noCleanup,
     domains: parsedArgs.domains || [],
+    // 多省安全：从 env 读省份编码（SYNC_VPS_BRANCH_CODE=SC 时启用分省保护）
+    // getSyncBranchCode 是 export function 声明，JavaScript 函数声明会提升，可在定义前引用
+    branchCode: getSyncBranchCode(),
   };
 }
 
@@ -365,6 +368,35 @@ async function execRemote(config, remoteCommand, options = {}) {
 const RSYNC_EXCLUDES = ['_incoming.parquet', '*.tmp', '_tmp/', '.DS_Store'];
 const RSYNC_EXCLUDE_ARGS = RSYNC_EXCLUDES.flatMap((p) => ['--exclude', p]);
 
+/**
+ * 多省安全：当 current/ 含多省分片时，--delete 会误删远端异省文件。
+ * 此函数生成 rsync filter 规则，保护（Protect）异省前缀的 .parquet 文件。
+ *
+ * 策略（codex 闸-1 P1 校正）：
+ *   - 异省文件格式约定：`<BRANCH>_*.parquet`（两位大写字母 + 下划线 + 任意名称）
+ *   - 本省文件含：`<branchCode>_*.parquet` + 无前缀旧分片（向后兼容裸名，省略省份前缀 = SC）
+ *   - rsync --filter 规则顺序：先 protect 异省前缀，再让 --delete 正常清理同省旧文件
+ *   - 使用 `--filter 'P <省>_*'` 保护不属于目标省的前缀文件（P = 不删除 receiver 端匹配文件）
+ *
+ * 字节安全：branchCode=null 时返回空数组 → rsyncDir 行为与原版完全等价。
+ *
+ * @param {string|null} branchCode - 目标省份编码（如 'SC'），null 表示单省模式（历史行为）
+ * @param {string[]} [knownBranches] - 已知所有省份编码列表（用于精确 protect 规则）
+ * @returns {string[]} rsync 参数数组
+ */
+export function buildRsyncBranchFilterArgs(branchCode, knownBranches = ['SC', 'SX']) {
+  if (!branchCode) return []; // 单省短路：不加任何 filter，与历史行为完全等价
+
+  // 对每个非目标省份生成 --filter 'P <BRANCH>_*'（Protect：受保护文件不会被 --delete 删除）
+  const protectArgs = [];
+  for (const b of knownBranches) {
+    if (b !== branchCode) {
+      protectArgs.push('--filter', `P ${b}_*.parquet`);
+    }
+  }
+  return protectArgs;
+}
+
 async function rsyncDir(alias, localDir, remoteDir, label, options = {}) {
   // 确保 localDir 以 / 结尾（rsync 语义：同步目录内容而非目录本身）
   const src = localDir.endsWith('/') ? localDir : `${localDir}/`;
@@ -372,12 +404,20 @@ async function rsyncDir(alias, localDir, remoteDir, label, options = {}) {
   const deleteRemote = options.deleteRemote !== false;
   const deleteArgs = deleteRemote ? ['--delete'] : [];
 
-  log('yellow', `  rsync ${label}${deleteRemote ? '' : ' (no --delete)'}: ${src} → ${alias}:${dst}`);
+  // 多省安全：options.safeDeleteBranch 非 null 时注入保护 filter（保护异省分片不被误删）
+  const branchFilterArgs = buildRsyncBranchFilterArgs(
+    options.safeDeleteBranch ?? null,
+    options.knownBranches,
+  );
+
+  const branchTag = options.safeDeleteBranch ? ` [分省保护:${options.safeDeleteBranch}]` : '';
+  log('yellow', `  rsync ${label}${deleteRemote ? '' : ' (no --delete)'}${branchTag}: ${src} → ${alias}:${dst}`);
 
   try {
     await runLocal('rsync', [
       '-azv',
       ...deleteArgs,
+      ...branchFilterArgs,
       ...RSYNC_EXCLUDE_ARGS,
       '-e', 'ssh',
       src,
@@ -472,6 +512,34 @@ async function queryLocalPolicyFingerprint(localCurrentDir) {
   }
 }
 
+/**
+ * 多省安全：分省统计本地 policy/current 指纹，只计算目标省份行数。
+ *
+ * 背景（codex 闸-1 P1）：全量 COUNT(*) 含多省时 rowCount 虚高，可能让 SC 行数实际不足
+ * 但总量 pass 的机器覆盖生产。branchCode 指定时只统计该省，与 VPS 端全量统计不可比，
+ * 故多省时 assertLocalNotStaleVsVps 降级为 skip（warn）。
+ *
+ * 字节安全：此函数仅在 branchCode 非 null 时才调用，单省 SC 时不走此路径。
+ *
+ * @param {string} localCurrentDir - policy/current 本地目录
+ * @param {string} branchCode - 省份编码（如 'SC'）
+ * @returns {Promise<{maxDate:string|null, rowCount:number}|null>}
+ */
+export async function queryLocalPolicyFingerprintForBranch(localCurrentDir, branchCode) {
+  const glob = join(localCurrentDir, '*.parquet').replace(/'/g, "''");
+  const branch = branchCode.replace(/'/g, "''");
+  // WHERE branch_code 过滤：只统计目标省份行数（SQL 注入安全：branch_code 由调用方控制，仅含大写字母）
+  const sql = `SELECT MAX(CAST(policy_date AS DATE))::VARCHAR AS max_date, COUNT(*) AS row_count FROM read_parquet('${glob}', union_by_name=true) WHERE branch_code = '${branch}'`;
+  try {
+    const { stdout } = await runLocal('duckdb', ['-json', '-c', sql], { silent: true });
+    const rows = JSON.parse(stdout || '[]');
+    const r = rows[0] || {};
+    return { maxDate: r.max_date ?? null, rowCount: Number(r.row_count ?? 0) };
+  } catch {
+    return null; // duckdb CLI 缺失 / parquet 读取失败 → 降级
+  }
+}
+
 async function queryVpsPolicyFingerprint(config) {
   const url = 'http://localhost:3000/internal/data-fingerprint';
   try {
@@ -488,10 +556,32 @@ async function queryVpsPolicyFingerprint(config) {
   }
 }
 
-async function assertLocalNotStaleVsVps(config, localCurrentDir, hooks = {}) {
+/**
+ * 完整性闸门主入口。
+ *
+ * 多省模式（branchCode 指定时）：
+ *   VPS /internal/data-fingerprint 当前只返回全量统计，与分省本地 count 不可比（codex P1）。
+ *   在 VPS 端分省指纹端点上线前，多省模式降级为 skip+warn（防误 block，不防数据倒退）。
+ *   TODO(G2 followup)：VPS 端就绪后移除降级，改为调用 ?branch=<code> 分省指纹对比。
+ *
+ * 单省模式（branchCode=null，默认，当前生产状态）：
+ *   行为与历史版本完全等价，用全量统计比较。
+ */
+async function assertLocalNotStaleVsVps(config, localCurrentDir, hooks = {}, branchCode = null) {
   const onPass = hooks.onPass || (() => {});
   const onWarn = hooks.onWarn || (() => {});
   const onFail = hooks.onFail || (() => {});
+
+  // 多省模式：VPS 端分省指纹未就绪，降级为 skip（warn）
+  if (branchCode) {
+    onWarn(
+      `多省分省新鲜度闸尚未就绪（VPS /internal/data-fingerprint 未支持 ?branch=${branchCode}），` +
+      `本次同步 [${branchCode}] 跳过新鲜度校验（降级放行）。待 VPS 端就绪后再启用分省对比。`,
+    );
+    return true;
+  }
+
+  // 单省模式：历史行为完全等价
   const [local, vps] = await Promise.all([
     queryLocalPolicyFingerprint(localCurrentDir),
     queryVpsPolicyFingerprint(config),
@@ -592,9 +682,50 @@ function printHelp() {
 `);
 }
 
-function buildStandardSyncTasks(remote, frontendDist) {
+/**
+ * 多省安全：读取当前省份编码，用于分省同步保护。
+ *
+ * 来源优先级：环境变量 SYNC_VPS_BRANCH_CODE → null（单省历史模式）。
+ * 单省 SC 时（默认），SYNC_VPS_BRANCH_CODE 未设置，返回 null，所有历史行为完全等价。
+ * 多省就绪时（如将来 current/ 含 SC+SX），由 ETL 编排层设置 SYNC_VPS_BRANCH_CODE=SC，
+ * 启用分省保护（保护 VPS 上其他省分片不被误删）。
+ *
+ * @returns {string|null} 省份编码或 null（单省模式）
+ */
+export function getSyncBranchCode() {
+  const env = process.env.SYNC_VPS_BRANCH_CODE;
+  if (!env) return null;
+  const code = env.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) {
+    throw new Error(`SYNC_VPS_BRANCH_CODE 格式错误（期望 2 位大写字母，如 SC、SX），实际：${env}`);
+  }
+  return code;
+}
+
+/**
+ * 构建标准同步任务列表。
+ *
+ * 多省安全改造（§6.1，codex 闸-1 P1 修正）：
+ *   - branchCode 非 null 时，policy/current 任务携带 safeDeleteBranch=branchCode，
+ *     使 rsyncDir 注入 --filter 'P <异省>_*' 保护规则，防止 --delete 误删 VPS 上异省分片。
+ *   - branchCode=null（默认/单省）时，task 无 safeDeleteBranch 属性，rsyncDir 行为与历史完全等价。
+ *
+ * @param {string} remote - VPS 远端数据根目录
+ * @param {string} frontendDist - VPS 前端 dist 目录
+ * @param {{branchCode?: string|null}} [opts] - 可选配置
+ */
+function buildStandardSyncTasks(remote, frontendDist, opts = {}) {
+  const branchCode = opts.branchCode ?? null;
+  // policy/current 分省安全：多省时加保护 filter，单省时不加（字节等价）
+  const policyCurrentTask = {
+    label: 'policy/current',
+    local: LOCAL_CURRENT_DIR,
+    remote: `${remote}/current`,
+    critical: true,
+    ...(branchCode ? { safeDeleteBranch: branchCode } : {}),
+  };
   return [
-    { label: 'policy/current',       local: LOCAL_CURRENT_DIR,            remote: `${remote}/current`,               critical: true },
+    policyCurrentTask,
     { label: 'dim/salesman',         local: LOCAL_SALESMAN_DIR,           remote: `${remote}/dim/salesman`,          critical: true },
     { label: 'dim/plan',             local: LOCAL_PLAN_DIR,               remote: `${remote}/dim/plan`,              critical: true },
     { label: 'fact/quotes_conversion', local: LOCAL_QUOTES_CONVERSION_DIR, remote: `${remote}/fact/quotes_conversion`, critical: false },
@@ -634,7 +765,10 @@ function buildSyncTasks(runConfig) {
   if (runConfig.domains.length > 0) {
     return buildDomainSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir, runConfig.domains);
   }
-  return buildStandardSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir);
+  // 多省安全：传递 branchCode 到 buildStandardSyncTasks，启用 policy/current 分省保护
+  return buildStandardSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir, {
+    branchCode: runConfig.branchCode ?? null,
+  });
 }
 
 function printDryRun(sshConfig, runConfig) {
@@ -755,11 +889,15 @@ async function runStandardMode(sshConfig, runConfig) {
   log('green', `▶ 并行同步 ${activeTasks.length} 个目录...`);
 
   // 并行 rsync 所有目录
+  // 多省安全：task.safeDeleteBranch 非 null 时，rsyncDir 注入 --filter 'P <异省>_*' 保护规则
   const results = await Promise.allSettled(
     activeTasks.map(task => (
       task.atomicLatest
         ? rsyncLatestAtomically(sshConfig, task.local, task.remote, task.label)
-        : rsyncDir(alias, task.local, task.remote, task.label, { deleteRemote: task.deleteRemote })
+        : rsyncDir(alias, task.local, task.remote, task.label, {
+            deleteRemote: task.deleteRemote,
+            safeDeleteBranch: task.safeDeleteBranch ?? null,
+          })
     ))
   );
 
@@ -774,7 +912,10 @@ async function runStandardMode(sshConfig, runConfig) {
       log('yellow', `  重试 optional ${task.label}（抖动容错）...`);
       rsyncResult = task.atomicLatest
         ? await rsyncLatestAtomically(sshConfig, task.local, task.remote, task.label)
-        : await rsyncDir(alias, task.local, task.remote, task.label, { deleteRemote: task.deleteRemote });
+        : await rsyncDir(alias, task.local, task.remote, task.label, {
+            deleteRemote: task.deleteRemote,
+            safeDeleteBranch: task.safeDeleteBranch ?? null,
+          });
     }
     if (!rsyncResult.ok) {
       failures.push({ ...rsyncResult, critical: task.critical });
@@ -888,11 +1029,29 @@ function readExistingSyncManifest(manifestPath) {
   }
 }
 
+/**
+ * 多省安全：判断文件是否属于目标省份（用于 manifest 过滤）。
+ * - branchCode=null（单省模式）：所有文件都记录，与历史等价
+ * - branchCode='SC'：只记录 SC 前缀或无前缀（裸名，向后兼容 SC）的文件
+ *
+ * 字节安全：单省时 branchCode=null → 返回 true → 所有文件都记录，与历史完全等价。
+ */
+export function isFileInBranch(filename, branchCode) {
+  if (!branchCode) return true; // 单省短路：等价历史行为
+  const m = filename.match(/^([A-Z]{2})_/);
+  if (!m) return branchCode === 'SC'; // 无前缀裸名文件 = SC 历史分片
+  return m[1] === branchCode;
+}
+
 function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DEFAULTS.frontendDistDir), runConfig = { domains: [] }) {
+  const branchCode = runConfig.branchCode ?? null;
   const files = {};
   for (const dir of tasks.map(task => ({ label: task.label, path: task.local }))) {
     if (!existsSync(dir.path)) continue;
-    const parquets = readdirSync(dir.path).filter(f => f.endsWith('.parquet'));
+    const parquets = readdirSync(dir.path)
+      .filter(f => f.endsWith('.parquet'))
+      // 多省安全（codex P2）：分省同步时只把本省文件写入 manifest，避免 governance drift 失真
+      .filter(f => isFileInBranch(f, dir.label === 'policy/current' ? branchCode : null));
     for (const f of parquets) {
       const fullPath = join(dir.path, f);
       const stat = statSync(fullPath);
@@ -922,6 +1081,7 @@ function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DE
     syncedAt: new Date().toISOString(),
     scope,
     domains: runConfig.domains || [],
+    ...(branchCode ? { branchCode } : {}), // 多省时记录 branchCode 便于 governance 审计
     fileCount: Object.keys(mergedFiles).length,
     files: mergedFiles,
   };
@@ -972,13 +1132,15 @@ async function main(argv = process.argv.slice(2)) {
   // 完整性闸门：本地 policy 数据若比 VPS 现役更旧/更少则拒绝，防残缺数据覆盖生产。
   // 仅在本次确实会同步 policy/current 时执行——--domain（只传对应 fact 域 latest.parquet，
   // 不含 policy）和 --check（仅预检）不该被 policy 新鲜度阻断。
+  // 多省模式（SYNC_VPS_BRANCH_CODE 指定）：assertLocalNotStaleVsVps 内部降级为 skip+warn，
+  // 直到 VPS /internal/data-fingerprint 支持 ?branch= 分省查询后再启用精确对比。
   const willSyncPolicy = buildSyncTasks(runConfig).some((t) => t.label === 'policy/current');
   if (!runConfig.checkMode && willSyncPolicy) {
     const freshnessOk = await assertLocalNotStaleVsVps(sshConfig, LOCAL_CURRENT_DIR, {
       onPass: (msg) => log('green', `✓ 完整性闸门: ${msg}`),
       onWarn: (msg) => log('yellow', `⚠ 完整性闸门: ${msg}`),
       onFail: (msg) => log('red', `❌ 完整性闸门: ${msg}`),
-    });
+    }, runConfig.branchCode ?? null);
     if (!freshnessOk) {
       log('red', '  本地数据疑似不全。若确属正常（如上游修正删重），请在数据完整的 ETL 机重跑，或人工核对后再同步。');
       process.exit(1);
@@ -1004,6 +1166,8 @@ async function main(argv = process.argv.slice(2)) {
   await runStandardMode(sshConfig, runConfig);
 }
 
+// 注：buildRsyncBranchFilterArgs / getSyncBranchCode / queryLocalPolicyFingerprintForBranch / isFileInBranch
+// 已在上方用 export function 声明，无需在此 re-export
 export {
   DEFAULTS,
   expandHomePath,

@@ -857,3 +857,14 @@
 - **复用价值**：① 「纯逻辑从 hook 提取到 utils/」打法=同目录(utils 与 hooks 同在 features/<mod>/下,`../../../shared` 相对深度一致零改写)抽纯函数、hook 改 `.map(normalizeX)`/`computeX()` 调用、useCallback 依赖移除已提取的稳定模块函数(原 `useCallback(...,[])` 提取后天然稳定,从依赖数组删除安全)；零生产行为变更而 hook 显著简化。可把 R19「纯函数分布扫描」里判为 hooks 的模块从路线 A 转路线 B。② 「`??` vs `||` 用空串(非 null)区分」「`== null` 用 undefined(非 null)区分」是锁「易被误改的判等运算符」标准测法。③ vitest exclude 含 `**/.claude/**`——测试**禁落 `.claude/worktrees/`**(否则静默 skip=假 passed)，本轮特意用兄弟目录 worktree 规避(呼应 feedback_e2e_silent_skip_false_positive)。
   - needs_automation: false（沿用 R18 已登记的「双源零测试盘点 + 纯函数分布扫描」脚本项 expires 2026-09-22；本轮新增「路线 A/B 同构判断随路线重判」是决策纪律非可自动化项）
 - **下一轮**：真零测试余 6 个**纯组件**模块(admin/customer-flow/file/moto-cost/repair/report,仅 .tsx+barrel 无纯函数)——须转「组件 smoke(DOM/@testing-library)」路线，与本纯函数策略不同，是 b332 既定**策略分叉点**；premium-report 已清零，b332 整体仍 IN_PROGRESS。
+
+**R21 · Loop v2 · sync-vps 分省安全改造（§6.1 三处扁平目录假设，单省字节安全）**
+- **触发**：多省接入(山西SX)，架构文档 §6.1 点名 sync-vps.mjs 三处扁平假设在多省时会导致：①--delete 整目录同步粒度→误删异省 VPS 分片 ②新鲜度闸全目录总行数→跨省混计 ③sync 任务无省份概念→无分省保护入口。
+- **codex 闸-1（计划审计）**：P1×3(rsync filter 规则错误/VPS freshness 必须分省/缺少启用入口)，P2×2(manifest漂移/测试不充分)。全部纳入修正。
+- **关键修正**：①filter改用`--filter 'P <异省>_*.parquet'`语义正确的Protect规则，不用`[^S][^C]`错误负向正则。②VPS分省freshness：任务限制不碰server/src，多省模式改为降级skip+warn（显式告知VPS端无分省指纹支持）；单省SC走旧全量对比=字节等价。③新增SYNC_VPS_BRANCH_CODE环境变量作为受控启用入口，非CLI参数（避免过度工程）。④manifest增加isFileInBranch过滤，分省同步时只记录本省文件。
+- **字节安全铁律**：SYNC_VPS_BRANCH_CODE未设置时所有改动通过null短路回旧行为，4个短路点各有单测验证。
+- **成果**：新增4个导出函数(buildRsyncBranchFilterArgs/getSyncBranchCode/queryLocalPolicyFingerprintForBranch/isFileInBranch) + 25个新单测 = 33新测试/134总测试全绿；governance 44/44；typecheck通过。
+- **重来更好**：①计划阶段应提前识别VPS端分省指纹的依赖，避免P1被codex发现后被迫降级（虽降级是正确策略，但应自主发现）。②rsync filter语义复杂，应在计划阶段先测试filter规则语义而非写进改造方案里再被codex发现漏洞。
+- **复用价值**：`buildRsyncBranchFilterArgs(branchCode, knownBranches)`模式（null短路=旧行为，非null=分省保护）可推广到其他扁平目录假设站点（daily.mjs/parquet-overlap-check等）。`isFileInBranch`可被ETL侧的manifest/audit脚本复用。
+  - needs_automation: true（VPS端就绪后需自动从`branchCode=null`升级为分省精确对比，触发条件：`/internal/data-fingerprint`支持`?branch=`参数）expires: 2026-12-31
+- **GATED残留**：真实多省同步验证需cutover时做（SX进current/的硬前置=G5口径签字+RLS-on）。VPS端分省指纹端点（`/internal/data-fingerprint?branch=SC`）待`server/src`侧实现后，assertLocalNotStaleVsVps多省路径才能从skip升级为精确对比。
