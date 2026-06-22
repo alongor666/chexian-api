@@ -1,0 +1,5090 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-22T02:50:36Z",
+  "generated_by": "数据管理/pipelines/field_coverage.py",
+  "duckdb_version": "1.5.1",
+  "note": "本地 AI 知识库事实源：字段×年份真实覆盖率。不随 VPS 发布。敏感列已脱敏（redacted=true）。effective_non_null_ratio 把空串/占位符算空。",
+  "domains": {
+    "policy": {
+      "available": true,
+      "glob": "数据管理/warehouse/fact/policy/current/*.parquet",
+      "year_anchor": "policy_date",
+      "total_rows": 2600421,
+      "data_range": {
+        "anchor": "policy_date",
+        "min": "2021-01-01 00:00:00",
+        "max": "2026-06-13 00:00:00"
+      },
+      "years": [
+        "_ALL",
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025",
+        "2026"
+      ],
+      "fields": {
+        "agent_name": {
+          "physical_column": "agent_name",
+          "physical_type": "VARCHAR",
+          "field_id": "agent_name",
+          "label": "经代名",
+          "source_column": "经代名",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2562240,
+              "effective_non_null_ratio": 0.9853,
+              "distinct_count": 1769
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 426714,
+              "effective_non_null_ratio": 0.956,
+              "distinct_count": 779
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 422886,
+              "effective_non_null_ratio": 0.9922,
+              "distinct_count": 686
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 462055,
+              "effective_non_null_ratio": 0.9946,
+              "distinct_count": 756
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 440030,
+              "effective_non_null_ratio": 0.994,
+              "distinct_count": 829
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 549233,
+              "effective_non_null_ratio": 0.9911,
+              "distinct_count": 736
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 261322,
+              "effective_non_null_ratio": 0.9808,
+              "distinct_count": 704
+            }
+          }
+        },
+        "branch_code": {
+          "physical_column": "branch_code",
+          "physical_type": "VARCHAR",
+          "field_id": "branch_code",
+          "label": "分公司编码",
+          "source_column": null,
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "SC"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            }
+          }
+        },
+        "commercial_ncd": {
+          "physical_column": "commercial_ncd",
+          "physical_type": "VARCHAR",
+          "field_id": "commercial_ncd",
+          "label": "商业险NCD",
+          "source_column": "商业险NCD",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "0.5",
+            "1.0",
+            "0.7",
+            "0.8",
+            "0.6"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 674870,
+              "effective_non_null_ratio": 0.2595,
+              "distinct_count": 13
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 113959,
+              "effective_non_null_ratio": 0.2553,
+              "distinct_count": 13
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 112290,
+              "effective_non_null_ratio": 0.2635,
+              "distinct_count": 10
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 120028,
+              "effective_non_null_ratio": 0.2584,
+              "distinct_count": 10
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 128202,
+              "effective_non_null_ratio": 0.2896,
+              "distinct_count": 9
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 132216,
+              "effective_non_null_ratio": 0.2386,
+              "distinct_count": 9
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 68175,
+              "effective_non_null_ratio": 0.2559,
+              "distinct_count": 8
+            }
+          }
+        },
+        "commercial_pricing_factor": {
+          "physical_column": "commercial_pricing_factor",
+          "physical_type": "DOUBLE",
+          "field_id": "commercial_pricing_factor",
+          "label": "商车自主定价系数",
+          "source_column": "商车自主定价系数",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 674286,
+              "effective_non_null_ratio": 0.2593,
+              "distinct_count": 3317
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 113375,
+              "effective_non_null_ratio": 0.254,
+              "distinct_count": 297
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 112290,
+              "effective_non_null_ratio": 0.2635,
+              "distinct_count": 287
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 120028,
+              "effective_non_null_ratio": 0.2584,
+              "distinct_count": 543
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 128202,
+              "effective_non_null_ratio": 0.2896,
+              "distinct_count": 899
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 132216,
+              "effective_non_null_ratio": 0.2386,
+              "distinct_count": 1636
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 68175,
+              "effective_non_null_ratio": 0.2559,
+              "distinct_count": 1409
+            }
+          }
+        },
+        "compulsory_ncd": {
+          "physical_column": "compulsory_ncd",
+          "physical_type": "VARCHAR",
+          "field_id": "compulsory_ncd",
+          "label": "交强险NCD",
+          "source_column": "交强险NCD",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "A0交强险交通事故费率不浮动",
+            "A3上三个及以上年度未发生有责任道路交通事故",
+            "A1上一个年度未发生有责任道路交通事故",
+            "A2上两个年度未发生有责任道路交通事故",
+            "A4上一个年度发生一次有责任不涉及死亡的道路交通事故"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 1536486,
+              "effective_non_null_ratio": 0.5909,
+              "distinct_count": 7
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 177629,
+              "effective_non_null_ratio": 0.398,
+              "distinct_count": 7
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 199086,
+              "effective_non_null_ratio": 0.4671,
+              "distinct_count": 7
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 225150,
+              "effective_non_null_ratio": 0.4846,
+              "distinct_count": 7
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 314407,
+              "effective_non_null_ratio": 0.7102,
+              "distinct_count": 7
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 421961,
+              "effective_non_null_ratio": 0.7614,
+              "distinct_count": 7
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 198253,
+              "effective_non_null_ratio": 0.7441,
+              "distinct_count": 7
+            }
+          }
+        },
+        "compulsory_ncd_factor": {
+          "physical_column": "compulsory_ncd_factor",
+          "physical_type": "DOUBLE",
+          "field_id": "compulsory_ncd_factor",
+          "label": "交强险NCD浮动系数",
+          "source_column": null,
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "1.0",
+            "0.7",
+            "0.9",
+            "0.8",
+            "1.1"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 1536486,
+              "effective_non_null_ratio": 0.5909,
+              "distinct_count": 6
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 177629,
+              "effective_non_null_ratio": 0.398,
+              "distinct_count": 6
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 199086,
+              "effective_non_null_ratio": 0.4671,
+              "distinct_count": 6
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 225150,
+              "effective_non_null_ratio": 0.4846,
+              "distinct_count": 6
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 314407,
+              "effective_non_null_ratio": 0.7102,
+              "distinct_count": 6
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 421961,
+              "effective_non_null_ratio": 0.7614,
+              "distinct_count": 6
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 198253,
+              "effective_non_null_ratio": 0.7441,
+              "distinct_count": 6
+            }
+          }
+        },
+        "coverage_combination": {
+          "physical_column": "coverage_combination",
+          "physical_type": "VARCHAR",
+          "field_id": "coverage_combination",
+          "label": "险别组合",
+          "source_column": "险别组合",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "单交",
+            "交三",
+            "主全",
+            "其他"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 3
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 3
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 3
+            }
+          }
+        },
+        "cross_sell_premium_driver": {
+          "physical_column": "cross_sell_premium_driver",
+          "physical_type": "DOUBLE",
+          "field_id": "cross_sell_premium_driver",
+          "label": "交叉销售保费_驾意",
+          "source_column": "交叉销售保费_驾意",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 441
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 64
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 98
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 260
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 184
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 170
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 193
+            }
+          }
+        },
+        "customer_category": {
+          "physical_column": "customer_category",
+          "physical_type": "VARCHAR",
+          "field_id": "customer_category",
+          "label": "客户类别",
+          "source_column": "客户类别",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "非营业个人客车",
+            "摩托车",
+            "非营业货车",
+            "营业货车",
+            "非营业企业客车"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 12
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 12
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 10
+            }
+          }
+        },
+        "customer_source": {
+          "physical_column": "customer_source",
+          "physical_type": "VARCHAR",
+          "field_id": "customer_source",
+          "label": "客户源",
+          "source_column": "客户源",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "修理厂",
+            "直销",
+            "自营",
+            "车行代理",
+            "其他"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 1328837,
+              "effective_non_null_ratio": 0.511,
+              "distinct_count": 8
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 58081,
+              "effective_non_null_ratio": 0.1301,
+              "distinct_count": 3
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 97874,
+              "effective_non_null_ratio": 0.2296,
+              "distinct_count": 4
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 124474,
+              "effective_non_null_ratio": 0.2679,
+              "distinct_count": 5
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 324468,
+              "effective_non_null_ratio": 0.7329,
+              "distinct_count": 8
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 499439,
+              "effective_non_null_ratio": 0.9012,
+              "distinct_count": 7
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 224501,
+              "effective_non_null_ratio": 0.8426,
+              "distinct_count": 6
+            }
+          }
+        },
+        "driver_age_group": {
+          "physical_column": "driver_age_group",
+          "physical_type": "VARCHAR",
+          "field_id": "driver_age_group",
+          "label": "被保险人年龄分组",
+          "source_column": "被保险人年龄分组",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "46岁≤年龄＜61岁",
+            "36岁≤年龄＜46岁",
+            "28岁≤年龄＜36岁",
+            "年龄≥61岁",
+            "24岁≤年龄＜28岁"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2383205,
+              "effective_non_null_ratio": 0.9165,
+              "distinct_count": 6
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 404345,
+              "effective_non_null_ratio": 0.9059,
+              "distinct_count": 6
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 378562,
+              "effective_non_null_ratio": 0.8882,
+              "distinct_count": 6
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 419156,
+              "effective_non_null_ratio": 0.9022,
+              "distinct_count": 6
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 407632,
+              "effective_non_null_ratio": 0.9208,
+              "distinct_count": 6
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 522451,
+              "effective_non_null_ratio": 0.9428,
+              "distinct_count": 6
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 251059,
+              "effective_non_null_ratio": 0.9423,
+              "distinct_count": 6
+            }
+          }
+        },
+        "endorsement_no": {
+          "physical_column": "endorsement_no",
+          "physical_type": "VARCHAR",
+          "field_id": "endorsement_no",
+          "label": "批单号",
+          "source_column": "批单号",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 72251,
+              "effective_non_null_ratio": 0.0278,
+              "distinct_count": 66467
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 12625,
+              "effective_non_null_ratio": 0.0283,
+              "distinct_count": 12580
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 11204,
+              "effective_non_null_ratio": 0.0263,
+              "distinct_count": 12138
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 12507,
+              "effective_non_null_ratio": 0.0269,
+              "distinct_count": 13745
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 13303,
+              "effective_non_null_ratio": 0.03,
+              "distinct_count": 13198
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 16213,
+              "effective_non_null_ratio": 0.0293,
+              "distinct_count": 15231
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 6399,
+              "effective_non_null_ratio": 0.024,
+              "distinct_count": 5744
+            }
+          }
+        },
+        "fee_amount": {
+          "physical_column": "fee_amount",
+          "physical_type": "DOUBLE",
+          "field_id": "fee_amount",
+          "label": "费用金额",
+          "source_column": "费用金额",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 186938
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 51508
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 50174
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 69298
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 83979
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 85745
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 42056
+            }
+          }
+        },
+        "first_registration_date": {
+          "physical_column": "first_registration_date",
+          "physical_type": "VARCHAR",
+          "field_id": "first_registration_date",
+          "label": "初次登记年月",
+          "source_column": "初次登记年月",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 8091
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4778
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5489
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 6442
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 6724
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 6582
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5800
+            }
+          }
+        },
+        "fuel_type": {
+          "physical_column": "fuel_type",
+          "physical_type": "VARCHAR",
+          "field_id": "fuel_type",
+          "label": "燃料种类",
+          "source_column": "燃料种类",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "汽油",
+            "柴油",
+            "纯电动(精友)",
+            "天然气(NG/CNG/LNG)",
+            "两用燃料"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 10
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            }
+          }
+        },
+        "highway_risk_level": {
+          "physical_column": "highway_risk_level",
+          "physical_type": "VARCHAR",
+          "field_id": "highway_risk_level",
+          "label": "高速风险等级",
+          "source_column": "高速风险等级",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "B",
+            "C",
+            "A",
+            "E",
+            "D"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 743090,
+              "effective_non_null_ratio": 0.2858,
+              "distinct_count": 7
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 75747,
+              "effective_non_null_ratio": 0.163,
+              "distinct_count": 6
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 259755,
+              "effective_non_null_ratio": 0.5868,
+              "distinct_count": 6
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 289439,
+              "effective_non_null_ratio": 0.5223,
+              "distinct_count": 7
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 118149,
+              "effective_non_null_ratio": 0.4435,
+              "distinct_count": 7
+            }
+          }
+        },
+        "insurance_end_date": {
+          "physical_column": "insurance_end_date",
+          "physical_type": "TIMESTAMP",
+          "field_id": "insurance_end_date",
+          "label": "保险止期",
+          "source_column": "保险止期",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2533
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 796
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 917
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 852
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 809
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 739
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 516
+            }
+          }
+        },
+        "insurance_grade": {
+          "physical_column": "insurance_grade",
+          "physical_type": "VARCHAR",
+          "field_id": "insurance_grade",
+          "label": "车险风险等级",
+          "source_column": "车险风险等级",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "B",
+            "A",
+            "C",
+            "D",
+            "E"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 847862,
+              "effective_non_null_ratio": 0.326,
+              "distinct_count": 8
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 4194,
+              "effective_non_null_ratio": 0.0094,
+              "distinct_count": 6
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 41868,
+              "effective_non_null_ratio": 0.0982,
+              "distinct_count": 7
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 76694,
+              "effective_non_null_ratio": 0.1651,
+              "distinct_count": 7
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 259126,
+              "effective_non_null_ratio": 0.5853,
+              "distinct_count": 8
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 327622,
+              "effective_non_null_ratio": 0.5912,
+              "distinct_count": 8
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 138358,
+              "effective_non_null_ratio": 0.5193,
+              "distinct_count": 8
+            }
+          }
+        },
+        "insurance_start_date": {
+          "physical_column": "insurance_start_date",
+          "physical_type": "TIMESTAMP",
+          "field_id": "insurance_start_date",
+          "label": "保险起期",
+          "source_column": "保险起期",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2419
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 702
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 751
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 843
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 848
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 815
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 520
+            }
+          }
+        },
+        "insurance_type": {
+          "physical_column": "insurance_type",
+          "physical_type": "VARCHAR",
+          "field_id": "insurance_type",
+          "label": "险类",
+          "source_column": "险类",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "交强险",
+            "商业保险"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "insured_gender": {
+          "physical_column": "insured_gender",
+          "physical_type": "VARCHAR",
+          "field_id": "insured_gender",
+          "label": "被保险人性别",
+          "source_column": "被保险人性别",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 822450,
+              "effective_non_null_ratio": 0.3163,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 94483,
+              "effective_non_null_ratio": 0.2117,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 100641,
+              "effective_non_null_ratio": 0.2361,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 113369,
+              "effective_non_null_ratio": 0.244,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 123796,
+              "effective_non_null_ratio": 0.2796,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 129314,
+              "effective_non_null_ratio": 0.2333,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 260847,
+              "effective_non_null_ratio": 0.9791,
+              "distinct_count": 2
+            }
+          }
+        },
+        "is_commercial_insure": {
+          "physical_column": "is_commercial_insure",
+          "physical_type": "VARCHAR",
+          "field_id": "is_commercial_insure",
+          "label": "是否交商统保",
+          "source_column": "是否交商统保",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "否",
+            "是"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "is_cross_sell": {
+          "physical_column": "is_cross_sell",
+          "physical_type": "BOOLEAN",
+          "field_id": "is_cross_sell",
+          "label": "交叉销售标识",
+          "source_column": "交叉销售标识",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "false",
+            "true"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "is_nev": {
+          "physical_column": "is_nev",
+          "physical_type": "BOOLEAN",
+          "field_id": "is_nev",
+          "label": "是否新能源",
+          "source_column": "是否新能源",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "false",
+            "true"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "is_new_car": {
+          "physical_column": "is_new_car",
+          "physical_type": "BOOLEAN",
+          "field_id": "is_new_car",
+          "label": "是否新车",
+          "source_column": "是否新车",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "false",
+            "true"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "is_renewable": {
+          "physical_column": "is_renewable",
+          "physical_type": "INTEGER",
+          "field_id": "is_renewable",
+          "label": "是否可续",
+          "source_column": "是否可续",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            }
+          }
+        },
+        "is_renewal": {
+          "physical_column": "is_renewal",
+          "physical_type": "BOOLEAN",
+          "field_id": "is_renewal",
+          "label": "是否续保",
+          "source_column": "是否续保",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "false",
+            "true"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "is_telemarketing": {
+          "physical_column": "is_telemarketing",
+          "physical_type": "BOOLEAN",
+          "field_id": "is_telemarketing",
+          "label": "是否电销",
+          "source_column": "是否电销",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "false",
+            "true"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "is_transfer": {
+          "physical_column": "is_transfer",
+          "physical_type": "BOOLEAN",
+          "field_id": "is_transfer",
+          "label": "是否过户车",
+          "source_column": "是否过户车",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "false",
+            "true"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "new_vehicle_price": {
+          "physical_column": "new_vehicle_price",
+          "physical_type": "DOUBLE",
+          "field_id": "new_vehicle_price",
+          "label": "新车购置价",
+          "source_column": "新车购置价",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 6865
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 3988
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 3934
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4219
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4927
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5136
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4042
+            }
+          }
+        },
+        "next_insurer": {
+          "physical_column": "next_insurer",
+          "physical_type": "VARCHAR",
+          "field_id": "next_insurer",
+          "label": "次年保险公司",
+          "source_column": "次年保险公司",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 44589,
+              "effective_non_null_ratio": 0.0171,
+              "distinct_count": 56
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 1373,
+              "effective_non_null_ratio": 0.0031,
+              "distinct_count": 43
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 43139,
+              "effective_non_null_ratio": 0.0778,
+              "distinct_count": 56
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 77,
+              "effective_non_null_ratio": 0.0003,
+              "distinct_count": 25
+            }
+          }
+        },
+        "no_claim_bonus": {
+          "physical_column": "no_claim_bonus",
+          "physical_type": "VARCHAR",
+          "field_id": "no_claim_bonus",
+          "label": "无赔款优待记录",
+          "source_column": "无赔款优待记录",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "连续4年及以上投保且没有发生赔付",
+            "首年投保或未发生浮动",
+            "连续1年投保且没有发生赔付",
+            "连续3年投保且没有发生赔付",
+            "连续3年投保且发生1次赔付"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 674870,
+              "effective_non_null_ratio": 0.2595,
+              "distinct_count": 34
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 113959,
+              "effective_non_null_ratio": 0.2553,
+              "distinct_count": 34
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 112290,
+              "effective_non_null_ratio": 0.2635,
+              "distinct_count": 26
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 120028,
+              "effective_non_null_ratio": 0.2584,
+              "distinct_count": 26
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 128202,
+              "effective_non_null_ratio": 0.2896,
+              "distinct_count": 22
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 132216,
+              "effective_non_null_ratio": 0.2386,
+              "distinct_count": 21
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 68175,
+              "effective_non_null_ratio": 0.2559,
+              "distinct_count": 19
+            }
+          }
+        },
+        "org_level_3": {
+          "physical_column": "org_level_3",
+          "physical_type": "VARCHAR",
+          "field_id": "org_level_3",
+          "label": "三级机构",
+          "source_column": "三级机构",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "天府",
+            "宜宾",
+            "高新",
+            "青羊",
+            "其他"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 15
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 15
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 15
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 15
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 14
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 14
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 14
+            }
+          }
+        },
+        "plate_no": {
+          "physical_column": "plate_no",
+          "physical_type": "VARCHAR",
+          "field_id": "plate_no",
+          "label": "车牌号码",
+          "source_column": "车牌号码",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2434978,
+              "effective_non_null_ratio": 0.9364,
+              "distinct_count": 1234697
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 387329,
+              "effective_non_null_ratio": 0.8678,
+              "distinct_count": 332984
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 401621,
+              "effective_non_null_ratio": 0.9423,
+              "distinct_count": 328883
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 437106,
+              "effective_non_null_ratio": 0.9409,
+              "distinct_count": 479277
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 435551,
+              "effective_non_null_ratio": 0.9839,
+              "distinct_count": 420660
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 522913,
+              "effective_non_null_ratio": 0.9436,
+              "distinct_count": 547379
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 250458,
+              "effective_non_null_ratio": 0.9401,
+              "distinct_count": 222314
+            }
+          }
+        },
+        "policy_date": {
+          "physical_column": "policy_date",
+          "physical_type": "TIMESTAMP",
+          "field_id": "policy_date",
+          "label": "签单日期",
+          "source_column": "签单日期",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2044
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 336
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 374
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 391
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 395
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 340
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 156
+            }
+          }
+        },
+        "policy_no": {
+          "physical_column": "policy_no",
+          "physical_type": "VARCHAR",
+          "field_id": "policy_no",
+          "label": "保单号",
+          "source_column": "保单号",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2621118
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 418812
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 466450
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 534904
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 345122
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 612588
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 247655
+            }
+          }
+        },
+        "premium": {
+          "physical_column": "premium",
+          "physical_type": "DOUBLE",
+          "field_id": "premium",
+          "label": "保费",
+          "source_column": "保费",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 172475
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 40425
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 44402
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 45590
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 43276
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 63694
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 35580
+            }
+          }
+        },
+        "previous_insurer": {
+          "physical_column": "previous_insurer",
+          "physical_type": "VARCHAR",
+          "field_id": "previous_insurer",
+          "label": "上年承保主体",
+          "source_column": "上年承保主体",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 81905,
+              "effective_non_null_ratio": 0.0315,
+              "distinct_count": 59
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 81905,
+              "effective_non_null_ratio": 0.3074,
+              "distinct_count": 59
+            }
+          }
+        },
+        "renewal_policy_no": {
+          "physical_column": "renewal_policy_no",
+          "physical_type": "VARCHAR",
+          "field_id": "renewal_policy_no",
+          "label": "续保单号",
+          "source_column": "续保单号",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 947069,
+              "effective_non_null_ratio": 0.3642,
+              "distinct_count": 785787
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 125505,
+              "effective_non_null_ratio": 0.2812,
+              "distinct_count": 103624
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 155490,
+              "effective_non_null_ratio": 0.3648,
+              "distinct_count": 148492
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 177141,
+              "effective_non_null_ratio": 0.3813,
+              "distinct_count": 60229
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 184270,
+              "effective_non_null_ratio": 0.4162,
+              "distinct_count": 184327
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 200570,
+              "effective_non_null_ratio": 0.3619,
+              "distinct_count": 199162
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 104093,
+              "effective_non_null_ratio": 0.3907,
+              "distinct_count": 131991
+            }
+          }
+        },
+        "salesman_name": {
+          "physical_column": "salesman_name",
+          "physical_type": "VARCHAR",
+          "field_id": "salesman_name",
+          "label": "业务员",
+          "source_column": "业务员",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 747
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 303
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 321
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 304
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 258
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 315
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 267
+            }
+          }
+        },
+        "seat_count": {
+          "physical_column": "seat_count",
+          "physical_type": "BIGINT",
+          "field_id": "seat_count",
+          "label": "座位数",
+          "source_column": "座位数",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "5",
+            "2",
+            "7",
+            "3",
+            "4"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 54
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 36
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 40
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 38
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 37
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 40
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 32
+            }
+          }
+        },
+        "terminal_source": {
+          "physical_column": "terminal_source",
+          "physical_type": "VARCHAR",
+          "field_id": "terminal_source",
+          "label": "终端来源",
+          "source_column": "终端来源",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "0106移动展业(App)",
+            "0101柜面",
+            "0107B2B",
+            "0110融合销售",
+            "0202APP"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 10
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 9
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 9
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 8
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 7
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 8
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 7
+            }
+          }
+        },
+        "tonnage_segment": {
+          "physical_column": "tonnage_segment",
+          "physical_type": "VARCHAR",
+          "field_id": "tonnage_segment",
+          "label": "吨位分段",
+          "source_column": "吨位分段",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "1吨以下",
+            "1-2吨",
+            "10吨以上",
+            "2-9吨",
+            "9-10吨"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            }
+          }
+        },
+        "tonnage_value": {
+          "physical_column": "tonnage_value",
+          "physical_type": "DOUBLE",
+          "field_id": "tonnage_value",
+          "label": "吨位数",
+          "source_column": "吨位数",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1979
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1568
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1368
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1572
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1169
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1520
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1035
+            }
+          }
+        },
+        "truck_type": {
+          "physical_column": "truck_type",
+          "physical_type": "VARCHAR",
+          "field_id": "truck_type",
+          "label": "货车类型",
+          "source_column": "货车类型",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "普通载货汽车",
+            "其他货车类型",
+            "仓栅",
+            "厢式",
+            "牵引"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 118677,
+              "effective_non_null_ratio": 0.0456,
+              "distinct_count": 10
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 47948,
+              "effective_non_null_ratio": 0.1083,
+              "distinct_count": 9
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 44855,
+              "effective_non_null_ratio": 0.0809,
+              "distinct_count": 10
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 25874,
+              "effective_non_null_ratio": 0.0971,
+              "distinct_count": 10
+            }
+          }
+        },
+        "vehicle_frame_no": {
+          "physical_column": "vehicle_frame_no",
+          "physical_type": "VARCHAR",
+          "field_id": "vehicle_frame_no",
+          "label": "车架号",
+          "source_column": "车架号",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1686750
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 357302
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 379839
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 409053
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 341922
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 472118
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 179896
+            }
+          }
+        },
+        "vehicle_model": {
+          "physical_column": "vehicle_model",
+          "physical_type": "VARCHAR",
+          "field_id": "vehicle_model",
+          "label": "厂牌车型",
+          "source_column": "厂牌车型",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 2600421,
+              "non_null_rows": 2600421,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 36146
+            },
+            "2021": {
+              "total_rows": 446332,
+              "non_null_rows": 446332,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 18300
+            },
+            "2022": {
+              "total_rows": 426216,
+              "non_null_rows": 426216,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 22147
+            },
+            "2023": {
+              "total_rows": 464572,
+              "non_null_rows": 464572,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 17162
+            },
+            "2024": {
+              "total_rows": 442696,
+              "non_null_rows": 442696,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 19426
+            },
+            "2025": {
+              "total_rows": 554177,
+              "non_null_rows": 554177,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 20340
+            },
+            "2026": {
+              "total_rows": 266428,
+              "non_null_rows": 266428,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 15974
+            }
+          }
+        }
+      },
+      "unmapped_fields": [],
+      "elapsed_ms": 5491,
+      "warnings": []
+    },
+    "claims_detail": {
+      "available": true,
+      "glob": "数据管理/warehouse/fact/claims_detail/claims_*.parquet",
+      "year_anchor": "report_time",
+      "total_rows": 288198,
+      "data_range": {
+        "anchor": "report_time",
+        "min": "2021-01-01 00:00:00",
+        "max": "2026-06-13 00:00:00"
+      },
+      "years": [
+        "_ALL",
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025",
+        "2026"
+      ],
+      "fields": {
+        "accident_address": {
+          "physical_column": "accident_address",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 110633
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 23726
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 23657
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 31434
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 29482
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 25108
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 16867
+            }
+          }
+        },
+        "accident_cause": {
+          "physical_column": "accident_cause",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 20
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 15
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 15
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 14
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 13
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 14
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 13
+            }
+          }
+        },
+        "accident_city": {
+          "physical_column": "accident_city",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288196,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 328
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49417,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 276
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 308
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 284
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51320,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 285
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 319
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 293
+            }
+          }
+        },
+        "accident_description": {
+          "physical_column": "accident_description",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 250236,
+              "effective_non_null_ratio": 0.8683,
+              "distinct_count": 171586
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 22700,
+              "effective_non_null_ratio": 0.4593,
+              "distinct_count": 14842
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 46442,
+              "effective_non_null_ratio": 0.9766,
+              "distinct_count": 34814
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 54711,
+              "effective_non_null_ratio": 0.9664,
+              "distinct_count": 41678
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 48799,
+              "effective_non_null_ratio": 0.9509,
+              "distinct_count": 33288
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 54894,
+              "effective_non_null_ratio": 0.9357,
+              "distinct_count": 50617
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 22690,
+              "effective_non_null_ratio": 0.9214,
+              "distinct_count": 13382
+            }
+          }
+        },
+        "accident_district": {
+          "physical_column": "accident_district",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 273130,
+              "effective_non_null_ratio": 0.9477,
+              "distinct_count": 2596
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 47032,
+              "effective_non_null_ratio": 0.9517,
+              "distinct_count": 1116
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 44512,
+              "effective_non_null_ratio": 0.9361,
+              "distinct_count": 1085
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 53315,
+              "effective_non_null_ratio": 0.9418,
+              "distinct_count": 1358
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 48556,
+              "effective_non_null_ratio": 0.9461,
+              "distinct_count": 1598
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 56117,
+              "effective_non_null_ratio": 0.9565,
+              "distinct_count": 1760
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 23598,
+              "effective_non_null_ratio": 0.9583,
+              "distinct_count": 1275
+            }
+          }
+        },
+        "accident_province": {
+          "physical_column": "accident_province",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 31
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 31
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 31
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 31
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 31
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 31
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 31
+            }
+          }
+        },
+        "accident_time": {
+          "physical_column": "accident_time",
+          "physical_type": "TIMESTAMP",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 157108
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 26954
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 23694
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 32982
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 35130
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 37230
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 16710
+            }
+          }
+        },
+        "case_open_time": {
+          "physical_column": "case_open_time",
+          "physical_type": "TIMESTAMP",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2044
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 336
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 374
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 391
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 395
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 340
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 156
+            }
+          }
+        },
+        "case_type": {
+          "physical_column": "case_type",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            }
+          }
+        },
+        "claim_no": {
+          "physical_column": "claim_no",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 263808
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 51574
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 52207
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 58945
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 47153
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 49932
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 21132
+            }
+          }
+        },
+        "claim_status": {
+          "physical_column": "claim_status",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "insurance_start_date": {
+          "physical_column": "insurance_start_date",
+          "physical_type": "TIMESTAMP",
+          "field_id": "insurance_start_date",
+          "label": "保险起期",
+          "source_column": "保险起期",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2103
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 456
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 665
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 845
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 806
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 753
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 514
+            }
+          }
+        },
+        "insurance_year": {
+          "physical_column": "insurance_year",
+          "physical_type": "BIGINT",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 8
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 3
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 3
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 4
+            }
+          }
+        },
+        "is_bodily_injury": {
+          "physical_column": "is_bodily_injury",
+          "physical_type": "BOOLEAN",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            }
+          }
+        },
+        "is_recovery": {
+          "physical_column": "is_recovery",
+          "physical_type": "BOOLEAN",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            }
+          }
+        },
+        "liability_ratio": {
+          "physical_column": "liability_ratio",
+          "physical_type": "BIGINT",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 15
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 9
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 9
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 10
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 11
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 8
+            }
+          }
+        },
+        "loss_category": {
+          "physical_column": "loss_category",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 264099,
+              "effective_non_null_ratio": 0.9164,
+              "distinct_count": 85
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 48276,
+              "effective_non_null_ratio": 0.9769,
+              "distinct_count": 59
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 44888,
+              "effective_non_null_ratio": 0.944,
+              "distinct_count": 51
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 52261,
+              "effective_non_null_ratio": 0.9231,
+              "distinct_count": 53
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 45665,
+              "effective_non_null_ratio": 0.8898,
+              "distinct_count": 51
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 51371,
+              "effective_non_null_ratio": 0.8756,
+              "distinct_count": 55
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 21638,
+              "effective_non_null_ratio": 0.8787,
+              "distinct_count": 46
+            }
+          }
+        },
+        "payment_time": {
+          "physical_column": "payment_time",
+          "physical_type": "TIMESTAMP",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 180752,
+              "effective_non_null_ratio": 0.6272,
+              "distinct_count": 2044
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 32954,
+              "effective_non_null_ratio": 0.6668,
+              "distinct_count": 648
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 30173,
+              "effective_non_null_ratio": 0.6345,
+              "distinct_count": 769
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 35546,
+              "effective_non_null_ratio": 0.6279,
+              "distinct_count": 809
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 31409,
+              "effective_non_null_ratio": 0.612,
+              "distinct_count": 629
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 36528,
+              "effective_non_null_ratio": 0.6226,
+              "distinct_count": 451
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 14142,
+              "effective_non_null_ratio": 0.5743,
+              "distinct_count": 154
+            }
+          }
+        },
+        "pending_amount": {
+          "physical_column": "pending_amount",
+          "physical_type": "DOUBLE",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 2884,
+              "effective_non_null_ratio": 0.01,
+              "distinct_count": 2310
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 5,
+              "effective_non_null_ratio": 0.0001,
+              "distinct_count": 4
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 12,
+              "effective_non_null_ratio": 0.0002,
+              "distinct_count": 13
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 109,
+              "effective_non_null_ratio": 0.0021,
+              "distinct_count": 120
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 615,
+              "effective_non_null_ratio": 0.0105,
+              "distinct_count": 433
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 2143,
+              "effective_non_null_ratio": 0.087,
+              "distinct_count": 1223
+            }
+          }
+        },
+        "policy_no": {
+          "physical_column": "policy_no",
+          "physical_type": "VARCHAR",
+          "field_id": "policy_no",
+          "label": "保单号",
+          "source_column": "保单号",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 249610
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 45152
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 41029
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 51993
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 47682
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 52440
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 21176
+            }
+          }
+        },
+        "report_no": {
+          "physical_column": "report_no",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 217015
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 27116
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 38005
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 40336
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 43011
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 45808
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 18711
+            }
+          }
+        },
+        "report_time": {
+          "physical_column": "report_time",
+          "physical_type": "TIMESTAMP",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 2044
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 336
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 374
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 391
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 395
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 340
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 156
+            }
+          }
+        },
+        "reserve_amount": {
+          "physical_column": "reserve_amount",
+          "physical_type": "DOUBLE",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 287680,
+              "effective_non_null_ratio": 0.9982,
+              "distinct_count": 69193
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49168,
+              "effective_non_null_ratio": 0.9949,
+              "distinct_count": 9937
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47358,
+              "effective_non_null_ratio": 0.9959,
+              "distinct_count": 12249
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56541,
+              "effective_non_null_ratio": 0.9987,
+              "distinct_count": 11586
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51319,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 12766
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 12476
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 7119
+            }
+          }
+        },
+        "reserve_bodily_amount": {
+          "physical_column": "reserve_bodily_amount",
+          "physical_type": "DOUBLE",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 40820,
+              "effective_non_null_ratio": 0.1416,
+              "distinct_count": 8786
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 6788,
+              "effective_non_null_ratio": 0.1374,
+              "distinct_count": 1804
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 6356,
+              "effective_non_null_ratio": 0.1337,
+              "distinct_count": 2034
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 7771,
+              "effective_non_null_ratio": 0.1373,
+              "distinct_count": 1893
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 7278,
+              "effective_non_null_ratio": 0.1418,
+              "distinct_count": 1865
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 8911,
+              "effective_non_null_ratio": 0.1519,
+              "distinct_count": 2318
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 3716,
+              "effective_non_null_ratio": 0.1509,
+              "distinct_count": 1339
+            }
+          }
+        },
+        "reserve_property_amount": {
+          "physical_column": "reserve_property_amount",
+          "physical_type": "DOUBLE",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 48963,
+              "effective_non_null_ratio": 0.1699,
+              "distinct_count": 1985
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 7537,
+              "effective_non_null_ratio": 0.1525,
+              "distinct_count": 650
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 8563,
+              "effective_non_null_ratio": 0.1801,
+              "distinct_count": 426
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 10417,
+              "effective_non_null_ratio": 0.184,
+              "distinct_count": 438
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 8837,
+              "effective_non_null_ratio": 0.1722,
+              "distinct_count": 391
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 9654,
+              "effective_non_null_ratio": 0.1646,
+              "distinct_count": 607
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 3955,
+              "effective_non_null_ratio": 0.1606,
+              "distinct_count": 306
+            }
+          }
+        },
+        "reserve_vehicle_amount": {
+          "physical_column": "reserve_vehicle_amount",
+          "physical_type": "DOUBLE",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 257503,
+              "effective_non_null_ratio": 0.8935,
+              "distinct_count": 5655
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 43099,
+              "effective_non_null_ratio": 0.8721,
+              "distinct_count": 1512
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 43729,
+              "effective_non_null_ratio": 0.9196,
+              "distinct_count": 1586
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 52255,
+              "effective_non_null_ratio": 0.923,
+              "distinct_count": 2480
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 45654,
+              "effective_non_null_ratio": 0.8896,
+              "distinct_count": 2006
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 51359,
+              "effective_non_null_ratio": 0.8754,
+              "distinct_count": 2152
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 21407,
+              "effective_non_null_ratio": 0.8693,
+              "distinct_count": 1368
+            }
+          }
+        },
+        "scene_type": {
+          "physical_column": "scene_type",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 5
+            }
+          }
+        },
+        "settled_amount": {
+          "physical_column": "settled_amount",
+          "physical_type": "DOUBLE",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 58162
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 10822
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 14863
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 17797
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 14429
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 23204
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 7515
+            }
+          }
+        },
+        "settled_bodily_amount": {
+          "physical_column": "settled_bodily_amount",
+          "physical_type": "DOUBLE",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 31965,
+              "effective_non_null_ratio": 0.1109,
+              "distinct_count": 16332
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 5315,
+              "effective_non_null_ratio": 0.1076,
+              "distinct_count": 3070
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 5095,
+              "effective_non_null_ratio": 0.1071,
+              "distinct_count": 2689
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 6306,
+              "effective_non_null_ratio": 0.1114,
+              "distinct_count": 4207
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 5812,
+              "effective_non_null_ratio": 0.1132,
+              "distinct_count": 3784
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 7115,
+              "effective_non_null_ratio": 0.1213,
+              "distinct_count": 3986
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 2322,
+              "effective_non_null_ratio": 0.0943,
+              "distinct_count": 1405
+            }
+          }
+        },
+        "settled_fee": {
+          "physical_column": "settled_fee",
+          "physical_type": "DOUBLE",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            }
+          }
+        },
+        "settled_vehicle_amount": {
+          "physical_column": "settled_vehicle_amount",
+          "physical_type": "DOUBLE",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 215060,
+              "effective_non_null_ratio": 0.7462,
+              "distinct_count": 37637
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 38906,
+              "effective_non_null_ratio": 0.7873,
+              "distinct_count": 8521
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 35687,
+              "effective_non_null_ratio": 0.7505,
+              "distinct_count": 8161
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 42343,
+              "effective_non_null_ratio": 0.748,
+              "distinct_count": 9548
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 37368,
+              "effective_non_null_ratio": 0.7281,
+              "distinct_count": 11902
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 43783,
+              "effective_non_null_ratio": 0.7463,
+              "distinct_count": 11876
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 16973,
+              "effective_non_null_ratio": 0.6892,
+              "distinct_count": 5011
+            }
+          }
+        },
+        "settlement_time": {
+          "physical_column": "settlement_time",
+          "physical_type": "TIMESTAMP",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 285309,
+              "effective_non_null_ratio": 0.99,
+              "distinct_count": 2044
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49415,
+              "effective_non_null_ratio": 0.9999,
+              "distinct_count": 772
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47543,
+              "effective_non_null_ratio": 0.9998,
+              "distinct_count": 867
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56596,
+              "effective_non_null_ratio": 0.9997,
+              "distinct_count": 889
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51213,
+              "effective_non_null_ratio": 0.9979,
+              "distinct_count": 642
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58058,
+              "effective_non_null_ratio": 0.9896,
+              "distinct_count": 451
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 22484,
+              "effective_non_null_ratio": 0.913,
+              "distinct_count": 156
+            }
+          }
+        },
+        "subject_plate_no": {
+          "physical_column": "subject_plate_no",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 156157
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 25953
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 22186
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 35634
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 30152
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 33162
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 15921
+            }
+          }
+        },
+        "subject_repair_shop": {
+          "physical_column": "subject_repair_shop",
+          "physical_type": "VARCHAR",
+          "field_id": "subject_repair_shop",
+          "label": "标的汽修厂",
+          "source_column": "标的汽修厂",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": false,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 263586,
+              "effective_non_null_ratio": 0.9146,
+              "distinct_count": 10454
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 48262,
+              "effective_non_null_ratio": 0.9766,
+              "distinct_count": 3278
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 44822,
+              "effective_non_null_ratio": 0.9426,
+              "distinct_count": 3882
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 52201,
+              "effective_non_null_ratio": 0.9221,
+              "distinct_count": 3480
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 45642,
+              "effective_non_null_ratio": 0.8893,
+              "distinct_count": 3475
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 51347,
+              "effective_non_null_ratio": 0.8752,
+              "distinct_count": 3739
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 21312,
+              "effective_non_null_ratio": 0.8654,
+              "distinct_count": 2045
+            }
+          }
+        },
+        "subject_shop_code": {
+          "physical_column": "subject_shop_code",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 263586,
+              "effective_non_null_ratio": 0.9146,
+              "distinct_count": 9768
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 48262,
+              "effective_non_null_ratio": 0.9766,
+              "distinct_count": 3806
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 44822,
+              "effective_non_null_ratio": 0.9426,
+              "distinct_count": 3027
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 52201,
+              "effective_non_null_ratio": 0.9221,
+              "distinct_count": 3358
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 45642,
+              "effective_non_null_ratio": 0.8893,
+              "distinct_count": 3606
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 51347,
+              "effective_non_null_ratio": 0.8752,
+              "distinct_count": 2981
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 21312,
+              "effective_non_null_ratio": 0.8654,
+              "distinct_count": 1394
+            }
+          }
+        },
+        "survey_time": {
+          "physical_column": "survey_time",
+          "physical_type": "TIMESTAMP",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 263952,
+              "effective_non_null_ratio": 0.9159,
+              "distinct_count": 201284
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 48276,
+              "effective_non_null_ratio": 0.9769,
+              "distinct_count": 31890
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 44892,
+              "effective_non_null_ratio": 0.944,
+              "distinct_count": 31622
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 52261,
+              "effective_non_null_ratio": 0.9231,
+              "distinct_count": 35912
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 45665,
+              "effective_non_null_ratio": 0.8898,
+              "distinct_count": 28297
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 51371,
+              "effective_non_null_ratio": 0.8756,
+              "distinct_count": 41530
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 21487,
+              "effective_non_null_ratio": 0.8725,
+              "distinct_count": 16128
+            }
+          }
+        },
+        "third_party_repair": {
+          "physical_column": "third_party_repair",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 154623,
+              "effective_non_null_ratio": 0.5365,
+              "distinct_count": 23598
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 27338,
+              "effective_non_null_ratio": 0.5532,
+              "distinct_count": 5157
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 25558,
+              "effective_non_null_ratio": 0.5375,
+              "distinct_count": 5416
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 30438,
+              "effective_non_null_ratio": 0.5377,
+              "distinct_count": 5800
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 26924,
+              "effective_non_null_ratio": 0.5246,
+              "distinct_count": 6851
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 31306,
+              "effective_non_null_ratio": 0.5336,
+              "distinct_count": 8579
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 13059,
+              "effective_non_null_ratio": 0.5303,
+              "distinct_count": 4097
+            }
+          }
+        },
+        "treatment_type": {
+          "physical_column": "treatment_type",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 38290,
+              "effective_non_null_ratio": 0.1329,
+              "distinct_count": 3
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 6491,
+              "effective_non_null_ratio": 0.1313,
+              "distinct_count": 3
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 6033,
+              "effective_non_null_ratio": 0.1269,
+              "distinct_count": 3
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 7301,
+              "effective_non_null_ratio": 0.129,
+              "distinct_count": 3
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 6865,
+              "effective_non_null_ratio": 0.1338,
+              "distinct_count": 3
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 8212,
+              "effective_non_null_ratio": 0.14,
+              "distinct_count": 3
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 3388,
+              "effective_non_null_ratio": 0.1376,
+              "distinct_count": 3
+            }
+          }
+        },
+        "vehicle_frame_no": {
+          "physical_column": "vehicle_frame_no",
+          "physical_type": "VARCHAR",
+          "field_id": "vehicle_frame_no",
+          "label": "车架号",
+          "source_column": "车架号",
+          "registry_status": "registered",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288198,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 144477
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 26026
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 27265
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 28079
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 32172
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 44083
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 17421
+            }
+          }
+        },
+        "vehicle_series": {
+          "physical_column": "vehicle_series",
+          "physical_type": "VARCHAR",
+          "field_id": null,
+          "label": null,
+          "source_column": null,
+          "registry_status": "unmapped",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
+          "redacted": true,
+          "sample_values": [],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 288198,
+              "non_null_rows": 288041,
+              "effective_non_null_ratio": 0.9995,
+              "distinct_count": 3217
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49336,
+              "effective_non_null_ratio": 0.9983,
+              "distinct_count": 1584
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47501,
+              "effective_non_null_ratio": 0.9989,
+              "distinct_count": 1485
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56601,
+              "effective_non_null_ratio": 0.9998,
+              "distinct_count": 1874
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51309,
+              "effective_non_null_ratio": 0.9998,
+              "distinct_count": 1818
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1986
+            },
+            "2026": {
+              "total_rows": 24626,
+              "non_null_rows": 24626,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1638
+            }
+          }
+        }
+      },
+      "unmapped_fields": [
+        "accident_address",
+        "accident_cause",
+        "accident_city",
+        "accident_description",
+        "accident_district",
+        "accident_province",
+        "accident_time",
+        "case_open_time",
+        "case_type",
+        "claim_no",
+        "claim_status",
+        "insurance_year",
+        "is_bodily_injury",
+        "is_recovery",
+        "liability_ratio",
+        "loss_category",
+        "payment_time",
+        "pending_amount",
+        "report_no",
+        "report_time",
+        "reserve_amount",
+        "reserve_bodily_amount",
+        "reserve_property_amount",
+        "reserve_vehicle_amount",
+        "scene_type",
+        "settled_amount",
+        "settled_bodily_amount",
+        "settled_fee",
+        "settled_vehicle_amount",
+        "settlement_time",
+        "subject_plate_no",
+        "subject_shop_code",
+        "survey_time",
+        "third_party_repair",
+        "treatment_type",
+        "vehicle_series"
+      ],
+      "elapsed_ms": 675,
+      "warnings": []
+    }
+  },
+  "warnings": []
+}

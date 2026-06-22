@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（83 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（82 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -33,11 +33,10 @@
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 - 2026-06-22-claude-15d8fd — 多省 RLS 查询层残留漏洞收口（G3/G4 closeout 拆出·GATED 前置）
 
-**P2（48 项）**
+**P2（47 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
-- B249 — 字段覆盖率报告自动化
 - B250 — 幽灵字段治理检查
 - B255 — 报价数据「是否报价」字段不可靠 — 改用续保单号判定
 - B274 — total_expense 1.6% vs L4 注册表 1.5% 系数不一致
@@ -122,7 +121,6 @@
 | B245 | 2026-04-11 | Analysis/Backend | @claude | **零赔付专项分析维度展开**：基于B244结果，按四个维度交叉分析零赔付特征：(a)时间维度—按起保年份/结案月份(b)机构维度—各三级机构零赔付率(c)险别维度—交强/商业分别的零赔付模式(d)车辆类型维度—客户类别(营业/非营业/货车等)的零赔付差异 | P2 | PROPOSED | 同B244 | 同B244 | 四维交叉分析报告 |
 | B246 | 2026-04-17 | Refactor/Backend | @claude | **VPS 分层查询改造（KPI variable_cost_ratio）**：`server/src/sql/kpi.ts:58-63` 当前直接 FROM PolicyFact 构建 `variable_cost_base` CTE，违反 VPS 分层架构铁律（禁止在 VPS 查原始表）。本次铁律对齐仅修了口径，未动查询层级。需新增 `AggregatedVariableCostBase`（含 earned_days × policy_term 预聚合）或由 DailyAggregated 派生 | P3 | PROPOSED | `CLAUDE.md` §3 / `.claude/rules/data-pipeline.md` | `server/src/sql/kpi.ts`<br>`数据管理/pipelines/`（新增聚合导出） | VPS 内存使用稳定 + variable_cost_ratio API 返回一致 <br>90a92c 第四批次已实质完成基础设施：sql/kpi.ts 已加 excludeVariableCost 参数（true 时 skip variable_cost_base CTE），routes/query/kpi.ts 已接入 CubeCostDay 三态路由（routing/shadow/null）。代码改造完成，待生产 CUBE_ROUTING_ENABLED=true 切流激活（当前 shadow 对账中，7 天观察期 2026-06-12 起算）。无需独立改造，跟随 90a92c 灰度收尾后置 DONE。 <br>窄化(2026-06-21 hygiene 调研)：实现已被 90a92c 立方体吸收——同一 excludeVariableCost 开关，KPI 路由立方体开启路径(CUBE_ROUTING_ENABLED=true)已结构性消除 variable_cost_base CTE。剩余=立方体关闭(默认)时回退路径仍 FROM PolicyFact 建 CTE，违反 VPS 分层铁律；因 cost/KPI 立方体经决策A 搁置(OOM 65f495)，原始诉求生产未达成。已降为 P3 低优治理项，挂接 65f495：cost/KPI 立方体复活或回退路径优化时一并处理。不关闭。 |
 | B247 | 2026-04-17 | Chore/Hygiene | @claude | **图表 hex 色值审计**：`WaterfallChart.tsx` / `EnhancedKpiCard.tsx` / `quoteChartColors`（index.ts:644+）等处 ECharts option 中硬编码 hex（`#91CC75`, `#EE6666`, `#10B981` 等）。需评估能否统一导出为 CSS 变量或由 `semanticColors` 派生，并建立图表色 token 规范 | P3 | PROPOSED | `DESIGN.md` §2 / `CLAUDE.md` §1 | `src/shared/styles/index.ts`<br>相关图表组件 | 图表 hex 全部指向 token，无散落字面量 |
-| B249 | 2026-04-21 | Enhancement/ETL | @claude | **字段覆盖率报告自动化**：每日 ETL 结束附带产出 `数据管理/knowledge/ai/field-coverage-report.json`，按字段×年份记录 non_null_ratio、distinct_count、sample_values。**动机**：`fields.json` 的 description 注释容易过时（如 fuel_type 注释"仅2020-2023有值"，实际 2024-2026 也有 71% 覆盖），AI 被误导需额外 DuckDB 验证轮次。**实现**：`数据管理/pipelines/field_coverage.py` 读 policy/current 和 claims_detail，按 YEAR 分组聚合每列 non_null 比例，结果落 JSON；`daily.mjs` 末尾调用 | P2 | PROPOSED | 配合 `/diagnose-segment` | `数据管理/pipelines/field_coverage.py`(新)<br>`数据管理/daily.mjs` | JSON 产出 + AI 使用记录（新诊断 case 不再需要手动跑 SELECT COUNT(field)） |
 | B250 | 2026-04-21 | Chore/Governance | @claude | **幽灵字段治理检查**：`bun run governance` 增加一条：扫描 `数据管理/pipelines/*.py` 与 `server/src/sql/**/*.ts` 引用的 Parquet 列名，与 `field-registry/fields.json` + `etl_fields.json` 比对，未知字段报错。**动机**：`moto_loss_ratio_development.py` 引用 `c.report_time`，但 claims_detail schema 实际是 `case_open_time`，字段已下线但代码仍残留，下次运行会挂 | P2 | PROPOSED | governance-check.yml | `scripts/check-governance.mjs`<br>`scripts/check-phantom-fields.mjs`(新) | 扫描脚本能抓出 report_time 这种残留引用 |
 | B251 | 2026-04-21 | Chore/Hygiene | @user | **输出风格与用户契约冲突**：SessionStart hook 推送 `learning` output style，但全局 memory `user_role.md` 明确「用户不写代码 AI 全权负责编码」。学习模式要求 AI 识别 5-10 行代码贡献点让用户写——两者相斥。**建议**：对本项目关闭 learning style，或在 hook 配置里对 chexian-api 路径排除 | P3 | PROPOSED | `~/.claude/settings.json` hooks | `~/.claude/settings.json`（或项目 `.claude/settings.json`） | hook 不再推送 learning style / AI 不再请求用户写代码 |
 | B253 | 2026-04-24 | Enhancement/Integration | @claude | **wecom_smartsheet schema 外部化为 schema.json**：当前 `sync_renewal.py:35-52` 把 16 个 fieldId 硬编码在 Python 模块常量 `DEFAULT_SCHEMA`，企业微信表格字段 ID 变更/迁库/换字段名时必须改 Python 重新部署。**改造**：抽到 `数据管理/integrations/wecom_smartsheet/schema.json`，脚本启动时加载；config 可选 `schema_path` 字段允许多实例使用不同 schema（如自贡/天府表格字段差异时）。**触发时机**：(a) 企业微信侧首次出现 fieldId 变更需求时立刻做，或 (b) 添加第 3 个不同字段的实例时，或 (c) 半年定期重构时。**预估工作量**：1 小时 | P3 | PROPOSED | 模块 README "故障排查"章节 errcode 40036 | `数据管理/integrations/wecom_smartsheet/sync_renewal.py`(35-52)<br>`数据管理/integrations/wecom_smartsheet/schema.json`(新)<br>`数据管理/integrations/wecom_smartsheet/config.*.json`(可选 schema_path) | schema.json 加载成功 + 5/5 单元测试通过 + 双实例 dry-run 数量与重构前一致 |

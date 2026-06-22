@@ -682,6 +682,18 @@
   - expires: 2026-09-21（下个多省 meta-review 周期前机制化或撤项）
 - **下一实验**：用 Loop v2 真正驱动一波并行（`bun run loop:dispatch` 取前沿 → 3 会话各跑 evidence-loop+双闸）；或填 G3/G4 服务端 RLS 后续。🔴 GATED cutover 须用户显式确认。
 
+**R14 · B249 字段覆盖率报告自动化（Loop v2 第二个跑 codex 双闸的实任务）**
+- **触发**：编排者按 Loop v2 派发 B249（@codex/@claude P2 增强项）。任务：每日 ETL 结束附带产出 `数据管理/knowledge/ai/field-coverage-report.json`（字段×年份记 有效非空比例/去重计数/样本值），解决 `fields.json` 注释过时（如 fuel_type 注「仅2020-2023有值」实际 2024-2026 满期100%覆盖）误导 AI、需额外 DuckDB 验证轮次。backlog `2026-04-21-claude-b249` → DONE。仅改 `数据管理/pipelines/field_coverage.py`(新)+`test_field_coverage.py`(新)+`daily.mjs`(末尾追加调用)，零既有逻辑改动、不触发任何 GATED cutover。
+- **成果**：纯函数式 `field_coverage.py`（DuckDB 读两域 parquet，`union_by_name=true` 兼容跨文件 schema 漂移；按年份锚点 policy=policy_date/claims=report_time 分桶 + `_ALL` 汇总 + `_UNKNOWN_YEAR`；低基数 exact distinct/高基数 approx；原子写 .tmp→replace）；daily.mjs 加 `runFieldCoverageReport` helper（SC-only + 失败降级不阻塞，呼应企微集成同策略；仅 premium/all/claims_detail 后触发）。
+- **🌟 codex 双闸均抓真问题（机制连续两任务证明价值）**：
+  - **闸-1（审计计划）**：0 通过 → 4 P0（PII 采样无闭环/`COUNT(col)` 高估覆盖含空串占位符/字段键不映射注册表制造双源漂移/多省分支隔离语义不清）+6 P1。全部纳入实现：脱敏白名单 + `effective_non_null_ratio`（VARCHAR 把空串/占位符算空）+ 映射 field_id/label/source_column + SC-only。
+  - **闸-2（审 diff）**：0 P0 + **3 P1**：(P1-1) 生成 JSON 落了本机**绝对路径**且来自另一 checkout → 加 `_repo_relative()` 转相对 + 全文 0 泄露断言；(P1-2) **去重计数仍含占位符**（`COUNT(DISTINCT col)` 把 ''/'NULL'/'-' 算成 3 个真实值）→ 改 `COUNT(DISTINCT CASE WHEN nn_expr THEN col END)`，approx 同理；(P1-3) PII 防线只硬编码 denylist，**未注册低基数字段仍被采样** → 改 fail-safe：仅「已注册+非敏感+低基数」才采样，未注册一律 redacted。+2 P2（注册表漏读 repair-fields.json 致 subject_repair_shop 误报 unmapped / 无关单域子命令也刷报告）全修。
+- **oracle**：源数据直查对账**零误差**（fuel_type 2024 满期100%、commercial_pricing_factor _ALL 0.2593、高基数 salesman_name approx 747=747 完全一致）；14 个 pytest 全过（含闸-2 三反例：占位符去重=0/未注册不采样/glob 非绝对路径）；typecheck PASS；governance 42/42（5090 行生成 JSON 走 GOVERNANCE_LARGE_PR_OK 大体量例外，代码仅 695 行）。
+- **重来更好**：① **schema 漂移应起手即料到**——首跑就撞 `next_insurer` DOUBLE↔VARCHAR 跨文件冲突，项目早有 `union_by_name=true` 标准（data-sources.json 注释 + diagnose_common.py 均用），先 grep 现有 read_parquet 用法就能一次写对。② **生成产物的路径可移植性**易被忽视——绝对路径泄露是 codex 才抓出的；ETL 派生物写盘前应默认相对化，呼应"禁硬编码路径"红线延伸到数据产物。③ **覆盖率口径与去重口径必须同源**——`effective_non_null_ratio` 严格了却漏改 distinct，是"改一处忘改一类"的典型；同一"有效非空"语义应抽成单一 SQL 片段（已抽 `effective_value`）供 ratio/distinct/sample 共用。
+- **复用价值**：`field-coverage-report.json` 成为 AI 知识库新事实源——后续诊断 case 查"某字段某年有没有值/有几个值"直接读 JSON，免跑 `SELECT COUNT(field)`。`effective_non_null_ratio`（空串/占位符算空）+「未注册字段 fail-safe 不采样」是任意数据剖析工具可复用的两条铁律。脚本 `--policy-glob/--claims-glob/--output` 入参设计便于单测 fixture 与只读 smoke。
+- **needs_automation: true** → ① claims_detail 域无独立字段注册表（schema 仅在 SCHEMA.md），其列大量被标 unmapped 属"诚实但噪音大"——可补一份 claims 字段注册表让覆盖率报告对齐；② 报告可加 governance 轻量闸：当某已注册字段 `effective_non_null_ratio` 跨年骤降（如 >30pt）时告警，提前发现上游 schema 退化。
+  - expires: 2026-09-21（下个数据治理周期前补 claims 注册表或撤项）
+- **下一实验**：用 Loop v2 继续取并行前沿；或为 claims_detail 域补字段注册表消化本轮 unmapped 噪音。🔴 GATED cutover 须用户显式确认。
 **R14 · B299 ClaimsAgg 出险日期窗口化（Loop v2 双闸·partial 落地）**
 - **触发**：Loop v2 调度取 B299（@user 提的潜在隐患 P2）。`createClaimsAggFromDetail` 按 policy_no 聚合赔款无 accident_time 过滤，多 cutoff/历史 YTD 查询时早期窗口拿"未来出险赔款÷过去满期保费"虚高数倍。任务域限 `duckdb-domain-loaders.ts`+`cost-ratios.ts`。
 - **🌟 闸-1（计划）当场收窄范围 = 机制防止破坏性落地**：codex 对抗审计计划抓 **3 P0 + 3 P1**：(P0-1) 给静态单例 ClaimsAgg 加 cutoff 参数会污染整个连接的共享表（8+ 消费方）→ 改为抽局部 CTE helper，静态表不动；(P0-2) "loader 加参+注释"是死代码非修复；(P0-3) "看板 cutoff=max accident_time 故 no-op"证据链不成立——cost cutoffDate 是请求传入、非恒等最新出险日；(P1-1) 只改 cost-ratios 是半修复，cost 有 cube 影子路径仍 JOIN 静态 ClaimsAgg，cutoff<最新时影子对账出差异；(P1-2) kpi/comprehensive/forecast 同 JOIN 静态表，不能宣称全局根治；(P1-3) accident_time<=cutoff 只截未来出险，金额仍当前快照≠历史 as-of。采纳后判定：完整修复跨任务域(cube/kpi/comprehensive/forecast)且破坏 cube-shadow 锚 → 是 BACKLOG 明列的**用户决策项** → 落地降级为 partial。

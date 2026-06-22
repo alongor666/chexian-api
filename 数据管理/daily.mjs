@@ -1071,6 +1071,36 @@ async function runPostEtlIntegrations(scriptDir, python) {
   }
 }
 
+/**
+ * 9. 字段覆盖率报告（B249）—— 本地 AI 知识库事实源，不随 VPS 发布。
+ *
+ * 读 policy/current + claims_detail，按 字段×年份 产出真实覆盖率到
+ * `数据管理/knowledge/ai/field-coverage-report.json`，解决 fields.json 注释过时
+ * 误导 AI、需额外 DuckDB 验证轮次的问题。
+ *
+ * 安全约束：
+ *   - 仅 SC 主流程末尾调用（非 SC 省在本函数之前已 return，不会触发，全局事实源 SC-only）；
+ *     这里仍对 BRANCH_CODE 做防御性二次校验。
+ *   - 失败降级告警、不阻塞 ETL（与企微集成同策略）。
+ *   - 全空数据默认不覆盖已有报告（脚本内 --allow-empty-output 控制，此处用默认行为）。
+ */
+function runFieldCoverageReport(scriptDir, python) {
+  const branch = process.env.BRANCH_CODE || 'SC';
+  if (branch !== 'SC') return; // 全局知识库 SC-only，防御性兜底
+  const script = join(scriptDir, 'pipelines/field_coverage.py');
+  if (!existsSync(script)) return;
+  console.log('');
+  log('green', '╔══════════════════════════════════════════╗');
+  log('green', '║  9. 字段覆盖率报告（AI 知识库）            ║');
+  log('green', '╚══════════════════════════════════════════╝');
+  try {
+    runPythonScript(python, script, []);
+  } catch (err) {
+    log('red', `  ⚠ 字段覆盖率报告生成失败（降级告警，不阻塞 ETL）: ${(err.message || '').trim()}`);
+    log('yellow', `     手动重试：python3 ${script}`);
+  }
+}
+
 /** 找最大的全量 xlsx（quotes 需要完整历史） */
 function findLargestXlsx(dir) {
   const files = ls('每日数据_*.xlsx', dir);
@@ -1403,6 +1433,11 @@ async function main() {
       if (!synced) process.exit(1);
     }
     await runPostEtlIntegrations(scriptDir, python);
+    // 字段覆盖率报告只统计 policy/current + claims_detail 两域；仅在改动这两域的子命令后刷新，
+    // 跑 quotes/brand/repair/customer_flow 等无关单域时不动知识库报告（codex 闸-2 P2）。
+    if (subcommand === 'claims_detail') {
+      runFieldCoverageReport(scriptDir, python);
+    }
     return;
   }
   if (subcommand === 'all') {
@@ -1801,6 +1836,9 @@ async function main() {
 
   // 8. 外部系统集成（企业微信智能表格），失败降级告警不阻塞 ETL
   await runPostEtlIntegrations(scriptDir, python);
+
+  // 9. 字段覆盖率报告（本地 AI 知识库，不随 VPS 发布；失败降级不阻塞）
+  runFieldCoverageReport(scriptDir, python);
 
   console.log('');
   log('green', '✅ ETL 流程完成！');
