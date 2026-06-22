@@ -51,22 +51,25 @@ export function bucketOf(p) {
     .replace(/^\.\//, '')
     .trim();
   if (!s) return null;
+  // P1-3（2026-06-22 wave-2 复盘）：边界用 `(?:\/|$)` 而非硬尾斜杠 `\/`——否则**目录形式**
+  // code（如 `server/src/sql` 无尾斜杠）落不到 be-sql、回退到 `^server` → 误归 be-other，
+  // 导致域互斥漏判（b331 的 server/src/sql 与 b244 的 claims-detail.ts 真重叠未被检出，险并行撞车）。
   const rules = [
-    [/^src\//, 'frontend'],
-    [/^server\/src\/sql\//, 'be-sql'],
-    [/^server\/src\/routes\//, 'be-routes'],
-    [/^server\/src\/services\//, 'be-services'],
-    [/^server\/src\/config\//, 'be-config'],
-    [/^server\/src\/middleware\//, 'be-middleware'],
-    [/^server\/src\/utils\//, 'be-utils'],
-    [/^server\/src\/agent\//, 'be-agent'],
-    [/^server\//, 'be-other'],
-    [/^数据管理\//, 'etl'],
-    [/^scripts\//, 'scripts'],
-    [/^cli\//, 'cli'],
-    [/^mcp\//, 'mcp'],
-    [/^开发文档\//, 'docs'],
-    [/^\.claude\//, 'meta'],
+    [/^src(?:\/|$)/, 'frontend'],
+    [/^server\/src\/sql(?:\/|$)/, 'be-sql'],
+    [/^server\/src\/routes(?:\/|$)/, 'be-routes'],
+    [/^server\/src\/services(?:\/|$)/, 'be-services'],
+    [/^server\/src\/config(?:\/|$)/, 'be-config'],
+    [/^server\/src\/middleware(?:\/|$)/, 'be-middleware'],
+    [/^server\/src\/utils(?:\/|$)/, 'be-utils'],
+    [/^server\/src\/agent(?:\/|$)/, 'be-agent'],
+    [/^server(?:\/|$)/, 'be-other'],
+    [/^数据管理(?:\/|$)/, 'etl'],
+    [/^scripts(?:\/|$)/, 'scripts'],
+    [/^cli(?:\/|$)/, 'cli'],
+    [/^mcp(?:\/|$)/, 'mcp'],
+    [/^开发文档(?:\/|$)/, 'docs'],
+    [/^\.claude(?:\/|$)/, 'meta'],
   ];
   for (const [re, b] of rules) if (re.test(s)) return b;
   // P1-2（codex 闸-2）：未知 token（N/A、同B244、自由文本、未识别前缀路径）**返回 null**，
