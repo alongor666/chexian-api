@@ -755,3 +755,11 @@
 - **重来更好**：① **现实核查再次是最高杠杆**——本轮在动手前连推翻 4 个既有假设（密码/PAT/USER_PASSWORDS/真因），全靠"读代码+读日志+读 BACKLOG note"而非信任任务描述。任务描述（"需 E2E_PASSWORD"）本身就是过时假设。② **报错日志直指根因**——`ConnectionPool: queue full` 一句话定位真因，胜过盲目加 params。先读 server 日志再动手（呼应 memory `feedback_startup_log_first_not_source`）。③ 区分"oracle 端点"与"基础设施/文件/实时端点"是 golden-baseline 设计的核心——不是所有 API 都该进回归基线。
 - **复用价值**：① **并发型 harness 默认限流**——任何"批量打本地服务"的脚本（baseline/bench/巡检）都该限流而非全并发，DuckDB 池小。`mapSettledWithConcurrency`（worker 池 + allSettled 同构返回）可复用。② golden-baseline 现可作所有 perf/refactor 任务的零差异 oracle（解锁后续重构对账），且对任意机器/CI 可复现（限流 + DEV_SKIP_AUTH 免密码）。③ 「volatile/deprecated 不纳入基线」的判据可复用到任何快照对账系统。
   - needs_automation: false（本轮即修复 harness 使其可用；无新增待自动化项。后续 perf/refactor 任务应在 §4 harness 表标注 golden-baseline 现已可用）
+**R17 · claims_detail「字面引号 bug」误报排查 → 据实关闭 + 固化 foot-gun 护栏（PR #732·无功能变更）**
+- **触发**：派单称 daily.mjs claims_detail / 字段覆盖率的 `'--policy-dir', \`"${policyDir}"\`` 是 new_energy_claims（PR #729）同款字面引号 bug，要求改裸路径。
+- **据实判定非 bug（核实零误差）**：① `runPythonScript`（daily.mjs:176）中央剥离 argv 最外层双引号（`d197b431` execSync→spawnSync 迁移补丁），claims_detail 全程经它 → 实测 `"${p}"`→裸路径；② 字段覆盖率 `runFieldCoverageReport` 用**空数组**调用 `field_coverage.py`、且该脚本无 `--policy-dir` → 描述对象不存在；③ PR #729 的 `e9507542`（同提交保留 claims_detail 引号未动）佐证；④ 进一步核实：new_energy 的 `--policy-dir` 同样经 runStrategyFullSnapshot→runPythonScript 剥离（`d197b431` 是 `e9507542` 祖先），故 e9507542 那处去引号在该控制流下实为冗余 no-op，其「Path.exists 静默跳过」根因叙事在该路径不成立——站不住的根因又派生出本次误报任务。
+- **根因（真问题）**：① pattern-grep ≠ data-flow：把「类成员资格」用表面语法（见 `"${...}"` 即归同类）判定，违反「grep 是有损代理 / 验证不声称」；② foot-gun：`"${path}"` 经 runPythonScript 安全、走裸 spawn 即坏，调用点视觉无法区分，安全全靠用了哪个 helper。
+- **根治（PR #732）**：抽 `数据管理/lib/arg-quotes.mjs` 纯函数（与原内联逐字等价）+ `tests/arg-quotes.test.ts` 14 例契约单测锁不变量（防误删剥离）+ governance AST 闸「spawn参数引号安全」禁裸 spawnSync/execFileSync 照搬 `"${path}"`（防复发）。**负向验证**：注入 daily.mjs:925 → 闸精确 FAIL → 已还原。oracle：单测 14/14 · verify:quick（governance 44 含新闸 + typecheck）· CI Governance+Production Gate 双绿 · rebase origin/main（含 e9507542/fa4c98d6）32 提交零冲突。
+- **重来更好**：派生「在别处修同款」任务前，必须端到端追一条代表性调用链（调用点→helper→Python argparse/Path）证明类成员资格 + 给最小复现，再动手——是 `feedback_codex_review_fix_sop`「修一处≠修一类」的逆向护栏（修一类前先证成员资格）。
+- **复用价值**：「中央 shim 兼容旧写法」型迁移（execSync→spawnSync 的剥引号）必配「契约单测 + 禁绕过 shim 的 AST 闸」，否则旧写法成视觉无差别 foot-gun，反复诱发误报与冗余修复。
+  - needs_automation: false（本轮已落地护栏闸 + 契约单测，无新增待自动化项）
