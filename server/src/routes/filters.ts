@@ -12,8 +12,51 @@ import { permissionMiddleware } from '../middleware/permission.js';
 import { asyncHandler } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
 import { permissionService } from '../services/permission.js';
+import { resolveBranchRlsCode } from './query/shared.js';
 
 const router = Router();
+
+/**
+ * 为 SalesmanTeamMapping 维度表生成行级过滤条件（纯函数，供单测）。
+ *
+ * 维度表用 organization 字段（非 PolicyFact.org_level_3），无法直接复用 req.permissionFilter。
+ * 分省 RLS（BRANCH_RLS_ENABLED=true，GATED 多省）时额外追加 branch_code 等值过滤：
+ *   - branchRlsCode 来自路由层 resolveBranchRlsCode 双门控解析；
+ *   - flag off / 单省无 branch_code 列 → branchRlsCode=undefined → 不追加 → 字节安全。
+ *
+ * @param role 用户角色
+ * @param organization 机构名（org_user 时使用）
+ * @param branchRlsCode 省份码（undefined → 不注入，行为与旧代码完全一致）
+ */
+export function buildMappingPermissionWhere(
+  role: string,
+  organization: string | undefined,
+  branchRlsCode: string | undefined,
+): string {
+  // 1. 基础机构级过滤（与旧代码逻辑一致）
+  let baseWhere: string;
+  if (role === 'branch_admin') {
+    baseWhere = '1=1';
+  } else if (role === 'telemarketing_user') {
+    baseWhere = '1=1';
+  } else if (role === 'org_user' && organization) {
+    const escaped = organization.replace(/'/g, "''");
+    baseWhere = `organization = '${escaped}'`;
+  } else {
+    // fail-closed：未知角色或缺机构信息
+    baseWhere = '1=0';
+  }
+
+  // 2. 分省 RLS（ADR G4 GATED 多省）：追加 branch_code 等值过滤
+  // branchRlsCode 来自 resolveBranchRlsCode 双门控（flag a: permissionFilter 含 branch_code + flag b: 列实测存在）。
+  // flag off / 单省无列 → undefined → 不追加 → 逐字节等价旧代码（字节安全）。
+  if (!branchRlsCode) {
+    return baseWhere;
+  }
+
+  const branchClause = `branch_code = '${branchRlsCode}'`;
+  return baseWhere === '1=1' ? branchClause : `${baseWhere} AND ${branchClause}`;
+}
 
 /**
  * 应用认证与权限中间件
@@ -37,20 +80,14 @@ router.get(
     const permissionWhere = req.permissionFilter || '1=0';
 
     // 维度表 SalesmanTeamMapping 用 organization 字段而非 PolicyFact 的 org_level_3，
-    // 故由 permissionService 单独生成等价的行级过滤（branch_admin → 1=1；
-    // org_user → organization='${org}'；telemarketing_user → 1=1，电销跨机构）。
-    // 单维度表的过滤无法直接套 req.permissionFilter（字段不同），手工组装。
-    const mappingPermissionWhere = (() => {
-      const user = req.user!;
-      if (user.role === 'branch_admin') return '1=1';
-      if (user.role === 'telemarketing_user') return '1=1';
-      if (user.role === 'org_user' && user.organization) {
-        const escaped = user.organization.replace(/'/g, "''");
-        return `organization = '${escaped}'`;
-      }
-      // fail-closed：未知角色或缺机构信息
-      return '1=0';
-    })();
+    // 故由 buildMappingPermissionWhere 生成等价的行级过滤。
+    // 分省 RLS（BRANCH_RLS_ENABLED=true，GATED 多省）时额外追加 branch_code 等值过滤。
+    const mappingBranchCode = await resolveBranchRlsCode(req, 'SalesmanTeamMapping');
+    const mappingPermissionWhere = buildMappingPermissionWhere(
+      req.user!.role,
+      req.user!.organization,
+      mappingBranchCode,
+    );
 
     // 3. 查询机构列表（从数据中实际存在的机构）
     const orgSql = `
