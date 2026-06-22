@@ -828,3 +828,10 @@
   - expires: 2026-09-22
 - **codex gate-2 修订（用户要求对 #744 跑对抗审查后）**：codex CLI(read-only) P0=0（三条目标 SQL 未引用旧 is_quote 成立），但抓 4 个 P1 **过度声称**已校准报告：① "260万0不一致"是循环论证（验证派生结果=派生规则，非源数据零误差）→改"现行实现已按该规则派生"；② "无任何生产 ETL 消费"过度——is_quote 仍在 mapping.ts/column-normalizer.ts/fields.json→PolicyFact 物化链→改"三条目标 SQL 未引用"；③ "交叉销售影响=0"需降级——cross-sell.ts 用 is_renewal(=续保单号非空) 作维度→改"不受旧 is_quote 影响"；④ 业务规则字典 SSOT(:413) 仍把 is_quote 描述为可用→关闭建议改"核心已落地、残留治理待清理"。P2 校准：历史绝对断言可证据化、检索范围列明、refine_verify.py 已做 is_renewed×is_quoted 交叉(避免误导"所有报价交叉不可算")。
   - **跨 R20/R21 共性教训**：分析报告极易**过度声称**（"0误差/无消费方/影响=0/不可计算"）——codex 窄范围对抗审在**分析任务**上同样高杠杆（不止代码任务）；分析结论的措辞应配"派生一致性≠质量证明""目标 SQL 未引用≠全局无消费""现行口径 vs 通用公式"三类区分。
+## 2026-06-22 · 47c2a5 stale-scan 增 PR-合并信号（根治「已合任务被重复派单 + DONE 滞后」）
+
+- **背景/根因**：本轮 loop 复盘暴露 P1——stale-scan 仅看完成语+git churn，看不到「任务实现 PR 已 MERGED」，致 7a2849（#640 已合一周仍被重复派单）、b299/b261（合并后滞留 IN_PROGRESS 未回填 DONE）。
+- **实现**：`classifyStale` 加注入参 `mergedPrRefs`（PR 已合=最强信号→high，独立于完成语）；CLI 一次 `gh pr list --state merged` 批量取 + 纯函数 `branchMatchesUid` 分隔符边界匹配（避免 b332 误命中无关分支子串）；网络/gh 不可用优雅降级（返回空 Map 不崩）；默认开 + `--no-pr` 关。
+- **验证**：43 单测全绿（含 6 新例：uidToken/branchMatchesUid/PR 信号高置信/scanStale 注入）；governance 44/44；实跑命中 b261/b299/b290/b322/b332 共 5 项「合并未回填 DONE」任务（活证据）。
+- **边界纪律（用户 2026-06-22 确认）**：网络抖动 / 判定器 503 是环境不可抗力（天），不计入「问题」、不优化，只容错共处；本 PR 只根治可控的逻辑盲区。
+- needs_automation: false（本身即把"现实核查"自动化的一环）
