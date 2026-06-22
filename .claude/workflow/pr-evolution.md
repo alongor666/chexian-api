@@ -734,3 +734,14 @@
 - **重来更好**：① 我的"分层推荐"对(slash 入口/Workflow 引擎/rules 协议/agent 执行者)，但**把维护面(quality/due/stale)和未落地的 --workflow 塞进入口**是过度工程——入口就该只做一件事。② 闸-1 的最大价值这次体现在**拦截"假想需求"**：把"不可发现"当 P1 缺口是夸大，真缺口是 dispatch 输入(backlog status)维护 + 硬编码漂移(承接 R14 三问)。③ 对抗审计用在**计划阶段**比代码阶段更省——砍掉的是还没写的代码。
 - **复用价值**：确立"新建任何 wrapper/命令前先问『现有入口是否已覆盖 + 这个壳是否名实相符 + 是否绕过 SSOT 门控』"——codex 闸-1 三连问。元工具(dispatch)提示词**禁硬编码易漂移状态**(governance 计数/PR 号)，用"全过/全绿"等不漂移措辞。
   - needs_automation: false（本轮即"少建一个东西"+ 修既存漂移；无新增待自动化项）
+
+---
+
+**R16 · b331 PerformanceAnalysisPanel 拆分（1401→882 行·codex 双闸·纯搬移行为零变更）**
+- **触发**：用户"按推荐办"驱 b331（前沿 top-1 P1）。**现实核查先救一命**：前沿原 top-1 是 7a2849，查其 note 发现 PR #640 已合并一周（commit 353aa7f5 在 main），仅状态没翻——差点重做。翻 DONE + 登记 stale-scan 增强 47c2a5（补"note 引用 PR 已 MERGED→高置信陈旧"信号，stale-scan 这次漏了它）。再核 b331 本身：client.ts 早于 Phase 2 已拆，仅 PerformanceAnalysisPanel.tsx 1401 行未拆（真实可做）。
+- **闸-1（改后实施·全核实零误差）**：3P0=oracle 写错(`build`≠tsc，须显式 typecheck)/barrel 无 DAG 约束恐循环依赖/引用清单漏 `tests/performance-drilldown-prefetch.test.ts` 从主文件 import（我只搜 src/ 漏 tests/）；4P1=不抽 controller hook(主组件 10+ 耦合 state)/不复用既漂移的 PerformanceDistributionChart/行为保真须加定向 vitest/拆 6 文件过细→4 文件。全采纳。
+- **成果**：抽 `performancePanel.shared.ts`(类型+常量+纯helper) + `PerformanceHeaderActions`/`PerformancePanelDistributionChart`/`PerformancePanelDimensionPicker`，主文件 1401→882。**同目录落位**(非闸-1 原议 performance/ 子目录)→被搬移代码 `./` 相对 import **零改写**，消除最大风险源。barrel 重导出全部 6 个原对外符号+默认导出→PerformanceAnalysisPage + test 旧入口**零改动**。
+- **oracle**：typecheck ✓ / build ✓ / governance 43/43（分层边界扫 421 文件 0 违规）/ 全量 **3550 测试全过** / 定向 prefetch gating+title 测试 4/4。**闸-2 codex 可合并 0P0/0P1**（仅 1 P2 理论 HMR 风险，非前置）。verifier=确定性闸（纯 move 宜确定性脚本非 LLM，符合 evidence-loop §特例）。
+- **重来更好**：① **现实核查必须前置于"动手"**：连续两轮(7a2849 第三方会话已合并/b331 部分早已做)证明 dispatch 前沿不等于"真待办"——派单前先查 note 里的 PR 状态 + 实测目标现状(行数/文件)。这是 stale-scan 47c2a5 要自动化的。② 同目录落位 > 子目录落位（当搬移代码有大量相对 import 时）——闸-1 没料到这点，我在实现时优化了，降风险。③ 纯搬移重构的 oracle 是"确定性闸全绿"，无需新增测试也无需 LLM verifier；但定向回归测试(prefetch)是验 barrel 不断链的关键锚。
+- **复用价值**：①「1000+行组件拆分」可复用打法=同目录抽 shared(类型/常量/纯helper)+子组件、barrel 重导出保旧入口零爆炸半径、`noUnusedLocals` 下精确剪枝靠 typecheck 迭代。② follow-up 登记纪律：大重构里"想做但风险高/超范围"的(hook 抽取 03f6f0、chart 去重 21c578)即时登记 backlog，不混进本 PR。
+  - needs_automation: false（本轮无新增待自动化项；stale-scan 增强已独立登记 47c2a5 带其自身 expires 由 #703 闸管）

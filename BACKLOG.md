@@ -16,23 +16,21 @@
 
 ---
 
-## 📋 活跃任务速查（79 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（80 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（9 项）**
+**P1（7 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
-- B331 — 超大文件拆分（21 目录排查 主题C）
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
-- 2026-06-11-claude-7a2849 — 同比/YTD 查询产生重复期间行 + 虚假 -100% 增长（DuckDB 实证）
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
 - 2026-06-16-claude-1f3bc1 `PARTIAL` — evidence-loop perf/refactor 类 oracle (.plann
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 - 2026-06-22-claude-15d8fd — 多省 RLS 查询层残留漏洞收口（G3/G4 closeout 拆出·GATED 前置）
 
-**P2（45 项）**
+**P2（46 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -79,8 +77,9 @@
 - 2026-06-20-claude-c21667 — 派生视图 is_telemarketing RLS 补齐（P0.5 遗留）— 电销用户在
 - 2026-06-21-claude-681eee — 多省 ETL『转换质量报告.json』未按省隔离
 - 2026-06-21-claude-acf188 `PARTIAL` — 山西账号（ADR G7）
+- 2026-06-22-claude-47c2a5 — stale-scan 增补『PR-合并』信号
 
-**P3（25 项）**
+**P3（27 项）**
 
 - B246 `BLOCKED` — VPS 分层查询改造（KPI variable_cost_ratio）
 - B247 — 图表 hex 色值审计
@@ -107,6 +106,8 @@
 - 2026-06-11-claude-f633c0 — cancelRequest 键不匹配永远取消不了请求
 - 2026-06-12-claude-055a12 `BLOCKED` — 立方体灰度哨兵降频里程碑
 - 2026-06-21-claude-f1a45c — cleanup-worktrees skill 与本项目兄弟目录约定 scope 错配
+- 2026-06-22-claude-03f6f0 — PerformanceAnalysisPanel 主组件(~900行)抽 usePerf
+- 2026-06-22-claude-21c578 — 两个 distribution chart 去重
 
 ---
 
@@ -141,11 +142,6 @@
 | B322 | 2026-06-02 | Security/Config | @claude | **claude-to-im 飞书 app_secret 明文存储 + 已暴露至本次会话上下文**（跨项目全局配置，记此 BACKLOG 为追踪）：`~/.claude-to-im/config.env` 明文存 `CTI_FEISHU_APP_SECRET`（app_id `cli_a94d08f46539dbcd`，对应租户 `2d26b50cf94f175e`）。本次会话为定位"Mac_飞侠" P2P bot 的 chat_id 在 Bash 中 cat 了 config.env，secret 进入 Opus 模型上下文（已尽量 mask 但 stdout 已发生）。**修复**：(1) 飞书开发者后台 rotate `cli_a94d08f46539dbcd` 的 app_secret；(2) 更新本机 `~/.claude-to-im/config.env`；(3) 重启 bridge daemon（`bridge.pid` 在 runtime/）验证连通；(4) 长期：考虑用系统 Keychain / 1Password CLI 替代明文 .env（参考 `claude-to-im` skill 的 reconfigure 子命令） | P2 | PROPOSED | 本会话；`~/.claude/skills/claude-to-im/SKILL.md` | `~/.claude-to-im/config.env`（用户私域，不在本 repo） | rotate 后旧 secret `lark-cli` 调用应 401；新 secret 写入 config.env 后 bridge daemon 重启正常，飞书内向 Mac_飞侠 发消息触发 Claude 启动如常 |
 | B321 | 2026-06-03 | Refactor/Governance | @claude | **super-powers 精髓 skills 两项后续**（PR #469 审计衍生）：(1) **上提共享仓**——`code-search-routing` / `agent-system-design-principles` 整体，及 `silent-failure-guard` 五律内核、`rule-promotion-gate` judge-not-lawyer、`adr-tiered-response` 分级响应的**通用内核**，均过语义独立测试，待项目级实战验证（≥2 场景命中）后经 `chexian-crystallize-skill` 上提到 `alongor666/alongor666-skills`（本会话 GitHub 工具仅限 chexian-api，无法跨库推送）。(2) **引入 ESLint AST 硬门**——补 `silent-failure-guard` 的"catch 返回空值无日志/无判别"检测（正则 100% 误报，#25 空catch门只覆盖纯空块），用 `no-useless-catch` + 自定义 rule；项目当前无 ESLint，需从零搭配置+CI 接线，属重改动宜独立 PR | P3 | PROPOSED | PR #469 审计；`.claude/skills/silent-failure-guard.md`；`.claude/skills/rule-promotion-gate.md` | `.claude/skills/*.md`（上提候选）<br>`scripts/check-governance.mjs`(#25 空catch门已落地)<br>新增 `eslint.config.*`（待建） | 候选 skill 验证后上提共享仓且通用层无重复；ESLint AST 门在当前库零误报通过 + 拦截真实吞异常 |
 | B326 | 2026-06-05 | Security/Backend | @claude | **`req.permissionFilter \|\| '1=1'` 防御性兜底 fail-closed 加固（纵深防御·非活漏洞·登记）**（B325 基线核查衍生）：governance `check-permission-coverage` 每次标 5 处 `[unsafe-fallback]`（agent-diagnosis.ts:156/157/261/290、agent-forecast.ts:51），全项目共 17 处同模式。**定性结论（非活 fail-open）**：agent 路由已在 router 级挂 `authMiddleware + readonlyMiddleware + permissionMiddleware`（agent-diagnosis.ts:41-43），而 `permissionMiddleware` 恒把 `req.permissionFilter` 设为具体值（admin=`1=1` / `org_level_3='...'` / `is_telemarketing=true`，见 permission.ts:55-64），故 `\|\| '1=1'` 是**防御性死代码**而非运行时漏洞；且真实 SQL 注入读取路径已由 B307（RLS 子查询绕过修复）+ B316（isValidPermissionFilter 白名单 fail-closed 接入）加固。**待办**：把 17 处 `permissionFilter \|\| '1=1'` 统一为 fail-closed（中间件缺失时拒绝/空集而非放行全量），需逐路由确认 permissionMiddleware 挂载 + 加"中间件缺失→fail-closed"回归测试，属独立安全 PR（红线"修补不拆除"，禁随手批量改 auth 语义）。登记以终止每次 governance 重复调查。 | P3 | PROPOSED | governance `check-permission-coverage` 输出；`server/src/middleware/permission.ts:55-64`；BACKLOG B307 / B316 | `server/src/agent/routes/agent-diagnosis.ts`<br>`server/src/agent/routes/agent-forecast.ts`<br>（全项目 17 处 `permissionFilter \|\| '1=1'`） | 待实施：改后 governance unsafe-fallback 提示清零 + agent 路由"中间件缺失→fail-closed"回归测试覆盖 |
-| B331 | 2026-06-05 | Refactor/Quality | @claude | **超大文件拆分**（21 目录排查 主题C）：PerformanceAnalysisPanel 1394、api/client.ts 1250(+26 any 鉴权边界)、NewEarnedPremiumTable 988、GeoRiskPanel 951、CrossSellAnalysisPanel 891、useCostAnalysis 880、EnhancedKpiCard 870、LineChart 720、claims-detail.ts 583、performance-analysis/shared.ts 548 等 | P1 | PROPOSED | 开发文档/目录排查报告_2026-06-05.md §2-C | src/features/dashboard；src/shared/api/client.ts；src/widgets；server/src/sql | 各拆至 <500 行；功能/测试不回归 <br>2026-06-14 现状盘点（B330 worktree 抽样）：
-- 已自然解决（≤500 行）：api/client.ts 1250→252（PR 已拆为 client-core + 13 域子客户端）
-- 尚 >500 行的原清单：PerformanceAnalysisPanel 1401（+7）/ NewEarnedPremiumTable 891 / GeoRiskPanel 951 / CrossSellAnalysisPanel 891 / useCostAnalysis 880 / EnhancedKpiCard 870 / LineChart 720 / claims-detail.ts 624 / performance-analysis/shared.ts 584
-- 新增 >500 行（基线外）：admin/AccessControlPage 770 / filters/AdvancedFilterPanel 728 / copilot/ForecastBaselinePanel 705 / filters/FilterLayoutV2 690 / server/skills/workflow-runner 999 / server/routes/data 874 / server/services/cache-warmer 848
-处置：本任务作为"桶任务"，每个文件需独立拆分 PR；建议为每个 >800 行文件登记单独 sub-task；governance 可加"src 下 .ts/.tsx >800 行报警"作过渡守卫。 |
 | B332 | 2026-06-05 | Test | @claude | **测试覆盖补强**（21 目录排查 主题D）：features 21 模块 19 个零 __tests__（comprehensive-analysis/cost/claims-detail/quote-conversion 优先）；最安全敏感的 utils/sql-validator(499 准入闸门)+ middleware/permission(RLS 生成器)无专属测试 | P1 | IN_PROGRESS | 开发文档/目录排查报告_2026-06-05.md §2-D；CLAUDE.md §5 | src/features/*；server/src/utils/sql-validator.ts；server/src/middleware/permission.ts | sql-validator 黑名单/掩码绕过用例、permission 角色/机构分支；关键模块有测试。✅ phase-1：新增 server `sql-validator.ts` 专属测试 31 例（多语句分号注入/字面量·注释 masking 不误判/隐私 GROUP·ORDER policy_no/isReadOnlyQuery/hasAggregation/analyzePerformance/withPerformance）。⚠️ 更正：permission RLS 生成器**已有**专属测试 `middleware/__tests__/permission.test.ts`（基础过滤+0F branchCode 矩阵+单引号转义+fail-closed），原"无专属测试"判断已过期。⏳ 余：features 19 个零测试模块待补 <br>2026-06-08 验证：desc 称「最安全敏感的 sql-validator(499准入闸门)+permission(RLS生成器)无专属测试」已陈旧——server/src/utils/__tests__/sql-validator.test.ts + server/src/middleware/__tests__/permission.test.ts 均已存在。安全关键部分已覆盖；剩余 features 19 模块零测试部分待确认，建议聚焦剩余或据实评估降级。 <br>2026-06-14 现状盘点（B330 worktree 抽样）：
 - features 模块测试覆盖：20 个模块中 15 个零测试，5 个有测试（claims-detail 4 / copilot 3 / dashboard 3 / home 2 / renewal-tracker 2）
 - 优先 4 模块状态：claims-detail ✓4 / comprehensive-analysis ✗0 / cost ✗0 / quote-conversion ✗0
@@ -169,7 +165,6 @@
 | 2026-06-11-claude-3093a3 | 2026-06-11 | Refactor/Frontend | @claude | 重复组件收拢（全站重复审计 主题②）：机构×维度×时间热力图 4 套独立实现（performance-org/cross-sell/claims-detail/quote-conversion）、机构→团队→业务员下钻表 5 处、KPI 卡 5 套、趋势折线封装 5 套、导出对话框 2 个（widgets/export/ExportDialog vs features/file/ExportModal）+ crossSellExport 重写 CSV 下载、格式化函数多处本地重写（renewal-tracker/expense-development/growth 对应 shared/utils/formatters 已有）、dashboard useFilterState 与全局 FilterContext 双轨。逐类提共享部件，结合功能迭代渐进做。关联 B330（依赖违规）/B331（大文件拆分）。 | P2 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/widgets；src/shared；src/features/dashboard | 标签收拢实施时排查出 5 处 SSOT 之外的残留硬编码维度标签副本（本批未动）：① PerformanceAnalysisPanel.tsx:92-101 PERF_HEATMAP_DRILL_DIMENSIONS（team:'团队'/insurance_grade:'风险评分'，与同页 HEATMAP_DIMENSION_LABELS 已统一文案形成页内不一致，优先治理）；② CrossSellAnalysisPanel.tsx:389-396 HEATMAP_DRILL_DIMENSIONS（team:'团队'，同页不一致，优先治理）；③ claims-detail/ClaimsHeatmapPanel.tsx:29,35；④ premium-report/hooks/usePremiumPlan.ts:35 LEVEL_LABELS；⑤ quote-conversion/DrilldownTable.tsx:101。收拢时改为 pickDimensionLabels 派生。 |
 | 2026-06-11-claude-3ab3e3 | 2026-06-11 | Bugfix/Frontend | @claude | 增长分析面板请求竞态旧响应覆盖新数据：GrowthAnalysisPanel.tsx:127+useGrowthAnalysis.ts:125 fetchGrowthFromApi/analyzeDualMetricComparison 无请求序号/AbortController/最新请求守卫，setState 无条件写。快速切换条件时两不同 URL 请求并发（apiClient in-flight 合并仅对相同 URL），慢的旧请求后返回覆盖新结果。 | P2 | PROPOSED | N/A | src/features/growth/components/GrowthAnalysisPanel.tsx,src/features/growth/hooks/useGrowthAnalysis.ts |  |
 | 2026-06-11-claude-42bf28 | 2026-06-11 | 数据质量 | @claude | 经营分析汇总表（performance-summary）达成率/计划列恒 NULL 的处置评估：146cce 口径统一时评估结论为「不顺势接入」——年计划只有业务员粒度、无险别组合维度，强行接入只会让整体行有值而主全/交三/单交子行恒空，新增口径混淆。待业务拍板二选一：① 删除汇总表这两列（前端 12 列减 2）；② 仅整体行接入标准口径并在列头注明子行无计划。summary.ts 旧版分摊死计算已随 146cce 移除。 | P3 | PROPOSED | 开发文档/达成率三路由口径对账报告_2026-06-11.md | server/src/sql/performance-analysis/summary.ts；src/features/dashboard/PerformanceAnalysisPanel.tsx | 实现漂移核实（自动检测）：commit c5f61081「车险达成率三路由统一为标准口径(146cce)」已并入 main，body 显式引用本 uid 并「移除从未输出的分摊死计算」。P3 评估类任务疑已被该口径统一处置。建议 owner 确认后置 DONE --evidence commit c5f61081。 |
-| 2026-06-11-claude-7a2849 | 2026-06-11 | Bugfix/Backend | @claude | 同比/YTD 查询产生重复期间行 + 虚假 -100% 增长（DuckDB 实证）：yoy.ts/ytd.ts 用 FULL OUTER JOIN ON c.tp=DATE_ADD(p.tp,1year)，t+1 年无数据期间 p 侧 unmatch 输出 current=0/growth=-100% 幽灵行；weekly 视图 DATE_TRUNC('week')+1年不再周一对齐致整列 NULL/-100%。 | P1 | PROPOSED | N/A | server/src/sql/growth/yoy.ts,server/src/sql/growth/ytd.ts,server/src/routes/query/growth.ts | PR #640 已建：https://github.com/alongor666/chexian-api/pull/640 — fix(growth) yoy/ytd FULL OUTER JOIN 幽灵 -100% + weekly 周一漂移；39 单测 + 11 cube test + 656 SQL 全过；待合并后置 DONE。 |
 | 2026-06-11-claude-7dca99 | 2026-06-11 | Refactor/Frontend | @claude | StableContext/ExportContext value 未 memoize：StableContext.tsx:181、ExportContext.tsx:45 每次 Provider 渲染创建新 value 对象，使拆分稳定状态避免重渲染的设计落空，48 个 useGlobalFilters 消费者随上游渲染重渲染。 | P3 | PROPOSED | N/A | src/shared/contexts/StableContext.tsx,src/shared/export/ExportContext.tsx |  |
 | 2026-06-11-claude-84ea3a | 2026-06-11 | Chore/Hygiene | @claude | cleanup-reports 按 mtime 而非文件名日期保留最新：cleanup-reports.mjs:122 业务组内 sort((a,b)=>b.mtime-a.mtime) 保 mtime 最新，文件名自带日期前缀，若有人补生成/触碰旧日期报告(mtime 变新)，--apply 会删掉日期更新的保留旧日期的。sync-vps 每次同步前自动带 --apply 无人工确认。 | P3 | PROPOSED | N/A | scripts/cleanup-reports.mjs |  |
 | 2026-06-11-claude-9ba379 | 2026-06-11 | 数据质量 | @claude | claims 源文件拼接顺序使遗留清单覆盖最新全量：daily.mjs:1091 [...newFiles,...legacyFiles]+convert_claims_detail.py:181 drop_duplicates(keep='last')，车险报立结案清单_*.xlsx 遗留旧快照排在新格式之后，同赔案号旧快照金额覆盖新全量。文件名无8位日期的遗留文件逃过自动归档守卫。 | P2 | PROPOSED | N/A | 数据管理/daily.mjs,数据管理/pipelines/convert_claims_detail.py |  |
@@ -200,4 +195,7 @@
 | 2026-06-21-claude-681eee | 2026-06-21 | 数据/ETL · 多省接入(G5/G6) | @claude | 多省 ETL『转换质量报告.json』未按省隔离。transform.py/daily.mjs 将质量报告写入四川默认路径 数据管理/数据分析报告/，BRANCH_CODE!=SC（如 SX）运行时会把它覆盖成该省统计。文件 gitignored 且为纯派生（下次 SC ETL 自动重生成回四川版），current/ 与 git 跟踪文件均无影响，故非阻断。但多省常态化后该路径应按 branch 隔离（如 数据分析报告/<branch>/ 或文件名带省码）。既存基建问题，非 PR #690 diff 引入——由 PR #690 独立审计 P2-1 暴露。建议随多省接入（G5/G6 上线预备）一并修，与 validation/<branch>、企微/VPS 等其余按省隔离点统筹。关联 2026-06-20-claude-2eccfa（同属多省机构口径）。 | P2 | PROPOSED | 开发文档/multi-branch/口径对齐_山西.md | 数据管理/pipelines/transform.py |  |
 | 2026-06-21-claude-acf188 | 2026-06-21 | Auth · 多省(山西)GATED | @claude | 山西账号（ADR G7）：preset-users.ts 加 SX 超管 + 山西机构用户（现 0 个 SX 账号，全 20 用户标 SC）。名单待用户定。启用前 RLS 隔离验证 SX token 不读 SC。Day-1 SOP §4，GATED 上线最后一步。 | P2 | PARTIAL | .claude/rules/multi-branch-day1-sop.md | server/src/config/preset-users.ts | preset-users.ts 加 SX 账号定义：1 超管 yangjie0621(branch_admin) + 11 经营单元 org_user(organization 取 SX.json units 11 单元)，全 branchCode=SX；密码全 tombstone(不可登录·无明文，真实凭据 GATED cutover 由 USER_PASSWORDS 注入)；getAllBranchCodes 自动含 SX。验证：preset-users.test.ts 8 passed(新增 SX 超管/11 org_user/organization 对齐/tombstone 格式断言)、typecheck PASS、governance 42/42。🔴 GATED cutover(RLS-on→SX 进 current/→sync VPS→发账号)+RLS 隔离验证(SX token 不读 SC) 待用户显式确认，本任务未做。 |
 | 2026-06-21-claude-f1a45c | 2026-06-21 | 工具与工作流 | @claude | cleanup-worktrees skill 与本项目兄弟目录约定 scope 错配：skill 仅纳管 .claude/worktrees/，而 .claude/rules/worktree-setup.md §A 规约 worktree 放兄弟目录 ../chexian-api-<task> → 已合并的兄弟 worktree（如 rls-closeout #710）不会被自动回收，需手动 git worktree remove。待调查：是 skill 缺'兄弟目录纳管'能力（fix 落跨仓 alongor666/alongor666-skills 的 cleanup-worktrees.sh in_scope()），还是 skill 可配置而本项目未配置纳管根。修复落点大概率在 skill 源仓（跨仓）。 | P3 | PROPOSED | .claude/rules/worktree-setup.md | N/A |  |
+| 2026-06-22-claude-03f6f0 | 2026-06-22 | 前端重构 follow-up | @claude | PerformanceAnalysisPanel 主组件(~900行)抽 usePerformancePanelController hook —— b331 拆分后续。codex 闸-1 判此项需先补行为测试再动(主组件 10+ 耦合 state/handler)，故 b331 本轮不做。 | P3 | PROPOSED | N/A | src/features/dashboard/PerformanceAnalysisPanel.tsx |  |
 | 2026-06-22-claude-15d8fd | 2026-06-22 | 数据架构 · 多省(山西)GATED前置 | @claude | **多省 RLS 查询层残留漏洞收口（G3/G4 closeout 拆出·GATED 前置）**：6ae4d7 维度表层省份化(#704)+typed 路由收口(#710)完成后，仍有两处查询层 RLS 未覆盖：(1) `server/src/routes/filters.ts` 的 `/api/filters/options`——位于 routes/ 非 routes/query/*，未经 permissionFilter 注入，RLS-on 后跨省可见筛选项(越权·数据行级)；(2) marketing-report/premium-report 的 SalesmanTeamMapping/SalesmanPlanFact 标签子查询——仅 team_name 命名泄漏(非数据行泄漏·低优)。BRANCH_RLS_ENABLED=false(默认)时无泄漏，仅 RLS-on(GATED)后暴露，故为 GATED cutover 前置。来源：6ae4d7 closeout note(eid 60f785e0)。 | P1 | PROPOSED | 开发文档/multi-branch/全国多省架构决策_2026-06-19.md | server/src/routes/filters.ts,server/src/sql/marketing-report.ts,server/src/sql/premium-report.ts |  |
+| 2026-06-22-claude-21c578 | 2026-06-22 | 前端重构 follow-up | @claude | 两个 distribution chart 去重：内部 DistributionChart(PerformancePanelDistributionChart) 与既有 performance/PerformanceDistributionChart.tsx option 已漂移，codex 闸-1 确认应另案统一。 | P3 | PROPOSED | N/A | src/features/dashboard/performance/PerformanceDistributionChart.tsx,src/features/dashboard/performance/PerformancePanelDistributionChart.tsx |  |
+| 2026-06-22-claude-47c2a5 | 2026-06-22 | Loop v2 自进化 | @claude | stale-scan 增补『PR-合并』信号：任务 note 引用的 PR #N 现已 MERGED → 高置信陈旧。当前 stale-scan 仅看完成语+git churn，漏掉『PR #640 已建…待合并后置 DONE』这类（实证：7a2849 已合并一周仍在前沿被推荐派单）。增 gh/git 核 PR 状态，merged 即标高置信。 | P2 | PROPOSED | N/A | scripts/loop/stale-scan.mjs |  |
