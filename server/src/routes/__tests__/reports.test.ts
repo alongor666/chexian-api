@@ -29,6 +29,12 @@ function makeReq(user?: unknown) {
   return { user } as any;
 }
 
+// dbEnv 是 `as const`（属性 readonly + 字面量类型）；运行时可变，单测需按用例切换多分公司 RLS flag。
+// reports.ts 的 isBranchRlsEnabled() 在调用时读 dbEnv.BRANCH_RLS_ENABLED（单例共享），故 mutate 即生效。
+function setBranchRls(value: 'true' | 'false'): void {
+  (dbEnv as unknown as Record<'BRANCH_RLS_ENABLED', string>).BRANCH_RLS_ENABLED = value;
+}
+
 /** 断言 fn 抛出 AppError(403)。 */
 function expectThrows403(fn: () => void): void {
   try {
@@ -43,7 +49,7 @@ function expectThrows403(fn: () => void): void {
 
 beforeEach(() => {
   // 默认多分公司 RLS 关闭，单测按需切换
-  dbEnv.BRANCH_RLS_ENABLED = 'false';
+  setBranchRls('false');
 });
 
 describe('assertReportAccess: 访问矩阵', () => {
@@ -117,7 +123,7 @@ describe('assertReportAccess: 访问矩阵', () => {
   });
 
   it('org_user：owner 有 branch 但 user 缺 branchCode + RLS off → 放行（退回 org 等值）', () => {
-    dbEnv.BRANCH_RLS_ENABLED = 'false';
+    setBranchRls('false');
     expect(() =>
       assertReportAccess(makeReq({ role: UserRole.ORG_USER, organization: '乐山' }), {
         org: '乐山',
@@ -127,7 +133,7 @@ describe('assertReportAccess: 访问矩阵', () => {
   });
 
   it('org_user：owner 有 branch 但 user 缺 branchCode + RLS on → 403（fail-closed）', () => {
-    dbEnv.BRANCH_RLS_ENABLED = 'true';
+    setBranchRls('true');
     expectThrows403(() =>
       assertReportAccess(makeReq({ role: UserRole.ORG_USER, organization: '乐山' }), {
         org: '乐山',
@@ -138,7 +144,7 @@ describe('assertReportAccess: 访问矩阵', () => {
 
   // codex 闸-2 P1：RLS 开启时 branch 是租户判别，owner 无 branch 不得仅凭 org 放行
   it('org_user：org 匹配 + owner 无 branch + RLS on → 403（缺 branch 判别 fail-closed）', () => {
-    dbEnv.BRANCH_RLS_ENABLED = 'true';
+    setBranchRls('true');
     expectThrows403(() =>
       assertReportAccess(
         makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' }),
@@ -148,7 +154,7 @@ describe('assertReportAccess: 访问矩阵', () => {
   });
 
   it('org_user：org 匹配 + owner.branch=SC + user.branchCode=SC + RLS on → 放行', () => {
-    dbEnv.BRANCH_RLS_ENABLED = 'true';
+    setBranchRls('true');
     expect(() =>
       assertReportAccess(
         makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' }),
@@ -158,7 +164,7 @@ describe('assertReportAccess: 访问矩阵', () => {
   });
 
   it('org_user：org 匹配 + owner.branch=SX + user.branchCode=SC + RLS on → 403（跨分公司租户隔离）', () => {
-    dbEnv.BRANCH_RLS_ENABLED = 'true';
+    setBranchRls('true');
     expectThrows403(() =>
       assertReportAccess(
         makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' }),
