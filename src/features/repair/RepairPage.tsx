@@ -12,16 +12,14 @@ import { formatPremiumWan, formatCount } from '@/shared/utils/formatters';
 import { RepairScatter, type ScatterShopPoint } from './components/RepairScatter';
 import { RepairShopDrawer } from './components/RepairShopDrawer';
 import { RepairDiversionList } from './components/RepairDiversionList';
-
-type TimeWindow = 'ytd' | 'rolling12' | 'all';
-type CoopTierFilter = '' | 'active' | 'past' | 'none';
-
-interface CoopTierRow {
-  coop_tier: 'active' | 'past' | 'none' | 'none_shadow';
-  shop_count: number;
-  damage_amount: number;
-  net_premium: number;
-}
+import {
+  type TimeWindow,
+  type CoopTierFilter,
+  type CoopTierRow,
+  buildRepairParams,
+  findTierRow,
+  computeToPremiumTotals,
+} from './utils/repairKpi';
 
 interface RepairMetadata {
   orgs: string[];
@@ -48,12 +46,10 @@ export const RepairPage: React.FC = () => {
   const [coopTier, setCoopTier] = useState<CoopTierFilter>('');
   const [selectedShop, setSelectedShop] = useState<ScatterShopPoint | null>(null);
 
-  const params = useMemo(() => {
-    const p: Record<string, string> = { timeWindow };
-    if (orgFilter) p.orgName = orgFilter;
-    if (coopTier) p.coopTier = coopTier;
-    return p;
-  }, [orgFilter, timeWindow, coopTier]);
+  const params = useMemo(
+    () => buildRepairParams(orgFilter, timeWindow, coopTier),
+    [orgFilter, timeWindow, coopTier]
+  );
 
   const { data: metadata } = useQuery({
     queryKey: ['repair-metadata'],
@@ -84,20 +80,13 @@ export const RepairPage: React.FC = () => {
 
   // KPI 计算
   const tierRows = coopTierData ?? [];
-  const findTier = (t: string) => tierRows.find(r => r.coop_tier === t) ?? {
-    shop_count: 0,
-    damage_amount: 0,
-    net_premium: 0,
-  };
-  const activeRow = findTier('active');
-  const pastRow = findTier('past');
-  const noneRow = findTier('none');
-  const shadowRow = findTier('none_shadow');
+  const activeRow = findTierRow(tierRows, 'active');
+  const pastRow = findTierRow(tierRows, 'past');
+  const noneRow = findTierRow(tierRows, 'none');
+  const shadowRow = findTierRow(tierRows, 'none_shadow');
 
   const toPRows = toPremiumAll ?? [];
-  const totalDamage = toPRows.reduce((s, r) => s + (r.damage_amount ?? 0), 0);
-  const totalPremium = toPRows.reduce((s, r) => s + (r.net_premium ?? 0), 0);
-  const overallRatio = totalPremium > 0 ? totalDamage / totalPremium : null;
+  const { totalDamage, totalPremium, overallRatio } = computeToPremiumTotals(toPRows);
 
   const orgs = metadata?.orgs ?? [];
 
