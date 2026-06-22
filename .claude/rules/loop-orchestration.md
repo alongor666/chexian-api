@@ -138,6 +138,13 @@ policy: append-only
   - **新增/变更**：纯函数 `latestClaims` + `computeFrontier`（新增 `config.claims/now/claimTtlHours`，返回新增 `claimed/released`）；CLI `gatherClaimContext` + `--no-fetch`/`--no-claims` 旗标；`dispatch-config.json` 增 `claimTtlHours`；`sessionPrompt` 增认领步。单测加 13 例（`latestClaims` 5 + `computeFrontier` 认领锁 7 + 边界）。`bun run governance` 44/44、全量单测 3715/3715 通过。
   - **不 cd 主仓**：`gatherClaimContext` 用 `git -C "${ROOT}"`（worktree 内 fetch/show），不触发主目录守卫。
   - **三问复盘**：① 重来更好？认领锁本可与 wave-2 同期落地（根因当时已诊断清楚），延后一波才补——根因明确即应同 PR 修，勿只登记。② 复用价值？`latestClaims`（事件日志取最新认领态）可被 stale-scan / 其他 loop 工具复用，避免各自实现折叠。③ 自动化？认领锁本身即「把纪律变机制」；残留人工点=会话必须真的执行「认领先于实现」步——`sessionPrompt` 已固化，但仍依赖会话遵从。`needs_automation: true`（认领遗漏的硬闸：dispatch 检出「远程分支存在但无认领」时可升级为更强提示/pre-push 闸）`expires: 2026-09-22`。
+- **meta（2026-06-22 · 本 PR · 用户指令）· 单任务 loop 的 P0/P1 复杂 PR：codex 闸-2 强制 + 三源过清后自动合并**：
+  - **用户指令**：「单任务 loop 也应安排 codex 对 P0/P1 级复杂任务的 PR 做对抗性审查后自动合并」。即 ① 单任务 loop **不豁免**闸-2 的 codex 对抗（此前我对本 PR 只跑了 evidence-verifier，跳过 codex，属漏闸）；② 闸-2 三源 P0/P1 全清后**应自动合并**，不留人工交接——澄清「禁 auto-merge」**仅限部署链 PR**（`.claude/pr-checklist.md §4`），P0/P1 普通任务过了对抗就自动合。
+  - **闸-2 的两层强度（按任务复杂度）**：**P0/P1 复杂任务 = codex 对抗强制不可跳**（§2 降级分层：codex skill → CLI `codex exec --sandbox read-only - < prompt 文件` → evidence-verifier+CI；本机 `/opt/homebrew/bin/codex` 0.141.0 可用，故走 CLI）；P2-P4 常规任务按需（evidence-verifier+CI 即可，codex 留给可疑口径/跨模块）。三源 = codex + evidence-verifier + CI auto-review。
+  - **自动合并判据（全满足才 enable --auto）**：① 闸-2 三源 P0/P1 全修 + 复审通过；② CI 双绿（Production Gate + Governance Check）；③ **非部署链**（不碰 `deploy.yml`/`vps-wrapper/**`/`sync-vps.mjs`/`ecosystem.config.cjs`）；④ 合并门 slot holder（`bun run loop:dispatch --merge-gate`）。满足 → `gh pr merge --auto --squash`（队列/strict=false 下 = 加入合并门，CI 过即自动落地）。**部署链 PR** 恒禁 auto-merge，人工选窗口合并并盯 CI 前 5 分钟。合并判成功一律 `gh pr view --json state`（==MERGED），禁 grep "merged"。
+  - **enable --auto 后禁再 push**（memory `feedback_auto_merge_no_followup_push`：跟进提交竞态丢失）→ codex 若抓 P0/P1，先全修 + 复审 + CI 再绿，**才** enable --auto；收尾 bundle（backlog/复盘/账本）也须在 enable 前一次推完。
+  - **落地**：`sessionPrompt` 第 4 步标注「P0/P1 强制 codex 闸-2 + CLI 降级路径」，第 6 步改为「三源过清 + CI 双绿 + 非部署链 → `gh pr merge --auto --squash` 自动合并；部署链人工合」。本 PR 自身即首个按新流程执行者（P0 级 → 跑 codex CLI 对抗 → 三源清 → 自动合并）。
+  - **needs_automation: false**（本条是把既有 §2 闸-2 + pr-checklist §4 部署链特例**显式编排进单任务收尾流**，非新机制；codex 调用已是 §2 降级分层覆盖的确定路径）。
 
 ---
 
