@@ -724,3 +724,13 @@
   - expires: 2026-09-19
 
 **量化**：并行波1 codex 双闸 — b330(闸1 3P0/5P1→闸2 0P0/2P1) · b299(3P0/3P1→0/0/0) · b249(4P0/6P1→0P0/3P1)；3 PR(#716/#717/#718)全经源数据/静态验证。b299 源数据验证 满期赔付率 176.48%(全快照虚高)→61.51%(窗口正确)、最新日窗口=全快照逐分钱一致(字节安全 no-op)，按红线停 partial 未盲改理赔 SSOT。
+
+---
+
+**R15 · Loop v2 入口设计 — codex 闸-1 砍掉过度工程（闸用在「计划」而非「代码」上）**
+- **触发**：用户问"Loop v2 激发/启动机制是什么？要不要做成 agent/skill/slash"。我初拟方案=新建 `/chexian-loop` 总控命令（含 quality/due/stale 子命令 + `--workflow` fan-out）。用户："制定计划，安排 codex 做对抗性评审后再定"——把闸-1 用在**纯设计决策**上（无一行代码）。
+- **codex 闸-1 结论「改后再建」，核实零误差**（6×P0/P1）：① slash 本质单会话 prompt 注入，**指挥不了多会话并行**，名实不符；② `--workflow` 是未落地承诺、越 Workflow 工具 opt-in 红线；③ slash 命令在 `.claude/commands/**`，**不触发** loop-orchestration 的 `paths:` 门控注入，"只放指针"会绕过协议；④ `stale` 子命令造第二份入口表(SSOT 漂移)；⑤ dispatch 已引导走 `/chexian-evidence-loop` + skills-map 已列 → "不可发现"被高估，泛名命令反抢入口；⑥ 发现**既存 bug**：`dispatch.mjs:162` 硬编码 `governance 42+/42`，实际已漂移到 43(R14 新增 checkArchLayerBoundaries)。
+- **决策（用户选「修真问题·不建命令」）+ 成果**：不建任何 slash/agent/skill。改 3 处真问题：① `dispatch.mjs:162` `42+/42`→`全过`(不再漂移)；② `loop:stale-scan` 补进 loop-orchestration §6 命令速查(SSOT 补全)；③ skills-map evidence-loop 行加「跨任务调度先 `bun run loop:dispatch`」指针(并压顶部 blockquote 净减 6B 抵预算)。验证：`loop:dispatch` 跑通(228 任务/前沿 9)、提示词已无硬编码 42。
+- **重来更好**：① 我的"分层推荐"对(slash 入口/Workflow 引擎/rules 协议/agent 执行者)，但**把维护面(quality/due/stale)和未落地的 --workflow 塞进入口**是过度工程——入口就该只做一件事。② 闸-1 的最大价值这次体现在**拦截"假想需求"**：把"不可发现"当 P1 缺口是夸大，真缺口是 dispatch 输入(backlog status)维护 + 硬编码漂移(承接 R14 三问)。③ 对抗审计用在**计划阶段**比代码阶段更省——砍掉的是还没写的代码。
+- **复用价值**：确立"新建任何 wrapper/命令前先问『现有入口是否已覆盖 + 这个壳是否名实相符 + 是否绕过 SSOT 门控』"——codex 闸-1 三连问。元工具(dispatch)提示词**禁硬编码易漂移状态**(governance 计数/PR 号)，用"全过/全绿"等不漂移措辞。
+  - needs_automation: false（本轮即"少建一个东西"+ 修既存漂移；无新增待自动化项）
