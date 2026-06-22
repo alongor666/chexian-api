@@ -144,6 +144,44 @@ export function computeFrontier(tasks, config = {}) {
   };
 }
 
+/**
+ * 合并门串行化闸（方案 B 配套 · 根治「CI 双绿但 state=BEHIND」活锁的「不迁 org」路径）。
+ *
+ * 背景：main 分支保护改 `strict=false` 后 BEHIND 活锁消除，但并行 PR 可**同时转绿同时合并**
+ * → 放弃了「组合一起测过」的保证。本闸把**合并阶段**串行化：同一时刻只放一个在飞 PR 过合并门
+ * （slot holder），其余按序排队（queue）。slot holder 落地 main → 移出 inflight → 下一个递补；
+ * 排队 PR 合并前必须 `git fetch origin main && git merge origin/main` 重新转绿，于是每个 PR 都对
+ * **累积后的 main** 验证过 → 近似恢复合并队列的「组合一起测过」，而无需迁 org / 用合并队列。
+ *
+ * 纯函数（不碰文件系统/网络/时钟）：给定在飞集 + 任务态，确定性算出**合并次序**。
+ * PR 是否已转绿由会话侧 `gh pr checks` 判断；本闸只决定**谁现在有资格合（次序）**，不决定时机。
+ * 次序与 computeFrontier 一致：priority 升序 → uid 升序（确定可复现）。in flight 集复用
+ * computeFrontier 同一来源（config.inflight）：computeFrontier 把在飞**排除出前沿**（不重复派单），
+ * 本闸把在飞**纳入合并门**（决定谁先合），二者互补。
+ *
+ * @param {Array<object>} tasks foldBacklog 结果
+ * @param {object} config dispatch-config（读 config.inflight）
+ * @returns {{slot: object|null, queue: object[], skipped: string[]}}
+ *   slot=当前唯一可合任务（null=在飞集空）；queue=须等待者（按合并次序）；
+ *   skipped=被剔除的 inflight 项（已 DONE 应移出 / 不在 backlog，附原因）。
+ */
+export function mergeGate(tasks, config = {}) {
+  const byUid = new Map(tasks.map((t) => [t.uid, t]));
+  const skipped = [];
+  const live = [];
+  for (const uid of (config.inflight || [])) {
+    const t = byUid.get(uid);
+    if (!t) { skipped.push(`${uid}(不在 backlog)`); continue; }
+    if (t.status === 'DONE') { skipped.push(`${uid}(已 DONE → 应移出 inflight)`); continue; }
+    live.push(t);
+  }
+  const order = live.sort((a, b) =>
+    String(a.priority || 'P9').localeCompare(String(b.priority || 'P9'))
+    || (a.uid < b.uid ? -1 : 1),
+  );
+  return { slot: order[0] || null, queue: order.slice(1), skipped };
+}
+
 /** 生成单个前沿任务的可粘贴会话提示词（off 最新 main + 并行安全协议 + 双闸）。 */
 export function sessionPrompt({ task, domains }) {
   const slug = task.uid.split('-').pop();
@@ -164,7 +202,8 @@ export function sessionPrompt({ task, domains }) {
     `2. TDD 实现，只改本任务域（${domains.join(',')}），不碰其他会话域。`,
     `3. 确定性闸：bun run verify:full / governance 全过 / 字节安全证据。`,
     `4. 🛡 闸-2：codex 审 diff + evidence-verifier 证伪 + CI auto-review，三源 P0/P1 全修。`,
-    `5. 收尾：backlog status 流转 + pr-evolution 三问复盘(needs_automation 紧跟 expires) + loop-quality-ledger 一行 → bundle 进代码提交 → PR → enable --auto MERGE（之后禁再 push）。`,
+    `5. 收尾：backlog status 流转 + pr-evolution 三问复盘(needs_automation 紧跟 expires) + loop-quality-ledger 一行 → bundle 进代码提交 → PR。`,
+    `6. 🚦 合并门串行化（strict=false 配套）：enable --auto 前先 \`bun run loop:dispatch --merge-gate\` 确认本任务是 slot holder；不是则等前序 PR 落地 main → git fetch origin main && git merge origin/main 重新转绿 → 再 enable --auto MERGE（之后禁再 push）。同一时刻只放一个 PR 过合并门，每个 PR 都对累积后的 main 验证过。`,
     ``,
     `【并行安全】每轮起手 & push 前 git fetch origin main && git merge origin/main；BACKLOG_*/pr-evolution/quality-ledger 已 merge=union 自动并；push 前 gh pr list 查撞车。`,
     `🔴 GATED cutover 须用户显式确认，禁自动执行。`,
@@ -191,6 +230,25 @@ export function renderBoard(result, tasks) {
   return L.join('\n');
 }
 
+/** 渲染合并门串行化状态（同一时刻只放一个 PR 过门）。 */
+export function renderMergeGate(gate) {
+  const L = [];
+  L.push(`## 🚦 合并门（串行化闸：strict=false 下同一时刻只放一个 PR 过门）`);
+  if (!gate.slot) {
+    L.push('（在飞集为空——无 PR 在合并门排队）');
+  } else {
+    L.push(`- ✅ **当前可合 slot holder**：\`${gate.slot.uid}\` [${gate.slot.priority || 'P?'}] — ${String(gate.slot.desc || '').slice(0, 60)}`);
+    if (gate.queue.length) {
+      L.push(`- ⏳ 排队（须等 slot 让出 → fetch+merge main 重新转绿再合）：`);
+      for (const t of gate.queue) L.push(`    - \`${t.uid}\` [${t.priority || 'P?'}]`);
+    } else {
+      L.push(`- （无其他在飞 PR 排队）`);
+    }
+  }
+  if (gate.skipped.length) L.push(`- ⚠️ 已剔除（应从 config.inflight 移出）：${gate.skipped.join('、')}`);
+  return L.join('\n');
+}
+
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch { return {}; }
 }
@@ -201,16 +259,27 @@ function main() {
   const tasks = foldBacklog(lines);
   const config = loadConfig();
   const result = computeFrontier(tasks, config);
+  const gate = mergeGate(tasks, config);
 
   if (args.includes('--json')) {
     process.stdout.write(JSON.stringify({
       frontier: result.frontier.map((f) => ({ uid: f.task.uid, priority: f.task.priority, domains: f.domains, desc: f.task.desc, code: f.task.code })),
       deferred: result.deferred.map((d) => ({ uid: d.task.uid, reason: d.reason })),
       blocked: result.blocked.map((b) => b.uid),
+      mergeGate: {
+        slot: gate.slot ? { uid: gate.slot.uid, priority: gate.slot.priority } : null,
+        queue: gate.queue.map((t) => ({ uid: t.uid, priority: t.priority })),
+        skipped: gate.skipped,
+      },
     }, null, 2) + '\n');
     return;
   }
+  if (args.includes('--merge-gate')) {
+    console.log(renderMergeGate(gate));
+    return;
+  }
   console.log(renderBoard(result, tasks));
+  console.log('\n' + renderMergeGate(gate));
   if (!args.includes('--board') && result.frontier.length) {
     console.log('\n' + '='.repeat(70));
     console.log('## 前沿任务会话提示词（每段贴进一个独立会话）\n');
