@@ -65,9 +65,11 @@ const NO_PERMISSION_ROUTES = new Set([
 const KNOWN_GAPS = new Map([
   [
     '/api/reports',
-    'HTML 报告按文件名托管（如 天府_经营诊断_2026Q1.html），任何登录用户可读跨机构报告；'
-    + '修复依赖 0C 字段 branch_code 落进报告元数据后按 user.branchCode 校验文件归属。'
-    + '详见 plan §0A KNOWN GAPS。',
+    '报告托管改用 handler 级行级安全（assertReportAccess），非 permissionMiddleware（文件服务无 SQL '
+    + 'permissionFilter 可注入），故仍列 known-gap。B328 phase-1 已堵跨机构泄漏（非 branch_admin fail-closed）；'
+    + 'phase-2 已让 org_user 读归属本机构报告（sidecar .meta.json 解析 ownerOrg/ownerBranch，按 '
+    + 'org_level_3 等值 + branch_code 校验）。残留：生产方 diagnose-*/push_html.py 尚未 emit sidecar，'
+    + '故生产真实 org_user 200 仍 GATED（见 BACKLOG 缺口登记）。',
   ],
 ]);
 
