@@ -17,6 +17,7 @@
 ---
 
 ## 📋 活跃任务速查（71 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（72 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -69,7 +70,6 @@
 - 2026-06-20-claude-2eccfa `BLOCKED` — 山西机构规范化映射 (61 原始机构 → 11 经营单元)
 - 2026-06-20-claude-8870f5 — [口径裁决] reserve_wan(未决准备金) 在覆盖全状态案件的面板含零结/注销/
 - 2026-06-21-claude-acf188 `PARTIAL` — 山西账号（ADR G7）
-- 2026-06-22-claude-47c2a5 — stale-scan 增补『PR-合并』信号
 
 **P3（26 项）**
 
@@ -180,4 +180,3 @@
 | 2026-06-21-claude-f1a45c | 2026-06-21 | 工具与工作流 | @claude | cleanup-worktrees skill 与本项目兄弟目录约定 scope 错配：skill 仅纳管 .claude/worktrees/，而 .claude/rules/worktree-setup.md §A 规约 worktree 放兄弟目录 ../chexian-api-<task> → 已合并的兄弟 worktree（如 rls-closeout #710）不会被自动回收，需手动 git worktree remove。待调查：是 skill 缺'兄弟目录纳管'能力（fix 落跨仓 alongor666/alongor666-skills 的 cleanup-worktrees.sh in_scope()），还是 skill 可配置而本项目未配置纳管根。修复落点大概率在 skill 源仓（跨仓）。 | P3 | PROPOSED | .claude/rules/worktree-setup.md | N/A |  |
 | 2026-06-22-claude-03f6f0 | 2026-06-22 | 前端重构 follow-up | @claude | PerformanceAnalysisPanel 主组件(~900行)抽 usePerformancePanelController hook —— b331 拆分后续。codex 闸-1 判此项需先补行为测试再动(主组件 10+ 耦合 state/handler)，故 b331 本轮不做。 | P3 | PROPOSED | N/A | src/features/dashboard/PerformanceAnalysisPanel.tsx |  |
 | 2026-06-22-claude-21c578 | 2026-06-22 | 前端重构 follow-up | @claude | 两个 distribution chart 去重：内部 DistributionChart(PerformancePanelDistributionChart) 与既有 performance/PerformanceDistributionChart.tsx option 已漂移，codex 闸-1 确认应另案统一。 | P3 | PROPOSED | N/A | src/features/dashboard/performance/PerformanceDistributionChart.tsx,src/features/dashboard/performance/PerformancePanelDistributionChart.tsx |  |
-| 2026-06-22-claude-47c2a5 | 2026-06-22 | Loop v2 自进化 | @claude | stale-scan 增补『PR-合并』信号：任务 note 引用的 PR #N 现已 MERGED → 高置信陈旧。当前 stale-scan 仅看完成语+git churn，漏掉『PR #640 已建…待合并后置 DONE』这类（实证：7a2849 已合并一周仍在前沿被推荐派单）。增 gh/git 核 PR 状态，merged 即标高置信。 | P2 | PROPOSED | N/A | scripts/loop/stale-scan.mjs |  |

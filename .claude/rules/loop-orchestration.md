@@ -121,6 +121,13 @@ policy: append-only
   - **P0「限流韧性」**：wave-2 两 high-effort agent 在 Anthropic 服务端限流窗口同时重试，跑 21.9M ms 后 `dev:[]` 零产出；b244 未到 push 即死=无 checkpoint。**根治**：① 并发 ≤2、effort 按任务难度而非一律 high、限流期不强推大并发波；② agent 尽早 commit/push（即便 WIP）留 checkpoint；③ 派大波前先轻量探一个 agent 试水再放大。
   - **P1「bucketOf 目录归桶」（本 PR 已修 + 单测）**：边界用 `(?:\/|$)` 替硬尾斜杠——目录形式 code（`server/src/sql` 无尾斜杠）旧版误归 be-other，致域互斥漏判（b331 与 b244 在 `claims-detail.ts` 真重叠未被检出，险并行撞车，靠人工拦下）。
   - **元教训**：本会话另一浪费源是「**多会话无协调地并发硬化 loop 机制**」本身——§4 出现 merge-queue→strict=false 的来回、本会话也险些重复别人已修的 BEHIND 活锁。**建议：loop-meta（本协议 / dispatch.mjs 等）改动由单一 owner 会话串行，功能任务才并行**。
+- **meta（2026-06-22 · 本 PR）· 方案 B 配套：合并门串行化闸（dispatch ⑧）— 不迁 org 近似恢复「组合一起测过」**：
+  - **决策**：BEHIND 活锁的「真正根治 = 迁 org 启用合并队列」经完整影响清单 + 回滚预案评估后**决定不迁**——owner 单人协作、止血方案（`strict=false`）已实测生效，迁 org（建 org / 重建 6 secrets+1 variable / 复核部署链 SSH / 生产域名）属不可逆性高的大手术，对单人 loop 自动化性价比低（合并队列的杀手锏是团队级高并发问题）。改在 `strict=false` 之上加一道**合并门串行化闸**，零生产风险拿到合并队列的主要收益。迁 org 完整清单 + 回滚预案见本 PR 描述（将来加入真实协作者 / 质量账本出现实测并行语义冲突时再迁）。
+  - **机制**：`dispatch.mjs` 新增纯函数 `mergeGate(tasks, config)` + `bun run loop:dispatch --merge-gate` 模式 + `--json` 的 `mergeGate` 字段。给定在飞集（`config.inflight`）确定性算出**合并次序**（priority→uid，与 computeFrontier 一致）：同一时刻只 1 个 slot holder 有资格合，其余排队。computeFrontier 把在飞**排除出前沿**（不重复派单）、本闸把在飞**纳入合并门**（决定谁先合），二者互补复用同一 `inflight` 源。剔除已 DONE / 不在 backlog 的脏 inflight 项防卡门。
+  - **协议落地（⑦/⑧）**：enable --auto 前先 `bun run loop:dispatch --merge-gate` 确认自己是 slot holder；不是则等前序 PR 落地 main → `git fetch origin main && git merge origin/main` 重新转绿 → 再 enable --auto。于是每个 PR 都对**累积后的 main** 验证过 → 近似恢复合并队列的「组合被一起测过」，无需迁 org。`sessionPrompt` 第 6 步已固化此纪律。
+  - **与 strict=false 的关系**：strict=false 消除 BEHIND（活锁根治）；串行化闸补回 strict=false 放弃的「组合一起测过」。两者叠加 = 不迁 org 的足够好替代。
+  - **将来若迁 org**：合并队列（投机 rebase 更强）可完全替代本闸，届时 `mergeGate` 可退役、`merge_group` 触发接管。本闸是「不迁 org 期间」的过渡机制，非永久。
+  - **单测**：`scripts/loop/__tests__/loop.test.mjs` 加 6 个 mergeGate 用例（空在飞 / 单个 / 多个排序 / DONE 剔除 / 脏 uid 剔除 / 缺 priority 兜底）。
 
 ---
 
@@ -138,6 +145,7 @@ policy: append-only
 | `bun run loop:quality` | 质量账本聚合报告（北极星 + 趋势） |
 | `bun run loop:automation-due` | 到期/临期/缺 expires 的 needs_automation 清单 |
 | `bun run loop:stale-scan [--churn]` | 列疑似陈旧任务（note 完成信号 + git churn 旁路改动） |
+| `bun run loop:dispatch --merge-gate` | 合并门串行化闸：当前 slot holder + 排队（strict=false 下同一时刻只放一个 PR 过门，每个 PR 对累积后的 main 验证过） |
 
 ## 7. 关联
 
