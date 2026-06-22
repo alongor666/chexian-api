@@ -36,7 +36,6 @@ EXCEL_ENGINE = 'calamine'
 DEFAULT_INPUT_FILE = Path("/Users/xuechenglong/Downloads/车险签单报价数据20260127_已匹配.xlsx")
 DEFAULT_OUTPUT_FILE = Path("/Users/xuechenglong/Downloads/01-正开发Git项目/chexianYJFX/数据管理/warehouse/fact/policy/车险保单综合明细表0127.parquet")
 DEFAULT_OUTPUT_MODE = "full"  # "full" = 保留所有记录（分析默认）, "merged" = 显式合并批改记录
-QUALITY_REPORT_FILE = Path("./数据分析报告/转换质量报告.json")
 
 def parse_args():
     """解析命令行参数"""
@@ -66,6 +65,9 @@ def parse_args():
                         help='增量模式：只保留签单日期 > 此日期的记录（格式 YYYY-MM-DD 或 YYYYMMDD）')
     parser.add_argument('--force', action='store_true',
                         help='跳过 Schema 契约检查（仅调试用，生产禁止）')
+    parser.add_argument('--branch-code', default=None,
+                        help='多省 0a（ADR D5）：分公司编码（如 SX）。提供时质量报告写入隔离目录 '
+                             '数据分析报告/<省>/转换质量报告.json；缺省（SC 默认链路）路径不变，四川产物字节安全。')
     return parser.parse_args()
 
 # 解析命令行参数
@@ -76,6 +78,15 @@ OUTPUT_MODE = args.mode
 RENEWAL_SOURCE_FILE = Path(args.renewal_source) if args.renewal_source else None
 DOMAIN = args.domain          # 输出域: policy/all
 AFTER_DATE = args.after_date  # 增量截止日期
+
+# 多省 0a：质量报告路径按分公司隔离
+# SC（默认）：保持原路径 ./数据分析报告/转换质量报告.json（字节安全，四川产物不受影响）
+# 非 SC（如 SX）：写入 ./数据分析报告/<省>/转换质量报告.json（隔离，不覆盖四川报告）
+_branch_for_report = args.branch_code if args.branch_code else os.environ.get('BRANCH_CODE', 'SC')
+if _branch_for_report and _branch_for_report != 'SC':
+    QUALITY_REPORT_FILE = Path(f"./数据分析报告/{_branch_for_report}/转换质量报告.json")
+else:
+    QUALITY_REPORT_FILE = Path("./数据分析报告/转换质量报告.json")
 
 POLICY_KEY_ALIASES = ['保单号', '保单号码', '保单编号', '保单']
 
