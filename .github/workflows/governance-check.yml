@@ -3,6 +3,8 @@ name: Governance Check
 on:
   pull_request:
     branches: [ main ]
+  # 合并队列（merge queue）：必需检查须在 merge_group 事件产出同名 status，否则队列卡死。详见 production-gate.yml 注释。
+  merge_group:
   workflow_dispatch:
 
 jobs:

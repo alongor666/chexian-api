@@ -737,6 +737,24 @@
 
 ---
 
+**R16 · 山西并入收尾 5 任务并行实现 — codex 闸-2 抓 3/5 真 P1，现实核查防 2 处返工**
+- **触发**：用户"聚焦山西数据并入系统，loop:stale-scan → 清理假阳性 → loop:dispatch 取干净前沿 → Workflow fan-out"，决策"codex 对抗审查后自动合并"。Workflow 规划 fan-out → 5 任务实现 fan-out（隔离 worktree）→ codex 闸-2 逐 PR → auto-merge。5 PR 全合：#726(15d8fd P1)/#725(10c9e9)/#727(681eee)/#729(00bac8)/#728(c21667)。
+- **codex 闸-2 量化（用户要求的核心闸）**：5 PR 中 3 个需返工才 ENDORSE，抓到的都是实现自评低估/漏掉的真 P1：
+  - **00bac8**（3 轮）：① 同 VIN 多保单用 `ROW_NUMBER() OVER ()` 物理序 → 机构变更静默归错（改 `ORDER BY insurance_start_date DESC`）；② `daily.mjs` 的 **`all` 路径** `--policy-dir` 带字面引号 → 日常 ETL 静默跳过回填（单域路径已改、`all` 漏改）；③ `except Exception` 静默吞 schema/Binder 错（改重新抛出）。**P1-1（policy-dir 传错目录）经核实是 codex 误读 `branchOutputRoot('SC')` 语义 → 撤销**（核实分歧而非盲从）。
+  - **c21667**（3 轮）：① boolean 迁移只改筛选、漏维度输出 → heatmap/ranking 输出 `true/false` 而非中文枚举，**federation 关闭时也破四川字节安全**；② 筛选侧对非法值放大为全部非电销（改严格三态，非法→`1=0`）；③ `ELSE 非电销` 折叠 NULL（加 `IS NULL THEN NULL`）。
+  - **10c9e9**（3 轮）：测试意图失真（声称测路由实际测 helper）→ 补真路由级测试，但 `vi.mock` factory 捕获顶层 `const` 致 TDZ（改 `vi.hoisted()`）。
+  - **15d8fd / 681eee**：首轮 ENDORSE。
+- **重来更好**：① **实现子代理的 self_review_p0p1 系统性低估真问题**——00bac8 把"物理序不稳"列为"可能性"（实为 P1）、完全漏掉 `all` 路径引号；c21667 漏掉维度输出侧。实现 prompt 对 ETL/SQL 改动应强制"枚举所有调用点（单域+all 路径）+ 区分筛选侧 vs 输出侧契约"。② **strict 分支保护 + 并发 loop 会话（本轮同时 7 个 open PR）→ 合并串行化抖动**，监控循环跑 8 轮反复 update-branch 才落地——无 merge queue 时多会话并行合并是结构性瓶颈。
+- **复用价值**：① **现实核查 first（规划 fan-out 阶段）防返工**——00bac8 实测 `policy_no` 全 NULL（policy_no JOIN 回填 0%）、`vehicle_frame_no` 100%，把"参 policy JOIN"具体化为 VIN JOIN；15d8fd 实测 filters.ts 已注入 → gap 收窄。stale-scan「逐任务现实核查」教训前移到规划阶段。② **审 diff（闸-2）比审计划更能抓具体 bug**：本轮真 P1 全是"代码与契约/数据现实的偏差"（all 路径漏改、输出侧漏改、JOIN 键错），计划阶段看不出。③ codex 与子代理分歧时**亲自读代码裁决**（00bac8 P1-1：codex 误读、子代理对）。
+- **needs_automation**：
+  - **dispatch.mjs gatedKeywords「cutover」误伤「cutover 前置」**：15d8fd（P1 RLS 收口，desc 含"GATED cutover 前置"）被 isGated 排除出前沿——它是 cutover 的*前置*（该做、字节安全）非 cutover 本身。修法：gated 判定排除含"前置/前提"的命中，或仅匹配不可逆动作短语（"进 current/"、"发账号"）。
+    - needs_automation: true
+    - expires: 2026-07-22
+  - **启用 GitHub merge queue**：消除 strict + 多并发 loop 会话的串行化抖动（本轮监控循环手动 update-branch 8 轮）。
+    - needs_automation: true
+    - expires: 2026-09-22
+
+**量化**：codex 闸-2 抓 P1 合计 5（00bac8×2 + c21667×2 + 10c9e9×1）+ 撤销误报 1（00bac8 P1-1），全部 by-construction 字节安全（BRANCH_RLS_ENABLED=false 四川零行为变更）；现实核查推翻 2 处实现假设。GATED 的 acf188 账号+cutover 未触碰（须用户显式确认）。
 **R16 · b331 PerformanceAnalysisPanel 拆分（1401→882 行·codex 双闸·纯搬移行为零变更）**
 - **触发**：用户"按推荐办"驱 b331（前沿 top-1 P1）。**现实核查先救一命**：前沿原 top-1 是 7a2849，查其 note 发现 PR #640 已合并一周（commit 353aa7f5 在 main），仅状态没翻——差点重做。翻 DONE + 登记 stale-scan 增强 47c2a5（补"note 引用 PR 已 MERGED→高置信陈旧"信号，stale-scan 这次漏了它）。再核 b331 本身：client.ts 早于 Phase 2 已拆，仅 PerformanceAnalysisPanel.tsx 1401 行未拆（真实可做）。
 - **闸-1（改后实施·全核实零误差）**：3P0=oracle 写错(`build`≠tsc，须显式 typecheck)/barrel 无 DAG 约束恐循环依赖/引用清单漏 `tests/performance-drilldown-prefetch.test.ts` 从主文件 import（我只搜 src/ 漏 tests/）；4P1=不抽 controller hook(主组件 10+ 耦合 state)/不复用既漂移的 PerformanceDistributionChart/行为保真须加定向 vitest/拆 6 文件过细→4 文件。全采纳。
@@ -776,3 +794,12 @@
   - needs_automation: true → 把「双源零测试盘点」做成 `scripts/` 脚本(同目录 find + tests/根 grep 并集)，供 b332 逐模块 PR 取准确前沿；可作 governance 过渡守卫"features/* 至少 1 处测试覆盖(含 tests/根引用)"。
   - expires: 2026-09-22
 - **下一轮**：8 个真零测试模块逐模块独立 PR(优先 moto-cost/report 纯函数)；b332 整体仍 IN_PROGRESS。
+**R18 · full_snapshot 缓存键漏 --policy-dir 内容指纹（PR #732 codex 另一发现·陈旧缓存隐患·task_6d1e8053）**
+- **触发**：PR #732 codex 闸-2 除「字面引号」（R17）外独立揪出的正交既存隐患（loop-orchestration §4 meta 已登记 task_6d1e8053）——`buildFullSnapshotCacheKey` material 漏掉调用方注入的 `extraArgs`（典型 new_energy_claims 的 `--policy-dir`）。评为低于 P1 后续项，单独成任务。
+- **systematic-debugging 先证后修（RED 复现）**：缓存键逻辑抽到 `数据管理/lib/full-snapshot-cache-key.mjs`（daily.mjs 顶层 main() 无法 import，同 R17/lib 既有模式），写 `tests/full-snapshot-cache-key.test.ts`：构造 id/batchDate/sources/deps 不变、policy-dir parquet 内容变化场景 → 当前代码 key 不变（3 例 RED）→ 证实「命中陈旧快照、服务旧 policy 回填的 org_level_3」真实可达。
+- **关键修正——任务原议「JSON 化 extraArgs 字符串」对所述场景不足**：`necPolicyDir`（`branchOutputRoot` SC）在同 worktree/同 SC 分支两次运行间是**恒定字符串**，仅把路径字符串塞进 key 则 key 不变、仍命中陈旧缓存。真正变化的是 `--policy-dir` 目录下 parquet 的**内容**。承重修复 = 对该目录 `*.parquet` 做内容指纹（与 convert 的 `read_parquet('<dir>/*.parquet')` JOIN 输入集严格对齐）；extraArgs 整组仍纳入（捕获 --branch-code/路径变更，保守正确）。
+- **oracle**：缓存键单测 9/9（RED→GREEN + P2 加固）· Python full_snapshot 7/7（依赖断言跟随 lib 重定向 + 新增 policy/extraArgs 覆盖，不回归）· 全量 3609 单测全过 · verify:quick（governance 44/44 + typecheck）· rebase origin/main（含 #732 e9507542/fa4c98d6）零冲突，自动合并 daily.mjs 后逐项重核完好。
+- **codex 闸-2（对抗审 diff·`codex exec` 经 stdin）= 无 P0/P1**：独立确认核心判断（路径恒定→必须内容指纹 / sha256 取舍正确 / 非递归 glob 对齐）。4 个 P2 中本 PR 修 3 个：① quoted `--policy-dir` 鲁棒性（复用 #732 `lib/arg-quotes.mjs` 剥引号，防 R17 同类 foot-gun 复活）② `--no-metadata` 内容中性（base_converter.py:206 仅门控 data-sources.json 写入，证安全）→ denylist 剔除避免 manifest/直接运行反复重算 ③ `withFileTypes` 只纳常规文件，防 `.parquet` 目录/FIFO 在缓存键计算阶段抛错。均补对应 vitest 用例。codex_done: {P0:0,P1:0,P2:4→已处理3+1测试覆盖}。
+- **重来更好**：收到「最小改动」式建议时，先端到端验证它是否真覆盖所述场景——这里「路径字符串 vs 目录内容」之差决定修复成败，是 systematic-debugging「症状描述 ≠ 根因」的实证。`dependencies` 只指纹 .py、`sources` 只指纹域自身 xlsx → 经 extraArgs 注入的外部数据依赖是缓存键盲区。
+- **复用价值**：full_snapshot 缓存键须覆盖「所有影响产物内容的输入」，含经 extraArgs 注入的外部目录依赖（--policy-dir）的**内容指纹**而非仅参数字符串；新增「convert 时读外部目录回填」型 full_snapshot 域时，该外部目录必须进缓存材料。
+  - needs_automation: false（回归测试 tests/full-snapshot-cache-key.test.ts 已锁内容敏感性不变量）

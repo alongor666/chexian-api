@@ -105,6 +105,12 @@ policy: append-only
   - **与 stale 的区别**：`loop:stale-scan` 只抓"已完成未流转"，抓不到"前提就错"。这是**独立失败类**。
   - **进化规则**：dispatch / 派单步骤对"修同款"类任务，须先**追一条代表性调用链（调用点 → helper → 消费端 argparse/Path）证明失败在新点重现 + 给最小复现**，再纳入前沿——把"修一类前先证成员资格"（`feedback_codex_review_fix_sop` 逆向护栏）**上提到调度层**：pattern 相似 ≠ 类成员资格。
   - **印证 codex 闸-2 价值**：本次窄范围对抗不止"抓 bug"——(a) 独立确认核心判断、降自我 pattern-match 风险 (b) 揪出正交既存隐患（full_snapshot 缓存键漏 extraArgs → `task_6d1e8053`）。即便常规变更，一次窄范围对抗也划算。
+- **meta（2026-06-22 · 本 PR）· 启用合并队列（merge queue）根治「CI 双绿但 state=BEHIND」活锁**：
+  - **现象**：每次落地 CI 双绿但 `state=BEHIND`——CI（Production Gate ≈ 3min）跑的期间别的 loop PR 合入 main，使本 PR 落后；`strict=true` 要求分支含最新 main → 绿了也合不了 → 人工 update-branch 重跑又赌一次没人插队，高并行下几乎每次复现。
+  - **根因（三因相乘，非 loop 逻辑 bug）**：main 分支保护 `strict=true`（要求分支 up-to-date）× 并行 PR 在合并门汇聚（在飞 K≥2 且 CI 完成时间重叠时，严格模式下只 1 个能合、其余瞬间全 BEHIND，self-invalidation）× **无 GitHub 合并队列**。靠"`git fetch origin main && git merge` 再 push"纪律赢不了——让你 BEHIND 的那次 main 前进，正是这批并行 PR 自己制造的。`enable --auto` 在 strict 下**不自动 update-branch**，故"绿了也不合"。三七开：平台机制缺口 ~60% / loop 并行度把偶发放大成每次 ~40%。
+  - **进化**：启用 GitHub 合并队列。队列把每个 PR **投机性 rebase 到队列尾**、对"未来 main 状态"跑必需检查、按序合并 → `BEHIND` 从定义上消失，且**保住"组合被一起测过"的保证**（优于关 strict）。配套：`production-gate.yml` / `governance-check.yml` 加 `merge_group` 事件触发（否则队列等不到同名 status → 合并门卡死）；deploy.yml 不动（merge_group 跑队列分支被 `branches:[main]` 过滤，不触发部署）。
+  - **落地语义变更（loop 端几乎零改动）**：⑦ 的 `gh pr merge --auto` 命令**不变**——队列启用后 `--auto` 自动变为"加入合并队列"。⑧ 合并探测**不再需要手动 update-branch**（队列负责串行 rebase + 合）。"enable --auto 后禁再 push"仍成立。
+  - **回滚**：删除 merge queue ruleset 即恢复旧行为（workflow 的 merge_group 触发空跑无害，可保留）。
 
 ---
 
