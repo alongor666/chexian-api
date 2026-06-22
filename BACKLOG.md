@@ -20,8 +20,7 @@
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（8 项）**
-**P1（6 项）**
+**P1（5 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - B332 `IN_PROGRESS` — 测试覆盖补强（21 目录排查 主题D）
@@ -29,8 +28,7 @@
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 
-**P2（40 项）**
-**P2（46 项）**
+**P2（41 项）**
 
 - B244 — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -185,6 +183,5 @@
 | 2026-06-21-claude-acf188 | 2026-06-21 | Auth · 多省(山西)GATED | @claude | 山西账号（ADR G7）：preset-users.ts 加 SX 超管 + 山西机构用户（现 0 个 SX 账号，全 20 用户标 SC）。名单待用户定。启用前 RLS 隔离验证 SX token 不读 SC。Day-1 SOP §4，GATED 上线最后一步。 | P2 | PARTIAL | .claude/rules/multi-branch-day1-sop.md | server/src/config/preset-users.ts | preset-users.ts 加 SX 账号定义：1 超管 yangjie0621(branch_admin) + 11 经营单元 org_user(organization 取 SX.json units 11 单元)，全 branchCode=SX；密码全 tombstone(不可登录·无明文，真实凭据 GATED cutover 由 USER_PASSWORDS 注入)；getAllBranchCodes 自动含 SX。验证：preset-users.test.ts 8 passed(新增 SX 超管/11 org_user/organization 对齐/tombstone 格式断言)、typecheck PASS、governance 42/42。🔴 GATED cutover(RLS-on→SX 进 current/→sync VPS→发账号)+RLS 隔离验证(SX token 不读 SC) 待用户显式确认，本任务未做。 |
 | 2026-06-21-claude-f1a45c | 2026-06-21 | 工具与工作流 | @claude | cleanup-worktrees skill 与本项目兄弟目录约定 scope 错配：skill 仅纳管 .claude/worktrees/，而 .claude/rules/worktree-setup.md §A 规约 worktree 放兄弟目录 ../chexian-api-<task> → 已合并的兄弟 worktree（如 rls-closeout #710）不会被自动回收，需手动 git worktree remove。待调查：是 skill 缺'兄弟目录纳管'能力（fix 落跨仓 alongor666/alongor666-skills 的 cleanup-worktrees.sh in_scope()），还是 skill 可配置而本项目未配置纳管根。修复落点大概率在 skill 源仓（跨仓）。 | P3 | PROPOSED | .claude/rules/worktree-setup.md | N/A |  |
 | 2026-06-22-claude-03f6f0 | 2026-06-22 | 前端重构 follow-up | @claude | PerformanceAnalysisPanel 主组件(~900行)抽 usePerformancePanelController hook —— b331 拆分后续。codex 闸-1 判此项需先补行为测试再动(主组件 10+ 耦合 state/handler)，故 b331 本轮不做。 | P3 | PROPOSED | N/A | src/features/dashboard/PerformanceAnalysisPanel.tsx |  |
-| 2026-06-22-claude-15d8fd | 2026-06-22 | 数据架构 · 多省(山西)GATED前置 | @claude | **多省 RLS 查询层残留漏洞收口（G3/G4 closeout 拆出·GATED 前置）**：6ae4d7 维度表层省份化(#704)+typed 路由收口(#710)完成后，仍有两处查询层 RLS 未覆盖：(1) `server/src/routes/filters.ts` 的 `/api/filters/options`——位于 routes/ 非 routes/query/*，未经 permissionFilter 注入，RLS-on 后跨省可见筛选项(越权·数据行级)；(2) marketing-report/premium-report 的 SalesmanTeamMapping/SalesmanPlanFact 标签子查询——仅 team_name 命名泄漏(非数据行泄漏·低优)。BRANCH_RLS_ENABLED=false(默认)时无泄漏，仅 RLS-on(GATED)后暴露，故为 GATED cutover 前置。来源：6ae4d7 closeout note(eid 60f785e0)。 | P1 | PROPOSED | 开发文档/multi-branch/全国多省架构决策_2026-06-19.md | server/src/routes/filters.ts,server/src/sql/marketing-report.ts,server/src/sql/premium-report.ts |  |
 | 2026-06-22-claude-21c578 | 2026-06-22 | 前端重构 follow-up | @claude | 两个 distribution chart 去重：内部 DistributionChart(PerformancePanelDistributionChart) 与既有 performance/PerformanceDistributionChart.tsx option 已漂移，codex 闸-1 确认应另案统一。 | P3 | PROPOSED | N/A | src/features/dashboard/performance/PerformanceDistributionChart.tsx,src/features/dashboard/performance/PerformancePanelDistributionChart.tsx |  |
 | 2026-06-22-claude-47c2a5 | 2026-06-22 | Loop v2 自进化 | @claude | stale-scan 增补『PR-合并』信号：任务 note 引用的 PR #N 现已 MERGED → 高置信陈旧。当前 stale-scan 仅看完成语+git churn，漏掉『PR #640 已建…待合并后置 DONE』这类（实证：7a2849 已合并一周仍在前沿被推荐派单）。增 gh/git 核 PR 状态，merged 即标高置信。 | P2 | PROPOSED | N/A | scripts/loop/stale-scan.mjs |  |
