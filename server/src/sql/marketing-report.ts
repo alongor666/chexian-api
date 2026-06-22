@@ -253,6 +253,9 @@ function holidayDrillStepToWhere(step: HolidayDrillStep): string {
  * 假日营销自由维度下钻查询
  *
  * 统一指标：车险保费（万元）、商业险保费（万元）、车险出单人数、总业务员数、车险开单率、商业险开单率
+ *
+ * @param rlsBranchCode 分省 RLS 省份码（由路由层 resolveBranchRlsCode 双门控解析；
+ *   BRANCH_RLS_ENABLED=false 或单省无 branch_code 列时为 undefined → 不注入 → 字节安全）。
  */
 export function generateHolidayFreeDrilldownQuery(
   whereClause: string,
@@ -260,6 +263,7 @@ export function generateHolidayFreeDrilldownQuery(
   groupBy: HolidayDrillDimension,
   drillPath: HolidayDrillStep[],
   dateField: string = 'policy_date',
+  rlsBranchCode?: string,
 ): string {
   const holidayValues = buildHolidayDateValues(holidayDates);
   const groupConfig = getHolidayGroupByConfig(groupBy);
@@ -271,11 +275,18 @@ export function generateHolidayFreeDrilldownQuery(
 
   logger.debug('Generating holiday free drilldown SQL', { groupBy, drillPath: drillPath.length });
 
+  // 分省 RLS（ADR G4 GATED 多省）：team_mapping 直查 SalesmanTeamMapping，多省时按省过滤。
+  // flag off / 单省无列 → rlsBranchCode=undefined → 不注入 → 逐字节等价历史行为（字节安全）。
+  const mappingBranchAnd = rlsBranchCode
+    ? `AND tm.branch_code = '${escapeSqlValue(rlsBranchCode)}'`
+    : '';
+
   const teamJoinCte = needsTeamJoin
     ? `
     team_mapping AS (
       SELECT DISTINCT full_name AS salesman_name, team_name
-      FROM SalesmanTeamMapping
+      FROM SalesmanTeamMapping tm
+      WHERE 1=1 ${mappingBranchAnd}
     ),`
     : '';
 
