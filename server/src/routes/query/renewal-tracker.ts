@@ -23,6 +23,7 @@ import {
   sendWithEtag,
   createDomainMiddleware,
   withRouteCache,
+  buildOrgScopedPermissionWhere,
 } from './shared.js';
 import { buildInCondition } from '../../utils/sql-sanitizer.js';
 import {
@@ -139,10 +140,16 @@ router.get(
       if (cond) extraConditions.push(cond);
     }
 
-    // 权限过滤
-    const permissionFilter = req.permissionFilter;
-    if (permissionFilter && permissionFilter !== '1=1') {
-      extraConditions.push(`(${permissionFilter})`);
+    // 权限过滤（RLS 安全降级）：RenewalTrackerFact 只含 org_level_3，
+    // 不含 is_telemarketing / branch_code。直接追加 permissionFilter 对电销用户
+    // （'is_telemarketing = true'）或多分公司用户（含 branch_code）会触发
+    // DuckDB Binder Error（列不存在）→ 500。
+    // 平移 cube.ts 已验证的修法：buildOrgScopedPermissionWhere 只保留视图
+    // 真实存在的 org_level_3 段，对齐 repair.ts 既定模式。
+    // 四川单租户 permissionFilter='1=1' 短路，行为不变（字节安全）。
+    const orgScoped = buildOrgScopedPermissionWhere(req);
+    if (orgScoped !== '1=1') {
+      extraConditions.push(`(${orgScoped})`);
     }
 
     // 主查询
