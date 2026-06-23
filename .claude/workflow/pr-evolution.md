@@ -924,6 +924,14 @@
 - **GATED残留**：真实多省同步验证需cutover时做（SX进current/的硬前置=G5口径签字+RLS-on）。VPS端分省指纹端点（`/internal/data-fingerprint?branch=SC`）待`server/src`侧实现后，assertLocalNotStaleVsVps多省路径才能从skip升级为精确对比。
 ---
 
+## 2026-06-22 · 山西 G5 口径文档确认（loop-sx-caliber · uid 2026-06-22-claude-64ac9e）
+
+- **背景**：山西 G5 上线前置口径文档（口径对齐_山西.md）§1.1~§1.6 签字列均为 ⏳，但用户已于 2026-06-20 口头确认 6 口径全部与四川一致。本轮任务：把既定事实落进文档，按 append-only 维护协议更新签字列 + 状态 + 追加 §7。
+- **改动**：§1 各子节 18 处 ⏳ 更新为 `✅ 用户确认=四川一致 @ 2026-06-20`；顶部状态从 🟡 更新为 🟢（含机构精确清分对账非阻断说明）；追加 §7（7.1 确认来源/7.2 确认内容表/7.3 佐证/7.4 两处子集差异/7.5 唯一例外/7.6 对上线影响）。
+- **治理**：governance 44/44 全通过；纯文档改动，无代码/配置修改。
+- **重来更好**：① 口头确认事实与文档 ⏳ 占位之间有时差（2026-06-20 确认、2026-06-22 才落文档），理想是确认当日同步落文档。② §7.4 两处子集差异明确保持 🟡 未确认——忠实事实比声称完整更重要。
+- **复用价值**：「用户口头确认→文档 append-only 补签字」是标准流程——只更新 ⏳ 占位（签字流程 §3 允许），追加新节记录来源/佐证/例外，不修改已有内容。
+- needs_automation: false（文档签字是人工决策，不可自动化）
 **R21 · b332 收尾分组 PR-1：admin 纯逻辑提取 + 单测（scoping 纠偏后启动·提取路线复用·三源全过）**
 - **触发**：用户认可"一个会话做完 b332 + 先 scoping + 分组 PR"路径。scoping 复核 6 个剩余"纯组件"模块：3 个 `.ts` 全是 barrel（无逻辑），但 `.tsx` 内 useMemo/helper 含可提取纯逻辑——**纠正"6 个只能组件 smoke"的预判**：多数能走已三轮验证的"提取路线"（零 mock、最稳），只有 file 偏 IO、moto-cost(29 行)该降级。admin 作旗舰：ApiTokensPanel 有现成纯 helper、AccessControlPage 有 IP 解析 + 重复 toggle。
 - **成果（提取 + 纯增测试）**：新建 utils/tokenDisplay.ts(fmtDate/maskTokenId/isExpired)+utils/accessControl.ts(splitIpList/joinList/toggleSelection)；两组件删内联改 import，AccessControlPage 两处内联 toggle(原变量名 r/f 不同、语义同)统一改用 toggleSelection。21 单测覆盖边界(maskTokenId len≤6)、三态(isExpired revokedAt 优先)、正则分隔(中英文逗号/换行)、catch 分支(stub toLocaleString 抛错)、不可变/去重副作用。
