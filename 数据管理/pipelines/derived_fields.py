@@ -6,10 +6,40 @@ fail-fast 自校验：未命中前缀(NULL) / 喂错省 / 混省 / 源列缺失 
 产出错省码或缺列 parquet（多省行级安全 RLS 等值过滤的前置数据契约）。普通 prefix_map
 字段（如 compulsory_ncd_factor，允许未命中为 NULL）无 flag → 行为不变、不受影响。
 
+P3-A 抽 2 个 helper（resolve_declared_branch / apply_registry_derivations）供各域 ETL
+（claims_detail / base_converter / quote_etl / renewal / new_energy）统一复用，避免每处
+复写 6 行 fields.json 读取 + declared_branch 解析逻辑。
+
 单测见 tests/pipelines/test_derived_fields.py。
 """
+import json
 import os
 import sys
+from pathlib import Path
+
+
+def resolve_declared_branch(args):
+    """统一 --branch-code 与 BRANCH_CODE env 解析（CLI 优先 + 大小写归一化）。
+
+    Returns:
+        str | None: 归一化大写的省份代码（'SC'/'SX'），全空时 None。
+    """
+    return (getattr(args, 'branch_code', None) or os.environ.get('BRANCH_CODE') or '').strip().upper() or None
+
+
+def apply_registry_derivations(df, declared_branch):
+    """从 server/src/config/field-registry/fields.json 读 derived:true 字段并物化到 df。
+
+    各 ETL 入口复用本 helper，避免每处复写「读 registry + 过滤 derived」的 6 行逻辑。
+    declared_branch 同 apply_derived_fields() 语义：供 assertDeclaredBranch 字段核对
+    「声明省 == 派生省」；本域 df 无该字段 source 列时由 derived_fields 守卫处理
+    （guarded 强校验字段 fail-fast、非 guarded 字段 skip）。
+    """
+    registry_path = Path(__file__).resolve().parent.parent.parent / 'server/src/config/field-registry/fields.json'
+    with open(registry_path) as f:
+        registry = json.load(f)
+    derived_fields = [fd for fd in registry.get('fields', []) if fd.get('derived')]
+    return apply_derived_fields(df, derived_fields, declared_branch=declared_branch)
 
 
 def apply_derived_fields(df, derived_fields, declared_branch=None):

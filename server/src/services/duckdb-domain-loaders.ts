@@ -677,12 +677,18 @@ export async function loadQuoteConversion(
 
 /**
  * 加载赔案明细 Parquet → ClaimsDetail VIEW
+ *
+ * P3-A（codex 闸-2 P1 采纳）：用 `union_by_name=true` 与 PolicyFact 对齐 schema 漂移容忍，
+ * 因 P3-A 让 claims_detail ETL 加派生 `branch_code` 列后 CDC 旧分区无该列、新分区有该列 →
+ * 混读会因列数不匹配崩溃。schema 一致性由 ETL fields.json + governance #17（字段注册表
+ * 一致性闸）+ schema 契约保证，无需在 loader 层兜底强一致性。同 PolicyFact `union_by_name`
+ * 路径（duckdb-parquet-loader.ts）逻辑。
  */
 export async function loadClaimsDetail(db: DuckDBQueryable, parquetPath: string): Promise<void> {
   const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
   await db.query(`
     CREATE OR REPLACE VIEW ClaimsDetail AS
-    SELECT * FROM read_parquet('${safePath}')
+    SELECT * FROM read_parquet('${safePath}', union_by_name=true)
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsDetail');
   console.log(`[DuckDB] ClaimsDetail view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);

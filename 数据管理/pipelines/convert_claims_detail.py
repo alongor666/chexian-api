@@ -153,7 +153,9 @@ def parse_args():
     parser.add_argument('--policy-dir', default=None,
                         help='PolicyFact parquet 目录，用于 JOIN 获取 insurance_start_date（可选，回退到 policy_no 提取）')
     parser.add_argument('--branch-code', default=None,
-                        help='多省 0a：分公司编码（如 SX）。提供时注入 branch_code 常量列；缺省（SC 默认链路）不注入，保持四川产物字节安全。')
+                        help='多省 P3-A：分公司编码（如 SX）。操作员声明省份；与从 policy_no 前 3 位 '
+                             'prefix_map 派生的 branch_code 做 assertDeclaredBranch 核对（不匹配/混省/'
+                             'NULL/源列缺失 → fail-fast）。SC 默认链路不传则跳过核对，派生仍执行。')
     return parser.parse_args()
 
 
@@ -299,10 +301,13 @@ def main():
     if 'reserve_amount' in df.columns:
         print(f"   立案金额: 总计 {df['reserve_amount'].sum()/1e8:.2f} 亿, 均值 {df['reserve_amount'].mean():,.0f} 元")
 
-    # ── 多省 0a：branch_code 常量列注入（仅 --branch-code 提供时；SC 默认链路不传 → 不注入，四川产物字节安全）──
-    if args.branch_code:
-        df['branch_code'] = args.branch_code
-        print(f"   🏢 注入 branch_code 常量列 = '{args.branch_code}'（{len(df):,} 行）")
+    # ── 多省 P3-A：branch_code 从 policy_no 前 3 位 prefix_map 派生（与 premium #762 同语义；
+    #     替代旧版"常量列注入"。--branch-code 转为 assertDeclaredBranch 操作员声明：
+    #     SC 默认链路（不传）仍执行派生 + strictNonNull/未知前缀 fail-fast；非 SC 链路（传 SX）
+    #     额外核对「声明省 == 派生省」，防喂错省/混省/NULL 省码致 RLS 漏行。）──
+    from pipelines.derived_fields import apply_registry_derivations, resolve_declared_branch
+    declared_branch = resolve_declared_branch(args)
+    df = apply_registry_derivations(df, declared_branch)
 
     # ── 输出 Parquet ──
     output_file.parent.mkdir(parents=True, exist_ok=True)

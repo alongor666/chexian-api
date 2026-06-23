@@ -92,20 +92,23 @@ describe('fetch-local-metrics SQL_TEMPLATES', () => {
     expect(sql).toContain('accident_time IS NOT NULL');
   });
 
-  it('读法镜像生产的不对称：policy 带 union_by_name=true（混合分片），claims 裸读（对齐 duckdb-domain-loaders.ts），codex PR #513 第2/3轮', () => {
+  it('读法镜像生产：policy 与 claims 均带 union_by_name=true（P3-A 后两个 loader 对齐 schema 漂移容忍）', () => {
+    // P3-A（codex 闸-2 P1 采纳）：claims_detail ETL 加派生 branch_code 列后，CDC 旧分区无、
+    // 新分区有，loader 升级为 union_by_name=true 容忍混分区 schema 漂移。schema 一致性由
+    // ETL fields.json + governance #17 + schema 契约保证，loader 层不再兜底强一致性。
+    // 历史背景（PR #513 第2/3轮）：claims 曾用裸读金丝雀防"prepublish 通过 + 生产首次加载崩"，
+    // 但 schema 演进无法靠 loader 层兜底；金丝雀已随 P3-A 同步升级到对称镜像生产 union_by_name。
     const ctx = { policyGlob: '/x/policy/*.parquet', claimsGlob: '/x/claims/claims_*.parquet', monthStart: '2026-06-01' };
-    const policySources = ['policy_trend.monthly_premium', 'policy_trend.monthly_policy_count'];
-    const claimsSources = ['claims_detail.monthly_claim_amount', 'claims_detail.monthly_claim_count'];
-    for (const source of policySources) {
+    const allSources = [
+      'policy_trend.monthly_premium',
+      'policy_trend.monthly_policy_count',
+      'claims_detail.monthly_claim_amount',
+      'claims_detail.monthly_claim_count',
+    ];
+    for (const source of allSources) {
       const sql = SQL_TEMPLATES[source](ctx);
-      // policy/current 真有旧静态分片+新周更分片，缺 union_by_name 会误阻断 → 对齐 duckdb-parquet-loader.ts
-      expect(sql, `${source} 应带 union_by_name`).toContain('union_by_name=true');
-    }
-    for (const source of claimsSources) {
-      const sql = SQL_TEMPLATES[source](ctx);
-      // 闸门是金丝雀：若比生产 claims 裸读更宽容，会把"生产首次加载会崩"的场景放行
-      expect(sql, `${source} 不应带 union_by_name（镜像生产裸读）`).not.toContain('union_by_name');
-      expect(sql, `${source} 应为裸 read_parquet('<glob>')`).toMatch(/read_parquet\('[^']+'\)/);
+      // policy/current 真有旧静态分片+新周更分片；claims_* P3-A 后旧无/新有 branch_code → 双双需要 union_by_name
+      expect(sql, `${source} 应带 union_by_name（镜像生产 loader 升级后行为）`).toContain('union_by_name=true');
     }
   });
 
