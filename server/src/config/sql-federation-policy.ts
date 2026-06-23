@@ -136,8 +136,9 @@ export function isFederationEnabled(): boolean {
 /**
  * 部署级分公司编码（CHAR(2)：'SC'=四川 / 'SX'=山西），派生视图视图层补 branch_code 常量列时使用。
  *
- * 与 0C 多分公司字段注册表同源：fields.json branch_code 派生字段 `derivation.envVar='BRANCH_CODE'`，
- * defaultValue='SC'。直读 `process.env`（仿 isFederationEnabled，避开 env.ts 加载期快照，PM2 reload 即时生效）。
+ * 注：此为「部署级运行时」分公司编码（联邦视图补 branch_code 常量列用），与 fields.json 的 ETL 派生
+ * 是两个口径——P1 起 fields.json branch_code 改为 policy_no 前 3 位 prefix_map 派生（非 envVar 常量）。
+ * 直读 `process.env`（仿 isFederationEnabled，避开 env.ts 加载期快照，PM2 reload 即时生效）。
  * 严格白名单校验 `^[A-Z]{2}$`：非法 / 缺省一律回退 'SC'。返回值仅用于受控视图 DDL 内插，
  * 已被该正则约束为两位大写字母，无 SQL 注入面。
  */

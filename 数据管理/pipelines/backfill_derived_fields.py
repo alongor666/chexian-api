@@ -10,16 +10,15 @@
 
 支持的 derivation.type：
   - prefix_map: 按源列前缀 N 位映射到系数
-  - constant: 写入常量（envVar 优先于 defaultValue；多分公司 branch_code 用）
+  - constant: 写入常量（envVar 优先于 defaultValue）
+  注：强校验派生字段（branch_code）由 transform.py ETL 物化 + 自校验，本通用 backfill 一律拒绝
 
 用法：
   python3 数据管理/pipelines/backfill_derived_fields.py           # 默认 policy/current
   python3 数据管理/pipelines/backfill_derived_fields.py --force   # 强制覆盖已存在的派生列
   python3 数据管理/pipelines/backfill_derived_fields.py --dry-run # 只打印计划不写入
 
-  # 多分公司 branch_code backfill（一次性 0C 收尾）：
-  BRANCH_CODE=SC python3 数据管理/pipelines/backfill_derived_fields.py \\
-      --path 数据管理/warehouse --recursive
+  # 注：branch_code（强校验）由 transform.py 在 ETL 物化 + 自校验，本脚本拒绝回填强校验字段。
 
   # 指定单一目录（如山西数据落地后只补一类）：
   python3 数据管理/pipelines/backfill_derived_fields.py --path 数据管理/warehouse/dim/salesman
@@ -57,6 +56,15 @@ def apply_derivation(df: pd.DataFrame, field: dict, force: bool) -> tuple[pd.Dat
     fid = field["id"]
     rule = field.get("derivation", {})
     rtype = rule.get("type")
+
+    # 强校验派生字段（branch_code：strictNonNull / assertDeclaredBranch）由 transform.py 在 ETL
+    # 物化时做完整 fail-fast 自校验（喂错省/混省/NULL/源列缺失）。通用 backfill 无声明省上下文、
+    # 且写回层按「是否新增列」判定（codex 闸-2 r2/r3），无法完整复刻该契约 → 一律拒绝回填强校验
+    # 字段，避免静默绕过契约（RLS 等值过滤漏行）。域感知强校验回填（含混省检测 + 域白名单）留 Phase 4。
+    if rule.get("strictNonNull") or rule.get("assertDeclaredBranch"):
+        # 一律 skip（不处理/不写回），交 transform.py（ETL 物化 + 完整自校验）/ Phase 4 域感知回填。
+        # 用 skip 而非 sys.exit：避免按全量字段跑时一遇 branch_code 就杀掉整轮、连带丢失其它字段回填。
+        return df, f"skip({fid}: 强校验派生字段，通用 backfill 不支持，由 transform.py 物化 / Phase 4 域感知回填)"
 
     if fid in df.columns and not force:
         nonnull = df[fid].notna().sum()

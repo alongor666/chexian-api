@@ -1023,3 +1023,19 @@
   ④ verifier 抓出「既存 golden-baseline 基线」事实偏差——我误把 worktree（无 untracked `.planning`）当全貌；教训：**gitignored/untracked 产物存在性必在主仓核实**，不凭 worktree ls 下结论。
   - needs_automation: false（Phase 0 零代码决策；oracle 已是 duckdb 确定性脚本）
 - **下一轮**：P1 premium 域派生化——`fields.json` branch_code `constant→prefix_map`（`source:policy_no`/`prefixLength:3`/`defaultValue:null`）+ `field-registry/generate.mjs` codegen + `transform.py` 自校验断言（**域限定 branch_code，勿泛化**，§10.9）+ 移除 `defaultValue`；oracle = governance #17 + duckdb 派生分布逐行相等 + 负向 SystemExit（SC policy_no 传 `--branch-code SX` 应 exit 1）。
+
+---
+
+**R27 · 省份派生化 P1 — premium branch_code 派生化 + ETL 自校验（codex 闸-2 五轮收敛）· 零 P0**
+- **触发**：bc36e8 P1（接 Phase 0/#761）。premium 域 `branch_code` 从 ETL 常量标签改为 `policy_no` 前 3 位 prefix_map 派生 + ETL 自校验 fail-fast。爆炸半径=小（不触 RLS/loader）。
+- **成果**：① `fields.json` branch_code `constant`→`prefix_map`（source:policy_no/prefixLength:3/mapping{610:SC,618:SX}/`defaultValue:null`/`strictNonNull`/`assertDeclaredBranch`）。② 抽 `数据管理/pipelines/derived_fields.py`（`apply_derived_fields` + `assert_guarded_prefix_field`，便于单测，避开 transform.py 顶层 argparse）。③ transform.py 调函数 + `declared_branch=(args.branch_code or env BRANCH_CODE).strip().upper()`。④ backfill **skip 强校验字段**（交 transform.py/Phase4）。⑤ sql-federation-policy.ts 注释纠偏。codegen 透明（mapping/validator/etl_fields 未变）。
+- **字节安全 oracle（强于 API 抽样）**：新函数在**真实全量 parquet** 重派生 vs 现状 `branch_code`——SC 2,600,421 + SX 1,830,603 行 **byte_mismatch=0**。+ verify:full **3946 vitest** + 11 Python 单测 + governance 44/44。**P2（SC 字节安全）已并入本任务 oracle**。
+- **双闸**：codex 闸-1（设计）无 P0 + 2 P1（源列缺失须 exit / declared=args‖env）+ 3 P2 全采纳；evidence-verifier **CONFIRMED**（独立复现字节安全 + 反向探针）+ 1 P2（declared 大小写，已归一化）；codex 闸-2 **五轮**收敛 1 P1（backfill 契约一致性）。
+- **重来更好/复用价值**：
+  ① **codex 闸-2 backfill 耗 5 轮 = 结构错配信号**：backfill 多层（apply_derivation early-skip → backfill_parquet 写回门）每层假设「缺则补/存则幂等 skip」，逐层 bolt strict-guard 无穷尽。**正解不是 bolt 而是 scope 让位**——通用 backfill skip 强校验字段、域感知回填留 Phase 4。早识别「逐层冒新 P1」是 scope 错配而非缺陷，可省数轮（呼应「修一处≠修一类，多轮冒新问题是结构信号」）。
+  ② **抽函数到独立模块**（非 transform.py 内）才能 pytest import（顶层 argparse 会炸，codex 闸-1 提示）——大脚本的可测逻辑应下沉小模块。
+  ③ **字节安全用「新函数在真实全量数据上重派生 vs 现状列」**比 golden-baseline API 抽样强：全总体、不需 E2E_PASSWORD、直证部署代码路径产出一致。
+  ④ **registry flag 域限定**（strictNonNull/assertDeclaredBranch 只挂 branch_code）使自校验不误伤允许 NULL 的 compulsory_ncd_factor——强校验语义声明式挂字段，非硬编码 fid。
+  - needs_automation: true → Phase 4 governance「单文件不混省」闸 + 域感知 backfill（backfill 现 skip 强校验字段，Phase 4 须补回填能力）
+  - expires: 2026-08-31
+- **下一轮**：P3 全域差异化（claims-hardfail / quotes-warn / new_energy-VIN-JOIN 独立任务 / repair-org_level_3），复用 `apply_derived_fields` + `assert_guarded_prefix_field`。
