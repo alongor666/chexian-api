@@ -1160,3 +1160,18 @@
 - **needs_automation: true** — ① governance 闸集成 `scripts/oracle_*_byte_safety.py` 全量跑（4 oracle 已立项，R31/R32/R33 三次提及）；② checkSingleProvincePerFile 加合成 fixture 回归测试（脱离数据环境可测）；③ evidence-loop checklist 加「闸依赖输入在目标运行环境是否存在/会否假安全」+「任务书计数/位置断言被闸-1 推翻」两条自检。
 - **expires: 2026-09-30**
 - **下一轮**：P5（依赖 Phase 1-4，须本 P4 合并后开工）——文档收口 + ADR + 新增省份落点 checklist + fields.json schema 演进收尾。Phase B（子目录隔离 current/<省>/，退役 #753 前缀，高爆炸半径）动工前**必须问用户确认**。R33 复用资产：① 「数据状态闸→readiness 层 vs 代码闸→governance 层」放置规则；② `resolveBranchFromParquet` 三态模式作文件名→数据轴迁移模板（Phase B 直接复用）；③ 字节安全 oracle 第 4 次验证为通用模板；④ codex 闸-1 推翻任务书实现位置断言（44→45）= 「任务书 ≠ 既定事实，闸-1 先质疑」的实证。
+
+---
+
+**R34 · 省份派生化 Phase 5 — 文档收口 + ADR 过渡定性 + RLS/loader 核对 + 新增省份落点 checklist（Phase A 检测层全完 · 零代码逻辑 · codex 双闸抓 6 处 overclaim）**
+
+- **任务**：backlog `2026-06-23-claude-bc36e8`（Phase A 全 DONE）· 分支 `claude/province-p5`（rebase origin/main 52da8f40，含 #770/#771）· 三文档（新建 `新增省份落点checklist_2026-06-23.md` + ADR `全国多省架构决策_2026-06-19.md` §11 entry + 规划 `省份派生化与子目录方案_2026-06-23.md` §12）· **零代码逻辑改动**（纯文档 + 只读核对）。
+- **成果（铁证）**：① RLS/loader 核对——duckdb 逐域实测 premium parquet 含 branch_code 列（SC=2,600,421），claims_detail + 6 派生域 latest.parquet 缺列（旧产物）；代码核实 branch_code 列供给**四类机制**（PolicyFact/ClaimsDetail `union_by_name` 无补列须物理列 · 4 federation 视图 `selectUnionWithBranchCode` 兜底 · 维度/达成缓存 gated 多源）+ RLS-on 硬前置 = `env.ts:127` Phase 4 backfill 物理补列 + typed 路由闭合**四档**（直接 branch / gated 下推 / org 降级 / 面外）。② governance 44/44 双绿（改动前后）。③ rebase 无冲突（#770 改 §10.9 / 我改 §12，不同区域）。
+- **对抗双闸（codex gpt-5.5 CLI 亲跑 · §2 降级分层②）**：闸-1 抓 0 P0 + **3 P1**（PolicyFact/ClaimsDetail 无兜底须物理列 / typed 路由 org 降级非 branch / "双保险"非全域）+ 2 P2，全采纳重写 §3 为分层。闸-2 抓 0 P0 + **1 P1**（漏第四类维度/达成缓存 gated）+ 2 P2（repair 误归 org-only 实有 `resolveBranchRlsCode` gated 下推 / 证据行号 `getAllBranchCodes@393`、stress-test:182、中文名 fallback `${code}分公司`）全采纳。闸-2 r2 复审无 P0/P1，仅 1 P2 文案残留（"三档"→"四档"）已修。evidence-verifier fresh-context **CONFIRMED** 主体（独立 duckdb 复跑 premium=2,600,421 / claims+5 域缺列）+ 抓 3 行号偏差（与闸-2 重合）。
+- **三问复盘**：
+  ① **重来怎样更好**：(a) 🔴 **cwd 漂移事故**——session 锚 worktree 但用**主目录绝对路径** Write，3 文档改动漏写**主目录**（违"主目录只读"红线），靠 cp 迁移 + `git restore` 才纠正。根因：worktree-setup §A「cwd 漂移根治」早警告，但我没在每次 Write 前确认路径前缀以 worktree 开头。下次锚 worktree 后 Write/Edit 路径一律以 worktree 绝对前缀开头（本次因当前已在 `.claude/worktrees/` 内、`EnterWorktree({path})` 落点约束与"兄弟目录"纪律冲突，选了"当前 worktree 直接建分支"——但仍踩绝对路径漏写）。(b) 🔴 **RLS 核对初稿连环 overclaim**——只读 `selectUnionWithBranchCode` 一条 loader 路径就外推"全域双保险/RLS 不漏行"，codex 闸-1 发现 PolicyFact/ClaimsDetail `union_by_name` 无兜底须物理列、闸-2 又发现漏第四类 + repair 误归。根因：RLS 列供给类断言只核一条 loader 路径就外推全域。下次此类断言必须**逐消费关系核各自 loader**（PolicyFact/ClaimsDetail/federation/维度表四条独立路径）。
+  ② **复用价值**：(a) checklist 两类落点（派生映射 vs 运行时白名单）+ RLS 列供给四类 + 路由闭合四档分层，是接第三省 / Phase B 复用资产。(b) codex 双闸对**文档类 overclaim** 的拦截力实证——文档任务也必须实读代码核每条断言，"看起来合理"不够；本轮 6 处 overclaim 全靠双闸实读代码抓出，非自查发现。
+  ③ **如何更高质量自动化**：(a) 缺「文档断言行号引用有效性」闸——checklist 引用 N 个 `file.ts:NNN`，行号漂移后误导（本轮 verifier/闸-2 抓到 `getSupportedBranchCodes`/stress-test:181 等 3 处偏差）；可加 governance 闸扫文档内 `file:line` 引用是否仍命中符号。(b) **cwd 漂移**：worktree 锚定下 Write 主目录路径应有 PreToolUse hook 拦截（检查 Write/Edit path 是否在当前会话锚定 worktree 内，越界即 warn/block）——本轮事故是该 hook 缺失的实证。
+- **needs_automation: true** — ① 文档 `file:line` 引用有效性 governance 闸（行号漂移检测）；② worktree 锚定下 Write/Edit 路径越界拦截 PreToolUse hook（防 cwd 漂移漏写主目录）。
+- **expires: 2026-09-30**
+- **下一轮**：Phase A 检测层**全部 DONE**（Phase 0 + P1/P3-A~E + P4 + P5）→ bc36e8 DONE。**Phase B（隔离层 · current/<省>/ 子目录 · 高爆炸半径）动工前必须问用户确认**（规划 §8 开放问题 2 + §10.9 (c)「文档预留、不立即开发第三省」）。follow-up：renewal-tracker/cube branch_code 下推（现 org 降级）+ `2026-06-23-claude-f77f8a` 跨省同 VIN 冲突，均山西 GATED 上线前评估。
