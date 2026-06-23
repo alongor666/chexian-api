@@ -135,18 +135,10 @@ describe('fileBelongsToBranch — 文件是否属于指定省份', () => {
   });
 });
 
-describe('branchFilePatterns — 省份文件模式（用于 protect/exclude）', () => {
-  it('SC 返回两个模式：日期数字裸名模式 + SC_ 前缀模式', () => {
+describe('branchFilePatterns — 省份文件模式（辅助函数）', () => {
+  it('SC 返回含 SC_ 前缀模式', () => {
     const pats = branchFilePatterns('SC');
     expect(pats).toContain('SC_*.parquet');
-    expect(pats).toContain('[0-9]*.parquet');
-    expect(pats).toHaveLength(2);
-  });
-
-  it('SC 裸名模式以 [0-9] 开头（日期格式，精确覆盖现有生产裸名分片）', () => {
-    const pats = branchFilePatterns('SC');
-    const barePat = pats.find(p => p.startsWith('[0-9]'));
-    expect(barePat).toBeDefined();
   });
 
   it('SX 返回单条 SX_*.parquet 模式', () => {
@@ -158,8 +150,8 @@ describe('branchFilePatterns — 省份文件模式（用于 protect/exclude）'
   });
 });
 
-// ------- 站点 1：buildRsyncBranchFilterArgs（P0-1/P0-2 修复）-------
-describe('buildRsyncBranchFilterArgs — rsync 分省保护 filter + sender exclude 参数生成', () => {
+// ------- 站点 1：buildRsyncBranchFilterArgs（P0 第 2 轮根因修复）-------
+describe('buildRsyncBranchFilterArgs — rsync 分省保护（前缀轴策略）', () => {
   it('单省短路：branchCode=null 返回空数组（字节安全：历史行为等价）', () => {
     expect(buildRsyncBranchFilterArgs(null)).toEqual([]);
   });
@@ -167,54 +159,66 @@ describe('buildRsyncBranchFilterArgs — rsync 分省保护 filter + sender excl
   it('单省短路：branchCode=null 不生成任何 filter 或 exclude 参数', () => {
     const args = buildRsyncBranchFilterArgs(null);
     expect(args).toEqual([]);
+    expect(args).not.toContain('--filter');
+    expect(args).not.toContain('--exclude');
   });
 
-  it('多省 SC 模式：包含保护 SX 的 filter（P0-2：同时含 --exclude）', () => {
-    const args = buildRsyncBranchFilterArgs('SC', ['SC', 'SX']);
-    // receiver protect
+  // ★ P0 根因修复核心：同步 SC 时，用 [A-Z][A-Z]_*.parquet 统一覆盖所有带前缀省
+  it('SC 模式：receiver protect 用 [A-Z][A-Z]_*.parquet（覆盖 SX_/GD_/ 等所有带前缀省）', () => {
+    const args = buildRsyncBranchFilterArgs('SC');
+    // 必须有 --filter 'P [A-Z][A-Z]_*.parquet'
     expect(args).toContain('--filter');
-    expect(args).toContain('P SX_*.parquet');
-    // P0-2 sender exclude
+    expect(args).toContain('P [A-Z][A-Z]_*.parquet');
+    // 必须有 --exclude '[A-Z][A-Z]_*.parquet'（sender 侧不上传异省）
     expect(args).toContain('--exclude');
-    expect(args).toContain('SX_*.parquet');
-    // 不应包含 SX 自身前缀保护 SX（那是自己）
-    expect(args.some((a, i) => a === '--filter' && args[i+1] && args[i+1].includes('SX_'))).toBe(true);
+    expect(args).toContain('[A-Z][A-Z]_*.parquet');
   });
 
-  it('P0-1 核心：多省 SX 模式必须保护裸名 SC 文件（不能只有 P SC_*.parquet）', () => {
-    const args = buildRsyncBranchFilterArgs('SX', ['SC', 'SX']);
-    // 必须有 --filter 规则
-    expect(args).toContain('--filter');
-    // 必须有多条规则保护裸名（SC 的 branchFilePatterns 包含裸名模式，不止 SC_*.parquet）
-    const filterRules = args.filter(a => a.startsWith('P '));
-    expect(filterRules.length).toBeGreaterThan(1); // 不只是 'P SC_*.parquet' 一条
-    // SC_*.parquet 也应该在内（未来带前缀的 SC 文件）
-    expect(filterRules).toContain('P SC_*.parquet');
+  it('SC 模式：只有 2 个参数对（1 条 protect + 1 条 exclude，简洁精准）', () => {
+    const args = buildRsyncBranchFilterArgs('SC');
+    expect(args).toHaveLength(4); // [--filter, P ..., --exclude, ...]
   });
 
-  it('P0-2：多省 SX 模式必须有 --exclude 阻止上传异省文件', () => {
-    const args = buildRsyncBranchFilterArgs('SX', ['SC', 'SX']);
-    expect(args).toContain('--exclude');
-    // SC 的裸名模式也应该被 exclude
-    const excludeRules = [];
-    for (let i = 0; i < args.length - 1; i++) {
-      if (args[i] === '--exclude') excludeRules.push(args[i+1]);
-    }
-    expect(excludeRules.length).toBeGreaterThan(0);
-    expect(excludeRules).toContain('SC_*.parquet');
+  it('SC 模式：不包含 [0-9]*.parquet 模式（旧枚举方式已废弃）', () => {
+    const args = buildRsyncBranchFilterArgs('SC');
+    expect(args).not.toContain('[0-9]*.parquet');
   });
 
-  it('三省模式 SC：包含 SX 和 GD 的保护规则（不含 SC 的）', () => {
-    const args = buildRsyncBranchFilterArgs('SC', ['SC', 'SX', 'GD']);
-    const filterRules = args.filter(a => a.startsWith('P '));
-    expect(filterRules).toContain('P SX_*.parquet');
-    expect(filterRules).toContain('P GD_*.parquet');
-    // 不保护 SC（SC 是本次同步目标，该删的就删）
-    expect(filterRules).not.toContain('P SC_*.parquet');
+  // ★ SX 模式：protect-all + risk-open（receiver）+ include-first（sender）
+  it('SX 模式：receiver 侧含 P *.parquet（保护所有 parquet）和 R SX_*.parquet（放开 SX_）', () => {
+    const args = buildRsyncBranchFilterArgs('SX');
+    // R 必须在 P 前（首匹配）
+    const rIdx = args.indexOf('R SX_*.parquet');
+    const pIdx = args.indexOf('P *.parquet');
+    expect(rIdx).toBeGreaterThanOrEqual(0);
+    expect(pIdx).toBeGreaterThanOrEqual(0);
+    expect(rIdx).toBeLessThan(pIdx); // R 先匹配，P 后兜底
+    // 包含 --filter 标志
+    const filterFlags = args.filter((a, i) => a === '--filter' && (args[i+1] === 'R SX_*.parquet' || args[i+1] === 'P *.parquet'));
+    expect(filterFlags.length).toBe(2);
   });
 
-  it('单省时 knownBranches 只含目标省：返回空数组（无异省可保护）', () => {
-    expect(buildRsyncBranchFilterArgs('SC', ['SC'])).toEqual([]);
+  it('SX 模式：sender 侧含 --include SX_*.parquet 在前，--exclude *.parquet 在后', () => {
+    const args = buildRsyncBranchFilterArgs('SX');
+    const includeIdx = args.indexOf('SX_*.parquet');
+    const excludeIdx = args.lastIndexOf('*.parquet');
+    // --include 'SX_*.parquet' 必须在 --exclude '*.parquet' 前
+    expect(includeIdx).toBeGreaterThanOrEqual(0);
+    expect(excludeIdx).toBeGreaterThan(includeIdx);
+    // 对应 flag 是 --include 和 --exclude
+    expect(args[includeIdx - 1]).toBe('--include');
+    expect(args[excludeIdx - 1]).toBe('--exclude');
+  });
+
+  it('SX 模式：包含 4 个参数对（R filter + P filter + include + exclude）', () => {
+    const args = buildRsyncBranchFilterArgs('SX');
+    expect(args).toHaveLength(8); // [--filter R SX_, --filter P *, --include SX_, --exclude *]
+  });
+
+  it('knownBranches 参数兼容（新实现已忽略该参数，旧测试调用不报错）', () => {
+    // 向后兼容：第二参数 _knownBranches 已废弃，传入任意值不报错
+    expect(() => buildRsyncBranchFilterArgs('SC', ['SC', 'SX', 'GD'])).not.toThrow();
+    expect(() => buildRsyncBranchFilterArgs('SX', ['SC', 'SX'])).not.toThrow();
   });
 });
 
@@ -255,6 +259,16 @@ describe('getSyncBranchCode — SYNC_VPS_BRANCH_CODE env 读取', () => {
   it('SYNC_VPS_BRANCH_CODE 格式不合法（非 2 位字母）→ 抛错', () => {
     process.env.SYNC_VPS_BRANCH_CODE = 'SICHUAN';
     expect(() => getSyncBranchCode()).toThrow('SYNC_VPS_BRANCH_CODE');
+  });
+
+  it('SYNC_VPS_BRANCH_CODE=GD（不支持的省份）→ 抛错拒绝（明确白名单）', () => {
+    process.env.SYNC_VPS_BRANCH_CODE = 'GD';
+    expect(() => getSyncBranchCode()).toThrow('不支持的省份编码');
+  });
+
+  it('SYNC_VPS_BRANCH_CODE=SX → 返回 SX（已支持）', () => {
+    process.env.SYNC_VPS_BRANCH_CODE = 'SX';
+    expect(getSyncBranchCode()).toBe('SX');
   });
 });
 
@@ -404,40 +418,87 @@ describe('assertLocalNotStaleVsVps — P1 修复：SC 不再跳过新鲜度闸 +
 });
 
 // ============================================================
-// 真实本地 rsync --delete 验证（P0-1/P0-2 强化测试）
+// 真实本地 rsync --delete 验证（P0 第 2 轮根因修复核心测试）
 // 使用临时目录跑真实 rsync，不连生产 VPS
+// ⚠ rsync 不可用时 skipIf 跳过，日志中会有明显提示
 // ============================================================
-describe('真实 rsync --delete 验证 — 裸名 SC 保护 + sender 隔离', () => {
+describe('真实 rsync --delete 验证 — 裸名 SC 保护（数字/非数字开头）+ sender 隔离', () => {
   // 检查 rsync 是否可用
   const rsyncAvailable = (() => {
     try { execSync('rsync --version', { stdio: 'ignore' }); return true; } catch { return false; }
   })();
 
-  it.skipIf(!rsyncAvailable)('SX 模式：VPS 上的裸名 SC 文件不被 --delete 删除（P0-1 验证）', () => {
-    // 建两个临时目录：local（sender）和 remote（receiver，模拟 VPS）
+  if (!rsyncAvailable) {
+    console.warn('[SKIP] rsync 不可用，跳过真实 rsync 验证组（需本机安装 rsync）');
+  }
+
+  it.skipIf(!rsyncAvailable)('SX 模式：VPS 上的数字开头裸名 SC 文件不被 --delete 删除（P0-1 旧场景）', () => {
     const srcDir = mkdtempSync(join(tmpdir(), 'sync-vps-src-'));
     const dstDir = mkdtempSync(join(tmpdir(), 'sync-vps-dst-'));
 
     // local：只有 SX 省的文件
     writeFileSync(join(srcDir, 'SX_20260101_签单.parquet'), 'sx-data');
 
-    // remote/VPS：有 SX 文件 + 裸名 SC 文件（生产上的四川历史分片）
+    // remote/VPS：有 SX 文件 + 数字开头裸名 SC 文件（生产上的四川历史分片）
     writeFileSync(join(dstDir, 'SX_20260101_签单.parquet'), 'sx-data-old');
     writeFileSync(join(dstDir, '20210101-20231231_01_签单清单_定稿.parquet'), 'sc-bare-data');
     writeFileSync(join(dstDir, '20240101-20261231_02_签单清单_定稿.parquet'), 'sc-bare-data-2');
 
-    // 构建 SX 模式的 filter 参数
-    const filterArgs = buildRsyncBranchFilterArgs('SX', ['SC', 'SX']);
-
-    // 跑真实本地 rsync --delete（src→dst，模拟 VPS 同步）
+    const filterArgs = buildRsyncBranchFilterArgs('SX');
     const rsyncArgs = ['-a', '--delete', ...filterArgs, `${srcDir}/`, `${dstDir}/`];
     execSync(`rsync ${rsyncArgs.map(a => JSON.stringify(a)).join(' ')}`);
 
-    // 验证：裸名 SC 文件不被删除（P0-1 核心验证）
+    // 验证：数字开头裸名 SC 文件不被删除
     expect(existsSync(join(dstDir, '20210101-20231231_01_签单清单_定稿.parquet'))).toBe(true);
     expect(existsSync(join(dstDir, '20240101-20261231_02_签单清单_定稿.parquet'))).toBe(true);
+    expect(existsSync(join(dstDir, 'SX_20260101_签单.parquet'))).toBe(true);
+  });
 
-    // 验证：SX 文件被正常同步
+  // ★ P0 第 2 轮根因：非数字开头裸名 SC 文件（每日数据_、01_签单清单_ 等）
+  it.skipIf(!rsyncAvailable)('SX 模式：VPS 上的非数字开头裸名 SC 文件不被 --delete 删除（P0 残留修复）', () => {
+    const srcDir = mkdtempSync(join(tmpdir(), 'sync-vps-src-'));
+    const dstDir = mkdtempSync(join(tmpdir(), 'sync-vps-dst-'));
+
+    // local：只有 SX 省的文件
+    writeFileSync(join(srcDir, 'SX_20260101_签单.parquet'), 'sx-data');
+
+    // remote/VPS：有 SX 文件 + 非数字开头裸名 SC 文件（这是 P0 第 2 轮残留场景）
+    writeFileSync(join(dstDir, 'SX_20260101_签单.parquet'), 'sx-data-old');
+    // 非数字开头裸名 SC 文件：旧实现 [0-9]* 无法覆盖这类文件！
+    writeFileSync(join(dstDir, '每日数据_20260101.parquet'), 'sc-daily-data');
+    writeFileSync(join(dstDir, '01_签单清单_定稿.parquet'), 'sc-list-data');
+
+    const filterArgs = buildRsyncBranchFilterArgs('SX');
+    console.log('[test] SX 模式 filterArgs:', filterArgs); // 便于调试
+    const rsyncArgs = ['-a', '--delete', ...filterArgs, `${srcDir}/`, `${dstDir}/`];
+    execSync(`rsync ${rsyncArgs.map(a => JSON.stringify(a)).join(' ')}`);
+
+    // ★ 关键断言（P0 第 2 轮修复验证）：非数字开头裸名 SC 文件不被 --delete 删除
+    expect(existsSync(join(dstDir, '每日数据_20260101.parquet'))).toBe(true);
+    expect(existsSync(join(dstDir, '01_签单清单_定稿.parquet'))).toBe(true);
+    // SX 文件正常同步
+    expect(existsSync(join(dstDir, 'SX_20260101_签单.parquet'))).toBe(true);
+  });
+
+  // ★ P0 第 2 轮：SX 模式 sender 侧，非数字开头裸名 SC 文件不被上传
+  it.skipIf(!rsyncAvailable)('SX 模式 sender：本地混有非数字开头裸名 SC，不被上传（P0 残留 sender 侧修复）', () => {
+    const srcDir = mkdtempSync(join(tmpdir(), 'sync-vps-src-'));
+    const dstDir = mkdtempSync(join(tmpdir(), 'sync-vps-dst-'));
+
+    // local（SX 模式，但混有非数字开头裸名 SC 文件）
+    writeFileSync(join(srcDir, 'SX_20260101_签单.parquet'), 'sx-data');
+    writeFileSync(join(srcDir, '每日数据_20260101.parquet'), 'sc-daily-local'); // 非数字开头裸名 SC
+    writeFileSync(join(srcDir, '01_签单清单_定稿.parquet'), 'sc-list-local');  // 另一种裸名 SC
+
+    // remote/VPS 初始为空
+    const filterArgs = buildRsyncBranchFilterArgs('SX');
+    const rsyncArgs = ['-a', '--delete', ...filterArgs, `${srcDir}/`, `${dstDir}/`];
+    execSync(`rsync ${rsyncArgs.map(a => JSON.stringify(a)).join(' ')}`);
+
+    // ★ 关键断言：非数字开头裸名 SC 文件不被上传（sender exclude *.parquet 自动覆盖）
+    expect(existsSync(join(dstDir, '每日数据_20260101.parquet'))).toBe(false);
+    expect(existsSync(join(dstDir, '01_签单清单_定稿.parquet'))).toBe(false);
+    // SX 文件正常上传
     expect(existsSync(join(dstDir, 'SX_20260101_签单.parquet'))).toBe(true);
   });
 
@@ -445,14 +506,15 @@ describe('真实 rsync --delete 验证 — 裸名 SC 保护 + sender 隔离', ()
     const srcDir = mkdtempSync(join(tmpdir(), 'sync-vps-src-'));
     const dstDir = mkdtempSync(join(tmpdir(), 'sync-vps-dst-'));
 
-    // local（SC 模式）：只有裸名 SC 文件
+    // local（SC 模式）：含数字和非数字开头裸名 SC 文件
     writeFileSync(join(srcDir, '20210101-20231231_01_签单清单_定稿.parquet'), 'sc-data');
+    writeFileSync(join(srcDir, '每日数据_20260101.parquet'), 'sc-daily-data');
 
     // remote/VPS：有 SC 裸名文件 + SX 前缀文件（两省共存）
     writeFileSync(join(dstDir, '20210101-20231231_01_签单清单_定稿.parquet'), 'sc-data-old');
     writeFileSync(join(dstDir, 'SX_20260101_签单.parquet'), 'sx-data');
 
-    const filterArgs = buildRsyncBranchFilterArgs('SC', ['SC', 'SX']);
+    const filterArgs = buildRsyncBranchFilterArgs('SC');
     const rsyncArgs = ['-a', '--delete', ...filterArgs, `${srcDir}/`, `${dstDir}/`];
     execSync(`rsync ${rsyncArgs.map(a => JSON.stringify(a)).join(' ')}`);
 
@@ -460,34 +522,73 @@ describe('真实 rsync --delete 验证 — 裸名 SC 保护 + sender 隔离', ()
     expect(existsSync(join(dstDir, 'SX_20260101_签单.parquet'))).toBe(true);
     // 验证：SC 文件正常同步
     expect(existsSync(join(dstDir, '20210101-20231231_01_签单清单_定稿.parquet'))).toBe(true);
+    expect(existsSync(join(dstDir, '每日数据_20260101.parquet'))).toBe(true);
   });
 
-  it.skipIf(!rsyncAvailable)('P0-2 验证：SX 模式时本地混有 SC 裸名文件，SC 文件不被上传到 VPS', () => {
+  it.skipIf(!rsyncAvailable)('SC 模式 sender：本地混有 SX 文件，SX 不被上传（sender exclude 生效）', () => {
     const srcDir = mkdtempSync(join(tmpdir(), 'sync-vps-src-'));
     const dstDir = mkdtempSync(join(tmpdir(), 'sync-vps-dst-'));
 
-    // local（SX 模式，但混有 SC 裸名文件——这是隔离不完全时的危险场景）
-    writeFileSync(join(srcDir, 'SX_20260101_签单.parquet'), 'sx-data');
-    writeFileSync(join(srcDir, '20210101-20231231_01_签单清单_定稿.parquet'), 'sc-bare-local'); // 本地混有 SC 文件
+    // local（SC 模式）：裸名 SC 文件 + 误混入的 SX 文件
+    writeFileSync(join(srcDir, '20210101-20231231_01_签单清单_定稿.parquet'), 'sc-data');
+    writeFileSync(join(srcDir, 'SX_20260101_签单.parquet'), 'sx-mistake-data'); // 本地误混 SX
 
-    // remote/VPS 初始为空（模拟只有 SX 的目标 VPS）
-    // 注意：remote 不含 SC 文件（P0-2 验证的是 sender 侧，不是 receiver 侧）
-
-    const filterArgs = buildRsyncBranchFilterArgs('SX', ['SC', 'SX']);
+    const filterArgs = buildRsyncBranchFilterArgs('SC');
     const rsyncArgs = ['-a', '--delete', ...filterArgs, `${srcDir}/`, `${dstDir}/`];
     execSync(`rsync ${rsyncArgs.map(a => JSON.stringify(a)).join(' ')}`);
 
-    // 验证：SC 裸名文件不被上传（sender exclude 生效）
+    // 验证：SX 文件不被上传（sender exclude [A-Z][A-Z]_*.parquet 生效）
+    expect(existsSync(join(dstDir, 'SX_20260101_签单.parquet'))).toBe(false);
+    // 验证：SC 文件正常同步
+    expect(existsSync(join(dstDir, '20210101-20231231_01_签单清单_定稿.parquet'))).toBe(true);
+  });
+
+  it.skipIf(!rsyncAvailable)('P0-2 验证：SX 模式时本地混有数字开头裸名 SC，SC 文件不被上传到 VPS', () => {
+    const srcDir = mkdtempSync(join(tmpdir(), 'sync-vps-src-'));
+    const dstDir = mkdtempSync(join(tmpdir(), 'sync-vps-dst-'));
+
+    // local（SX 模式，但混有数字开头裸名 SC 文件）
+    writeFileSync(join(srcDir, 'SX_20260101_签单.parquet'), 'sx-data');
+    writeFileSync(join(srcDir, '20210101-20231231_01_签单清单_定稿.parquet'), 'sc-bare-local');
+
+    const filterArgs = buildRsyncBranchFilterArgs('SX');
+    const rsyncArgs = ['-a', '--delete', ...filterArgs, `${srcDir}/`, `${dstDir}/`];
+    execSync(`rsync ${rsyncArgs.map(a => JSON.stringify(a)).join(' ')}`);
+
+    // 验证：数字开头裸名 SC 文件不被上传
     expect(existsSync(join(dstDir, '20210101-20231231_01_签单清单_定稿.parquet'))).toBe(false);
     // 验证：SX 文件正常上传
     expect(existsSync(join(dstDir, 'SX_20260101_签单.parquet'))).toBe(true);
+  });
+
+  // P1 强化：stale SC 本地文件在 SC 模式下真的被 block（不只是没有降级放行文案）
+  it.skipIf(!rsyncAvailable)('SC 模式（stale）：旧版本 SC 文件在 VPS 上存在但本地不存在 → 被 --delete 清理（SC 同步正常行为）', () => {
+    const srcDir = mkdtempSync(join(tmpdir(), 'sync-vps-src-'));
+    const dstDir = mkdtempSync(join(tmpdir(), 'sync-vps-dst-'));
+
+    // local（SC 模式）：只有新版本 SC 文件
+    writeFileSync(join(srcDir, '20260101-20261231_新期签单.parquet'), 'sc-new-data');
+
+    // remote/VPS：有旧版本 SC 文件 + SX 文件
+    writeFileSync(join(dstDir, '20210101-20231231_01_签单清单_定稿.parquet'), 'sc-stale-data');
+    writeFileSync(join(dstDir, 'SX_20260101_签单.parquet'), 'sx-data');
+
+    const filterArgs = buildRsyncBranchFilterArgs('SC');
+    const rsyncArgs = ['-a', '--delete', ...filterArgs, `${srcDir}/`, `${dstDir}/`];
+    execSync(`rsync ${rsyncArgs.map(a => JSON.stringify(a)).join(' ')}`);
+
+    // SC 模式 --delete：旧 SC 文件（stale）应该被删除（不是 block，这是正常的 SC 同步删除）
+    expect(existsSync(join(dstDir, '20210101-20231231_01_签单清单_定稿.parquet'))).toBe(false);
+    // SX 文件受保护，不被删除
+    expect(existsSync(join(dstDir, 'SX_20260101_签单.parquet'))).toBe(true);
+    // 新 SC 文件被同步上去
+    expect(existsSync(join(dstDir, '20260101-20261231_新期签单.parquet'))).toBe(true);
   });
 
   it('单省字节等价验证：branchCode=null 时无 filter 参数（与历史行为相同）', () => {
     // 不跑真实 rsync，仅验证参数为空
     const args = buildRsyncBranchFilterArgs(null);
     expect(args).toEqual([]);
-    // 确认没有任何 --filter 或 --exclude
     expect(args).not.toContain('--filter');
     expect(args).not.toContain('--exclude');
   });

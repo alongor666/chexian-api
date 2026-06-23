@@ -986,3 +986,18 @@
 - **重来更好/复用价值（b332 收官元教训）**：① **「测试覆盖补强」的最优解往往是「提取内联纯逻辑」而非「组件 smoke」**——8 个「纯组件」里 7 个含可提取 useMemo/helper/防御性逻辑，提取后零 mock 直测(最稳)+组件瘦身；只有真无逻辑的(moto-cost)才降级。这推翻了开局「6 个只能组件 smoke」的预判，是 R21 scoping 纠偏一路验证到底的结论。② **降级是合法收尾**——不是每个零测试模块都值得测；29 行 permission-gated 壳 smoke 价值为负，明确登记理由降级比硬凑诚实。③ **staged/working 快照时序**：codex 后补采纳的 P2 测试若不 re-stage，verifier 会(正确地)按 staged 快照判 count 不符——收尾标准动作=git add -A + 最终状态 verify:full，把 count 与门禁一并闭合。④ 全程「闸-1 免(同构纯函数)+闸-2 审 diff(codex 亲跑函数)+verifier 证伪」三源 + bundle 一次提交，是测试覆盖类任务的稳定流水线，6 PR 零返工(rework 均为采纳 codex P2 加固，非逻辑错)。
   - needs_automation: false（b332 收官；「双源盘点+纯函数分布扫描+按内联逻辑密度判路线」启发式已在 R18/R21/R22/R23 沉淀，未来同类任务直接复用）
 - **b332 DONE**。
+
+
+**R25 · PR #753 codex 第 2 轮残留 P0 修复（rsync protect/exclude 与 branchOfFile 归属完全对齐）**
+- **触发**：第 1 轮修复后 codex 独立复核抓出残留 P0：branchFilePatterns 用 [0-9]*.parquet 枚举 SC 裸名，但 branchOfFile 把所有裸名（无 XX_ 前缀，不论是否数字开头）都判定为 SC。每日数据_20260101.parquet、01_签单清单_定稿.parquet 这类非数字开头裸名 SC 文件不被覆盖，SX 模式 rsync --delete 仍可删除它们（会删四川生产数据的 P0）。
+- **根因（分类与 rsync 模式不自洽）**：第 1 轮用枚举 SC 正向模式来识别 SC 文件，无法覆盖所有裸名格式。正确方法：以是否有两字母前缀（^[A-Z]{2}_）为唯一区分轴，与 branchOfFile 判定逻辑完全一致。
+- **修复方案（前缀轴策略）**：
+  - 同步 SC 时：异省 = 所有带两字母前缀的 parquet → 单一模式 [A-Z][A-Z]_*.parquet 覆盖全部带前缀省（SX_/GD_/……），裸名 SC（任意格式）不匹配 → 安全。receiver --filter 'P [A-Z][A-Z]_*.parquet' + sender --exclude '[A-Z][A-Z]_*.parquet'。
+  - 同步带前缀省 P（如 SX）时：receiver 用 protect-all + risk-open（--filter 'R SX_*.parquet' 先放开，--filter 'P *.parquet' 后兜底保护）；sender 用 include-first（--include 'SX_*.parquet' 先，--exclude '*.parquet' 后兜底阻断所有 parquet）。
+  - env 白名单：getSyncBranchCode 新增 SUPPORTED_BRANCH_CODES={SC,SX}，非支持省份明确报错拒绝（消除 knownBranches 硬编码）。
+- **P2 dry-run 修复**：printDryRun 原将 filterArgs 偶数位全显示为 --filter，现按真实 (flag, value) 对打印。
+- **测试加强**：新增非数字开头裸名 SC 的真实 rsync 测试（每日数据_*.parquet 不被删/不被上传），全量 61 个 sync-vps 测试全绿，7 个真实 rsync 验证。
+- **确定性闸**：governance 44/44 + typecheck + 3946 单测全绿。
+- **重来更好**：枚举正向模式是陷阱；以否定前缀（无 XX_=SC）为唯一轴，rsync 字符类 [A-Z][A-Z]_* 比枚举更健壮，新省加入只需扩展 SUPPORTED_BRANCH_CODES。
+  - needs_automation: true → scripts/verify-branch-rsync-safety.sh
+  - expires: 2026-07-31

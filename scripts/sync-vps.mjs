@@ -371,28 +371,32 @@ const RSYNC_EXCLUDE_ARGS = RSYNC_EXCLUDES.flatMap((p) => ['--exclude', p]);
 /**
  * 多省安全：将省份编码映射到该省分片的 rsync 文件模式字符串。
  *
- * 关键：四川（SC）历史分片是"裸名"（无省份前缀），命名规律为日期数字开头，
- *   如 `20210101-20231231_01_签单清单_定稿.parquet`。
- *   其他新省（SX 等）用 `<BRANCH>_*.parquet` 带前缀格式。
+ * 关键：四川（SC）历史分片是"裸名"（无省份前缀），命名可以是任意格式（数字开头如
+ *   `20210101-20231231_01_签单清单_定稿.parquet`，或非数字开头如 `每日数据_*.parquet`、
+ *   `01_签单清单_*.parquet`）。其他新省（SX 等）用 `<BRANCH>_*.parquet` 带前缀格式。
  *
- * 此函数是 P0-1 修复的核心：保护规则必须用正确的文件模式。
- *   SC 裸名文件的可靠特征是以日期数字（`[0-9]`）开头，
- *   外加可能存在的 `SC_` 前缀格式（未来兼容）。
- *   rsync 字符类 `[0-9]` 是 rsync 原生支持的通配符语法（POSIX 字符类），可可靠匹配数字开头文件。
+ * 此函数已废弃作为 protect/exclude 直接模式来源，现仅保留用于：
+ *   - 测试断言（fileBelongsToBranch 等纯函数）
+ *   - 未来可能的其他用途
  *
- * 注（已知 limitation，BACKLOG 登记）：
- *   若未来 SC 裸名文件出现非数字、非 SC_ 开头的命名，此处模式需要更新。
- *   实践中，当前所有生产 SC 分片均以日期（YYYYMMDD）开头，此模式覆盖完整。
+ * P0 根因修复（第 2 轮）：
+ *   旧实现把 SC 的"异省保护集合"枚举为 [0-9]*.parquet + SC_*.parquet，漏掉了
+ *   非数字开头的裸名 SC 文件（如 每日数据_*.parquet、01_签单清单_*.parquet），
+ *   导致 SX 模式 rsync --delete 会删除这些文件。
+ *
+ *   正确设计（见 buildRsyncBranchFilterArgs）：
+ *   - 同步 SC 时：异省 = 所有带两字母前缀的文件 → 单一模式 [A-Z][A-Z]_*.parquet
+ *   - 同步带前缀省 P 时：sender 用 include-first，receiver 用 protect-all + risk-open
  *
  * @param {string} branchCode - 省份编码（如 'SC', 'SX'）
- * @returns {string[]} 该省份对应的 rsync 文件模式数组（用于 protect 或 exclude）
+ * @returns {string[]} 该省份对应的 rsync 文件模式数组
  */
 export function branchFilePatterns(branchCode) {
   if (branchCode === 'SC') {
-    // SC 历史裸名分片：以日期数字（YYYYMMDD...）开头，如 20210101-20231231_01_签单清单_定稿.parquet
-    // 使用 [0-9] rsync 字符类匹配数字开头文件 + SC_ 前缀格式（未来兼容）
-    // 注：不用 [!A-Z] 否定字符类，因为 rsync glob 的否定类语义与 shell 不同，可靠性更低
-    return ['[0-9]*.parquet', 'SC_*.parquet'];
+    // SC：裸名（任意格式，无 XX_ 前缀）+ SC_ 前缀（未来兼容）
+    // 注：此函数不再用于 protect/exclude（因为无法枚举所有裸名格式），
+    //     buildRsyncBranchFilterArgs 改用"异省用两字母前缀模式 [A-Z][A-Z]_*"覆盖策略
+    return ['SC_*.parquet', '[0-9]*.parquet']; // 保留兼容，仅供测试断言引用
   }
   // 其他省份（SX 等）统一用 `<BRANCH>_*.parquet` 带前缀格式
   return [`${branchCode}_*.parquet`];
@@ -429,40 +433,67 @@ export function branchOfFile(filename) {
 /**
  * 多省安全：当 current/ 含多省分片时，--delete 会误删远端异省文件。
  * 此函数生成 rsync 参数，同时做到：
- *   1. receiver 侧 Protect（--filter 'P ...'）：保护 VPS 上异省分片不被 --delete 删除
- *   2. sender 侧 exclude（--exclude '...'）：不上传本地异省分片到 VPS
+ *   1. receiver 侧 Protect：保护 VPS 上异省分片不被 --delete 删除
+ *   2. sender 侧 exclude：不上传本地异省分片到 VPS
  *
- * P0-1 修复：SC 分片是裸名（无 SC_ 前缀），protect/exclude 必须用正确模式，
- *   不能只写 `P SC_*.parquet`（该模式无法匹配裸名 SC 文件）。
- * P0-2 修复：增加 sender 侧 --exclude，防止本地混有多省文件时异省文件被上传。
+ * P0 根因修复（第 2 轮）—— 以"前缀"为唯一区分轴，与 branchOfFile 判定完全自洽：
+ *
+ * 旧实现用枚举 SC 的正向模式（[0-9]*.parquet + SC_*.parquet），漏掉了非数字开头
+ * 裸名 SC 文件（如 `每日数据_*.parquet`、`01_签单清单_*.parquet`），导致 SX 模式
+ * 下 --delete 删除这类文件（会删四川生产数据的 P0）。
+ *
+ * 正确策略：不枚举 SC 正向模式，改用"以两字母前缀区分异省"的统一策略：
+ *
+ * ★ 同步 SC 时（branchCode='SC'）：
+ *   - 异省 = 所有带两字母大写前缀的文件 → 单一模式 [A-Z][A-Z]_*.parquet
+ *   - receiver protect: --filter 'P [A-Z][A-Z]_*.parquet'
+ *   - sender exclude: --exclude '[A-Z][A-Z]_*.parquet'
+ *   - SC 裸名文件（无论何种格式）自然不匹配该模式 → 全部安全
+ *
+ * ★ 同步带前缀省 P（如 SX）时：
+ *   - sender include-first: --include 'SX_*.parquet' 在前，--exclude '*.parquet' 在后
+ *     → 首匹配：SX_* 通过，其余所有 parquet（含裸名 SC，不论格式）全部被拦截
+ *   - receiver（首匹配，R 必须在 P 前面）:
+ *     --filter 'R SX_*.parquet' 先：SX_* un-protect（允许增删更新）
+ *     --filter 'P *.parquet' 后：其余所有 parquet（裸名 SC，不论格式）→ 受保护，不被 --delete 删除
  *
  * 字节安全：branchCode=null 时返回空数组 → rsyncDir 行为与原版完全等价。
  *
- * @param {string|null} branchCode - 目标省份编码（如 'SC'），null 表示单省模式（历史行为）
- * @param {string[]} [knownBranches] - 已知所有省份编码列表（用于精确 protect 规则）
+ * env 校验：getSyncBranchCode 已对非 SC/SX 值报错拒绝，此函数无需再校验。
+ *
+ * @param {string|null} branchCode - 目标省份编码（如 'SC', 'SX'），null 表示单省模式
+ * @param {string[]} [_knownBranches] - 已废弃参数（保留签名兼容性，新逻辑不依赖枚举）
  * @returns {string[]} rsync 参数数组
  */
-export function buildRsyncBranchFilterArgs(branchCode, knownBranches = ['SC', 'SX']) {
+export function buildRsyncBranchFilterArgs(branchCode, _knownBranches = ['SC', 'SX']) {
   if (!branchCode) return []; // 单省短路：不加任何 filter，与历史行为完全等价
 
   const args = [];
 
-  for (const b of knownBranches) {
-    if (b === branchCode) continue;
+  if (branchCode === 'SC') {
+    // 同步 SC：异省 = 所有带两字母大写前缀的 parquet
+    // 单一模式 [A-Z][A-Z]_*.parquet 覆盖全部带前缀文件（SX_、GD_、HB_……）
+    // SC 裸名文件（任意格式，包括非数字开头）自然不含 XX_ 前缀 → 不受影响 → 安全
+    const OTHER_BRANCH_PAT = '[A-Z][A-Z]_*.parquet';
+    // receiver protect
+    args.push('--filter', `P ${OTHER_BRANCH_PAT}`);
+    // sender exclude
+    args.push('--exclude', OTHER_BRANCH_PAT);
+  } else {
+    // 同步带前缀省 P（如 SX）：
+    // 本省文件 = P_*.parquet，异省 = 其他所有 parquet（含裸名 SC，任意格式）
+    const P_PAT = `${branchCode}_*.parquet`;
 
-    // P0-1 修复：用 branchFilePatterns 获取正确的文件模式
-    // 关键：SC 是裸名，必须用裸名匹配模式保护，而不是 `P SC_*.parquet`
-    const patterns = branchFilePatterns(b);
+    // receiver 首匹配规则（顺序关键：R 必须在 P 前面）：
+    // 1. R（risk/un-protect）：本省文件不受保护 → 允许 rsync 正常增删更新
+    args.push('--filter', `R ${P_PAT}`);
+    // 2. P（protect）：其余所有 parquet（裸名 SC，任意格式）一律受保护 → 不被 --delete 删除
+    args.push('--filter', 'P *.parquet');
 
-    // receiver 侧 Protect：VPS 上该异省的文件不被 --delete 删除
-    for (const pat of patterns) {
-      args.push('--filter', `P ${pat}`);
-    }
-
-    // P0-2 修复：sender 侧 exclude：本地若有该异省文件，不上传
-    for (const pat of patterns) {
-      args.push('--exclude', pat);
-    }
+    // sender include-first：先 include 本省文件，再 exclude 其余 parquet
+    // 首匹配：本省文件匹配 include → 通过；其余 parquet（含裸名 SC）→ 被 exclude
+    args.push('--include', P_PAT);
+    args.push('--exclude', '*.parquet');
   }
 
   return args;
@@ -779,12 +810,21 @@ function printHelp() {
  *
  * @returns {string|null} 省份编码或 null（单省模式）
  */
+/** 当前支持的省份编码集合（更换区分策略时在此扩展）。 */
+const SUPPORTED_BRANCH_CODES = new Set(['SC', 'SX']);
+
 export function getSyncBranchCode() {
   const env = process.env.SYNC_VPS_BRANCH_CODE;
   if (!env) return null;
   const code = env.trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(code)) {
     throw new Error(`SYNC_VPS_BRANCH_CODE 格式错误（期望 2 位大写字母，如 SC、SX），实际：${env}`);
+  }
+  if (!SUPPORTED_BRANCH_CODES.has(code)) {
+    throw new Error(
+      `SYNC_VPS_BRANCH_CODE 不支持的省份编码：${code}（当前支持：${[...SUPPORTED_BRANCH_CODES].join('、')}）。` +
+      `新省份请先扩展 SUPPORTED_BRANCH_CODES 并验证 rsync 分省策略。`,
+    );
   }
   return code;
 }
@@ -889,11 +929,20 @@ function printDryRun(sshConfig, runConfig) {
     const suffix = exists ? '' : '  （本地目录不存在，跳过）';
     const excludeStr = RSYNC_EXCLUDES.map((p) => `--exclude '${p}'`).join(' ');
     const deleteArg = task.deleteRemote === false ? '' : '--delete ';
-    // P1#1 修复：多省模式（task.safeDeleteBranch 非空）时，把保护 filter 参数也拼入打印字符串，
+    // P2 dry-run 修复：多省模式（task.safeDeleteBranch 非空）时，把保护 filter 参数也拼入打印字符串，
     // 使 dry-run 展示与 rsyncDir 实际执行一致（字节安全：单省时 buildRsyncBranchFilterArgs 返回 []）
+    // 修复旧实现把偶数位全显示成 --filter 的 bug：按真实 (flag, value) 对打印
     const filterArgs = buildRsyncBranchFilterArgs(task.safeDeleteBranch ?? null);
     const filterStr = filterArgs.length
-      ? filterArgs.map((a, i) => (i % 2 === 0 ? `--filter` : `'${a}'`)).join(' ') + ' '
+      ? (() => {
+          const parts = [];
+          for (let i = 0; i < filterArgs.length; i += 2) {
+            const flag = filterArgs[i];      // 真实 flag：--filter / --include / --exclude
+            const value = filterArgs[i + 1]; // 对应值
+            parts.push(`${flag} '${value}'`);
+          }
+          return parts.join(' ') + ' ';
+        })()
       : '';
     if (task.atomicLatest) {
       console.log(`  ${tag} rsync -azv -e ssh ${task.local}/latest.parquet ${sshConfig.alias}:${task.remote}/latest.parquet.uploading && mv latest.parquet.uploading latest.parquet${suffix}`);
