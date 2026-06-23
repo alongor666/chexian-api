@@ -34,6 +34,15 @@ export const LoginPage: React.FC = () => {
 
   // 获取重定向目标
   const from = resolveRedirectPath(location.state, '/');
+
+  // G8 多省接入：监听会话过期事件，刷新 token 失败（旧 token 被 fail-closed）时显示提示
+  const [sessionExpired, setSessionExpired] = useState(false);
+  useEffect(() => {
+    const handleSessionExpired = () => setSessionExpired(true);
+    window.addEventListener('auth-session-expired', handleSessionExpired);
+    return () => window.removeEventListener('auth-session-expired', handleSessionExpired);
+  }, []);
+
   const resolveTargetPath = useCallback(() => {
     if (!userPermission) {
       return from;
@@ -161,6 +170,14 @@ export const LoginPage: React.FC = () => {
         {/* 登录表单卡片 */}
         <div className="bg-white dark:bg-neutral-800 rounded-2xl shadow-xl p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* G8 会话过期提示（多省接入：旧 token fail-closed 场景） */}
+            {sessionExpired && !error && (
+              <div className={cn("flex items-center gap-2 p-3 border rounded-lg text-sm", colorClasses.bg.warning, colorClasses.border.warning, colorClasses.text.warning)}>
+                <AlertCircle size={16} className="flex-shrink-0" />
+                <span>会话已过期，请重新登录刷新权限</span>
+              </div>
+            )}
+
             {/* 错误提示 */}
             {error && (
               <div className={cn("flex items-center gap-2 p-3 border rounded-lg text-sm", colorClasses.bg.danger, colorClasses.border.danger, colorClasses.text.danger)}>
