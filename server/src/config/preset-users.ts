@@ -229,126 +229,164 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   // ===== 山西分公司（SX）— G7 多省接入账号定义 =====
   // BRANCH_RLS_ENABLED 默认关，加账号不改默认行为；RLS-on 时 permission.ts 按 branch_code='SX' 过滤。
-  // 全部 passwordHash 为 tombstone 占位（即弃随机口令哈希，不可登录、无明文硬编码）：
-  //   真实凭据于 🔴 GATED cutover 时由 USER_PASSWORDS 环境变量注入（同 admin 机制）。
+  // 全部 passwordHash 为 tombstone 占位（弃随机口令哈希，不可用于登录、无明文硬编码）。
+  // 全部显式 active:false —— seedFromPreset 默认 active ?? true；必须明确设 false 才能阻断登录。
+  //   auth.ts: if (!user.active) throw new AppError(403, 'Account disabled')
+  //   真实凭据于 🔴 GATED cutover 时由 USER_PASSWORDS 环境变量注入 + active 改为 true。
   // organization 取自 数据管理/config/branch-org-mapping/SX.json 的 11 经营单元（= ETL 规范化后 org_level_3），禁臆造。
+  sxAdmin: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    username: 'sxAdmin',
+    // tombstone 占位（不可登录）：山西超管凭据仅由 USER_PASSWORDS 环境变量提供。
+    // 以下为标准 bcrypt 格式 tombstone（60 字符，无对应明文，bcrypt.compare 必然返回 false）
+    passwordHash: '$2b$10$SXAdminTombstone000000000000000000000000000000000000u',
+    displayName: '山西分公司管理员',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    specialFeatures: ['cost', 'moto_cost'],
+    active: false,
+  },
   yangjie0621: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'yangjie0621',
     // tombstone 占位（不可登录）：山西超管凭据仅由 USER_PASSWORDS 环境变量提供。
     passwordHash: '$2b$10$Zxa3dsY1HXkZfwpysO.XGeTYfmHTlfccDGgjfoaIwaOrVMyZURW76',
     displayName: '山西管理员（杨杰）',
     role: 'branch_admin',
     branchCode: 'SX',
+    active: false,
   },
   sx_taiyuan1: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_taiyuan1',
     passwordHash: '$2b$10$AzI0gjEGLs8cbjhTNs2UN.4G4xooBnnj6qGdte1HNvlvLy10zXL46',
-    displayName: '山西-太原一部',
+    displayName: '太原一部机构',
     role: 'org_user',
     organization: '太原一部',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_taiyuan2: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_taiyuan2',
     passwordHash: '$2b$10$bXRptG458/Il9nUkmnlcWOivj4r/GJHjUQmkHlhYcCHmXOufo83hi',
-    displayName: '山西-太原二部',
+    displayName: '太原二部机构',
     role: 'org_user',
     organization: '太原二部',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_jdcszk: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_jdcszk',
     passwordHash: '$2b$10$wnDkAMH3iVMBrrsCK8LenuNqeozISSfRaPecDCvQhQJYoNS/q1L.a',
-    displayName: '山西-经代、车商、重客',
+    displayName: '经代、车商、重客机构',
     role: 'org_user',
     organization: '经代、车商、重客',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_datong: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_datong',
     passwordHash: '$2b$10$P37GlPMyyRAA9d5mOpFgtOlrGrrTvuspDA0OcPt1JD7PBnA1ay5gK',
-    displayName: '山西-大同',
+    displayName: '大同机构',
     role: 'org_user',
     organization: '大同',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_yangquan: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_yangquan',
     passwordHash: '$2b$10$aeqVdThH/IYLtFxwp7N19O3nicSClNp8aBXmsQnL9OWbrhUYqp4cC',
-    displayName: '山西-阳泉',
+    displayName: '阳泉机构',
     role: 'org_user',
     organization: '阳泉',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_changzhi: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_changzhi',
     passwordHash: '$2b$10$hAbIswbZBd0WeNUPxoW6oOqstYzAsP6cISeTuJv42b7ARBS4w0z8u',
-    displayName: '山西-长治',
+    displayName: '长治机构',
     role: 'org_user',
     organization: '长治',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_jincheng: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_jincheng',
     passwordHash: '$2b$10$53jN/NHOAb1cuBulRaUiUul5qyYbjlU98U/DqPJ2iNPMMjjGmiUUi',
-    displayName: '山西-晋城',
+    displayName: '晋城机构',
     role: 'org_user',
     organization: '晋城',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_jinzhong: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_jinzhong',
     passwordHash: '$2b$10$7gk9OPZSUZO2G8cRp4hla.pGxhdTh9rpJLaUxyTuXnz4lcoH15niC',
-    displayName: '山西-晋中',
+    displayName: '晋中机构',
     role: 'org_user',
     organization: '晋中',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_yuncheng: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_yuncheng',
     passwordHash: '$2b$10$VDYrudhzR8v2w1ADNvkOUuZoQnPiJGBsIFmJu9CFXmrYSRseZoE8C',
-    displayName: '山西-运城',
+    displayName: '运城机构',
     role: 'org_user',
     organization: '运城',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_linfen: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_linfen',
     passwordHash: '$2b$10$S6fnwPB129BVJO0NQrUGw.mEMGzZ3thwqErOunttTDkbIr3ZWlvXa',
-    displayName: '山西-临汾',
+    displayName: '临汾机构',
     role: 'org_user',
     organization: '临汾',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   sx_lvliang: {
+    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
     username: 'sx_lvliang',
     passwordHash: '$2b$10$/fnP4DILPq5c2UaK8ji/m.Lcj5QsJzbecG2j08Pg/aV2nqvwokoSi',
-    displayName: '山西-吕梁',
+    displayName: '吕梁机构',
     role: 'org_user',
     organization: '吕梁',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
+    active: false,
   },
   test_org_user: {
     username: 'test_org_user',
