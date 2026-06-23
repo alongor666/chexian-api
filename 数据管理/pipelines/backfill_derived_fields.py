@@ -35,6 +35,13 @@ from pathlib import Path
 import pandas as pd
 import pyarrow.parquet as pq
 
+# Phase 4：可信域回填复用 derived_fields 的 guarded helper（与各域 ETL 同一物化路径）。
+# 同时支持「作为脚本直跑」（pipelines/ 在 sys.path[0]）与「作为 pipelines.* 包导入」（测试）两种上下文。
+try:
+    from pipelines.derived_fields import apply_derived_fields
+except ImportError:  # pragma: no cover - 脚本直跑路径
+    from derived_fields import apply_derived_fields
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 REGISTRY_PATH = ROOT / "server/src/config/field-registry/fields.json"
 POLICY_CURRENT = ROOT / "数据管理/warehouse/fact/policy/current"
@@ -51,27 +58,97 @@ def load_derived_rules() -> list[dict]:
     return [fd for fd in registry.get("fields", []) if fd.get("derived")]
 
 
-def apply_derivation(df: pd.DataFrame, field: dict, force: bool) -> tuple[pd.DataFrame, str]:
-    """对 DataFrame 应用单个派生规则。返回 (新 df, 状态描述)。"""
+def apply_guarded_backfill(
+    df: pd.DataFrame, field: dict, force: bool, declared_branch: str | None
+) -> tuple[pd.DataFrame, str]:
+    """Phase 4：强校验派生字段（branch_code）的「可信域感知」回填（codex 闸-1 P1.3）。
+
+    数据驱动判定（不硬编码域路径）：仅对 policy_no 完整 + 单一已知省份的「可信域」物化；
+    不可信域 skip；看似可信但混省 / 未知前缀 / 声明省≠推断省 → error（本轮非零退出）。
+
+    各域 ETL 已落 branch_code 物化（premium/claims_detail/cross_sell/customer_flow 直接喂；
+    quotes warn 模式；renewal_tracker 造临时列；new_energy_claims VIN-JOIN）；本通用 backfill
+    只承担「policy_no 可信域」的历史补列，不触碰 quotes/new_energy/renewal_tracker/dim 等不可信域。
+    """
     fid = field["id"]
     rule = field.get("derivation", {})
     rtype = rule.get("type")
 
-    # 强校验派生字段（branch_code：strictNonNull / assertDeclaredBranch）由各域 ETL 物化时做
-    # 完整 fail-fast 自校验（喂错省/混省/NULL/源列缺失）。当前已落各域 ETL 入口：
-    #   - premium → transform.py (P1 #762)
-    #   - claims_detail → convert_claims_detail.py (P3-A #763)
-    #   - cross_sell / repair / brand → base_converter.py (P3-B #764)
-    #   - customer_flow → convert_customer_flow.py (P3-B #764)
-    #   - quotes → quote_etl.py (P3-D #765, warn 模式 + 5 道闸口)
-    #   - renewal_tracker → convert_renewal_tracker.py (P3-C 2026-06-23, 造临时 policy_no 列)
-    # 通用 backfill 无声明省上下文、且写回层按「是否新增列」判定（codex 闸-2 r2/r3），无法完整复刻
-    # 该契约 → 一律拒绝回填强校验字段，避免静默绕过契约（RLS 等值过滤漏行）。
-    # 域感知强校验回填（含混省检测 + 域白名单）留 Phase 4。
+    if rtype != "prefix_map":
+        return df, f"skip({fid}: 强校验字段仅支持 prefix_map 回填，实际 {rtype})"
+
+    source = rule.get("source")
+    if not source or source not in df.columns:
+        # 无 source 列（renewal_tracker 无 policy_no / dim 表 repair·brand）→ 交域专用 ETL
+        return df, f"skip({fid}: 无 source 列 {source}，须域专用 ETL 回填（非 policy_no 可信域）)"
+
+    if fid in df.columns and not force:
+        nonnull = int(df[fid].notna().sum())
+        return df, f"skip({fid}: already exists, {nonnull:,} non-null, use --force to overwrite)"
+
+    if len(df) == 0:
+        # 空分片（0 行）：无可派生，结构化 skip（不让 provinces[0] 抛 IndexError · codex 闸-2 P2.1）
+        return df, f"skip({fid}: 空数据（0 行），无可派生)"
+
+    prefix_len = rule.get("prefixLength", 2)
+    mapping = rule.get("mapping", {})
+    src = df[source].astype(str)
+    # 不可信域：policy_no 含 NULL / 空 / 'nan' 字面（quotes 92.5% / new_energy 100%）→ skip
+    empty_mask = df[source].isna() | (src.str.strip() == "") | (src.str.lower() == "nan")
+    if bool(empty_mask.any()):
+        return df, (
+            f"skip({fid}: {source} 有 {int(empty_mask.sum()):,} 行 NULL/空，"
+            f"不可信域（VIN-JOIN / warn 模式），须域专用回填)"
+        )
+
+    mapped = src.str[:prefix_len].map(mapping)
+    unknown_mask = mapped.isna()
+    if bool(unknown_mask.any()):
+        bad = src[unknown_mask].str[:prefix_len].value_counts().head(5).to_dict()
+        return df, (
+            f"error({fid}: {int(unknown_mask.sum()):,} 行 {source}[:{prefix_len}] 未命中 mapping "
+            f"值域 {sorted(mapping)}，top5={bad} — 疑似数据损坏，fail-closed)"
+        )
+
+    provinces = sorted(set(mapped.unique()))
+    if len(provinces) > 1:
+        return df, (
+            f"error({fid}: 单文件混省 {provinces} — 违反单文件不混省契约，fail-closed)"
+        )
+
+    inferred = provinces[0]
+    if declared_branch and declared_branch != inferred:
+        return df, (
+            f"error({fid}: 声明省={declared_branch} ≠ 推断省={inferred} — 疑似喂错省，fail-closed)"
+        )
+
+    # 可信域：复用 derived_fields.apply_derived_fields 物化（与各域 ETL 同一 guarded 路径）。
+    # 已预校验非空 + 单省 + 已知前缀 + 声明一致 → guard 不会 sys.exit；try 兜底防御（codex P2 #1c）。
+    try:
+        apply_derived_fields(df, [field], declared_branch=inferred)
+    except SystemExit:  # pragma: no cover - 预校验后不应触发
+        return df, f"error({fid}: guarded helper fail-fast（预校验外的意外），fail-closed)"
+    nonnull = int(df[fid].notna().sum())
+    return df, f"ok({fid}: 可信域派生 '{inferred}'，{nonnull:,}/{len(df):,} non-null)"
+
+
+def apply_derivation(
+    df: pd.DataFrame, field: dict, force: bool, declared_branch: str | None = None
+) -> tuple[pd.DataFrame, str]:
+    """对 DataFrame 应用单个派生规则。返回 (新 df, 状态描述)。
+
+    status 约定：以 `ok(` / `skip(` / `error(` 开头。`error(` 表示数据损坏（混省 / 未知前缀 /
+    声明不符），由 main() 聚合后令本轮非零退出（fail-closed）。
+    """
+    fid = field["id"]
+    rule = field.get("derivation", {})
+    rtype = rule.get("type")
+
+    # 强校验派生字段（branch_code：strictNonNull / assertDeclaredBranch）走可信域感知回填。
+    # 各域 ETL 仍是物化主路径（premium/claims/cross_sell/customer_flow/quotes/renewal/new_energy）；
+    # 本 backfill 只补「policy_no 可信域」历史列，不可信域 skip、数据损坏 error。
     if rule.get("strictNonNull") or rule.get("assertDeclaredBranch"):
-        # 一律 skip（不处理/不写回），交各域 ETL（物化 + 完整自校验）/ Phase 4 域感知回填。
-        # 用 skip 而非 sys.exit：避免按全量字段跑时一遇 branch_code 就杀掉整轮、连带丢失其它字段回填。
-        return df, f"skip({fid}: 强校验派生字段，通用 backfill 不支持，由各域 ETL 物化 / Phase 4 域感知回填)"
+        return apply_guarded_backfill(df, field, force, declared_branch)
 
     if fid in df.columns and not force:
         nonnull = df[fid].notna().sum()
@@ -103,7 +180,10 @@ def apply_derivation(df: pd.DataFrame, field: dict, force: bool) -> tuple[pd.Dat
     return df, f"skip({fid}: unsupported derivation.type={rtype})"
 
 
-def backfill_parquet(path: Path, derived_fields: list[dict], force: bool, dry_run: bool) -> dict:
+def backfill_parquet(
+    path: Path, derived_fields: list[dict], force: bool, dry_run: bool,
+    declared_branch: str | None = None,
+) -> dict:
     """处理单个 Parquet 文件。"""
     table = pq.read_table(path)
     df = table.to_pandas()
@@ -111,8 +191,13 @@ def backfill_parquet(path: Path, derived_fields: list[dict], force: bool, dry_ru
     statuses = []
 
     for field in derived_fields:
-        df, status = apply_derivation(df, field, force)
+        df, status = apply_derivation(df, field, force, declared_branch)
         statuses.append(status)
+
+    # 数据损坏（error 状态）→ 拒绝写回该文件（不物化半成品），交 main 聚合非零退出
+    has_error = any(s.startswith("error(") for s in statuses)
+    if has_error:
+        return {"path": path.name, "changed": False, "error": True, "statuses": statuses}
 
     added_cols = set(df.columns) - original_cols
     if not added_cols and not force:
@@ -168,7 +253,15 @@ def main():
         action="store_true",
         help="递归扫描子目录所有 *.parquet（用于多域 branch_code 一次性 backfill）",
     )
+    parser.add_argument(
+        "--branch-code",
+        type=str,
+        default=None,
+        help="声明省份代码（如 SC/SX），对强校验字段（branch_code）断言「声明省 == 推断省」；"
+             "不传则用文件内单一推断省（codex 闸-1 P1.3）",
+    )
     args = parser.parse_args()
+    declared_branch = (args.branch_code or "").strip().upper() or None
 
     derived_fields = load_derived_rules()
     if not derived_fields:
@@ -193,16 +286,29 @@ def main():
         print("⚠️  无分片文件")
         return 0
 
+    if declared_branch:
+        print(f"🏷  声明省份（--branch-code）: {declared_branch}（强校验字段将断言 声明省==推断省）\n")
+
     changed_count = 0
+    error_count = 0
     total_rows = 0
     for path in parquet_files:
-        result = backfill_parquet(path, derived_fields, args.force, args.dry_run)
-        tag = "DRY-RUN" if result.get("dry_run") else ("✅" if result["changed"] else "⏭️ ")
+        result = backfill_parquet(path, derived_fields, args.force, args.dry_run, declared_branch)
+        if result.get("error"):
+            tag = "❌"
+        elif result.get("dry_run"):
+            tag = "DRY-RUN"
+        elif result["changed"]:
+            tag = "✅"
+        else:
+            tag = "⏭️ "
         display_path = path.relative_to(scan_root) if path.is_relative_to(scan_root) else path.name
         print(f"{tag} {display_path}")
         for s in result["statuses"]:
             print(f"       {s}")
-        if result["changed"]:
+        if result.get("error"):
+            error_count += 1
+        elif result["changed"]:
             changed_count += 1
             total_rows += result.get("rows", 0)
 
@@ -212,6 +318,10 @@ def main():
         print(f"   总记录数: {total_rows:,}")
     if args.dry_run:
         print("   (dry-run 模式，未实际写入)")
+    if error_count:
+        # fail-closed：数据损坏（混省 / 未知前缀 / 声明不符）→ 非零退出，不静默放行
+        print(f"\n❌ {error_count}/{len(parquet_files)} 分片检出数据损坏（混省 / 未知前缀 / 声明不符）— 非零退出")
+        return 1
     return 0
 
 

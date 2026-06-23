@@ -811,6 +811,18 @@ function checkParquetOverlapInCurrent() {
     return true;
   }
 
+  // fail-closed：派生省份混省/读失败（codex 闸-2 P1.2）——必须在 count===0 之前消费 branchErrors，
+  // 否则「无 branch_code 列但 policy_no 混省」的文件会同时绕过本闸（count===0）与单文件不混省闸
+  // （无 branch_code 列 → skip），双漏。
+  if (result.branchErrors && result.branchErrors.length > 0) {
+    error('current/ 存在单文件混省或不可判定省份的 parquet（数据轴权威，非文件名）：');
+    for (const m of result.branchErrors) {
+      console.log(`    - ${m}`);
+    }
+    console.log('    ▶ 修复：拆分混省 parquet（单文件单省），或核查损坏文件；省份以 parquet 内派生为准');
+    return false;
+  }
+
   if (result.count === 0) {
     success(`current/ Parquet 重叠检测通过（${result.files} 个文件，区间互补无重叠）`);
     return true;
@@ -868,6 +880,154 @@ function checkClaimsDetailDeduplication() {
     warning(`claims_detail/ 去重检测跳过：${e.message.split('\n')[0]}`);
     return true;
   }
+}
+
+// ============================================================
+// pre-sync readiness：fact parquet「单文件不混省」闸（多省派生化 Phase 4）
+// ============================================================
+
+/**
+ * 校验每个生产 fact parquet「单文件不混省」+ 派生省==列省（codex 闸-1 P1.1/P1.5 采纳）。
+ *
+ * 设计要点：
+ * - 注册到 PRE_SYNC_READINESS_CHECKS（数据就绪闸），**不在**代码门禁（CI 无 parquet 会造假安全 · P1.2）。
+ * - 分域建模：policy/current + claims_detail + cross_sell + customer_flow 走「prefix hard-check」
+ *   （派生省 == 列省）；new_energy_claims（VIN-JOIN，policy_no 全 NULL）/ quotes（warn，92.5% NULL）/
+ *   renewal_tracker（无 policy_no）只校验单省 + 非空 + 允许值，**不**按 policy_no 前缀比对（P1.1）。
+ * - 无 branch_code 列 → 跳过（loader 注入部署省常量，单省 by construction）。
+ * - 允许值/mapping/prefixLength 全部从 fields.json 读取，不硬编码 SC/SX（P1.5）。
+ * - 全量扫描不抽样（260 万行 premium ~0.04s · P2 #2a）；单 python3 进程批量检查（P2 #2c）。
+ * - fail-closed：数据存在但 DuckDB 读不了 → 失败放行=假安全，故报错（P1.2）；
+ *   无任何生产 parquet（CI/非数据环境）→ python 先 glob 判定、不 import duckdb → 跳过。
+ */
+function checkSingleProvincePerFile() {
+  info('检查 fact parquet 单文件不混省（派生省==列省 · pre-sync）...');
+
+  const domains = [
+    { glob: '数据管理/warehouse/fact/policy/current/*.parquet', prefixCheckable: true },
+    { glob: '数据管理/warehouse/fact/claims_detail/claims_*.parquet', prefixCheckable: true },
+    { glob: '数据管理/warehouse/fact/cross_sell/latest.parquet', prefixCheckable: true },
+    { glob: '数据管理/warehouse/fact/customer_flow/latest.parquet', prefixCheckable: true },
+    { glob: '数据管理/warehouse/fact/new_energy_claims/latest.parquet', prefixCheckable: false },
+    { glob: '数据管理/warehouse/fact/quotes_conversion/latest.parquet', prefixCheckable: false },
+    { glob: '数据管理/warehouse/fact/renewal_tracker/latest.parquet', prefixCheckable: false },
+  ].map((d) => ({ ...d, glob: path.join(ROOT_DIR, d.glob) }));
+
+  const fieldsPath = path.join(ROOT_DIR, 'server/src/config/field-registry/fields.json');
+
+  // python：先 glob 判定数据是否存在（不 import duckdb）；有数据才 import duckdb 逐文件校验。
+  const py = `
+import sys, json, glob
+fields_path = sys.argv[1]
+domains = json.loads(sys.argv[2])
+import re
+reg = json.load(open(fields_path))
+bc = next((f for f in reg.get('fields', []) if f.get('id') == 'branch_code'), {})
+deriv = bc.get('derivation', {})
+mapping = deriv.get('mapping', {})
+plen = int(deriv.get('prefixLength', 3))
+allowed = sorted(set(mapping.values()))
+# 防注入：mapping 的 key/value 必须是纯字母数字（来自 fields.json registry，受治理）。
+# 任一非法即拒绝构造 SQL CASE，避免拼接注入（codex 闸-2 P1.1）。
+_safe = re.compile(r'^[A-Za-z0-9]+$')
+_bad_map = [f"{k}->{v}" for k, v in mapping.items() if not (_safe.match(str(k)) and _safe.match(str(v)))]
+if _bad_map:
+    print(json.dumps({"data_present": True, "scanned": 0,
+                      "violations": [{"file": fields_path, "kind": "unsafe_mapping",
+                                      "detail": ",".join(_bad_map)}]})); sys.exit(0)
+files = []
+for d in domains:
+    for fp in sorted(glob.glob(d['glob'])):
+        files.append((fp, bool(d['prefixCheckable'])))
+if not files:
+    print(json.dumps({"data_present": False})); sys.exit(0)
+import duckdb
+con = duckdb.connect()
+violations = []
+NL = chr(10)
+for fp, prefix_checkable in files:
+    rp = "read_parquet('" + fp + "')"
+    try:
+        cols = [c[0] for c in con.execute("DESCRIBE SELECT * FROM " + rp).fetchall()]
+    except Exception as e:
+        violations.append({"file": fp, "kind": "read_error", "detail": str(e).split(NL)[0]}); continue
+    if 'branch_code' not in cols:
+        continue
+    try:
+        distinct = [r[0] for r in con.execute("SELECT DISTINCT branch_code FROM " + rp).fetchall()]
+        nonnull = sorted(set(str(v) for v in distinct if v is not None and str(v).strip() != ''))
+        if len(nonnull) > 1:
+            violations.append({"file": fp, "kind": "mixed", "detail": ",".join(nonnull)})
+        nullcnt = con.execute("SELECT COUNT(*) FROM " + rp + " WHERE branch_code IS NULL OR TRIM(branch_code) = ''").fetchone()[0]
+        if nullcnt and nullcnt > 0:
+            violations.append({"file": fp, "kind": "null_empty", "detail": str(nullcnt)})
+        bad = [v for v in nonnull if v not in allowed]
+        if bad:
+            violations.append({"file": fp, "kind": "illegal_value", "detail": ",".join(bad) + " 不在 " + ",".join(allowed)})
+        if prefix_checkable and 'policy_no' in cols:
+            cases = " ".join("WHEN '" + k + "' THEN '" + v + "'" for k, v in mapping.items())
+            # 把派生省份提为 expected_branch；未知前缀→expected 为 NULL（单列 unknown_prefix），
+            # 已知但≠列省→mislabel。用 IS DISTINCT FROM 让 NULL branch_code 也参与比对，
+            # 不再有 branch_code 不等于 NULL = UNKNOWN 的漏判（codex 闸-2 P1.1）。
+            sub = (
+                "SELECT branch_code AS bc, "
+                "(CASE SUBSTR(CAST(policy_no AS VARCHAR), 1, " + str(plen) + ") " + cases + " ELSE NULL END) AS expected "
+                "FROM " + rp + " WHERE policy_no IS NOT NULL AND TRIM(CAST(policy_no AS VARCHAR)) <> ''"
+            )
+            row = con.execute(
+                "SELECT COUNT(*) FILTER (WHERE expected IS NULL), "
+                "COUNT(*) FILTER (WHERE expected IS NOT NULL AND bc IS DISTINCT FROM expected) "
+                "FROM (" + sub + ")"
+            ).fetchone()
+            unknown_cnt, mislabel_cnt = (row[0] or 0), (row[1] or 0)
+            if unknown_cnt > 0:
+                violations.append({"file": fp, "kind": "unknown_prefix",
+                                   "detail": str(unknown_cnt) + " 行 policy_no 前缀不在 mapping 值域"})
+            if mislabel_cnt > 0:
+                violations.append({"file": fp, "kind": "mislabel", "detail": str(mislabel_cnt) + " 行派生省≠列省"})
+    except Exception as e:
+        violations.append({"file": fp, "kind": "read_error", "detail": str(e).split(NL)[0]})
+print(json.dumps({"data_present": True, "scanned": len(files), "violations": violations}))
+`;
+
+  let out;
+  try {
+    out = execFileSync('python3', ['-c', py, fieldsPath, JSON.stringify(domains)], {
+      encoding: 'utf-8',
+      maxBuffer: 16 * 1024 * 1024,
+    });
+  } catch (e) {
+    // fail-closed：数据就绪闸里 python3/duckdb 不可用是真问题（非 CI 代码门禁），不放行
+    error(`单文件不混省检测无法执行（python3/duckdb 缺失或读失败）：${String(e.message || e).split('\n')[0]}`);
+    console.log('    ▶ 修复：在含 parquet 的数据环境跑（python3 + duckdb 必备）；发布链路 fail-closed');
+    return false;
+  }
+
+  let r;
+  try {
+    r = JSON.parse(out.trim());
+  } catch {
+    error(`单文件不混省检测输出解析失败：${out.slice(0, 200)}`);
+    return false;
+  }
+
+  if (!r.data_present) {
+    success('单文件不混省检测：无生产 fact parquet（CI/非数据环境），跳过');
+    return true;
+  }
+  if (!r.violations || r.violations.length === 0) {
+    success(`单文件不混省检测通过（扫描 ${r.scanned} 个 fact parquet · 派生省==列省）`);
+    return true;
+  }
+  error(`单文件不混省检测失败（${r.violations.length} 项）：`);
+  for (const v of r.violations) {
+    const rel = v.file.replace(ROOT_DIR + '/', '');
+    console.log(`    - [${v.kind}] ${rel}: ${v.detail}`);
+  }
+  console.log('    ▶ 混省(mixed)：拆分为单文件单省；贴错标签(mislabel)：核查 ETL declared_branch；');
+  console.log('    ▶ 未知前缀(unknown_prefix)：policy_no 前缀不在 mapping，疑数据损坏；NULL/非法值(illegal_value)：重跑域 ETL 派生；');
+  console.log('    ▶ unsafe_mapping：fields.json branch_code mapping 含非字母数字值，须修注册表；省份以 fields.json mapping 为准');
+  return false;
 }
 
 // ============================================================
@@ -2478,6 +2638,7 @@ export const PRE_SYNC_READINESS_CHECKS = [
   { name: 'Parquet重叠', fn: checkParquetOverlapInCurrent },
   { name: 'Claims去重', fn: checkClaimsDetailDeduplication },
   { name: '知识库一致性', fn: checkKnowledgeDataConsistency },
+  { name: '单文件不混省', fn: checkSingleProvincePerFile },
 ];
 
 // post-sync 检查：sync-vps 之后跑（本地 vs VPS 清单一致性，ETL 后必然先漂移再同步）

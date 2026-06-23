@@ -11,18 +11,44 @@ import { describe, expect, it, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { execFileSync } from 'child_process';
 import {
   parseDateRangeFromFilename,
   parseBranchFromFilename,
   isComplementaryPair,
   detectPolicyCurrentOverlap,
   assertNoPolicyCurrentOverlap,
+  resolveBranchFromParquet,
 } from '../lib/parquet-overlap-check.mjs';
 
 function makeDir(files) {
   const dir = mkdtempSync(join(tmpdir(), 'parquet-overlap-'));
   for (const name of files) writeFileSync(join(dir, name), '');
   return dir;
+}
+
+// 派生轴（真 parquet）测试需 python3 + duckdb（CI 通常无）→ 显式 skipIf（非静默跳过，避免假 passed）。
+// 本地有 duckdb 时真跑作证据；CI 无 duckdb 时 vitest 输出显式标记 skipped。
+function duckdbAvailable() {
+  try {
+    execFileSync('python3', ['-c', 'import duckdb'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+const HAS_DUCKDB = duckdbAvailable();
+
+// 用 python3+duckdb 在 dir 里写一个真 parquet：cols 形如 {policy_no:[...], branch_code:[...]}（branch_code 可省）
+function writeParquetFixture(dir, name, cols) {
+  const py = `
+import sys, json, duckdb, pandas as pd
+cols = json.loads(sys.argv[1]); out = sys.argv[2]
+df = pd.DataFrame(cols)
+con = duckdb.connect(); con.register('df', df)
+con.execute(f"COPY (SELECT * FROM df) TO '{out}' (FORMAT parquet)")
+`;
+  execFileSync('python3', ['-c', py, JSON.stringify(cols), join(dir, name)], { stdio: 'ignore' });
 }
 
 describe('parseDateRangeFromFilename', () => {
@@ -195,5 +221,89 @@ describe('assertNoPolicyCurrentOverlap', () => {
     });
     expect(ok).toBe(false);
     expect(failMsg).toContain('反模式');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// 派生轴（数据权威）测试 — Phase 4 codex 闸-1 P1.4 / P2 #3b（真 parquet fixture，需 duckdb）
+// ════════════════════════════════════════════════════════════════════════════
+
+describe.skipIf(!HAS_DUCKDB)('resolveBranchFromParquet（派生轴权威·真 parquet）', () => {
+  let dir;
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = null;
+  });
+
+  it('空占位文件（0 字节）→ 回退文件名轴（legacy 兼容）', () => {
+    dir = makeDir(['SX_20210101-20260617_01_签单清单_定稿.parquet']);
+    expect(resolveBranchFromParquet(join(dir, 'SX_20210101-20260617_01_签单清单_定稿.parquet')))
+      .toEqual({ branch: 'SX' });
+  });
+
+  it('文件名 SX_ 但内容全 SC → 取派生 SC（数据轴覆盖文件名）', () => {
+    dir = mkdtempSync(join(tmpdir(), 'parquet-derive-'));
+    writeParquetFixture(dir, 'SX_20210101-20260617_01_签单清单_定稿.parquet', {
+      policy_no: ['6100001', '6100002'], branch_code: ['SC', 'SC'],
+    });
+    expect(resolveBranchFromParquet(join(dir, 'SX_20210101-20260617_01_签单清单_定稿.parquet')))
+      .toEqual({ branch: 'SC' });
+  });
+
+  it('无 branch_code 列但 policy_no 派生 SX → 取派生 SX', () => {
+    dir = mkdtempSync(join(tmpdir(), 'parquet-derive-'));
+    writeParquetFixture(dir, '20210101-20260617_01_签单清单_定稿.parquet', {
+      policy_no: ['6180001', '6180002'],
+    });
+    expect(resolveBranchFromParquet(join(dir, '20210101-20260617_01_签单清单_定稿.parquet')))
+      .toEqual({ branch: 'SX' });
+  });
+
+  it('单文件混省（SC+SX）→ branchError（fail-closed）', () => {
+    dir = mkdtempSync(join(tmpdir(), 'parquet-derive-'));
+    writeParquetFixture(dir, '20210101-20260617_01_签单清单_定稿.parquet', {
+      policy_no: ['6100001', '6180002'], branch_code: ['SC', 'SX'],
+    });
+    const r = resolveBranchFromParquet(join(dir, '20210101-20260617_01_签单清单_定稿.parquet'));
+    expect(r.branchError).toBeTruthy();
+    expect(r.branch).toBeUndefined();
+  });
+});
+
+describe.skipIf(!HAS_DUCKDB)('detectPolicyCurrentOverlap（派生轴·真 parquet）', () => {
+  let dir;
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = null;
+  });
+
+  it('文件名 SX_ 但内容 SC + 裸名 SC 同期 → 派生轴归同省 → 检出重叠（文件名轴会漏）', () => {
+    dir = mkdtempSync(join(tmpdir(), 'parquet-derive-'));
+    // 两文件同期；若按文件名轴会分入 SX/SC 两组（0 overlap），按派生轴都是 SC（1 overlap）
+    writeParquetFixture(dir, 'SX_20210101-20260617_01_签单清单_定稿.parquet', {
+      policy_no: ['6100001'], branch_code: ['SC'],
+    });
+    writeParquetFixture(dir, '20210101-20260617_01_签单清单_定稿.parquet', {
+      policy_no: ['6100002'], branch_code: ['SC'],
+    });
+    const r = detectPolicyCurrentOverlap(dir);
+    expect(r.count).toBe(1);
+    expect(r.branchErrors).toEqual([]);
+  });
+
+  it('混省 parquet → branchErrors 非空 → assertNoPolicyCurrentOverlap fail-closed', () => {
+    dir = mkdtempSync(join(tmpdir(), 'parquet-derive-'));
+    writeParquetFixture(dir, '20210101-20260617_01_签单清单_定稿.parquet', {
+      policy_no: ['6100001', '6180002'], branch_code: ['SC', 'SX'],
+    });
+    const r = detectPolicyCurrentOverlap(dir);
+    expect(r.branchErrors.length).toBeGreaterThan(0);
+    let failMsg = null;
+    const ok = assertNoPolicyCurrentOverlap(dir, {
+      onPass: () => { throw new Error('should not pass'); },
+      onFail: (m) => { failMsg = m; },
+    });
+    expect(ok).toBe(false);
+    expect(failMsg).toContain('混省');
   });
 });
