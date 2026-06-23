@@ -29,7 +29,8 @@ describe('customer_flow ETL contract', () => {
         next_insurer: 1,
       },
     });
-    expect(customerFlow.field_count).toBe(5);
+    // 多省 P3-B：customer_flow 主产物加 branch_code 派生列（5 → 6）
+    expect(customerFlow.field_count).toBe(6);
   });
 
   it('rejects candidate parquet when date validation is enabled but date stats are empty', () => {

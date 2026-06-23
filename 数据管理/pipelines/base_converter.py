@@ -174,11 +174,23 @@ class BaseConverter(ABC):
                 if len(df) < before:
                     print(f"   过滤无 {col}: {before - len(df):,} 行")
 
-        # 6c-多省 0a：branch_code 常量列注入（仅 --branch-code 提供时；
-        #   SC 默认链路不传 → 不注入，四川产物字节安全。与 convert_claims_detail.py 同语义）
-        if args.branch_code:
-            df["branch_code"] = args.branch_code
-            print(f"   🏢 注入 branch_code 常量列 = '{args.branch_code}'（{len(df):,} 行）")
+        # 6c-多省 P3-B：branch_code 从 policy_no 前 3 位 prefix_map 派生（与 P1 premium #762 /
+        #   P3-A claims_detail #763 同语义；唯一事实源 = fields.json branch_code derivation）
+        #   · 'policy_no' in df.columns（cross_sell / customer_flow）→ apply_registry_derivations
+        #     派生 + assertDeclaredBranch / strictNonNull fail-fast（防混省 / 喂错省 / NULL 省码）；
+        #     declared_branch 缺省回退 'SC'（codex 闸-1 P1-1：SC 默认链路也需 assertDeclaredBranch
+        #     守卫，否则混省行不会 fail-fast）
+        #   · 'policy_no' not in df.columns（dim 表 repair / brand）→ 安静跳过派生入口，避免
+        #     derived_fields.py 内 strict 守卫对 dim 表误触 fail-fast
+        from pipelines.derived_fields import resolve_declared_branch, apply_registry_derivations
+        declared_branch = resolve_declared_branch(args)
+        if 'policy_no' in df.columns:
+            df = apply_registry_derivations(df, declared_branch or 'SC')
+        elif declared_branch:
+            print(
+                f"   ℹ 跳过 branch_code 派生（{self.get_domain_id()} 无 policy_no 列；"
+                f"declared={declared_branch}）"
+            )
 
         # 6d. pre-write 钩子（如 customer_flow 与旧 parquet 做 diff 对比）
         self.pre_write_hook(df, output_file)
@@ -228,7 +240,10 @@ class BaseConverter(ABC):
         parser.add_argument(
             "--branch-code",
             default=None,
-            help="多省 0a（ADR D5）：分公司编码（如 SX）。提供时注入 branch_code 常量列并跳过 "
-                 "data-sources.json 写入；缺省（SC 默认链路）不传 → 不注入，四川产物字节安全。",
+            help="多省 P3-B（ADR D5；2026-06-23 起 constant 注入升级为 prefix_map 派生）："
+                 "分公司编码（如 SX）。提供时透传 declared_branch 给 derived_fields 做 "
+                 "assertDeclaredBranch 校对「声明省==派生省」+ 跳过 data-sources.json 写入；"
+                 "SC 默认链路不传 → declared_branch 回退 'SC'（让 assertDeclaredBranch 仍守卫"
+                 "混省）；branch_code 列恒从 fields.json prefix_map(policy_no, len=3) 派生。",
         )
         return parser.parse_args()

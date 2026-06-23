@@ -1092,18 +1092,17 @@ def save_to_parquet(df, output_path):
         print(f"   ⚠️ cn_to_en_mapping 读取失败，保留中文列名: {e}")
 
     # ── 派生字段物化：遍历字段注册表 derived:true 字段，按 derivation.type 执行 ──
-    # 派生字段规则是注册表的一部分（唯一事实源），此处仅做执行
-    registry_path = Path(__file__).resolve().parent.parent.parent / 'server/src/config/field-registry/fields.json'
+    # 派生字段规则是注册表的一部分（唯一事实源），此处仅做执行；调用 derived_fields helper
+    # 收敛 ETL 入口（premium 此处 / base_converter / claims_detail / customer_flow）统一逻辑。
+    # SC 默认链路（不传 --branch-code）declared_branch 回退 'SC'（codex 闸-1 P1-1：让
+    # assertDeclaredBranch 在 SC 也守卫混省/喂错省）。
+    # 异常边界（codex 闸-1 P2-1）：只吞 FileNotFoundError/JSONDecodeError（registry 缺失或
+    # JSON 坏 → 跳过派生）；派生触发的 SystemExit（strict_non_null/assertDeclaredBranch
+    # fail-fast）必须冒泡，禁止吞掉静默产出错省码 parquet。
     try:
-        from pipelines.derived_fields import apply_derived_fields
-        with open(registry_path) as f:
-            registry = json.load(f)
-        derived_fields = [fd for fd in registry.get('fields', []) if fd.get('derived')]
-        # 有效声明省（codex 闸-1 P1-2）：CLI --branch-code 优先，回退 env BRANCH_CODE；
-        # 归一化大小写（evidence-verifier P2：防 BRANCH_CODE=sc 等手误误触 fail-fast）；
-        # 供 assertDeclaredBranch 字段（branch_code）核对「声明省==派生省」，防喂错省/混省
-        declared_branch = (args.branch_code or os.environ.get('BRANCH_CODE') or '').strip().upper() or None
-        df = apply_derived_fields(df, derived_fields, declared_branch=declared_branch)
+        from pipelines.derived_fields import resolve_declared_branch, apply_registry_derivations
+        declared_branch = resolve_declared_branch(args) or 'SC'
+        df = apply_registry_derivations(df, declared_branch)
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"   ⚠️ 派生字段注册表读取失败，跳过派生: {e}")
 
