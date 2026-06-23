@@ -892,7 +892,8 @@
 - **成果**：新增4个导出函数(buildRsyncBranchFilterArgs/getSyncBranchCode/queryLocalPolicyFingerprintForBranch/isFileInBranch) + 25个新单测 = 33新测试/134总测试全绿；governance 44/44；typecheck通过。
 - **重来更好**：①计划阶段应提前识别VPS端分省指纹的依赖，避免P1被codex发现后被迫降级（虽降级是正确策略，但应自主发现）。②rsync filter语义复杂，应在计划阶段先测试filter规则语义而非写进改造方案里再被codex发现漏洞。
 - **复用价值**：`buildRsyncBranchFilterArgs(branchCode, knownBranches)`模式（null短路=旧行为，非null=分省保护）可推广到其他扁平目录假设站点（daily.mjs/parquet-overlap-check等）。`isFileInBranch`可被ETL侧的manifest/audit脚本复用。
-  - needs_automation: true（VPS端就绪后需自动从`branchCode=null`升级为分省精确对比，触发条件：`/internal/data-fingerprint`支持`?branch=`参数）expires: 2026-12-31
+  - needs_automation: true（VPS端就绪后需自动从`branchCode=null`升级为分省精确对比，触发条件：`/internal/data-fingerprint`支持`?branch=`参数）
+  - expires: 2026-12-31
 - **GATED残留**：真实多省同步验证需cutover时做（SX进current/的硬前置=G5口径签字+RLS-on）。VPS端分省指纹端点（`/internal/data-fingerprint?branch=SC`）待`server/src`侧实现后，assertLocalNotStaleVsVps多省路径才能从skip升级为精确对比。
 ---
 
@@ -914,7 +915,11 @@
 - **P2#2（待人工）**：PR body "33 新增"不实（实为新增 22 / 文件总计 33 个 it），gh API keyring 失效无法自动 edit；需用户手动执行：`gh pr edit 753 --body-file <临时文件>` 或直接在 GitHub 页面修正措辞 `单测: 22 新增 / 33 总计（闸-2 修复后 36） / 全部 PASS`。
 - **验证**：36 单测 PASS（新增 3 个 it）；governance 44/44；typecheck 未单独跑（仅修改 .mjs 无 TS 类型）。
 - **重来更好**：①导出 `assertLocalNotStaleVsVps` 应在 PR #753 原始提交时一并处理，不该留到闸-2 才发现。②printDryRun 的打印字符串与实际执行 rsyncDir 共享两处构建逻辑（rsync 参数列表和打印字符串）但未共享代码，是结构性重复——后续可提取 `buildRsyncArgsList(task)` 统一源，dry-run 打印和实际执行都从该函数派生，消除不一致风险。
-  - needs_automation: true（printDryRun 与 rsyncDir 参数不一致是结构性问题；后续提取 buildRsyncArgsList 统一源后可在 harness 层 diff 验证"打印 == 执行"）expires: 2026-12-31
+  - needs_automation: true（printDryRun 与 rsyncDir 参数不一致是结构性问题；后续提取 buildRsyncArgsList 统一源后可在 harness 层 diff 验证"打印 == 执行"）
+  - expires: 2026-12-31
+
+---
+
 **R22 · b332 收尾 PR-2：repair 纯逻辑提取（逻辑密度最高模块·图表 useMemo 提取·三源全过）**
 - **触发**：PR-1 admin(#751)合并后续推。repair 是 6 剩余模块里逻辑密度最高(useMemo×5 / 数组链×12)，含 RepairPage 的 KPI 计算 + RepairScatter 的 ECharts option 数据塑形。
 - **成果（提取 + 纯增测试）**：utils/repairKpi.ts(buildRepairParams/findTierRow/computeToPremiumTotals + 移入类型 TimeWindow/CoopTierFilter/CoopTierRow)+utils/repairScatter.ts(buildScatterAxes/scatterSymbolSize/buildTierSeriesData)；RepairPage/RepairScatter 删内联改 import。21 单测覆盖查询参数条件包含、层级补零(含 none_shadow)、除零→null、轴去重排序、symbolSize 钳位[8,40]+sqrt 缩放、坐标映射+空值回退。type-only 循环导入(util import 组件类型、组件 import util 值)安全。

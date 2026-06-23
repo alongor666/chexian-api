@@ -68,8 +68,8 @@
 - 2026-06-20-claude-2eccfa `BLOCKED` — 山西机构规范化映射 (61 原始机构 → 11 经营单元)
 - 2026-06-20-claude-8870f5 — [口径裁决] reserve_wan(未决准备金) 在覆盖全状态案件的面板含零结/注销/
 - 2026-06-21-claude-acf188 `PARTIAL` — 山西账号（ADR G7）
-- 2026-06-22-claude-e5cc06 — buildRsyncBranchFilterArgs 的 knownBranches 默
 - 2026-06-22-16ab1c-b842bc — 报告托管 phase-2 GATED 续作
+- 2026-06-22-claude-e5cc06 — buildRsyncBranchFilterArgs 的 knownBranches 默
 
 **P3（26 项）**
 
