@@ -28,8 +28,9 @@ import type { MetricDefinition } from '../types.js';
 export const planMetrics: readonly MetricDefinition[] = [
   {
     id: 'plan_completion_pct',
+    timeWindow: 'cutoff-based',
     additive: false,
-    version: '2.0.0',
+    version: '2.1.0',
     name: '计划达成率',
     category: 'plan',
     tags: ['kpi', 'plan', 'alert', 'branch-ops'],
@@ -50,6 +51,9 @@ export const planMetrics: readonly MetricDefinition[] = [
         'time_progress = EXTRACT(doy FROM 数据内最新签单日) ÷ 全年天数（闰年感知，禁止硬编码 365）。' +
         '进度锚点必须用数据内最新签单日（非服务器当前日期）；带时间筛选时返回' +
         '「年初至筛选末日的累计达成率」。100% 即按时间进度均匀达成。' +
+        '月度/任意子周期计划取官方派生口径 = 年计划 × 子周期占比（月度即年计划 ÷ 12，' +
+        'B290 用户 2026-06-22 拍板；非真实逐月计划，详见业务规则字典 §「计划与时间进度口径」）；' +
+        '本指标标准口径用连续时间进度，离散月度仅为口头解释时的派生近似。' +
         '注册到 L4_METRIC_IDS，集成测试跳过。',
     },
     display: {
@@ -76,6 +80,15 @@ export const planMetrics: readonly MetricDefinition[] = [
       source: 'skills/chexian-report-shell/lib/alerts.py v1.7 (2026-05-13)',
     },
     changelog: [
+      {
+        version: '2.1.0',
+        date: '2026-06-22',
+        changes:
+          'B290 时间口径语义层 v0.1：标注 timeWindow=cutoff-based（达成率锚定数据内最新签单日的时间进度，' +
+          '数值随观察截止日变化，跨窗口比较须对齐 cutoff，不可与自由窗口口径混用）；' +
+          '确立月度计划官方派生口径 = 年计划 ÷ 12（用户 2026-06-22 拍板，非真实逐月计划）。' +
+          '仅补元数据与口径文档，L4 公式语义不变。',
+      },
       {
         version: '2.0.0',
         date: '2026-06-11',

@@ -86,9 +86,14 @@ export interface MetricTestCase {
 /** 指标定义 — 注册表核心条目 */
 /**
  * 指标固有时间窗口语义（B290 口径消歧，与路由层 RouteTimeWindow 配合）：
- * - 'any'（缺省）：窗口完全随查询路由的 WHERE 决定，指标本身无固有时间语义
- * - 'cutoff-based'：指标内嵌观察时点逻辑（满期系数/年化），数值随观察截止日成熟度变化，
- *   跨窗口比较时必须对齐 cutoff（如满期保费/满期赔付率/年化出险率族）
+ * - 'any'：窗口完全随查询路由的 WHERE 决定，指标本身无固有时间语义
+ * - 'cutoff-based'：指标内嵌观察时点逻辑，数值随观察截止日变化，跨窗口比较时必须对齐 cutoff。
+ *   涵盖两类：(1) 满期系数/年化成熟度族（满期保费/满期赔付率/年化出险率）；
+ *   (2) 计划进度锚定族——计划达成率以「数据内最新签单日」为时间进度锚点，离散月度需用
+ *   官方派生口径（年计划 ÷ 12），故同属随截止日变化、禁止与自由窗口口径混用。
+ *
+ * 注册表层校验（validation.ts）强制每个指标显式声明，消除缺省歧义。类型上保持可选
+ * 仅为兼容注册表外的 MetricDefinition 构造点（比照 additive）。
  */
 export type MetricTimeWindow = 'any' | 'cutoff-based';
 
@@ -102,7 +107,7 @@ export interface MetricDefinition {
   readonly category: MetricCategory;
   readonly tags: readonly string[];
 
-  // ===== 时间窗口语义（可选，缺省 'any'） =====
+  // ===== 时间窗口语义（注册表内强制显式声明，类型可选仅兼容外部构造点） =====
   readonly timeWindow?: MetricTimeWindow;
 
   // ===== 可加性（cube 语义层聚合路由，P2）=====

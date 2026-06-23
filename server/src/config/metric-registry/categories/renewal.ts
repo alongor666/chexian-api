@@ -25,6 +25,7 @@ export const renewalMetrics: readonly MetricDefinition[] = [
   // ===== A 应续件数 =====
   {
     id: 'renewal_due_count',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '应续件数',
@@ -51,6 +52,7 @@ export const renewalMetrics: readonly MetricDefinition[] = [
   // ===== B 报价件数 =====
   {
     id: 'renewal_quoted_count',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '报价件数',
@@ -77,6 +79,7 @@ export const renewalMetrics: readonly MetricDefinition[] = [
   // ===== C 已续件数 =====
   {
     id: 'renewal_renewed_count',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '已续件数',
@@ -103,6 +106,7 @@ export const renewalMetrics: readonly MetricDefinition[] = [
   // ===== D 未报价件数（自 foundation 归类至 renewal 域）=====
   {
     id: 'renewal_unquoted_count',
+    timeWindow: 'any',
     additive: false,
     version: '1.1.0',
     name: '未报价件数',
@@ -132,6 +136,7 @@ export const renewalMetrics: readonly MetricDefinition[] = [
   // ===== E 流失件数（自 foundation 归类至 renewal 域）=====
   {
     id: 'renewal_lost_count',
+    timeWindow: 'any',
     additive: false,
     version: '1.1.0',
     name: '流失件数',
@@ -162,6 +167,7 @@ export const renewalMetrics: readonly MetricDefinition[] = [
   // ===== 续保影响度（自 ratio 归类至 renewal 域）=====
   {
     id: 'renewal_impact_rate',
+    timeWindow: 'any',
     additive: false,
     version: '1.1.0',
     name: '续保影响度',

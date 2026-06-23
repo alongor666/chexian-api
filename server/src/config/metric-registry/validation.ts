@@ -95,6 +95,19 @@ export function validateRegistry(): {
       });
     }
 
+    // timeWindow 固有时间窗口语义（B290 口径消歧，每指标必须显式声明，消除缺省歧义）
+    // 类型上 timeWindow 可选（兼容注册表外构造点，比照 additive），但注册表内强制声明，
+    // 避免静默缺省导致客户端无法判断指标是否随观察截止日变化。判定见 types.ts
+    // MetricDefinition.timeWindow / MetricTimeWindow 注释。
+    if (m.timeWindow !== 'any' && m.timeWindow !== 'cutoff-based') {
+      errors.push({
+        metricId: m.id,
+        field: 'timeWindow',
+        message:
+          'timeWindow 固有时间语义缺失或非法（B290 必需：any=窗口随路由 WHERE 决定 / cutoff-based=内嵌观察时点逻辑，数值随截止日变化）',
+      });
+    }
+
     // thresholds 单调性（可选字段）
     if (m.thresholds) {
       const { direction, notice, warn, danger } = m.thresholds;
