@@ -75,6 +75,11 @@ export function parsePolicyDir(extraArgs = []) {
  * 目录缺失 / 无 parquet → 返回 []（与 Python 端「policy_dir 不存在则跳过回填」语义一致）。
  * 仅纳入常规文件：以 .parquet 结尾的目录 / FIFO 等若被 stat/readFile 会在缓存键计算阶段抛错
  * 中断整条 ETL（policy/current 由 ETL renameSync 写出，正常只含常规 parquet 文件）。
+ *
+ * 多省 Phase B B2：**故意保持 flat-within-dir（isFile 过滤天然排除省份子目录 current/<省>/）**，
+ * 与消费者 convert_new_energy_claims.py 的 read_parquet('<dir>/*.parquet') 非递归 glob 严格对齐——
+ * 子目录布局下 daily.mjs 把 --policy-dir 指向 current/<省>/ 本身（branchOutputRoot 派生），指纹与
+ * convert 读到的是同一组 flat 分片，无需下钻。**禁止改为递归**（否则指纹覆盖 convert 没读到的文件）。
  */
 export function collectPolicyInputFingerprints(policyDir) {
   if (!policyDir || !existsSync(policyDir)) return [];

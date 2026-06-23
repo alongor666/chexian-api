@@ -168,8 +168,33 @@ describe('fetch-local-metrics inspectWarehouse', () => {
     writeFileSync(join(tmpRoot, 'fact/claims_detail/claims_2026.parquet'), '');
     const r = inspectWarehouse(tmpRoot);
     expect(r.ready).toBe(true);
-    expect(r.policyGlob).toMatch(/policy\/current\/\*\.parquet$/);
+    // B2：policyGlob 现为 DuckDB read_parquet 显式文件**数组字面量**（非宽 glob），含顶层扁平分片
+    expect(r.policyGlob).toMatch(/^\[.*\]$/);
+    expect(r.policyGlob).toContain('fact/policy/current/x.parquet');
+    expect(r.policyGlob).not.toContain('**');
     expect(r.claimsGlob).toMatch(/claims_detail\/claims_\*\.parquet$/);
+  });
+
+  it('policy 仅省份子目录 current/<省>/ → 仍 ready，数组字面量含子目录文件（下钻不失明，B2 防沉默失败）', () => {
+    mkdirSync(join(tmpRoot, 'fact/policy/current/SC'), { recursive: true });
+    mkdirSync(join(tmpRoot, 'fact/claims_detail'), { recursive: true });
+    writeFileSync(join(tmpRoot, 'fact/policy/current/SC/x.parquet'), '');
+    writeFileSync(join(tmpRoot, 'fact/claims_detail/claims_2026.parquet'), '');
+    const r = inspectWarehouse(tmpRoot);
+    expect(r.ready).toBe(true);
+    expect(r.policyGlob).toContain('fact/policy/current/SC/x.parquet');
+    expect(r.policyGlob).toMatch(/^\[.*\]$/);
+  });
+
+  it('policy 顶层 current/ 下的非省码目录（archive/）不被纳入读集（与 helper ^[A-Z]{2}$ 语义一致，codex 闸-2 P1）', () => {
+    mkdirSync(join(tmpRoot, 'fact/policy/current/archive'), { recursive: true });
+    mkdirSync(join(tmpRoot, 'fact/claims_detail'), { recursive: true });
+    writeFileSync(join(tmpRoot, 'fact/policy/current/flat.parquet'), '');
+    writeFileSync(join(tmpRoot, 'fact/policy/current/archive/old.parquet'), '');
+    writeFileSync(join(tmpRoot, 'fact/claims_detail/claims_2026.parquet'), '');
+    const r = inspectWarehouse(tmpRoot);
+    expect(r.policyGlob).toContain('fact/policy/current/flat.parquet');
+    expect(r.policyGlob).not.toContain('archive/old.parquet'); // archive 非省码目录 → 排除
   });
 
   it('claims 仅有 latest.parquet（旧架构）→ glob 回退到 latest.parquet（镜像 bootstrapper 回退）', () => {

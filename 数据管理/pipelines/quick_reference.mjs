@@ -1,8 +1,8 @@
 import { spawnSync } from 'child_process';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 
 import { getParquetColumnCount, getParquetRowCount } from './parquet_stats.mjs';
+import { listPolicyCurrentShards, toDuckdbReadParquetList } from '../../scripts/lib/policy-current-shards.mjs';
 
 function todayString() {
   const d = new Date();
@@ -14,16 +14,19 @@ function formatWan(value) {
 }
 
 const PY_POLICY_SUMMARY = `
-import json, os, sys
+import json, sys
 import duckdb
 
-pattern = os.path.join(sys.argv[1], '*.parquet').replace("'", "''")
+# B2：read_target = DuckDB read_parquet 数组字面量（JS toDuckdbReadParquetList 显式枚举顶层扁平 +
+# 省份子目录 current/<省>/ 的精确文件列表，已 SQL 单引号转义）——与 helper ^[A-Z]{2}$ 单层语义一致，
+# 不用宽 ** glob（避免吃到 archive/ 等 helper 排除的文件，codex 闸-2 P1）。
+read_target = sys.argv[1]
 row = duckdb.sql(f"""
 SELECT
   COUNT(*) AS row_count,
   COUNT(DISTINCT policy_no) AS unique_policy_count,
   SUM(CASE WHEN CAST(policy_date AS DATE) >= DATE '2024-01-01' THEN 1 ELSE 0 END) AS active_2024_row_count
-FROM read_parquet('{pattern}', union_by_name=true)
+FROM read_parquet({read_target}, union_by_name=true)
 """).fetchone()
 
 print(json.dumps({
@@ -33,8 +36,8 @@ print(json.dumps({
 }, ensure_ascii=False))
 `;
 
-function getPolicyCurrentSummary(python, policyCurrentDir) {
-  const result = spawnSync(python, ['-', policyCurrentDir], {
+function getPolicyCurrentSummary(python, readTarget) {
+  const result = spawnSync(python, ['-', readTarget], {
     input: PY_POLICY_SUMMARY,
     encoding: 'utf-8',
     windowsHide: true,
@@ -93,15 +96,15 @@ export function collectPolicyCurrentStats(
 ) {
   if (!existsSync(policyCurrentDir)) return null;
 
-  const shardFiles = readdirSync(policyCurrentDir)
-    .filter((f) => f.endsWith('.parquet'))
-    .sort();
-  if (shardFiles.length === 0) return null;
+  // B2：下钻顶层扁平 + 省份子目录 current/<省>/（共享 helper），防子目录失明致 shardCount 0。
+  // 扁平布局下与历史 readdirSync(policyCurrentDir) 枚举逐字节等价。
+  const shards = listPolicyCurrentShards(policyCurrentDir).sort((a, b) => a.path.localeCompare(b.path));
+  if (shards.length === 0) return null;
 
   let rowCount = 0;
   let fieldCount = 0;
-  for (const shard of shardFiles) {
-    const shardPath = join(policyCurrentDir, shard);
+  for (const shard of shards) {
+    const shardPath = shard.path;
     const rows = statFns.getParquetRowCount(python, shardPath);
     const cols = statFns.getParquetColumnCount(python, shardPath);
     if (rows == null || cols == null) {
@@ -111,12 +114,13 @@ export function collectPolicyCurrentStats(
     fieldCount = Math.max(fieldCount, cols);
   }
 
-  const summary = statFns.getPolicyCurrentSummary?.(python, policyCurrentDir);
+  // summary 用显式文件列表（与 shardCount/逐分片统计同一组 shards），不下钻宽 glob
+  const summary = statFns.getPolicyCurrentSummary?.(python, toDuckdbReadParquetList(shards.map((s) => s.path)));
 
   return {
     rowCount: summary?.rowCount ?? rowCount,
     fieldCount,
-    shardCount: shardFiles.length,
+    shardCount: shards.length,
     ...(summary?.uniquePolicyCount != null ? { uniquePolicyCount: summary.uniquePolicyCount } : {}),
     ...(summary?.active2024RowCount != null ? { active2024RowCount: summary.active2024RowCount } : {}),
   };
