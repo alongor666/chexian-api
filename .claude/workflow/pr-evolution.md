@@ -953,3 +953,17 @@
 - **重来更好/复用价值**：① **同构小模块合并一 PR 合理**——都是组件提取纯函数、无交叉依赖，合并减少 worktree/CI/复盘开销而不牺牲审查粒度(diff 仍小、codex/verifier 仍逐函数审)。② **带注释解释真实 bug 的防御性 helper(ensureArray)是最高价值提取**——注释本身就是测试用例来源(DuckDB LIST 序列化为 null/{items:[]}/数字键对象/原始值的 4 种形态，原注释记录了 `.map is not a function` 崩溃)。③ **泛型化(`T extends {category:string}`)避免移动组件类型**，比 R22 的 type-only 循环导入更干净——优先泛型，类型循环导入次之。
   - needs_automation: false
 - **下一轮**：PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE（收尾最后一单）。
+
+---
+
+**R24 · PR #753 codex 对抗评审 P0/P1 缺陷修复（分省安全同步）**
+- **触发**：PR #753 引入 `SYNC_VPS_BRANCH_CODE` 分省安全改造，evidence-verifier 放行，但 codex 对抗评审抓出 4 个缺陷（P0-1/P0-2/P1/P2）。
+- **P0-1 根因（最严重·会删四川生产数据）**：`buildRsyncBranchFilterArgs('SX')` 只生成 `--filter 'P SC_*.parquet'`，但四川裸名分片不匹配 `SC_*.parquet` 模式，`rsync --delete` 会删掉 VPS 上的裸名 SC 文件。**修复**：引入 `branchFilePatterns` 纯函数，SC 用 `[0-9]*.parquet`（日期数字裸名）+ `SC_*.parquet` 两条模式精确覆盖，完全替代错误的 `SC_*.parquet` 单条规则。
+- **P0-2 根因（sender 未隔离）**：原方案只有 receiver 侧 `--filter 'P ...'`，不阻止本地混有异省文件时被上传。**修复**：`buildRsyncBranchFilterArgs` 同时生成 sender 侧 `--exclude <异省模式>`，防止异省文件被上传。
+- **P1 根因（新鲜度闸绕过）**：`assertLocalNotStaleVsVps` 对 `branchCode` 非 null（含 SC！）无条件 return true，四川模式也绕过了生产保护。**修复**：只有非 SC 省份（SX 等）才降级，SC 模式走新鲜度校验，且改用 `queryLocalPolicyFingerprintForBranch` 只统计 SC 本省文件，防止本地混省时 SX 数据撑过 SC stale 场景。
+- **P2 修复**：新增 `branchOfFile`/`fileBelongsToBranch`/`branchFilePatterns` 纯函数，测试从"断言字符串含某 filter"升级为真实本地 rsync --delete 验证（临时目录三场景：SX 模式裸名不被删/SC 模式 SX 不被删/P0-2 sender 隔离）。
+- **evidence-verifier 漏掉的根因**：evidence-verifier 是 LLM subagent，无法像 codex 那样实际跑 rsync 命令验证 filter 行为；rsync 的 glob 语义需要真实执行才能验证。本轮强化测试覆盖了这个盲区。
+- **三源（最终）**：verify:full(governance44+typecheck+3919 单测)全绿；codex 两轮复审（第一轮 P0-1/P0-2 清除，P1 条件遗留；第二轮 P0/P0-2 清除，P1 用 `queryLocalPolicyFingerprintForBranch` 彻底修复，字节安全清除）；tests 54 个 sync-vps 专项测试（含 3 个真实 rsync 验证）全通过。
+- **重来更好/复用价值**：① **evidence-verifier + codex 对抗评审是互补的**——LLM verifier 擅长架构/语义/一致性检查，codex 擅长命令行工具的实际行为验证（rsync glob 语义需要真实执行）。② **rsync filter 规则必须用临时目录真实跑**，单纯断言参数字符串是假覆盖。③ **裸名 SC 文件是一类常见陷阱**——前缀约定建立后，遗留裸名数据必须在所有 filter/exclude/protect/manifest 逻辑里单独处理。④ `branchFilePatterns` 封装成 SSOT 可解决此类前缀错配问题。
+  - needs_automation: true → `scripts/verify-branch-rsync-safety.sh`（用真实 rsync 验证所有分省组合的保护行为）
+  - expires: 2026-07-31

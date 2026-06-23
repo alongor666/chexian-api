@@ -369,14 +369,72 @@ const RSYNC_EXCLUDES = ['_incoming.parquet', '*.tmp', '_tmp/', '.DS_Store'];
 const RSYNC_EXCLUDE_ARGS = RSYNC_EXCLUDES.flatMap((p) => ['--exclude', p]);
 
 /**
- * 多省安全：当 current/ 含多省分片时，--delete 会误删远端异省文件。
- * 此函数生成 rsync filter 规则，保护（Protect）异省前缀的 .parquet 文件。
+ * 多省安全：将省份编码映射到该省分片的 rsync 文件模式字符串。
  *
- * 策略（codex 闸-1 P1 校正）：
- *   - 异省文件格式约定：`<BRANCH>_*.parquet`（两位大写字母 + 下划线 + 任意名称）
- *   - 本省文件含：`<branchCode>_*.parquet` + 无前缀旧分片（向后兼容裸名，省略省份前缀 = SC）
- *   - rsync --filter 规则顺序：先 protect 异省前缀，再让 --delete 正常清理同省旧文件
- *   - 使用 `--filter 'P <省>_*'` 保护不属于目标省的前缀文件（P = 不删除 receiver 端匹配文件）
+ * 关键：四川（SC）历史分片是"裸名"（无省份前缀），命名规律为日期数字开头，
+ *   如 `20210101-20231231_01_签单清单_定稿.parquet`。
+ *   其他新省（SX 等）用 `<BRANCH>_*.parquet` 带前缀格式。
+ *
+ * 此函数是 P0-1 修复的核心：保护规则必须用正确的文件模式。
+ *   SC 裸名文件的可靠特征是以日期数字（`[0-9]`）开头，
+ *   外加可能存在的 `SC_` 前缀格式（未来兼容）。
+ *   rsync 字符类 `[0-9]` 是 rsync 原生支持的通配符语法（POSIX 字符类），可可靠匹配数字开头文件。
+ *
+ * 注（已知 limitation，BACKLOG 登记）：
+ *   若未来 SC 裸名文件出现非数字、非 SC_ 开头的命名，此处模式需要更新。
+ *   实践中，当前所有生产 SC 分片均以日期（YYYYMMDD）开头，此模式覆盖完整。
+ *
+ * @param {string} branchCode - 省份编码（如 'SC', 'SX'）
+ * @returns {string[]} 该省份对应的 rsync 文件模式数组（用于 protect 或 exclude）
+ */
+export function branchFilePatterns(branchCode) {
+  if (branchCode === 'SC') {
+    // SC 历史裸名分片：以日期数字（YYYYMMDD...）开头，如 20210101-20231231_01_签单清单_定稿.parquet
+    // 使用 [0-9] rsync 字符类匹配数字开头文件 + SC_ 前缀格式（未来兼容）
+    // 注：不用 [!A-Z] 否定字符类，因为 rsync glob 的否定类语义与 shell 不同，可靠性更低
+    return ['[0-9]*.parquet', 'SC_*.parquet'];
+  }
+  // 其他省份（SX 等）统一用 `<BRANCH>_*.parquet` 带前缀格式
+  return [`${branchCode}_*.parquet`];
+}
+
+/**
+ * 判断文件名是否属于指定省份（纯函数，供 filter/exclude/manifest 等共用）。
+ *
+ * 规则：
+ *   - SC 省：无 `XX_` 前缀的裸名，或 `SC_` 前缀
+ *   - 其他省：`<BRANCH>_` 前缀
+ *
+ * @param {string} filename - 文件名（不含路径）
+ * @param {string} branchCode - 省份编码
+ * @returns {boolean}
+ */
+export function fileBelongsToBranch(filename, branchCode) {
+  return branchOfFile(filename) === branchCode;
+}
+
+/**
+ * 根据文件名推断所属省份。
+ *   - `XX_*.parquet`（两位大写字母+下划线开头）→ 对应省份编码
+ *   - 裸名（无此前缀）→ 'SC'（历史四川分片约定）
+ *
+ * @param {string} filename - 文件名（不含路径）
+ * @returns {string} 省份编码（如 'SC', 'SX'）
+ */
+export function branchOfFile(filename) {
+  const m = filename.match(/^([A-Z]{2})_/);
+  return m ? m[1] : 'SC'; // 裸名 = 历史 SC 分片
+}
+
+/**
+ * 多省安全：当 current/ 含多省分片时，--delete 会误删远端异省文件。
+ * 此函数生成 rsync 参数，同时做到：
+ *   1. receiver 侧 Protect（--filter 'P ...'）：保护 VPS 上异省分片不被 --delete 删除
+ *   2. sender 侧 exclude（--exclude '...'）：不上传本地异省分片到 VPS
+ *
+ * P0-1 修复：SC 分片是裸名（无 SC_ 前缀），protect/exclude 必须用正确模式，
+ *   不能只写 `P SC_*.parquet`（该模式无法匹配裸名 SC 文件）。
+ * P0-2 修复：增加 sender 侧 --exclude，防止本地混有多省文件时异省文件被上传。
  *
  * 字节安全：branchCode=null 时返回空数组 → rsyncDir 行为与原版完全等价。
  *
@@ -387,18 +445,27 @@ const RSYNC_EXCLUDE_ARGS = RSYNC_EXCLUDES.flatMap((p) => ['--exclude', p]);
 export function buildRsyncBranchFilterArgs(branchCode, knownBranches = ['SC', 'SX']) {
   if (!branchCode) return []; // 单省短路：不加任何 filter，与历史行为完全等价
 
-  // 对每个非目标省份生成 --filter 'P <BRANCH>_*'（Protect：受保护文件不会被 --delete 删除）
-  // ⚠ P2 约束（follow-up 已登记 BACKLOG）：knownBranches 默认 ['SC','SX'] 硬编码，
-  //   三省扩展时须通过 task.knownBranches（由 buildStandardSyncTasks opts 传入）覆盖默认值，
-  //   否则第三省文件不受 Protect 保护。当前 buildSyncTasks→buildStandardSyncTasks 未透传
-  //   knownBranches，故三省前须先修复该透传链路。
-  const protectArgs = [];
+  const args = [];
+
   for (const b of knownBranches) {
-    if (b !== branchCode) {
-      protectArgs.push('--filter', `P ${b}_*.parquet`);
+    if (b === branchCode) continue;
+
+    // P0-1 修复：用 branchFilePatterns 获取正确的文件模式
+    // 关键：SC 是裸名，必须用裸名匹配模式保护，而不是 `P SC_*.parquet`
+    const patterns = branchFilePatterns(b);
+
+    // receiver 侧 Protect：VPS 上该异省的文件不被 --delete 删除
+    for (const pat of patterns) {
+      args.push('--filter', `P ${pat}`);
+    }
+
+    // P0-2 修复：sender 侧 exclude：本地若有该异省文件，不上传
+    for (const pat of patterns) {
+      args.push('--exclude', pat);
     }
   }
-  return protectArgs;
+
+  return args;
 }
 
 async function rsyncDir(alias, localDir, remoteDir, label, options = {}) {
@@ -563,13 +630,17 @@ async function queryVpsPolicyFingerprint(config) {
 /**
  * 完整性闸门主入口。
  *
- * 多省模式（branchCode 指定时）：
- *   VPS /internal/data-fingerprint 当前只返回全量统计，与分省本地 count 不可比（codex P1）。
- *   在 VPS 端分省指纹端点上线前，多省模式降级为 skip+warn（防误 block，不防数据倒退）。
- *   TODO(G2 followup)：VPS 端就绪后移除降级，改为调用 ?branch=<code> 分省指纹对比。
+ * P1 修复：原代码 `if (branchCode)` 对所有非 null 值（含 SC）无条件 skip+return true，
+ *   导致 SYNC_VPS_BRANCH_CODE=SC 时也绕过了现有四川生产保护。
  *
- * 单省模式（branchCode=null，默认，当前生产状态）：
- *   行为与历史版本完全等价，用全量统计比较。
+ * 修复后策略：
+ *   - branchCode=null（单省历史模式，默认，当前生产状态）：行为与历史版本完全等价，全量统计比较
+ *   - branchCode='SC'（显式四川分省模式）：等同单省路径跑新鲜度校验（四川分片=裸名，VPS 全量统计仍有效）
+ *   - branchCode 为其他省份（如 'SX'）：VPS /internal/data-fingerprint 只返回全量统计，
+ *     与分省本地 count 不可比，降级为 skip+warn（防误 block）；SC 不在此范围。
+ *
+ * 单省模式（branchCode=null 或 branchCode='SC'，当前生产状态）：
+ *   行为与历史版本完全等价，用全量统计比较（四川分片是 VPS 上的全部 policy 数据）。
  */
 // 导出供单元测试（多省降级路径断言）；生产调用路径通过 main() 内部间接使用，行为不变。
 export async function assertLocalNotStaleVsVps(config, localCurrentDir, hooks = {}, branchCode = null) {
@@ -577,8 +648,11 @@ export async function assertLocalNotStaleVsVps(config, localCurrentDir, hooks = 
   const onWarn = hooks.onWarn || (() => {});
   const onFail = hooks.onFail || (() => {});
 
-  // 多省模式：VPS 端分省指纹未就绪，降级为 skip（warn）
-  if (branchCode) {
+  // P1 修复：只对真正无法与 VPS 全量统计比较的非 SC 省份降级，
+  // SC（branchCode='SC'）等同 null（单省路径），保持现有四川生产保护。
+  // 判断：branchCode 非 null 且不是 SC → VPS 端无分省指纹，降级 skip
+  const isNonScBranch = branchCode && branchCode !== 'SC';
+  if (isNonScBranch) {
     onWarn(
       `多省分省新鲜度闸尚未就绪（VPS /internal/data-fingerprint 未支持 ?branch=${branchCode}），` +
       `本次同步 [${branchCode}] 跳过新鲜度校验（降级放行）。待 VPS 端就绪后再启用分省对比。`,
@@ -586,9 +660,17 @@ export async function assertLocalNotStaleVsVps(config, localCurrentDir, hooks = 
     return true;
   }
 
-  // 单省模式：历史行为完全等价
+  // 单省模式（branchCode=null 或 branchCode='SC'）：
+  // VPS 全量统计 = SC 全量（四川是当前 VPS 上的全部 policy 数据）
+  // 本地统计：若 branchCode='SC'，用分省统计只计 SC 文件，防止本地混有异省文件时撑过校验
+  // （例如本地同时有 stale SC + fresh SX，全量统计会被 SX 撑过，但实际只上传 SC）
+  // branchCode=null（历史模式）：用全量统计，与历史行为完全等价
+  const localFingerprintPromise = branchCode === 'SC'
+    ? queryLocalPolicyFingerprintForBranch(localCurrentDir, 'SC')
+    : queryLocalPolicyFingerprint(localCurrentDir);
+
   const [local, vps] = await Promise.all([
-    queryLocalPolicyFingerprint(localCurrentDir),
+    localFingerprintPromise,
     queryVpsPolicyFingerprint(config),
   ]);
   const { verdict, reason } = evaluateFreshness(local, vps);
@@ -1178,7 +1260,7 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 // 注：buildRsyncBranchFilterArgs / getSyncBranchCode / queryLocalPolicyFingerprintForBranch / isFileInBranch
-// 已在上方用 export function 声明，无需在此 re-export
+// branchOfFile / fileBelongsToBranch / branchFilePatterns 已在上方用 export function 声明，无需在此 re-export
 export {
   DEFAULTS,
   expandHomePath,
