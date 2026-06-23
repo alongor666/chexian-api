@@ -6,6 +6,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { filterFileReportTemplates } from './utils/fileHelpers';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
@@ -90,14 +91,7 @@ export const ReportTemplatesModal: React.FC<ReportTemplatesModalProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredTemplates = templates.filter((template) => {
-    const matchesCategory =
-      selectedCategory === '全部' || template.category === selectedCategory;
-    const matchesSearch =
-      template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      template.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredTemplates = filterFileReportTemplates(templates, selectedCategory, searchQuery);
 
   const handleSelectTemplate = useCallback(
     (template: ReportTemplate) => {

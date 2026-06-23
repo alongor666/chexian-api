@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../shared/api/client';
 import { Download, X, FolderOpen, Loader2, AlertTriangle } from 'lucide-react';
 import { useFocusTrap } from '../../shared/hooks';
+import { validateImportFile, mapImportError } from './utils/fileHelpers';
 import { Logger } from '@/shared/utils/logger';
 import { colorClasses } from '../../shared/styles';
 
@@ -46,14 +47,9 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
 
   const handleFileSelect = useCallback(
     async (file: File) => {
-      if (!file.name.endsWith('.parquet')) {
-        setError('请选择 .parquet 格式的文件');
-        return;
-      }
-
-      const MAX_SIZE = 100 * 1024 * 1024;
-      if (file.size > MAX_SIZE) {
-        setError('文件大小超过限制（最大100MB）');
+      const validationError = validateImportFile(file);
+      if (validationError) {
+        setError(validationError);
         return;
       }
 
@@ -68,13 +64,7 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClos
         logger.error('Import failed:', err);
         const errorMessage = err instanceof Error ? err.message : '导入失败，请重试';
 
-        if (errorMessage.includes('Snappy decompression failure')) {
-          setError('文件格式错误：Snappy 解压失败，请检查文件是否损坏或使用了不支持的压缩格式');
-        } else if (errorMessage.includes('Failed to read file')) {
-          setError('文件读取失败，请检查文件是否损坏');
-        } else {
-          setError(errorMessage);
-        }
+        setError(mapImportError(errorMessage));
       } finally {
         setIsLoading(false);
       }
