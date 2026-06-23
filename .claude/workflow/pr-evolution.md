@@ -929,3 +929,14 @@
 - **重来更好/复用价值**：① **同构小模块合并一 PR 合理**——都是组件提取纯函数、无交叉依赖，合并减少 worktree/CI/复盘开销而不牺牲审查粒度(diff 仍小、codex/verifier 仍逐函数审)。② **带注释解释真实 bug 的防御性 helper(ensureArray)是最高价值提取**——注释本身就是测试用例来源(DuckDB LIST 序列化为 null/{items:[]}/数字键对象/原始值的 4 种形态，原注释记录了 `.map is not a function` 崩溃)。③ **泛型化(`T extends {category:string}`)避免移动组件类型**，比 R22 的 type-only 循环导入更干净——优先泛型，类型循环导入次之。
   - needs_automation: false
 - **下一轮**：PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE（收尾最后一单）。
+
+---
+
+**R24 · b332 收尾终单 PR-4 + b332 整体 DONE（file 薄提取 + moto-cost 降级·8 模块测试覆盖收官）**
+- **触发**：PR-3(#758)合并后收尾终单（file + moto-cost）。
+- **成果**：file/utils/fileHelpers.ts(validateImportFile/mapImportError/filterFileReportTemplates) + 15 单测；moto-cost(29 行 permission-gated 渲染壳，0 逻辑)**正式降级不测**；b332 置 **DONE**。
+- **b332 全弧总结**：双源盘点确认真零测试 8 模块，分 5 个收尾 PR 清零——comprehensive(#739)/expense-development(#742)/premium-report(#749)/admin(#751)/repair(#756)/customer-flow+report(#758)/file(终单) + moto-cost(降级)；安全关键 sql-validator(31 例)/permission 早覆盖。**7 模块走「提取内联纯逻辑直测」(零 mock 路线)，1 模块(moto-cost)降级**。累计净增 ~157 单测。
+- **三源（闸-1 免）**：verify:full(governance44+typecheck+**3891 单测**)全绿；闸-2 codex 无 P0/P1+3 P2 全采纳(扩展名优先/Snappy 优先/description 大小写不敏感)；evidence-verifier(fresh,sonnet)提取保真 **CONFIRMED**(count gap 系暂存快照时序，git add -A 后 staged=15、最终 verify:full 3891 绿闭合)。
+- **重来更好/复用价值（b332 收官元教训）**：① **「测试覆盖补强」的最优解往往是「提取内联纯逻辑」而非「组件 smoke」**——8 个「纯组件」里 7 个含可提取 useMemo/helper/防御性逻辑，提取后零 mock 直测(最稳)+组件瘦身；只有真无逻辑的(moto-cost)才降级。这推翻了开局「6 个只能组件 smoke」的预判，是 R21 scoping 纠偏一路验证到底的结论。② **降级是合法收尾**——不是每个零测试模块都值得测；29 行 permission-gated 壳 smoke 价值为负，明确登记理由降级比硬凑诚实。③ **staged/working 快照时序**：codex 后补采纳的 P2 测试若不 re-stage，verifier 会(正确地)按 staged 快照判 count 不符——收尾标准动作=git add -A + 最终状态 verify:full，把 count 与门禁一并闭合。④ 全程「闸-1 免(同构纯函数)+闸-2 审 diff(codex 亲跑函数)+verifier 证伪」三源 + bundle 一次提交，是测试覆盖类任务的稳定流水线，6 PR 零返工(rework 均为采纳 codex P2 加固，非逻辑错)。
+  - needs_automation: false（b332 收官；「双源盘点+纯函数分布扫描+按内联逻辑密度判路线」启发式已在 R18/R21/R22/R23 沉淀，未来同类任务直接复用）
+- **b332 DONE**。
