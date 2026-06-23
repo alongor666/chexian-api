@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（69 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（70 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -27,7 +27,7 @@
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 
-**P2（39 项）**
+**P2（40 项）**
 
 - B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -68,6 +68,7 @@
 - 2026-06-21-claude-acf188 `PARTIAL` — 山西账号（ADR G7）
 - 2026-06-22-16ab1c-b842bc — 报告托管 phase-2 GATED 续作
 - 2026-06-22-b320-975a3e — 给 Nginx 托管的 SPA 下发 CSP + 评估收紧 scriptSrc 'uns
+- 2026-06-22-claude-e5cc06 — buildRsyncBranchFilterArgs 的 knownBranches 默
 
 **P3（26 项）**
 
@@ -173,3 +174,4 @@
 | 2026-06-22-b320-975a3e | 2026-06-22 | Security/Frontend | b320 | **给 Nginx 托管的 SPA 下发 CSP + 评估收紧 scriptSrc 'unsafe-inline'**（B320 后续）：B320 移除 Express helmet 的 'unsafe-eval' 后发现——生产 SPA 由 Nginx (`deploy/nginx-fullstack.conf`) 托管且**完全未设 CSP**（仅 COOP/COEP/CORP），即 SPA 当前无任何 CSP 防护。应给 Nginx `location /` 下发 CSP。同时 `dist/index.html` 实测**无内联脚本**（Vite es2020+crossorigin 未注入 modulepreload polyfill）→ scriptSrc 层可上严格策略（去 'unsafe-inline'），但需 nonce/hash 跨 Nginx + 构建链协调，故独立成任务。 | P2 | PROPOSED | .claude/workflow/pr-evolution.md（B320 entry） | deploy/nginx-fullstack.conf, server/src/config/csp.ts |  |
 | 2026-06-22-claude-03f6f0 | 2026-06-22 | 前端重构 follow-up | @claude | PerformanceAnalysisPanel 主组件(~900行)抽 usePerformancePanelController hook —— b331 拆分后续。codex 闸-1 判此项需先补行为测试再动(主组件 10+ 耦合 state/handler)，故 b331 本轮不做。 | P3 | PROPOSED | N/A | src/features/dashboard/PerformanceAnalysisPanel.tsx |  |
 | 2026-06-22-claude-21c578 | 2026-06-22 | 前端重构 follow-up | @claude | 两个 distribution chart 去重：内部 DistributionChart(PerformancePanelDistributionChart) 与既有 performance/PerformanceDistributionChart.tsx option 已漂移，codex 闸-1 确认应另案统一。 | P3 | PROPOSED | N/A | src/features/dashboard/performance/PerformanceDistributionChart.tsx,src/features/dashboard/performance/PerformancePanelDistributionChart.tsx |  |
+| 2026-06-22-claude-e5cc06 | 2026-06-22 | 数据架构 · 多省(山西)GATED前置 | @claude | buildRsyncBranchFilterArgs 的 knownBranches 默认 ['SC','SX'] 硬编码，三省扩展时须通过 task.knownBranches（由 buildStandardSyncTasks opts 透传）覆盖默认值，否则第三省文件不受 Protect 规则保护。当前 buildSyncTasks→buildStandardSyncTasks 未透传 knownBranches，故三省前须先修复该透传链路。闸-2 P2（scripts/sync-vps.mjs buildRsyncBranchFilterArgs 注释已标注此约束）。 | P2 | PROPOSED | N/A | N/A |  |
