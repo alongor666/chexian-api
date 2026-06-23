@@ -152,3 +152,47 @@ export function resolveGroupDim(
   const isOrgUser = req.user?.role === 'org_user';
   return (isOrgSelected || isOrgUser) ? 'org_level_3' : "'全部'";
 }
+
+// ── B290 时间口径不变量：ytd-progress 路由禁止自由窗口参数 ────────────────────
+
+/** 自由窗口参数名（用户可任意指定起止日期的窗口口径参数） */
+const FREE_WINDOW_PARAMS = ['startDate', 'endDate', 'dateStart', 'dateEnd'] as const;
+
+/** ytd-progress 口径路由声明窗口参数的违规记录 */
+export interface TimeWindowParamViolation {
+  readonly path: string;
+  readonly key: string;
+  readonly offendingParams: string[];
+}
+
+/**
+ * B290 原始事故防回归不变量（编译期/CI 校验）：
+ * 「年度计划进度」（ytd-progress）口径的路由禁止声明自由窗口参数。
+ *
+ * 根因（2026-05-12）：用户给日期窗口（5/1-5/11）却问"完成率"，若 ytd-progress
+ * 路由接受 startDate/endDate，参数会被 zod 静默 strip（产出全量 YTD 值）或被 LLM
+ * 误解为窗口口径——同一问题不同客户端答案不一致。锁死：ytd-progress 与自由窗口互斥。
+ *
+ * 纯函数：调用方注入路由元数据 + 参数集合解析器，便于单测覆盖合规/违规两路。
+ * 范围（codex 闸-1 P2.4）：仅锁 ytd-progress；snapshot/policy-year 不纳入
+ * （snapshot 可能合法按 endDate 取状态快照，blanket 禁会误伤）。
+ *
+ * @param routes      路由元数据（含 key / path / timeWindow）
+ * @param allowedKeysOf  给定 path 返回其合法参数名集合；无契约的路由返回 undefined（跳过）
+ */
+export function findYtdProgressWindowParamViolations(
+  routes: ReadonlyArray<{ readonly key: string; readonly path: string; readonly timeWindow: string }>,
+  allowedKeysOf: (path: string) => ReadonlySet<string> | undefined
+): TimeWindowParamViolation[] {
+  const violations: TimeWindowParamViolation[] = [];
+  for (const r of routes) {
+    if (r.timeWindow !== 'ytd-progress') continue;
+    const keys = allowedKeysOf(r.path);
+    if (!keys) continue;
+    const offendingParams = FREE_WINDOW_PARAMS.filter((p) => keys.has(p));
+    if (offendingParams.length > 0) {
+      violations.push({ path: r.path, key: r.key, offendingParams });
+    }
+  }
+  return violations;
+}
