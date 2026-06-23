@@ -96,6 +96,103 @@ def split_salesman_columns(raw: pd.Series) -> tuple[pd.Series, pd.Series]:
     return salesman_no, salesman_name
 
 
+def derive_branch_code(df: 'pd.DataFrame', declared_branch: str) -> 'pd.DataFrame':
+    """报价表 branch_code 派生（quotes 专用 · warn 模式）。
+
+    fields.json branch_code 字段已挂 strictNonNull + assertDeclaredBranch；quotes 报价表
+    policy_no NULL 占比 92.5%（B255 数据质量问题，待生产报价源抽样修复），直接调
+    apply_registry_derivations(df, declared) 会因 NULL 比例触发 strictNonNull fail-fast。
+    故此处走内联 + warn 模式自管校验，唯一从 fields.json 复用 mapping/prefixLength：
+
+      - 缺 'policy_no' 列 → schema 退化防线，fail-fast
+      - declared_branch 必须 ∈ fields.json mapping.values()（白名单），非法 fail-fast
+      - 非缺失行：policy_no[:prefixLength] 必须 ∈ mapping.keys()（key 级校验，防 .map(miss)
+        变 NaN 被 dropna 静默丢失 → codex 闸-1 P0），未命中前缀 fail-fast
+      - 非缺失派生值：必须 ⊆ {declared_branch}（防喂错省/混省），不符 fail-fast
+      - 缺失行（NaN/None/'nan'/'None'/''）：fillna(declared_branch)，等价 loader
+        selectUnionWithBranchCode 旧"列缺失注入部署省常量"兜底，防 RLS 漏行
+
+    注：B255 数据质量修复后再升级到 derived_fields.py guarded helper 路径。
+    单测：tests/pipelines/test_quote_etl_branch_code_derivation.py（10 边界用例）。
+    """
+    if 'policy_no' not in df.columns:
+        print("   ❌ derive_branch_code: df 缺 'policy_no' 列（schema 退化防线）— fail-fast")
+        sys.exit(1)
+
+    registry_path = Path(__file__).resolve().parent.parent.parent / 'server/src/config/field-registry/fields.json'
+    with open(registry_path) as f:
+        registry = json.load(f)
+    branch_field = next(fd for fd in registry['fields'] if fd['id'] == 'branch_code')
+    mapping = branch_field['derivation']['mapping']
+    prefix_len = branch_field['derivation'].get('prefixLength', 3)
+    allowed_values = set(mapping.values())
+    allowed_prefixes = set(mapping.keys())
+
+    # P1.2（codex 闸-1）：declared_branch 白名单校验，防 BRANCH_CODE=GD 等错值兜底全部
+    if declared_branch not in allowed_values:
+        print(
+            f"   ❌ derive_branch_code: declared_branch={declared_branch!r} 不在白名单 "
+            f"{sorted(allowed_values)}（fields.json mapping 值域）— fail-fast"
+        )
+        sys.exit(1)
+
+    # 识别"缺失行"：pandas NaN/None + ETL astype(str) 链路产生的 'nan'/'None'/'' 字符串
+    policy_str = df['policy_no'].astype(str)
+    missing_mask = df['policy_no'].isna() | policy_str.isin(['nan', 'None', 'NaT', ''])
+    notmissing_mask = ~missing_mask
+
+    # P0（codex 闸-1）：非缺失行做 prefix key 级校验（不依赖 .map() 后的 dropna，
+    # 否则未知前缀（999...）→ NaN → dropna 丢掉 → 误判为"全合规"被静默兜底 declared）
+    if notmissing_mask.any():
+        prefixes = policy_str[notmissing_mask].str[:prefix_len]
+        unknown_prefixes = set(prefixes.unique()) - allowed_prefixes
+        if unknown_prefixes:
+            samples = (
+                prefixes[prefixes.isin(unknown_prefixes)]
+                .value_counts().head(5).to_dict()
+            )
+            print(
+                f"   ❌ derive_branch_code: 非缺失行出现未知 policy_no 前缀 "
+                f"{sorted(unknown_prefixes)}（不在 fields.json mapping 键集 "
+                f"{sorted(allowed_prefixes)}）— fail-fast"
+            )
+            print(f"      未命中前缀样例(top5): {samples}")
+            sys.exit(1)
+
+        derived_values = set(prefixes.map(mapping).unique())
+        if derived_values != {declared_branch}:
+            print(
+                f"   ❌ derive_branch_code: 派生省 {sorted(derived_values)} 与声明省 "
+                f"{declared_branch!r} 不符（疑似喂错省 / 混省）— fail-fast"
+            )
+            sys.exit(1)
+
+    df = df.copy()
+    # 缺失行全填 declared_branch（loader 旧兜底语义），非缺失行覆盖为派生值
+    df['branch_code'] = declared_branch
+    if notmissing_mask.any():
+        df.loc[notmissing_mask, 'branch_code'] = (
+            policy_str[notmissing_mask].str[:prefix_len].map(mapping)
+        )
+
+    n_missing = int(missing_mask.sum())
+    print(
+        f"   派生字段: branch_code ← policy_no[:{prefix_len}] 映射 + "
+        f"缺失行兜底 declared='{declared_branch}'"
+    )
+    if len(df) > 0:
+        print(
+            f"   ⚠️  policy_no 缺失 {n_missing:,}/{len(df):,} "
+            f"({n_missing * 100 / len(df):.1f}%) 已兜底 → '{declared_branch}' "
+            "（quotes 表已知数据质量问题，见 BACKLOG B255）"
+        )
+    print(
+        f"   branch_code 全非空: {df['branch_code'].notna().sum():,}/{len(df):,}"
+        "（应=总行数）"
+    )
+    return df
+
+
 def main():
     parser = argparse.ArgumentParser(description='报价转化数据 ETL（04_报价清单 → Parquet）')
     parser.add_argument('-i', '--input', nargs='+', help='输入 Excel 文件（支持多个）')
@@ -106,8 +203,10 @@ def main():
     )
     parser.add_argument(
         '--branch-code', default=None,
-        help='多省 0a（ADR D5）：分公司编码（如 SX）。提供时注入 branch_code 常量列并跳过 '
-             'data-sources.json 写入；缺省（SC 默认链路）不传 → 不注入，四川产物字节安全。',
+        help='多省 P3-D（ADR D5）：分公司编码（如 SX）。CLI 优先，其次 BRANCH_CODE env，'
+             '默认 SC。派生后 quotes parquet 全行 branch_code = 声明省（非缺失行按 fields.json '
+             'prefix_map 派生 + 校验，缺失行兜底 declared）；声明省 != SC 时跳过 data-sources.json '
+             '写入。SC 默认链路与原"loader 注入部署省常量"逐字节等价。',
     )
     args = parser.parse_args()
 
@@ -274,11 +373,13 @@ def main():
         total = pd.to_numeric(result['final_quote_premium'], errors='coerce').sum()
         print(f"   最终报价合计: {total/1e8:.2f} 亿元")
 
-    # 11b-多省 0a：branch_code 常量列注入（仅 --branch-code 提供时；
-    #     SC 默认链路不传 → 不注入，四川产物字节安全。与 base_converter / convert_claims_detail 同语义）
-    if args.branch_code:
-        result['branch_code'] = args.branch_code
-        print(f"   🏢 注入 branch_code 常量列 = '{args.branch_code}'（{len(result):,} 行）")
+    # 11b-多省 P3-D：branch_code 派生（替代 P3 之前的 constant 注入；codex 闸-1 修订）。
+    # 解析顺序：--branch-code CLI 优先 → BRANCH_CODE env → 默认 'SC'（与 daily.mjs:669
+    # process.env.BRANCH_CODE || 'SC' 同语义）。declared_branch 后续同时用于 derive_branch_code
+    # 校验、写后 verify、metadata skip（覆盖 env-only 路径，codex 闸-1 P1.1）。
+    from pipelines.derived_fields import resolve_declared_branch
+    declared_branch = resolve_declared_branch(args) or 'SC'
+    result = derive_branch_code(result, declared_branch)
 
     # 12. 输出 Parquet
     output_file = output_dir / 'latest.parquet'
@@ -310,11 +411,32 @@ def main():
     print(f"   机构: {verify[2]} | 团队: {verify[3]} | 业务员: {verify[4]}")
     print(f"   列: {len(result.columns)} → {list(result.columns)}")
 
+    # 13b. branch_code 写后断言（P3-D codex 闸-1 P1.3）：零 NULL + 单一值 = declared_branch
+    branch_verify = con.execute(
+        f"""
+        SELECT
+            COUNT(*) - COUNT(branch_code) AS bc_null,
+            LIST(DISTINCT branch_code) AS bc_values
+        FROM read_parquet('{output_file}')
+        """
+    ).fetchone()
+    bc_null_cnt, bc_values = int(branch_verify[0]), list(branch_verify[1])
+    if bc_null_cnt > 0:
+        print(f"   ❌ 写后 verify: branch_code 含 {bc_null_cnt:,} 行 NULL（应=0）— fail-fast")
+        sys.exit(1)
+    if set(bc_values) != {declared_branch}:
+        print(
+            f"   ❌ 写后 verify: branch_code 值集 {sorted(bc_values)} ≠ "
+            f"{{{declared_branch!r}}} — fail-fast"
+        )
+        sys.exit(1)
+    print(f"   ✅ branch_code 写后 verify：{verify[0]:,} 行全非空，值集=[{declared_branch}]")
+
     # 14. 更新 data-sources.json
-    # 多省 0a：非 SC 省（--branch-code）跳过，避免把隔离省行数写进共享
-    # data-sources.json（SC 唯一事实源；ADR D5）。
-    if args.branch_code:
-        print(f"  ⏭ [{args.branch_code}] 跳过 data-sources.json 写入（隔离省不污染 SC 唯一事实源）")
+    # 多省 P3-D（codex 闸-1 P1.1）：用 declared_branch 判定（覆盖 BRANCH_CODE env 路径），
+    # 非 SC 省一律跳过共享 SC data-sources.json 写入，避免污染唯一事实源。
+    if declared_branch != 'SC':
+        print(f"  ⏭ [{declared_branch}] 跳过 data-sources.json 写入（隔离省不污染 SC 唯一事实源）")
     else:
         try:
             from pipelines.data_sources_updater import update_data_sources

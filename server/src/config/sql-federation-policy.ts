@@ -20,11 +20,14 @@
  * permissionColumns 为 ground-truth：由 `duckdb DESCRIBE` 直查各域 latest.parquet 实测
  * （2026-06-18），不靠推断。新增关系前必须实测其权限列，宁缺毋滥。
  *
- * branch_code 例外（P0.5，2026-06-19；2026-06-23 P3-B 注脚更新）：早期派生视图 parquet **均不含
- * branch_code**（DESCRIBE 实测），由 loader（duckdb-domain-loaders.ts selectUnionWithBranchCode）
- * 在视图层补 `'<BRANCH_CODE>' AS branch_code` 常量列实现对齐。
+ * branch_code 例外（P0.5，2026-06-19；2026-06-23 P3-B/P3-D 注脚更新）：早期派生视图 parquet
+ * **均不含 branch_code**（DESCRIBE 实测），由 loader（duckdb-domain-loaders.ts
+ * selectUnionWithBranchCode）在视图层补 `'<BRANCH_CODE>' AS branch_code` 常量列实现对齐。
  *   - P3-A（2026-06-23 #763）起 claims_detail parquet ETL 派生 branch_code（policy_no 前缀）
- *   - P3-B（2026-06-23 此 PR）起 cross_sell / customer_flow parquet 同样派生 branch_code
+ *   - P3-B（2026-06-23 #764）起 cross_sell / customer_flow parquet 同样派生 branch_code
+ *   - P3-D（2026-06-23 此 PR）起 quotes_conversion parquet ETL 派生 branch_code（quotes 报价表
+ *     policy_no NULL 92.5% / B255 数据质量问题，故走内联 warn 模式 + declared_branch 兜底，
+ *     而非通用 derived_fields.py guarded helper）
  *   - selectUnionWithBranchCode 用 DESCRIBE 实测 hasBranchCode 自适应（有则裸 SELECT *、
  *     无则补常量），故 ETL 改造对 loader 透明、无需同步升级。
  * branch_code 的 ground-truth 由「loader 保证视图必含该列」构造性成立——参 federation 表头
@@ -94,7 +97,9 @@ const FEDERATED_REGISTRY: Readonly<Record<string, RelationPolicy>> = {
   },
   QUOTECONVERSION: {
     canonical: 'QuoteConversion',
-    // branch_code 由 loader 在视图层补常量列。
+    // branch_code（P3-D, 2026-06-23）：quotes_conversion ETL 已派生 branch_code 列（quote_etl.py
+    // derive_branch_code · warn 模式）。loader selectUnionWithBranchCode 用 DESCRIBE 自适应：
+    // parquet 含列直接用、不含时仍兜部署省常量，故 ETL 改造对 loader 透明、双路径并存。
     // is_telemarketing（P2 c21667）：parquet 原为 varchar（'电销'/'非电销'），loader 在视图层用
     // `CASE WHEN is_telemarketing = '电销' THEN TRUE ELSE FALSE END` 归一为 boolean。
     // typed 报价路由（sql/quote-conversion.ts）中 buildWhere 同步映射枚举→boolean SQL 条件

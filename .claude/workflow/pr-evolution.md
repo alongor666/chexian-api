@@ -1069,3 +1069,28 @@
   - needs_automation: true → 项目缺"测试 policy_no 必须 610/618 前缀"的 lint（否则 P3-C/D/E 接入时新写测试可能再次踩坑）；merge_parquet --declared-branch 是 SC 默认链路也强制传，未来若加更多 multi_file_merge 域且无 policy_no 列（dim 表），derived_fields 守卫已支持但 daily.mjs 透传逻辑应保持"对所有 multi_file_merge 域生效"（dim 表自动 skip 不影响）。
   - expires: 2026-09-30
 - **下一轮**：P3-D quotes（warn 模式：policy_no NULL 92.5%，待生产报价源抽样才升级 hard-fail；用户已决）；P3-C renewal_tracker（最复杂：SQL ETL 无 policy_no 主列，需 source_policy_no/renewed_policy_no 临时列派生）；P3-E new_energy_claims（policy_no 100% NULL，VIN→policy JOIN 取 branch_code）。R29 复用三处资产：① derived_fields.py 4 helper；② merge_parquet reapply_registry_derivations（cross_sell-style multi_file_merge 域必加 --declared-branch）；③ R28 判别法（同 PR 修 vs 让位）。
+
+## 2026-06-23 · P3-D quotes 派生化（quote_etl.py constant→prefix_map · warn 模式）
+
+**R30 · P3-D quote_etl.py 派生化（接 P3-A/P3-B 模式 · warn 模式 + 多重 fail-fast 自管）**
+
+- **触发**：续推多省「省份派生化」P3 阶段。用户给出会话续推协议（D→C→E 复杂度递增推进，先做 D 因 quotes 报价表 NULL 92.5% 走 warn 模式最简单），并明确 fields.json branch_code guarded helper 不可直接复用（strictNonNull 会因 NULL 比例 fail-fast）。
+- **改造**：
+  - 新增模块级函数 `quote_etl.derive_branch_code(df, declared_branch)` 92 行（**5 道 fail-fast 闸口**：① `policy_no` 列缺失 ② declared_branch 不在 fields.json mapping.values() 白名单 ③ 非缺失行 prefix key 级校验未命中 mapping.keys() ④ 派生省 ≠ {declared_branch}（混省/喂错省） ⑤ 写后 verify branch_code 含 NULL 或值集 ≠ {declared_branch}）
+  - 缺失行（pandas NaN/None + ETL astype(str) 链路产生的 'nan'/'None'/'' 字符串）`fillna(declared_branch)` —— **等价 loader `selectUnionWithBranchCode` 旧"列缺失注入部署省常量"兜底**，**防 R28-类 RLS 漏行**（92.46% NULL 行若保留 NULL，loader 检测到列存在不再走常量兜底 → 实例开 RLS 等值过滤会漏 92% 行）
+  - 主流程接入 3 处：派生调用（quote_etl.py:373-385）+ 写后 verify（411-432）+ metadata skip 用 `declared_branch != 'SC'`（覆盖 BRANCH_CODE env 路径，codex 闸-1 P1.1）
+  - 文档同步：derived_fields.py docstring 标注 quotes 例外（不复用 guarded helper）；sql-federation-policy.ts 加 P3-D 注脚 + QuoteConversion 内联注释；.gitignore 加 `.codex-gates/`（evidence-verifier 抓出我"已在 gitignore 验证"声明不实）
+- **R28 类风险预判（事前论证 + 事后实证）**：
+  - schema 演进侧 + loader 读侧：`buildFactSelectSql → selectUnionWithBranchCode` 已用 DESCRIBE 实测自适应（含 branch_code → 裸 SELECT *、不含 → 补 `'<部署省>' AS branch_code`），故 quote_etl 加列对 loader 透明、双路径并存，**无 R28-类不一致**
+  - quotes 不走 multi_file_merge / merge_with_history（quote_etl 单文件 write_parquet），无 R29-类 schema 漂移
+- **codex 闸-1（计划对抗·gpt-5.5/high）**：抓 1 P0 + 4 P1 + 4 P2。**P0 核心**："unknown prefix `.map(mapping)` → NaN → dropna 后空集 → `_known_derived - allowed` 永远基本为空 → 未知 policy_no 静默被 fillna 兜底为 declared，**违反停止条件**"。我事前 prompt 把这条当 P2-3 边界关注点，codex 实测 `['6100001', None, '', '9990001'].map() = ['SC', nan, nan, nan]; dropna → {'SC'}` → 用证据驳倒。修法：先做 `prefix not in mapping.keys()` key 级校验（而非依赖 `.map()` 后做 value 级校验）。
+- **codex 闸-2（完成对抗·亲跑 4 个 smoke）**：CONFIRMED 零 P0/P1 + 3 P2 全采纳。codex 自跑负向 smoke 验证 unknown prefix `['9990001']` declared='SC' / 混省 `['6180001']` declared='SC' / declared='GD' 全 exit 1 + 输出预期错误信息。
+- **evidence-verifier fresh-context（sonnet）**：通过 + 抓 1 真问题（.codex-gates/ 未在 .gitignore 中，我声明不实 → 已修）。自跑 3946/3946 vitest 单测、独立复跑字节安全 oracle、独立复查 loader DESCRIBE 自适应路径。
+- **逐字节安全 oracle 实证**：duckdb 直查现状 SC quotes parquet 880,489 行（policy_no 非空 66,358 / NULL 814,131 = 92.46%）→ python 调 derive_branch_code(declared='SC') → 32 业务字段 sha256 hash 完全相等 + 新增 branch_code 列全 'SC' 零 NULL + 行数不变 → **字节安全协议满足**。
+- **三问复盘**：
+  ① **重来怎样更好**：codex 闸-1 P0 我事前关注点 #3 已问到 pandas .map() miss → NaN 的行为，但**没有把这个事实推到"unknown prefix 会被静默兜底"的结论**——本来应该自己写一行 `python -c` 实证再下笔，而不是把它列为"待 codex 审"。下次写计划 prompt 时遇到 pandas/numpy 行为相关疑问，先自跑 1 行 `python -c` 实证再 codex，能省一轮闸-1 修订。
+  ② **复用价值**：① 5 道 fail-fast 闸口模式（schema/whitelist/key-prefix/value-province/post-write-verify）可作 ETL 派生字段的通用守卫模板，比 derived_fields.py guarded helper 更细粒度（适合 warn 模式或自定义阈值场景）；② "派生 + fillna(declared_branch) 兜底" 替代"loader 注入常量"的字节安全证明，可推广到其他需要从无 → 含的 schema 演进域；③ codex 闸-1 用 `python -c` 实测 pandas 行为驳倒计划假设的方法论，可复用到所有涉及 numpy/pandas 库行为的设计审查。
+  ③ **如何更高质量自动化**：① "ETL 派生字段添加 PR" 应有 lint 自动检测 `pd.Series.str[:N].map(mapping)` + `.dropna()` 组合是否漏 key 级校验（codex 闸-1 P0 是结构性模式，可正则匹配）。② 字节安全 oracle 应集成为 `bun run governance` 的 ETL schema 演进闸：检测 ETL Python 脚本 diff 含新增列时自动跑 32 业务字段 hash 校验。③ verifier 抓 "声明事实错误"（.gitignore 内容）→ pr-evolution 应有自检步骤，commit 前自动 grep 当前会话所有"已在 X 验证"类声明 + 自动复跑命令对账。
+- **needs_automation: true** — ① ETL 派生 PR 的 `pd.Series.map() + dropna()` 漏 key 校验模式 lint；② ETL schema 演进的字节安全 oracle 集成进 governance；③ verifier 抓的"声明事实错误"应在 commit 前自检（grep "已在 X 验证" 类声明 + 复跑）。
+- **expires: 2026-09-30**
+- **下一轮**：P3-C renewal_tracker（最复杂：SQL ETL，无 policy_no 列，需 con.execute 读回 df 后造 `policy_no = renewed_policy_no if is_renewed else source_policy_no` 临时列 → 派生 → drop → write_parquet；3 边界单测：全已续/全未续/跨省）；P3-E new_energy_claims（policy_no 100% NULL，VIN→policy JOIN 取 branch_code；现 :130 行只取 org_level_3 → 改成同时带 branch_code）。R30 复用资产：① derive_branch_code 5 道闸口模式可作其他 warn 模式域模板；② loader DESCRIBE 自适应已论证免 loader 改动模式可复用；③ 字节安全 oracle python 脚本结构（读 parquet → 调派生函数 → 业务字段 hash 全等 + 新增列契约）可作模板。
