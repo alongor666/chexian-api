@@ -1009,3 +1009,17 @@
 - **重来更好**：枚举正向模式是陷阱；以否定前缀（无 XX_=SC）为唯一轴，rsync 字符类 [A-Z][A-Z]_* 比枚举更健壮，新省加入只需扩展 SUPPORTED_BRANCH_CODES。
   - needs_automation: true → scripts/verify-branch-rsync-safety.sh
   - expires: 2026-07-31
+
+---
+
+**R26 · 省份派生化 Phase 0 — 铁证复验 + 派生轴决策门（Option A 零代码）· 双闸零 P0**
+- **触发**：多省 `branch_code` 派生化（替代 #753 前缀方案的**检测层**重构，BACKLOG `2026-06-23-claude-bc36e8` P1），按单任务 evidence-loop 起步。Phase 0 爆炸半径=零（纯证据/决策）。
+- **成果**：duckdb 全量复验两省铁证——SC 2,600,421 行/`policy_no[:3]=610`、SX 1,830,603 行/`618`，两省首位恒 `6`、零 NULL、派生 `map(前3位)` 与现状常量 `branch_code` **逐行相等 diff==0**（claims 288,198/610 零例外）；派生轴决策门定 **Option A**（`policy_no[:3]` prefix_map，引擎零改动——现存实战字段 `compulsory_ncd_factor` + `defaultValue:null` 坐实）；Phase 0 执行记录落规划 §10；bc36e8 → IN_PROGRESS；governance 44/44。
+- **双闸（零 P0）**：codex exec（亲跑）核 §10.3 三条代码论断全属实 + 无 P0 / 1 P1（Phase 4 通用 backfill 须限定可信域）/ 3 P2；evidence-verifier（fresh context，主目录 parquet 重跑 duckdb）§10.2/§10.5 全 **CONFIRMED** + 1 P1（`.planning/golden-baseline/` 既存基线纠错）。采纳项写入 §10.9（断言域限 `branch_code`、Phase4 限可信域、Phase5 补 `sql-federation-policy.ts` 落点）。
+- **重来更好/复用价值**：
+  ① **数据/代码分工核验**是本轮高价值模式——parquet gitignored 致 codex 沙箱无数据，故让 evidence-verifier（主目录 parquet）验数据、codex（worktree）验代码，各补盲区（延续 R24「codex 擅命令行行为 / verifier 擅架构语义」互补律）。
+  ② **数据层全量逐行 diff==0（4.43M 行）作字节安全 oracle 强于 API 抽样**且不依赖 E2E_PASSWORD——重构类「行为不变」任务优先建数据层 oracle。
+  ③ 「零代码」结论靠**同机制生产在用先例**（`compulsory_ncd_factor` prefix_map + `defaultValue:null`）坐实，而非仅读引擎分支——找先例是证明低风险最快路径。
+  ④ verifier 抓出「既存 golden-baseline 基线」事实偏差——我误把 worktree（无 untracked `.planning`）当全貌；教训：**gitignored/untracked 产物存在性必在主仓核实**，不凭 worktree ls 下结论。
+  - needs_automation: false（Phase 0 零代码决策；oracle 已是 duckdb 确定性脚本）
+- **下一轮**：P1 premium 域派生化——`fields.json` branch_code `constant→prefix_map`（`source:policy_no`/`prefixLength:3`/`defaultValue:null`）+ `field-registry/generate.mjs` codegen + `transform.py` 自校验断言（**域限定 branch_code，勿泛化**，§10.9）+ 移除 `defaultValue`；oracle = governance #17 + duckdb 派生分布逐行相等 + 负向 SystemExit（SC policy_no 传 `--branch-code SX` 应 exit 1）。
