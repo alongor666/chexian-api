@@ -15,27 +15,43 @@ import type { KpiDetailResult } from '../types/kpi.js';
 export type { KpiDetailResult } from '../types/kpi.js';
 
 /**
- * 同城（成都地区）三级机构名单 — 同城/异地保费占比的判定依据。
- * 异地 = 非同城兜底（原实现同城/异地各自硬编码白名单，新增机构两边都不计入，
- * region 环形图分母静默缺失）。新设成都地区机构时需在此登记。
+ * 按省份的同城三级机构名单 — 同城/异地保费占比的判定依据。
+ *
+ * - SC（四川）：成都地区 7 机构
+ * - SX（山西）：太原口径 3 机构（"经代、车商、重客"含中文顿号，为精确字符串）
+ * 异地 = 非同城兜底（新增机构自动归异地，不会导致分母静默缺失）。
  */
-export const SAME_CITY_ORGS = ['天府', '高新', '新都', '青羊', '武侯', '重客', '本部'] as const;
-const sameCityList = SAME_CITY_ORGS.map((o) => `'${o}'`).join(', ');
+export const SAME_CITY_ORGS_BY_BRANCH: Record<string, readonly string[]> = {
+  SC: ['天府', '高新', '新都', '青羊', '武侯', '重客', '本部'],
+  SX: ['太原一部', '太原二部', '经代、车商、重客'],
+};
+
+/**
+ * 向后兼容别名（= SC 同城名单）。
+ * 现有消费方若直接引用此常量，行为与改动前逐字节一致。
+ */
+export const SAME_CITY_ORGS: readonly string[] = SAME_CITY_ORGS_BY_BRANCH.SC;
 
 /**
  * 生成 KPI 详细数据查询
  *
  * @param whereClause - WHERE 子句（默认 '1=1'）
  * @param useInsuredScope - 是否使用承保口径（默认 true）
+ * @param branchCode - 省份代码（'SC'/'SX'）；未传或未知时回退 SC 名单，SQL 与改动前逐字节一致
  * @returns SQL 查询字符串
  */
 export const generateKpiDetailQuery = (
   whereClause: string = '1=1',
-  useInsuredScope: boolean = true
+  useInsuredScope: boolean = true,
+  branchCode?: string,
 ): string => {
   // 承保口径：仅统计 premium > 0
   // 净额口径：包含所有保费（正/零/负）
   const scopeFilter = useInsuredScope ? 'AND premium > 0' : '';
+
+  // 按省份选同城名单；未知省码回退 SC（字节安全：与改动前生成结果完全一致）
+  const sameCityOrgs = SAME_CITY_ORGS_BY_BRANCH[branchCode ?? 'SC'] ?? SAME_CITY_ORGS_BY_BRANCH.SC;
+  const sameCityList = sameCityOrgs.map((o) => `'${o}'`).join(', ');
 
   return `
     SELECT

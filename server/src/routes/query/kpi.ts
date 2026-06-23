@@ -149,7 +149,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const { whereClause } = parseFiltersAndBuildWhere(req);
 
-    const sql = generateKpiDetailQuery(whereClause, false);
+    const branchCode = await resolveBranchRlsCode(req, 'PolicyFact');
+    const sql = generateKpiDetailQuery(whereClause, false, branchCode);
     const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
 
     sendWithEtag(req, res, {

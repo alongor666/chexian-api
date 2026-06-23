@@ -13,6 +13,7 @@ import {
   isBundleRoutesEnabled, buildRouteCacheKey,
   getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
+  resolveBranchRlsCode,
 } from '../shared.js';
 import { buildWhereFromFilterParams } from '../../../utils/filter-params.js';
 import { generateKpiQuery } from '../../../sql/kpi.js';
@@ -148,6 +149,9 @@ router.get(
       req.permissionFilter || '1=1'
     );
 
+    // 分省 RLS：kpi-detail 内同城/异地名单按省切换（G6 follow-up）
+    const branchCode = await resolveBranchRlsCode(req, 'PolicyFact');
+
     // Tier 3: 动态执行 Fallback
     const bundleData = await fetchDashboardBundleData({
       whereWithDate,
@@ -159,7 +163,8 @@ router.get(
       timeView,
       perspective,
       groupDim,
-      dateField: filterData.dateField || 'policy_date'
+      dateField: filterData.dateField || 'policy_date',
+      branchCode,
     });
 
     setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
@@ -182,7 +187,8 @@ export async function fetchDashboardBundleData({
   timeView,
   perspective,
   groupDim,
-  dateField
+  dateField,
+  branchCode,
 }: {
   whereWithDate: string;
   whereWithoutDate: string;
@@ -194,9 +200,11 @@ export async function fetchDashboardBundleData({
   perspective: ViewPerspective;
   groupDim?: string;
   dateField: DateCriteria;
+  /** 省份代码（'SC'/'SX'）；未传时回退 SC 名单，SQL 字节与改动前一致（字节安全）。G6 follow-up。*/
+  branchCode?: string;
 }) {
   const kpiSql = generateKpiQuery(whereWithDate, { orgNames, salesmanNames }, whereWithoutDate);
-  const kpiDetailSql = generateKpiDetailQuery(whereWithDate, false);
+  const kpiDetailSql = generateKpiDetailQuery(whereWithDate, false, branchCode);
   const trendSql = generatePremiumTrendQuery(
     timeView,
     whereWithDate,
