@@ -846,6 +846,32 @@
 - **边界纪律（用户 2026-06-22 确认）**：网络抖动 / 判定器 503 是环境不可抗力（天），不计入「问题」、不优化，只容错共处；本 PR 只根治可控的逻辑盲区。
 - needs_automation: false（本身即把"现实核查"自动化的一环）
 
+## 2026-06-22 · loop-meta 跨会话认领锁（event-log claim lock + TTL）根治 §4 P0「跨会话重复劳动」
+
+- **背景/根因**：多会话无协调排空同一 BACKLOG 前沿 → 重复劳动 + 真冲突（wave-2 实证：派 b331，6h 内另一会话也做并先合并，agent 工作孤儿化）。上游根因=`computeFrontier` 的 `inflight` 仅本地 `dispatch-config.json`、非跨会话共享，无认领锁。下游缓解（#747 stale-scan PR-合并信号）能检出已合任务，但认领锁才是上游根治。
+- **实现（单 owner 串行，遵 §4 wave-2 元教训：loop-meta 改动不并发硬化）**：① 纯函数 `latestClaims(events)`（每 uid 最新 status 命中 `IN_PROGRESS/DOING` 即认领，与 `fold` 同 `(at,eid)` 全序）；② `computeFrontier` 新增 `claims/now/claimTtlHours`（默认 8h），新鲜认领锁出前沿、陈旧释放防死锁，返回 `claimed/released`，缺时钟保守锁；③ CLI `gatherClaimContext` 扫 `origin/main`+所有 `origin/claude/*` 的 `BACKLOG_LOG.jsonl`（认领常在 feature 分支未并 main）；④ 辅助信号=远程分支存在（复用 stale-scan `branchMatchesUid`，软提示不硬锁）；⑤ `sessionPrompt` 增「认领先于实现」步。详见 `.claude/rules/loop-orchestration.md` §4 末尾 meta 条。
+- **验证（证据闭环）**：12 新单测全绿（latestClaims 5 + computeFrontier 认领锁 7），全量 55/55；governance 44/44 + 全量 3715/3715 零回归；**实跑前后对比铁证**：默认 dispatch 见 b244(0.64h)/b255(1.13h) 新鲜认领锁出（`--no-claims` 旧行为下二者仍是候选会被重复派单），b332(430h)/35998a(88h) 陈旧释放，候选 64→62=恰好 2 个新鲜锁零误伤；evidence-verifier（fresh-context 闸-2）判 CONFIRMED 无 P0/P1（其 Nit「无 at 永久锁」经实跑证伪：validateLog 强制 ts、`latestClaims` 回退 `at||ts`，真实数据 0 个 null-age 认领，且失败方向是 under-dispatch=安全侧）。
+- **三问复盘**：① 重来更好？根因 wave-2 已诊断清楚，本可同期落地而非延后一波——根因明确即应同 PR 修、勿只登记 P0。② 复用价值？`latestClaims`（事件日志取最新认领态）可被 stale-scan/其他 loop 工具复用，避免各自实现折叠。③ 自动化？认领锁即「把纪律变机制」；残留人工点=会话须真执行「认领先于实现」（sessionPrompt 已固化但仍依赖遵从）。
+  - needs_automation: true → 认领遗漏硬闸：dispatch 检出「远程 loop 分支存在但无认领事件」时可升级为更强提示/pre-push 闸（属 loop-meta，单 owner 串行落地）。
+  - expires: 2026-09-22
+
+## 2026-06-22 · loop 优化：单任务 P0/P1 PR 强制 codex 闸-2 + 三源过清自动合并（codex 抓 1 P1）
+
+- **用户指令**：单任务 loop 也应对 P0/P1 级复杂任务的 PR 跑 codex 对抗审查后**自动合并**。澄清「禁 auto-merge」仅限部署链 PR。
+- **优化**：sessionPrompt 第 4 步（P0/P1 强制 codex 闸-2 + §2 降级分层 CLI 路径）+ 第 6 步（三源 P0/P1 全清 + CI 双绿 + 非部署链 + slot holder → `gh pr merge --auto --squash`；部署链人工合）；loop-orchestration.md §4 meta 固化。
+- **首次按新流程执行（#748 自身）即抓到真 P1**：evidence-verifier 闸-2 先判 CONFIRMED 无 P0/P1，但 codex CLI 窄对抗抓出 **认领锁 TTL 据「认领时刻」而非「最后活动」**——「认领 8h+ 但 7.5h 前还在 note 心跳」的活跃会话被误释放→重复派单（与文档「无后续事件才释放」不符）。+2 P2（ttl 无校验静默释放 / ref 上限静默漏）。**全修**：latestClaims 增 lastAt（任意事件刷新锁）、ttl 非正回退默认、ref 上限 80→200+告警。codex 原始复现修后锁住；+4 单测；全量 3719/3719。
+- **核心教训**：**P0/P1 复杂任务「强制 codex（多模型对抗）」有不可替代的增量价值**——单一 evidence-verifier 判 CONFIRMED 仍漏掉 spec-vs-impl 不符的真 P1；多模型对抗是「证伪」的必要冗余，不是仪式。用户要求把它编排进单任务收尾流是对的。
+- needs_automation: false（闸-2 codex 已是 §2 降级分层确定路径；本条仅显式编排进单任务流）。
+## 2026-06-22 · 16ab1c B328 phase-2 报告托管 org_user 行级安全（sidecar 归属 + 双闸 + verifier 抓回归）
+
+- **背景/范围**：B328 phase-1 已 fail-closed 堵跨机构泄漏；phase-2 让 org_user 读**本机构**报告。**前置依赖核实优先**：生产方 push_html.py 单文件命名 `<日期>-<slug>-<hash>.html` 不含机构归属、无 metadata 机制 → 依赖未就位。按任务约定 scope = handler 侧解析 + 登记缺口（不碰生产方/diagnose skills，避免跨域撞车）。
+- **实现（只改 be-routes）**：reports.ts 引入 sidecar 归属约定（`<report>.meta.json` / `.report-meta.json` 含 ownerOrg/ownerBranch）；`resolveReportOwner`（路径限定+二次 validatePathWithinDirectory+严格 schema，fail-closed）→ `assertReportAccess`（org_level_3 等值 + branch RLS mirror）；`assertReportRoleAllowed` 粗闸防枚举；`normalizeReportError` 把 org_user 所有 4xx 归一同一 403。
+- **三源闭环**：codex 闸-1（方案）收紧 schema 校验/枚举归一/branch 语义；codex 闸-2（实现）抓 P1-a（RLS-on 漏 ownerBranch 仍按 org 放行→跨分公司读）+ P1-b（多文件 baseDir symlink 逃逸）+ P2（403 消息侧信道），**全采纳加固**；evidence-verifier fresh-context 抓 **P1 回归**——旧测试 `tests/api/reports.route-contract.test.ts` 用旧字符串签名调用改签名后的 assertReportAccess，致 verify:full 实际 1 failed。
+- **验证**：36 单测（access 矩阵 × RLS on/off × branch 组合）+ verify:full 3739 全过 + typecheck + governance 44/44 + **live HTTP 矩阵**（org_user 本机构 200 含 HTML 体 / 跨机构 403 / 无归属 403 / branch_admin 全放行 / telemarketing 403 / 无 token 401 / 枚举防护：org_user 不存在→403 与 branch_admin→404，且 org_user 跨机构 body == 不存在 body）。
+- **重来更好**：① **改函数签名必须全仓 grep（含 tests/）**——我只 grep `server/src` 漏了 `tests/api/`，被 verifier 兜住。签名变更 = pattern 级影响，按 codex-fix-sop「抽 pattern→全仓 grep」应含测试目录。② **声称完成前跑 verify:full 而非单测文件**——我开发循环只跑了目标测试文件+typecheck+governance，没跑全量 3739，回归被推迟到 verifier 才暴露。完整 oracle 应在自检阶段就跑。
+- **复用价值**：① 「文件服务路由行级安全」范式 = 粗闸防枚举 + sidecar 可信归属源（only-trust-minimal-schema，不从文件名反推）+ 细粒度授权 mirror RLS + 错误归一防存在性侧信道 + fail-closed 默认；可套任何「按归属托管静态敏感文件」场景。② 「前置依赖未就位 → handler 就绪 + 登记 GATED 缺口」是 phased rollout 的诚实打法，避免「为了端到端验收去改非本域生产方」的越界。③ 合成 fixture + 伪造 JWT（dev secret）做 live 验证，绕开「真实凭据/真实报告」依赖，仍证明 route+auth+flow 完整接线。
+  - needs_automation: false（「签名变更全仓 grep 含 tests/」「声称完成跑 verify:full」属纪律，已有 verify:full 门禁；本轮教训是「自检阶段就该跑全量门禁」，非新增脚本）
+- **GATED 续作**：生产方 emit sidecar（push_html.py --org/--branch + diagnose-* 机构报告）→ 缺口清单 B003 + backlog 2026-06-22-16ab1c-b842bc。补齐后用真实 org_user 凭据做生产端到端验收。
 ---
 
 **R20 · b332 premium-report 2 hooks 纯逻辑提取 + 单测（Loop v2 续推·路线 B 提取重构·三源全过·golden 由确定性等价证明）**
@@ -868,3 +894,20 @@
 - **重来更好**：① 口头确认事实与文档 ⏳ 占位之间有时差（2026-06-20 确认、2026-06-22 才落文档），理想是确认当日同步落文档。② §7.4 两处子集差异明确保持 🟡 未确认——忠实事实比声称完整更重要。
 - **复用价值**：「用户口头确认→文档 append-only 补签字」是标准流程——只更新 ⏳ 占位（签字流程 §3 允许），追加新节记录来源/佐证/例外，不修改已有内容。
 - needs_automation: false（文档签字是人工决策，不可自动化）
+**R21 · b332 收尾分组 PR-1：admin 纯逻辑提取 + 单测（scoping 纠偏后启动·提取路线复用·三源全过）**
+- **触发**：用户认可"一个会话做完 b332 + 先 scoping + 分组 PR"路径。scoping 复核 6 个剩余"纯组件"模块：3 个 `.ts` 全是 barrel（无逻辑），但 `.tsx` 内 useMemo/helper 含可提取纯逻辑——**纠正"6 个只能组件 smoke"的预判**：多数能走已三轮验证的"提取路线"（零 mock、最稳），只有 file 偏 IO、moto-cost(29 行)该降级。admin 作旗舰：ApiTokensPanel 有现成纯 helper、AccessControlPage 有 IP 解析 + 重复 toggle。
+- **成果（提取 + 纯增测试）**：新建 utils/tokenDisplay.ts(fmtDate/maskTokenId/isExpired)+utils/accessControl.ts(splitIpList/joinList/toggleSelection)；两组件删内联改 import，AccessControlPage 两处内联 toggle(原变量名 r/f 不同、语义同)统一改用 toggleSelection。21 单测覆盖边界(maskTokenId len≤6)、三态(isExpired revokedAt 优先)、正则分隔(中英文逗号/换行)、catch 分支(stub toLocaleString 抛错)、不可变/去重副作用。
+- **三源（闸-1 免，同 R20 路线 B 同构理由）**：verify:full(governance44+typecheck+**3768 单测**)全绿；闸-2 codex 无 P0/P1(确认逐字符等价、仅 export+prettier 括号差异)+2 P2 全采纳(fmtDate catch stub / toggleSelection 重复追加锁 `[...selected,x]` 语义)；evidence-verifier(fresh,sonnet)**CONFIRMED**(逐函数对 diff 等价、5 断言推演、亲跑 3768)。
+- **重来更好/复用价值**：① **scoping 纠偏是高杠杆**——"6 纯组件无纯函数"是有损盘点(只看文件类型 .tsx)，实际组件内联 useMemo/helper 是可提取纯逻辑富矿；判"组件 smoke vs 提取"应看**内联逻辑密度**(useMemo×N/数组链/顶层 helper)而非文件后缀。② **premium-report 的提取打法对 .tsx 组件同样成立**(源从 hooks 换成组件)，且组件里"已是独立 function 的 helper"(fmtDate/maskTokenId/isExpired)提取=纯搬移零风险，"重复内联逻辑"(两处 toggle)提取=顺带去重。③ 收尾分组里能走提取路线的优先提取(零 mock 稳)，组件 smoke 仅留给真无逻辑的展示壳。
+  - needs_automation: false（沿用 R18「双源零测试盘点 + 纯函数分布扫描」脚本项；本轮新增"按内联逻辑密度判路线"是 scoping 启发式，并入该项）
+- **下一轮**：PR-2 repair(5 useMemo 数据塑形提取)→ PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。
+
+---
+
+**R22 · b332 收尾 PR-2：repair 纯逻辑提取（逻辑密度最高模块·图表 useMemo 提取·三源全过）**
+- **触发**：PR-1 admin(#751)合并后续推。repair 是 6 剩余模块里逻辑密度最高(useMemo×5 / 数组链×12)，含 RepairPage 的 KPI 计算 + RepairScatter 的 ECharts option 数据塑形。
+- **成果（提取 + 纯增测试）**：utils/repairKpi.ts(buildRepairParams/findTierRow/computeToPremiumTotals + 移入类型 TimeWindow/CoopTierFilter/CoopTierRow)+utils/repairScatter.ts(buildScatterAxes/scatterSymbolSize/buildTierSeriesData)；RepairPage/RepairScatter 删内联改 import。21 单测覆盖查询参数条件包含、层级补零(含 none_shadow)、除零→null、轴去重排序、symbolSize 钳位[8,40]+sqrt 缩放、坐标映射+空值回退。type-only 循环导入(util import 组件类型、组件 import util 值)安全。
+- **三源（闸-1 免）**：verify:full(governance44+typecheck+**3789 单测**)全绿；闸-2 codex 无 P0/P1(**亲自跑函数**确认 40000→12 等输出，非仅读代码)+2 P2(采纳 none_shadow；组件 option 测试记路线 B 残留)；evidence-verifier(fresh,sonnet)**CONFIRMED**(逐函数 git show 对比、5 断言推演、亲跑 3789)。
+- **重来更好/复用价值**：① **图表组件 useMemo 是高价值提取目标**——把 ECharts option 里的纯数据塑形(轴去重/点尺寸/坐标映射)抽出，既测了易错的钳位/sqrt/indexOf 回退逻辑(组件 smoke 测不到)，又让 useMemo 体大幅瘦身；option 外壳(legend/grid/tooltip)留组件。② "图表数学"(symbolSize 钳位、坐标 indexOf)提取后能精确锁边界值，是本轮最高信息密度的测试。③ **codex 亲自跑函数验证输出**(本轮它用 bun -e 直接 import util 跑 golden 样例)是审 diff 的更强形态，比纯读代码更可信。
+  - needs_automation: false（沿用 R18 脚本项；图表 useMemo 提取打法并入 R21「按内联逻辑密度判路线」）
+- **下一轮**：PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。

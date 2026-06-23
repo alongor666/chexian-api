@@ -12,11 +12,14 @@
  *     server/data/reports/{reportId}/{snapshot}/{preview-mvp,drill/...}.html
  *   - 用户在企微 App 点击链接 → 浏览器打开 → JWT cookie 自动带 → 鉴权通过 → 渲染 HTML
  *
- * 安全：
+ * 安全（行级安全 B328）：
  *   - authMiddleware（拒绝未登录）
+ *   - assertReportRoleAllowed（粗闸：仅 branch_admin/org_user，前置防枚举）
  *   - sanitizeFilename / validateReportSubPath（拒绝路径遍历/特殊字符）
  *   - validatePathWithinDirectory（拒绝符号链接逃逸）
  *   - report_id 白名单 + snapshot 日期格式校验
+ *   - resolveReportOwner + assertReportAccess（org 归属校验：org_user 仅读本机构报告，跨机构 fail-closed）
+ *   - normalizeReportError（org_user 枚举防护：非 403 的 4xx 统一收敛为 403）
  */
 
 import { Router, Request, Response } from 'express';
@@ -30,6 +33,7 @@ import {
   validatePathWithinDirectory,
 } from '../utils/security.js';
 import { getReportsDir } from '../config/paths.js';
+import { dbEnv } from '../config/env.js';
 
 const router = Router();
 
@@ -42,30 +46,136 @@ const ALLOWED_REPORT_IDS = new Set<string>([
 ]);
 
 /**
- * B328：报告托管的行级安全（org 归属校验）。
- *
- * 历史漏洞：两个 GET handler 仅挂 authMiddleware，无 permissionMiddleware / 归属校验 →
- * 任意已登录用户（含三级机构 org_user）可凭文件名/reportId 读取**跨机构** HTML 诊断报告
- * （含保费/赔付/出险敏感数据），违反 §10 行级安全。
- *
- * 现有报告以「业务名+hash」单文件 / 「{reportId}/{snapshot}/...」多文件平铺存储，
- * 路径不含机构归属信息。在生产方（diagnose-* skills / push_html.py）补齐机构归属约定之前，
- * 本校验对非 branch_admin **fail-closed**，彻底封堵跨机构越权读取。
- *
- * @param ownerOrg 报告归属机构（org_level_3）；null = 无法判定归属
- *                 （跨机构聚合报告 / 未带归属约定的平铺报告）→ 仅 branch_admin 可读
+ * 报告的机构归属（行级安全的可信归属源）。
+ * 由生产方在报告旁写入 sidecar JSON（约定见 resolveReportOwner），handler 侧只信最小 schema。
  */
-export function assertReportAccess(req: Request, ownerOrg: string | null): void {
+export interface ReportOwner {
+  /** 归属机构（org_level_3，与 org_user.organization 严格等值匹配） */
+  org: string;
+  /** 归属分公司（branch_code，多分公司租户判别；null = sidecar 未声明） */
+  branch: string | null;
+}
+
+/** 仅当 BRANCH_RLS_ENABLED === 'true' 时返回 true（与 permission.ts 同一 env 语义）。 */
+function isBranchRlsEnabled(): boolean {
+  return dbEnv.BRANCH_RLS_ENABLED === 'true';
+}
+
+/**
+ * B328：报告托管的行级安全（org 归属校验·细粒度）。
+ *
+ * 历史漏洞（phase-1 已堵）：两个 GET handler 仅挂 authMiddleware，无归属校验 →
+ * 任意已登录用户可凭文件名/reportId 读取**跨机构** HTML 诊断报告（含保费/赔付/出险敏感数据）。
+ *
+ * phase-2（本次）：在 phase-1 fail-closed 基础上，放行 org_user 读**归属本机构**的报告。
+ * - branch_admin（分公司管理员）：放行全部报告（phase-1 行为不变）
+ * - org_user（三级机构用户）：仅放行归属本机构（org_level_3 等值）且 branch 不冲突的报告，否则 403
+ * - 其他角色（telemarketing / 未知 / 未认证）：报告为机构级敏感数据，fail-closed 403
+ *
+ * branch 语义（精确 mirror permission.ts 多分公司 RLS）：
+ * - RLS 开启：branch_code 是租户判别，必须 sidecar 声明 ownerBranch 且 === user.branchCode，
+ *   任一缺失 → fail-closed 403（同名 org_level_3 可能跨分公司，漏写 ownerBranch 不得放行）
+ * - RLS 关闭（单租户兼容期）：退回 org 等值；防御纵深——双方都声明 branch 且不等仍拒
+ *
+ * @param owner 报告归属（resolveReportOwner 解析自 sidecar）；null = 无法判定归属 → org_user fail-closed
+ */
+export function assertReportAccess(req: Request, owner: ReportOwner | null): void {
   const role = req.user?.role as UserRole | undefined;
   // branch_admin（分公司管理员）：放行全部报告
   if (role === UserRole.BRANCH_ADMIN) return;
-  // org_user（三级机构用户）：仅放行归属本机构的报告，跨机构 → 403
+  // org_user（三级机构用户）：仅放行归属本机构的报告
   if (role === UserRole.ORG_USER) {
-    if (ownerOrg !== null && ownerOrg === req.user?.organization) return;
+    const userOrg = req.user?.organization;
+    const userBranch = req.user?.branchCode;
+    if (owner && userOrg && owner.org === userOrg) {
+      if (isBranchRlsEnabled()) {
+        // RLS 开启：branch_code 是省份/租户判别（同名 org_level_3 可能跨分公司存在）。
+        // 必须 sidecar 声明 ownerBranch 且与 user.branchCode 严格相等，任一缺失即 fail-closed
+        // （防 sidecar 漏写 ownerBranch 导致 SC 用户读 SX 同名机构报告 —— codex 闸-2 P1）。
+        if (owner.branch && userBranch && owner.branch === userBranch) return;
+        throw new AppError(403, '无权访问其他机构的报告');
+      }
+      // RLS 关闭（单租户兼容期）：退回 org 等值；防御纵深——双方都声明 branch 且不等仍拒
+      if (owner.branch && userBranch && owner.branch !== userBranch) {
+        throw new AppError(403, '无权访问其他机构的报告');
+      }
+      return;
+    }
     throw new AppError(403, '无权访问其他机构的报告');
   }
-  // telemarketing_user / 未知角色：报告为机构级敏感数据，fail-closed 403
+  // telemarketing_user / 未知角色 / 未认证：fail-closed 403
   throw new AppError(403, '无权访问报告');
+}
+
+/**
+ * 粗粒度角色闸：仅 branch_admin / org_user 可访问报告路由；其余角色（含未认证）fail-closed 403。
+ * 必须置于路径/白名单/快照解析**之前**调用，避免低权限角色借 404/400 差异枚举报告类型 / 快照日期
+ * （保留 phase-1 「归属校验前置」的枚举防护语义）。
+ */
+export function assertReportRoleAllowed(req: Request): void {
+  const role = req.user?.role as UserRole | undefined;
+  if (role === UserRole.BRANCH_ADMIN || role === UserRole.ORG_USER) return;
+  throw new AppError(403, '无权访问报告');
+}
+
+/**
+ * org_user 枚举防护归一：把 org_user 遇到的**所有 4xx**（坏路径 400 / 不存在 404 / 跨机构·无归属 403）
+ * 统一收敛为同一条 403（同状态码 + 同消息），使「不存在 / 跨机构存在 / 坏归属 / 无归属」对 org_user
+ * 完全不可区分（消除跨机构存在性侧信道 —— codex 闸-2 P2；与 phase-1「org_user 恒 403」一致）。
+ * branch_admin 保留精确错误码（400/404），便于其排障（其本就放行全部，无枚举收益）。
+ */
+export function normalizeReportError(req: Request, err: unknown): unknown {
+  if (
+    req.user?.role === UserRole.ORG_USER &&
+    err instanceof AppError &&
+    err.statusCode >= 400 &&
+    err.statusCode < 500
+  ) {
+    return new AppError(403, '无权访问报告');
+  }
+  return err;
+}
+
+/**
+ * 解析报告的机构归属（org_level_3 + branch_code），来源是报告旁的 sidecar JSON。
+ *
+ * 约定（⚠ 生产方 diagnose-* skills / push_html.py 待补齐 emit —— 见 BACKLOG 缺口登记）：
+ *   - 单文件 foo.html              → 旁路 foo.html.meta.json
+ *   - 多文件 {reportId}/{snapshot}/ → {reportId}/{snapshot}/.report-meta.json
+ *   - 内容：{ "ownerOrg": "<org_level_3>", "ownerBranch": "<branch_code, 可选>" }
+ *
+ * 安全（只信最小 schema，不做模糊匹配 / 不从文件名反推机构）：
+ *   - metaPath 必须从已校验的报告路径派生，并再次 validatePathWithinDirectory（防符号链接 / 拼接逃逸）
+ *   - ownerOrg 必须非空 string，否则 → null
+ *   - ownerBranch 若声明必须匹配 ^[A-Z]{2}$，否则整体 → null（fail-closed，坏 schema 不放行）
+ *   - 文件缺失 / 读失败 / JSON 解析失败 → null
+ * 返回 null 时 org_user fail-closed（读不到）；生产方未补 sidecar 前不回归 phase-1 行为。
+ */
+export function resolveReportOwner(metaPath: string, baseDir: string): ReportOwner | null {
+  try {
+    validatePathWithinDirectory(metaPath, baseDir);
+    if (!fs.existsSync(metaPath)) return null;
+    const raw = fs.readFileSync(metaPath, 'utf-8');
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const record = parsed as Record<string, unknown>;
+
+    const orgRaw = record.ownerOrg;
+    const org = typeof orgRaw === 'string' ? orgRaw.trim() : '';
+    if (!org) return null;
+
+    let branch: string | null = null;
+    if (record.ownerBranch !== undefined && record.ownerBranch !== null) {
+      if (typeof record.ownerBranch === 'string' && /^[A-Z]{2}$/.test(record.ownerBranch)) {
+        branch = record.ownerBranch;
+      } else {
+        return null; // 声明了 branch 但 schema 非法 → fail-closed
+      }
+    }
+    return { org, branch };
+  } catch {
+    return null; // 路径逃逸 / 读失败 / JSON 错误 → fail-closed
+  }
 }
 
 /**
@@ -167,25 +277,35 @@ router.get(
   '/:reportId/:snapshot/*',
   authMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
-    const { reportId, snapshot } = req.params;
-    const relativePath = (req.params as Record<string, string>)[0] || '';
+    // B328 phase-2：粗粒度角色闸前置（先于白名单/路径解析），保留枚举防护
+    assertReportRoleAllowed(req);
 
-    // B328：归属校验前置（先于白名单），避免低权限用户用 404/403 差异枚举有效 reportId。
-    // 多文件白名单报告（diagnose-loss-development）为跨机构聚合报告，无单一机构归属
-    // → ownerOrg=null → 仅 branch_admin 可读
-    assertReportAccess(req, null);
+    try {
+      const { reportId, snapshot } = req.params;
+      const relativePath = (req.params as Record<string, string>)[0] || '';
 
-    if (!ALLOWED_REPORT_IDS.has(reportId)) {
-      throw new AppError(404, '报告类型不存在');
+      if (!ALLOWED_REPORT_IDS.has(reportId)) {
+        throw new AppError(404, '报告类型不存在');
+      }
+      validateSnapshotName(snapshot);
+      const safeRel = validateReportSubPath(relativePath);
+
+      const baseDir = path.join(REPORTS_DIR, reportId, snapshot);
+      // baseDir 本身必须真实落在 REPORTS_DIR 内（防中间目录 symlink 逃逸 —— codex 闸-2 P1）
+      validatePathWithinDirectory(baseDir, REPORTS_DIR);
+      const fullPath = path.join(baseDir, safeRel);
+      validatePathWithinDirectory(fullPath, baseDir);
+
+      // 归属解析（sidecar 在 snapshot 目录下）+ 细粒度授权。
+      // 现有白名单报告 diagnose-loss-development 为跨机构聚合，无 sidecar → owner=null → 仅 branch_admin。
+      const owner = resolveReportOwner(path.join(baseDir, '.report-meta.json'), baseDir);
+      assertReportAccess(req, owner);
+
+      // serveReportFile 的 404 纳入 try：org_user 经归一也变 403（防存在性枚举），branch_admin 保留精确 404
+      serveReportFile(res, fullPath);
+    } catch (err) {
+      throw normalizeReportError(req, err); // org_user：所有 4xx → 统一 403（防枚举）
     }
-    validateSnapshotName(snapshot);
-    const safeRel = validateReportSubPath(relativePath);
-
-    const baseDir = path.join(REPORTS_DIR, reportId, snapshot);
-    const fullPath = path.join(baseDir, safeRel);
-    validatePathWithinDirectory(fullPath, baseDir);
-
-    serveReportFile(res, fullPath);
   })
 );
 
@@ -194,20 +314,29 @@ router.get(
   '/:filename',
   authMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
-    // B328：归属校验前置。单文件报告平铺存储（业务名+hash），文件名不含机构归属
-    // → ownerOrg=null → 仅 branch_admin 可读（生产方补齐归属约定前 fail-closed，封堵跨机构越权）
-    assertReportAccess(req, null);
+    // B328 phase-2：粗粒度角色闸前置，保留枚举防护
+    assertReportRoleAllowed(req);
 
-    const safe = sanitizeFilename(req.params.filename);
+    try {
+      const safe = sanitizeFilename(req.params.filename);
 
-    if (!/\.html?$/i.test(safe)) {
-      throw new AppError(400, '仅支持 .html / .htm 文件');
+      if (!/\.html?$/i.test(safe)) {
+        throw new AppError(400, '仅支持 .html / .htm 文件');
+      }
+
+      const fullPath = path.join(REPORTS_DIR, safe);
+      validatePathWithinDirectory(fullPath, REPORTS_DIR);
+
+      // 归属解析（单文件 sidecar = <报告路径>.meta.json）+ 细粒度授权。
+      // 生产方补齐 sidecar 前，平铺报告无归属 → owner=null → org_user fail-closed（不回归 phase-1）。
+      const owner = resolveReportOwner(`${fullPath}.meta.json`, REPORTS_DIR);
+      assertReportAccess(req, owner);
+
+      // serveReportFile 的 404 纳入 try：org_user 经归一也变 403（防存在性枚举），branch_admin 保留精确 404
+      serveReportFile(res, fullPath);
+    } catch (err) {
+      throw normalizeReportError(req, err); // org_user：所有 4xx → 统一 403（防枚举）
     }
-
-    const fullPath = path.join(REPORTS_DIR, safe);
-    validatePathWithinDirectory(fullPath, REPORTS_DIR);
-
-    serveReportFile(res, fullPath);
   })
 );
 
