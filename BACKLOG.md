@@ -27,7 +27,7 @@
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 
-**P2（39 项）**
+**P2（40 项）**
 
 - B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -67,8 +67,8 @@
 - 2026-06-20-claude-8870f5 — [口径裁决] reserve_wan(未决准备金) 在覆盖全状态案件的面板含零结/注销/
 - 2026-06-21-claude-acf188 `PARTIAL` — 山西账号（ADR G7）
 - 2026-06-22-16ab1c-b842bc — 报告托管 phase-2 GATED 续作
-- 2026-06-22-claude-e5cc06 — buildRsyncBranchFilterArgs 的 knownBranches 默
 - 2026-06-22-b320-975a3e — 给 Nginx 托管的 SPA 下发 CSP + 评估收紧 scriptSrc 'uns
+- 2026-06-22-claude-e5cc06 — buildRsyncBranchFilterArgs 的 knownBranches 默
 
 **P3（26 项）**
 
