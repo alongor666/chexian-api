@@ -688,6 +688,13 @@ function runStandardDomain(python, scriptDir, manifest, extraArgsOverride = []) 
 
   const { sourceFiles, batchDate } = resolveSourceFilesForTrigger(id, inputGlobs, sourceRoot, trigger);
   if (sourceFiles.length === 0) {
+    // 多省 P3-B（codex 闸-2 P2-1）：非 SC 单域 staging 源缺失时假阳性"绿字完成"会误导
+    //   运维（以为成功了），改为 exit 1 让调用方拿到失败状态；SC 默认链路保持原"跳过"
+    //   语义（增量未到不视为故障）。
+    if (isBranch) {
+      log('red', `❌ [${BRANCH_CODE}] 域 '${id}' 未找到源 ${inputGlobs.join(' / ')}（源根 ${sourceRoot}），非 SC 单域路径下视为失败（避免假阳性"绿字完成"）`);
+      process.exit(1);
+    }
     log('yellow', `⚠ 未找到 ${inputGlobs.join(' / ')}（源根 ${sourceRoot}），跳过`);
     return;
   }
@@ -882,11 +889,16 @@ function runStrategyMultiMerge(ctx) {
     const mergeScript = join(scriptDir, 'pipelines/merge_parquet.py');
     const desc = hasHistory ? `历史 latest + ${tmpFiles.length} 增量` : `${tmpFiles.length} 分片`;
     log('green', `▶ 合并（${desc}），按 ${merge_dedup_key} 去重...`);
+    // 多省 P3-B（codex 闸-2 P1）：合并 + 历史 latest 时透传 declared-branch，让
+    //   merge_parquet 在 dedup 完成后对最终 parquet 重新应用 registry 派生（覆盖来自旧
+    //   latest 合并产生的 NULL 派生列），防 RLS 漏行。SC 默认链路也传 'SC'，使
+    //   strictNonNull+assertDeclaredBranch 在 SC 默认链路也守卫。
     runPythonScript(python, mergeScript, [
       '-i', ...mergeInputs.map(f => `"${f}"`),
       '-o', `"${tmpOutput}"`,
       '--dedup-key', `"${merge_dedup_key}"`,
       '--order-by', `"${merge_order_by}"`,
+      '--declared-branch', `"${BRANCH_CODE}"`,
     ]);
     validateCandidate(tmpOutput);
     if (existsSync(outputAbs)) {
@@ -1378,9 +1390,9 @@ async function main() {
     // runStandardDomain/runRenewalTracker 尚未省份化，非 SC 运行会写入 SC 路径 → 硬拦截。
     // 每 branch 化一个域，把它加进 __branchReadyDomains（与 ALL_DOMAINS 同名）。
     const __branchSub = process.env.BRANCH_CODE || 'SC';
-    const __branchReadyDomains = new Set(['claims_detail', 'quotes', 'repair', 'brand']);
+    const __branchReadyDomains = new Set(['claims_detail', 'quotes', 'repair', 'brand', 'cross_sell', 'customer_flow']);
     if (__branchSub !== 'SC' && !__branchReadyDomains.has(subcommand)) {
-      log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail / quotes / repair / brand`);
+      log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail / quotes / repair / brand / cross_sell / customer_flow`);
       process.exit(1);
     }
     switch (subcommand) {

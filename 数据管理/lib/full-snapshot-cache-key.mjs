@@ -32,11 +32,18 @@ export function fullSnapshotOutputName(id, trigger) {
 }
 
 export function fullSnapshotDependencyPaths(pipelineDir, scriptPath) {
+  // 多省 P3-B（codex 闸-2 P2-2）：补 derived_fields.py + field-registry/fields.json 进缓存
+  //   key—— 仅改 prefix mapping / guard 逻辑（不动 convert_*.py）时，旧 cache 可能误复用，
+  //   导致 branch_code 派生错乱。registry 文件相对路径：pipelineDir 上溯两级到仓库根，再进
+  //   server/src/config/field-registry/fields.json（与 derived_fields.py 读法对齐）。
+  const repoRoot = join(pipelineDir, '..', '..');
   return [
     scriptPath,
     join(pipelineDir, 'base_converter.py'),
     join(pipelineDir, 'etl_validation.py'),
     join(pipelineDir, 'parquet_utils.py'),
+    join(pipelineDir, 'derived_fields.py'),
+    join(repoRoot, 'server', 'src', 'config', 'field-registry', 'fields.json'),
   ];
 }
 

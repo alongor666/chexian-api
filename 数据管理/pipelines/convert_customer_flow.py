@@ -43,8 +43,18 @@ def build_customer_flow_dataframe(
     input_files: list[Path],
     snapshot_dir: Path | None = None,
     batch_date: str | None = None,
+    declared_branch: str | None = None,
 ) -> pd.DataFrame:
-    """读取新的 08/09 双产物，并合成为原 customer_flow schema。"""
+    """读取新的 08/09 双产物，并合成为原 customer_flow schema。
+
+    declared_branch: 多省 P3-B（codex 闸-1 P1-1/P1-4）。
+        · 'SC' / 'SX' / None：派生 branch_code 时透传给 derived_fields.assert_guarded_prefix_field
+          做「声明省 == 派生省」核对。
+        · None 会在最终 final snapshot 派生时回退 'SC'，使 SC 默认链路也能被
+          assertDeclaredBranch 守卫到（防混省）。
+        · 08/09 part snapshot 保持原 5 列源 schema（不派生 branch_code），因为分片快照只反映源
+          Excel 内容；final snapshot 与主产物保持 6 列一致（含派生的 branch_code）。
+    """
     from pipelines.etl_validation import load_excel_all_sheets
 
     converter = CustomerFlowConverter()
@@ -105,6 +115,12 @@ def build_customer_flow_dataframe(
         print(f"   合并 08/09 重叠主键: {before - len(df):,} 行")
 
     final = df[OUTPUT_COLUMNS].sort_values(["insurance_start_date", "policy_no"]).reset_index(drop=True)
+
+    # 多省 P3-B（codex 闸-1 P1-4）：在 final snapshot 写出**之前**派生 branch_code，使 final
+    #   snapshot 与主产物 schema 一致（6 列含 branch_code）。08/09 part snapshot 保持源 5 列。
+    from pipelines.derived_fields import apply_registry_derivations
+    final = apply_registry_derivations(final, declared_branch or 'SC')
+
     if snapshot_dir:
         from pipelines.parquet_utils import write_parquet_with_metadata
 
@@ -214,6 +230,15 @@ class CustomerFlowConverter(BaseConverter):
             action="store_true",
             help="跳过 data-sources.json 写入（manifest 驱动流程专用，由 refresh_metadata.py 统一写）",
         )
+        parser.add_argument(
+            "--branch-code",
+            default=None,
+            help="多省 P3-B（ADR D5）：分公司编码（如 SX）。提供时透传 declared_branch 给"
+                 " derived_fields.assertDeclaredBranch 校对「声明省==派生省」+ 跳过 data-sources.json"
+                 " 写入；SC 默认链路不传 → declared_branch 回退 'SC'（让 assertDeclaredBranch 仍守卫"
+                 " 混省）；branch_code 列**始终**派生（与 base_converter.py:177 同语义，"
+                 " cross_sell/customer_flow 主产物 schema 一致）。",
+        )
         parser.add_argument("--snapshot-dir", default=None, help="可选：写出 08/09 中间快照和 final snapshot 的目录")
         parser.add_argument("--batch-date", default=None, help="可选：快照批次日期 YYYYMMDD")
         args = parser.parse_args()
@@ -227,8 +252,17 @@ class CustomerFlowConverter(BaseConverter):
         for input_file in input_files:
             print(f"   输入: {input_file.name}")
 
+        # 多省 P3-B：声明省解析（CLI > env > None；归一大写）；下游派生若 None 回退 'SC'
+        from pipelines.derived_fields import resolve_declared_branch
+        declared_branch = resolve_declared_branch(args)
+
         snapshot_dir = Path(args.snapshot_dir).resolve() if args.snapshot_dir else None
-        df = build_customer_flow_dataframe(input_files, snapshot_dir=snapshot_dir, batch_date=args.batch_date)
+        df = build_customer_flow_dataframe(
+            input_files,
+            snapshot_dir=snapshot_dir,
+            batch_date=args.batch_date,
+            declared_branch=declared_branch,
+        )
         self.pre_write_hook(df, output_file)
 
         source_names = ", ".join(str(p) for p in input_files)
@@ -245,7 +279,9 @@ class CustomerFlowConverter(BaseConverter):
         verify_non_empty(verify)
         print(f"   验证: {len(verify):,} 行 × {len(verify.columns)} 列 ✅")
 
-        if not args.no_metadata:
+        # 多省 P3-B：非 SC 省（--branch-code）跳过 data-sources.json，避免污染 SC 唯一事实源
+        #   （与 base_converter.py:206 同语义；ADR D5）
+        if not args.no_metadata and not args.branch_code:
             update_data_sources(
                 self.get_domain_id(),
                 row_count=len(df),

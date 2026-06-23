@@ -165,6 +165,29 @@ def run_dedup(input_paths, output_path, dedup_key, order_by):
     print(f"   ✅ 去重合并完成: {cnt:,} 条 → {output_path.name}")
 
 
+def reapply_registry_derivations(output_path, declared_branch):
+    """合并去重后对最终 parquet 重新应用 registry 派生（多省 P3-B codex 闸-2 P1）。
+
+    根因：multi_file_merge + merge_with_history 会把旧 latest.parquet（无 branch_code 列）
+    与新 tmp 分片（已派生 branch_code）一起喂给 `read_parquet(..., union_by_name=true)`，
+    导致旧行 branch_code=NULL → strict_non_null 保护被绕过 → RLS 漏行。
+
+    本函数读回合并产物 → 重派生 branch_code（基于 policy_no 现有列）→ 写回。
+    df 无 policy_no 列时 derived_fields 守卫处理（guarded fail-fast / 非 guarded skip）。
+    """
+    import pandas as pd
+    from pipelines.derived_fields import apply_registry_derivations
+
+    df = pd.read_parquet(output_path)
+    before_cols = list(df.columns)
+    df = apply_registry_derivations(df, declared_branch)
+    print(
+        f"   🔁 合并后 re-derive 完成: {output_path.name}（{len(df):,} 行,"
+        f" {len(before_cols)} → {len(df.columns)} 列）"
+    )
+    df.to_parquet(output_path, index=False)
+
+
 def main():
     # 检测调用模式：含 -i/-o → argparse 模式；否则 → 旧位置参数模式
     use_argparse = any(a in ("-i", "--inputs", "-o", "--output") for a in sys.argv[1:])
@@ -177,6 +200,13 @@ def main():
                             help="去重主键列名（提供则启用 dedup 模式）")
         parser.add_argument("--order-by", default=None,
                             help='dedup 排序表达式，如 "policy_date DESC NULLS LAST"')
+        parser.add_argument(
+            "--declared-branch", default=None,
+            help="多省 P3-B（codex 闸-2 P1）：dedup 模式合并完成后对最终 parquet 重新应用 "
+                 "registry 派生（branch_code 等）。覆盖来自历史 latest 合并产生的 NULL 派生列（"
+                 "union_by_name=true 会给旧行补 NULL → strict_non_null 保护被绕过 → RLS 漏行）。"
+                 "df 无 policy_no 时 derived_fields 守卫自动处理。仅作用于 dedup 模式。",
+        )
         args = parser.parse_args()
         input_paths = [Path(p) for p in args.inputs]
         output_path = Path(args.output)
@@ -188,7 +218,7 @@ def main():
             sys.exit(1)
         input_paths = [Path(p) for p in sys.argv[1:-1]]
         output_path = Path(sys.argv[-1])
-        args = argparse.Namespace(dedup_key=None, order_by=None)
+        args = argparse.Namespace(dedup_key=None, order_by=None, declared_branch=None)
 
     for p in input_paths:
         if not p.exists():
@@ -202,6 +232,9 @@ def main():
             print("❌ --dedup-key 需配合 --order-by 使用")
             sys.exit(1)
         run_dedup(input_paths, output_path, args.dedup_key, args.order_by)
+        # 多省 P3-B（codex 闸-2 P1）：dedup 合并后 re-derive，覆盖来自历史 latest 的 NULL 派生
+        if args.declared_branch:
+            reapply_registry_derivations(output_path, args.declared_branch)
     else:
         run_concat(input_paths, output_path)
 

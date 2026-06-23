@@ -20,10 +20,15 @@
  * permissionColumns 为 ground-truth：由 `duckdb DESCRIBE` 直查各域 latest.parquet 实测
  * （2026-06-18），不靠推断。新增关系前必须实测其权限列，宁缺毋滥。
  *
- * branch_code 例外（P0.5，2026-06-19）：派生视图 parquet **均不含 branch_code**（DESCRIBE 实测）。
- * 由 loader（duckdb-domain-loaders.ts selectUnionWithBranchCode）在视图层补 `'<BRANCH_CODE>' AS branch_code`
- * 常量列，使其与 PolicyFact（ETL 落列）对齐、可被 BRANCH_RLS 的 `branch_code='SC'` 过滤命中。
- * 故此处 branch_code 的 ground-truth 由「loader 保证视图必含该列」构造性成立，而非 parquet 实测。
+ * branch_code 例外（P0.5，2026-06-19；2026-06-23 P3-B 注脚更新）：早期派生视图 parquet **均不含
+ * branch_code**（DESCRIBE 实测），由 loader（duckdb-domain-loaders.ts selectUnionWithBranchCode）
+ * 在视图层补 `'<BRANCH_CODE>' AS branch_code` 常量列实现对齐。
+ *   - P3-A（2026-06-23 #763）起 claims_detail parquet ETL 派生 branch_code（policy_no 前缀）
+ *   - P3-B（2026-06-23 此 PR）起 cross_sell / customer_flow parquet 同样派生 branch_code
+ *   - selectUnionWithBranchCode 用 DESCRIBE 实测 hasBranchCode 自适应（有则裸 SELECT *、
+ *     无则补常量），故 ETL 改造对 loader 透明、无需同步升级。
+ * branch_code 的 ground-truth 由「loader 保证视图必含该列」构造性成立——参 federation 表头
+ * 注释的 ETL 落列 + loader 补列双路径。
  */
 
 /** 关系联邦策略 */

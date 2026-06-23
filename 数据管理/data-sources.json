@@ -287,7 +287,7 @@
       "notes": "独立交叉销售清单（从签单清单中移出），9列，按保单号去重。⚠ 2026-06-10 上游 BI 清单重构停止下载本清单，本域为冻结存量（merge_with_history=true 保护历史 parquet）；签单清单同日新增「交叉销售标识-驾意/交叉销售保费-驾意」两列，未来可评估改从签单域派生（口径等价性未验证，禁自动推断）",
       "last_updated": "2026-06-09",
       "row_count": 420899,
-      "field_count": 9,
+      "field_count": 10,
       "data_range": "2023-01-01 ~ 2026-05-22"
     },
     {
@@ -414,7 +414,7 @@
       "notes": "客户转保/流失分析；由 08_商业险续保流失公司(next_insurer) + 09_商业险转保上年公司(previous_insurer) 合成，按 (policy_no, insurance_start_date) 合并到精简 customer_flow schema。⚠ 2026-06-10 上游停止下载 08/09 两清单，本域为冻结存量；签单清单同日新增「上年承保主体/次年保险公司」两列（已注册为 previous_insurer/next_insurer 字段），未来可评估改从签单域派生（口径等价性未验证，禁自动推断）。详见 docs/data-sources/customer_flow.md",
       "last_updated": "2026-06-09",
       "row_count": 188340,
-      "field_count": 5
+      "field_count": 6
     },
     {
       "id": "new_energy_claims",

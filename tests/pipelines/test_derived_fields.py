@@ -200,5 +200,122 @@ class BackfillGuardTest(unittest.TestCase):
         self.assertIn("skip", status)
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# P3-B cross_sell + customer_flow 派生化新增场景（base_converter 入口语义）
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class BaseConverterEntryGuardTest(unittest.TestCase):
+    """模拟 base_converter.py:177 6c 段的派生入口逻辑：
+    · 'policy_no' in df.columns（cross_sell/customer_flow）→ 派生 + 守卫
+    · 'policy_no' not in df.columns（repair/brand）→ 安静跳过
+    """
+
+    def test_cross_sell_full_sc_passes(self):
+        """cross_sell 全 SC 派生：declared_branch='SC' + 610... 前缀 → 通过且全 SC"""
+        df = _df(["6101001", "6102002", "6103003"])
+        out = apply_derived_fields(df, [BRANCH_RULE], declared_branch="SC")
+        self.assertEqual(out["branch_code"].tolist(), ["SC", "SC", "SC"])
+        self.assertEqual(int(out["branch_code"].notna().sum()), 3)
+
+    def test_customer_flow_full_sc_passes(self):
+        """customer_flow 全 SC 派生：与 cross_sell 同语义（共享 helper）"""
+        df = _df(["61020260100000001", "61020250100000002", "61020260100000003"])
+        out = apply_derived_fields(df, [BRANCH_RULE], declared_branch="SC")
+        self.assertEqual(out["branch_code"].tolist(), ["SC", "SC", "SC"])
+
+    def test_dim_table_without_policy_no_skipped_at_entry(self):
+        """dim 表（repair/brand）无 policy_no 列 → base_converter 入口必须跳过派生入口；
+        若误调 apply_registry_derivations 直接传 dim df，derived_fields.py:60-66 会因
+        guarded(branch_code) 源列缺失 fail-fast。该测试断言：base_converter 必须在 entry 守卫
+        （'policy_no' in df.columns），不能让 dim 表 df 进派生。
+        """
+        dim_df = pd.DataFrame({
+            "repair_shop_name": ["A 厂", "B 厂"],
+            "report_date": ["2026-01-01", "2026-01-02"],
+        })
+        # 模拟 base_converter 入口判断
+        if 'policy_no' in dim_df.columns:
+            self.fail("dim_df 不应有 policy_no 列")
+        # 直接验证：若强行进派生，会 fail-fast（这是 base_converter 必须守卫的根因）
+        with self.assertRaises(SystemExit) as cm:
+            apply_derived_fields(dim_df, [BRANCH_RULE], declared_branch="SC")
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_sc_default_link_blocks_mixed_provinces(self):
+        """SC 默认链路（declared_branch='SC'，base_converter 入口 `or 'SC'` 兜底）必须
+        fail-fast 拦截混省（混 610 + 618 行）—— codex 闸-1 P1-1 关键防线。
+        """
+        mixed_df = _df(["6100001", "6180002", "6100003"])
+        with self.assertRaises(SystemExit) as cm:
+            apply_derived_fields(mixed_df, [BRANCH_RULE], declared_branch="SC")
+        self.assertEqual(cm.exception.code, 1)
+
+
+class TransformPyRetrofitTest(unittest.TestCase):
+    """transform.py:1094-1108 retrofit 后的行为契约：
+    · SystemExit（fail-fast）必须冒泡，不被异常边界吞
+    · 仅 FileNotFoundError / JSONDecodeError 触发 skip 派生
+    （codex 闸-1 P2-1：transform.py 异常边界保持原语义）
+    """
+
+    def test_helper_propagates_systemexit_on_mixed(self):
+        """混省 → apply_registry_derivations 内部 sys.exit(1) 必须冒泡；
+        transform.py 的 try/except 不应吞 SystemExit。
+        """
+        mixed_df = _df(["6100001", "6180002"])
+        with self.assertRaises(SystemExit):
+            apply_registry_derivations(mixed_df, "SC")
+
+    def test_resolve_declared_branch_sc_fallback(self):
+        """SC 默认链路：CLI/env 全空时 resolve_declared_branch 返回 None，
+        transform.py 用 `or 'SC'` 兜底（与 base_converter:188 同语义）。
+        """
+        ns = argparse.Namespace(branch_code=None)
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('BRANCH_CODE', None)
+            self.assertIsNone(resolve_declared_branch(ns))
+        # 调用方期望 `or 'SC'` 转换 → 派生
+        df = apply_derived_fields(_df(["6100001"]), [BRANCH_RULE], declared_branch=resolve_declared_branch(ns) or 'SC')
+        self.assertEqual(df["branch_code"].tolist(), ["SC"])
+
+
+class MergeParquetReapplyTest(unittest.TestCase):
+    """merge_parquet.reapply_registry_derivations 行为契约（codex 闸-2 P1）：
+    模拟 cross_sell merge_with_history 场景——旧 latest（无 branch_code 列）+ 新 tmp（已
+    派生 branch_code）合并后 union_by_name 给旧行补 NULL，必须 re-derive 覆盖恢复全列非空。
+    """
+
+    def test_reapply_covers_null_from_history_merge(self):
+        import tempfile
+
+        from pipelines.merge_parquet import reapply_registry_derivations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cross_sell_merged.parquet"
+            # 模拟 union_by_name 产物：旧行 branch_code=NULL，新行=SC（policy_no 全 610 前缀）
+            df = pd.DataFrame({
+                "policy_no": ["6100001", "6100002", "6100003", "6100004"],
+                "branch_code": [None, None, "SC", "SC"],
+            })
+            df.to_parquet(out, index=False)
+            reapply_registry_derivations(out, "SC")
+            df2 = pd.read_parquet(out)
+            self.assertEqual(int(df2["branch_code"].isna().sum()), 0)
+            self.assertTrue((df2["branch_code"] == "SC").all())
+
+    def test_reapply_fails_on_unknown_prefix(self):
+        """re-derive 后若 policy_no 含未知前缀 → strict_non_null fail-fast（与 ETL 同语义）"""
+        import tempfile
+
+        from pipelines.merge_parquet import reapply_registry_derivations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "bad_prefix.parquet"
+            pd.DataFrame({"policy_no": ["6100001", "999XXX"]}).to_parquet(out, index=False)
+            with self.assertRaises(SystemExit):
+                reapply_registry_derivations(out, "SC")
+
+
 if __name__ == "__main__":
     unittest.main()
