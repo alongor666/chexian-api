@@ -3,11 +3,13 @@
   "_fields": {
     "gatedKeywords": "🔴 desc/section 命中任一即 GATED cutover（永不自动进前沿，须用户显式确认）。必须精确指向不可逆 cutover，禁用『GATED』(会误伤『GATED 上线前置』该做任务)。",
     "deps": "uid -> [前置 uid...]；前置全 DONE 才就绪。",
-    "inflight": "[uid...] 当前已有会话在做（防重复派单）。会话开工时加入、合并后移除。",
-    "tasks": "uid -> { domain:[域桶覆盖], gated:true 显式终局闸, exclude:true 排除 }。code 字段噪声大或跨域时用 domain 覆盖。"
+    "inflight": "[uid...] 本地标记在飞（防重复派单）+ 合并门串行化输入。跨会话防重复劳动改用『认领锁』(见 claimTtlHours)，本字段仅本地/单会话编排兜底。",
+    "tasks": "uid -> { domain:[域桶覆盖], gated:true 显式终局闸, exclude:true 排除 }。code 字段噪声大或跨域时用 domain 覆盖。",
+    "claimTtlHours": "跨会话认领锁时效（小时，默认 8）。会话开工即 `backlog.mjs status <uid> IN_PROGRESS --actor <session>` 并 push；dispatch 收集多 ref 日志见此认领即锁出前沿。认领后超此时长无后续事件 → 视为陈旧（会话疑似死亡）释放回前沿防死锁。§4 P0『跨会话重复劳动』根治。"
   },
   "gatedKeywords": ["cutover", "RLS-on 上线", "sync VPS 发账号", "RLS-on→", "进 current/ →", "发山西账号"],
   "deps": {},
   "inflight": [],
+  "claimTtlHours": 8,
   "tasks": {}
 }
