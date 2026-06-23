@@ -11,6 +11,7 @@ import {
   getVisibleOrganizations,
   canViewOrganization,
   canAccessRoute,
+  canAccessMotoCost,
   getDefaultRoute,
 } from '../../src/shared/config/organizations';
 
@@ -120,6 +121,40 @@ describe('Organizations Config', () => {
     it('should use performance-analysis as fallback default route for org user', () => {
       const orgUser = getPermissionByUsername('leshan')!;
       expect(getDefaultRoute(orgUser)).toBe('/performance-analysis');
+    });
+  });
+
+  describe('canAccessMotoCost (摩意模型特性权限)', () => {
+    it('grants super users even when specialFeatures omits moto_cost', () => {
+      // 超管不变量：admin / xuechenglong 始终拥有完整访问权，
+      // 即使其 specialFeatures 被改成不含 moto_cost 也应放行。
+      expect(canAccessMotoCost('admin', ['cost'])).toBe(true);
+      expect(canAccessMotoCost('xuechenglong', [])).toBe(true);
+    });
+
+    it('grants non-admin users who hold the moto_cost special feature', () => {
+      // 核心场景：三级机构用户被授予 moto_cost 特性后应可访问 /moto-cost。
+      expect(canAccessMotoCost('leshan', ['moto_cost'])).toBe(true);
+      expect(canAccessMotoCost('leshan', ['cost', 'moto_cost'])).toBe(true);
+    });
+
+    it('denies non-admin users without the moto_cost special feature', () => {
+      expect(canAccessMotoCost('leshan', ['cost'])).toBe(false);
+      expect(canAccessMotoCost('leshan', [])).toBe(false);
+    });
+
+    it('falls back to super-user check when specialFeatures is undefined', () => {
+      expect(canAccessMotoCost('admin', undefined)).toBe(true);
+      expect(canAccessMotoCost('leshan', undefined)).toBe(false);
+    });
+  });
+
+  describe('canAccessRoute vs /moto-cost (守卫选型回归)', () => {
+    it('denies /moto-cost for org users — 证明 RouteAccessGuard 是错误守卫', () => {
+      // /moto-cost 是「特性路由」，永远不在 org 用户的 allowedRoutes 中，
+      // 因此 canAccessRoute 必拒；路由层必须改用 canAccessMotoCost（FeatureGuard）。
+      const orgUser = getPermissionByUsername('leshan')!;
+      expect(canAccessRoute(orgUser, '/moto-cost')).toBe(false);
     });
   });
 

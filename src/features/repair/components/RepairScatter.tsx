@@ -5,6 +5,7 @@ import { getChartTheme } from '@/shared/config/chartStyles';
 import { useTheme } from '@/shared/theme';
 import { cardStyles, textStyles, cn } from '@/shared/styles';
 import { formatPremiumWan } from '@/shared/utils/formatters';
+import { buildScatterAxes, scatterSymbolSize, buildTierSeriesData } from '../utils/repairScatter';
 
 export interface ScatterShopPoint {
   shop_code: string;
@@ -44,38 +45,19 @@ export const RepairScatter: React.FC<Props> = ({ data, loading, onPointClick }) 
 
   const { option } = useMemo(() => {
     const theme = getChartTheme(isDark);
-    const districtSet = new Set<string>();
-    const orgSet = new Set<string>();
-    data.forEach(p => {
-      districtSet.add(p.district ?? '未知区县');
-      orgSet.add(p.org_level_3 ?? '其他');
-    });
-    const dList = Array.from(districtSet).sort();
-    const oList = Array.from(orgSet).sort();
+    const { districtList: dList, orgList: oList } = buildScatterAxes(data);
 
     const series = (['active', 'past', 'none', 'none_shadow'] as const).map(tier => ({
       name: TIER_LABEL[tier],
       type: 'scatter' as const,
-      symbolSize: (d: [number, number, number]) => {
-        const premium = d[2] ?? 0;
-        return Math.max(8, Math.min(40, Math.sqrt(premium / 10000) * 2 + 8));
-      },
+      symbolSize: (d: [number, number, number]) => scatterSymbolSize(d[2]),
       itemStyle: {
         color: TIER_COLOR[tier],
         opacity: tier === 'none' ? 0.55 : 0.85,
         borderColor: '#fff',
         borderWidth: 1,
       },
-      data: data
-        .filter(p => p.coop_tier === tier)
-        .map(p => ({
-          value: [
-            dList.indexOf(p.district ?? '未知区县'),
-            oList.indexOf(p.org_level_3 ?? '其他'),
-            p.net_premium,
-          ],
-          shop: p,
-        })),
+      data: buildTierSeriesData(data, tier, dList, oList),
     }));
 
     const opt = {
