@@ -17,10 +17,11 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { duckdbService } from '../duckdb.js';
-import { loadQuoteConversion, loadCrossSell } from '../duckdb-domain-loaders.js';
+import { loadQuoteConversion, loadCrossSell, loadNewEnergyClaims } from '../duckdb-domain-loaders.js';
 
 let tmpDir: string;
 let scQuote: string, sxQuote: string, scCross: string, sxCrossNoBc: string;
+let scNec: string, sxNecNoBc: string;
 
 describe('派生域多省共存加载（ADR G4）', () => {
   beforeAll(async () => {
@@ -29,15 +30,19 @@ describe('派生域多省共存加载（ADR G4）', () => {
     const p = (n: string) => path.join(tmpDir, n).replace(/\\/g, '/');
     scQuote = p('sc_quote.parquet'); sxQuote = p('sx_quote.parquet');
     scCross = p('sc_cross.parquet'); sxCrossNoBc = p('sx_cross_nobc.parquet');
+    scNec = p('sc_nec.parquet'); sxNecNoBc = p('sx_nec_nobc.parquet');
 
     // SC 报价源：不含 branch_code（模拟 SC fact parquet）
+    // is_telemarketing 列（varchar 电销/非电销）— loadQuoteConversion REPLACE 转 boolean 必需
     await duckdbService.query(`
-      COPY (SELECT '川报价' AS policy_no, '乐山' AS org_level_3, '川业务员' AS salesman_name)
+      COPY (SELECT '川报价' AS policy_no, '乐山' AS org_level_3, '川业务员' AS salesman_name,
+                   '非电销' AS is_telemarketing)
       TO '${scQuote}' (FORMAT PARQUET)
     `);
     // SX 报价源：自带 branch_code='SX'（G1 runStandardDomain ETL 已注入）
     await duckdbService.query(`
-      COPY (SELECT '晋报价' AS policy_no, '太原' AS org_level_3, '晋业务员' AS salesman_name, 'SX' AS branch_code)
+      COPY (SELECT '晋报价' AS policy_no, '太原' AS org_level_3, '晋业务员' AS salesman_name,
+                   '非电销' AS is_telemarketing, 'SX' AS branch_code)
       TO '${sxQuote}' (FORMAT PARQUET)
     `);
     // SC 交叉销售源：不含 branch_code
@@ -49,6 +54,35 @@ describe('派生域多省共存加载（ADR G4）', () => {
     await duckdbService.query(`
       COPY (SELECT '晋交叉' AS policy_no, '太原' AS org_level_3)
       TO '${sxCrossNoBc}' (FORMAT PARQUET)
+    `);
+    // P3-E SC 新能源出险源：含 branch_code='SC'（ETL VIN JOIN 派生后产物）
+    await duckdbService.query(`
+      COPY (SELECT
+        TIMESTAMP '2026-01-07' AS report_time,
+        '川出险' AS claim_no,
+        'VIN_SC_001' AS vehicle_frame_no,
+        '川A12345' AS plate_no,
+        '乐山' AS org_level_3,
+        'SC' AS branch_code,
+        '未业务结案' AS claim_status,
+        CAST(NULL AS DOUBLE) AS settled_amount,
+        CAST(5000 AS DOUBLE) AS reserve_amount,
+        '20260607' AS source_batch_date)
+      TO '${scNec}' (FORMAT PARQUET)
+    `);
+    // P3-E SX 新能源出险源：不含 branch_code（模拟旧产物 / 跨省加载兜底）
+    await duckdbService.query(`
+      COPY (SELECT
+        TIMESTAMP '2026-01-08' AS report_time,
+        '晋出险' AS claim_no,
+        'VIN_SX_001' AS vehicle_frame_no,
+        '晋A99999' AS plate_no,
+        '太原' AS org_level_3,
+        '未业务结案' AS claim_status,
+        CAST(NULL AS DOUBLE) AS settled_amount,
+        CAST(3000 AS DOUBLE) AS reserve_amount,
+        '20260607' AS source_batch_date)
+      TO '${sxNecNoBc}' (FORMAT PARQUET)
     `);
   });
 
@@ -95,5 +129,29 @@ describe('派生域多省共存加载（ADR G4）', () => {
     expect(cols.some(c => c.column_name.toLowerCase() === 'branch_code')).toBe(true);
     const rows = await duckdbService.query<{ branch_code: string }>('SELECT DISTINCT branch_code FROM CrossSellFact');
     expect(rows.map(r => r.branch_code)).toEqual(['SC']);
+  });
+
+  // P3-E 2026-06-23：new_energy_claims branch_code 派生化 loader 自适应验证
+  it('🔴 P3-E 单省（SC-only）：NewEnergyClaims 含源 branch_code 列 → DESCRIBE 自适应直用、全为 SC', async () => {
+    await loadNewEnergyClaims(duckdbService, scNec);
+    const cols = await duckdbService.query<{ column_name: string }>('DESCRIBE NewEnergyClaims');
+    expect(cols.some(c => c.column_name.toLowerCase() === 'branch_code')).toBe(true);
+    expect(cols.some(c => c.column_name.toLowerCase() === 'is_telemarketing')).toBe(true);
+    const rows = await duckdbService.query<{ branch_code: string }>(
+      'SELECT DISTINCT branch_code FROM NewEnergyClaims',
+    );
+    expect(rows.map(r => r.branch_code)).toEqual(['SC']);
+  });
+
+  it('P3-E 多省（SC 携源 + SX 无 branch_code）：NewEnergyClaims SC 用源值 / SX 补部署省常量兜底', async () => {
+    // 注：当前部署省 SC，跨省源加载场景下，SX 旧产物无 branch_code 列 → buildFactSelectSql 补部署省常量。
+    // 这是 R28/R30 已验证的 DESCRIBE 自适应路径；本测试锁定 NewEnergyClaims 同走该路径。
+    await loadNewEnergyClaims(duckdbService, scNec, [{ branchCode: 'SX', path: sxNecNoBc }]);
+    const rows = await duckdbService.query<{ branch_code: string; claim_no: string }>(
+      'SELECT branch_code, claim_no FROM NewEnergyClaims ORDER BY claim_no',
+    );
+    expect(rows.length).toBe(2);
+    expect(rows.find(r => r.claim_no === '川出险')?.branch_code).toBe('SC');
+    expect(rows.find(r => r.claim_no === '晋出险')?.branch_code).toBe('SX');
   });
 });
