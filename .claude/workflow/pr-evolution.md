@@ -1175,3 +1175,24 @@
 - **needs_automation: true** — ① 文档 `file:line` 引用有效性 governance 闸（行号漂移检测）；② worktree 锚定下 Write/Edit 路径越界拦截 PreToolUse hook（防 cwd 漂移漏写主目录）。
 - **expires: 2026-09-30**
 - **下一轮**：Phase A 检测层**全部 DONE**（Phase 0 + P1/P3-A~E + P4 + P5）→ bc36e8 DONE。**Phase B（隔离层 · current/<省>/ 子目录 · 高爆炸半径）动工前必须问用户确认**（规划 §8 开放问题 2 + §10.9 (c)「文档预留、不立即开发第三省」）。follow-up：renewal-tracker/cube branch_code 下推（现 org 降级）+ `2026-06-23-claude-f77f8a` 跨省同 VIN 冲突，均山西 GATED 上线前评估。
+**R34 · 省份派生化 Phase B B1 — 装载层省份子目录发现（生死点 · 重构行为不变 · 双闸零残留 · codex 闸-1 抓 2 P0 救场）**
+
+- **触发**：多省 Phase B 隔离层（用户 2026-06-23 授权动工，承接 Phase A 检测层 bc36e8 P0-P4 全合并）首个子任务。B1 = `data-bootstrapper.ts discoverParquetFiles` 下钻 `current/<省>/`，是唯一**启动期** PolicyFact 文件发现入口（漏改则顶层 readdir 空 → PolicyFact 静默 0 行、全站空白）。backlog 新建 Phase B 任务 `2026-06-23-claude-801409`（IN_PROGRESS）。
+- **成果**：仅改 `data-bootstrapper.ts`（+111/-15）+ 新增 18 单测（`data-bootstrapper-subdir.test.ts`）。① `ParquetFileInfo` 加 `branch?` 字段；② 新增 static `discoverInDir(dir)`：Pass1 顶层 parquet（**逐字节复刻现状** `name.endsWith('.parquet')`+`statSync` 跟随 symlink，branch=undefined）+ Pass2 `^[A-Z]{2}$` 子目录内 parquet（`readdir` 枚举**实际**子目录，禁硬编码 `['SC','SX']` 省常量，与 resolveBranchFactExtras/getDeploymentBranchCode/fields.json 派生轴同源约束；isFile 排除嵌套 staging/）；③ 新增 `enforceProvinceSubdirGate`（GATED fail-closed 双抛：非基准省子目录+`BRANCH_RLS_ENABLED!=true`→抛错 / 扁平+子目录并存→抛错；基准省=`getDeploymentBranchCode()` 动态非写死 SC）；④ `deduplicateOverlapping` 分组键 matching/非matching 都纳 `${branch??''}::${key}`。**字节安全核心**：今天 current/ 扁平无子目录 → branch 全 undefined → 子目录发现+gate+branch 分组全休眠 → 生产逐字节不变（B2 落盘子目录才激活）。
+- **codex 闸-1（计划对抗·gpt-5.5-codex/high·亲跑读代码）抓 2 P0 + 4 P1，救场关键**：
+  - **P0-1**（采纳）：原设计只改 matching dedup 键 branch-aware，**漏了非匹配文件键仍 `f.name`**。生产文件名用 `-` 分隔不匹配正则 → 全走非匹配路径 → 跨省同名 `SC/x.parquet`+`SX/x.parquet` → `groups.set('x.parquet')` 后者覆盖前者 → **静默丢一省全量**（正是生死点）。修：非匹配键也 `${branch??''}::${name}`。
+  - **P0-2**（采纳）：原设计 fail-**open** —— `current/SX/` 一旦被误放 parquet 即直接装入 PolicyFact，无 cutover 闸 → 跨省串读违 GATED。修：fail-closed `enforceProvinceSubdirGate`，闸=`BRANCH_RLS_ENABLED`、基准=`getDeploymentBranchCode()`。
+  - P1-1（事实修正）：「唯一入口」论断错，漏 `data.ts` upload/load 重建入口 → 修正为「唯一**启动期**入口」，data.ts 是 **B4 范围**（SSOT 明列），B1 不碰且不受影响（不调 discoverInDir）。
+  - P1-2（部分采纳/延后）：PolicyFact 0 行静默通过 → 全局 0 行硬抛会破坏合法空数据启动（CI/dev），GATED fail-closed 已堵危险方向；登 follow-up，不在 B1 扩。
+  - P1-3（采纳）：`withFileTypes+isFile()` ≠ 现状（跳过 symlink parquet）→ 顶层发现保留 `statSync` 谓词，子目录扫描纯增量。
+  - P1-4（采纳）：扁平+`current/SC/` 并存双计四川 → 互斥闸抛错。
+- **codex 闸-2（完成对抗·亲跑 staged diff）**：零残留 P0/P1，可合并；额外确认新测试被 root vitest 拾取（`vite.config.ts:81` `server/**/*.test.ts` node 环境，不在 exclude）。
+- **evidence-verifier（fresh-context·sonnet·独立证伪）**：**CONFIRMED**，9/9 白名单逐项过，零 P0/P1。独立复跑：单测 24/24 + verify:full 3970/3970 + governance 44/44 + typecheck；字节安全 oracle（真实主目录 current/ → discoverInDir 返回同 4 扁平文件 branch 全 undefined）；duckdb 显式数组跨子目录读逐省==文件之和；穷举确认 dedup 键无碰撞（`branch::name.parquet` vs `branch::YYYYMMDD` 结构不同）；确认 legacy fallback 不绕过 GATED（fallback 仅 files 空时触发、产物无 branch）。
+- **oracle 实证**：① duckdb 显式数组 `read_parquet(['flat','SX/x'], union_by_name=true)` → SC=2+SX=3=子目录文件之和（证 `loadMultipleParquet` 对子目录透明，**R28 判别法第 7 次**：loader 无需改）；② 真实 current/ discoverInDir → 4 扁平文件 branch 全 undefined 零子目录（生产字节安全）。
+- **三问复盘**：
+  ① **重来怎样更好**：原设计 dedup 只改了 matching 键，漏非匹配键——根因是我**默认生产文件名会匹配 dedup 正则**，没核实"生产文件名用 `-` 分隔起止日 → 全走非匹配路径"这一事实链（其实 Stage A 我已观察到该正则对生产是 no-op，却没把"no-op 意味着全走非匹配键，所以非匹配键才是跨省碰撞的真实战场"推到结论）。教训：**当某分支是"主路径"（生产数据实际走的路径），对它的改动优先级最高**——下次改分组/分派逻辑，先用真实数据样本确认"实际走哪条分支"，再决定改哪条。codex P0-1 正是抓在这条主路径上。
+  ② **复用价值**：① B1 的「fail-closed GATED 闸」模式（非基准省+gate 关→抛错 / 迁移并存→抛错，基准省取 `getDeploymentBranchCode()` 动态）可直接复用于 B2/B3（ETL 落盘、sync 退役）的省份隔离护栏；② 「顶层逐字节复刻现状谓词 + 子目录纯增量、两遍扫描天然不相交」是所有"给既有发现逻辑加维度"的字节安全模板；③ duckdb 显式数组 oracle 证 loadMultipleParquet 透明 = R28 判别法（loader 同步 vs 单独修）第 7 次准确应用，恒为"loader 自适应→无需同 PR 改"。
+  ③ **如何更高质量自动化**：① B1 的 GATED 闸目前只有单测（合成数组），无运行期集成测试覆盖"真有 current/SX/ 时启动抛错"——B5 cutover 测试应加端到端 fixture；② evidence-loop checklist 应加"改分组/分派逻辑前，先用真实数据确认实际走哪条分支"自检（R34 教训，对应 R33"闸依赖输入"自检的姊妹项）。
+- **needs_automation: true** — ① B1 GATED 闸运行期集成测试（真 current/<省>/ fixture 启动抛错，留 B5）；② evidence-loop checklist 加"改分派逻辑先核实生产实际走哪条分支"自检；③ PolicyFact 0 行启动 fail-fast（P1-2 延后项，需区分合法空数据启动 vs 发现回归，独立 follow-up）。
+- **expires: 2026-09-30**
+- **下一轮**：B2（ETL 落盘 `current/<省>/` + 改全部扁平 readdir 站点：quick_reference.mjs/daily.mjs/parquet-overlap-check.mjs/full-snapshot-cache-key.mjs/fetch-local-metrics.mjs/check-governance.mjs + 配套"子目录分片被枚举"断言防沉默失败）。R34 复用资产：① fail-closed GATED 闸模式；② 顶层复刻+子目录增量字节安全模板；③ R28 判别法第 7 次（loader 透明）；④ "先核实生产实际走哪条分支"自检。

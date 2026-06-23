@@ -33,6 +33,7 @@ import {
   getBranchValidationDimPath,
   getBranchValidationFactPath,
 } from '../config/paths.js';
+import { getDeploymentBranchCode } from '../config/sql-federation-policy.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 import { isValidParquetFile } from '../utils/security.js';
 import * as materialization from './duckdb-materialization.js';
@@ -49,6 +50,11 @@ interface ParquetFileInfo {
   path: string;
   size: number;
   mtimeMs: number;
+  /**
+   * 省份子目录来源（current/<省>/）的省码（`^[A-Z]{2}$`）；顶层扁平文件为 undefined。
+   * Phase B B1：装载层省份子目录发现。今天 current/ 扁平无子目录 → 全 undefined → 行为休眠。
+   */
+  branch?: string;
 }
 
 const RELOADABLE_FULL_SNAPSHOT_DOMAINS: Record<string, { lazyName: string; relation: string }> = {
@@ -95,8 +101,9 @@ export class DataBootstrapper {
   async bootstrap(): Promise<BootstrapResult | null> {
     this.logHealthCheck();
 
-    // Stage 1-5: 发现→回退→去重→验证→检查来源
+    // Stage 1-5: 发现→GATED 省份闸→回退→去重→验证→检查来源
     let files = this.discoverParquetFiles();
+    files = this.enforceProvinceSubdirGate(files);
     files = this.applyLegacyFallback(files);
     files = this.deduplicateOverlapping(files);
     files = await this.validateFiles(files);
@@ -149,17 +156,101 @@ export class DataBootstrapper {
 
   private discoverParquetFiles(): ParquetFileInfo[] {
     const candidateDirs = getCandidateDataDirs();
-    const files = candidateDirs.flatMap(dir => {
-      if (!fs.existsSync(dir)) return [];
-      return fs.readdirSync(dir)
-        .filter(f => f.endsWith('.parquet'))
-        .map(f => {
-          const fullPath = path.join(dir, f);
-          const stat = fs.statSync(fullPath);
-          return { name: f, path: fullPath, size: stat.size, mtimeMs: stat.mtimeMs };
-        });
-    });
+    const files = candidateDirs.flatMap(dir => DataBootstrapper.discoverInDir(dir));
     console.log('[Bootstrap] Parquet search dirs (current/):', candidateDirs.filter(d => fs.existsSync(d)));
+    return files;
+  }
+
+  /**
+   * 发现单个 current/ 根目录下的 parquet：① 顶层扁平文件（branch=undefined）；
+   * ② 省份子目录 current/<省>/ 内的 parquet（branch=子目录名）。
+   *
+   * Phase B B1（生死点）：DuckDB read_parquet 不自动递归子目录，故必须由 JS 端显式列出
+   * 每个子目录文件。省份子目录通过 `fs.readdirSync` 枚举**实际存在**的目录（数据/配置驱动，
+   * 天然处理 N 省），以 `^[A-Z]{2}$` 校验目录名——与 resolveBranchFactExtras（ADR G3/G4）、
+   * getDeploymentBranchCode、fields.json branch_code 派生轴同源约束，**不硬编码 ['SC','SX'] 省常量**。
+   *
+   * 顶层文件发现**逐字节复刻现状谓词**（`name.endsWith('.parquet')` + `fs.statSync`，跟随 symlink，
+   * 不引入 Dirent.isFile() 过滤）——省份子目录扫描是纯增量行为，与顶层互不影响（省码不以
+   * `.parquet` 结尾，两遍扫描天然不相交）。今天 current/ 扁平无子目录 → 仅返回顶层文件 → 与现状等价。
+   */
+  static discoverInDir(dir: string): ParquetFileInfo[] {
+    if (!fs.existsSync(dir)) return [];
+    const entries = fs.readdirSync(dir);
+    const result: ParquetFileInfo[] = [];
+
+    // Pass 1：顶层扁平 parquet（复刻现状语义与顺序；branch=undefined）
+    for (const name of entries) {
+      if (!name.endsWith('.parquet')) continue;
+      const fullPath = path.join(dir, name);
+      const stat = fs.statSync(fullPath);
+      result.push({ name, path: fullPath, size: stat.size, mtimeMs: stat.mtimeMs });
+    }
+
+    // Pass 2：省份子目录 current/<省>/（新增；仅 ^[A-Z]{2}$ 目录，省码不以 .parquet 结尾故与 Pass 1 不相交）
+    for (const name of entries) {
+      if (!/^[A-Z]{2}$/.test(name)) continue;
+      const subDir = path.join(dir, name);
+      let subStat: fs.Stats;
+      try {
+        subStat = fs.statSync(subDir);
+      } catch {
+        continue;
+      }
+      if (!subStat.isDirectory()) continue;
+      for (const f of fs.readdirSync(subDir)) {
+        if (!f.endsWith('.parquet')) continue;
+        const fullPath = path.join(subDir, f);
+        const stat = fs.statSync(fullPath);
+        if (!stat.isFile()) continue; // 子目录内仅取文件，排除 staging/ 等嵌套目录
+        result.push({ name: f, path: fullPath, size: stat.size, mtimeMs: stat.mtimeMs, branch: name });
+      }
+    }
+
+    return result;
+  }
+
+  // ============================================
+  // Stage 2b: GATED 省份子目录闸（fail-closed，防跨省数据误入 PolicyFact）
+  // ============================================
+
+  /**
+   * Phase B B1 GATED 红线护栏（fail-closed）：PolicyFact 是核心 eager 关系，
+   * current/<省>/ 子目录数据只有在多省 cutover 激活（BRANCH_RLS_ENABLED=true，RLS 注入按
+   * branch_code 过滤可见性）时才允许装入；否则非基准省数据会被 SC 用户越权读到（跨省串读）。
+   *
+   * 两道 fail-closed 抛错（命中即拒绝启动，不静默装载/丢弃）：
+   *   ① 非基准省子目录含 parquet 且多省闸未开 → 抛错（GATED：SX 应隔离在 validation/，绝不进 current/）。
+   *   ② 同一 current/ 根下扁平顶层 parquet 与省份子目录 parquet 并存 → 抛错（迁移须一次性：
+   *      B2 落盘子目录后顶层应清空，并存会双计同省）。
+   *
+   * 今天 current/ 扁平无子目录 → discoverInDir 返回 branch 全 undefined → 本闸两条均不触发 → 行为休眠。
+   */
+  private enforceProvinceSubdirGate(files: ParquetFileInfo[]): ParquetFileInfo[] {
+    const subdirFiles = files.filter(f => f.branch !== undefined);
+    if (subdirFiles.length === 0) return files; // 无省份子目录 → 休眠（含今天扁平布局）
+
+    const flatFiles = files.filter(f => f.branch === undefined);
+    if (flatFiles.length > 0) {
+      throw new Error(
+        `[Bootstrap] GATED 迁移态冲突：current/ 同时存在顶层扁平 parquet（${flatFiles.length} 个）` +
+        `与省份子目录 parquet（${[...new Set(subdirFiles.map(f => f.branch))].join(',')}）。` +
+        `子目录迁移须一次性——B2 落盘 current/<省>/ 后顶层须清空，否则同省数据双计。`
+      );
+    }
+
+    const multiProvinceEnabled = process.env.BRANCH_RLS_ENABLED === 'true';
+    const deploymentBranch = getDeploymentBranchCode();
+    const nonBaselineBranches = [...new Set(subdirFiles.map(f => f.branch))].filter(b => b !== deploymentBranch);
+    if (nonBaselineBranches.length > 0 && !multiProvinceEnabled) {
+      throw new Error(
+        `[Bootstrap] GATED fail-closed：current/ 发现非基准省子目录数据 [${nonBaselineBranches.join(',')}]` +
+        `（部署基准省=${deploymentBranch}），但多省模式未激活（BRANCH_RLS_ENABLED!=true）。` +
+        `非基准省数据严禁在 RLS 关闭时装入 PolicyFact（跨省串读风险）——应隔离在 validation/<省>/，` +
+        `或先开启 BRANCH_RLS_ENABLED 完成 cutover。`
+      );
+    }
+
     return files;
   }
 
@@ -203,16 +294,21 @@ export class DataBootstrapper {
     const datePattern = /(\d{8})_(\d{8})\.parquet$/;
     const groups = new Map<string, ParquetFileInfo[]>();
 
+    // B1：分组键纳入 branch 维度，防 SC/SX 同起期（或同名）文件跨省互补误删/碰撞覆盖。
+    // 扁平文件 branch=undefined → 键前缀恒 ''（`::…`），分组与现状逐字节等价。
     for (const f of files) {
+      const branchPrefix = `${f.branch ?? ''}::`;
       const m = datePattern.exec(f.name);
       if (!m) {
-        groups.set(f.name, [f]);
+        // 非匹配文件：键 = branch::文件名（跨省同名文件不再互相覆盖，P0 生死点）
+        const nameKey = `${branchPrefix}${f.name}`;
+        groups.set(nameKey, [f]);
         continue;
       }
-      const startDate = m[1];
-      const existing = groups.get(startDate) ?? [];
+      const startKey = `${branchPrefix}${m[1]}`;
+      const existing = groups.get(startKey) ?? [];
       existing.push(f);
-      groups.set(startDate, existing);
+      groups.set(startKey, existing);
     }
 
     const result: ParquetFileInfo[] = [];
