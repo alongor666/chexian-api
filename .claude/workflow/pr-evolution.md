@@ -857,6 +857,22 @@
 - **复用价值**：① 「CSP/安全 header 收紧」任务模板：作用域图 → 抽 config 模块（cors.ts 模式）→ 对象层+响应头层双断言（共用真实 options 对象防假阳性）→ Playwright bypassCSP=false E2E（自检对照证 header 生效 + 真实依赖路径跑通）。② 验证「前端依赖是否触发 eval」的可复用探针法：Vite 单文件构建真实模块 → 收紧 CSP 静态托管 → Playwright 捕 securitypolicyviolation（避开 MCP 浏览器 bypassCSP 陷阱）。③ 教训：**MCP 浏览器（chrome-devtools-mcp）可能默认 setBypassCSP(true)，做 CSP 相关 E2E 必须用 bypassCSP=false 的 Playwright 自写脚本，并以「页面源脚本 eval 被 BLOCKED」对照证 CSP 真实生效**。
   - needs_automation: false（一次性安全加固；csp.test.ts 已把"scriptSrc 永不含 unsafe-eval"机制化为回归闸）
 - **后续 backlog**：给 Nginx 托管的 SPA 下发 CSP（当前完全无 CSP）+ 评估收紧 unsafe-inline（dist/index.html 实测无内联脚本→脚本层可上严格 CSP，但需 nonce/hash 跨 Nginx+Vite，属独立较大任务）。
+## 2026-06-22 · B290 时间口径语义层 v0.1 收尾（盘点发现核心已落地→只做剩余决策项·两决策抛用户·codex 双闸全收敛）
+
+- **触发/关键盘点发现**：loop 派单按 B290 标题描述「实现中量方案」，但开工首步盘点（Explore agent）即发现 **中量方案核心 ~70% 已于 2026-06-10 落地**（uid 2026-06-10-claude-8964d3：65 路由 timeWindow 七枚举全量标注 + MCP/CLI 消费层 + plan-achievement 标 ytd-progress；Phase 1 参数契约 commit 83f7754f 已 DONE）。**B290 真正剩余 = 那三个用户决策项 + be-config 收尾**——恰好与派单「⚠先出计划把两决策抛用户、勿自行假设」吻合。教训：**loop 派单描述可能滞后于 main 已落地工作，开工必先盘点现状再定范围**（红线「先搜再写」的语义层版；亦印证 47c2a5 stale-scan 把 b290 列「合并未回填 DONE」的活证据）。
+- **两决策抛用户（GATED，不自行假设）**：(1) 月度计划口径 → 用户选「年计划÷12 定为官方派生口径」(不引真实逐月数据)；(2) LLM 反问触发 → 用户选「4 类全纳入」(窗口×进度/分母周期/跨口径/日期锚点)。
+- **实现（仅 be-config + 允许文档，TDD RED→GREEN，17 新测试）**：
+  - **A 指标全量 timeWindow**：比照既有 `additive` 惯例（类型保持可选 + validation.ts 注册表内强制 + 镜像测试）——codex 闸-1 P2.3 采纳，避免改 TS 必填扩散到注册表外构造点。44 个 codemod 补显式 `'any'`、plan_completion_pct 改 `'cutoff-based'`(2.0.0→2.1.0+changelog；拓宽 cutoff-based 语义涵盖「计划进度锚点」)。
+  - **B 编译期不变量**：`route-helpers.ts findYtdProgressWindowParamViolations` 纯函数（注入路由元数据+参数解析器，可单测合规/违规两路）锁死 ytd-progress 禁自由窗口参数=原始事故防回归闸。codex 闸-1 P2.4 采纳「仅锁 ytd-progress、不 blanket snapshot/policy-year」(避免误伤合法 endDate 快照)。
+  - **C/D 文档+SSOT**：disambiguation-protocol.ts 4 触发机器可读 SSOT，`composeAskBackHint('ytd-progress')` 被 query-routes-metadata timeWindowNote **import 真实拼装**→既有 MCP build-tools/CLI --describe 透出（codex 闸-1 P1.1「死 SSOT」采纳，零 mcp/ 越界）；业务规则字典 §计划与时间进度口径(v3.2) + .claude/rules/time-caliber-disambiguation.md。
+- **codex 双闸 + verifier（§2 降级分层：skill 缺失但 /opt/homebrew/bin/codex 在→tier-2 直接 codex exec）**：闸-1 审计划=0 P0 + 4 P1(全收敛进计划)+4 P2；闸-2 审 diff=**0 P0/P1** + 1 P2(metric-display-map 时间戳噪音→还原)；evidence-verifier fresh-context **未找到反例**(独立复跑 3720 测试/governance44/typecheck，实证 composeAskBackHint 运行时返回 232 字符非死代码)。
+- **诚实边界声明（codex 闸-1 P1.3）**：v0.1 = 提示+防回归，**不声称完整根治**——无法运行时强制 LLM 反问/拒答(GLM 遵从率非 100%，参 memory feedback_prompt_needs_code_backup)；运行时强制拒绝路径属 follow-up，已在协议文档+计划标注。
+- **每轮三问复盘**：
+  - **重来更好**：开工盘点应**更早 `git log --grep b290 origin/main`** 1 步定位 6-10 已落地的 70%，而非靠 Explore 全量扫。派单滞后于 main 是 loop 常态，应作默认前提。
+  - **复用价值**：①「派单描述滞后 main 已落地工作」是 loop 结构性现象→任何 loop 开工先盘点现状定范围，别照派单字面实现。②「类型可选+validation 强制+镜像测试」是 metric-registry 加语义维度的**标准三件套**（additive/timeWindow 同构），下个语义字段照搬。③「SSOT 被既有消费面 import 拼装」避免死代码且零越界，是「机器可读化」诉求在严格范围约束下的通用解法。
+  - **needs_automation: false**（expires n/a）：timeWindow 完整性已由 validation.ts CI 闸 + timewindow.test.ts 双锁；不变量已由 time-window-invariants.test.ts 锁；无需新自动化。
+- **follow-up（已在协议文档+计划登记，未自建 backlog 以免越界）**：/api/discover 透出 disambiguation-protocol + 运行时强制拒绝路径（ytd-progress 收窗口参数即 400）——B290 重量方案/dbt 语义层方向，待踩坑频度再启。
+- **PR 合并方式**：派单明确 ❌ 不 enable --auto，建 ready PR 由用户手动合（非 draft）。
 ## 2026-06-22 · loop-meta 跨会话认领锁（event-log claim lock + TTL）根治 §4 P0「跨会话重复劳动」
 
 - **背景/根因**：多会话无协调排空同一 BACKLOG 前沿 → 重复劳动 + 真冲突（wave-2 实证：派 b331，6h 内另一会话也做并先合并，agent 工作孤儿化）。上游根因=`computeFrontier` 的 `inflight` 仅本地 `dispatch-config.json`、非跨会话共享，无认领锁。下游缓解（#747 stale-scan PR-合并信号）能检出已合任务，但认领锁才是上游根治。
@@ -914,3 +930,13 @@
 - **重来更好/复用价值**：① **图表组件 useMemo 是高价值提取目标**——把 ECharts option 里的纯数据塑形(轴去重/点尺寸/坐标映射)抽出，既测了易错的钳位/sqrt/indexOf 回退逻辑(组件 smoke 测不到)，又让 useMemo 体大幅瘦身；option 外壳(legend/grid/tooltip)留组件。② "图表数学"(symbolSize 钳位、坐标 indexOf)提取后能精确锁边界值，是本轮最高信息密度的测试。③ **codex 亲自跑函数验证输出**(本轮它用 bun -e 直接 import util 跑 golden 样例)是审 diff 的更强形态，比纯读代码更可信。
   - needs_automation: false（沿用 R18 脚本项；图表 useMemo 提取打法并入 R21「按内联逻辑密度判路线」）
 - **下一轮**：PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。
+
+---
+
+**R23 · b332 收尾 PR-3：customer-flow + report 两小模块合并提取（同构小模块合并一 PR）**
+- **触发**：PR-2 repair(#756)合并后续推。customer-flow(169 行)+report(161 行)都是小模块、同构(都从组件提取纯逻辑)，合并一 PR 减少编排开销。
+- **成果**：customer-flow/utils/customerFlow.ts(ensureArray 防御性数组归一 4 分支 + buildFlowParams)+report/utils/reportTemplates.ts(deriveCategories/filterTemplatesByCategory 泛型化)；两组件删内联改 import。13 单测覆盖 ensureArray 四分支(数组同引用/items 取值/Object.values/原始值→[])、buildFlowParams 空→undefined、分类去重顺序、全部同引用筛选。
+- **三源**：verify:full(governance44+typecheck+**3854 单测**)全绿；闸-2 codex 无 P0/P1+1 P2(采纳 ensureArray 同引用 toBe)；evidence-verifier(fresh,sonnet)**CONFIRMED**。
+- **重来更好/复用价值**：① **同构小模块合并一 PR 合理**——都是组件提取纯函数、无交叉依赖，合并减少 worktree/CI/复盘开销而不牺牲审查粒度(diff 仍小、codex/verifier 仍逐函数审)。② **带注释解释真实 bug 的防御性 helper(ensureArray)是最高价值提取**——注释本身就是测试用例来源(DuckDB LIST 序列化为 null/{items:[]}/数字键对象/原始值的 4 种形态，原注释记录了 `.map is not a function` 崩溃)。③ **泛型化(`T extends {category:string}`)避免移动组件类型**，比 R22 的 type-only 循环导入更干净——优先泛型，类型循环导入次之。
+  - needs_automation: false
+- **下一轮**：PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE（收尾最后一单）。

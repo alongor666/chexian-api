@@ -59,6 +59,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'expense_ratio',
+    timeWindow: 'any',
     additive: false,
     version: '1.2.0',
     name: '费用率',
@@ -102,6 +103,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'avg_claim_amount',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '案均赔款',
@@ -171,6 +173,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'baseline_premium',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '基准保费',
@@ -508,6 +511,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'comprehensive_expense_ratio',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '综合费用率',
@@ -557,6 +561,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'fixed_cost_amount',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '固定成本额',
@@ -590,6 +595,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'fixed_cost_ratio',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '固定成本率',
@@ -732,6 +738,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'bi_case_ratio_pct',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '人伤案件占比',
@@ -773,6 +780,7 @@ export const costMetrics: readonly MetricDefinition[] = [
 
   {
     id: 'bi_amount_ratio_pct',
+    timeWindow: 'any',
     additive: false,
     version: '1.0.0',
     name: '人伤赔款占比',
