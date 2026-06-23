@@ -846,6 +846,17 @@
 - **边界纪律（用户 2026-06-22 确认）**：网络抖动 / 判定器 503 是环境不可抗力（天），不计入「问题」、不优化，只容错共处；本 PR 只根治可控的逻辑盲区。
 - needs_automation: false（本身即把"现实核查"自动化的一环）
 
+## 2026-06-22 · B320 移除全局 helmet CSP 的 'unsafe-eval'（安全加固·前端 E2E 门控·不 auto-merge）
+
+- **背景/任务**：后端架构审计（范围 B）标记 `app.ts` scriptSrc 含 `'unsafe-eval'` 放宽 XSS 防护。任务原描述担心「盲删若某依赖（如 DuckDB-wasm）用 eval/new Function 致生产白屏」，硬要求前端 E2E 证据才可合、不 auto-merge。
+- **关键纠偏（任务描述基于已过时架构）**：① 前端 **DuckDB-WASM 已移除**（2026-02 起 API-only，见 src/shared/INDEX.md）——任务设想的最大风险源不存在；② Express **不托管 SPA**（无 express.static），全局 helmet CSP 只覆盖 API/health/error 响应（JSON，不执行脚本）；③ 生产 SPA 由 Nginx 托管且 nginx-fullstack.conf **未设 CSP**——SPA 当前根本不吃 Express CSP；④ 报告两路径（Express /api/reports 自设 REPORT_HTML_CSP + Nginx /reports/ 静态）均不受影响。→ 本次改动对生产 SPA 功能风险结构性为零，是 Express 响应面的防御性加固。
+- **实现（仅 be-other）**：抽 `server/src/config/csp.ts`（镜像 cors.ts）导出 `cspDirectives`（scriptSrc 移除 unsafe-eval、保留 unsafe-inline）+ `helmetOptions`（完整选项）；app.ts 改 `helmet(helmetOptions)`；新增 `csp.test.ts`（对象层 + 响应头层，共用 helmetOptions）。
+- **验证（证据闭环）**：typecheck + governance 44/44 + 全量 3708 单测全绿。**前端 E2E（Playwright，bypassCSP=false，CSP 真实生效）**：(1) 服务端自检顶层 inline 脚本 eval+new Function 均 BLOCKED（证 CSP 生效、测试有意义）；(2) SPA 登录页在收紧 CSP 下完整渲染、启动 0 违规 0 console 错误；(3) **真实 ECharts geo 探针**（Vite 构建真实 echarts 封装+geo-map-loader+china/sichuan.json，preloadDefaultMaps()+地图渲染）：0 CSP 违规、canvas 实际渲染。静态：dist/index.html 无内联脚本；产物仅 2 处 new Function 均不可达防御分支（ECharts ER 有 JSON.parse 守卫+传对象不触发；setImmediate 仅非函数入参触发）。
+- **codex 两闸教训**：闸-1 纠正 3 处过度声称（"报告自设CSP覆盖全路径"→Nginx静态报告无CSP不吃Express；"ECharts不依赖eval"→当前地图路径传对象不触发ER的new Function fallback；"E2E证本次回归"→实为前瞻验证，本次回归面是Express响应头，须加响应头层断言）。闸-2 命中**假阳性**：原响应头测试复刻 helmet 配置只证 cspDirectives 可序列化，不证 app.ts 接入→改为抽 `helmetOptions` 共享对象、app.ts 与测试共用同一引用。evidence-verifier fresh-context 7 项全 PASS、无阻断缺陷。
+- **重来更好**：① 「移除某 CSP 指令」类任务第 0 步固定=**画 CSP 作用域图**（谁下发 header→谁消费：Express helmet vs Nginx vs meta vs 路由自设覆盖）；本轮先建作用域图就能一眼看出"任务担心的白屏面（SPA）根本不在 Express CSP 覆盖内"，省去后续反复论证。是 `feedback_verify_before_assume` 在「安全 header 作用域」上的实例。② 「依赖是否用 eval」不能停在 grep 源码（依赖在 node_modules）——须 grep**构建产物** + 判断分支可达性 + 真实浏览器在**CSP 生效**下跑该依赖路径三件套；本轮 chrome-devtools-mcp 默认 bypassCSP 致首测假绿，换 Playwright(bypassCSP=false) 才得可信结论。
+- **复用价值**：① 「CSP/安全 header 收紧」任务模板：作用域图 → 抽 config 模块（cors.ts 模式）→ 对象层+响应头层双断言（共用真实 options 对象防假阳性）→ Playwright bypassCSP=false E2E（自检对照证 header 生效 + 真实依赖路径跑通）。② 验证「前端依赖是否触发 eval」的可复用探针法：Vite 单文件构建真实模块 → 收紧 CSP 静态托管 → Playwright 捕 securitypolicyviolation（避开 MCP 浏览器 bypassCSP 陷阱）。③ 教训：**MCP 浏览器（chrome-devtools-mcp）可能默认 setBypassCSP(true)，做 CSP 相关 E2E 必须用 bypassCSP=false 的 Playwright 自写脚本，并以「页面源脚本 eval 被 BLOCKED」对照证 CSP 真实生效**。
+  - needs_automation: false（一次性安全加固；csp.test.ts 已把"scriptSrc 永不含 unsafe-eval"机制化为回归闸）
+- **后续 backlog**：给 Nginx 托管的 SPA 下发 CSP（当前完全无 CSP）+ 评估收紧 unsafe-inline（dist/index.html 实测无内联脚本→脚本层可上严格 CSP，但需 nonce/hash 跨 Nginx+Vite，属独立较大任务）。
 ## 2026-06-22 · B290 时间口径语义层 v0.1 收尾（盘点发现核心已落地→只做剩余决策项·两决策抛用户·codex 双闸全收敛）
 
 - **触发/关键盘点发现**：loop 派单按 B290 标题描述「实现中量方案」，但开工首步盘点（Explore agent）即发现 **中量方案核心 ~70% 已于 2026-06-10 落地**（uid 2026-06-10-claude-8964d3：65 路由 timeWindow 七枚举全量标注 + MCP/CLI 消费层 + plan-achievement 标 ytd-progress；Phase 1 参数契约 commit 83f7754f 已 DONE）。**B290 真正剩余 = 那三个用户决策项 + be-config 收尾**——恰好与派单「⚠先出计划把两决策抛用户、勿自行假设」吻合。教训：**loop 派单描述可能滞后于 main 已落地工作，开工必先盘点现状再定范围**（红线「先搜再写」的语义层版；亦印证 47c2a5 stale-scan 把 b290 列「合并未回填 DONE」的活证据）。
