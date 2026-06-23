@@ -903,3 +903,13 @@
 - **重来更好/复用价值**：① **图表组件 useMemo 是高价值提取目标**——把 ECharts option 里的纯数据塑形(轴去重/点尺寸/坐标映射)抽出，既测了易错的钳位/sqrt/indexOf 回退逻辑(组件 smoke 测不到)，又让 useMemo 体大幅瘦身；option 外壳(legend/grid/tooltip)留组件。② "图表数学"(symbolSize 钳位、坐标 indexOf)提取后能精确锁边界值，是本轮最高信息密度的测试。③ **codex 亲自跑函数验证输出**(本轮它用 bun -e 直接 import util 跑 golden 样例)是审 diff 的更强形态，比纯读代码更可信。
   - needs_automation: false（沿用 R18 脚本项；图表 useMemo 提取打法并入 R21「按内联逻辑密度判路线」）
 - **下一轮**：PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。
+
+---
+
+**R23 · b332 收尾 PR-3：customer-flow + report 两小模块合并提取（同构小模块合并一 PR）**
+- **触发**：PR-2 repair(#756)合并后续推。customer-flow(169 行)+report(161 行)都是小模块、同构(都从组件提取纯逻辑)，合并一 PR 减少编排开销。
+- **成果**：customer-flow/utils/customerFlow.ts(ensureArray 防御性数组归一 4 分支 + buildFlowParams)+report/utils/reportTemplates.ts(deriveCategories/filterTemplatesByCategory 泛型化)；两组件删内联改 import。13 单测覆盖 ensureArray 四分支(数组同引用/items 取值/Object.values/原始值→[])、buildFlowParams 空→undefined、分类去重顺序、全部同引用筛选。
+- **三源**：verify:full(governance44+typecheck+**3854 单测**)全绿；闸-2 codex 无 P0/P1+1 P2(采纳 ensureArray 同引用 toBe)；evidence-verifier(fresh,sonnet)**CONFIRMED**。
+- **重来更好/复用价值**：① **同构小模块合并一 PR 合理**——都是组件提取纯函数、无交叉依赖，合并减少 worktree/CI/复盘开销而不牺牲审查粒度(diff 仍小、codex/verifier 仍逐函数审)。② **带注释解释真实 bug 的防御性 helper(ensureArray)是最高价值提取**——注释本身就是测试用例来源(DuckDB LIST 序列化为 null/{items:[]}/数字键对象/原始值的 4 种形态，原注释记录了 `.map is not a function` 崩溃)。③ **泛型化(`T extends {category:string}`)避免移动组件类型**，比 R22 的 type-only 循环导入更干净——优先泛型，类型循环导入次之。
+  - needs_automation: false
+- **下一轮**：PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE（收尾最后一单）。
