@@ -63,6 +63,17 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
     '吕梁',
   ];
 
+  it('山西超管 sxAdmin 存在且 role=branch_admin / branchCode=SX / specialFeatures 含 cost+moto_cost', () => {
+    const admin = PRESET_USERS.sxAdmin;
+    expect(admin).toBeDefined();
+    expect(admin.role).toBe('branch_admin');
+    expect(admin.branchCode).toBe('SX');
+    expect(admin.specialFeatures).toContain('cost');
+    expect(admin.specialFeatures).toContain('moto_cost');
+    // 超管不绑定单一 organization
+    expect(admin.organization).toBeUndefined();
+  });
+
   it('山西超管 yangjie0621 存在且 role=branch_admin / branchCode=SX', () => {
     const admin = PRESET_USERS.yangjie0621;
     expect(admin).toBeDefined();
@@ -91,10 +102,19 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
 
   it('SX 账号密码均为 tombstone 占位（bcrypt 格式，不含明文）', () => {
     const sxUsers = Object.values(PRESET_USERS).filter((u) => u.branchCode === 'SX');
-    // 1 超管 + 11 org_user
-    expect(sxUsers).toHaveLength(12);
+    // sxAdmin + yangjie0621（2 超管）+ 11 org_user = 13
+    expect(sxUsers).toHaveLength(13);
     for (const u of sxUsers) {
       expect(u.passwordHash).toMatch(/^\$2[aby]\$\d{2}\$/);
+    }
+  });
+
+  it('SX 账号全部 active:false — 山西上线前不可登录（auth.ts 第 121 行闸：!user.active → 403）', () => {
+    const sxUsers = Object.values(PRESET_USERS).filter((u) => u.branchCode === 'SX');
+    // 确保所有 SX 账号都显式设置了 active:false
+    expect(sxUsers.length).toBeGreaterThan(0);
+    for (const u of sxUsers) {
+      expect(u.active).toBe(false);
     }
   });
 });
