@@ -362,6 +362,7 @@ export class CacheWarmer {
                             perspective: 'premium',
                             groupDim: undefined,
                             dateField: 'policy_date',
+                            branchCode: variant.branchCode ?? undefined,
                         });
 
                         const baseQuery: Record<string, QueryValue> = {
@@ -496,7 +497,8 @@ export class CacheWarmer {
                 timeView: 'weekly',
                 perspective: 'premium',
                 groupDim: undefined,
-                dateField: 'policy_date'
+                dateField: 'policy_date',
+                branchCode: variant.branchCode ?? undefined,
             });
 
             for (const query of queryVariants) {
@@ -546,7 +548,8 @@ export class CacheWarmer {
                 timeView: 'weekly',
                 perspective: 'premium',
                 groupDim: undefined,
-                dateField: 'policy_date'
+                dateField: 'policy_date',
+                branchCode: variant.branchCode ?? undefined,
             });
 
             // 0E codex P2：Tier 1 cache_key 也含 branchCode 段（与 shared.ts buildRouteCacheKey
@@ -787,7 +790,8 @@ export class CacheWarmer {
                     timeView: 'daily',
                     perspective: 'premium',
                     groupDim: undefined,
-                    dateField: 'policy_date'
+                    dateField: 'policy_date',
+                    branchCode: variant.branchCode ?? undefined,
                 });
 
                 // 对应的 API 请求 key，相当于 ?org_filter=["org"] 等，详见 frontend

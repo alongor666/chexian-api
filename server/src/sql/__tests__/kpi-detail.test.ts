@@ -107,3 +107,36 @@ describe('generateKpiDetailQuery — 同城机构名单省份感知 (G6)', () =>
     expect(sx).toHaveLength(3);
   });
 });
+
+/**
+ * G6 follow-up：fetchDashboardBundleData 第二消费方 — dashboard bundle 路径透传 branchCode 验证
+ *
+ * fetchDashboardBundleData 内部调用 generateKpiDetailQuery(whereWithDate, false, branchCode)。
+ * 该集成路径的核心逻辑在 generateKpiDetailQuery（上方已有完整测试），此处仅验证
+ * SQL 生成层签名满足"透传 branchCode 可改变同城名单"的前提条件，
+ * 确认 dashboard bundle 路径在 G6 follow-up 后的行为与 /kpi-detail 路由一致。
+ */
+describe('generateKpiDetailQuery — dashboard bundle 透传 branchCode (G6 follow-up)', () => {
+  it('模拟 dashboard bundle 传 SC branchCode：SQL 含成都机构', () => {
+    // 模拟 fetchDashboardBundleData 内部调用（branchCode 来自路由 handler 的 resolveBranchRlsCode）
+    const sql = generateKpiDetailQuery('policy_date >= \'2026-01-01\'', false, 'SC');
+    expect(sql).toContain("'天府'");
+    expect(sql).toContain("'高新'");
+    expect(sql).toContain('same_city_premium');
+  });
+
+  it('模拟 dashboard bundle 传 SX branchCode：SQL 含太原机构，不含成都机构', () => {
+    const sql = generateKpiDetailQuery('policy_date >= \'2026-01-01\'', false, 'SX');
+    expect(sql).toContain("'太原一部'");
+    expect(sql).not.toContain("'天府'");
+    expect(sql).toContain('same_city_premium');
+  });
+
+  it('模拟 dashboard bundle 不传 branchCode（cache-warmer 旧调用）：回退 SC 名单，字节安全', () => {
+    // cache-warmer 中新增 branchCode: variant.branchCode ?? undefined
+    // 当 variant.branchCode 为 null（flag off 兼容期）时等同不传，仍回退 SC 名单
+    const sqlNone = generateKpiDetailQuery('1=1', false, undefined);
+    const sqlSC   = generateKpiDetailQuery('1=1', false, 'SC');
+    expect(sqlNone).toBe(sqlSC);
+  });
+});
