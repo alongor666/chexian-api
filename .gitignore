@@ -2,6 +2,9 @@
 # Claude Code worktrees（本地临时目录，禁止提交为 gitlink）
 .claude/worktrees/
 
+# codex 闸-1/闸-2 prompt + verdict（evidence-loop wrapper 内部产物，按需重生，不入库）
+.codex-gates/
+
 # 第三方 Claude Code 插件本地副本（gstack/codex/browse 等，非项目资产，体积 350MB+）
 # 项目原创保留：.claude/skills/*.md 文件；第三方 skill（目录+gstack 旧版 symlink）全部忽略
 .claude/skills/*
