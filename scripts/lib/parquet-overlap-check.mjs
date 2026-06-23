@@ -8,10 +8,11 @@
  * 单独存在的限摩（无配对剔摩）= 反模式，必须报错。
  */
 
-import { existsSync, readdirSync, statSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join, basename, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { listPolicyCurrentShards } from './policy-current-shards.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIELDS_JSON = join(__dirname, '../../server/src/config/field-registry/fields.json');
@@ -57,15 +58,19 @@ else:
  *   - 无 branch 信号（无 branch_code 且无 policy_no）→ 文件名兜底
  *   - 非空文件但读取失败（损坏 / duckdb 缺失）→ branchError（fail-closed，不回退文件名）
  */
-export function resolveBranchFromParquet(filePath) {
+export function resolveBranchFromParquet(filePath, { fallbackBranch } = {}) {
   const name = basename(filePath);
+  // B2：子目录 current/<省>/ 来源时，子目录名是**权威物理省份**，优先于文件名前缀解析
+  //（0 字节/无 branch 信号兜底用它；real parquet 仍以内容派生轴为准）。扁平文件 fallbackBranch=undefined
+  // → 退回 parseBranchFromFilename，与现状逐字节一致。
+  const nameFallback = () => fallbackBranch ?? parseBranchFromFilename(name);
   let size = -1;
   try {
     size = statSync(filePath).size;
   } catch {
-    return { branch: parseBranchFromFilename(name) }; // 文件不存在 → 文件名兜底（不应阻断）
+    return { branch: nameFallback() }; // 文件不存在 → 兜底（不应阻断）
   }
-  if (size === 0) return { branch: parseBranchFromFilename(name) }; // 空占位（单测）→ legacy
+  if (size === 0) return { branch: nameFallback() }; // 空占位（单测）→ legacy/子目录名
   try {
     const out = execFileSync('python3', ['-c', BRANCH_RESOLVER_PY, FIELDS_JSON, filePath], {
       encoding: 'utf-8',
@@ -73,7 +78,7 @@ export function resolveBranchFromParquet(filePath) {
     });
     const r = JSON.parse(out.trim());
     if (r.error) return { branchError: `${name}: parquet 派生省份多值/混省（${r.error}）` };
-    if (r.branch == null) return { branch: parseBranchFromFilename(name) }; // 无 branch 信号 → 文件名
+    if (r.branch == null) return { branch: nameFallback() }; // 无 branch 信号 → 兜底
     return { branch: r.branch };
   } catch (e) {
     const msg = String((e && e.message) || e).split('\n')[0];
@@ -120,9 +125,12 @@ export function detectPolicyCurrentOverlap(currentDir) {
     return { count: 0, files: 0, overlaps: [], skipped: true, reason: 'dir-not-exist' };
   }
 
-  const parquetFiles = readdirSync(currentDir)
-    .filter((f) => f.endsWith('.parquet') && !f.startsWith('test-data'))
-    .map((f) => ({ name: f, range: parseDateRangeFromFilename(f) }))
+  // B2：下钻顶层扁平 + 省份子目录 current/<省>/（共享 helper）。子目录失明会返回 0 文件
+  // → 假「通过」、shardCount 0（沉默失败，比报错更危险）。扁平布局下 branch 全 undefined、
+  // 与历史 readdirSync(currentDir) 枚举逐字节等价。
+  const parquetFiles = listPolicyCurrentShards(currentDir)
+    .filter((s) => !s.name.startsWith('test-data'))
+    .map((s) => ({ name: s.name, path: s.path, branch: s.branch, range: parseDateRangeFromFilename(s.name) }))
     .filter((f) => f.range !== null);
 
   // 多省物理隔离：按省份分组，仅在同省组内做两两重叠比对。
@@ -133,7 +141,8 @@ export function detectPolicyCurrentOverlap(currentDir) {
   const byBranch = new Map();
   const branchErrors = [];
   for (const f of parquetFiles) {
-    const res = resolveBranchFromParquet(join(currentDir, f.name));
+    // 全路径（可能在子目录）喂派生轴；子目录名作 0 字节/无信号兜底（权威物理省份）
+    const res = resolveBranchFromParquet(f.path, { fallbackBranch: f.branch });
     if (res.branchError) {
       branchErrors.push(res.branchError);
       continue;

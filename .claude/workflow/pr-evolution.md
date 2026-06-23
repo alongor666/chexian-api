@@ -1196,3 +1196,23 @@
 - **needs_automation: true** — ① B1 GATED 闸运行期集成测试（真 current/<省>/ fixture 启动抛错，留 B5）；② evidence-loop checklist 加"改分派逻辑先核实生产实际走哪条分支"自检；③ PolicyFact 0 行启动 fail-fast（P1-2 延后项，需区分合法空数据启动 vs 发现回归，独立 follow-up）。
 - **expires: 2026-09-30**
 - **下一轮**：B2（ETL 落盘 `current/<省>/` + 改全部扁平 readdir 站点：quick_reference.mjs/daily.mjs/parquet-overlap-check.mjs/full-snapshot-cache-key.mjs/fetch-local-metrics.mjs/check-governance.mjs + 配套"子目录分片被枚举"断言防沉默失败）。R34 复用资产：① fail-closed GATED 闸模式；② 顶层复刻+子目录增量字节安全模板；③ R28 判别法第 7 次（loader 透明）；④ "先核实生产实际走哪条分支"自检。
+
+---
+
+**R35 · 省份派生化 Phase B B2 — 读侧子目录下钻（休眠·行为不变）+ ETL gated 写侧能力（双闸救场：闸-1 重塑写侧 6 P0、闸-2 抓 ** glob 过读 P1）**
+
+- **触发**：多省 Phase B 隔离层第 2 子任务（承接 B1 PR #773）。原任务书 B2 = 「ETL 落盘 current/<省>/ + 改全部扁平 readdir 站点 + 子目录枚举断言」。backlog `2026-06-23-claude-801409`（Phase B，IN_PROGRESS，B2 已 note）。
+- **范围决策（用户拍板 Option 1）**：Phase A 侦察暴露任务书未预判的爆炸半径——物理迁移 SC→current/SC/ 会击穿 **18 个 Python DuckDB glob** + B3 sync-vps（均单任务范围外）+ 日常发布管线。用户选「**休眠读侧下钻 + 写侧 gated（不迁移生产）**」：读侧纯增量下钻（像 B1 休眠）、写侧加能力但默认 off、物理 cutover 延后。
+- **成果**：新增 `scripts/lib/policy-current-shards.mjs`（共享 helper，镜像 data-bootstrapper.ts:discoverInDir）+ 测试；读侧 4 站点下钻（parquet-overlap-check / quick_reference JS+Python / fetch-local-metrics / check-governance）用 **helper 显式文件列表 → `read_parquet([...])`**（非宽 glob）；2 耦合站点保持 flat 对齐延后 Python 消费者（full-snapshot-cache-key 天然 isFile 排除；renewal readiness 加 subdir-only fail-closed）；写侧 `branchOutputRoot` 加 subdirLayout 能力 + 专用 env `POLICY_CURRENT_SUBDIR_LAYOUT`（默认 off），subdir 布局强制 noSync + 不自动 flat-clear。**字节安全核心**：env 默认 off + 今天 current/ 无子目录 → 所有读写逐字节同现状（dormant）。
+- **双闸**：
+  - **闸-1（计划对抗·codex high）抓 6 P0 重塑写侧**：① full-snapshot-cache-key 应保持 flat（对齐延后 convert_new_energy flat glob）非下钻；② renewal readiness 保持 flat + subdir-only fail-closed（防同步陈旧 renewal_tracker）；③ 写侧专用 env 不复用 BRANCH_RLS_ENABLED（RLS 开关不驱动 ETL 写布局）；④ 不自动 flat-clear（生产物理迁移→cutover SOP）；⑤ subdir 布局强制 noSync（rsync 不排除子目录会推生产，B3 前）；⑥ fixture 无条件运行（tmpdir+空 parquet，不被 skipIf(duckdb) 跳成假安全）。全采纳。
+  - **闸-2（完成对抗·codex high）抓 1 P1 + 3 P2**：P1 `policyCurrentRecursiveGlob` 用 `**` 语义比 helper 宽（吃 archive/ 等 helper 排除文件）→ 改 helper 显式列表 `read_parquet([...])` + Python 两模式 `[A-Z][A-Z]` glob，全站点对齐 helper ^[A-Z]{2}$ 单层语义（DuckDB 数组 glob 零匹配报错故不能用 2-glob 数组，必须显式文件列表）。P2-2 Pass1 statSync 吞错 → 对齐 discoverInDir 不吞（fail-closed）。P2-1 cube-probe / P2-3 run.mjs 归 cutover 延后清单（手动工具/已弃用，非 readdir/gate）。
+  - **evidence-verifier（fresh-context·sonnet）**：8 个证伪攻击全反驳，零 P0/P1；独立复跑 verify:full + 字节安全 oracle + helper 语义一致性 + 范围无越界。
+- **oracle 实证**：① 字节安全 duckdb：构造 current/SC/（symlink 真实分片）经 `**` 读 = 扁平 baseline 2,600,421 行/1 省 SC；② read_parquet([显式文件列表]) = 2,600,421；③ Python 两模式 glob 扁平 top=4 prov=0（空不报错）；④ verify:full governance 44/44 + 280 文件 3993 测试 + typecheck 全绿。
+- **三问复盘**：
+  ① **重来怎样更好**：Phase A 应更早 grep 全消费者（含 Python DuckDB glob + glob 字符串构建器），第一时间识别「物理迁移爆炸半径 ≫ 任务书列的 readdir 站点」，避免在计划稿里先写「下钻全部」再被闸-1 收窄。「readdir 站点」≠「policy/current 全部消费者」——glob 字符串构建器（quick_reference/fetch-local-metrics）+ Python glob 是隐藏承重点。
+  ② **复用价值**：① **「读侧下钻 vs 对齐延后消费者」判别法**——站点的 consumer 自包含/同步下钻 → 下钻；consumer 是延后的 flat Python → 保持 flat + subdir-only fail-closed（防 false-ready）。B3/cutover 直接复用。② **「文件名/glob 契约切显式文件列表」模板**——DuckDB 数组 glob 零匹配报错，故跨布局统一读取必须用 helper 显式枚举 + `read_parquet([...])`（非 `**`/数组 glob），与 R33 `resolveBranchFromParquet` 三态模式并列为「契约迁移」双模板。③ helper 镜像 discoverInDir「顶层复刻+子目录增量、statSync 不吞错」字节安全模板第 2 次应用。
+  ③ **如何更高质量自动化**：① 缺「禁止新增 policy/current 宽 `**`/扁平 readdir 站点」的 governance 闸（防 B3/B4/未来回归引入新失明站点）——可加 lint 扫 `policy/current.*\*\*|readdirSync.*current` 要求走 helper；② 写侧 gated 能力目前仅单测，无「POLICY_CURRENT_SUBDIR_LAYOUT=true 时 ETL 真落 current/SC/ + 强制 noSync + renewal fail-closed」端到端集成测试（留 cutover）。
+- **needs_automation: true** — ① governance 闸：禁新增绕过 helper 的 policy/current 宽 glob/扁平 readdir 站点（防失明回归）；② B2 写侧 gated 端到端集成测试（留 cutover/B3）；③ cube-build-prod-probe.ts + run.mjs 默认 glob 子目录化（cutover 清单）。
+- **expires: 2026-09-30**
+- **下一轮**：B3（sync-vps 退役 #753 前缀 5 函数 + 每省独立同步遍历子目录，🔴 GATED：cutover 前 current/SX/ 须空/排除）。R35 复用资产：① 读侧下钻 vs 对齐延后消费者判别法；② 契约迁移「显式文件列表 read_parquet([...])」模板（DuckDB 数组 glob 零匹配报错故不可用 glob 数组）；③ helper discoverInDir 字节安全镜像模板；④ 写侧专用 env + 强制 noSync + fail-closed gated 范式。**Phase B 后续仍每子任务问用户/独立 ready PR + 双闸**。

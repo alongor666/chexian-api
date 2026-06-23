@@ -35,6 +35,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { listPolicyCurrentShards, toDuckdbReadParquetList } from '../../lib/policy-current-shards.mjs';
 
 /** 子进程执行 duckdb -c "<sql>"，返回 stdout（JSON 模式） */
 export function runDuckDBDefault({ duckdbBin = 'duckdb', sql, timeoutMs = 60_000 } = {}) {
@@ -76,11 +77,14 @@ export function inspectWarehouse(warehouseRoot) {
   const policyDir = join(warehouseRoot, 'fact/policy/current');
   const claimsDir = join(warehouseRoot, 'fact/claims_detail');
 
+  // policyGlob 现持 DuckDB read_parquet **数组字面量**（显式枚举顶层扁平 + 省份子目录 current/<省>/，
+  // 共享 helper），非宽 glob——与 helper ^[A-Z]{2}$ 单层语义一致（codex 闸-2 P1）。policy 模板用
+  // read_parquet(${policyGlob}, ...)（无外引号）。扁平布局下即顶层文件列表，与现状读集逐字节等价。
   let policyGlob = null;
   if (existsSync(policyDir)) {
-    const files = readdirSync(policyDir).filter((f) => f.endsWith('.parquet'));
-    if (files.length > 0) policyGlob = join(policyDir, '*.parquet');
-    else missing.push(`${policyDir}/*.parquet（目录存在但无 parquet 文件）`);
+    const shards = listPolicyCurrentShards(policyDir);
+    if (shards.length > 0) policyGlob = toDuckdbReadParquetList(shards.map((s) => s.path));
+    else missing.push(`${policyDir}/*.parquet（目录存在但无 parquet 文件，含省份子目录 current/<省>/）`);
   } else {
     missing.push(`${policyDir}（目录不存在）`);
   }
@@ -137,7 +141,7 @@ export const SQL_TEMPLATES = {
     SELECT
       strftime(policy_date, '%Y-%m') AS time_period,
       ROUND(SUM(premium), 2) AS value
-    FROM read_parquet('${policyGlob}', union_by_name=true)
+    FROM read_parquet(${policyGlob}, union_by_name=true)
     WHERE ${COMPLETED_MONTH_FILTER('policy_date', monthStart)}
     GROUP BY time_period
     ORDER BY time_period
@@ -152,7 +156,7 @@ export const SQL_TEMPLATES = {
     SELECT
       strftime(policy_date, '%Y-%m') AS time_period,
       COUNT(*) AS value
-    FROM read_parquet('${policyGlob}', union_by_name=true)
+    FROM read_parquet(${policyGlob}, union_by_name=true)
     WHERE ${COMPLETED_MONTH_FILTER('policy_date', monthStart)}
     GROUP BY time_period
     ORDER BY time_period

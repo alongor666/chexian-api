@@ -11,6 +11,23 @@
 import { join } from 'node:path';
 
 /**
+ * 多省 Phase B B2 gated 写侧开关：是否启用 `current/<省>/` 子目录布局。
+ *
+ * **专用开关 `POLICY_CURRENT_SUBDIR_LAYOUT`**（codex 闸-1 P0-3：不复用 `BRANCH_RLS_ENABLED`——后者是
+ * 服务端 RLS 安全开关，绑定 ETL 写布局会让开 RLS 意外触发 SC 物理迁移）。默认 off → SC 落顶层扁平
+ * `current/`（现状，字节安全）；on → SC 落 `current/SC/`（子目录隔离）。
+ *
+ * ⚠️ 开启后 ETL 会**写子目录但不自动清顶层扁平**（B2 不做物理迁移 flat-clear，留 cutover SOP，
+ * 带 dry-run/备份/回滚）；顶层与子目录并存会被 B1 装载层互斥闸 + overlap 闸 fail-closed 拦下，
+ * 且 daily.mjs 在此布局下强制 `--no-sync`（防 rsync 推子目录到生产，B3 sync 退役前）。
+ * @param {NodeJS.ProcessEnv} [env=process.env]
+ * @returns {boolean}
+ */
+export function isPolicyCurrentSubdirLayout(env = process.env) {
+  return env.POLICY_CURRENT_SUBDIR_LAYOUT === 'true';
+}
+
+/**
  * 当前省的源 staging 目录。
  * @param scriptDir daily.mjs 所在根目录（数据管理/）
  * @param branchCode CHAR(2)；SC/空＝四川（现状，读脚本根）；其余＝staging/<省>/
@@ -28,9 +45,12 @@ export function branchSourceDir(scriptDir, branchCode) {
  * @throws 非 SC 省的输出根若落入 policy/current（如 warehouseRoot 被误传成 current 目录）→ 抛错，
  *         防 ADR D5「SX 不进共享 runtime」回归。
  */
-export function branchOutputRoot(warehouseRoot, branchCode) {
+export function branchOutputRoot(warehouseRoot, branchCode, { subdirLayout = isPolicyCurrentSubdirLayout() } = {}) {
   if (!branchCode || branchCode === 'SC') {
-    return join(warehouseRoot, 'fact', 'policy', 'current');
+    const current = join(warehouseRoot, 'fact', 'policy', 'current');
+    // B2 gated 写侧：subdirLayout 开启 → SC 落 current/SC/（子目录隔离）；默认 current/（扁平，现状）。
+    // 默认参数调用时求值 isPolicyCurrentSubdirLayout()，故所有调用点自动一致 gated；测试可显式覆盖。
+    return subdirLayout ? join(current, 'SC') : current;
   }
   const out = join(warehouseRoot, 'validation', branchCode);
   if (out.includes(join('policy', 'current'))) {

@@ -44,10 +44,11 @@ import {
 } from './pipelines/parquet_stats.mjs';
 import { collectPolicyCurrentStats, syncQuickReferenceFile } from './pipelines/quick_reference.mjs';
 import { assertNoPolicyCurrentOverlap } from '../scripts/lib/parquet-overlap-check.mjs';
+import { inspectPolicyCurrentLayout } from '../scripts/lib/policy-current-shards.mjs';
 // 分片判定纯函数抽到 lib/shard-classify.mjs（可单测，daily.mjs 顶层执行 main() 无法被 import）
 import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
 // 多省 ETL 路由纯函数（0a：非 SC 省 premium 源走 staging/<省>、产物隔离到 warehouse/validation/<省>，绝不进 current/；ADR D5）
-import { branchSourceDir, branchOutputRoot } from './lib/branch-naming.mjs';
+import { branchSourceDir, branchOutputRoot, isPolicyCurrentSubdirLayout } from './lib/branch-naming.mjs';
 // argv 最外层双引号剥离抽到 lib/arg-quotes.mjs（可单测；裸 spawn 引号安全闸的不变量源）
 import { stripArgQuotes } from './lib/arg-quotes.mjs';
 // claims 报案截止日新鲜度判定纯函数（同模式抽 lib/ 便于单测）
@@ -368,7 +369,7 @@ function updateQuickReference(python, policyCurrentDir) {
   try {
     const stats = collectPolicyCurrentStats(python, policyCurrentDir);
     if (!stats) {
-      log('yellow', '  ⚠️ QUICK_REFERENCE.md 跳过：未找到 policy/current/*.parquet');
+      log('yellow', '  ⚠️ QUICK_REFERENCE.md 跳过：未找到 policy/current parquet 分片（顶层扁平或省份子目录 current/<省>/）');
       return;
     }
     const line = syncQuickReferenceFile(QUICK_REFERENCE_PATH, stats);
@@ -1332,7 +1333,17 @@ function runRenewalTracker(python, scriptDir) {
   const quotesPath = join(scriptDir, 'warehouse/fact/quotes_conversion/latest.parquet');
   const salesmanPath = join(scriptDir, 'warehouse/dim/salesman/latest.parquet');
   const missing = [];
-  if (!existsSync(policyDir) || readdirSync(policyDir).filter(f => f.endsWith('.parquet')).length === 0) missing.push('policy/current/*.parquet');
+  // B2：续保消费者 convert_renewal_tracker.py 仍读顶层扁平 glob（DEFAULT_POLICY_GLOB=current/*.parquet，
+  // 延后随 B3/cutover 升级），故 readiness 保持 flat 对齐消费者；但「子目录独占」态（顶层空 + current/<省>/ 有）
+  // 下消费者会读 0 行静默产空续保 → fail-closed BLOCK（非静默 return）防同步陈旧 renewal_tracker。
+  const policyLayout = inspectPolicyCurrentLayout(policyDir);
+  if (policyLayout.subdirOnly) {
+    log('red', `❌ renewal_tracker 中止：policy/current 仅含省份子目录 [${policyLayout.branches.join(',')}]，` +
+      `但续保消费者 convert_renewal_tracker.py 仍读顶层扁平 glob（current/*.parquet）→ 会静默产出空续保。` +
+      `子目录消费须等 cutover 给 convert 传 --policy-glob current/**/*.parquet（B3/cutover 范围）。`);
+    process.exit(1);
+  }
+  if (policyLayout.flatCount === 0) missing.push('policy/current/*.parquet');
   if (!existsSync(quotesPath)) missing.push('quotes_conversion/latest.parquet');
   if (!existsSync(salesmanPath)) missing.push('salesman/latest.parquet');
   if (missing.length > 0) {
@@ -1379,7 +1390,13 @@ async function main() {
   // 取锁后注册退出钩子（含 process.exit/信号路径）自动释放。
   acquireLock(scriptDir);
 
-  const noSync = process.argv.includes('--no-sync');
+  // B2（codex 闸-1 P0-5）：子目录布局开启时强制 --no-sync —— sync-vps（B3 前）按文件名前缀分省，
+  // rsync 不排除 current/<省>/，自动同步会把子目录推生产。B3 退役前禁子目录布局下自动 sync。
+  const _subdirLayout = isPolicyCurrentSubdirLayout();
+  const noSync = process.argv.includes('--no-sync') || _subdirLayout;
+  if (_subdirLayout && !process.argv.includes('--no-sync')) {
+    log('yellow', '⚠ POLICY_CURRENT_SUBDIR_LAYOUT=true：强制 --no-sync（sync-vps 分省同步退役 B3 前禁子目录布局自动 sync）');
+  }
   const skipReport = process.argv.includes('--skip-report');
   const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'new_energy_claims', 'new_energy', 'renewal_tracker', 'all'];
   const subcommand = process.argv.find(a => ALL_DOMAINS.includes(a));

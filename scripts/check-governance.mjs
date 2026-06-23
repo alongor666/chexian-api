@@ -904,7 +904,8 @@ function checkSingleProvincePerFile() {
   info('检查 fact parquet 单文件不混省（派生省==列省 · pre-sync）...');
 
   const domains = [
-    { glob: '数据管理/warehouse/fact/policy/current/*.parquet', prefixCheckable: true },
+    { glob: '数据管理/warehouse/fact/policy/current/*.parquet', prefixCheckable: true }, // B2：顶层扁平（现状）
+    { glob: '数据管理/warehouse/fact/policy/current/[A-Z][A-Z]/*.parquet', prefixCheckable: true }, // B2：单层省份子目录 current/<省>/（^[A-Z]{2}$，与 helper 一致；空匹配 glob.glob 返回 []）
     { glob: '数据管理/warehouse/fact/claims_detail/claims_*.parquet', prefixCheckable: true },
     { glob: '数据管理/warehouse/fact/cross_sell/latest.parquet', prefixCheckable: true },
     { glob: '数据管理/warehouse/fact/customer_flow/latest.parquet', prefixCheckable: true },
@@ -937,6 +938,8 @@ if _bad_map:
                                       "detail": ",".join(_bad_map)}]})); sys.exit(0)
 files = []
 for d in domains:
+    # B2：policy/current 拆「顶层 + 单层 [A-Z][A-Z] 省份子目录」两条 domain（非递归，与 helper
+    # ^[A-Z]{2}$ 语义一致）；省份子目录 glob 空匹配时 glob.glob 返回 []（不报错）。
     for fp in sorted(glob.glob(d['glob'])):
         files.append((fp, bool(d['prefixCheckable'])))
 if not files:
