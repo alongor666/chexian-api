@@ -1095,38 +1095,15 @@ def save_to_parquet(df, output_path):
     # 派生字段规则是注册表的一部分（唯一事实源），此处仅做执行
     registry_path = Path(__file__).resolve().parent.parent.parent / 'server/src/config/field-registry/fields.json'
     try:
+        from pipelines.derived_fields import apply_derived_fields
         with open(registry_path) as f:
             registry = json.load(f)
         derived_fields = [fd for fd in registry.get('fields', []) if fd.get('derived')]
-        for fd in derived_fields:
-            fid = fd['id']
-            rule = fd.get('derivation', {})
-            rtype = rule.get('type')
-            if rtype == 'prefix_map':
-                source = rule.get('source')
-                if not source or source not in df.columns:
-                    print(f"   ⚠️ 派生字段 {fid} 跳过（源列 {source} 缺失）")
-                    continue
-                prefix_len = rule.get('prefixLength', 2)
-                mapping = rule.get('mapping', {})
-                default_value = rule.get('defaultValue')
-                df[fid] = df[source].astype(str).str[:prefix_len].map(mapping)
-                if default_value is not None:
-                    df[fid] = df[fid].fillna(default_value)
-                notna = df[fid].notna().sum()
-                print(f"   派生字段: {fid} ← {source}[:{ prefix_len}] 映射完成 ({notna:,} 条非空)")
-            elif rtype == 'constant':
-                env_var = rule.get('envVar')
-                env_value = os.environ.get(env_var) if env_var else None
-                value = env_value if env_value else rule.get('defaultValue')
-                if value is None:
-                    print(f"   ⚠️ 派生字段 {fid} 跳过（constant 无 envVar={env_var} 命中且无 defaultValue）")
-                    continue
-                hint = f"envVar={env_var}" if env_value else "defaultValue"
-                df[fid] = value
-                print(f"   派生字段: {fid} ← 常量 '{value}' ({hint})")
-            else:
-                print(f"   ⚠️ 派生字段 {fid} 跳过（未支持的 derivation.type: {rtype}）")
+        # 有效声明省（codex 闸-1 P1-2）：CLI --branch-code 优先，回退 env BRANCH_CODE；
+        # 归一化大小写（evidence-verifier P2：防 BRANCH_CODE=sc 等手误误触 fail-fast）；
+        # 供 assertDeclaredBranch 字段（branch_code）核对「声明省==派生省」，防喂错省/混省
+        declared_branch = (args.branch_code or os.environ.get('BRANCH_CODE') or '').strip().upper() or None
+        df = apply_derived_fields(df, derived_fields, declared_branch=declared_branch)
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"   ⚠️ 派生字段注册表读取失败，跳过派生: {e}")
 
