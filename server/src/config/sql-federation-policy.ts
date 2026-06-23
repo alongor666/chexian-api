@@ -88,7 +88,12 @@ const POLICY_FACT_POLICY: RelationPolicy = {
 const FEDERATED_REGISTRY: Readonly<Record<string, RelationPolicy>> = {
   RENEWALTRACKERFACT: {
     canonical: 'RenewalTrackerFact',
-    // branch_code 由 loader 在视图层补常量列（parquet 不含；见 duckdb-domain-loaders selectUnionWithBranchCode）。
+    // branch_code（P3-C, 2026-06-23）：renewal_tracker ETL 已派生 branch_code 列
+    // （convert_renewal_tracker.py derive_renewal_tracker_branch_code · hard-fail 模式：
+    // SC 链路 source/renewed 100% 非空+610 前缀已 duckdb 实证 128,016 行零 NULL）。
+    // loader selectUnionWithBranchCode 用 DESCRIBE 自适应：parquet 含列直接用、不含时
+    // （旧产物 / 重新 ETL 前）仍兜部署省常量，故 ETL 改造对 loader 透明、双路径并存
+    // （无 R28 不一致）。
     // is_telemarketing（P2 c21667）：parquet 无该列，loader 在视图层补 `FALSE AS is_telemarketing` 常量；
     // 电销用户查本域得空结果（安全·业务暂不可用·用户接受先上线）。
     permissionColumns: new Set(['org_level_3', 'salesman_name', 'branch_code', 'is_telemarketing']),

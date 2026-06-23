@@ -7,15 +7,27 @@ fail-fast 自校验：未命中前缀(NULL) / 喂错省 / 混省 / 源列缺失 
 字段（如 compulsory_ncd_factor，允许未命中为 NULL）无 flag → 行为不变、不受影响。
 
 P3-A 抽 2 个 helper（resolve_declared_branch / apply_registry_derivations）供各域 ETL
-（claims_detail / base_converter / renewal / new_energy）统一复用，避免每处复写 6 行
-fields.json 读取 + declared_branch 解析逻辑。
+统一复用，避免每处复写 6 行 fields.json 读取 + declared_branch 解析逻辑。
+
+入口适配模式：
+- **直接 df 喂入**（policy_no 列已在）：premium (transform.py)、claims_detail、
+  base_converter (cross_sell/repair/brand)、customer_flow → 直接调 apply_registry_derivations
+- **造临时 policy_no 列后喂入**：renewal_tracker (convert_renewal_tracker.py P3-C) —
+  输出 schema 无 policy_no 主列，先造 __tmp_policy_no_for_branch = renewed_policy_no(if
+  is_renewed) else source_policy_no → 复制到 df['policy_no'] 喂 helper（registry 用
+  policy_no 作 prefix_map 源列） → drop __tmp_policy_no_for_branch + 'policy_no' 两列
+  （renewal_tracker schema 无业务 'policy_no'，故 drop 是字节安全的）。复用 strictNonNull
+  + assertDeclaredBranch guard（已 duckdb 实证 SC 链路 source/renewed 100% 非空+610 前缀）。
+  helper 入口含双重 guard：未来若 schema 演进引入 'policy_no' 业务列，convert_renewal_tracker
+  会 ValueError 拒绝（保护业务列不被无声覆盖）
 
 例外：quotes（quote_etl.py 的 derive_branch_code）走内联自管校验 / warn 模式 —
 quotes policy_no NULL 占比 92.5%（B255 数据质量问题），直接调 apply_registry_derivations
 会被 strictNonNull guard fail-fast。quotes 仅复用 fields.json mapping/prefixLength，
 不复用 guard 路径；待 B255 修复后再升级回 guarded helper（P3-D codex 闸-1 P2.3）。
 
-单测见 tests/pipelines/test_derived_fields.py + test_quote_etl_branch_code_derivation.py。
+单测见 tests/pipelines/test_derived_fields.py + test_quote_etl_branch_code_derivation.py
++ test_renewal_tracker_branch_derivation.py (P3-C)。
 """
 import json
 import os

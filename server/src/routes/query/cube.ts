@@ -109,11 +109,12 @@ function buildRenewalExtraConditions(req: import('express').Request): string[] {
     if (cond) extra.push(cond);
   }
 
-  // 权限过滤（RLS）：RenewalTrackerFact 只含 org_level_3（无 is_telemarketing/branch_code），
-  // 故用安全降级助手——电销用户的 'is_telemarketing = true' / 多分公司的 branch_code 直接追加
-  // 会 Binder Error 500（评审发现）。buildOrgScopedPermissionWhere 只保留视图真实存在的
-  // org_level_3 段，对齐 repair.ts 既定模式（注：renewal-tracker 路由仍是朴素追加，同款
-  // 既存 bug 已单独登 BACKLOG，不在本 PR 偷修）。
+  // 权限过滤（RLS）：RenewalTrackerFact 视图当前只含 org_level_3（is_telemarketing 由 loader
+  // 视图层补 `FALSE AS is_telemarketing` 常量；branch_code 由 loader buildFactSelectSql 的
+  // DESCRIBE 自适应路径处理——P3-C #765 起 ETL 已派生该列写入 parquet，但 cube 路由保守
+  // 走 buildOrgScopedPermissionWhere 安全降级，只保留视图真实存在的 org_level_3 段，避免
+  // 因 loader 路径切换造成 Binder Error 500，对齐 repair.ts 既定模式。
+  // 注：renewal-tracker 路由仍是朴素追加，同款既存 bug 已单独登 BACKLOG，不在本 PR 偷修。
   const orgScoped = buildOrgScopedPermissionWhere(req);
   if (orgScoped !== '1=1') {
     extra.push(`(${orgScoped})`);

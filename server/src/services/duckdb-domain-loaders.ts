@@ -930,6 +930,11 @@ export async function loadNewEnergyClaims(
  * 数据源：warehouse/fact/renewal_tracker/latest.parquet（ETL 预计算产物）
  * 口径：2025 起保 + 2026 到期商业险 universe，dual-key 续保匹配，VIN 粒度
  *
+ * **branch_code（P3-C 2026-06-23）**：ETL 派生 branch_code 列已落 parquet
+ * （convert_renewal_tracker.py derive_renewal_tracker_branch_code · hard-fail）。
+ * buildFactSelectSql → selectUnionWithBranchCode 用 DESCRIBE 自适应：含列直接用、
+ * 不含时（旧产物）兜部署省常量。ETL 改造对 loader 透明，双路径并存。
+ *
  * **is_telemarketing 补列（P2 c21667）**：renewal_tracker parquet 无电销来源列，视图层补
  * `false AS is_telemarketing` 常量，使 federation RLS 能注入 boolean 过滤。
  * 电销用户查本域得空结果（安全·业务暂不可用·用户接受先上线）。

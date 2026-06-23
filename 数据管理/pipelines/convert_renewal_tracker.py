@@ -15,6 +15,13 @@ Universe 口径：
 用法：
   python3 convert_renewal_tracker.py -o warehouse/fact/renewal_tracker/latest.parquet
   python3 convert_renewal_tracker.py -o ... --quote-window-start 2025-12-03
+  python3 convert_renewal_tracker.py -o ... --branch-code SC   # 显式声明省份（默认从 BRANCH_CODE env 读，全空兜底 'SC'）
+
+P3-C (2026-06-23)：派生 branch_code 列（CHAR(2)，'SC'/'SX'），从 policy_no 前 3 位
+prefix_map 派生（610→SC, 618→SX）。renewal_tracker 输出 schema 无 policy_no 主列，
+故先造临时列 __tmp_policy_no_for_branch = renewed_policy_no(if is_renewed) else
+source_policy_no → 喂 apply_registry_derivations → drop 临时列。复用 strictNonNull +
+assertDeclaredBranch guard（已 duckdb 实证 SC 链路 source/renewed 100% 非空+610 前缀）。
 """
 
 import argparse
@@ -22,6 +29,9 @@ import sys
 from pathlib import Path
 
 import duckdb
+import numpy as np
+
+from derived_fields import apply_registry_derivations, resolve_declared_branch
 
 HERE = Path(__file__).resolve().parent
 DATA_ROOT = HERE.parent
@@ -33,6 +43,73 @@ DEFAULT_SALESMAN_PATH = str(DATA_ROOT / "warehouse" / "dim" / "salesman" / "late
 DEFAULT_QUOTE_WINDOW_START = "2025-12-03"
 DEFAULT_SOURCE_YEAR = 2025
 DEFAULT_RENEWAL_YEAR = 2026
+
+# 临时列名（P3-C codex 闸-1 P1.1）：renewal_tracker 输出 schema 不含 policy_no 列，
+# 派生 branch_code 需用 source_policy_no/renewed_policy_no 二选一造临时列喂给
+# apply_registry_derivations。用 dunder 前缀避免与未来业务字段冲突；已存在时 ValueError
+# 拒绝继续，避免无声覆盖破坏字节安全（codex 闸-1 P1.1）。
+_TMP_POLICY_NO_COL = "__tmp_policy_no_for_branch"
+
+
+def derive_renewal_tracker_branch_code(df, declared_branch):
+    """对 renewal_tracker DataFrame 派生 branch_code 列（mutate df 并新增列）。
+
+    1. 造内部临时列 _TMP_POLICY_NO_COL = renewed_policy_no(if is_renewed) else source_policy_no
+    2. 跨省登记（source 省 ≠ renewed 省 时 print 不静默，归 renewed=当前承保省）
+    3. 复用 apply_registry_derivations 走 prefix_map + assertDeclaredBranch + strictNonNull guard
+    4. drop 临时列
+
+    Args:
+        df: pandas DataFrame，需含 is_renewed/source_policy_no/renewed_policy_no
+        declared_branch: 操作员声明的省份代码（CHAR(2)，'SC'/'SX'），不可为 None
+                         （codex 闸-1 P0：直跑入口须 'SC' 默认兜底，避免漏 assertDeclaredBranch）
+
+    Returns:
+        pandas DataFrame：新增 branch_code 列、临时列已 drop
+    """
+    if _TMP_POLICY_NO_COL in df.columns:
+        # 防御未来 schema 演进引入同名列（codex 闸-1 P1.1）
+        raise ValueError(
+            f"renewal_tracker 输出 schema 已含临时列 {_TMP_POLICY_NO_COL!r}，"
+            f"可能与未来业务字段冲突；请重命名 _TMP_POLICY_NO_COL 避免无声覆盖"
+        )
+    if "policy_no" in df.columns:
+        # 防御未来 schema 演进引入业务 policy_no 列（codex 闸-2 P1.1）：
+        # 当前实现下方会写 df['policy_no'] = df[_TMP_POLICY_NO_COL] 喂 helper、再
+        # drop 'policy_no'——若 df 已含业务 policy_no，会被无声覆盖并随后被 drop，
+        # 破坏字节安全。renewal_tracker 输出 schema 当前不含 policy_no（仅
+        # source_policy_no + renewed_policy_no），未来若新增 policy_no 业务字段须
+        # 重新设计 helper 调用路径（如改用 df.rename 临时改列名 + 还原）。
+        raise ValueError(
+            "renewal_tracker 输出 schema 已含 'policy_no' 业务列；当前 helper "
+            "通过 df['policy_no'] 喂 apply_registry_derivations 后会 drop，会无声"
+            "覆盖业务列。请改造 helper（如临时 rename）以保护业务 policy_no 列"
+        )
+    df[_TMP_POLICY_NO_COL] = np.where(
+        df["is_renewed"].astype(bool),
+        df["renewed_policy_no"],
+        df["source_policy_no"],
+    )
+    # 跨省续保登记（不静默，归 renewed=当前承保省）：现状 SC 链路 cross_province_cnt=0；
+    # 山西 GATED 上线后若出现 source 省 ≠ renewed 省，本 print 提示数据质量
+    if df["is_renewed"].any():
+        renewed_df = df[df["is_renewed"].astype(bool)]
+        src_prefix = renewed_df["source_policy_no"].astype(str).str[:3]
+        rnw_prefix = renewed_df["renewed_policy_no"].astype(str).str[:3]
+        cross_cnt = int((src_prefix != rnw_prefix).sum())
+        if cross_cnt > 0:
+            print(
+                f"   ⚠️ 跨省续保登记 {cross_cnt:,} 行 "
+                f"(source 省 ≠ renewed 省, 归 renewed=当前承保省)"
+            )
+    # apply_registry_derivations 用 fields.json branch_code 派生规则
+    # (source=policy_no/prefixLength=3/mapping{610:SC,618:SX}+strictNonNull+assertDeclaredBranch)
+    # 它读 df['policy_no'] 列；故我们临时把 _TMP_POLICY_NO_COL 复制成 policy_no 喂给 helper、
+    # 之后两列一起 drop（registry 视图层无 policy_no 真业务字段）。
+    df["policy_no"] = df[_TMP_POLICY_NO_COL]
+    df = apply_registry_derivations(df, declared_branch)
+    df.drop(columns=[_TMP_POLICY_NO_COL, "policy_no"], inplace=True)
+    return df
 
 
 def main():
@@ -47,6 +124,9 @@ def main():
                     help=f"源保单起保年度，默认 {DEFAULT_SOURCE_YEAR}")
     ap.add_argument("--renewal-year", type=int, default=DEFAULT_RENEWAL_YEAR,
                     help=f"续保到期年度，默认 {DEFAULT_RENEWAL_YEAR}")
+    ap.add_argument("--branch-code", default=None,
+                    help="部署省份代码（CHAR(2)，'SC'/'SX'），未指定时读 BRANCH_CODE env，"
+                         "全空时默认 'SC'（codex 闸-1 P0：避免漏 assertDeclaredBranch 核对）")
     args = ap.parse_args()
 
     out_path = Path(args.output).resolve()
@@ -154,55 +234,67 @@ def main():
         FROM read_parquet('{args.salesman_path}')
     """)
 
-    # Step 5: LEFT JOIN 四表，写 parquet
+    # Step 5: LEFT JOIN 四表，构建结果表（P3-C：先 CREATE TABLE 而非 COPY，
+    # 便于读回 pandas df 派生 branch_code 后再 COPY 写 parquet）
     # 派生维度字段：
     #   fuel_category: is_nev → 电 / 油（本期两分，气需专用字段，暂跳过）
     #   used_transfer_type: 新车 / 旧车过户 / 旧车非过户
     #   renewal_type:       新车 / 续保 / 转保
-    print(f"\n📊 Step 5: JOIN 生成 universe → {out_path.name}...")
+    print(f"\n📊 Step 5: JOIN 生成 universe → 内存表 renewal_tracker_result...")
+    con.execute("""
+        CREATE OR REPLACE TABLE renewal_tracker_result AS
+        SELECT
+            b.source_policy_no,
+            b.vehicle_frame_no,
+            b.expiry_date,
+            b.expiry_month,
+            b.expected_expiry_date,
+            b.org_level_3,
+            COALESCE(s.team, '直管') AS team_name,
+            b.salesman_name,
+            b.customer_category,
+            b.coverage_combination,
+            CASE WHEN b.is_nev THEN '电' ELSE '油' END AS fuel_category,
+            b.is_nev,
+            b.is_new_car,
+            b.is_transfer,
+            b.is_renewal,
+            CASE
+                WHEN b.is_new_car THEN '新车'
+                WHEN b.is_transfer THEN '旧车过户'
+                ELSE '旧车非过户'
+            END AS used_transfer_type,
+            CASE
+                WHEN b.is_new_car THEN '新车'
+                WHEN b.is_renewal THEN '续保'
+                ELSE '转保'
+            END AS renewal_type,
+            CASE WHEN r.renewed_policy_no IS NOT NULL THEN true ELSE false END AS is_renewed,
+            r.renewed_policy_no,
+            r.renewed_date,
+            CASE WHEN q.first_quote_time IS NOT NULL THEN true ELSE false END AS is_quoted,
+            q.first_quote_time,
+            q.quote_count
+        FROM base b
+        LEFT JOIN renewed r
+            ON r.source_policy_no = b.source_policy_no
+            AND r.vehicle_frame_no = b.vehicle_frame_no
+        LEFT JOIN quoted q
+            ON b.vehicle_frame_no = q.vehicle_frame_no
+        LEFT JOIN salesman_dim s
+            ON b.salesman_name = s.full_name
+    """)
+
+    # Step 6: 读回 df → 派生 branch_code → register → COPY 写 parquet
+    # codex 闸-1 P0：declared_branch 默认 'SC'，避免直跑入口漏 assertDeclaredBranch 核对
+    declared_branch = resolve_declared_branch(args) or 'SC'
+    print(f"\n📊 Step 6: 派生 branch_code (declared='{declared_branch}') → {out_path.name}...")
+    df = con.execute("SELECT * FROM renewal_tracker_result").fetchdf()
+    df = derive_renewal_tracker_branch_code(df, declared_branch)
+    con.register('renewal_tracker_with_branch', df)
     con.execute(f"""
-        COPY (
-            SELECT
-                b.source_policy_no,
-                b.vehicle_frame_no,
-                b.expiry_date,
-                b.expiry_month,
-                b.expected_expiry_date,
-                b.org_level_3,
-                COALESCE(s.team, '直管') AS team_name,
-                b.salesman_name,
-                b.customer_category,
-                b.coverage_combination,
-                CASE WHEN b.is_nev THEN '电' ELSE '油' END AS fuel_category,
-                b.is_nev,
-                b.is_new_car,
-                b.is_transfer,
-                b.is_renewal,
-                CASE
-                    WHEN b.is_new_car THEN '新车'
-                    WHEN b.is_transfer THEN '旧车过户'
-                    ELSE '旧车非过户'
-                END AS used_transfer_type,
-                CASE
-                    WHEN b.is_new_car THEN '新车'
-                    WHEN b.is_renewal THEN '续保'
-                    ELSE '转保'
-                END AS renewal_type,
-                CASE WHEN r.renewed_policy_no IS NOT NULL THEN true ELSE false END AS is_renewed,
-                r.renewed_policy_no,
-                r.renewed_date,
-                CASE WHEN q.first_quote_time IS NOT NULL THEN true ELSE false END AS is_quoted,
-                q.first_quote_time,
-                q.quote_count
-            FROM base b
-            LEFT JOIN renewed r
-                ON r.source_policy_no = b.source_policy_no
-                AND r.vehicle_frame_no = b.vehicle_frame_no
-            LEFT JOIN quoted q
-                ON b.vehicle_frame_no = q.vehicle_frame_no
-            LEFT JOIN salesman_dim s
-                ON b.salesman_name = s.full_name
-        ) TO '{out_path}' (FORMAT PARQUET, COMPRESSION 'zstd');
+        COPY renewal_tracker_with_branch
+        TO '{out_path}' (FORMAT PARQUET, COMPRESSION 'zstd');
     """)
 
     # 校验 + 数据概览
