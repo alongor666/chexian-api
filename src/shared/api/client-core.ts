@@ -336,11 +336,18 @@ export class ApiClientCore {
       });
       if (!refreshed.ok) {
         this.clearToken();
+        // 刷新失败（refresh token 也已过期）→ 通知前端显示"会话已过期"提示（G8 多省接入）
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('auth-session-expired'));
+        }
         return false;
       }
       const data: ApiResponse<{ token?: string }> = await refreshed.json();
       if (!data.success) {
         this.clearToken();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('auth-session-expired'));
+        }
         return false;
       }
       if (data.data?.token) {
