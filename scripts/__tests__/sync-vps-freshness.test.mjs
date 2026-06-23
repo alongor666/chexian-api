@@ -11,7 +11,7 @@
  *   - buildStandardSyncTasks：多省时 policy/current 带 safeDeleteBranch
  *   - assertLocalNotStaleVsVps：多省降级 skip（由于 VPS 端无分省指纹）
  */
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
   evaluateFreshness,
   buildSyncTasks,
@@ -19,6 +19,7 @@ import {
   getSyncBranchCode,
   isFileInBranch,
   buildStandardSyncTasks,
+  assertLocalNotStaleVsVps,
 } from '../sync-vps.mjs';
 
 const vps = { maxDate: '2026-05-30', rowCount: 1_000_000 };
@@ -235,5 +236,63 @@ describe('buildStandardSyncTasks — 多省安全（policy/current safeDeleteBra
     const tasks = buildSyncTasks(cfg);
     const policy = tasks.find(t => t.label === 'policy/current');
     expect(policy.safeDeleteBranch).toBeUndefined();
+  });
+});
+
+// ============================================================
+// P1#2 修复：assertLocalNotStaleVsVps 多省降级路径单测
+// （闸-2 evidence-verifier 抓出：多省降级路径无单测，与 PR 声称覆盖矛盾）
+// ============================================================
+describe('assertLocalNotStaleVsVps — 多省降级路径 + 单省历史行为', () => {
+  it('多省模式（branchCode 非 null）：调用 onWarn 且 return true（降级放行）', async () => {
+    const warnMessages = [];
+    const onWarn = (msg) => warnMessages.push(msg);
+    const onFail = vi.fn();
+    const onPass = vi.fn();
+
+    const result = await assertLocalNotStaleVsVps(
+      /* config 不会被访问（多省路径早返回） */ {},
+      /* localCurrentDir 不会被访问 */ '/unused',
+      { onWarn, onFail, onPass },
+      'SX', // branchCode 非 null → 多省降级路径
+    );
+
+    expect(result).toBe(true);
+    expect(warnMessages.length).toBe(1);
+    expect(warnMessages[0]).toContain('SX');
+    expect(warnMessages[0]).toContain('降级放行');
+    // onFail / onPass 不应被调用
+    expect(onFail).not.toHaveBeenCalled();
+    expect(onPass).not.toHaveBeenCalled();
+  });
+
+  it('多省模式 SC：同样降级放行，warn 消息含省份编码', async () => {
+    const warnings = [];
+    const result = await assertLocalNotStaleVsVps(
+      {},
+      '/unused',
+      { onWarn: (m) => warnings.push(m) },
+      'SC',
+    );
+    expect(result).toBe(true);
+    expect(warnings[0]).toContain('SC');
+  });
+
+  it('单省模式（branchCode=null）：走历史路径（不进多省分支）', async () => {
+    // 单省路径会尝试 queryLocalPolicyFingerprint + queryVpsPolicyFingerprint，
+    // 两者依赖 duckdb CLI + SSH，在单测环境必然 skip/warn（evaluateFreshness 对 null 指纹返回 skip）。
+    // 此断言仅验证"不会被多省早返回短路"，即 branchCode=null 不触发多省 warn 消息。
+    const warnMessages = [];
+    // 不抛异常即可（queryLocalPolicyFingerprint 在无 duckdb 时返回 null → evaluateFreshness skip → return true）
+    const result = await assertLocalNotStaleVsVps(
+      { host: '127.0.0.1', port: 22, username: 'test', alias: 'test-alias' },
+      '/nonexistent-path-for-test',
+      { onWarn: (m) => warnMessages.push(m) },
+      null, // branchCode=null → 单省历史路径
+    );
+    // 单省路径：指纹获取失败 → evaluateFreshness skip → return true；或异常捕获后 skip
+    // 关键：不含"多省降级放行"字样（证明没走多省分支）
+    const hasMultiProvinceSXMsg = warnMessages.some(m => m.includes('降级放行'));
+    expect(hasMultiProvinceSXMsg).toBe(false);
   });
 });

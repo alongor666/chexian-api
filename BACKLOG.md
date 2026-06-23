@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（70 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（71 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -28,7 +28,7 @@
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 
-**P2（39 项）**
+**P2（40 项）**
 
 - B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -69,6 +69,7 @@
 - 2026-06-20-claude-2eccfa `BLOCKED` — 山西机构规范化映射 (61 原始机构 → 11 经营单元)
 - 2026-06-20-claude-8870f5 — [口径裁决] reserve_wan(未决准备金) 在覆盖全状态案件的面板含零结/注销/
 - 2026-06-21-claude-acf188 `PARTIAL` — 山西账号（ADR G7）
+- 2026-06-22-claude-e5cc06 — buildRsyncBranchFilterArgs 的 knownBranches 默
 
 **P3（26 项）**
 
@@ -179,3 +180,4 @@
 | 2026-06-21-claude-f1a45c | 2026-06-21 | 工具与工作流 | @claude | cleanup-worktrees skill 与本项目兄弟目录约定 scope 错配：skill 仅纳管 .claude/worktrees/，而 .claude/rules/worktree-setup.md §A 规约 worktree 放兄弟目录 ../chexian-api-<task> → 已合并的兄弟 worktree（如 rls-closeout #710）不会被自动回收，需手动 git worktree remove。待调查：是 skill 缺'兄弟目录纳管'能力（fix 落跨仓 alongor666/alongor666-skills 的 cleanup-worktrees.sh in_scope()），还是 skill 可配置而本项目未配置纳管根。修复落点大概率在 skill 源仓（跨仓）。 | P3 | PROPOSED | .claude/rules/worktree-setup.md | N/A |  |
 | 2026-06-22-claude-03f6f0 | 2026-06-22 | 前端重构 follow-up | @claude | PerformanceAnalysisPanel 主组件(~900行)抽 usePerformancePanelController hook —— b331 拆分后续。codex 闸-1 判此项需先补行为测试再动(主组件 10+ 耦合 state/handler)，故 b331 本轮不做。 | P3 | PROPOSED | N/A | src/features/dashboard/PerformanceAnalysisPanel.tsx |  |
 | 2026-06-22-claude-21c578 | 2026-06-22 | 前端重构 follow-up | @claude | 两个 distribution chart 去重：内部 DistributionChart(PerformancePanelDistributionChart) 与既有 performance/PerformanceDistributionChart.tsx option 已漂移，codex 闸-1 确认应另案统一。 | P3 | PROPOSED | N/A | src/features/dashboard/performance/PerformanceDistributionChart.tsx,src/features/dashboard/performance/PerformancePanelDistributionChart.tsx |  |
+| 2026-06-22-claude-e5cc06 | 2026-06-22 | 数据架构 · 多省(山西)GATED前置 | @claude | buildRsyncBranchFilterArgs 的 knownBranches 默认 ['SC','SX'] 硬编码，三省扩展时须通过 task.knownBranches（由 buildStandardSyncTasks opts 透传）覆盖默认值，否则第三省文件不受 Protect 规则保护。当前 buildSyncTasks→buildStandardSyncTasks 未透传 knownBranches，故三省前须先修复该透传链路。闸-2 P2（scripts/sync-vps.mjs buildRsyncBranchFilterArgs 注释已标注此约束）。 | P2 | PROPOSED | N/A | N/A |  |

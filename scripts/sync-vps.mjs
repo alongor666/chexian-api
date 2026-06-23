@@ -388,6 +388,10 @@ export function buildRsyncBranchFilterArgs(branchCode, knownBranches = ['SC', 'S
   if (!branchCode) return []; // 单省短路：不加任何 filter，与历史行为完全等价
 
   // 对每个非目标省份生成 --filter 'P <BRANCH>_*'（Protect：受保护文件不会被 --delete 删除）
+  // ⚠ P2 约束（follow-up 已登记 BACKLOG）：knownBranches 默认 ['SC','SX'] 硬编码，
+  //   三省扩展时须通过 task.knownBranches（由 buildStandardSyncTasks opts 传入）覆盖默认值，
+  //   否则第三省文件不受 Protect 保护。当前 buildSyncTasks→buildStandardSyncTasks 未透传
+  //   knownBranches，故三省前须先修复该透传链路。
   const protectArgs = [];
   for (const b of knownBranches) {
     if (b !== branchCode) {
@@ -567,7 +571,8 @@ async function queryVpsPolicyFingerprint(config) {
  * 单省模式（branchCode=null，默认，当前生产状态）：
  *   行为与历史版本完全等价，用全量统计比较。
  */
-async function assertLocalNotStaleVsVps(config, localCurrentDir, hooks = {}, branchCode = null) {
+// 导出供单元测试（多省降级路径断言）；生产调用路径通过 main() 内部间接使用，行为不变。
+export async function assertLocalNotStaleVsVps(config, localCurrentDir, hooks = {}, branchCode = null) {
   const onPass = hooks.onPass || (() => {});
   const onWarn = hooks.onWarn || (() => {});
   const onFail = hooks.onFail || (() => {});
@@ -802,10 +807,16 @@ function printDryRun(sshConfig, runConfig) {
     const suffix = exists ? '' : '  （本地目录不存在，跳过）';
     const excludeStr = RSYNC_EXCLUDES.map((p) => `--exclude '${p}'`).join(' ');
     const deleteArg = task.deleteRemote === false ? '' : '--delete ';
+    // P1#1 修复：多省模式（task.safeDeleteBranch 非空）时，把保护 filter 参数也拼入打印字符串，
+    // 使 dry-run 展示与 rsyncDir 实际执行一致（字节安全：单省时 buildRsyncBranchFilterArgs 返回 []）
+    const filterArgs = buildRsyncBranchFilterArgs(task.safeDeleteBranch ?? null);
+    const filterStr = filterArgs.length
+      ? filterArgs.map((a, i) => (i % 2 === 0 ? `--filter` : `'${a}'`)).join(' ') + ' '
+      : '';
     if (task.atomicLatest) {
       console.log(`  ${tag} rsync -azv -e ssh ${task.local}/latest.parquet ${sshConfig.alias}:${task.remote}/latest.parquet.uploading && mv latest.parquet.uploading latest.parquet${suffix}`);
     } else {
-      console.log(`  ${tag} rsync -azv ${deleteArg}${excludeStr} -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
+      console.log(`  ${tag} rsync -azv ${deleteArg}${filterStr}${excludeStr} -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
     }
   }
 }

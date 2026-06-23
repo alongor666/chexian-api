@@ -877,3 +877,15 @@
 - **重来更好/复用价值**：① **scoping 纠偏是高杠杆**——"6 纯组件无纯函数"是有损盘点(只看文件类型 .tsx)，实际组件内联 useMemo/helper 是可提取纯逻辑富矿；判"组件 smoke vs 提取"应看**内联逻辑密度**(useMemo×N/数组链/顶层 helper)而非文件后缀。② **premium-report 的提取打法对 .tsx 组件同样成立**(源从 hooks 换成组件)，且组件里"已是独立 function 的 helper"(fmtDate/maskTokenId/isExpired)提取=纯搬移零风险，"重复内联逻辑"(两处 toggle)提取=顺带去重。③ 收尾分组里能走提取路线的优先提取(零 mock 稳)，组件 smoke 仅留给真无逻辑的展示壳。
   - needs_automation: false（沿用 R18「双源零测试盘点 + 纯函数分布扫描」脚本项；本轮新增"按内联逻辑密度判路线"是 scoping 启发式，并入该项）
 - **下一轮**：PR-2 repair(5 useMemo 数据塑形提取)→ PR-3 customer-flow+report(提取)→ PR-4 file(薄提取)+moto-cost(降级)→ b332 置 DONE。
+
+---
+
+**R21-闸2 · #753 sync-vps 分省安全 — evidence-verifier 抓出 2 P1 修复（Loop v2 子代理）**
+- **触发**：PR #753 经 Loop v2 对抗闸-2（evidence-verifier 独立证伪）审出 2 个 P1 + 2 个 P2 必须修复后才能入库。
+- **P1#1（已修）**：`printDryRun` 在多省模式（task.safeDeleteBranch 非空）时，打印的 rsync 命令字符串漏掉 `--filter 'P <省>_*.parquet'` 保护参数 → 操作员看 dry-run 无法判断保护是否生效，与实际 `rsyncDir` 执行不一致。修复：在打印 else 分支加 `buildRsyncBranchFilterArgs(task.safeDeleteBranch ?? null)` 生成 filterStr，并拼入打印字符串。字节安全：单省 branchCode=null 短路返回 []，filterStr 空，原有打印字符串不变。
+- **P1#2（已修）**：`assertLocalNotStaleVsVps` 的多省降级路径（branchCode 非 null → onWarn + return true）无单测，与 PR 声称覆盖矛盾。修复：①将该函数改为 `export async function`（仅供测试，生产调用路径不变）。②在测试文件追加 `describe('assertLocalNotStaleVsVps — 多省降级路径 + 单省历史行为')`，3 个 it（多省 SX 降级 warn + return true / 多省 SC 降级 warn / 单省 null 不走多省分支）。
+- **P2#1（已处理）**：`buildRsyncBranchFilterArgs` 附近加注释标注 knownBranches 三省透传约束，BACKLOG 登记 uid=`2026-06-22-claude-e5cc06`（P2，数据架构·多省GATED前置）。
+- **P2#2（待人工）**：PR body "33 新增"不实（实为新增 22 / 文件总计 33 个 it），gh API keyring 失效无法自动 edit；需用户手动执行：`gh pr edit 753 --body-file <临时文件>` 或直接在 GitHub 页面修正措辞 `单测: 22 新增 / 33 总计（闸-2 修复后 36） / 全部 PASS`。
+- **验证**：36 单测 PASS（新增 3 个 it）；governance 44/44；typecheck 未单独跑（仅修改 .mjs 无 TS 类型）。
+- **重来更好**：①导出 `assertLocalNotStaleVsVps` 应在 PR #753 原始提交时一并处理，不该留到闸-2 才发现。②printDryRun 的打印字符串与实际执行 rsyncDir 共享两处构建逻辑（rsync 参数列表和打印字符串）但未共享代码，是结构性重复——后续可提取 `buildRsyncArgsList(task)` 统一源，dry-run 打印和实际执行都从该函数派生，消除不一致风险。
+  - needs_automation: true（printDryRun 与 rsyncDir 参数不一致是结构性问题；后续提取 buildRsyncArgsList 统一源后可在 harness 层 diff 验证"打印 == 执行"）expires: 2026-12-31
