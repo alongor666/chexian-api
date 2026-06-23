@@ -11,7 +11,7 @@ import { ThemeProvider } from '../shared/theme';
 import { ExportProvider } from '../shared/export/ExportContext';
 import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
-import { canAccessCost, canAccessExpenseDevelopment } from '../shared/config/organizations';
+import { canAccessCost, canAccessExpenseDevelopment, canAccessMotoCost } from '../shared/config/organizations';
 
 // SW 活跃时让 SW 管理新鲜度（避免双重缓存），否则保持 5min staleTime
 const swActive = typeof navigator !== 'undefined'
@@ -283,13 +283,14 @@ function App() {
                     }
                   />
 
-                  {/* 摩意模型 - 外部 iframe 嵌入，不需要数据守卫 */}
+                  {/* 摩意模型 - 特性路由（按 moto_cost 特性授权，非 allowedRoutes 白名单），
+                      与 /expense-development 一致使用 FeatureGuard；外部 iframe 嵌入，不需要数据守卫 */}
                   <Route
                     path="moto-cost"
                     element={
-                      <RouteAccessGuard routePath="/moto-cost">
+                      <FeatureGuard check={canAccessMotoCost}>
                         <LazyRoute><MotoCostPage /></LazyRoute>
-                      </RouteAccessGuard>
+                      </FeatureGuard>
                     }
                   />
 
