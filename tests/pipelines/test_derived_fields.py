@@ -171,20 +171,64 @@ from pipelines.backfill_derived_fields import apply_derivation as _backfill_appl
 
 
 class BackfillGuardTest(unittest.TestCase):
-    """通用 backfill 一律拒绝强校验字段（branch_code），交 transform.py / Phase 4（codex 闸-2 P1）。"""
+    """Phase 4：通用 backfill 升级为「可信域感知」回填（codex 闸-1 P1.3 采纳）。
 
-    def test_backfill_skips_guarded_field(self):
-        # 强校验字段一律 skip（不处理/不写回），四象限全 skip；不杀整轮、不影响其它字段
-        for df, force in [
-            (_df(["6100001"]), True),
-            (_df(["6100001"]), False),
-            (pd.DataFrame({"policy_no": ["6100001"], "branch_code": ["SC"]}), False),
-            (pd.DataFrame({"other": [1]}), True),
-        ]:
-            out, status = _backfill_apply(df, BRANCH_RULE, force=force)
-            self.assertIn("skip", status)
-        # 不存在 branch_code 列的输入不应被新增该列
-        out, _ = _backfill_apply(_df(["6100001"]), BRANCH_RULE, force=True)
+    强校验字段（branch_code）不再一律 skip，而是按数据特征分流：
+    · 可信域（policy_no 全非空 + 单一已知省份）→ 派生 + guarded helper 物化
+    · 不可信域（无 source 列 / policy_no 含 NULL）→ skip（交域专用 ETL）
+    · 看似可信但混省 / 未知前缀 / 声明省≠推断省 → error（本轮非零退出，fail-closed）
+    """
+
+    def test_backfill_trusted_domain_derives_single_province(self):
+        # 可信域：policy_no 全 610... 非空 → 派生 SC（单省），写入 branch_code 列
+        out, status = _backfill_apply(_df(["6100001", "6102002", "6103003"]), BRANCH_RULE, force=True)
+        self.assertIn("ok", status)
+        self.assertEqual(out["branch_code"].tolist(), ["SC", "SC", "SC"])
+
+    def test_backfill_skips_when_no_source_column(self):
+        # 无 policy_no 列（renewal_tracker / dim 表）→ skip，不新增 branch_code 列
+        out, status = _backfill_apply(pd.DataFrame({"other": [1]}), BRANCH_RULE, force=True)
+        self.assertIn("skip", status)
+        self.assertNotIn("branch_code", out.columns)
+
+    def test_backfill_skips_when_policy_no_has_null(self):
+        # 不可信域：policy_no 含 NULL（quotes 92.5% / new_energy 100%）→ skip 交域专用回填
+        out, status = _backfill_apply(_df(["6100001", None, "6100003"]), BRANCH_RULE, force=True)
+        self.assertIn("skip", status)
+        self.assertNotIn("branch_code", out.columns)
+
+    def test_backfill_existing_column_no_force_skips(self):
+        # 已有 branch_code 且无 --force → 幂等 skip
+        df = pd.DataFrame({"policy_no": ["6100001"], "branch_code": ["SC"]})
+        out, status = _backfill_apply(df, BRANCH_RULE, force=False)
+        self.assertIn("skip", status)
+
+    def test_backfill_mixed_province_errors(self):
+        # 单文件混省（610 + 618），未传 declared → error（fail-closed，非 skip）
+        out, status = _backfill_apply(_df(["6100001", "6180002"]), BRANCH_RULE, force=True)
+        self.assertIn("error", status)
+        self.assertNotIn("branch_code", out.columns)
+
+    def test_backfill_unknown_prefix_errors(self):
+        # policy_no 全非空但前缀未知（999...）→ error（疑似数据损坏，fail-closed）
+        out, status = _backfill_apply(_df(["9990001", "9990002"]), BRANCH_RULE, force=True)
+        self.assertIn("error", status)
+
+    def test_backfill_declared_mismatch_errors(self):
+        # 全 610（推断 SC）但显式 declared='SX' → error（疑似喂错省）
+        out, status = _backfill_apply(_df(["6100001"]), BRANCH_RULE, force=True, declared_branch="SX")
+        self.assertIn("error", status)
+
+    def test_backfill_declared_match_ok(self):
+        # 全 610（推断 SC）且 declared='SC' → 通过
+        out, status = _backfill_apply(_df(["6100001"]), BRANCH_RULE, force=True, declared_branch="SC")
+        self.assertIn("ok", status)
+        self.assertEqual(out["branch_code"].tolist(), ["SC"])
+
+    def test_backfill_empty_dataframe_skips_no_crash(self):
+        # 空分片（0 行有 policy_no 列）→ 结构化 skip，不抛 IndexError（codex 闸-2 P2.1）
+        out, status = _backfill_apply(pd.DataFrame({"policy_no": []}), BRANCH_RULE, force=True)
+        self.assertIn("skip", status)
         self.assertNotIn("branch_code", out.columns)
 
     def test_backfill_unguarded_field_derives(self):

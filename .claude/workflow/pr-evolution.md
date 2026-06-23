@@ -1140,3 +1140,23 @@
 - **needs_automation: true** — ① 派生模式选择矩阵 doc（按 policy_no 状态/数据 schema/失败模式三维决策）；② governance 闸 #45 字节安全 oracle 集成；③ evidence-loop checklist 加"通用 except 路径 fail-fast 兜底"自检项；④ R28 判别法固化进基座。
 - **expires: 2026-09-30**
 - **下一轮**：P3 全域差异化完成（A/B/C/D/E 五子任务全 DONE）→ P3-collect 汇总 + bc36e8 → DONE；继续 P4（清理 #753 残留 prefix_map 旧路径）+ P5（fields.json schema 演进）；Phase B 子目录隔离方案动工前必须问用户确认。
+
+---
+
+**R33 · 省份派生化 Phase 4 — 存量回填可信域化 + governance 单文件不混省闸 + overlap 派生轴（Phase A 检测层收口 · 零 P0 · codex 闸-1 一处颠覆原计划）**
+
+- **任务**：Phase 4 三件交付——① backfill 存量回填限定可信域；② governance「单文件不混省」闸；③ overlap-check 从文件名轴切派生轴。承接 P1-P3（全 MERGED），Phase A 检测层最后一块。
+- **成果（铁证）**：
+  - **① backfill 可信域感知**（`backfill_derived_fields.py:apply_guarded_backfill`）：通用回填从「一律拒绝强校验字段」升级为数据驱动判定——policy_no 全非空 + 单一已知省份 → 复用 `apply_derived_fields` guarded helper 物化；含 NULL（quotes 92.5%/new_energy 100%）→ skip 交域专用；混省/未知前缀/声明≠推断 → error 令 `main()` 聚合非零退出（fail-closed）；新增 `--branch-code`。字节安全 oracle（`scripts/oracle_p4_backfill_byte_safety.py` 入库）：premium **2,600,421 行重派生 branch_code 0 变更** + 46 业务列 sha256 全等（经 COPY→read_parquet 回读，R31/R32 模板）+ 单省 SC。
+  - **② governance 单文件不混省闸**（`checkSingleProvincePerFile`）：分域建模（policy/claims_detail/cross_sell/customer_flow 走派生省==列省 hard-check；new_energy/quotes/renewal 只校验单省+非空+允许值不比对前缀）；允许值/mapping/prefixLength 全读 fields.json；单 python3 进程全量扫描（17 文件 0.24s）。负向 oracle：合成混省→mixed、未知前缀→unknown_prefix、SX 标但 610 前缀→mislabel、同数据放不可信域→不误报。
+  - **③ overlap 派生轴**（`resolveBranchFromParquet`）：省份从文件名（#753 契约）切到 parquet 派生轴——0 字节/无信号→文件名兜底（legacy 兼容 19 旧空文件单测）；有效 parquet 混省/读失败→branchError fail-closed；`detectPolicyCurrentOverlap` 即便 ≤1 文件也解析（单文件混省须检出）。
+- **codex 闸-1（计划对抗·gpt-5.5/high·亲跑 duckdb）**：0 P0 + 5 P1，全部采纳。**P1.2 颠覆原计划**：原计划把闸挂 `CODE_GOVERNANCE_CHECKS` 第 45 项（任务硬护栏 #6 也这么写），codex 指出本仓已把数据状态检查从代码门禁解耦到 `check-data-readiness.mjs`——CI 无 parquet 时 warning skip = 假安全。改注册到 `PRE_SYNC_READINESS_CHECKS`（数据就绪层，fail-closed），**governance 代码门禁仍 44 不变**（任务假设的 44→45 被推翻）。其余 P1：分域建模（VIN-JOIN/warn 域不能按 prefix 误杀）、backfill 须 distinct 派生省==1 + 推断单值作 declared、overlap 多值/读失败不取第一个/不回退文件名、检查 NULL/空/非法值且允许值读 fields.json。
+- **codex 闸-2（完成对抗·亲跑）**：0 P0 + 2 P1 + 1 P2，全修复并复验。**P1.1**：`checkSingleProvincePerFile` mislabel SQL 用 `branch_code <> CASE...ELSE NULL` → 未知前缀变 `<> NULL`=UNKNOWN 漏判（codex `python -c` 复现 999+618 应报 2 行只报 1）→ 改 `expected IS NULL`（单列 unknown_prefix）+ `IS DISTINCT FROM`（NULL branch_code 也参与）+ mapping 值非字母数字防注入闸。**P1.2**：`checkParquetOverlapInCurrent` wrapper 没消费新 `branchErrors`，混省单文件（尤其无 branch_code 但 policy_no 混省者）会同时绕过本闸（count===0）与单文件不混省闸（无列 skip）双漏 → 在 count===0 前加 branchErrors fail-closed 分支。**P2.1**：空 DataFrame `provinces[0]` IndexError → 空数据结构化 skip。
+- **evidence-verifier（fresh-context·sonnet·独立证伪）**：裁定**通过，必修项无**。6 声明（pytest/vitest/governance/typecheck/字节安全 oracle/混省检出）+ `verify:full`（3952 单测）全部独立复现。唯一注意级发现 = 闸-2 P1.2（它读到修复前快照），**当前代码已修 + 端到端复验关闭**（混省 parquet → count=0 但 branchErrors=1 → wrapper 判定 false 被拦）。
+- **重来更好 / 复用价值（三问）**：
+  ① **重来怎样更好**：任务书硬护栏 #6 直接断言「governance 计数 44→45」，我若不经 codex 就实现，会把数据状态闸误挂代码门禁——根因是**接受任务给的实现位置当既定事实，没先质疑「这个闸属于代码层还是数据层」**。下次拿到「在 X 处加闸」类任务，动手前必问一句「这个闸依赖的输入（此处=parquet 数据）在 X 的运行环境（此处=CI）是否存在？不存在会不会 warning skip 成假安全」。codex 闸-1 替我兜住了，但这本该是我设计阶段的自检。
+  ② **复用价值**：本轮「数据状态闸 vs 代码门禁」的判别（依赖数据/会随数据变红 → readiness 层；纯代码静态 → governance 层）可固化为一条放置规则；`resolveBranchFromParquet` 的「0 字节/无信号→文件名兜底，有效→数据轴权威，多值/读失败→fail-closed」三态模式可作所有「文件名契约切数据轴」迁移的模板（Phase B 子目录退役 #753 前缀时直接复用）。
+  ③ **如何更高质量自动化**：① R31/R32 提的 governance 闸「`scripts/oracle_*_byte_safety.py` 全量跑」本轮新增第 4 个 oracle（`oracle_p4_backfill_byte_safety.py`），4 个同构 oracle 已够立项——应真正落地该闸（扫 `scripts/oracle_*_byte_safety.py` 在数据环境全量跑），否则 oracle 写完即孤儿；② governance 单文件不混省闸目前只在数据环境跑、无 CI 单测覆盖（data-env-only），应加一个「合成混省 parquet fixture + 调 checkSingleProvincePerFile」的 readiness 层回归测试（本轮靠 oracle 手验，未沉淀成测试）；③ evidence-loop 应有「任务书给的实现位置/计数断言，是否被闸-1 推翻」的对账自检（本轮 44→45 被推翻即一例）。
+- **needs_automation: true** — ① governance 闸集成 `scripts/oracle_*_byte_safety.py` 全量跑（4 oracle 已立项，R31/R32/R33 三次提及）；② checkSingleProvincePerFile 加合成 fixture 回归测试（脱离数据环境可测）；③ evidence-loop checklist 加「闸依赖输入在目标运行环境是否存在/会否假安全」+「任务书计数/位置断言被闸-1 推翻」两条自检。
+- **expires: 2026-09-30**
+- **下一轮**：P5（依赖 Phase 1-4，须本 P4 合并后开工）——文档收口 + ADR + 新增省份落点 checklist + fields.json schema 演进收尾。Phase B（子目录隔离 current/<省>/，退役 #753 前缀，高爆炸半径）动工前**必须问用户确认**。R33 复用资产：① 「数据状态闸→readiness 层 vs 代码闸→governance 层」放置规则；② `resolveBranchFromParquet` 三态模式作文件名→数据轴迁移模板（Phase B 直接复用）；③ 字节安全 oracle 第 4 次验证为通用模板；④ codex 闸-1 推翻任务书实现位置断言（44→45）= 「任务书 ≠ 既定事实，闸-1 先质疑」的实证。
