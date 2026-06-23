@@ -12,6 +12,7 @@ import { brotliMiddleware } from './middleware/brotli.js';
 import cors from 'cors';
 import helmet from 'helmet';
 import { corsConfig } from './config/cors.js';
+import { helmetOptions } from './config/csp.js';
 import { serverEnv, dbEnv } from './config/env.js';
 import { duckdbService } from './services/duckdb.js';
 import { getTrendCubeState, getCostCubeState, getSalesmanCubeState } from './services/duckdb-cube.js';
@@ -46,19 +47,7 @@ let stopAuditLogMaintenance: (() => void) | null = null;
 /**
  * 1. 安全中间件
  */
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "https://open.bigmodel.cn", "https://openrouter.ai"],
-    },
-  },
-  crossOriginEmbedderPolicy: false,
-})); // HTTP安全头（含 CSP）
+app.use(helmet(helmetOptions)); // HTTP安全头（含 CSP）— 唯一事实源：config/csp.ts（B320 移除 'unsafe-eval'）
 app.use(cors(corsConfig)); // 跨域配置
 
 /**
