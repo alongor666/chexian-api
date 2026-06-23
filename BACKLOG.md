@@ -16,16 +16,17 @@
 
 ---
 
-## 📋 活跃任务速查（70 项 · 数据截至 2026-06-22 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（71 项 · 数据截至 2026-06-23 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（4 项）**
+**P1（5 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
+- 2026-06-23-claude-bc36e8 — branch_code 派生化 + ETL 自校验
 
 **P2（40 项）**
 
@@ -175,3 +176,4 @@
 | 2026-06-22-claude-03f6f0 | 2026-06-22 | 前端重构 follow-up | @claude | PerformanceAnalysisPanel 主组件(~900行)抽 usePerformancePanelController hook —— b331 拆分后续。codex 闸-1 判此项需先补行为测试再动(主组件 10+ 耦合 state/handler)，故 b331 本轮不做。 | P3 | PROPOSED | N/A | src/features/dashboard/PerformanceAnalysisPanel.tsx |  |
 | 2026-06-22-claude-21c578 | 2026-06-22 | 前端重构 follow-up | @claude | 两个 distribution chart 去重：内部 DistributionChart(PerformancePanelDistributionChart) 与既有 performance/PerformanceDistributionChart.tsx option 已漂移，codex 闸-1 确认应另案统一。 | P3 | PROPOSED | N/A | src/features/dashboard/performance/PerformanceDistributionChart.tsx,src/features/dashboard/performance/PerformancePanelDistributionChart.tsx |  |
 | 2026-06-22-claude-e5cc06 | 2026-06-22 | 数据架构 · 多省(山西)GATED前置 | @claude | buildRsyncBranchFilterArgs 的 knownBranches 默认 ['SC','SX'] 硬编码，三省扩展时须通过 task.knownBranches（由 buildStandardSyncTasks opts 透传）覆盖默认值，否则第三省文件不受 Protect 规则保护。当前 buildSyncTasks→buildStandardSyncTasks 未透传 knownBranches，故三省前须先修复该透传链路。闸-2 P2（scripts/sync-vps.mjs buildRsyncBranchFilterArgs 注释已标注此约束）。 | P2 | PROPOSED | N/A | N/A |  |
+| 2026-06-23-claude-bc36e8 | 2026-06-23 | 数据架构 · 多省省份派生化(替代#753) | @claude | branch_code 派生化 + ETL 自校验:从 policy_no 第2-3位派生(10=四川/18=山西,440万行 duckdb 直查零例外),替代脆弱的 ETL 常量标签(防贴错/检测混省)。Phase A 派生化(低爆炸半径·先做:transform.py 派生+自校验 fail-fast/fields.json codegen/backfill/省份码映射表);Phase B 分省子目录 current/<省>/ 替代 #753 前缀+rsync filter(高爆炸半径·后置立项:生死点 data-bootstrapper discoverParquetFiles 子目录发现/去重纳 branch 键/sync-vps 退役前缀/governance 禁混省文件)。约束:SC-only 逐字节安全·GATED 严禁推 SX 进生产(current/SX 保持空)·NULL 省码 fail-fast。规划+单任务清单见 docs。 | P1 | PROPOSED | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | 数据管理/pipelines/transform.py,server/src/config/field-registry/fields.json,server/src/services/data-bootstrapper.ts,scripts/sync-vps.mjs |  |
