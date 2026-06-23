@@ -1,5 +1,6 @@
 import React from 'react';
 import { buttonStyles, cn, colorClasses } from '../../../shared/styles';
+import { deriveCategories, filterTemplatesByCategory } from '../utils/reportTemplates';
 
 interface ReportTemplate {
   id: string;
@@ -65,16 +66,14 @@ const templates: ReportTemplate[] = [
   }
 ];
 
-const categories = ['全部', ...Array.from(new Set(templates.map(t => t.category)))];
+const categories = deriveCategories(templates);
 
 export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({
   onSelectTemplate
 }) => {
   const [selectedCategory, setSelectedCategory] = React.useState('全部');
 
-  const filteredTemplates = selectedCategory === '全部'
-    ? templates
-    : templates.filter(t => t.category === selectedCategory);
+  const filteredTemplates = filterTemplatesByCategory(templates, selectedCategory);
 
   return (
     <div className="bg-white dark:bg-neutral-800 p-4 sm:p-6 rounded shadow">
