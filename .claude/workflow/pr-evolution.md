@@ -1039,3 +1039,19 @@
   - needs_automation: true → Phase 4 governance「单文件不混省」闸 + 域感知 backfill（backfill 现 skip 强校验字段，Phase 4 须补回填能力）
   - expires: 2026-08-31
 - **下一轮**：P3 全域差异化（claims-hardfail / quotes-warn / new_energy-VIN-JOIN 独立任务 / repair-org_level_3），复用 `apply_derived_fields` + `assert_guarded_prefix_field`。
+
+---
+
+**R28 · 省份派生化 P3-A — claims_detail hard-fail 派生化 + ClaimsDetail loader 兼容性升级 · 零 P0/P1**
+- **触发**：bc36e8 P3-A（接 P1 #762）。claims_detail 域 policy_no 全 610 零例外 → 从「ETL 常量列注入」改为 prefix_map 派生 + 自校验 fail-fast，与 premium 同语义。爆炸半径=中（撞上 ClaimsDetail loader 裸 read_parquet 的金丝雀 debt，需同步升级）。
+- **成果**：① 抽 2 个 helper 到 `derived_fields.py`：`resolve_declared_branch(args)`（CLI > env > None + 大小写归一）+ `apply_registry_derivations(df, declared_branch)`（统一读 fields.json + 过滤 derived + 调 apply_derived_fields），供 P3-B/C/D/E 复用，避免 5 处复写 6 行逻辑。② `convert_claims_detail.py:302-305` 删除常量分支，接入 helper（4 行 → 2 行 + 注释）；`--branch-code` help 文本同步改写（旧"注入常量列"→新"assertDeclaredBranch 操作员声明"）。③ **同 PR 升级 ClaimsDetail loader**：`duckdb-domain-loaders.ts:681` `read_parquet` 加 `union_by_name=true` 容忍 CDC 旧分区无 branch_code + 新分区有的 schema 漂移，与 PolicyFact loader 路径对齐；④ prepublish gate 镜像同步：`fetch-local-metrics.mjs` 两个 claims SQL 模板 + 顶部设计注释 + `fetch-local-metrics.test.ts` 金丝雀测试改写（"两个 loader 均 union_by_name=true"，schema 一致性转移到 ETL fields.json + governance #17 + schema 契约）。⑤ 单测：3 个新测试类（5 helper + 3 registry 集成 case）+ retrofit 4 个 SystemExit 加 `cm.exception.code == 1` 断言。
+- **字节安全 oracle（R27 教训 #3 复用）**：新 `apply_registry_derivations` 在**真实 288,198 行 SC claims_detail parquet** 上重派生 → branch_code 全 'SC' 零例外 + compulsory_ncd_factor 正确跳过（claims schema 无 compulsory_ncd 源列、非 guarded → 不报错不新增列，证明"premium-only 字段隔离"）+ vehicle_age_group 因 type=case_when 不支持被跳过（不影响）。+ pytest 19/19 + vitest prepublish 21/21 + bun run governance 44/44。
+- **双闸**：codex 闸-1（设计）零 P0 + 1 P1（CDC 旧分区 NULL 边界）+ 4 P2 全采纳；codex 闸-2（完成）一轮抓出 **P1（ClaimsDetail loader 裸读混 schema 会崩，仓库自有金丝雀测试明写"生产 claims 加载器无 union_by_name"）**，**采纳同 PR 升级 loader + 测试镜像方案**而非 R27 式 scope 让位（这次不是 scope 蔓延、是 "ETL schema 升级 + loader 兼容性" 同一功能闭环，分离会让 P3-A 单独不可上线）；codex 闸-2 复审零 P0/P1，1 个文档漂移建议（顶部旧注释）同 PR 修掉。
+- **重来更好/复用价值**：
+  ① **scope 错配的两种形态**：R27 的 backfill 5 轮是「跨 ETL 阶段层层 bolt 同一 strict-guard」= scope 蔓延需让位；R28 的 loader 同步升级是「同一功能（schema 演进）的 ETL 端 + 服务端必须协调」= 功能闭环不可分离。判别法：bolt 后是否还出**同类**P1。
+  ② **金丝雀 vs schema 契约的边界**：项目级 ClaimsDetail loader 裸读金丝雀（PR #513）本意防"loader 比生产宽容→放行混 schema 崩场景"；但**schema 演进**（加列）的兼容性无法靠 loader 层兜底，必须落到 ETL fields.json + governance #17 + schema 契约。P3-A 把 ClaimsDetail loader 升级到与 PolicyFact 对称（两者都 union_by_name=true），同步把金丝雀升级到对称镜像。
+  ③ **helper 抽取的边界**：`apply_registry_derivations` 当前是"全 registry derived 字段全域执行"，未来若 fields.json 加 policy-only 且 guarded 的 derived 字段，会让 claims_detail 连坐 fail-fast。P3-B/C/D/E 复用前若出现该信号，加 `field_ids` 域 predicate（registry 已支持"该字段哪些域适用"的扩展点）。
+  ④ **PolicyFact 多文件加载早就用 union_by_name=true**（duckdb-parquet-loader.ts:112/141），P3-A 的 ClaimsDetail loader 升级是补齐对称性、不是新引入风险。
+  - needs_automation: true → P3-B/C/D/E 接入前若 fields.json 加新 derived 字段须考虑 `apply_registry_derivations` 域 predicate；P5 RLS 核对时检查 ClaimsDetail 新增 branch_code 列对 RLS 路径无破坏
+  - expires: 2026-09-30
+- **下一轮**：P3-B cross_sell + customer_flow 派生（base_converter.py:177-181 改一处覆盖两域；hard-fail 同 claims_detail，但要保护 repair——无 policy_no 列）；复用 `apply_registry_derivations` + `resolve_declared_branch`。

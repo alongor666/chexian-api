@@ -14,13 +14,15 @@
  *       · **赔款金额锚定 ClaimsAgg.reported_claims SSOT**（codex PR #513 第2轮 P2）：每案已结案取
  *         settled_amount、未结案取 reserve_amount（非二者相加），剔除无责/零结/注销/拒赔。
  *       · claims 按 `accident_time` 月（与 claims-heatmap cohort + ClaimsAgg 一致；不切到 policy_date）。
- *   - 读法「镜像生产」而非自定义（codex PR #513 第2/3轮）：闸门是发布前金丝雀，必须与生产加载器逐字一致，
- *       否则要么误阻断、要么把"生产会崩"的场景放行。生产读法本身不对称，照搬不可擅自统一：
+ *   - 读法「镜像生产」而非自定义（codex PR #513 第2/3轮 → P3-A 同步升级）：闸门是发布前金丝雀，必须与生产
+ *       加载器逐字一致，否则要么误阻断、要么把"生产会崩"的场景放行。P3-A 后两个 loader 路径对齐：
  *       · policy → read_parquet(glob, union_by_name=true)，对齐 duckdb-parquet-loader.ts。
  *         policy/current 混有旧静态分片+新周更分片，按位置 union 会因 schema 漂移报错（缺它→误阻断）。
- *       · claims → 裸 read_parquet(glob)，对齐 duckdb-domain-loaders.ts（生产 claims 加载器无 union_by_name）。
- *         闸门若擅自加 union_by_name 会比生产更宽容→生产首次加载 ClaimsDetail/ClaimsAgg 仍崩而闸门已放行。
- *         （生产 claims 加载器缺 union_by_name 本身是潜伏 bug，已登记 BACKLOG B340 单独修；本闸门只做忠实镜像。）
+ *       · claims → read_parquet(glob, union_by_name=true)，对齐 duckdb-domain-loaders.ts（P3-A 升级后）。
+ *         P3-A 让 claims_detail ETL 加派生 branch_code 列，CDC 旧分区无、新分区有→loader 必须容忍 schema
+ *         漂移。schema 一致性由 ETL fields.json + governance #17 + schema 契约保证，loader 层不再兜底
+ *         强一致性。历史：PR #513 第2/3轮 claims 曾用裸读金丝雀防"prepublish 通过+生产首次加载崩"，
+ *         但 schema 演进无法靠 loader 层兜底；金丝雀随 P3-A 同步升级到对称镜像。
  *       · claims glob 同样镜像 data-bootstrapper.ts：优先 claims_*.parquet 分区、回退 latest.parquet 单文件，
  *         不纳入生产不会服务的杂项 parquet（codex PR #513 第3轮 3b）。
  *   - 率值不在此层计算（gate 直接 Z-score 分子/分母独立序列即可，满足铁律 SUM(分子)/SUM(分母)
@@ -160,6 +162,12 @@ export const SQL_TEMPLATES = {
    * （server/src/services/duckdb-domain-loaders.ts）——每案已结案(settlement_time 非空)取
    * settled_amount、未结案取 reserve_amount（**非二者相加**，避免已结案残留 reserve 双计），
    * 并剔除无责(liability_ratio=0)/零结/注销/拒赔案件。与成本率口径一致，防误阻断/漏判漂移（codex PR #513 P2）。
+   *
+   * P3-A（codex 闸-2 P1 采纳）：union_by_name=true 镜像生产 ClaimsDetail loader 升级。
+   * P3-A 让 claims_detail ETL 加派生 branch_code 列后，CDC 旧分区无该列、新分区有该列；
+   * loader 已改为 union_by_name=true 容忍 schema 漂移（schema 一致性由 ETL fields.json +
+   * governance #17 + schema 契约保证），prepublish gate 须同步对齐避免再次出现"门比生产
+   * 严格"的不对称（曾因不对称放行混 schema 的生产首次加载会崩场景）。
    */
   'claims_detail.monthly_claim_amount': ({ claimsGlob, monthStart }) => `
     SELECT
@@ -171,17 +179,20 @@ export const SQL_TEMPLATES = {
                    ELSE COALESCE(reserve_amount, 0) END)
         ELSE 0
       END), 2) AS value
-    FROM read_parquet('${claimsGlob}')
+    FROM read_parquet('${claimsGlob}', union_by_name=true)
     WHERE ${COMPLETED_MONTH_FILTER('accident_time', monthStart)}
     GROUP BY time_period
     ORDER BY time_period
   `,
-  /** 月出险报案件数：COUNT DISTINCT claim_no by accident_time month（与 ClaimsAgg.claim_cases 一致，不过滤） */
+  /**
+   * 月出险报案件数：COUNT DISTINCT claim_no by accident_time month（与 ClaimsAgg.claim_cases 一致，不过滤）
+   * P3-A：union_by_name=true 镜像生产 ClaimsDetail loader 升级（同上）。
+   */
   'claims_detail.monthly_claim_count': ({ claimsGlob, monthStart }) => `
     SELECT
       strftime(accident_time, '%Y-%m') AS time_period,
       COUNT(DISTINCT claim_no) AS value
-    FROM read_parquet('${claimsGlob}')
+    FROM read_parquet('${claimsGlob}', union_by_name=true)
     WHERE ${COMPLETED_MONTH_FILTER('accident_time', monthStart)}
     GROUP BY time_period
     ORDER BY time_period
