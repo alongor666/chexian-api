@@ -1346,7 +1346,12 @@ function runRenewalTracker(python, scriptDir) {
   ensureDir(outputDir);
 
   const scriptPath = join(scriptDir, 'pipelines/convert_renewal_tracker.py');
-  runPythonScript(python, scriptPath, ['-o', `"${tmpPath}"`]);
+  // P3-C 2026-06-23：透传 BRANCH_CODE 触发 assertDeclaredBranch + strictNonNull guard
+  // SC 默认链路（无显式 env）→ 'SC'，确保派生 branch_code 全 SC 零 NULL。
+  // 注：非 SC 路由（branchSourceDir/branchOutputRoot）留 Phase B；renewal_tracker
+  // 未纳入 __branchReadyDomains 白名单，BRANCH_CODE=SX 单域跑仍被阻断。
+  const BRANCH_CODE = process.env.BRANCH_CODE || 'SC';
+  runPythonScript(python, scriptPath, ['-o', `"${tmpPath}"`, '--branch-code', BRANCH_CODE]);
 
   // 归档旧文件（成功转换后才归档）
   if (existsSync(outputPath)) {

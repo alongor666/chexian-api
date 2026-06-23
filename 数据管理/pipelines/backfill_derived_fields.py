@@ -57,14 +57,21 @@ def apply_derivation(df: pd.DataFrame, field: dict, force: bool) -> tuple[pd.Dat
     rule = field.get("derivation", {})
     rtype = rule.get("type")
 
-    # 强校验派生字段（branch_code：strictNonNull / assertDeclaredBranch）由 transform.py 在 ETL
-    # 物化时做完整 fail-fast 自校验（喂错省/混省/NULL/源列缺失）。通用 backfill 无声明省上下文、
-    # 且写回层按「是否新增列」判定（codex 闸-2 r2/r3），无法完整复刻该契约 → 一律拒绝回填强校验
-    # 字段，避免静默绕过契约（RLS 等值过滤漏行）。域感知强校验回填（含混省检测 + 域白名单）留 Phase 4。
+    # 强校验派生字段（branch_code：strictNonNull / assertDeclaredBranch）由各域 ETL 物化时做
+    # 完整 fail-fast 自校验（喂错省/混省/NULL/源列缺失）。当前已落各域 ETL 入口：
+    #   - premium → transform.py (P1 #762)
+    #   - claims_detail → convert_claims_detail.py (P3-A #763)
+    #   - cross_sell / repair / brand → base_converter.py (P3-B #764)
+    #   - customer_flow → convert_customer_flow.py (P3-B #764)
+    #   - quotes → quote_etl.py (P3-D #765, warn 模式 + 5 道闸口)
+    #   - renewal_tracker → convert_renewal_tracker.py (P3-C 2026-06-23, 造临时 policy_no 列)
+    # 通用 backfill 无声明省上下文、且写回层按「是否新增列」判定（codex 闸-2 r2/r3），无法完整复刻
+    # 该契约 → 一律拒绝回填强校验字段，避免静默绕过契约（RLS 等值过滤漏行）。
+    # 域感知强校验回填（含混省检测 + 域白名单）留 Phase 4。
     if rule.get("strictNonNull") or rule.get("assertDeclaredBranch"):
-        # 一律 skip（不处理/不写回），交 transform.py（ETL 物化 + 完整自校验）/ Phase 4 域感知回填。
+        # 一律 skip（不处理/不写回），交各域 ETL（物化 + 完整自校验）/ Phase 4 域感知回填。
         # 用 skip 而非 sys.exit：避免按全量字段跑时一遇 branch_code 就杀掉整轮、连带丢失其它字段回填。
-        return df, f"skip({fid}: 强校验派生字段，通用 backfill 不支持，由 transform.py 物化 / Phase 4 域感知回填)"
+        return df, f"skip({fid}: 强校验派生字段，通用 backfill 不支持，由各域 ETL 物化 / Phase 4 域感知回填)"
 
     if fid in df.columns and not force:
         nonnull = df[fid].notna().sum()

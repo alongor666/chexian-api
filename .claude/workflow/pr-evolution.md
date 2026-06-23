@@ -1094,3 +1094,32 @@
 - **needs_automation: true** — ① ETL 派生 PR 的 `pd.Series.map() + dropna()` 漏 key 校验模式 lint；② ETL schema 演进的字节安全 oracle 集成进 governance；③ verifier 抓的"声明事实错误"应在 commit 前自检（grep "已在 X 验证" 类声明 + 复跑）。
 - **expires: 2026-09-30**
 - **下一轮**：P3-C renewal_tracker（最复杂：SQL ETL，无 policy_no 列，需 con.execute 读回 df 后造 `policy_no = renewed_policy_no if is_renewed else source_policy_no` 临时列 → 派生 → drop → write_parquet；3 边界单测：全已续/全未续/跨省）；P3-E new_energy_claims（policy_no 100% NULL，VIN→policy JOIN 取 branch_code；现 :130 行只取 org_level_3 → 改成同时带 branch_code）。R30 复用资产：① derive_branch_code 5 道闸口模式可作其他 warn 模式域模板；② loader DESCRIBE 自适应已论证免 loader 改动模式可复用；③ 字节安全 oracle python 脚本结构（读 parquet → 调派生函数 → 业务字段 hash 全等 + 新增列契约）可作模板。
+
+---
+
+**R31 · 省份派生化 P3-C — renewal_tracker (SQL ETL + 临时列派生 + 业务列保护双 guard) · 零 P0**
+
+- **触发**：bc36e8 P3-C（接 P1 #762、P3-A #763、P3-B #764、P3-D #765 同模式）。renewal_tracker 输出 schema 无 policy_no 主列（只有 source_policy_no + renewed_policy_no），是本轮"造临时列 → 喂 helper → drop"模式的实战。**爆炸半径=中**：SQL ETL 改造 + daily.mjs 透传 + cube/loader/federation 多处注释同步。
+- **改造**：
+  - 抽 `derive_renewal_tracker_branch_code(df, declared_branch)` 模块级函数：双重 guard（`_TMP_POLICY_NO_COL` 已存在 ValueError + `policy_no` 业务列已存在 ValueError 防无声覆盖）→ `np.where(is_renewed, renewed, source)` 造临时列 → 跨省登记 print（不静默）→ 复制到 `df['policy_no']` 喂 `apply_registry_derivations` → drop `_TMP_POLICY_NO_COL` + `'policy_no'` 两列
+  - main Step 5 改 `COPY (SELECT ...) TO parquet` → `CREATE TABLE renewal_tracker_result AS SELECT ...`
+  - main Step 6 新增：`declared_branch = resolve_declared_branch(args) or 'SC'` → `fetchdf` → derive → register → COPY
+  - argparse 加 `--branch-code`；docstring 头部加 P3-C 设计注释
+  - `daily.mjs:1349` 透传 BRANCH_CODE（默认 'SC'）；renewal_tracker 未纳入 `__branchReadyDomains` 白名单 → BRANCH_CODE=SX 单域跑仍被阻断在 `daily.mjs:1399`（Scope：本 PR 仅 SC 默认链路，跨省路由留 Phase B）
+  - 注释/docstring 同步：`derived_fields.py` docstring 列三种入口适配模式（直接喂 vs 造临时列 vs warn 模式）；`sql-federation-policy.ts` RENEWALTRACKERFACT 注释加 P3-C 注脚；`duckdb-domain-loaders.ts` loadRenewalTracker 注释加 P3-C；`cube.ts:112` + `cube-permission.test.ts:28` 注释更新；`backfill_derived_fields.py` skip 提示列各域 ETL 入口对照
+- **R28 类风险预判（事前论证 + verifier 实证）**：
+  - schema 演进侧 + loader 读侧：`buildFactSelectSql → selectUnionWithBranchCode` 已 DESCRIBE 自适应（同 P3-D R30 实证），含 branch_code 直读、不含补部署省常量 → ETL 改造对 loader 透明、双路径并存
+  - 单文件 write_parquet（无 merge_with_history）→ 无 R29 schema 漂移
+  - 发布安全：daily.mjs:1399 + daily.mjs:1769（all 模式）双路径阻断 SX 单域 renewal_tracker（verifier 独立逻辑追踪确认）
+- **codex 闸-1（计划对抗·gpt-5.5/high）**：抓 1 P0 + 7 P1 + 5 P2，全部采纳（P1.5 部分采纳）。**P0 核心**：`declared_branch = resolve_declared_branch(args)` 返 None 让直跑入口绕过 `assertDeclaredBranch`。修法：`or 'SC'` 兜底 + Case G no arg/no env 测试。我事前关注点已问到 pandas/numpy 行为（R30 教训 #1），但 P0 仍出在 declared_branch 路径——下次写计划 prompt 时要把"函数调用链中每一层的 None / 空串行为"都用 `python -c` 实证而不止是基本类型行为。
+- **codex 闸-2（完成对抗·亲跑 r1+r2）**：r1 抓 0 P0 + 4 P1 + 2 P2，全部采纳；r2 复审 CONFIRMED 可合并（零残留 + R28 判别法不是 scope 蔓延）。**P1.1 关键**：第一轮 P1.1 修复只 guard `_TMP_POLICY_NO_COL` 没 guard 真实 `policy_no` 业务列——codex 用 `python -c` 复现 `policy_no_present False`。**R28 判别法实战**：这不是"功能闭环不可分离"的 scope 蔓延，而是 bolt 修复本身漏半边，同 PR 最小修（加第二个 ValueError）即可。R28 判别法在 P3 系列的累计应用证明其稳健：R27 backfill 5 轮 = scope 蔓延需让位 / R28 ClaimsDetail loader = 功能闭环同 PR 修 / R29 merge_with_history = 功能闭环同 PR 修 / R30 quotes warn 模式 + loader 透明 = 无 R28 风险 / R31 P1.1 bolt 漏半边 = 同 PR 修不让位（这是第 4 个 R28 判别法应用，每次都准确）。
+- **evidence-verifier fresh-context（sonnet）**：CONFIRMED 总体通过 + 9/9 白名单逐项过 + 0 P0/P1/P2。独立复跑：duckdb 直查 128,016 行 / src_null=0 / renewed_but_null_policy=0 / oracle 全过 / pytest 14/14 OK / governance 44/44 / vitest 3946/3946 / typecheck ✅。零命中陷阱（AST 解析 `policy_no` 赋值路径仅 1 条写路径 + 双 guard 覆盖）+ 红线扫描全过。verifier 额外抓的 daily.mjs:1769 vs 1399 阻断点差异（all 模式更上游阻断）是 ADR D5 既定设计、不构成缺陷。
+- **逐字节安全 oracle 实证（codex 闸-2 P1.2 加 parquet 回读）**：duckdb 读现状 SC renewal_tracker 128,016 行 → `derive_renewal_tracker_branch_code(df, 'SC')` → tempfile + `COPY → read_parquet` 回读路径（非 con.register 绕过序列化）→ 23 业务字段 sha256 hash 完全相等 + DESCRIBE 前后 schema 保真（仅新增 `branch_code VARCHAR` 列）+ branch_code 全 'SC' 零 NULL + 临时列已 drop。**字节安全协议全过**。
+- **三问复盘**：
+  ① **重来怎样更好**：P1.1 第一轮 bolt 修复漏 guard 业务 `policy_no` 列——根因是计划阶段我只想到"临时列 vs 业务列"的命名冲突，没想到"helper 实际是用 `df['policy_no']` 作 prefix_map 源列读取"的事实链。下次设计"造临时列 → 喂 helper"模式时，必须画出 helper 内部对临时列名的所有读路径（即"helper 实际依赖什么列名"），不仅是临时列名本身。R30 教训 #1 ("python -c 实证 pandas/numpy 行为") 应扩展为 R31 教训 ("python -c 实证函数调用链中每一层对所有列名的依赖关系")。
+  ② **复用价值**：① 双重 guard 模式（临时列 + 业务列同时 ValueError）可作"造临时列 → 喂 helper → drop"模式的通用防御模板，特别是 helper 与临时列同名时；② oracle 经真实 COPY→read_parquet 回读路径（tempfile.NamedTemporaryFile + COPY + VIEW + DESCRIBE）比 con.register 强，能捕捉 arrow→parquet→arrow 序列化路径上的类型损失，可作所有 ETL 字节安全 oracle 的标准模板；③ R28 判别法在 P3 系列累计 4 次准确应用证明稳健，可作 evidence-loop 协议核心判定工具；④ codex 闸-2 自跑 `python -c` 实证 P1.1 漏 guard 业务列的方法论可复用——把"未来 schema 演进引入 X 列"作通用 hypothesis 实测。
+  ③ **如何更高质量自动化**：① 项目缺"造临时列 + 喂 helper + drop 模式的双重 guard lint"（grep 模式：`df["x"] =` 后 `apply_*` 后 `drop` 时检查是否 guard `x` 列已存在）；② evidence-loop scorecard 应有"我事前关注的点是否实际驳倒 codex 闸"的自检（R30 教训 #1 应用、R31 自检），即把 codex 抓的 P0/P1 与我事前 prompt 的 "P2/边界关注点" 对账，告诉我哪些关注点没推到结论；③ 临时 oracle 脚本（如 `scripts/oracle_renewal_tracker_byte_safety.py`）应自动按域命名归一并入 governance ETL 字节安全闸（governance 加 #45：找 `scripts/oracle_*_byte_safety.py` 全量跑）。
+- **needs_automation: true** — ① 造临时列+喂 helper+drop 模式的双重 guard lint（grep + 模式匹配）；② evidence-loop scorecard 自检"事前关注点 vs codex P0/P1 对账"；③ ETL 字节安全 oracle 集成进 governance 闸。
+- **expires: 2026-09-30**
+- **CI fixture 未做**：scripts/e2e/generate-ci-fixture.mjs 生成的 renewal_tracker fixture 仍无 branch_code 且前缀 97...（loader DESCRIBE 自适应能兜旧产物路径，故不影响生产 SC 链路）。codex 闸-1 P1.5 + 闸-2 P1.4 建议加 backend loader test 覆盖"parquet 含 branch_code"读侧路径，本 PR 部分采纳（引用 P3-D R30 loader DESCRIBE 自适应已实证），CI fixture + loader test 留 backlog 2026-06-23-claude-bc36e8 子任务。
+- **下一轮**：P3-E new_energy_claims（独立任务：policy_no 100% NULL，VIN→policy JOIN 取 branch_code；现 :130 行只取 org_level_3 → 改成同时带 branch_code）。R31 复用资产：① 双重 guard 模式可作"造临时列+喂 helper+drop"模板（new_energy 不走这条路径，但若任何域走"造临时列"必复用此模式）；② oracle 经 COPY→read_parquet 回读路径作通用字节安全模板；③ R28 判别法继续应用判定"loader 同步 vs ETL 单独修"；④ "事前关注点 vs codex P0/P1 对账"自检流程化。
