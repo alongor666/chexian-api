@@ -16,17 +16,19 @@
 
 ---
 
-## 📋 活跃任务速查（77 项 · 数据截至 2026-06-24 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（79 项 · 数据截至 2026-06-24 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（6 项）**
+**P1（8 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
+- 2026-06-24-claude-43e39b — achievement_cache/dim 兼容层跨省复合键（codex 闸-2 P1·
+- 2026-06-24-claude-533e57 — 生产数据多省就绪
 - 2026-06-24-claude-85759a — D6 收敛
 
 **P2（44 项）**
@@ -186,6 +188,8 @@
 | 2026-06-23-claude-f77f8a | 2026-06-23 | 数据架构 · 多省派生化 follow-up | @claude | 跨省同 VIN 冲突登记机制（P3-E R32 P2·山西 GATED 上线前完成）: P3-E new_energy_claims 用 ROW_NUMBER PARTITION BY VIN ORDER BY insurance_start_date DESC, policy_no DESC 同时取 org+branch 静默兜底——当前 distinct_branch_in_hit=1 安全。但山西 GATED 上线后若同一 VIN 跨省（610/618 多保单），现状只取最新单一分支，未登记/告警冲突。须在 enrich_org_and_branch_from_policy SQL 加 distinct_branch 统计：>1 时打 warning 日志（含 VIN/冲突分支列表）；若超过预设阈值走 fail-fast。codex 闸-1 P2#2 + 闸-2 P2 一致建议。山西上线前必修，否则机构归错风险。 | P2 | PROPOSED | N/A | 数据管理/pipelines/convert_new_energy_claims.py |  |
 | 2026-06-24-claude-0898bd | 2026-06-24 | 多省·山西 cutover | @claude | multi-branch-stress-test cross-sell 覆盖缺口：/api/query/cross-sell 压测里 HTTP 400(路由参数过时)被当失败排除→未进串读断言。补 cross-sell 必需参数以扩 gate 覆盖 | P2 | PROPOSED | N/A | scripts/multi-branch-stress-test.mjs |  |
 | 2026-06-24-claude-2a7e17 | 2026-06-24 | 多省·山西 cutover | @claude | 计划维度省份化：vehicle_plan_wan 等计划字段未省份化(dim SC-only)，SX token 也看到 SC 计划值。兼容期无真实 SX 账号无影响；真实 SX 计划数据落地时需按 branch_code 切分 | P2 | PROPOSED | N/A | 数据管理/warehouse/dim/plan/ |  |
+| 2026-06-24-claude-43e39b | 2026-06-24 | 多省·山西 cutover | @claude | achievement_cache/dim 兼容层跨省复合键（codex 闸-2 P1·SX salesman维度 GATED 上线前必修）：multiProvince 时 dedupedSalesmanDimSql PARTITION BY full_name / ytd_actual GROUP BY salesman_name / JOIN full_name=salesman_name 仍单键，SC/SX 同名会串数。修法：branchAware 时全升 (branch_code,full_name)/(branch_code,salesman_name) + SC/SX 同名集成测试。Task A SC-only 不触发（无 SX salesman），故非 Task A 阻断，是 SX salesman维度落地硬前置 | P1 | PROPOSED | N/A | server/src/services/duckdb-domain-loaders.ts |  |
+| 2026-06-24-claude-533e57 | 2026-06-24 | 多省·山西 cutover | @claude | 生产数据多省就绪：sync-vps 推 dim+派生域到生产 + reload + 生产验证（GATED·owner 授权） | P1 | PROPOSED | N/A | scripts/sync-vps.mjs |  |
 | 2026-06-24-claude-694041 | 2026-06-24 | 多省·山西 cutover | @claude | sx-promote 测试卫生：E2E 测试把临时路径写进仓库跟踪的 scripts/release/.sx-promote-manifest.json(#783 自带)，宜改写临时 manifest 或 gitignore | P3 | PROPOSED | N/A | scripts/release/__tests__/sx-promote.test.mjs |  |
 | 2026-06-24-claude-85759a | 2026-06-24 | 多省 Phase B | @claude | D6 收敛：0a 隔离层终局定为子目录 current/<省>/，超越 D3（前缀），退役 #753。采纳 B 决策（用户 2026-06-24）。程序：①ADR §1 D6+§11 收敛(本 PR docs-only) ②B3 落地(b3 950267c6 复活，退役前缀 sync) ③退役/隔离 #783 前缀 promote，B5 前重建子目录版 ④loop 机制(dispatch 架构轴+contract-token preflight)独立 follow-up | P1 | PROPOSED | 开发文档/multi-branch/D3-vs-PhaseB分叉复盘_2026-06-24.md | N/A |  |
 | 2026-06-24-claude-f7590d | 2026-06-24 | Chore | @claude | sx-promote.mjs 批量 staging→final rename 非跨进程崩溃原子（Option A 扁平固有）。已三层缓解（leftover preflight+幂等+ready-marker+SOP串行）。彻底闭合需 Option B 子目录单次目录 swap，或 sync-vps/data-bootstrapper 共守 promote lock。cutover 真用前须 VPS 真实 SX parquet dry-run。 | P2 | PROPOSED | N/A | scripts/release/sx-promote.mjs 数据管理/lib/branch-naming.mjs scripts/sync-vps.mjs |  |
