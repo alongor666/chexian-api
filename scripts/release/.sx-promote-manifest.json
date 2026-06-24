@@ -1,0 +1,18 @@
+{
+  "promotedAt": "2026-06-24T03:32:13.212Z",
+  "runId": "run_73021412537625",
+  "sourceDir": "/var/folders/54/lw6jhz2s2bvcwkmh9rcxjqpw0000gn/T/sx-promote-test-RSrvDu/e2e_src",
+  "targetDir": "/var/folders/54/lw6jhz2s2bvcwkmh9rcxjqpw0000gn/T/sx-promote-test-RSrvDu/e2e_dst",
+  "files": [
+    {
+      "name": "每日数据_20240101_20261231.parquet",
+      "dstName": "SX_每日数据_20240101_20261231.parquet",
+      "status": "skipped_identical",
+      "sha256": "31529b4840682d556601f45fca5b57099250807e3a2778f11eb21c9355d3fd53"
+    }
+  ],
+  "summary": {
+    "status": "SUCCESS_ALL_SKIPPED",
+    "totalSkipped": 1
+  }
+}
