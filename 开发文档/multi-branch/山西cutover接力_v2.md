@@ -41,13 +41,14 @@
 - **Phase A 检测层 + Phase B B1/B2**：branch_code 从 policy_no 前缀派生（610=SC/618=SX）、P5 文档收口、子目录发现/下钻、ETL gated 写侧能力，已合并（PR #762~#777）。**B2 的"ETL gated 写侧能力"可能即 SX→current/ 的 promotion 雏形，开工核对。**
 - **G3/G4**：维度/派生域省份化 loader + 查询期 RLS 已落地。G4 子问题：is_telemarketing RLS（`c21667`）已 DONE #728、新能源 org_level_3（`00bac8`）已 DONE #729、续保 tonnage（`e2240c`）仍 PROPOSED。
 - **G5 口径**：用户 2026-06-20 确认 6 大口径照搬四川（注意：这是**口径确认，≠ 生产 cutover 授权，≠ 业务接受近似清分**，见 2B 前置）。
-- **G6/G7/G8 已合并**：G6 同城白名单省份化（#774，7307dc43）；G7 山西账号（#775，ba747d92，sxAdmin + 11 org_user，全部 `active:false` + tombstone，当前不可登录）；G8 前端空态（#776，094ed364）。收尾 #779、backlog 补登 #780 已合并。
+- **G6/G7/G8 已合并**：G6 同城白名单省份化（#774，7307dc43）；G7 山西账号（#775，ba747d92，sxAdmin + 11 org_user，全部 `active:false` + tombstone，当前不可登录）；G8 前端空态（#776，094ed364）。收尾 #779、backlog 补登 **#780 已关闭(superseded，e52d9b 工作并入 #782)**。
+- **2A 已完成（2026-06-24）**：G7 P2 login→403 运行时测试（#782，auto-merge 中）；B-b promotion 脚本（#783，已合并 `scripts/release/sx-promote.mjs`）；B-a=Option A 扁平前缀（owner 2026-06-24 拍板）。
 - **山西数据**：已 ETL 到隔离区 `数据管理/warehouse/validation/SX/`（1,830,603 行 / 15.28 亿，与原始 Excel 零差异），**尚未进生产 `current/`**。
 - **机构归属**：`SX.json` 按机构名近似（11 单元），精确清分需业务数据，非阻断但**太原二部含停用历史**（上线通知须含此 caveat，见 2B 前置）。
 
 ## 2A. 代码硬化波（Loop v2，分三类 —— P1-7）
 
-- **【cutover 阻断·必做】** G7 P2 login→403 集成测试（backlog `2026-06-23-claude-e52d9b`）：账号闸的运行时验证，cutover 发账号前必须有。
+- **【cutover 阻断·已完成】** G7 P2 login→403 集成测试（backlog `2026-06-23-claude-e52d9b`，已并入 #782）：账号闸的运行时验证，cutover 发账号前必须有。✅ 已合并。
 - **【非阻断 backlog】** `e2240c` 续保 tonnage（PROPOSED）：可 cutover 后迭代。
 - **【禁止 auto-merge】** 任何碰部署链（`deploy.yml`/`sync-vps.mjs`/`vps-wrapper/`/`ecosystem.config.cjs`）或账号链（`preset-users.ts` active/密码）的 PR：人工合并，不进 Loop 自动合并。
 
@@ -98,3 +99,38 @@
 ---
 
 **第一步**：跑 0.1-0.3 pre-flight → 解决 2B 的 B-a/B-b/B-c 三个 BLOCKER（多半要先做 promotion runbook + 布局决策的前置 PR，**先核对 #777 是否已部分覆盖**）→ 与 owner 确认执行窗口 → 才进 cutover 序列。**任一硬闸缺失就停在 GATED/BLOCKED，向 owner 要授权，不自行绕过。**
+
+---
+
+## 2B 执行接力（2026-06-24 · 2A 已完成，新会话据此执行 cutover）
+
+> 2A 代码前置全部就绪：B-a=Option A 扁平前缀（owner 拍板）· B-b promotion 脚本 `scripts/release/sx-promote.mjs` 已合并（#783）· G7 P2 账号闸测试已合并（#782）。**以下 cutover 步骤是 production 操作，每步须 owner 显式授权，凭据缺失即 BLOCKED。**
+
+### 第 0 步：凭据矩阵（缺任一即该步 BLOCKED，禁替代绕过）
+| 凭据 | 用途 | 谁提供 |
+|------|------|--------|
+| `E2E_PASSWORD` | RLS-on 前后抓 SC API golden-baseline 零差异 | owner |
+| `JWT_SECRET`（生产） | `multi-branch-stress-test.mjs --simulate-sx` 隔离压测 | owner |
+| VPS deployer SSH（162.14.113.44） | promotion dry-run / sync / 巡检 | owner |
+| 生产 `BRANCH_RLS_ENABLED` 写权限（`deploy-chexian-api edit-env`） | 开 RLS | owner |
+| 生产 `USER_PASSWORDS` 写权限 | 发山西账号（只走生产 env，禁 PR） | owner |
+| `sudo /usr/local/bin/deploy-chexian-api reload` | PM2 重启 | owner |
+
+### 第 1 步（🔴 真用 promotion 脚本前必做）：VPS 真实 SX parquet dry-run
+本地 `validation/SX` 为空，promotion 脚本的 `branch_code` 实际值/列名、duckdb 版本兼容性**必须在 VPS 用真实 SX parquet 先 dry-run 验证**：
+```
+# VPS 上，默认 dry-run（不写任何文件）
+node scripts/release/sx-promote.mjs
+# 预期：列出 validation/SX premium → SX_*.parquet 计划 + 每文件 branch_code='SX' 校验通过 + 行数/保费预读
+```
+dry-run 报错或 branch_code 校验不过 → 停，排查（字段名/列大小写/数据），不得 --apply。
+
+### 第 2 步起：cutover 序列（D5 顺序铁律，沿用本文 §2B；关键增量）
+1. 抓 SC API 基线（`E2E_PASSWORD` + golden-baseline `--build`）。
+2. 开 `BRANCH_RLS_ENABLED=true` + reload → **SX 进 current/ 之前**跑 `multi-branch-stress-test --simulate-sx`（预期 SC 非空/SX 空/无串读）+ 比 SC 基线零差异。
+3. **用 promotion 脚本落 SX 进 current/**：`node scripts/release/sx-promote.mjs --apply --rls-confirmed`（`--rls-confirmed` = operator 声明已核实生产 RLS-on）。⚠️ **脚本非崩溃原子**：必须等它 **exit 0 + `.sx-promote-ready` 标记存在**，**才**跑 sync-vps，**禁与 sync 并发**；若被 kill，按脚本 leftover preflight 提示清理后重跑（幂等）。
+4. sync-vps 硬闸：`SYNC_VPS_BRANCH_CODE=SX node scripts/sync-vps.mjs --dry-run` 确认远端 SC 受保护 + 备份远端 manifest，再实跑。
+5. reload + post-cutover 验收（SX 非空且 org/branch 全 SX、SC 与基线零差异）。
+6. 发账号（最后）：PR 只改 `active:true`（禁含密码）；`USER_PASSWORDS` 走生产 env；逐账号登录隔离验证。
+
+### 回滚（沿用本文 §3 两套：账号激活前=直接关 RLS；激活后=先禁 SX 登录再关 RLS）。

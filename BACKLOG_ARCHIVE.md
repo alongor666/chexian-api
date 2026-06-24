@@ -190,4 +190,4 @@
 | 2026-06-23-claude-c9fb4e | 2026-06-23 | 多省架构 | @claude | 山西上线 G8 前端空态保护 401 文案 | P3 | DONE | N/A | N/A | PR #776 merged 094ed364；401 会话过期 Banner；装载中/空态非零前序已实现 |
 | 2026-06-23-claude-d1ead2 | 2026-06-23 | 多省架构 | @claude | 山西上线 G6 同城/异地机构白名单省份化（多省） | P3 | DONE | N/A | N/A | PR #774 merged 7307dc43；省份感知白名单 3 路径覆盖；evidence-verifier CONFIRMED；字节安全 |
 | 2026-06-23-claude-e84218 | 2026-06-23 | 多省架构 | @claude | 山西上线 G7 山西分公司预置账号（active:false GATED） | P3 | DONE | N/A | N/A | PR #775 merged ba747d92；sxAdmin+11 org_user 三层不可登录防御；evidence-verifier CONFIRMED（1 P2 集成测试 follow-up） |
-| 2026-06-24-claude-f7bda2 | 2026-06-24 | Chore | @claude | 安全 promote SX premium 到生产 current/，dry-run 默认+duckdb 校验+回滚 | P1 | DONE | N/A | scripts/release/sx-promote.mjs | commit 0333e186: 26 单测全绿 / governance 44/44 / typecheck 通过 / dry-run + apply + 回滚三场景验证 |
+| 2026-06-24-claude-f7bda2 | 2026-06-24 | Chore | @claude | 安全 promote SX premium 到生产 current/，dry-run 默认+duckdb 校验+回滚 | P1 | DONE | N/A | scripts/release/sx-promote.mjs | promotion 脚本 PR #783 merged；Option A 扁平前缀；codex+verifier 双闸两轮硬化 3P0+8P1 全修；56 测试 |
