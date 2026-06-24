@@ -1,6 +1,6 @@
 # 需求账本归档 (BACKLOG ARCHIVE)
 
-**用途**：存放已完成（DONE）任务，完整保留 ID、描述、证据，供历史追溯。当前 173 项。
+**用途**：存放已完成（DONE）任务，完整保留 ID、描述、证据，供历史追溯。当前 174 项。
 
 **铁律**：
 - 本文件是 [`BACKLOG_LOG.jsonl`](./BACKLOG_LOG.jsonl) 的**派生视图**，由 `bun scripts/governance-backlog-curate.mjs --apply` 折叠日志渲染，**禁止手工编辑**。
@@ -190,5 +190,6 @@
 | 2026-06-23-claude-c9fb4e | 2026-06-23 | 多省架构 | @claude | 山西上线 G8 前端空态保护 401 文案 | P3 | DONE | N/A | N/A | PR #776 merged 094ed364；401 会话过期 Banner；装载中/空态非零前序已实现 |
 | 2026-06-23-claude-d1ead2 | 2026-06-23 | 多省架构 | @claude | 山西上线 G6 同城/异地机构白名单省份化（多省） | P3 | DONE | N/A | N/A | PR #774 merged 7307dc43；省份感知白名单 3 路径覆盖；evidence-verifier CONFIRMED；字节安全 |
 | 2026-06-23-claude-e84218 | 2026-06-23 | 多省架构 | @claude | 山西上线 G7 山西分公司预置账号（active:false GATED） | P3 | DONE | N/A | N/A | PR #775 merged ba747d92；sxAdmin+11 org_user 三层不可登录防御；evidence-verifier CONFIRMED（1 P2 集成测试 follow-up） |
+| 2026-06-24-claude-9e5bac | 2026-06-24 | 多省·山西 cutover | @claude | 生产数据多省就绪：salesman dim 加 branch_code='SC' + 派生域 per-row branch_code（backfill+域ETL），本地 multiProvince=true + RLS-on 0 fail-close + 字节安全验证 | P1 | DONE | N/A | 数据管理/warehouse/dim/generate_dim_tables.py,数据管理/pipelines/backfill_derived_fields.py | commit 22e68c1b+32488c80(claude/loop-mpdata)；7域物化branch_code='SC'；值级字节安全oracle非branch列sha256全等；governance44/44+全量单测4096/4096+python26；RLS-on自签SC/SX token premium-plan/performance SC200带数据+SX空0fail-close+quotes跨省隔离无串读；codex闸-1/2双过(P2全修,P1→follow-up43e39b)+evidence-verifier CONFIRMED |
 | 2026-06-24-claude-f7bda2 | 2026-06-24 | Chore | @claude | 安全 promote SX premium 到生产 current/，dry-run 默认+duckdb 校验+回滚 | P1 | DONE | N/A | scripts/release/sx-promote.mjs | promotion 脚本 PR #783 merged；Option A 扁平前缀；codex+verifier 双闸两轮硬化 3P0+8P1 全修；56 测试 |
 | 2026-06-24-claude-sx-g7p2-test-b6699a | 2026-06-24 | Chore | claude/sx-g7p2-test | evidence-verifier留下的P2：对sxAdmin及山西org_user调用真实login路径，断言返回403(Account disabled)。补充G7静态测试的运行时覆盖 | P2 | DONE | N/A | N/A | server/src/services/__tests__/auth-sx-active-gate.test.ts: 19测试全绿；CI=1 bun run test --run 验证；typecheck通过；governance 44/44 |

@@ -1288,3 +1288,21 @@ promotion 脚本第 1 轮对抗：**evidence-verifier 判 PASS（仅 2 P1）；c
 ### needs_automation: true
 expires: 2026-09-23
 （① dispatch 主题查 main 前沿强制化；② evidence-loop 阶段 A「与近期合并 PR 架构冲突」自检；③ 退役公共契约任务闸-1 查新基线消费者。到期未落地 meta-review 处置或撤项。）
+
+## 2026-06-24 · 山西多省「生产数据就绪」Task A（R36 · backlog 9e5bac · 分支 claude/loop-mpdata）
+
+- **触发**：山西 cutover GATED 前置——把本地 warehouse 各运行时消费域物理补 per-row branch_code，使 multiProvince=true + RLS-on 0 fail-close。非 GATED（数据物化本地操作 + ETL 生产者代码改）；GATED sync 是 Task B 533e57（dispatch 标 gated，dep B→A）。
+- **成果（铁证）**：① 7 域（salesman/cross_sell/claims_detail 8 分区/customer_flow/quotes_conversion/renewal_tracker/new_energy_claims）物化 branch_code='SC'。② 值级字节安全 oracle（snapshot/verify·sha256）：非 branch 列值级逐行全等 + branch_code 全 SC。③ data-readiness 单文件不混省 17 fact parquet 派生省==列省。④ governance 44/44 + 全量单测 4096/4096 + python 26。⑤ RLS-on 自签 SC/SX token：premium-plan/plan-achievement/performance/comprehensive SC 200 带数据 + SX 空（**multiProvince 闸闭环**——achievement_cache 带 branch_code，分公司管理员 0 fail-close）；quotes SC 627,698/SX validation 392,761 跨省隔离无串读。
+- **设计要点（codex 闸-1 GO-with-fixes 全采纳）**：① 物化**一律 in-place 仅追加列、禁 ETL 重跑**（重跑拉最新源刷新业务数据违「只许新增 branch_code 列」合同 + 扩 Task B sync 爆炸半径）。② policy_no 净域（cross_sell/claims/customer_flow）走通用 backfill；无 policy_no 域（quotes warn 模式/renewal source_policy_no/new_energy VIN-JOIN）复用各域已合并 derive 函数校验后加列；salesman 常量（生产者 generate_dim_tables.py 同步落列）。③ **修正任务书"claims_detail 仅 17 行非空 policy_no"错**——实测 8 分区 100% 非空全 610（"17"是最小单分区）。④ **codex P1.1 揭示**：validation/SX 已 wire 为 quotes/renewal extra source → 这两域本地已多省 UNION，验证禁用"SX 全空"统一断言，改分域（core SX 空、quotes/renewal SX 见 validation）。
+- **codex 闸-2（完成对抗·亲跑）→ PARTIAL（1 P1 + 3 P2）+ evidence-verifier CONFIRMED**：
+  - **P1（full_name 跨省串数）= 登记 follow-up（43e39b），非 Task A 阻断**：achievement_cache/dim 单键 full_name，SC/SX 同名串数。**Task A SC-only（无 SX salesman）→ 碰撞不可能**；修复是 SX salesman维度 GATED 上线硬前置。**R28 判别第 8 次**：跨模块 multi-province RLS 正确性 + 需 SX 数据才能测 = scope 蔓延让位（非"功能闭环同 PR 修"）。
+  - **P2 全修**：new_energy 逐行 VIN guard（防 NULL VIN 被常量静默标 SC）/ oracle md5→sha256 + 值级 wording（不声称 parquet 容器原始字节相等）/ materialize 缺文件 fail-fast。修后幂等重派生 + sha256 verify 全绿。
+  - **evidence-verifier 独立 CONFIRMED**：duckdb 复跑 7 域全 SC/0 NULL/前缀一致 + RLS SX 无串读 + governance/python 复现。补充「两入口/未接 daily」澄清：各域 ETL 已含 branch_code 派生，materialize 是存量一次性桥，无持续维护点（docstring 已注明）。
+- **三问复盘**：
+  ① **重来更好**：claims_detail "17 行" 任务书错误若开工即 duckdb 实测可更早澄清（我在闸-1 前才查）——「任务书给的数据事实必先 duckdb 复核再纳入计划」应前置到 pre-flight。
+  ② **复用价值**：① 「append_column 到原始 arrow table + sha256 值级 oracle（snapshot/verify）」是所有"给既有 parquet 加派生列"的字节安全模板（比 backfill 的 pandas 往返更稳）；② 「复用各域已合并 derive 函数做存量补列、非 ETL 重跑」是 P3 系列派生升级后的存量物化通法；③ validation/<省> extra-source 自动 wire → 验证须分域断言，是多省 RLS 验证的通用陷阱。
+  ③ **如何更高质量自动化**：① materialize_branch_code_special 的"存量补列"本可由一个「检测 current 域缺 branch_code → 提示/自动补」的 readiness 子闸守护（现靠人记得跑）；② RLS 验证脚本（自签 token 扫 multiProvince-gated 路由 + 分域隔离断言）值得固化为可复用 harness（本轮 /tmp 临时脚本，未沉淀）。
+
+### needs_automation: true
+expires: 2026-09-24
+（① 「current 域缺 branch_code」readiness 子闸（检测+提示存量补列）；② multiProvince-gated 路由 RLS 隔离验证 harness 固化（自签 token + 分域断言，取代 /tmp 临时脚本）；③ 任务书数据事实 pre-flight 必 duckdb 复核。到期未落地 meta-review 处置或撤项。）
