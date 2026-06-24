@@ -1,24 +1,29 @@
 {
-  "promotedAt": "2026-06-24T02:42:41.898Z",
-  "sourceDir": "/tmp/sx-test-src",
-  "targetDir": "/tmp/sx-test-target",
+  "promotedAt": "2026-06-24T03:08:29.956Z",
+  "runId": "run_71598172679416",
+  "sourceDir": "/var/folders/54/lw6jhz2s2bvcwkmh9rcxjqpw0000gn/T/tmp.tGOqe3RNw7/validation_SX",
+  "targetDir": "/var/folders/54/lw6jhz2s2bvcwkmh9rcxjqpw0000gn/T/tmp.tGOqe3RNw7/current",
   "files": [
-    {
-      "name": "每日数据_20210101_20231231.parquet",
-      "dstName": "SX_每日数据_20210101_20231231.parquet",
-      "status": "skipped_exists"
-    },
     {
       "name": "每日数据_20240101_20261231.parquet",
       "dstName": "SX_每日数据_20240101_20261231.parquet",
-      "status": "skipped_exists"
+      "status": "ok",
+      "sha256": "c1464987ed50cb101cf42655f82941969a11095ad092d72110a9357facc3c09e",
+      "srcStats": {
+        "rowCount": 2,
+        "premiumSum": 8000
+      },
+      "stagingStats": {
+        "rowCount": 2,
+        "premiumSum": 8000
+      }
     }
   ],
   "summary": {
     "status": "SUCCESS",
-    "totalPromoted": 0,
-    "totalSkipped": 2,
-    "totalRows": 0,
-    "totalPremium": 0
+    "totalPromoted": 1,
+    "totalSkipped": 0,
+    "totalRows": 2,
+    "totalPremium": 8000
   }
 }
