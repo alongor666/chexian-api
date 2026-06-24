@@ -8,7 +8,7 @@
  * 4. 不存在的目录 → skipped
  */
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
@@ -177,6 +177,27 @@ describe('detectPolicyCurrentOverlap', () => {
   it('目录不存在 → skipped', () => {
     const r = detectPolicyCurrentOverlap('/nonexistent/path/xxx');
     expect(r.skipped).toBe(true);
+  });
+
+  // B2 防沉默失败：省份子目录 current/<省>/ 分片必须被枚举（否则 files=0 假「通过」）
+  it('省份子目录分片被枚举（current/<省>/，无条件结构断言）', () => {
+    dir = mkdtempSync(join(tmpdir(), 'parquet-overlap-'));
+    mkdirSync(join(dir, 'SC'), { recursive: true });
+    writeFileSync(join(dir, 'SC', '01_签单清单_20210101_20221231.parquet'), '');
+    writeFileSync(join(dir, 'SC', '01_签单清单_20230101_20241231.parquet'), '');
+    const r = detectPolicyCurrentOverlap(dir);
+    // 关键：files 计入子目录分片（不失明）；两段不重叠 → 0 overlap
+    expect(r.files).toBe(2);
+    expect(r.skipped).toBe(false);
+  });
+
+  it('扁平 + 子目录并存时两者都被枚举', () => {
+    dir = mkdtempSync(join(tmpdir(), 'parquet-overlap-'));
+    writeFileSync(join(dir, '01_签单清单_20210101_20221231.parquet'), '');
+    mkdirSync(join(dir, 'SC'), { recursive: true });
+    writeFileSync(join(dir, 'SC', '01_签单清单_20230101_20241231.parquet'), '');
+    const r = detectPolicyCurrentOverlap(dir);
+    expect(r.files).toBe(2);
   });
 
   it('忽略 test-data 前缀与无日期范围的文件', () => {

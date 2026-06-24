@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { branchSourceDir, branchOutputRoot } from '../数据管理/lib/branch-naming.mjs';
+import { branchSourceDir, branchOutputRoot, isPolicyCurrentSubdirLayout } from '../数据管理/lib/branch-naming.mjs';
 
 describe('branchSourceDir', () => {
   it('SC / 空 → 脚本根（现状，零差异）', () => {
@@ -36,5 +36,37 @@ describe('branchOutputRoot', () => {
   it('硬护栏：非 SC 省输出根落入 policy/current 必 throw（D5 防回归）', () => {
     // warehouseRoot 被误传成 current 目录 → 结果会含 policy/current → 必须拦截
     expect(() => branchOutputRoot(join('/w', 'fact', 'policy', 'current'), 'SX')).toThrow(/policy/);
+  });
+
+  // B2 gated 写侧：subdirLayout 显式传参（纯函数，不依赖 env）
+  it('SC + subdirLayout=true → current/SC/（gated 子目录布局）', () => {
+    expect(branchOutputRoot('/w', 'SC', { subdirLayout: true }))
+      .toBe(join('/w', 'fact', 'policy', 'current', 'SC'));
+  });
+
+  it('SC + subdirLayout=false → current/（扁平，字节安全默认）', () => {
+    expect(branchOutputRoot('/w', 'SC', { subdirLayout: false }))
+      .toBe(join('/w', 'fact', 'policy', 'current'));
+  });
+
+  it('SX + subdirLayout=true → 仍 validation/SX（subdirLayout 不影响非 SC，SX 仍 GATED 隔离）', () => {
+    expect(branchOutputRoot('/w', 'SX', { subdirLayout: true }))
+      .toBe(join('/w', 'validation', 'SX'));
+  });
+});
+
+describe('isPolicyCurrentSubdirLayout（B2 gated 写侧专用开关）', () => {
+  it('POLICY_CURRENT_SUBDIR_LAYOUT=true → true', () => {
+    expect(isPolicyCurrentSubdirLayout({ POLICY_CURRENT_SUBDIR_LAYOUT: 'true' })).toBe(true);
+  });
+
+  it('未设 / 其它值 → false（默认扁平，字节安全）', () => {
+    expect(isPolicyCurrentSubdirLayout({})).toBe(false);
+    expect(isPolicyCurrentSubdirLayout({ POLICY_CURRENT_SUBDIR_LAYOUT: 'false' })).toBe(false);
+    expect(isPolicyCurrentSubdirLayout({ POLICY_CURRENT_SUBDIR_LAYOUT: '1' })).toBe(false);
+  });
+
+  it('不复用 BRANCH_RLS_ENABLED（codex 闸-1 P0-3：RLS 开关不驱动 ETL 写布局）', () => {
+    expect(isPolicyCurrentSubdirLayout({ BRANCH_RLS_ENABLED: 'true' })).toBe(false);
   });
 });

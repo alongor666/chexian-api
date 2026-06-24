@@ -126,4 +126,17 @@ describe('buildFullSnapshotCacheKey — codex 闸-2 P2 加固', () => {
     expect(() => { k2 = keyWithPolicy(['--policy-dir', policyDir]); }).not.toThrow();
     expect(k2).toBe(k1);
   });
+
+  // B2：cache key 指纹**故意保持 flat-within-dir**（isFile 过滤排除子目录），与消费者
+  // convert_new_energy_claims.py 的 read_parquet('<--policy-dir>/*.parquet') 非递归 glob 严格对齐。
+  // 子目录布局下 daily.mjs 传 --policy-dir=current/<省>/（指向子目录本身），故指纹仍读到该省 flat 分片。
+  // 此测试锁定：在 --policy-dir=current/ 下放一个 SC/ 省份子目录，不影响 cache key（不下钻）。
+  it('省份子目录 current/<省>/ 内的 parquet 不影响 cache key（flat-within-dir，对齐 convert 非递归 glob）', () => {
+    writePolicyParquet('flat-baseline', 'policy-0.parquet');
+    const k1 = keyWithPolicy(['--policy-dir', policyDir]);
+    mkdirSync(join(policyDir, 'SC'), { recursive: true });
+    writeFileSync(join(policyDir, 'SC', 'subdir-shard.parquet'), 'subdir-content');
+    const k2 = keyWithPolicy(['--policy-dir', policyDir]);
+    expect(k2).toBe(k1);
+  });
 });

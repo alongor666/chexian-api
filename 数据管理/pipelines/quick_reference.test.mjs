@@ -103,4 +103,23 @@ describe('quick_reference governance helpers', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // B2 防沉默失败：省份子目录 current/<省>/ 分片必须计入 shardCount/rowCount（否则知识库自愈写错）
+  it('counts province subdir shards (current/<省>/) — no subdir blindness', () => {
+    const dir = join(tmpdir(), `quick-reference-subdir-${process.pid}-${Date.now()}`);
+    mkdirSync(join(dir, 'SC'), { recursive: true });
+    try {
+      writeFileSync(join(dir, 'SC', '2021.parquet'), '');
+      writeFileSync(join(dir, 'SC', '2022.parquet'), '');
+
+      const stats = collectPolicyCurrentStats('python3', dir, {
+        getParquetRowCount: (_python, filePath) => (filePath.endsWith('2021.parquet') ? 10 : 25),
+        getParquetColumnCount: () => 41,
+      });
+
+      expect(stats).toEqual({ rowCount: 35, fieldCount: 41, shardCount: 2 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
