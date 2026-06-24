@@ -8,8 +8,12 @@
     "claimTtlHours": "跨会话认领锁时效（小时，默认 8）。会话开工即 `backlog.mjs status <uid> IN_PROGRESS --actor <session>` 并 push；dispatch 收集多 ref 日志见此认领即锁出前沿。认领后超此时长无后续事件 → 视为陈旧（会话疑似死亡）释放回前沿防死锁。§4 P0『跨会话重复劳动』根治。"
   },
   "gatedKeywords": ["cutover", "RLS-on 上线", "sync VPS 发账号", "RLS-on→", "进 current/ →", "发山西账号"],
-  "deps": {},
+  "deps": {
+    "2026-06-24-claude-533e57": ["2026-06-24-claude-9e5bac"]
+  },
   "inflight": [],
   "claimTtlHours": 8,
-  "tasks": {}
+  "tasks": {
+    "2026-06-24-claude-533e57": { "gated": true }
+  }
 }
