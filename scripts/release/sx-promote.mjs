@@ -7,19 +7,39 @@
  *   - sync-vps（同步到 VPS 须另跑 `SYNC_VPS_BRANCH_CODE=SX node scripts/sync-vps.mjs --dry-run` 先验）
  *   - 发放山西账号
  *
+ * ⚠️  崩溃原子性声明（请勿在此处声称"atomic"）：
+ *   本脚本的 Phase E（staging → final 批量 rename）**非跨进程崩溃原子**。
+ *   这是 Option A 扁平布局的固有限制：rename 是逐文件串行的，进程被 kill 会留下
+ *   部分 final 已完成 + 部分 staging 仍存在的中间态。
+ *
+ *   安全靠三层叠加缓解（不声称完全消除）：
+ *     ① Day-1 SOP 串行纪律：operator 必须确认本脚本 exit 0 且 .sx-promote-ready
+ *        文件存在后，**才**运行 sync-vps.mjs（禁并发）
+ *     ② 幂等重跑：sha256 一致自动 skip；残余 staging 由下次运行重新处理
+ *     ③ leftover preflight：残留 .staging/.bak_* 默认拦截 --apply（第 4 条）
+ *
+ *   彻底的崩溃原子（无中间态）需 Option B 子目录单次 swap 或 sync/bootstrap 共守
+ *   文件系统级 lock，超出本脚本范围，已登记为 follow-up。
+ *
  * 调用时机：BRANCH_RLS_ENABLED=true 已在服务端核实生效（用 --rls-confirmed 声明）、
  * SX parquet 在 validation/ 通过 ETL 质量校验后，由 operator 在 Day-1 SOP 序列中手动触发
  * （非自动化推送）。
  *
- * 硬化要点（双闸 P0/P1）：
+ * 硬化要点（双闸 P0/P1/P0-2 缓解）：
  *   P0-1. 源省份 fail-fast：每文件 duckdb CLI 查 branch_code='SX' 全行一致，任一不满足 exit 1
  *   P0-2. staging 先校后 rename：复制到 .staging 扩展名 → 完整校验 → 批量 rename → 无竞态窗口
  *   P0-3. --force 回滚护栏：覆盖前先 backup 旧文件 → 失败时恢复；生产模式默认禁止覆盖已存在文件
+ *         backup 阶段事务化：任何 renameSync 失败立即按 backupMap 恢复已挪走文件（P1 第2轮）
+ *         跨设备 rename 预检：backup 与 dst 须在同一设备（rename 跨设备=EXDEV），否则 exit 1（P1 第2轮）
+ *   P0-2a. leftover preflight（P0-2 缓解）：--apply 启动时扫描目标目录残留 .staging/.bak_*，
+ *         默认 exit 1 提示人工核对；--resume 跳过（由 operator 显式声明可安全幂等恢复）
+ *   P0-2b. ready-marker（P0-2 缓解）：Phase E 全部 rename 成功后写 .sx-promote-ready（含 run-id +
+ *         manifest 摘要）；operator 须确认该文件存在后才运行 sync-vps（SOP 纪律，非代码强制）
  *   P1-4. 保费字段改 premium + 缺失 fail-fast（不再降级仅校行数）
  *   P1-5. duckdb CLI 替换 Python，任何文件复制前先 preflight 校验 duckdb 可用
  *   P1-6. 空源 --apply 失败（除非 --allow-empty）
  *   P1-7. 目标已存在时比较 sha256 字节一致，不一致 fail-fast
- *   P1-8. sha256 字节 hash 为主校验判据（promote=逐字节复制，dest==source 是完美证明）
+ *   P1-8. sha256 流式计算（createReadStream + hash.update）防大 parquet 整文件进内存（P1 第2轮）
  *   P2-9. assertNoSubdirIntent 在 mkdirSync 之前调用
  *   P2-10. --apply 必须携带 --rls-confirmed（operator 声明已核实生产 RLS-on）
  *
@@ -51,6 +71,7 @@
  *   node scripts/release/sx-promote.mjs --apply --rls-confirmed           # 真实复制 + 校验 + 失败自动回滚
  *   node scripts/release/sx-promote.mjs --apply --rls-confirmed --force   # 允许覆盖已存在的 SX_ 文件（测试用）
  *   node scripts/release/sx-promote.mjs --apply --rls-confirmed --allow-empty  # 允许源目录为空
+ *   node scripts/release/sx-promote.mjs --apply --rls-confirmed --resume  # 跳过 leftover preflight（幂等恢复）
  *   node scripts/release/sx-promote.mjs --target-dir /tmp/test-current         # 指定目标目录（测试用）
  *   node scripts/release/sx-promote.mjs --source-dir /custom/path              # 覆盖源目录（测试/测试用，需 --unsafe-source-dir）
  *   node scripts/release/sx-promote.mjs --source-dir /custom --unsafe-source-dir  # 非默认源目录（测试用，打 ERROR 警告）
@@ -69,9 +90,10 @@
 
 import {
   existsSync, mkdirSync, readdirSync, statSync,
-  copyFileSync, renameSync, unlinkSync, writeFileSync, readFileSync,
+  copyFileSync, renameSync, unlinkSync, writeFileSync,
+  createReadStream,
 } from 'node:fs';
-import { join, basename, resolve } from 'node:path';
+import { join, basename, resolve, dirname } from 'node:path';
 import { spawnSync, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -99,6 +121,7 @@ const args = {
   allowEmpty: false,
   rlsConfirmed: false,
   unsafeSourceDir: false,
+  resume: false,  // 跳过 leftover preflight，由 operator 显式声明可安全幂等恢复
   sourceDir: null,
   targetDir: null,
   runId: null,
@@ -112,6 +135,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--allow-empty') args.allowEmpty = true;
   else if (a === '--rls-confirmed') args.rlsConfirmed = true;
   else if (a === '--unsafe-source-dir') args.unsafeSourceDir = true;
+  else if (a === '--resume') args.resume = true;
   else if (a === '--source-dir') args.sourceDir = resolve(eat());
   else if (a === '--target-dir') args.targetDir = resolve(eat());
   else if (a === '--run-id') args.runId = eat();
@@ -140,14 +164,20 @@ function log(level, msg) {
 // ─────────────────────────── sha256 工具 ───────────────────────────
 
 /**
- * 计算文件的 sha256 hex 摘要。
+ * 流式计算文件的 sha256 hex 摘要（P1-8 第2轮硬化）。
+ * 使用 createReadStream + hash.update 逐块处理，防止大 parquet 整文件进内存导致 OOM/中途崩。
  * promote 是逐字节复制（copyFileSync），dest sha256 == source sha256 是完美证明。
  * @param {string} filePath
- * @returns {string} hex digest
+ * @returns {Promise<string>} hex digest
  */
 export function sha256File(filePath) {
-  const buf = readFileSync(filePath);
-  return createHash('sha256').update(buf).digest('hex');
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256');
+    const stream = createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', (err) => reject(new Error(`sha256File 读取失败 "${filePath}": ${err.message}`)));
+  });
 }
 
 // ─────────────────────────── duckdb CLI 工具 ───────────────────────────
@@ -304,6 +334,44 @@ export function assertNoSubdirIntent(targetRoot) {
 }
 
 /**
+ * P0-2a leftover preflight：--apply 启动时扫描目标目录中本工具遗留的 .staging 和 .bak_* 残留。
+ * 若发现残留（疑似上次被 kill）→ exit 1，打印残留文件清单，提示人工核对/清理后重试。
+ * 传入 resume=true 时跳过（operator 显式声明可安全幂等恢复）。
+ *
+ * @param {string} targetDir
+ * @param {{ resume?: boolean }} [opts]
+ */
+export function leftoverPreflight(targetDir, { resume = false } = {}) {
+  if (resume) {
+    log('warn', `[leftover-preflight] --resume 已声明，跳过残留检查（operator 确认可幂等恢复）`);
+    return;
+  }
+  if (!existsSync(targetDir)) return; // 目标目录不存在 → 无残留
+
+  let entries;
+  try {
+    entries = readdirSync(targetDir);
+  } catch {
+    return; // 读取失败不阻断（目标目录权限问题在后续 mkdirSync 处理）
+  }
+
+  const stagingFiles = entries.filter(f => f.endsWith('.staging'));
+  const bakFiles = entries.filter(f => f.includes('.bak_'));
+
+  const leftovers = [...stagingFiles, ...bakFiles];
+  if (leftovers.length === 0) return;
+
+  log('error', `[sx-promote] 检测到上次未完成 promote 的残留文件（疑似进程被 kill）:`);
+  for (const f of leftovers) {
+    log('error', `    ${join(targetDir, f)}`);
+  }
+  log('error', `请人工核对/清理后重试：`);
+  log('error', `  - 若上次 promote 已部分完成，可传 --resume 跳过此检查（幂等重跑 sha256 一致自动 skip）`);
+  log('error', `  - 若需清理残留：rm -f <上述文件路径>`);
+  throw new Error(`[sx-promote] leftover preflight 失败：发现 ${leftovers.length} 个未清理残留`);
+}
+
+/**
  * --force 安全护栏：只允许覆盖 SX_ 前缀文件，绝不允许覆盖 SC 裸名或其他省前缀文件。
  * @param {string} filename
  */
@@ -335,6 +403,68 @@ export function assertSourceDirSafety({ sourceDir, defaultSourceDir, unsafeSourc
     }
     // 打 ERROR 级警告但不 exit（已显式声明 unsafe）
     log('error', `⚠️  WARNING：使用非默认源目录（--unsafe-source-dir 已声明，仅测试用）：${resolvedSource}`);
+  }
+}
+
+/**
+ * P0-3 backup EXDEV 预检：验证 dst 与 bak 路径在同一设备（同一文件系统）。
+ * rename 跨设备（EXDEV）会失败，backup 前必须确认。
+ * 简单实现：比较 dst 所在目录与 bakDir（= targetDir）的 st_dev。
+ *
+ * @param {string} dstPath  目标文件路径（用于取所在目录的 device）
+ * @param {string} bakDir   backup 文件存放目录（通常 = targetDir）
+ */
+export function assertSameDevice(dstPath, bakDir) {
+  try {
+    const dstDev = statSync(dirname(dstPath)).dev;
+    // bakDir 可能尚未存在（第一次 promote），取其最近存在的祖先
+    let bakCheck = bakDir;
+    while (!existsSync(bakCheck)) {
+      const parent = dirname(bakCheck);
+      if (parent === bakCheck) break; // 到达根目录
+      bakCheck = parent;
+    }
+    const bakDev = statSync(bakCheck).dev;
+    if (dstDev !== bakDev) {
+      throw new Error(
+        `[sx-promote] backup 路径与目标路径跨设备（EXDEV），rename 会失败。` +
+        `  目标目录 device=${dstDev}，backup 目录 device=${bakDev}。` +
+        `  请确保 backup 与 target 在同一文件系统。`
+      );
+    }
+  } catch (e) {
+    if (e.message.includes('[sx-promote]')) throw e;
+    // stat 本身失败（目录不存在等）→ 非跨设备错误，忽略（后续流程处理）
+  }
+}
+
+/**
+ * P0-2b ready-marker：Phase E 全部 rename 成功后写 .sx-promote-ready 标记文件。
+ * 含 run-id + manifest 摘要，operator 须确认此文件存在后才运行 sync-vps（SOP 纪律）。
+ *
+ * ⚠️  ready-marker 是 best-effort（写入失败仅 warn，不阻断 exit 0）。
+ *     原子性不比 Phase E 更强（same OS，同步写，但仍非事务性保证）。
+ *
+ * @param {object} manifest
+ * @param {string} targetDir
+ */
+export function writeReadyMarker(manifest, targetDir) {
+  const markerPath = join(targetDir, '.sx-promote-ready');
+  const markerContent = {
+    runId: manifest.runId,
+    promotedAt: manifest.promotedAt,
+    totalPromoted: manifest.summary?.totalPromoted ?? 0,
+    totalSkipped: manifest.summary?.totalSkipped ?? 0,
+    totalRows: manifest.summary?.totalRows ?? 0,
+    files: (manifest.files ?? []).map(f => ({ name: f.dstName, status: f.status, sha256: f.sha256?.slice(0, 16) })),
+    note: 'Phase E 全部 rename 成功。operator 确认此文件存在后才运行 sync-vps（SOP 纪律）。',
+  };
+  try {
+    writeFileSync(markerPath, JSON.stringify(markerContent, null, 2), 'utf-8');
+    log('ok', `ready-marker 已写入: ${markerPath}`);
+    log('info', `  operator SOP：确认此文件存在后才运行 sync-vps`);
+  } catch (e) {
+    log('warn', `ready-marker 写入失败（非阻断，可手动补写）: ${e.message}`);
   }
 }
 
@@ -457,7 +587,7 @@ async function printPlan(files) {
  *   Phase D：全部通过 → 短窗口批量 rename staging→final；任一失败 → 回滚
  * @param {ReturnType<typeof discoverSourceFiles>} files
  */
-async function applyPromote(files) {
+export async function applyPromote(files) {
   log('info', `【APPLY 模式】正式 promote：${files.length} 个文件`);
   log('info', `  源: ${sourceDir}`);
   log('info', `  目标: ${targetDir}`);
@@ -490,7 +620,7 @@ async function applyPromote(files) {
     try {
       const stats = await validateBranchCodeSX(f.srcPath);
       srcStats.set(f.name, stats);
-      const hash = sha256File(f.srcPath);
+      const hash = await sha256File(f.srcPath);
       srcHash.set(f.name, hash);
       log('ok', `    branch_code=SX 全行一致 ✅  行数=${stats.rowCount.toLocaleString()}  sha256=${hash.slice(0, 16)}...`);
     } catch (e) {
@@ -510,7 +640,7 @@ async function applyPromote(files) {
   for (const f of files) {
     if (existsSync(f.dstPath)) {
       const srcH = srcHash.get(f.name);
-      const dstH = sha256File(f.dstPath);
+      const dstH = await sha256File(f.dstPath);
       if (srcH === dstH) {
         log('ok', `  ${f.dstName}：目标已存在且 sha256 完全一致，跳过（幂等）`);
         manifest.files.push({ name: f.name, dstName: f.dstName, status: 'skipped_identical', sha256: srcH });
@@ -540,16 +670,50 @@ async function applyPromote(files) {
     return;
   }
 
-  // ─── Phase B：--force 模式先 backup 旧文件 ───
+  // ─── Phase B：--force 模式先 backup 旧文件（P0-3 事务化：任何失败立即恢复已挪走的文件） ───
   const backupMap = new Map(); // dstPath → backupPath（本次覆盖的旧文件）
   if (args.force) {
     log('info', '─── Phase B（force）：backup 旧文件 ───');
+
+    // EXDEV 预检：目标目录与 backup 目录须在同一设备，否则 rename 会报 EXDEV
     for (const f of toProcess) {
       if (existsSync(f.dstPath)) {
-        const backupPath = `${f.dstPath}.bak_${RUN_ID}`;
+        try {
+          assertSameDevice(f.dstPath, targetDir);
+        } catch (e) {
+          log('error', `Phase B EXDEV 预检失败：${e.message}`);
+          manifest.summary = { status: 'BACKUP_EXDEV_PREFLIGHT_FAILED', error: e.message };
+          writeManifest(manifest);
+          process.exit(1);
+        }
+      }
+    }
+
+    // 事务化 backup：逐文件 renameSync，任何异常立即恢复已挪走的文件
+    for (const f of toProcess) {
+      if (!existsSync(f.dstPath)) continue;
+      const backupPath = `${f.dstPath}.bak_${RUN_ID}`;
+      try {
         renameSync(f.dstPath, backupPath);
         backupMap.set(f.dstPath, backupPath);
         log('info', `  已 backup：${f.dstName} → ${basename(backupPath)}`);
+      } catch (e) {
+        // backup 本身失败：按 backupMap 恢复已挪走的旧文件，然后 exit 1
+        log('error', `  Phase B backup 失败（${f.dstName}）：${e.message}`);
+        log('error', `  正在恢复已 backup 的文件...`);
+        for (const [dstPath, bkPath] of backupMap.entries()) {
+          if (existsSync(bkPath)) {
+            try {
+              renameSync(bkPath, dstPath);
+              log('ok', `    已恢复：${basename(bkPath)} → ${basename(dstPath)}`);
+            } catch (re) {
+              log('error', `    恢复失败（需人工处理）：${basename(bkPath)}: ${re.message}`);
+            }
+          }
+        }
+        manifest.summary = { status: 'BACKUP_FAILED_RESTORED', error: e.message };
+        writeManifest(manifest);
+        process.exit(1);
       }
     }
   }
@@ -595,7 +759,7 @@ async function applyPromote(files) {
     try {
       // sha256 主校验（证明 staging == source）
       const srcH = srcHash.get(f.name);
-      const stgH = sha256File(f.stagingPath);
+      const stgH = await sha256File(f.stagingPath);
       if (srcH !== stgH) {
         throw new Error(
           `sha256 不一致（复制损坏）：源=${srcH?.slice(0, 16)}...  staging=${stgH.slice(0, 16)}...`
@@ -705,6 +869,8 @@ async function applyPromote(files) {
   };
 
   writeManifest(manifest);
+  // P0-2b ready-marker：全部 rename 成功后写入标记，operator 须确认此文件存在才运行 sync-vps
+  writeReadyMarker(manifest, targetDir);
 
   console.log('');
   log('ok', `SX promote 完成！`);
@@ -801,6 +967,16 @@ async function main() {
   } catch (e) {
     log('error', e.message);
     process.exit(1);
+  }
+
+  // P0-2a leftover preflight：检测目标目录残留 .staging/.bak_*（仅 apply 模式）
+  if (args.apply) {
+    try {
+      leftoverPreflight(targetDir, { resume: args.resume });
+    } catch (e) {
+      log('error', e.message);
+      process.exit(1);
+    }
   }
 
   // P1-5：任何文件复制前先 duckdb preflight（仅 apply 模式）

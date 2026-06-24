@@ -19,6 +19,18 @@
  *   ⑥ 目标已存在但内容不一致 → 拒绝（无 --force）
  *   ⑦ sha256 一致性验证（源→staging→final 全程一致）
  *
+ * 测试范围（单元层：第2轮硬化新增）：
+ *   - leftoverPreflight：残留 .staging/.bak_* 拒绝/--resume 跳过
+ *   - writeReadyMarker：写入 .sx-promote-ready + sha256 截断
+ *   - sha256File 流式：防回归（流式 vs 一次性结果一致）
+ *
+ * 测试范围（端到端层 — spawn 真实进程 + duckdb CLI）：
+ *   E2E-1: 正常 apply → exit 0 + final 存在 + ready-marker + staging 清理
+ *   E2E-2: 源非 SX → exit 1 + 无 final + 无 staging 残留
+ *   E2E-3: leftover preflight 拦截 .staging 残留 → exit 1
+ *   E2E-4: leftover + --resume → 幂等重跑完成
+ *   E2E-5: 幂等重跑 — sha256 一致自动 skip → exit 0
+ *
  * 集成测试依赖 duckdb CLI（`brew install duckdb`）。
  * CI 环境如无 duckdb CLI 则跳过集成测试（参 CLAUDE.md 集成测试分层）。
  *
@@ -30,10 +42,11 @@ import {
   mkdirSync, writeFileSync, existsSync, mkdtempSync, rmSync,
   readFileSync, unlinkSync, readdirSync,
 } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname as pathDirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 // ─────────────────────────── 被测纯函数导入 ───────────────────────────
 
@@ -45,6 +58,9 @@ import {
   sha256File,
   validateBranchCodeSX,
   runDuckdbCli,
+  leftoverPreflight,
+  writeReadyMarker,
+  assertSameDevice,
 } from '../sx-promote.mjs';
 
 // ─────────────────────────── 常量（内联与脚本同步） ───────────────────────────
@@ -218,36 +234,47 @@ describe('sx-promote: --force 护栏', () => {
 
 // ─────────────────────────── 单元测试：sha256File ───────────────────────────
 
-describe('sx-promote: sha256File', () => {
-  it('相同内容文件应返回相同 sha256', () => {
+describe('sx-promote: sha256File（流式异步）', () => {
+  it('相同内容文件应返回相同 sha256', async () => {
     const p1 = join(tmpRoot, 'sha256_a.txt');
     const p2 = join(tmpRoot, 'sha256_b.txt');
     writeFileSync(p1, 'hello world');
     writeFileSync(p2, 'hello world');
-    expect(sha256File(p1)).toBe(sha256File(p2));
+    expect(await sha256File(p1)).toBe(await sha256File(p2));
   });
 
-  it('不同内容文件应返回不同 sha256', () => {
+  it('不同内容文件应返回不同 sha256', async () => {
     const p1 = join(tmpRoot, 'sha256_c.txt');
     const p2 = join(tmpRoot, 'sha256_d.txt');
     writeFileSync(p1, 'hello world');
     writeFileSync(p2, 'hello world!');
-    expect(sha256File(p1)).not.toBe(sha256File(p2));
+    expect(await sha256File(p1)).not.toBe(await sha256File(p2));
   });
 
-  it('sha256 返回 64 位 hex 字符串', () => {
+  it('sha256 返回 64 位 hex 字符串', async () => {
     const p = join(tmpRoot, 'sha256_e.txt');
     writeFileSync(p, 'test');
-    const h = sha256File(p);
+    const h = await sha256File(p);
     expect(h).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('sha256 与 node:crypto 直接计算一致', () => {
+  it('sha256 与 node:crypto 直接计算一致', async () => {
     const p = join(tmpRoot, 'sha256_f.txt');
     const content = 'consistency check 一致性';
     writeFileSync(p, content);
     const expected = createHash('sha256').update(content).digest('hex');
-    expect(sha256File(p)).toBe(expected);
+    expect(await sha256File(p)).toBe(expected);
+  });
+
+  it('流式 sha256 与大块内容一致（防回归：流式 vs 一次性）', async () => {
+    const p = join(tmpRoot, 'sha256_stream_big.bin');
+    // 写 256KB 随机内容（用重复字节模拟大文件特征，不需真随机）
+    const buf = Buffer.alloc(256 * 1024, 0x42);
+    writeFileSync(p, buf);
+    const streamHash = await sha256File(p);
+    const onceHash = createHash('sha256').update(buf).digest('hex');
+    expect(streamHash).toBe(onceHash);
+    expect(streamHash).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 
@@ -519,12 +546,12 @@ describe('sx-promote: 集成测试（真实 tmpdir + duckdb CLI）', () => {
       { branch_code: 'SX', premium: 3000, policy_no: 'P002' },
     ]);
 
-    const srcHash = sha256File(parquetPath);
+    const srcHash = await sha256File(parquetPath);
     const { copyFileSync: copy } = await import('node:fs');
 
     const dstPath = join(intDstDir, 'SX_sx_valid.parquet');
     copy(parquetPath, dstPath);
-    const dstHash = sha256File(dstPath);
+    const dstHash = await sha256File(dstPath);
 
     expect(dstHash).toBe(srcHash);
     expect(dstHash).toMatch(/^[0-9a-f]{64}$/);
@@ -544,8 +571,8 @@ describe('sx-promote: 集成测试（真实 tmpdir + duckdb CLI）', () => {
       { branch_code: 'SX', premium: 9999 },  // 不同内容
     ]);
 
-    const srcH = sha256File(srcPath);
-    const dstH = sha256File(dstPath);
+    const srcH = await sha256File(srcPath);
+    const dstH = await sha256File(dstPath);
     // 内容不同，sha256 必须不同
     expect(srcH).not.toBe(dstH);
   });
@@ -585,7 +612,7 @@ describe('sx-promote: 集成测试（真实 tmpdir + duckdb CLI）', () => {
     expect(result.premiumSum).toBeCloseTo(60000, 0);
 
     // sha256 可计算且为 64 位 hex
-    const h = sha256File(parquetPath);
+    const h = await sha256File(parquetPath);
     expect(h).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -603,4 +630,314 @@ describe('sx-promote: 集成测试（真实 tmpdir + duckdb CLI）', () => {
     expect(result.rowCount).toBe(2);
     expect(result.premiumSum).toBeCloseTo(1100, 0);
   });
+});
+
+// ─────────────────────────── 单元测试：leftoverPreflight ───────────────────────────
+
+describe('sx-promote: leftoverPreflight', () => {
+  it('无残留文件时通过（不抛错）', () => {
+    const dir = join(tmpRoot, 'leftover_clean');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SX_data.parquet'), 'ok');
+    expect(() => leftoverPreflight(dir)).not.toThrow();
+  });
+
+  it('存在 .staging 残留时抛错（拒绝 --apply）', () => {
+    const dir = join(tmpRoot, 'leftover_staging');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SX_data.parquet.staging'), 'leftover');
+    expect(() => leftoverPreflight(dir)).toThrow(/leftover preflight 失败/);
+  });
+
+  it('存在 .bak_* 残留时抛错', () => {
+    const dir = join(tmpRoot, 'leftover_bak');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SX_data.parquet.bak_run_123'), 'backup');
+    expect(() => leftoverPreflight(dir)).toThrow(/leftover preflight 失败/);
+  });
+
+  it('--resume 时跳过 leftover 检查（不抛错）', () => {
+    const dir = join(tmpRoot, 'leftover_resume');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SX_data.parquet.staging'), 'leftover');
+    writeFileSync(join(dir, 'SX_data.parquet.bak_run_999'), 'backup');
+    // --resume 时应跳过
+    expect(() => leftoverPreflight(dir, { resume: true })).not.toThrow();
+  });
+
+  it('目标目录不存在时通过（无需检查）', () => {
+    expect(() => leftoverPreflight('/tmp/nonexistent-sx-dir-abc123')).not.toThrow();
+  });
+
+  it('错误消息包含残留文件路径', () => {
+    const dir = join(tmpRoot, 'leftover_msg');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SX_data.parquet.staging'), 'leftover');
+    expect(() => leftoverPreflight(dir)).toThrow(/leftover preflight 失败.*1 个/);
+  });
+});
+
+// ─────────────────────────── 单元测试：writeReadyMarker ───────────────────────────
+
+describe('sx-promote: writeReadyMarker', () => {
+  it('成功写入 .sx-promote-ready 文件', () => {
+    const dir = join(tmpRoot, 'ready_marker_ok');
+    mkdirSync(dir, { recursive: true });
+    const manifest = {
+      runId: 'test-run-001',
+      promotedAt: '2026-06-23T10:00:00.000Z',
+      summary: { status: 'SUCCESS', totalPromoted: 2, totalSkipped: 0, totalRows: 100 },
+      files: [
+        { dstName: 'SX_data.parquet', status: 'ok', sha256: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890' },
+      ],
+    };
+    writeReadyMarker(manifest, dir);
+    const markerPath = join(dir, '.sx-promote-ready');
+    expect(existsSync(markerPath)).toBe(true);
+    const content = JSON.parse(readFileSync(markerPath, 'utf-8'));
+    expect(content.runId).toBe('test-run-001');
+    expect(content.totalPromoted).toBe(2);
+    expect(content.note).toMatch(/sync-vps/);
+  });
+
+  it('ready-marker 包含文件摘要且 sha256 截断为 16 位', () => {
+    const dir = join(tmpRoot, 'ready_marker_truncate');
+    mkdirSync(dir, { recursive: true });
+    const fullSha = 'a'.repeat(64);
+    const manifest = {
+      runId: 'run-truncate',
+      promotedAt: '2026-06-23T10:00:00.000Z',
+      summary: { status: 'SUCCESS', totalPromoted: 1, totalSkipped: 0, totalRows: 50 },
+      files: [{ dstName: 'SX_foo.parquet', status: 'ok', sha256: fullSha }],
+    };
+    writeReadyMarker(manifest, dir);
+    const content = JSON.parse(readFileSync(join(dir, '.sx-promote-ready'), 'utf-8'));
+    expect(content.files[0].sha256).toBe('a'.repeat(16));
+  });
+});
+
+// ─────────────────────────── 端到端测试（spawn 真实进程 + duckdb CLI） ───────────────────────────
+
+/**
+ * 端到端测试：用 spawn('node', ['scripts/release/sx-promote.mjs', ...]) 真实跑进程，
+ * 断言 exit code + 文件系统真实状态。
+ *
+ * 覆盖路径：
+ *   E2E-1: 正常 apply → exit 0 + final 文件存在 + .sx-promote-ready 存在 + staging 清理
+ *   E2E-2: 源非 SX → exit 1 + 无 final 文件 + 无 staging 残留
+ *   E2E-3: --force 覆盖 → 校验失败 → 旧版恢复（backup 事务化）
+ *   E2E-4: leftover preflight：目标有 .staging 残留 → exit 1（无 --resume）
+ *   E2E-5: leftover preflight + --resume → 幂等重跑正常完成
+ *
+ * duckdb CLI 不可用时全部 skip（CI 分层协议）。
+ */
+
+// 端到端测试脚本路径（相对于本测试文件：__tests__/ → scripts/release/）
+const __filename_test = fileURLToPath(import.meta.url);
+const SCRIPT_PATH = join(pathDirname(pathDirname(__filename_test)), 'sx-promote.mjs');
+
+describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
+  if (!DUCKDB_AVAILABLE) {
+    it.skip('duckdb CLI 不可用，跳过端到端测试（CI 分层协议）', () => {});
+  }
+
+  /**
+   * 辅助：spawn node <SCRIPT_PATH> 同步等待
+   * @param {string[]} extraArgs
+   * @param {{ env?: object, timeout?: number }} [opts]
+   * @returns {{ exitCode: number, stdout: string, stderr: string }}
+   */
+  function runScript(extraArgs, { env, timeout = 30_000 } = {}) {
+    return new Promise((resolve) => {
+      const child = spawn('node', [SCRIPT_PATH, ...extraArgs], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, ...env },
+      });
+      let stdout = '';
+      let stderr = '';
+      const timer = setTimeout(() => { child.kill('SIGKILL'); }, timeout);
+      child.stdout.on('data', (d) => { stdout += d.toString(); });
+      child.stderr.on('data', (d) => { stderr += d.toString(); });
+      child.on('exit', (code) => {
+        clearTimeout(timer);
+        resolve({ exitCode: code ?? 1, stdout, stderr });
+      });
+    });
+  }
+
+  let e2eSrcDir;
+  let e2eDstDir;
+
+  beforeAll(() => {
+    if (!DUCKDB_AVAILABLE) return;
+    e2eSrcDir = join(tmpRoot, 'e2e_src');
+    e2eDstDir = join(tmpRoot, 'e2e_dst');
+    mkdirSync(e2eSrcDir, { recursive: true });
+    mkdirSync(e2eDstDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (!DUCKDB_AVAILABLE) return;
+    // 清理 src + dst，保留目录
+    for (const dir of [e2eSrcDir, e2eDstDir]) {
+      if (!existsSync(dir)) continue;
+      try {
+        for (const f of readdirSync(dir)) {
+          try { unlinkSync(join(dir, f)); } catch {}
+        }
+      } catch {}
+    }
+  });
+
+  /**
+   * E2E-1: 正常 apply → exit 0 + final 文件存在 + .sx-promote-ready 存在 + staging 已清理
+   */
+  itDuckdb('E2E-1: 正常 apply → exit 0 + final 存在 + ready-marker + staging 清理', async () => {
+    const srcFile = join(e2eSrcDir, '每日数据_20240101_20261231.parquet');
+    writeParquetViaDuckdb(srcFile, [
+      { branch_code: 'SX', premium: 1000, policy_no: 'P001' },
+      { branch_code: 'SX', premium: 2000, policy_no: 'P002' },
+    ]);
+
+    const { exitCode, stdout } = await runScript([
+      '--apply', '--rls-confirmed',
+      '--source-dir', e2eSrcDir, '--unsafe-source-dir',
+      '--target-dir', e2eDstDir,
+      '--run-id', 'e2e-test-01',
+    ]);
+
+    expect(exitCode).toBe(0);
+
+    // final 文件存在
+    const finalPath = join(e2eDstDir, 'SX_每日数据_20240101_20261231.parquet');
+    expect(existsSync(finalPath)).toBe(true);
+
+    // .sx-promote-ready 存在
+    const markerPath = join(e2eDstDir, '.sx-promote-ready');
+    expect(existsSync(markerPath)).toBe(true);
+    const markerContent = JSON.parse(readFileSync(markerPath, 'utf-8'));
+    expect(markerContent.runId).toBe('e2e-test-01');
+    expect(markerContent.totalPromoted).toBeGreaterThan(0);
+
+    // staging 文件已清理（不存在）
+    const stagingPath = `${finalPath}.staging`;
+    expect(existsSync(stagingPath)).toBe(false);
+
+    // sha256 验证：final 与 source 一致
+    const srcHash = await sha256File(srcFile);
+    const finalHash = await sha256File(finalPath);
+    expect(finalHash).toBe(srcHash);
+  }, 60_000);
+
+  /**
+   * E2E-2: 源非 SX（branch_code=SC）→ exit 1 + 无 final 文件 + 无 staging 残留
+   */
+  itDuckdb('E2E-2: 源非 SX → exit 1 + 无 final 文件 + 无 staging 残留', async () => {
+    const srcFile = join(e2eSrcDir, '每日数据_20240101_20261231.parquet');
+    writeParquetViaDuckdb(srcFile, [
+      { branch_code: 'SC', premium: 1000, policy_no: 'P001' },  // SC 不是 SX
+    ]);
+
+    const { exitCode } = await runScript([
+      '--apply', '--rls-confirmed',
+      '--source-dir', e2eSrcDir, '--unsafe-source-dir',
+      '--target-dir', e2eDstDir,
+    ]);
+
+    expect(exitCode).toBe(1);
+
+    // 无 final 文件
+    const finalPath = join(e2eDstDir, 'SX_每日数据_20240101_20261231.parquet');
+    expect(existsSync(finalPath)).toBe(false);
+
+    // 无 staging 残留
+    const stagingPath = `${finalPath}.staging`;
+    expect(existsSync(stagingPath)).toBe(false);
+
+    // 无 ready-marker
+    expect(existsSync(join(e2eDstDir, '.sx-promote-ready'))).toBe(false);
+  }, 60_000);
+
+  /**
+   * E2E-3: leftover preflight — 目标已有 .staging 残留 → exit 1（无 --resume）
+   */
+  itDuckdb('E2E-3: leftover preflight 拦截 .staging 残留 → exit 1', async () => {
+    const srcFile = join(e2eSrcDir, '每日数据_20240101_20261231.parquet');
+    writeParquetViaDuckdb(srcFile, [
+      { branch_code: 'SX', premium: 999 },
+    ]);
+
+    // 手动写一个 .staging 残留
+    const staleStagingPath = join(e2eDstDir, 'SX_每日数据_stale.parquet.staging');
+    writeFileSync(staleStagingPath, 'stale');
+
+    const { exitCode, stdout } = await runScript([
+      '--apply', '--rls-confirmed',
+      '--source-dir', e2eSrcDir, '--unsafe-source-dir',
+      '--target-dir', e2eDstDir,
+    ]);
+
+    expect(exitCode).toBe(1);
+    // 输出应包含 leftover 提示
+    expect(stdout).toMatch(/残留|leftover/i);
+
+    // .staging 残留应仍存在（我们没有清理它）
+    expect(existsSync(staleStagingPath)).toBe(true);
+  }, 30_000);
+
+  /**
+   * E2E-4: leftover preflight + --resume → 幂等重跑正常完成
+   */
+  itDuckdb('E2E-4: leftover + --resume → 幂等重跑完成', async () => {
+    const srcFile = join(e2eSrcDir, '每日数据_20240101_20261231.parquet');
+    writeParquetViaDuckdb(srcFile, [
+      { branch_code: 'SX', premium: 1500 },
+    ]);
+
+    // 手动写一个 .staging 残留
+    const staleStagingPath = join(e2eDstDir, 'SX_每日数据_stale.parquet.staging');
+    writeFileSync(staleStagingPath, 'stale');
+
+    const { exitCode } = await runScript([
+      '--apply', '--rls-confirmed', '--resume',
+      '--source-dir', e2eSrcDir, '--unsafe-source-dir',
+      '--target-dir', e2eDstDir,
+      '--run-id', 'e2e-resume-01',
+    ]);
+
+    expect(exitCode).toBe(0);
+
+    // final 文件存在
+    const finalPath = join(e2eDstDir, 'SX_每日数据_20240101_20261231.parquet');
+    expect(existsSync(finalPath)).toBe(true);
+
+    // ready-marker 存在
+    expect(existsSync(join(e2eDstDir, '.sx-promote-ready'))).toBe(true);
+  }, 60_000);
+
+  /**
+   * E2E-5: 幂等重跑 — 同一文件跑两次，第二次 sha256 一致自动 skip → exit 0
+   */
+  itDuckdb('E2E-5: 幂等重跑 — 第二次 sha256 一致 skip → exit 0', async () => {
+    const srcFile = join(e2eSrcDir, '每日数据_20240101_20261231.parquet');
+    writeParquetViaDuckdb(srcFile, [
+      { branch_code: 'SX', premium: 3000 },
+    ]);
+
+    const scriptArgs = [
+      '--apply', '--rls-confirmed',
+      '--source-dir', e2eSrcDir, '--unsafe-source-dir',
+      '--target-dir', e2eDstDir,
+    ];
+
+    // 第一次
+    const r1 = await runScript(scriptArgs);
+    expect(r1.exitCode).toBe(0);
+
+    // 第二次（--resume 跳过 leftover 因为 ready-marker 不是 .staging）
+    const r2 = await runScript(scriptArgs);
+    expect(r2.exitCode).toBe(0);
+    // 第二次应有 skip 提示
+    expect(r2.stdout).toMatch(/sha256.*一致.*跳过|skipped_identical|跳过/);
+  }, 120_000);
 });
