@@ -16,17 +16,18 @@
 
 ---
 
-## 📋 活跃任务速查（76 项 · 数据截至 2026-06-24 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（77 项 · 数据截至 2026-06-24 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（5 项）**
+**P1（6 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
+- 2026-06-24-claude-85759a — D6 收敛
 
 **P2（44 项）**
 
@@ -186,4 +187,5 @@
 | 2026-06-24-claude-0898bd | 2026-06-24 | 多省·山西 cutover | @claude | multi-branch-stress-test cross-sell 覆盖缺口：/api/query/cross-sell 压测里 HTTP 400(路由参数过时)被当失败排除→未进串读断言。补 cross-sell 必需参数以扩 gate 覆盖 | P2 | PROPOSED | N/A | scripts/multi-branch-stress-test.mjs |  |
 | 2026-06-24-claude-2a7e17 | 2026-06-24 | 多省·山西 cutover | @claude | 计划维度省份化：vehicle_plan_wan 等计划字段未省份化(dim SC-only)，SX token 也看到 SC 计划值。兼容期无真实 SX 账号无影响；真实 SX 计划数据落地时需按 branch_code 切分 | P2 | PROPOSED | N/A | 数据管理/warehouse/dim/plan/ |  |
 | 2026-06-24-claude-694041 | 2026-06-24 | 多省·山西 cutover | @claude | sx-promote 测试卫生：E2E 测试把临时路径写进仓库跟踪的 scripts/release/.sx-promote-manifest.json(#783 自带)，宜改写临时 manifest 或 gitignore | P3 | PROPOSED | N/A | scripts/release/__tests__/sx-promote.test.mjs |  |
+| 2026-06-24-claude-85759a | 2026-06-24 | 多省 Phase B | @claude | D6 收敛：0a 隔离层终局定为子目录 current/<省>/，超越 D3（前缀），退役 #753。采纳 B 决策（用户 2026-06-24）。程序：①ADR §1 D6+§11 收敛(本 PR docs-only) ②B3 落地(b3 950267c6 复活，退役前缀 sync) ③退役/隔离 #783 前缀 promote，B5 前重建子目录版 ④loop 机制(dispatch 架构轴+contract-token preflight)独立 follow-up | P1 | PROPOSED | 开发文档/multi-branch/D3-vs-PhaseB分叉复盘_2026-06-24.md | N/A |  |
 | 2026-06-24-claude-f7590d | 2026-06-24 | Chore | @claude | sx-promote.mjs 批量 staging→final rename 非跨进程崩溃原子（Option A 扁平固有）。已三层缓解（leftover preflight+幂等+ready-marker+SOP串行）。彻底闭合需 Option B 子目录单次目录 swap，或 sync-vps/data-bootstrapper 共守 promote lock。cutover 真用前须 VPS 真实 SX parquet dry-run。 | P2 | PROPOSED | N/A | scripts/release/sx-promote.mjs 数据管理/lib/branch-naming.mjs scripts/sync-vps.mjs |  |
