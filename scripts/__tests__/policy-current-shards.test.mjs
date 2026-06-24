@@ -18,6 +18,7 @@ import {
   toDuckdbReadParquetList,
   policyCurrentGlobPatterns,
   inspectPolicyCurrentLayout,
+  findPolicyCurrentSyncGateViolations,
 } from '../lib/policy-current-shards.mjs';
 
 let dir;
@@ -119,5 +120,77 @@ describe('inspectPolicyCurrentLayout', () => {
     makeCurrent({ flat: ['flat.parquet'], subdirs: { SC: ['sub.parquet'] } });
     const r = inspectPolicyCurrentLayout(dir);
     expect(r).toMatchObject({ flatCount: 1, subdirCount: 1, subdirOnly: false });
+  });
+});
+
+// ============================================================
+// B3 · sync 前 GATED 子目录闸（镜像 data-bootstrapper.ts，比 B1 严；基准省参数驱动，默认固定 SC）
+// ============================================================
+describe('findPolicyCurrentSyncGateViolations — sync 前 GATED 子目录闸（fail-closed）', () => {
+  it('纯扁平（今天现状）→ 零违规（休眠放行，字节安全）', () => {
+    makeCurrent({ flat: ['a.parquet', 'b.parquet'] });
+    expect(findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' })).toEqual([]);
+  });
+
+  it('空目录 → 零违规', () => {
+    makeCurrent({});
+    expect(findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' })).toEqual([]);
+  });
+
+  it('仅基准省子目录（current/SC/，基准=SC）→ 零违规（基准省子目录允许同步）', () => {
+    makeCurrent({ subdirs: { SC: ['x.parquet'] } });
+    expect(findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' })).toEqual([]);
+  });
+
+  it('非基准省子目录（current/SX/，基准=SC）→ GATED fail-closed 违规（无条件，不给 RLS 放行口）', () => {
+    makeCurrent({ subdirs: { SX: ['x.parquet'] } });
+    const v = findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' });
+    expect(v).toHaveLength(1);
+    expect(v[0]).toContain('GATED');
+    expect(v[0]).toContain('SX');
+    expect(v[0]).toContain('validation');
+  });
+
+  it('基准省=SX 时，current/SC/ 变成非基准省 → 违规（基准由参数驱动，非硬编码 SC）', () => {
+    makeCurrent({ subdirs: { SC: ['x.parquet'] } });
+    const v = findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SX' });
+    expect(v).toHaveLength(1);
+    expect(v[0]).toContain('SC');
+  });
+
+  it('扁平 + 子目录并存 → 迁移态冲突违规', () => {
+    makeCurrent({ flat: ['flat.parquet'], subdirs: { SC: ['sub.parquet'] } });
+    const v = findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' });
+    expect(v.some((m) => m.includes('迁移态冲突'))).toBe(true);
+  });
+
+  it('扁平 + 非基准省子目录并存 → 同时报迁移冲突 + GATED（两类违规）', () => {
+    makeCurrent({ flat: ['flat.parquet'], subdirs: { SX: ['sub.parquet'] } });
+    const v = findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' });
+    expect(v).toHaveLength(2);
+    expect(v.some((m) => m.includes('迁移态冲突'))).toBe(true);
+    expect(v.some((m) => m.includes('GATED'))).toBe(true);
+  });
+
+  it('默认基准省（不传 deploymentBranch）→ 固定 SC（禁读 ETL BRANCH_CODE，codex 闸-2 P1）', () => {
+    makeCurrent({ subdirs: { SC: ['x.parquet'] } });
+    // 默认基准省固定 'SC' → current/SC/ 零违规（与 env BRANCH_CODE 无关）
+    expect(findPolicyCurrentSyncGateViolations(dir)).toEqual([]);
+  });
+
+  it('默认基准省不受 env BRANCH_CODE=SX 影响（解耦 ETL 声明省，防 current/SX/ 误放行）', () => {
+    const saved = process.env.BRANCH_CODE;
+    process.env.BRANCH_CODE = 'SX'; // 模拟 SX ETL 残留 env
+    try {
+      makeCurrent({ subdirs: { SX: ['x.parquet'] } });
+      // 即便 env BRANCH_CODE=SX，默认基准省仍固定 SC → current/SX/ 仍 GATED fail-closed
+      const v = findPolicyCurrentSyncGateViolations(dir);
+      expect(v).toHaveLength(1);
+      expect(v[0]).toContain('GATED');
+      expect(v[0]).toContain('SX');
+    } finally {
+      if (saved === undefined) delete process.env.BRANCH_CODE;
+      else process.env.BRANCH_CODE = saved;
+    }
   });
 });

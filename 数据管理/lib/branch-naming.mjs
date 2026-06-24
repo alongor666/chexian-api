@@ -18,8 +18,9 @@ import { join } from 'node:path';
  * `current/`（现状，字节安全）；on → SC 落 `current/SC/`（子目录隔离）。
  *
  * ⚠️ 开启后 ETL 会**写子目录但不自动清顶层扁平**（B2 不做物理迁移 flat-clear，留 cutover SOP，
- * 带 dry-run/备份/回滚）；顶层与子目录并存会被 B1 装载层互斥闸 + overlap 闸 fail-closed 拦下，
- * 且 daily.mjs 在此布局下强制 `--no-sync`（防 rsync 推子目录到生产，B3 sync 退役前）。
+ * 带 dry-run/备份/回滚）；顶层与子目录并存会被 B1 装载层互斥闸 + overlap 闸 fail-closed 拦下。
+ * （B3 已落地：sync-vps 退役 #753 前缀、改分省子目录同步并加 GATED 预检——扁平+子目录并存 / 非基准省
+ * 子目录均 fail-closed，故 daily.mjs 原「子目录布局强制 --no-sync」前置条件已解除，改由 sync-vps 闸守住。）
  * @param {NodeJS.ProcessEnv} [env=process.env]
  * @returns {boolean}
  */
