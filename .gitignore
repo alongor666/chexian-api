@@ -172,6 +172,12 @@ warehouse/**/_partition_meta.json
 # daily.mjs 互斥锁（运行时临时文件）
 数据管理/.daily.lock
 
+# sx-promote 运行时产物（promote 清单快照 + ready 标记），随 --target-dir 落盘
+# （真实 promote→current/，测试→tmp）。非 .parquet，bootstrapper/sync-vps 不加载/不同步；
+# 禁入 git（#783 曾因写固定仓库路径污染被追踪文件，引发 spurious 脏状态）。
+.sx-promote-manifest.json
+.sx-promote-ready
+
 # 赔付率周报对账输出（每周覆盖，每次 6MB；README.md 入 git，子目录 JSON 不入）
 数据管理/validation/loss-ratio-weekly/*/
 !数据管理/validation/loss-ratio-weekly/README.md

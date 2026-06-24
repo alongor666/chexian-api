@@ -723,7 +723,7 @@ describe('sx-promote: writeReadyMarker', () => {
  * 断言 exit code + 文件系统真实状态。
  *
  * 覆盖路径：
- *   E2E-1: 正常 apply → exit 0 + final 文件存在 + .sx-promote-ready 存在 + staging 清理
+ *   E2E-1: 正常 apply → exit 0 + final 文件存在 + .sx-promote-ready + manifest 落 targetDir + staging 清理
  *   E2E-2: 源非 SX → exit 1 + 无 final 文件 + 无 staging 残留
  *   E2E-3: --force 覆盖 → 校验失败 → 旧版恢复（backup 事务化）
  *   E2E-4: leftover preflight：目标有 .staging 残留 → exit 1（无 --resume）
@@ -790,7 +790,7 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
   });
 
   /**
-   * E2E-1: 正常 apply → exit 0 + final 文件存在 + .sx-promote-ready 存在 + staging 已清理
+   * E2E-1: 正常 apply → exit 0 + final 文件存在 + .sx-promote-ready 存在 + manifest 落 targetDir + staging 已清理
    */
   itDuckdb('E2E-1: 正常 apply → exit 0 + final 存在 + ready-marker + staging 清理', async () => {
     const srcFile = join(e2eSrcDir, '每日数据_20240101_20261231.parquet');
@@ -818,6 +818,14 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
     const markerContent = JSON.parse(readFileSync(markerPath, 'utf-8'));
     expect(markerContent.runId).toBe('e2e-test-01');
     expect(markerContent.totalPromoted).toBeGreaterThan(0);
+
+    // 回归锁：manifest 必须落在 --target-dir 内（跟随 targetDir，不写回 git 追踪的仓库路径）。
+    // 防 sx-promote.mjs writeManifest 退回固定 scripts/release/.sx-promote-manifest.json（spurious 脏状态根因）。
+    const manifestPath = join(e2eDstDir, '.sx-promote-manifest.json');
+    expect(existsSync(manifestPath)).toBe(true);
+    const manifestContent = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+    expect(resolve(manifestContent.targetDir)).toBe(resolve(e2eDstDir));
+    expect(manifestContent.runId).toBe('e2e-test-01');
 
     // staging 文件已清理（不存在）
     const stagingPath = `${finalPath}.staging`;
