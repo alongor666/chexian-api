@@ -51,6 +51,10 @@ SRC_ORG_DAILY = _find_src("四川分公司机构业务日报（截止2026年3月
 OUT_SALESMAN = SCRIPT_DIR / "salesman" / "latest.parquet"
 OUT_PLAN = SCRIPT_DIR / "plan" / "latest.parquet"
 
+# 业务员维度部署省（ADR G3）：本脚本只读四川源 xlsx，业务员主数据全归 SC。
+# 落 branch_code 列触发运行时 multiProvince（见 build_salesman_table 注释）。
+SALESMAN_BRANCH_CODE = "SC"
+
 
 def extract_business_no(full_name: str) -> str:
     """从 '200048468肖照耀' 中提取编号 '200048468'"""
@@ -375,6 +379,15 @@ def build_salesman_table(
     dedup_dropped = before_dedup - len(master)
 
     master = master.sort_values("full_name").reset_index(drop=True)
+
+    # ADR G3 多省·branch_code（末尾追加常量列）：本脚本仅消费四川（SC）源 xlsx，故业务员主数据
+    # 全部归属 SC。运行时 loadDimParquet 以「SalesmanDim 含 branch_code 列」判定 multiProvince=true
+    # （duckdb-domain-loaders.ts），据此让 SalesmanTeamMapping/SalesmanPlanFact/achievement_cache
+    # 携带 branch_code 供 typed 路由分省 RLS（否则分公司管理员查 premium-plan/kpi 等会 fail-close）。
+    # 维度表单源 loader 不在视图层补常量（字节安全优先），故必须由本生产者物理落列。
+    # 山西（SX）业务员维度由 GATED 上线时的 validation/SX/dim/salesman 隔离副本携真实 'SX' 提供，
+    # 与本列经 UNION ALL BY NAME 合并。
+    master["branch_code"] = SALESMAN_BRANCH_CODE
 
     print(f"  总业务员数: {len(master)}")
     print(f"  来源: 名单 {len(salesman_list)}, 计划表补充 {len(extra_from_plans)}, 重复去除 {dedup_dropped}")
