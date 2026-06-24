@@ -919,7 +919,12 @@ function rollbackAll(stagedFiles, backupMap) {
 // ─────────────────────────── Manifest 落盘 ───────────────────────────
 
 function writeManifest(manifest) {
-  const outPath = join(PROJECT_ROOT, 'scripts', 'release', '.sx-promote-manifest.json');
+  // manifest 落点跟随 targetDir（与 .sx-promote-ready 标记一致），而非固定仓库相对路径。
+  //   - 真实 promote（targetDir = current/）：清单与 .sx-promote-ready + SX_*.parquet 同处一地，
+  //     operator 可在同一目录核查（Day-1 SOP「确认 ready-marker 存在后才跑 sync-vps」纪律不变）。
+  //   - 测试（--target-dir /tmp/...）：清单落 tmp，绝不覆写被 git 追踪的仓库文件（防 spurious 脏状态）。
+  // 这两份产物均以 . 开头且非 .parquet，不被 bootstrapper/sync-vps 加载或同步，并经 .gitignore 排除。
+  const outPath = join(targetDir, '.sx-promote-manifest.json');
   try {
     writeFileSync(outPath, JSON.stringify(manifest, null, 2), 'utf-8');
     log('info', `清单已落盘: ${outPath}`);
