@@ -1261,3 +1261,30 @@ promotion 脚本第 1 轮对抗：**evidence-verifier 判 PASS（仅 2 P1）；c
 
 ### needs_automation: false
 （Option B 已由 backlog f7590d 跟踪；本条无新增机制缺口。）
+
+## 2026-06-23 · Phase B B3 sync-vps 子目录化 — 实现完成但**暂停**（与 #783 Option A cutover 策略冲突 · 用户重定位 follow-up）
+
+> 任务 backlog `2026-06-23-claude-801409`（Phase B 隔离层）。B3 = 退役 #753 前缀 5 函数 + getSyncBranchCode/queryLocalPolicyFingerprintForBranch + rsync R/P filter + 异省 --exclude → 分省子目录 `current/<省>/` 遍历同步 + GATED 预检 + 解除 daily.mjs subdir 强制 noSync。worktree `chexian-api-b3`，分支 `claude/multi-province-b3-syncvps`。**未合并、无 PR**——用户决策暂停。
+
+### 实现质量（本会话全绿，证据充分）
+- 改 6 文件（sync-vps.mjs 退役前缀 +413/-796；helper +findPolicyCurrentSyncGateViolations；check-governance #21 子目录感知 key；daily.mjs 解 noSync；branch-naming 注释；2 测试改写）+ rebase 到 origin/main eed908bb。
+- governance 44/44（#20 sync-vps 覆盖 15 域 + #21 数据漂移子目录 key 一致）+ 3982 单测 + typecheck 全绿；B3 子集 63 测试。
+- 端到端 GATED oracle：注入 current/SX/ → exit 1「非基准省」；current/SC/+顶层扁平 → exit 1「迁移态冲突」；**BRANCH_CODE=SX 仍 fail-closed**（基准省固定 SC，解耦 ETL env）。真实 rsync：扁平 SC --delete 清陈旧 + current/SC/→data/current/SC/ 隔离、SX 子目录不受 SC 任务 --delete 影响。
+- **双闸**：codex 闸-1 抓 2 P0（GATED 不复用 BRANCH_RLS_ENABLED 放行 / kind 防 willSyncPolicy 绕过）+ 3 P1 全采纳；闸-2 抓 1 P1（getDeploymentBranchCode 读 ETL BRANCH_CODE → current/SX/ 误放行）已修（基准省固定 SC 常量、禁读 BRANCH_CODE）+ 2 P2；evidence-verifier 核心 6 声明全 CONFIRMED。
+
+### 🔴 暂停根因：rebase 暴露与 #783 的策略前提冲突（非实现缺陷）
+- worktree 基于 e136cfed（B2），rebase 到 origin/main 时发现 **#783（2026-06-24 合并·双闸硬化）`sx-promote.mjs` 是当前山西 cutover 机制，刻意选 Option A『扁平 SX_ 前缀』布局**，正依赖 B3 要退役的 `SYNC_VPS_BRANCH_CODE=SX` + `buildRsyncBranchFilterArgs('SX')`。sx-promote 头部明列「Option B 子目录…超出本脚本范围，已登记为 follow-up」（=backlog `2026-06-24-claude-f7590d`）。
+- 若合并 B3：① 破坏 #783 cutover SOP（env 退役变空操作，前缀过滤同步语义全失）；② **GATED 漏洞**——B3 GATED 预检只拦 `^[A-Z]{2}$` 子目录、**不拦扁平 `SX_` 前缀文件**，而 sx-promote 产的正是扁平 `SX_*.parquet` → B3 无 filter 扁平同步会把 SX 推进生产。
+- 两条轨道并行分歧：**子目录方案轨道**（801409：B1#773/B2#777/B3 本会话）vs **SX cutover 轨道**（#781/#782/#783/#784：Option A 扁平前缀首次上线）。#783 先合并 → B3「退役前缀」前提被推翻。
+
+### 用户决策（2026-06-23）
+**暂停 B3、重定位为 follow-up**：保留 #783 Option A 扁平前缀 cutover 不动（当前山西上线机制）；B3 子目录方案 = 「SX 首次 cutover（Option A）稳定后的 Option B 子目录迁移」follow-up（并入 `f7590d`），届时**须与 sx-promote.mjs 一并改**（产 `current/SX/` 子目录 + 去 `SYNC_VPS_BRANCH_CODE` + cutover SOP 改 swap）。B3 实现成果保留在 worktree 待重启。
+
+### 三问复盘
+- **重来怎样更好**：开工**第一步**按主题（非状态）`gh pr list --search` 查 main 近期合并/同名 PR——本应在建 worktree 前就发现 #781/#782/#783/#784 的 SX cutover 轨道用 Option A，与「退役前缀」直接冲突，可省掉整轮实现。任务交接提示词基于 e136cfed 快照，未含 #783（晚一天合并）→ 交接事实即已 stale，更需开工自查 main 真实前沿。
+- **复用价值**：① B3 实现本身（findPolicyCurrentSyncGateViolations GATED 闸镜像 B1 + 比 B1 严不复用 RLS 放行 + 基准省固定常量解耦 ETL env + kind 防 freshness 绕过 + #21 manifest key 子目录一致 + 真实 rsync 每省隔离 oracle）是 Option B 子目录迁移的**现成基础**，重启 f7590d 直接复用；② 「rebase 后必查新基线引入的代码是否消费本任务退役的契约」应入 evidence-loop checklist（本轮靠 evidence-verifier git diff origin/main 才暴露，险些 overclaim 范围越界）。
+- **如何更高质量自动化**：① dispatch/loop 派活前按**主题**查 main 近期合并（feedback_loop_fanout_concurrent_collision 已提，本轮再实证：状态查询不够，须主题查）；② evidence-loop 阶段 A 加「目标改动是否与最近 7 天合并 PR 的架构方向冲突」自检；③ 「退役/删除公共契约（函数/env）」类任务，闸-1 必查全仓 + **新基线**消费者（含注释/SOP 文档引用，sx-promote 即在注释依赖）。
+
+### needs_automation: true
+expires: 2026-09-23
+（① dispatch 主题查 main 前沿强制化；② evidence-loop 阶段 A「与近期合并 PR 架构冲突」自检；③ 退役公共契约任务闸-1 查新基线消费者。到期未落地 meta-review 处置或撤项。）
