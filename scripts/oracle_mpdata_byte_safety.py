@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""山西多省「生产数据就绪」字节安全 oracle — snapshot/verify 双模式（域无关）。
+"""山西多省「生产数据就绪」**值级**字节安全 oracle — snapshot/verify 双模式（域无关）。
 
-证明各域物化 branch_code **只新增 branch_code 列、非 branch 列逐字节不变**：
+证明各域物化 branch_code **只新增 branch_code 列、非 branch 列值级逐行不变**（codex 闸-2 P2.2：
+本 oracle 证「非 branch 列**值级**逐行相等 + 列名序 + DuckDB 类型不变」的**逻辑层**不变量，
+**不**声称 parquet 容器原始字节相等——append_column/write_table 重写必改压缩/row-group/metadata，
+属预期且无害；运行时按列读值，值级相等即足够）：
   1. `--snapshot <baseline.json>`：物化**前**对每个域每个 parquet 文件记录
      {row_count, 非 branch 列名(有序), 非 branch 列 DuckDB 类型, 非 branch 列逐列 sha256,
       branch_code 是否存在}。
@@ -11,7 +14,8 @@
        + branch_code 列存在且全 'SC'（单省）+ 行数不变。
 
 回读路径用 DuckDB read_parquet（捕捉 arrow→parquet→arrow 序列化漂移，R31/R32 模板）。
-列 sha256 用 DuckDB md5(string_agg) 在引擎内算（不 to_pandas，避开 dtype 强转噪声）。
+列 sha256 用 DuckDB sha256(string_agg ORDER BY 物理行序) 在引擎内算（不 to_pandas，避开 dtype
+强转噪声；NULL 哨兵 + 列含 NULL 标记防歧义）。
 
 用法：
   python3 scripts/oracle_mpdata_byte_safety.py --snapshot /tmp/mp_base.json --data-root <warehouse 绝对路径>
@@ -58,15 +62,20 @@ def _fingerprint_file(con: duckdb.DuckDBPyConnection, path: str) -> dict:
     nonbranch = [(n, t) for (n, t) in cols if n != BRANCH]
     n = con.execute(f"SELECT count(*) FROM read_parquet('{safe}')").fetchone()[0]
 
-    # 逐列 sha256：在引擎内 md5(string_agg(col ORDER BY rowid)) 取每列内容指纹。
-    # 用 row_number 锚定文件物理行序（read_parquet 保序），COALESCE NULL→哨兵防 NULL 拼接歧义。
+    # 逐列 sha256：引擎内 sha256(string_agg(col ORDER BY 物理行序)) 取每列**值级**内容指纹。
+    # 用 row_number 锚定文件物理行序（read_parquet 保序）；NULL→哨兵 + 列内是否含 NULL 单独标记，
+    # 防「NULL vs 字面 'NULL'」歧义。注：本 oracle 证「非 branch 列**值级**逐行相等」（逻辑层），
+    # **不**证 parquet 容器原始字节相等（append_column 重写必改压缩/row-group/metadata，属预期）。
     col_hashes = {}
     base = f"(SELECT *, row_number() OVER () AS _rn FROM read_parquet('{safe}'))"
     for name, _t in nonbranch:
         qn = '"' + name.replace('"', '""') + '"'
+        # 哨兵选不可能出现在数据里的控制字符序列；列含 NULL 时哈希前缀加 'HASNULL' 区分
         h = con.execute(
-            f"SELECT md5(string_agg(COALESCE(CAST({qn} AS VARCHAR), '\\x00NULL'), '\\x1f' ORDER BY _rn)) "
-            f"FROM {base}"
+            f"SELECT sha256("
+            f"  CASE WHEN bool_or({qn} IS NULL) THEN 'HASNULL\\x1e' ELSE '' END || "
+            f"  COALESCE(string_agg(COALESCE(CAST({qn} AS VARCHAR), '\\x00NUL\\x00'), '\\x1f' ORDER BY _rn), '')"
+            f") FROM {base}"
         ).fetchone()[0]
         col_hashes[name] = h
 
@@ -156,14 +165,14 @@ def verify(data_root: Path, base_path: Path) -> int:
                     fails.append(f"{name}/{fn}: branch_code 有 {bi['nulls']} 行 NULL")
         if not [x for x in fails if x.startswith(name)]:
             rows = sum(_fingerprint_file(con, f)["row_count"] for f in files)
-            print(f"✅ {name}: {len(files)} 文件 / {rows:,} 行 — 非 branch 列字节全等 + branch_code 全 SC")
+            print(f"✅ {name}: {len(files)} 文件 / {rows:,} 行 — 非 branch 列值级逐行全等 + branch_code 全 SC")
 
     if fails:
-        print("\n❌ 字节安全 FAIL:")
+        print("\n❌ 值级字节安全 FAIL:")
         for x in fails:
             print(f"   - {x}")
         return 1
-    print("\n✅ 全域字节安全通过：只新增 branch_code 列、非 branch 列逐字节不变、branch_code 全 'SC'")
+    print("\n✅ 全域值级字节安全通过：只新增 branch_code 列、非 branch 列值级逐行不变、branch_code 全 'SC'")
     return 0
 
 

@@ -13,9 +13,15 @@
   - new_energy_claims（policy_no 100% NULL）：vehicle_frame_no→policy/current branch_code JOIN
     校验全 SC + miss=0，再加常量 'SC'（不回填/改写 org_level_3，codex P1.3）。
 
-**字节安全 by construction**：读原始 arrow table → 仅抽取派生出的 branch_code 列 → `append_column`
+**值级字节安全 by construction**：读原始 arrow table → 仅抽取派生出的 branch_code 列 → `append_column`
 到**原始 table**（非 branch 列复用原 arrow 数组，零 pandas 往返漂移）→ 写回。原 schema metadata
-（含 etl_*）随 append_column 自动保留。非 branch 列字节不变由 scripts/oracle_mpdata_byte_safety.py 复证。
+（含 etl_*）随 append_column 自动保留。非 branch 列**值级**逐行不变由 scripts/oracle_mpdata_byte_safety.py
+复证（不声称 parquet 容器原始字节相等——重写必改压缩/row-group，属预期）。
+
+**一次性工具，非 daily 流程**（evidence-verifier 闸-2 澄清）：本脚本只为「物化**存量**旧 parquet
+（P3 ETL 派生升级前的产物）的 branch_code」。各域 ETL（quote_etl/convert_renewal_tracker/
+convert_new_energy_claims，及 generate_dim_tables salesman）**已合并 branch_code 派生**，故下次 daily ETL
+重跑自然产 branch_code，**无需**把本脚本接入 daily.mjs；它是「存量补列」的一次性桥，不是持续维护点。
 
 用法：
   python3 数据管理/pipelines/materialize_branch_code_special.py --data-root <warehouse 绝对路径> [--dry-run] [--force]
@@ -68,6 +74,13 @@ def _branch_series_new_energy(table: pa.Table, root: Path) -> pd.Series:
     df = table.to_pandas()
     if "vehicle_frame_no" not in df.columns:
         print("   ❌ new_energy 缺 vehicle_frame_no 列 — fail-fast")
+        sys.exit(1)
+    # codex 闸-2 P2.1：逐行 VIN 闭环——常量 'SC' 覆盖全表，故每行都须有可校验 VIN。
+    # NULL/空 VIN 行无法经 VIN→policy JOIN 证省，禁被常量静默标 SC（防未来脏数据绕过）。
+    vin = df["vehicle_frame_no"].astype(str).str.strip()
+    null_vin = int((df["vehicle_frame_no"].isna() | (vin == "") | (vin.str.lower() == "nan")).sum())
+    if null_vin > 0:
+        print(f"   ❌ new_energy {null_vin} 行 VIN 为 NULL/空 — 无法经 VIN 证省，禁常量兜底，fail-fast")
         sys.exit(1)
     policy_glob = str(root / "fact/policy/current/*.parquet")
     con = duckdb.connect()
@@ -140,6 +153,8 @@ def main() -> int:
     ap.add_argument("--domains", default=",".join(DOMAINS), help="逗号分隔域子集")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--allow-missing", action="store_true",
+                    help="目标 parquet 缺失时跳过而非 fail-fast（默认缺失即非零退出，防 evidence-loop 假绿）")
     args = ap.parse_args()
 
     root = Path(args.data_root).resolve()
@@ -158,8 +173,12 @@ def main() -> int:
     for name in selected:
         path = root / DOMAINS[name]["rel"]
         if not path.exists():
-            print(f"⚠️  {name}: 文件不存在 {path} — 跳过")
-            continue
+            # codex 闸-2 P2.3：默认缺文件 fail-fast（防"全跳过 exit 0"假绿）；显式 --allow-missing 才容忍
+            if args.allow_missing:
+                print(f"⚠️  {name}: 文件不存在 {path} — 跳过（--allow-missing）")
+                continue
+            print(f"❌ {name}: 目标 parquet 不存在 {path} — fail-fast（如确需容忍用 --allow-missing）")
+            return 1
         if materialize_one(name, path, root, args.force, args.dry_run):
             changed += 1
     print(f"\n{'='*60}\n✅ 完成: {changed}/{len(selected)} 域已物化"
