@@ -16,17 +16,18 @@
 
 ---
 
-## 📋 活跃任务速查（72 项 · 数据截至 2026-06-23 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（73 项 · 数据截至 2026-06-24 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（5 项）**
+**P1（6 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
 - 2026-06-20-claude-65f495 `BLOCKED` — 成本/KPI 立方体生产不可服务（T1 实测）
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
+- 2026-06-24-claude-f7bda2 `IN_PROGRESS` — 安全 promote SX premium 到生产 current/，dry-run 默
 
 **P2（41 项）**
 
@@ -179,3 +180,4 @@
 | 2026-06-22-claude-e5cc06 | 2026-06-22 | 数据架构 · 多省(山西)GATED前置 | @claude | buildRsyncBranchFilterArgs 的 knownBranches 默认 ['SC','SX'] 硬编码，三省扩展时须通过 task.knownBranches（由 buildStandardSyncTasks opts 透传）覆盖默认值，否则第三省文件不受 Protect 规则保护。当前 buildSyncTasks→buildStandardSyncTasks 未透传 knownBranches，故三省前须先修复该透传链路。闸-2 P2（scripts/sync-vps.mjs buildRsyncBranchFilterArgs 注释已标注此约束）。 | P2 | PROPOSED | N/A | N/A |  |
 | 2026-06-23-claude-801409 | 2026-06-23 | 数据架构 · 多省 Phase B 隔离层(current/<省>/子目录) | @claude | Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P4): 用分省子目录 current/<省>/ 替代 #753 扁平目录+SX_前缀+rsync filter。高爆炸半径,用户 2026-06-23 授权动工,单任务 evidence-loop+双codex闸独立PR推进。范围红线: 仅SC+SX·readdir枚举实际子目录禁省常量·禁造加省脚手架·GATED严禁推SX进生产(current/SX空)·SC逐字节安全。子任务 B1(生死点装载发现)/B2(ETL落盘+扁平readdir站点)/B3(sync-vps退役5函数)/B4(web上传子目录化)/B5(RLS/性能/cutover)。 | P1 | IN_PROGRESS | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | server/src/services/data-bootstrapper.ts | B1 装载层子目录发现完成(PR pending): discoverInDir 静态发现顶层+current/<省>/(^[A-Z]{2}$ readdir枚举,禁省常量) + ParquetFileInfo.branch + enforceProvinceSubdirGate(GATED fail-closed: 非基准省+BRANCH_RLS_ENABLED!=true抛错/扁平+子目录并存抛错,基准省=getDeploymentBranchCode动态) + deduplicateOverlapping分组键纳branch(matching/非matching都branch::key防跨省同名同起期碰撞,P0生死点). 字节安全: 真实current/ discoverInDir返回同4扁平文件branch全undefined+新逻辑今日休眠. oracle: duckdb显式数组跨子目录读逐省==文件之和(loadMultipleParquet透明,无需改loader R28第7次). 18新单测+6现有dedup全绿+verify:full 3970+governance44/44+typecheck. 双闸零P0/P1: codex闸-1抓2P0(非matching键碰撞/GATED fail-open)+4P1全采纳; 闸-2零残留可合并; evidence-verifier CONFIRMED 9/9. 范围仅data-bootstrapper.ts(+111/-15)+新测试. 下一步 B2(ETL落盘+扁平readdir站点). <br>Phase B B2 完成（ETL gated 写侧 current/<省>/ 能力 + 全部读侧 readdir/glob 站点下钻子目录 + 每处子目录枚举断言）。读侧 6 站点：parquet-overlap-check/quick_reference/fetch-local-metrics/check-governance 下钻（显式文件列表 read_parquet([...])，非宽 ** glob）；full-snapshot-cache-key + renewal readiness 保持 flat 对齐延后 Python 消费者（renewal 加 subdir-only fail-closed）。写侧专用 env POLICY_CURRENT_SUBDIR_LAYOUT（默认 off SC 扁平字节安全），subdir 布局强制 noSync，不自动 flat-clear（留 cutover SOP）。范围外延后：18 个 Python DuckDB glob + B3 sync-vps + cube-probe/run.mjs。双闸：codex 闸-1 抓 6 P0（重塑写侧）+ 闸-2 抓 1 P1（** glob 过读 → 改显式列表）全修；evidence-verifier 8 攻击全反驳。verify:full 44/44+3993 测试+typecheck 全绿；字节安全 oracle current/SC/ ** = 扁平 2,600,421 行。B3/B4/B5 仍待。 |
 | 2026-06-23-claude-f77f8a | 2026-06-23 | 数据架构 · 多省派生化 follow-up | @claude | 跨省同 VIN 冲突登记机制（P3-E R32 P2·山西 GATED 上线前完成）: P3-E new_energy_claims 用 ROW_NUMBER PARTITION BY VIN ORDER BY insurance_start_date DESC, policy_no DESC 同时取 org+branch 静默兜底——当前 distinct_branch_in_hit=1 安全。但山西 GATED 上线后若同一 VIN 跨省（610/618 多保单），现状只取最新单一分支，未登记/告警冲突。须在 enrich_org_and_branch_from_policy SQL 加 distinct_branch 统计：>1 时打 warning 日志（含 VIN/冲突分支列表）；若超过预设阈值走 fail-fast。codex 闸-1 P2#2 + 闸-2 P2 一致建议。山西上线前必修，否则机构归错风险。 | P2 | PROPOSED | N/A | 数据管理/pipelines/convert_new_energy_claims.py |  |
+| 2026-06-24-claude-f7bda2 | 2026-06-24 | Chore | @claude | 安全 promote SX premium 到生产 current/，dry-run 默认+duckdb 校验+回滚 | P1 | IN_PROGRESS | N/A | scripts/release/sx-promote.mjs |  |

@@ -1,0 +1,24 @@
+{
+  "promotedAt": "2026-06-24T02:42:41.898Z",
+  "sourceDir": "/tmp/sx-test-src",
+  "targetDir": "/tmp/sx-test-target",
+  "files": [
+    {
+      "name": "每日数据_20210101_20231231.parquet",
+      "dstName": "SX_每日数据_20210101_20231231.parquet",
+      "status": "skipped_exists"
+    },
+    {
+      "name": "每日数据_20240101_20261231.parquet",
+      "dstName": "SX_每日数据_20240101_20261231.parquet",
+      "status": "skipped_exists"
+    }
+  ],
+  "summary": {
+    "status": "SUCCESS",
+    "totalPromoted": 0,
+    "totalSkipped": 2,
+    "totalRows": 0,
+    "totalPremium": 0
+  }
+}
