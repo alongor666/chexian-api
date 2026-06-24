@@ -10,7 +10,8 @@
  *   1. cache key 隔离 — SC vs SX 双 token 同 query 命中各自 cache（PR #501 / #507）
  *   2. permissionFilter 注入 — flag on 后 SX token 请求 SQL where 含 branch_code='SX'
  *   3. 基线性能 — N 并发用户下 RSS 峰值 / DuckDB heap peak / 平均响应时间
- *   4. 串读断言 — Phase 2 自动校验 SX 请求 dataLength=0（兼容期）+ SC 非空，不符 exit(1)
+ *   4. 串读断言 — Phase 2 自动校验 SX 请求无真实业务数据（realDataCount=0，兼容期）+ SC 有数据，不符 exit(1)
+ *      （realDataCount 按"含正数业务度量的行"判定，非数组长度 — 聚合路由零行仍返回 1 行全零）
  *
  * 限制：
  *   - 本会话无真实 SX 数据（数据全部 branch_code='SC'），SX token 请求会返回空集
@@ -27,6 +28,7 @@
  */
 
 import { createHmac } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 
 const args = process.argv.slice(2);
 const simulateSx = args.includes('--simulate-sx');
@@ -75,6 +77,63 @@ function getJwtSecret() {
   return secret;
 }
 
+/**
+ * 串读判定修复（2026-06-24）：聚合路由（KPI / comprehensive…）即便被 RLS 过滤到零行，
+ * SUM/COUNT 仍返回 1 行（业务度量全零/全空）。旧断言用「data 数组长度 > 0」判「有数据」，
+ * 把这「1 行全零」误判为串读 CRITICAL（假阳性）。正确口径：一行算「有真实业务数据」
+ * 当且仅当其某个记录量/保费度量为正数。
+ *
+ * ⚠️ 计划/目标/比率字段不作为信号 —— 计划维度尚未省份化（dim 仍 SC-only），SX token
+ *    也会看到 SC 的计划值（如 vehicle_plan_wan），那不是 SC 业务数据泄漏（已登记 follow-up）。
+ */
+const REAL_DATA_MEASURE_FIELDS = [
+  'policy_count', 'count', 'org_count', 'salesman_count',
+  'total_premium', 'signed_premium', 'matured_premium',
+  'vehicle_premium', 'driver_premium', 'premium',
+  'reported_claims', 'claim_cases',
+];
+
+/**
+ * 返回一行中「真实业务数据」信号（度量字段为正数）。空数组 = 该行无真实数据。
+ * @param {unknown} row
+ * @returns {{field: string, value: number}[]}
+ */
+export function realDataSignals(row) {
+  if (row == null) return [];
+  if (typeof row !== 'object') return [{ field: '(value)', value: 1 }]; // 原始值列表项 = 一条数据
+  const signals = [];
+  for (const f of REAL_DATA_MEASURE_FIELDS) {
+    const v = row[f];
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) signals.push({ field: f, value: v });
+  }
+  // 行内无任何已知度量字段（未知形状）→ 保守判为「有数据」，宁可误报不漏真串读
+  if (signals.length === 0 && !REAL_DATA_MEASURE_FIELDS.some((f) => f in row) && Object.keys(row).length > 0) {
+    signals.push({ field: '(unknown-shape)', value: 1 });
+  }
+  return signals;
+}
+
+/**
+ * 统计响应体中「含真实业务数据」的行数 + 前 3 行信号样本（诊断用）。
+ * 列表路由 = 有信号的行数；聚合单行路由 = 0 或 1。
+ * @param {any} body
+ * @returns {{count: number, sample: {field: string, value: number}[][]}}
+ */
+export function countRealDataRows(body) {
+  const data = body?.data;
+  const rows = Array.isArray(data) ? data : data != null ? [data] : [];
+  let count = 0;
+  const sample = [];
+  for (const row of rows) {
+    const sig = realDataSignals(row);
+    if (sig.length > 0) {
+      count++;
+      if (sample.length < 3) sample.push(sig);
+    }
+  }
+  return { count, sample };
+}
+
 const ROUTES = [
   '/api/query/kpi?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-11',
   '/api/query/trend?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-11&granularity=day&perspective=premium',
@@ -94,7 +153,8 @@ async function runOne(token, url, branchLabel) {
     }
     const body = await res.json();
     const dataLength = Array.isArray(body?.data) ? body.data.length : body?.data ? 1 : 0;
-    return { ok: true, status: res.status, ms, branchLabel, url, dataLength };
+    const { count: realDataCount, sample: realDataSample } = countRealDataRows(body);
+    return { ok: true, status: res.status, ms, branchLabel, url, dataLength, realDataCount, realDataSample };
   } catch (e) {
     return { ok: false, status: 'ERR', ms: Date.now() - start, branchLabel, url, error: String(e?.message ?? e) };
   }
@@ -141,35 +201,39 @@ async function runBatch(tasks, label) {
 }
 
 /**
- * 0H codex P2-2：串读断言 — 兼容期 SX token 必须 dataLength=0（permission.ts 注入
- * branch_code='SX' WHERE 过滤掉所有行）；SC token 必须 dataLength>0（有四川数据）。
+ * 0H codex P2-2 串读断言 + 2026-06-24 假阳性修复：兼容期 SX token 必须「无真实业务数据」
+ * （permission.ts 注入 branch_code='SX' WHERE 过滤掉所有 SC 行）；SC token 必须有真实数据。
+ *
+ * 判据用 realDataCount（含正数业务度量的行数）而非 data 数组长度 —— 聚合路由（KPI 等）
+ * 被过滤到零行后仍返回 1 行全零，数组长度=1 但 realDataCount=0，那不是串读。
  * 任一不符 → cache 串读或 RLS 失效，CRITICAL，exit(1) 让 Day-1 验证显式失败。
  */
 function assertNoLeak(results, phaseLabel) {
   const scResults = results.filter((r) => r.ok && r.branchLabel === 'SC');
   const sxResults = results.filter((r) => r.ok && r.branchLabel === 'SX');
 
-  const scEmpty = scResults.filter((r) => r.dataLength === 0);
-  const sxNonEmpty = sxResults.filter((r) => r.dataLength > 0);
+  const scEmpty = scResults.filter((r) => (r.realDataCount ?? 0) === 0);
+  const sxLeaked = sxResults.filter((r) => (r.realDataCount ?? 0) > 0);
 
-  console.log(`\n🔍 ${phaseLabel} 串读检测：`);
-  console.log(`   SC 请求 ${scResults.length} 条，非空 ${scResults.length - scEmpty.length}，空集 ${scEmpty.length}`);
-  console.log(`   SX 请求 ${sxResults.length} 条，非空 ${sxNonEmpty.length}（兼容期应=0），空集 ${sxResults.length - sxNonEmpty.length}`);
+  console.log(`\n🔍 ${phaseLabel} 串读检测（按真实业务数据行，非数组长度）：`);
+  console.log(`   SC 请求 ${scResults.length} 条，有数据 ${scResults.length - scEmpty.length}，空 ${scEmpty.length}`);
+  console.log(`   SX 请求 ${sxResults.length} 条，泄漏 ${sxLeaked.length}（兼容期应=0），空 ${sxResults.length - sxLeaked.length}`);
 
   let failed = false;
-  if (sxNonEmpty.length > 0) {
-    console.error(`\n❌ CRITICAL：${sxNonEmpty.length} 条 SX token 请求返回非空数据 → cache 串读或 RLS 失效！`);
-    sxNonEmpty.slice(0, 5).forEach((r) => {
-      console.error(`   - SX token / ${r.url} → dataLength=${r.dataLength}`);
+  if (sxLeaked.length > 0) {
+    console.error(`\n❌ CRITICAL：${sxLeaked.length} 条 SX token 请求返回真实 SC 业务数据 → cache 串读或 RLS 失效！`);
+    sxLeaked.slice(0, 5).forEach((r) => {
+      const sig = (r.realDataSample?.[0] ?? []).map((s) => `${s.field}=${s.value}`).join(', ');
+      console.error(`   - SX token / ${r.url} → realDataCount=${r.realDataCount}（泄漏度量: ${sig || '未知形状'}）`);
     });
     failed = true;
   }
   if (scResults.length > 0 && scEmpty.length === scResults.length) {
-    console.error(`\n❌ SC token 所有请求返回空集 → 兼容期数据应非空，可能 RLS 配置错或数据为空`);
+    console.error(`\n❌ SC token 所有请求无真实数据 → 兼容期 SC 应非空，可能 RLS 配置错或数据为空`);
     failed = true;
   }
   if (!failed) {
-    console.log(`   ✅ 串读断言通过（SX dataLength=0 + SC dataLength>0）`);
+    console.log(`   ✅ 串读断言通过（SX 真实数据行=0 + SC 真实数据行>0）`);
   }
   return !failed;
 }
@@ -231,7 +295,11 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error('❌ 压测脚本异常:', e);
-  process.exit(1);
-});
+// 仅直接执行时跑 main()；被 import（单测）时不触发副作用
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) {
+  main().catch((e) => {
+    console.error('❌ 压测脚本异常:', e);
+    process.exit(1);
+  });
+}
