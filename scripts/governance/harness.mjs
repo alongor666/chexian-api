@@ -11,7 +11,8 @@ const ROOT_DIR = path.resolve(__dirname, '../..');
 const requiredDenyEntries = [
   'Read(./node_modules/**)',
   'Read(./dist/**)',
-  'Read(./.claude/worktrees/**)',
+  // Read(./.claude/worktrees/**) 已移除（2026-06-23，PR #778）：与官方 EnterWorktree 默认落点（.claude/worktrees/）
+  // 自相矛盾，且与 .gitignore 的 .claude/worktrees/ 冗余（官方推荐 gitignore 兜噪声，非 Read deny）。勿再加回。
   'Read(./server/data/**)',
   'Read(./logs/**)',
   'Read(./public/reports/**)',
