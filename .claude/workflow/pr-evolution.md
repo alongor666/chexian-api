@@ -1243,3 +1243,21 @@
 ### needs_automation: true
 expires: 2026-09-23
 （认领锁强制 + 环境 pre-flight 自检 + codex CLI 降级，三项可机制化；到期未落地则 meta-review 强制处置或显式撤项。）
+
+## 2026-06-24 · 山西第二层 2A 代码前置（G7 P2 + B-b promotion 脚本）· 双闸抓 3 P0 实证
+
+> 交付：G7 P2 login→403 运行时测试（PR #782）、B-b validation/SX→current promotion 脚本（PR #783，Option A 扁平前缀）。owner 拍板 B-a=Option A、并授权建脚本。
+
+### 核心实证：双闸（codex + evidence-verifier）的差异化价值
+promotion 脚本第 1 轮对抗：**evidence-verifier 判 PASS（仅 2 P1）；codex 判「不能用于 cutover：3 P0 + 5 P1」**。codex 多模型对抗抓出 evidence-verifier 漏判/低估的 3 个 P0：① 源不校 `branch_code` + `--source-dir` 任意 → 可把 SC 数据复制成 `SX_*.parquet` 装进生产（混省/重复计数）② validate-after-rename 竞态窗口 ③ `--force` 不可恢复数据丢失（verifier 仅评 P1）。**这直接证实「P0/P1 复杂任务 codex 强制」规则——单靠 evidence-verifier 会放 3 个 P0 进生产 cutover 工具。** 第 2 轮 codex 再抓残留 P0-2（崩溃原子性）+ 3 P1（backup 事务化 / 流式 sha256 / 测试没真跑端到端，与 verifier 一致）。
+
+### 诚实停止点
+残留 P0-2「批量 staging→final rename 跨进程崩溃非原子」是 **Option A 扁平布局 OS 级固有**（多文件 rename 无法原子）。脚本内三层缓解（leftover preflight 拒绝 / 幂等重跑 / SOP 串行+ready-marker）+ 诚实标注「非崩溃原子」+ 登记 Option B 子目录单次 swap 的根治 follow-up（backlog f7590d）。**不对固有限制空转复闸。**
+
+### 三问复盘
+- **重来更好？** promotion 脚本第 1 版就该按「源 branch_code='SX' fail-fast + staging 先校后 rename + 字节 sha256 一致」设计，而非「行数+保费」弱校验——这些是高风险数据搬运脚本的基本盘，codex 抓的 3 P0 本可在规格阶段避免。教训：cutover 类数据搬运脚本，规格里就写死「省份事实源校验 + 字节一致 + 先校后提交」。
+- **复用价值？** 双闸对高风险件的差异化价值已实证（codex 多模型对抗 > 单 verifier）。固化「P0 复杂件必过 codex CLI（`/opt/homebrew/bin/codex exec --sandbox read-only`）」。
+- **自动化？** 脚本的「源 branch_code='SX' fail-fast」即把混省风险变机制；Option B 子目录单次 swap 是崩溃原子性的根治自动化（follow-up f7590d）。
+
+### needs_automation: false
+（Option B 已由 backlog f7590d 跟踪；本条无新增机制缺口。）

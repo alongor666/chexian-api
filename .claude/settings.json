@@ -4,7 +4,6 @@
     "deny": [
       "Read(./node_modules/**)",
       "Read(./dist/**)",
-      "Read(./.claude/worktrees/**)",
       "Read(./server/data/**)",
       "Read(./logs/**)",
       "Read(./public/reports/**)",
