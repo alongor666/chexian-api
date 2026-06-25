@@ -93,3 +93,39 @@ describe('repair 影子网点 CTE 分省 RLS 注入（PR-6）', () => {
     expect(generateRepairOrphanShopsQuery({ timeWindow: 'rolling12' })).not.toContain(NO_BRANCH);
   });
 });
+
+// ── PR-7：RepairDim（登记表侧）bare 子查询分省过滤 ──
+// 影子分类用的 NOT IN/IN (SELECT FROM RepairDim) 不经 finalWhere，须用独立 repairBranchCode
+// （gate 在 RepairDim 列存在性，与 ClaimsDetail 的 branchCode 分开）下推 branch_code，
+// 否则 RLS-on 多省时 SX 赔案网点被 SC 登记表误判为已登记。RepairDim 子查询无别名 → branch_code 不带前缀。
+const REPAIR_NAME = "FROM RepairDim WHERE repair_shop_name IS NOT NULL AND branch_code = 'SX'";
+const REPAIR_PAST = "WHERE cooperation_status IN ('0暂停合作', '7已撤销', '8失效') AND branch_code = 'SX'";
+
+describe('repair RepairDim 登记表 bare 子查询分省过滤（PR-7）', () => {
+  it('传 repairBranchCode → coop-tier shadow_shops NOT IN RepairDim 含 branch_code 过滤', () => {
+    expect(generateRepairCoopTierQuery(filters, '1=1', undefined, 'SX')).toContain(REPAIR_NAME);
+  });
+
+  it('传 repairBranchCode → orphan-shops NOT IN RepairDim 含 branch_code 过滤', () => {
+    expect(generateRepairOrphanShopsQuery(filters, 100, '1=1', undefined, 'SX')).toContain(REPAIR_NAME);
+  });
+
+  it('传 repairBranchCode → diversion 三处 RepairDim 子查询（active/past/none）均过滤', () => {
+    const sql = generateRepairDiversionListQuery(filters, 500, 0, '1=1', undefined, undefined, 'SX');
+    expect(sql).toContain(REPAIR_PAST);
+    // active_shops + past + none 三处 RepairDim 子查询，各一个 branch_code = 'SX'
+    expect(count(sql, "branch_code = 'SX'")).toBe(3);
+  });
+
+  it('独立 gate：传 branchCode 但不传 repairBranchCode → ClaimsDetail 过滤但 RepairDim 子查询保持 bare（防 RepairDim 未物化时 Binder Error）', () => {
+    const sql = generateRepairCoopTierQuery(filters, '1=1', 'SX');
+    expect(sql).toContain(BRANCH); // ClaimsDetail c.branch_code 过滤在
+    expect(sql).not.toContain(REPAIR_NAME); // RepairDim 子查询无 branch_code（gate b 未过）
+  });
+
+  it('不传 repairBranchCode → 3 端点 RepairDim 子查询零 branch_code（字节安全）', () => {
+    expect(generateRepairCoopTierQuery(filters)).not.toContain(NO_BRANCH);
+    expect(generateRepairDiversionListQuery(filters)).not.toContain(NO_BRANCH);
+    expect(generateRepairOrphanShopsQuery(filters)).not.toContain(NO_BRANCH);
+  });
+});
