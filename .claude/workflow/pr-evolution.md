@@ -1382,3 +1382,17 @@ PR-7 对其范围正确、codex 复审可合并。HIGH 已修（diversion org-on
 
 ### needs_automation: false
 （本条教训「dormant finding 激活台账」并入 R37 的「域跨省关系清单」静态闸 expires 2026-07-25 一并决策，不另起闸。）
+
+---
+
+## 2026-06-25 · 山西 cutover PR-5 前端空态保护（R40 · backlog 34dae2 · 分支 claude/sx-cutover-pr5-frontend-empty）
+
+> renewal-tracker + claims-detail ClaimsHeatmapPanel 空态守卫（纯函数 isXxxEmpty + EmptyState，G8 范式）。codex CLI 单源对抗（按 #796 用户指令收敛；本 PR 另跑了 code-reviewer，因开工时分支尚未含 #796）。非部署链。
+
+### 三问复盘
+1. **重来怎样更好**：① Explore 子代理给的「4 panel 全需补守卫」清单不能照搬——逐个读实际代码才发现 PendingClaimsPanel 有刻意「0 件正常态」（codex P2 #2）、GeoRiskPanel 已有「暂无赔案数据」叙事、LossRatioDev 已有空态框架。教训：**「空态 vs 真实零」是业务语义判断，必须读每个 consumer 的实际渲染逻辑，不能照测绘清单批量加守卫**（否则回归既有刻意行为）。② codex 比我更细：GeoRisk 我判「已非静默零」，codex 指出 KPI 卡仍显 0 件/横幅判正常 → 只「部分成立」。教训：**「已有 X 处理」不等于「完全覆盖」，排除决策要核到每个渲染元素**。
+2. **复用价值**：① **G8 空态范式三件套**（纯函数 isXxxEmpty 判规模锚 + EmptyState + TDD）已第 N 次复用（quoteKpiState→renewal→heatmap），是新分公司接入的标准模板。② **规模锚选择有讲究**：renewal 选应续 A 非已续 C（C=0 是真实「没续」、A=0 才是「没到期保单」=装载中）——「锚要选『是否有业务量入口』而非『业务结果』」可推广。③ **对抗 finding 分级处置**：真静默零（renewal）当场修，部分缓解（GeoRisk）登记 follow-up 不强塞进本 PR（避免误伤真实零赔案窄筛选）。
+3. **如何更高质量自动化**：空态守卫覆盖率无静态闸——未来新增 KPI 页面易漏。可加 lint：features 下渲染 KPI 卡的组件若 data 来自 API hook 但无 isXxxEmpty 守卫 → 告警。但「哪些是 KPI 卡 / 哪些 0 是真实态」难静态判定，**P4**（低频 + 业务语义重，人工 review 更可靠）。
+
+### needs_automation: false
+（空态守卫覆盖率静态闸 P4：业务语义重、误报率高，人工 review + 本复盘范式更可靠，不另起闸。GeoRisk 完整守卫见 backlog 6a5aad。）

@@ -300,3 +300,21 @@ PR-6 只过滤 ClaimsDetail（赔案侧）。**RepairDim（登记表侧）无 br
 
 ### cutover 数据发布步增量（PR-2 激活）
 - validation/SX 派生域 sync 是 **GATED 显式步**：`SYNC_VALIDATION_BRANCHES=1` + `node scripts/sync-vps.mjs`（RLS-on 前置序列内，类比 RepairDim materialize+sync）。日常 `release:daily` 不带此 env → 不推 SX。**RLS-on 前必做（否则 VPS 读不到 SX 派生域）。**
+
+---
+
+## 实证追加（2026-06-25 · PR-5 前端空态保护完成 · append-only）
+
+> 阶段 1 PR-5（`34dae2`）已实现 + 双对抗（code-reviewer + codex CLI；后者按 #796 用户指令为单源闸）。**非部署链，非 GATED。PR-2（#795）已被 owner 合并入 main。**
+
+### PR-5 已完成（分支 claude/sx-cutover-pr5-frontend-empty，未合并）
+- **renewal-tracker（真静默零 → 修）**：RenewalTrackerPage 原 `{data && (...)}` 直接渲染全零仪表盘。新增纯函数 `isRenewalEmpty`（规模锚=应续件数 A，useMemo 收口）+ 页面级 EmptyState 守卫。
+- **claims-detail ClaimsHeatmapPanel（隐性静默零 → 修）**：原 `periods.length===0` 挡不住「有时间桶但规模锚全 0」零矩阵。新增 `isClaimsHeatmapEmpty` + EmptyState。
+- **逐 panel 读实际代码定范围（非照测绘清单）**：PendingClaimsPanel 刻意「0 件正常态」（codex P2 #2）/ GeoRiskPanel 已有「暂无赔案数据」叙事（但 KPI 卡仍 0 件 → **部分缓解**，登记 P3 `6a5aad`）/ LossRatioDev 已有空态框架 → 均排除（避免回归既有刻意行为 + 误伤真实零）。
+- **SC 无影响**：populated 数据 isXxxEmpty=false → 渲染路径逐字节等价历史。
+- **验证**：TDD 单元 15（renewal 8 + heatmap 7）+ 两 feature 套件 137 + typecheck + build + governance 44/44。
+
+### cutover 前置清单（PR-5 完成后）
+- 非 GATED：PR-1 ✅(#792) · PR-6 ✅(#793) · PR-7 ✅(#794) · **PR-2 ✅(#795 已合并)** · **PR-5 ✅(本 PR·未合并)**。**非 GATED 代码前置全部就绪。**
+- 数据发布步（GATED 显式）：RepairDim materialize+sync（PR-7 激活）· validation/SX 派生域 sync（PR-2 激活，`SYNC_VALIDATION_BRANCHES=1`）。
+- 🔴 GATED：PR-3 RLS-on（依赖上面全部 + 数据发布 + 山西账号激活 + owner 凭据矩阵）· PR-4 可选 edit-env。

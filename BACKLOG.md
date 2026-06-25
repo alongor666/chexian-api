@@ -31,7 +31,7 @@
 - 2026-06-24-claude-85759a — D6 收敛
 - 2026-06-25-claude-fe871b — cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链)
 
-**P2（46 项）**
+**P2（45 项）**
 
 - B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -77,10 +77,9 @@
 - 2026-06-24-claude-0898bd — multi-branch-stress-test cross-sell 覆盖缺口
 - 2026-06-24-claude-2a7e17 — 计划维度省份化
 - 2026-06-24-claude-f7590d — sx-promote.mjs 批量 staging→final rename 非跨进程崩
-- 2026-06-25-claude-34dae2 — cutover能力PR-5(并行·day1-sop V9 §5)
 - 2026-06-25-claude-8e6e8a — cutover能力PR-4(可选·碰部署链)
 
-**P3（28 项）**
+**P3（29 项）**
 
 - B246 `BLOCKED` — VPS 分层查询改造（KPI variable_cost_ratio）
 - B247 — 图表 hex 色值审计
@@ -109,6 +108,7 @@
 - 2026-06-22-claude-03f6f0 — PerformanceAnalysisPanel 主组件(~900行)抽 usePerf
 - 2026-06-22-claude-21c578 — 两个 distribution chart 去重
 - 2026-06-24-claude-694041 — sx-promote 测试卫生
+- 2026-06-25-claude-6a5aad — GeoRiskPanel 完整空态守卫（PR-5 follow-up·codex 闸-2
 - 2026-06-25-claude-6b021a — repair diversion-list org 粒度泄漏(codex闸-2 PR-7
 
 ---
@@ -195,7 +195,7 @@
 | 2026-06-24-claude-694041 | 2026-06-24 | 多省·山西 cutover | @claude | sx-promote 测试卫生：E2E 测试把临时路径写进仓库跟踪的 scripts/release/.sx-promote-manifest.json(#783 自带)，宜改写临时 manifest 或 gitignore | P3 | PROPOSED | N/A | scripts/release/__tests__/sx-promote.test.mjs |  |
 | 2026-06-24-claude-85759a | 2026-06-24 | 多省 Phase B | @claude | D6 收敛：0a 隔离层终局定为子目录 current/<省>/，超越 D3（前缀），退役 #753。采纳 B 决策（用户 2026-06-24）。程序：①ADR §1 D6+§11 收敛(本 PR docs-only) ②B3 落地(b3 950267c6 复活，退役前缀 sync) ③退役/隔离 #783 前缀 promote，B5 前重建子目录版 ④loop 机制(dispatch 架构轴+contract-token preflight)独立 follow-up | P1 | PROPOSED | 开发文档/multi-branch/D3-vs-PhaseB分叉复盘_2026-06-24.md | N/A |  |
 | 2026-06-24-claude-f7590d | 2026-06-24 | Chore | @claude | sx-promote.mjs 批量 staging→final rename 非跨进程崩溃原子（Option A 扁平固有）。已三层缓解（leftover preflight+幂等+ready-marker+SOP串行）。彻底闭合需 Option B 子目录单次目录 swap，或 sync-vps/data-bootstrapper 共守 promote lock。cutover 真用前须 VPS 真实 SX parquet dry-run。 | P2 | PROPOSED | N/A | scripts/release/sx-promote.mjs 数据管理/lib/branch-naming.mjs scripts/sync-vps.mjs |  |
-| 2026-06-25-claude-34dae2 | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-5(并行·day1-sop V9 §5): 前端空态保护—claims-detail/renewal-tracker 等页面 KPI 空时显示'山西数据装载中'而非静默零值(参 VariableCostKpiBoard ADR G8 范式),禁静默展示空 KPI | P2 | PROPOSED | N/A | src/features/claims-detail,src/features/renewal-tracker |  |
+| 2026-06-25-claude-6a5aad | 2026-06-25 | 多省·山西 cutover | @claude | GeoRiskPanel 完整空态守卫（PR-5 follow-up·codex 闸-2 MEDIUM）：totalCases=0 时虽有「本期暂无赔案数据」叙事，但 KPI 卡仍显 0 件/0.0%、横幅 severity 判正常（crossPct=0→good）→ 非完全非静默零。需用数据缺失锚（comparison===null 区分 SX 装载中 vs 真实零赔案窄筛选）补 EmptyState 守卫，避免误伤真实零 | P3 | PROPOSED | N/A | src/features/claims-detail/components/GeoRiskPanel.tsx,src/features/claims-detail/components/claimsEmptyState.ts |  |
 | 2026-06-25-claude-6b021a | 2026-06-25 | 多省·山西 cutover | @claude | repair diversion-list org 粒度泄漏(codex闸-2 PR-7复审MEDIUM·非分省隔离·非PR-6/7引入·低优): generateRepairDiversionListQuery 的 diversion_claims(ClaimsDetail)+shop_tier 分类未按 org_level_3 过滤,只 policy_dedup(PolicyFact) 按 org。org_user 经 LEFT JOIN 可见同分公司内其他机构的 claim_no/subject_shop_code/accident_district/shop_tier 行(policy 字段 null)。分省隔离(SC/SX)正确(claimsBranch/repairBranch),仅 org 粒度细分缺口。cutover(分省)不关心,RLS-on 不阻断。修法待定:diversion_claims 是否该按 org 收窄(需业务确认 diversion 是本机构视角还是分公司视角) | P3 | PROPOSED | N/A | server/src/sql/repair.ts |  |
 | 2026-06-25-claude-8e6e8a | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-4(可选·碰部署链): deploy/vps-wrapper/deploy-chexian-api.sh 补 edit-env 子命令(sed 改 ecosystem env+reload),修 day1-sop 假设的 edit-env 与 wrapper 实现偏差。优先级低于 PR-1/2/3 | P2 | PROPOSED | N/A | deploy/vps-wrapper/deploy-chexian-api.sh |  |
 | 2026-06-25-claude-fe871b | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链): ecosystem.config.cjs env 加 BRANCH_RLS_ENABLED true。不可逆生产 RLS 开启,人工监控窗口 merge+盯CI。开前必跑 multi-branch-stress-test --simulate-sx + SC golden-baseline 零差异(需 owner 给 E2E_PASSWORD/JWT_SECRET) | P1 | PROPOSED | N/A | server/ecosystem.config.cjs | RLS-on 硬前置升级（2026-06-25）：除 stress-test --simulate-sx + SC golden-baseline 零差异外，新增依赖 PR-6(2bb22d) repair shadow 网点 ClaimsDetail branch 隔离——PR-1(5f1545) 让 ClaimsDetail 多源后，repair 4 端点 RLS-on 会跨省串读。开 RLS 前 PR-6 必须先合并。 <br>RLS-on 硬前置再升级（2026-06-25 codex 对抗审计）：新增依赖 PR-7(e6fac1) RepairDim 省份化。PR-6(2bb22d) 只闭 ClaimsDetail/PolicyFact 行泄漏；RepairDim-only 端点(overview/detail等)对 branch_admin 未省份隔离 + 影子 CTE bare RepairDim 子查询跨省全读仍未闭。开 RLS 前 PR-6 + PR-7 都必须先合并。 |
