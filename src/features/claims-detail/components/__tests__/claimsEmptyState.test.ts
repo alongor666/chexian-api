@@ -31,4 +31,7 @@ describe('isClaimsHeatmapEmpty（规模锚：已赚保费/赔款/件数）', () 
   it('规模锚为 null/undefined 经 toNum 归零 → 空态', () => {
     expect(isClaimsHeatmapEmpty([{ earned_premium_wan: null, claim_count: undefined, total_claims_wan: null }])).toBe(true);
   });
+  it('规模锚为负数 / NaN → 「不 > 0」按空态（保守，冲销类负值宁显装载中）', () => {
+    expect(isClaimsHeatmapEmpty([{ earned_premium_wan: -10, claim_count: Number.NaN, total_claims_wan: -2 }])).toBe(true);
+  });
 });

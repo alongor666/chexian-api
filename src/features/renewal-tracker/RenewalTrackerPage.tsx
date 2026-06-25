@@ -46,6 +46,12 @@ export default function RenewalTrackerPage() {
 
   const { data, isLoading, isFetching, error } = useRenewalTracker(timeRange);
 
+  // 空态判据收口到 useMemo（避免渲染期两处内联各遍历一次 orgRows；与 ClaimsHeatmapPanel 写法一致）
+  const isRenewalEmptyState = useMemo(
+    () => isRenewalEmpty(data?.overall, data?.orgRows),
+    [data?.overall, data?.orgRows],
+  );
+
   const handleTimeChange = useCallback((range: TimeRange) => {
     setSelection({ kind: 'overall' });
     setTimeRange(range);
@@ -134,7 +140,7 @@ export default function RenewalTrackerPage() {
       {/* 空态保护（多省接入 ADR G8 / Day-1 SOP §5）：山西等新分公司数据装载中 / 缺数据时，
           续保端点返回全零应续行（A=0）。无此守卫会静默渲染 0 件应续 / 0.0% 续保率，被业务方
           误判「真实零续保」。规模锚 A=0 即渲染 EmptyState 而非零（判据见 utils/renewalEmptyState.ts）。 */}
-      {data && isRenewalEmpty(data.overall, data.orgRows) && (
+      {data && isRenewalEmptyState && (
         <EmptyState
           size="lg"
           title="暂无续保数据"
@@ -142,7 +148,7 @@ export default function RenewalTrackerPage() {
         />
       )}
 
-      {data && !isRenewalEmpty(data.overall, data.orgRows) && (
+      {data && !isRenewalEmptyState && (
         <div className={isFetching ? 'opacity-50 pointer-events-none' : ''}>
           <OverviewBand
             overall={data.overall}

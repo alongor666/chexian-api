@@ -38,4 +38,9 @@ describe('isRenewalEmpty', () => {
   it('A 为 null/undefined 经 toNum 归零 → 空态', () => {
     expect(isRenewalEmpty(row({ A: null as unknown as number }), [row({ row_level: 'org', A: undefined as unknown as number })])).toBe(true);
   });
+
+  it('A 为负数 / NaN → 「不 > 0」按空态（保守，宁显装载中不显误导零）', () => {
+    expect(isRenewalEmpty(row({ A: -3 }), [])).toBe(true);
+    expect(isRenewalEmpty(row({ A: Number.NaN }), [row({ row_level: 'org', A: -1 })])).toBe(true);
+  });
 });
