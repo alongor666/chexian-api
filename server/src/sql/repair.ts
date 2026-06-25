@@ -126,14 +126,34 @@ const NON_REPAIR_FILTER = `(
     AND repair_shop_name IS NOT NULL
   )`;
 
-/** 时间窗 WHERE 子句（用于 ClaimsDetail，基准 MAX(accident_time) 而非 today()） */
-function claimsTimeWindow(window: RepairTimeWindow | undefined, alias = 'c'): string {
+/**
+ * 时间窗 WHERE 子句（用于 ClaimsDetail，基准 MAX(accident_time) 而非 today()）。
+ *
+ * PR-6（RLS-on 硬前置）：基准 MAX 子查询亦读 ClaimsDetail，多省共存时须按 branchCode 收束到本省，
+ * 否则 SX 用户的窗口锚点会被 SC 最新出险日带偏（读到对方省的聚合时点）。branchCode undefined
+ * （RLS-off / 单省）→ 不追加 WHERE → 与历史 SQL 逐字节一致（字节安全）。
+ */
+function claimsTimeWindow(window: RepairTimeWindow | undefined, alias = 'c', branchCode?: string): string {
   if (!window || window === 'all') return '1=1';
+  const baseWhere = branchCode ? ` WHERE branch_code = '${branchCode}'` : '';
   if (window === 'ytd') {
-    return `YEAR(${alias}.accident_time) = YEAR((SELECT MAX(accident_time) FROM ClaimsDetail))`;
+    return `YEAR(${alias}.accident_time) = YEAR((SELECT MAX(accident_time) FROM ClaimsDetail${baseWhere}))`;
   }
   // rolling12
-  return `${alias}.accident_time >= (SELECT MAX(accident_time) FROM ClaimsDetail) - INTERVAL 12 MONTH`;
+  return `${alias}.accident_time >= (SELECT MAX(accident_time) FROM ClaimsDetail${baseWhere}) - INTERVAL 12 MONTH`;
+}
+
+/**
+ * ClaimsDetail 影子网点扫描的分省 RLS 过滤片段（PR-6 · RLS-on 硬前置）。
+ *
+ * 影子 / 导流 / 本地资源等 CTE 直接扫 ClaimsDetail、**不经 PolicyFact JOIN**，故无法靠 JOIN
+ * 传导 RLS——必须在 ClaimsDetail 扫描处就地下推 `branch_code` 隔离本省。branchCode 来自路由
+ * resolveBranchRlsCode(req,'ClaimsDetail') 双门控（gate a：RLS-on 且用户有省份码；gate b：
+ * ClaimsDetail 实测含 branch_code 列），经 ^[A-Z]{2}$ 校验后内插，无 SQL 注入面。
+ * undefined（RLS-off / 单省）→ 返回空串 → 不追加任何字符 → 字节安全、RLS-off 生产零行为变更。
+ */
+function claimsBranchAnd(branchCode: string | undefined, alias = 'c'): string {
+  return branchCode ? ` AND ${alias}.branch_code = '${branchCode}'` : '';
 }
 
 /** v2 WHERE 构造（兼容 v1） */
@@ -192,10 +212,11 @@ export function generateRepairChannelQuery(filters: RepairFiltersV2, whereClause
 }
 
 /** 【3】三态合作分布（含影子网点从 claims 反推） */
-export function generateRepairCoopTierQuery(filters: RepairFiltersV2, whereClause: string = '1=1'): string {
+export function generateRepairCoopTierQuery(filters: RepairFiltersV2, whereClause: string = '1=1', branchCode?: string): string {
   const where = buildWhereV2(filters);
   const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
-  const timeWhere = claimsTimeWindow(filters.timeWindow);
+  const timeWhere = claimsTimeWindow(filters.timeWindow, 'c', branchCode);
+  const claimsBranch = claimsBranchAnd(branchCode);
   return `
     WITH repair_tiers AS (
       SELECT
@@ -210,7 +231,7 @@ export function generateRepairCoopTierQuery(filters: RepairFiltersV2, whereClaus
       SELECT DISTINCT c.subject_shop_code AS shop_code
       FROM ClaimsDetail c
       WHERE c.subject_shop_code IS NOT NULL
-        AND ${timeWhere}
+        AND ${timeWhere}${claimsBranch}
         AND c.subject_shop_code NOT IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE repair_shop_name IS NOT NULL)
     ),
     tier_agg AS (
@@ -228,10 +249,11 @@ export function generateRepairCoopTierQuery(filters: RepairFiltersV2, whereClaus
 }
 
 /** 【4】散点图数据：区县 × 机构 网格三态（业务规则字典 §6） */
-export function generateRepairScatterQuery(filters: RepairFiltersV2, whereClause: string = '1=1'): string {
+export function generateRepairScatterQuery(filters: RepairFiltersV2, whereClause: string = '1=1', branchCode?: string): string {
   const where = buildWhereV2(filters);
   const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
-  const timeWhere = claimsTimeWindow(filters.timeWindow);
+  const timeWhere = claimsTimeWindow(filters.timeWindow, 'c', branchCode);
+  const claimsBranch = claimsBranchAnd(branchCode);
   return `
     WITH repair_shops AS (
       SELECT
@@ -256,7 +278,7 @@ export function generateRepairScatterQuery(filters: RepairFiltersV2, whereClause
       FROM ClaimsDetail c
       WHERE c.subject_shop_code IS NOT NULL
         AND c.accident_district IS NOT NULL
-        AND ${timeWhere}
+        AND ${timeWhere}${claimsBranch}
         AND c.subject_shop_code NOT IN (SELECT DISTINCT shop_code FROM repair_shops)
       GROUP BY subject_shop_code, accident_district
     ),
@@ -266,7 +288,7 @@ export function generateRepairScatterQuery(filters: RepairFiltersV2, whereClause
         COUNT(DISTINCT c.claim_no) AS claim_count,
         SUM(COALESCE(c.settled_vehicle_amount, 0)) AS settled_amount
       FROM ClaimsDetail c
-      WHERE c.subject_shop_code IS NOT NULL AND ${timeWhere}
+      WHERE c.subject_shop_code IS NOT NULL AND ${timeWhere}${claimsBranch}
         AND c.subject_shop_code NOT IN (SELECT DISTINCT shop_code FROM repair_shops)
       GROUP BY c.subject_shop_code
     )
@@ -293,10 +315,11 @@ export function generateRepairScatterQuery(filters: RepairFiltersV2, whereClause
 }
 
 /** 【5】本地资源占比（L4，RepairDim LEFT JOIN ClaimsDetail） */
-export function generateRepairLocalResourceQuery(filters: RepairFiltersV2, whereClause: string = '1=1'): string {
+export function generateRepairLocalResourceQuery(filters: RepairFiltersV2, whereClause: string = '1=1', branchCode?: string): string {
   const where = buildWhereV2(filters);
   const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
-  const timeWhere = claimsTimeWindow(filters.timeWindow);
+  const timeWhere = claimsTimeWindow(filters.timeWindow, 'c', branchCode);
+  const claimsBranch = claimsBranchAnd(branchCode);
   return `
     WITH base AS (
       SELECT
@@ -316,7 +339,7 @@ export function generateRepairLocalResourceQuery(filters: RepairFiltersV2, where
         COUNT(DISTINCT c.claim_no) AS total_claims,
         COUNT(DISTINCT CASE WHEN c.accident_district = b.shop_district THEN c.claim_no END) AS local_claims
       FROM base b
-      LEFT JOIN ClaimsDetail c ON c.subject_shop_code = b.shop_code AND ${timeWhere}
+      LEFT JOIN ClaimsDetail c ON c.subject_shop_code = b.shop_code AND ${timeWhere}${claimsBranch}
       GROUP BY b.shop_code, b.shop_name, b.org_level_3, b.shop_district
     )
     SELECT shop_code, shop_name, org_level_3, shop_district, total_claims, local_claims,
@@ -351,8 +374,9 @@ export function generateRepairToPremiumQuery(filters: RepairFiltersV2, whereClau
 }
 
 /** 【7】导流目标清单：送修在"曾合作/未合作/影子"的保单 */
-export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit = 500, offset = 0, whereClause: string = '1=1'): string {
-  const timeWhere = claimsTimeWindow(filters.timeWindow);
+export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit = 500, offset = 0, whereClause: string = '1=1', branchCode?: string): string {
+  const timeWhere = claimsTimeWindow(filters.timeWindow, 'c', branchCode);
+  const claimsBranch = claimsBranchAnd(branchCode);
   const orgClause = filters.orgName ? `AND p.org_level_3 = '${escapeSqlValue(filters.orgName)}'` : '';
   // whereClause 注入到 PolicyFact（有 org_level_3/is_telemarketing），实现保单维度权限收束
   const policyWhereExtra = whereClause !== '1=1' ? ` AND ${whereClause}` : '';
@@ -377,7 +401,7 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
           ELSE 'none_shadow'
         END AS shop_tier
       FROM ClaimsDetail c
-      WHERE c.subject_shop_code IS NOT NULL AND ${timeWhere}
+      WHERE c.subject_shop_code IS NOT NULL AND ${timeWhere}${claimsBranch}
     ),
     -- B252：PolicyFact 按 policy_no 去重，防止原单+批改多行让列表行数翻倍且 premium 显示错乱
     policy_dedup AS (
@@ -413,11 +437,13 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
 }
 
 /** 【8】影子网点（claims 中出现但 RepairDim 未登记）地理归属 */
-export function generateRepairOrphanShopsQuery(filters: RepairFiltersV2, limit = 100, whereClause: string = '1=1'): string {
-  // whereClause 为签名扩展，ClaimsDetail 无 org_level_3/is_telemarketing，
-  // 影子网点是全省维度数据，不按机构过滤（_whereClause 保留入参兼容路由层统一传参）
+export function generateRepairOrphanShopsQuery(filters: RepairFiltersV2, limit = 100, whereClause: string = '1=1', branchCode?: string): string {
+  // whereClause 为签名扩展，ClaimsDetail 无 org_level_3/is_telemarketing，机构维度不在此过滤
+  // （void 保留入参兼容路由层统一传参）。PR-6：分省 RLS 经 branchCode 在 ClaimsDetail 扫描处
+  // 下推（claimsBranch），将「全省维度」收束为「本省维度」——多省下不再跨省串读影子网点。
   void whereClause;
-  const timeWhere = claimsTimeWindow(filters.timeWindow);
+  const timeWhere = claimsTimeWindow(filters.timeWindow, 'c', branchCode);
+  const claimsBranch = claimsBranchAnd(branchCode);
   return `
     WITH orphan_claims AS (
       SELECT
@@ -429,7 +455,7 @@ export function generateRepairOrphanShopsQuery(filters: RepairFiltersV2, limit =
       FROM ClaimsDetail c
       WHERE c.subject_shop_code IS NOT NULL
         AND c.accident_district IS NOT NULL
-        AND ${timeWhere}
+        AND ${timeWhere}${claimsBranch}
         AND c.subject_shop_code NOT IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE repair_shop_name IS NOT NULL)
       GROUP BY c.subject_shop_code, c.subject_repair_shop, c.accident_district
     ),
