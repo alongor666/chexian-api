@@ -7,6 +7,7 @@
  */
 
 import path from 'path';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,12 +57,28 @@ export function getClaimsDetailPaths(): string[] {
 // ── 多省维度隔离副本路径（ADR G3 · GATED 多省共存能力预备）──
 
 /**
- * GATED 多省共存：维度/派生域隔离副本根目录（warehouse/validation）。
- * 0a 期各省 SX premium/quotes/renewal 隔离产物落此（warehouse/validation/<省>/…），
- * 绝不进 current/（ADR D5）。维度副本镜像 SC 的 dim/<域> 结构 → validation/<省>/dim/<域>/。
+ * GATED 多省共存：维度/派生域隔离副本根目录候选（本地 warehouse 优先，VPS data/ 回退）（PR-2）。
+ * - 候选 0：本地开发 `数据管理/warehouse/validation`（ETL 产物落此）。
+ * - 候选 1：VPS 运行时 `server/data/validation`（sync-vps 推送目标；VPS 无 warehouse）。
+ * 0a 期各省 SX premium/quotes/renewal 隔离产物落此（validation/<省>/…），绝不进 current/（ADR D5）。
  */
-export function getValidationRootDir(): string {
-  return path.resolve(SERVER_ROOT, '../数据管理/warehouse/validation');
+export function getValidationRootDirs(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/validation'),
+    path.resolve(getDataDir(), 'validation'),
+  ];
+}
+
+/**
+ * validation 隔离区根目录：返回首个存在的候选（本地 warehouse 优先，VPS data/validation 回退）。
+ * 两者皆不存在 → 默认返回首个候选（candidates[0]=warehouse），调用方（data-bootstrapper）existsSync
+ * guard 兜底返回 [] → 与历史行为逐字节等价（字节安全）。维度副本镜像 SC 的 dim/<域> → validation/<省>/dim/<域>/。
+ *
+ * @param candidates 候选根目录列表（默认 getValidationRootDirs()）；可注入以确定性测试选择逻辑，
+ *   不依赖真实机器的 warehouse/data 文件系统状态（生产调用方一律用默认）。
+ */
+export function getValidationRootDir(candidates: string[] = getValidationRootDirs()): string {
+  return candidates.find((d) => existsSync(d)) ?? candidates[0];
 }
 
 /**

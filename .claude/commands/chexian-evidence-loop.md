@@ -26,8 +26,8 @@ last_updated: "2026-06-16"
      本地 A p95 × 14 ≤ 250ms，否则 push 前 BLOCKED
 □ 3. pr-evolution 最近 7 天 entry：tail -100 .claude/workflow/pr-evolution.md
      看是否已记录同类失败模式（避免 24h 内复发）
-□ 4. verifier 计划：阶段 C 必跑 evidence-verifier（fresh context）
-     不可跳过，否则属流程违规
+□ 4. 闸-2 计划：阶段 C 必跑 codex CLI 对抗审计（read-only、fresh、code review 单源）
+     不可跳过，否则属流程违规（不再起 code-reviewer/evidence-verifier 子代理）
 □ 5. 凭据/数据缺口：若任务需 E2E_PASSWORD / admin token / baseline 文件
      等而当前缺失 → 先向用户索取，不要默认绕过
      （memory feedback_no_giveup_ask_authorization）
@@ -49,7 +49,7 @@ last_updated: "2026-06-16"
 | 基座挂载点 | 本项目提供 |
 |---|---|
 | §4 harness 映射表 | [.claude/rules/evidence-loop.md §4](../rules/evidence-loop.md) — 6 类任务的实际命令（bench / golden-baseline / cube-shadow / duckdb 直查 / verify:full / governance / sentinel） |
-| verifier agent | [.claude/agents/evidence-verifier.md](../agents/evidence-verifier.md)（项目级，提示词源自基座 `verifier-agent-template.md`） |
+| verifier agent（阶段 C 对抗/证伪） | **loop v2 收敛为 codex CLI 单源**（2026-06-25 用户指令，见 [loop-orchestration §2 + §4 末 meta](../rules/loop-orchestration.md)）：阶段 C 对抗审计只调 codex CLI，**不再起 `evidence-verifier` / `code-reviewer` 子代理**。[.claude/agents/evidence-verifier.md](../agents/evidence-verifier.md) 保留为可选 ad-hoc 正确性证伪 agent，但**非 loop 闸必需源**。correctness oracle = 确定性脚本（governance / verify:full / golden-baseline / duckdb 直查）。 |
 | scorecard 落位 | `.claude/workflow/pr-evolution.md`（append；与 `commit-push-pr-core` 自进化日志同位置）。**禁止** `.claude/shared-memory/**` / `~/.claude/projects/**/memory/**` —— AGENTS.md §8.3 user-only。**SSOT**: [`.claude/pr-checklist.md`](../pr-checklist.md) "sink/scorecard 落位" 行，三处同步由 governance "evidence-loop SSOT 漂移" 强制 |
 | 项目治理 / 回归门禁 | `bun run governance`（聚合 32+ 项）/ `bun run verify:full`（governance + 单元测试） |
 
@@ -67,8 +67,8 @@ last_updated: "2026-06-16"
 > 固化为单任务闭环内的**两道强制闸**（详见 [.claude/rules/loop-orchestration.md §2](../rules/loop-orchestration.md)）。
 
 - **🛡 闸-1（计划对抗）**：合同/计划（阶段 A 后、动手前）→ 调 `codex` skill 对抗审查**设计**（缺陷/遗漏/更优解/边界）→ 修 P0/P1 再实现。结论计入质量账本 `codex_plan`。
-- **🛡 闸-2（完成对抗）**：实现 + 确定性闸（verify:full/governance）绿后、**enable --auto 前** → 调 `codex` skill 审 **diff 完成质量** + `evidence-verifier` agent 证伪（fresh context）+ `claude-code.yml` CI auto-review；三源 P0/P1 全修 + 复审通过才合并。计入 `codex_done` / `verifier_refuted`。
-- codex CLI 不可用 → 降级为 evidence-verifier + CI auto-review 双源，账本标 `codex_*:{"unavailable":true}`，**不得静默跳过对抗**（`feedback_no_giveup_ask_authorization`）。
+- **🛡 闸-2（完成对抗）**：实现 + 确定性闸（verify:full/governance）绿后、**enable --auto 前** → 调 `codex` skill（或 CLI）审 **diff 完成质量** —— **code review 单源 = codex CLI**（2026-06-25 用户指令）。P0/P1 全修 + 复审通过才合并。计入 `codex_done`。**不再起 `code-reviewer` / `evidence-verifier` 子代理，也不把 CI auto-review 计作闸源**；correctness 由确定性闸（verify:full/governance）承担（正交）。
+- codex 完全不可用 → 标 `codex_*:{"unavailable":true}` 并**向用户报缺口请授权**（`feedback_no_giveup_ask_authorization`），**不得静默跳过、也不得回退 evidence-verifier / CI 兜底**；确定性闸照常跑。
 
 ### 5. 收尾三件套（与基座 scorecard 同步）
 
