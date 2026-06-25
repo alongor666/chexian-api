@@ -30,7 +30,8 @@ policy: append-only
 ## 本项目特例
 
 - **scorecard 落位**：基座 §8 阶段 C 步骤 4 写入 **`.claude/workflow/pr-evolution.md`**（append 到尾部，性质与 `commit-push-pr-core` 的"自进化日志"一致）。**禁止**写入 `.claude/shared-memory/**` 或 `~/.claude/projects/**/memory/**` —— 这两个路径在 AGENTS.md §8.3 标为 user-only，AI 仅可只读引用。**不新建 `docs/perf/` 等目录**。
-- **verifier 隔离**：correctness / 度量 / 发布风险优先交给**确定性脚本**（影子对账 / bench / `bun run governance` / sentinel），不用 LLM subagent 去做。收尾时调本项目 `.claude/agents/evidence-verifier.md`（fresh-context）。
+- **verifier 隔离**：correctness / 度量 / 发布风险优先交给**确定性脚本**（影子对账 / bench / `bun run governance` / sentinel），不用 LLM subagent 去做。
+- **loop v2 code review 单源 = codex CLI（2026-06-25 用户指令）**：收尾阶段 C 的 LLM 对抗审计/证伪**只调 codex CLI**（见 [loop-orchestration §2 + §4 末 meta](./loop-orchestration.md)），**不再起 `evidence-verifier` / `code-reviewer` 子代理**。`.claude/agents/evidence-verifier.md` 保留为可选 ad-hoc 正确性证伪 agent，但**非 loop 闸必需源**；correctness 仍以上一条确定性脚本为准。
 - **立方体专项**作为"性能 → 项目特化"实例，其 cube-shadow / cube-promote / cube-rollback 是发布安全机制的具体实现，不是基座要求。
 
 ## 关联

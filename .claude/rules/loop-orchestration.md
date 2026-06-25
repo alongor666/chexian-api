@@ -34,7 +34,7 @@ policy: append-only
         ③ 🛡 对抗闸-1（codex 审【计划】）→ 修 P0/P1 → 放行
         ④ TDD 实现（隔离 worktree，off 最新 main）
         ⑤ 确定性闸：bun run verify:full / governance / 字节安全证据
-        ⑥ 🛡 对抗闸-2（codex 审【完成 diff】+ evidence-verifier 证伪 + CI auto-review）→ 修 P0/P1 → 复审
+        ⑥ 🛡 对抗闸-2（codex CLI 审【完成 diff】· code review 单源）→ 修 P0/P1 → 复审
         ⑦ commit（bundle 代码+backlog 流转+复盘+质量账本一行）→ PR → enable --auto
         │
         ▼
@@ -69,13 +69,17 @@ policy: append-only
 
 ## 2. 双对抗闸（codex）
 
-> codex 平台 auto-review 已失效（memory `feedback_codex_review_auto_off`）→ 现靠 `claude-code.yml` auto-review job。
+> codex 平台 auto-review 已失效（memory `feedback_codex_review_auto_off`）。
 > codex **CLI 经 `codex` skill 仍可手动调**（"ask codex"/"codex review"）。本协议把对抗审计固化为**两道强制闸**。
+>
+> **🔴 code review 单源 = codex CLI（2026-06-25 用户指令，见 §4 末 meta）**：闸-1 审【计划】、闸-2 审【完成 diff】**只用 codex CLI**。
+> **不再起 `code-reviewer` / `evidence-verifier` 等 Claude 子代理做 LLM 对抗，也不把 `claude-code.yml` CI auto-review 计作闸源**（CI job 仍可在 PR 上空跑，但不作为闸-2 的判定源）。
+> correctness oracle 由阶段 ⑤ 确定性闸（`verify:full` / `governance` / golden-baseline / duckdb 直查）承担，与本 code-review 闸正交、不受本收敛影响。
 
 - **闸-1（计划对抗·阶段 ②后）**：合同/计划写好后，调 `codex` skill 对抗审查**设计**（缺陷 / 遗漏 / 更优解 / 边界）。P0/P1 修复后才进实现。结论计入质量账本 `codex_plan`。
-- **闸-2（完成对抗·阶段 ⑤后、enable --auto 前）**：调 `codex` skill 审 **diff 完成质量** + `evidence-verifier` agent 独立证伪（fresh context）+ `claude-code.yml` CI auto-review。**三源 P0/P1 全修 + 复审通过**才合并。结论计入 `codex_done` / `verifier_refuted`。
-- **降级**：codex CLI 不可用时，闸用 `evidence-verifier` + CI auto-review 双源，并在质量账本标 `codex_*: {"unavailable":true}`，**不得静默跳过对抗**（向用户报缺口，参 `feedback_no_giveup_ask_authorization`）。
-- **降级分层（2026-06-22 · PR #732 补）**：codex 对抗源按可用性**逐级**降级，**不得**因 `codex` skill 报 `Unknown skill` 就直接跳到 evidence-verifier：① skill 在 → 经 skill 调；② **skill 包装缺失但 CLI 在**（`command -v codex` 命中，如 `/opt/homebrew/bin/codex`）→ 直接 `codex exec --sandbox read-only - < <prompt 文件>`（prompt 走 stdin 文件，避开反引号 / `${}` 的 shell 转义事故）；③ CLI 也不可用 → 才退 `evidence-verifier` + CI 双源并标 `unavailable`。**教训**：本次 `Unknown skill: codex` 但 `/opt/homebrew/bin/codex` 实际可用，险被误判"对抗源不可用"。
+- **闸-2（完成对抗·阶段 ⑤后、enable --auto 前）**：调 `codex` skill（或 CLI）审 **diff 完成质量** —— **code review 单源 = codex CLI**（2026-06-25 用户指令）。**P0/P1 全修 + 复审通过**才合并。结论计入 `codex_done`。**不再起 `code-reviewer` / `evidence-verifier` 子代理，也不把 CI auto-review 计作闸源**；correctness 由阶段 ⑤ 确定性闸承担（正交）。
+- **降级**：code review 已收敛为 codex CLI 单源 → codex 完全不可用时**无 LLM 兜底闸**：标 `codex_*: {"unavailable":true}` 并**向用户报缺口请授权**（`feedback_no_giveup_ask_authorization`），**不得静默跳过、也不得擅自回退 `evidence-verifier` / CI 兜底**；阶段 ⑤ 确定性闸照常跑。
+- **降级分层（2026-06-22 · PR #732 补；2026-06-25 据单源收敛更新尾级）**：codex 在 codex CLI 内**逐级**取用，**不得**因 `codex` skill 报 `Unknown skill` 就判"对抗源不可用"：① skill 在 → 经 skill 调；② **skill 包装缺失但 CLI 在**（`command -v codex` 命中，如 `/opt/homebrew/bin/codex`）→ 直接 `codex exec --sandbox read-only - < <prompt 文件>`（prompt 走 stdin 文件，避开反引号 / `${}` 的 shell 转义事故）；③ CLI 也不可用 → 标 `unavailable` 并**向用户报缺口请授权**（不回退 `evidence-verifier`/CI；阶段 ⑤ 确定性闸照跑）。**教训**：`Unknown skill: codex` 但 `/opt/homebrew/bin/codex` 实际可用，险被误判"对抗源不可用"。
 
 ---
 
@@ -86,10 +90,11 @@ policy: append-only
   {"uid":"...","round":"R12","ts":"2026-06-21","task":"一句话","domain":["be-sql"],
    "rounds_to_green":1,"rework_count":0,
    "codex_plan":{"P0":0,"P1":1,"P2":2},"codex_done":{"P0":0,"P1":0,"P2":1},
-   "verifier_refuted":0,"byte_safety_proof":"by-construction","tests_added":6,
+   "byte_safety_proof":"by-construction","tests_added":6,
    "governance_pass":true,"pr":704,"verdict":"pass"}
   ```
   字段语义见 `dispatch.mjs`/`quality-report.mjs` 注释。`byte_safety_proof ∈ golden-baseline|by-construction|n/a`。
+  - **`verifier_refuted` 字段 2026-06-25 起弃用**：闸-2 收敛为 codex CLI 单源、不再跑 evidence-verifier，新行**不再产出**该字段（`quality-report.mjs` 以 `Number(...)||0` 兜底，缺失即计 0，旧行兼容保留）。对抗命中以 `codex_plan`/`codex_done` 为准。
 - **`bun run loop:quality`**（`quality-report.mjs`）聚合 → 北极星：**一次过率**（rounds_to_green=1 且 rework=0）/ 平均转绿轮次 / 平均返工 / codex 命中（plan+done 各级合计）/ governance 通过率，按域 + 按 round 趋势。
 - 与 `pr-evolution.md` 互补：**账本=量化指标，复盘=定性教训**。两者同一收尾步一起写。
 
@@ -146,6 +151,12 @@ policy: append-only
   - **落地**：`sessionPrompt` 第 4 步标注「P0/P1 强制 codex 闸-2 + CLI 降级路径」，第 6 步改为「三源过清 + CI 双绿 + 非部署链 → `gh pr merge --auto --squash` 自动合并；部署链人工合」。本 PR 自身即首个按新流程执行者（P0 级 → 跑 codex CLI 对抗 → 三源清 → 自动合并）。
   - **needs_automation: false**（本条是把既有 §2 闸-2 + pr-checklist §4 部署链特例**显式编排进单任务收尾流**，非新机制；codex 调用已是 §2 降级分层覆盖的确定路径）。
   - **本 PR codex 闸-2 实跑结果（首个按新流程执行，证「强制 codex 对抗」有价值）**：codex CLI（read-only）判 PARTIAL，抓 **1 P1 + 2 P2，已全修**——① **P1（认领锁 TTL 据「认领时刻」而非「最后活动」）**：旧 `latestClaims` 只取最新 status 的 at 算 TTL，致「认领 8h+ 但 7.5h 前还在 note 心跳」的**活跃**会话被误释放→重复派单（与文档「无后续事件才释放」不符）。修：`latestClaims` 增 `lastAt`=该 uid **任意事件**最新时刻，`computeFrontier` TTL 据 `lastAt`（任何 note/amend/status 刷新锁）；codex 原始复现（IN_PROGRESS@00:00+note@07:30,now=08:00,ttl=8）修后 frontier=[]、claimed=1（锁住）。② **P2 ttl 校验**：`claimTtlHours` 为 `'bad'/0/负` 时静默释放所有认领→加非正有限数回退默认 8h。③ **P2 ref 上限**：`.slice(0,80)` 无新鲜度序，超限静默漏认领→提到 200 + 超限 `console.error` 告警（不静默截断）。+4 单测（lastAt 心跳刷新 / 活跃锁 / 真陈旧释放 / ttl 非法回退），全量 3719/3719、governance 44/44。**教训**：evidence-verifier 闸-2 已判 CONFIRMED 无 P0/P1，但 codex 窄范围对抗仍抓出 1 个真 P1（spec-vs-impl 不符）——印证「P0/P1 强制 codex（多模型对抗）」的增量价值，单一 verifier 会漏。
+- **meta（2026-06-25 · 本 PR · 用户指令）· 双闸 code review 收敛为 codex CLI 单源（去 code-reviewer / evidence-verifier / CI auto-review）**：
+  - **用户指令**：「loop v2 的单任务与多任务的 code review，只需要 codex cli，去掉 code-reviewer。」澄清确认（AskUserQuestion）：闸-2 从「codex + evidence-verifier 证伪 + CI auto-review 三源」**收敛为 codex CLI 单源**。
+  - **背景**：协议 §2/§4 原写闸-2 三源；但实跑（PR-6 `2bb22d` / PR-1 `5f1545`，见 `pr-evolution.md` / `BACKLOG_ARCHIVE.md`）执行会话额外起了 **`code-reviewer` Claude 子代理**做对抗（"双对抗:code-reviewer+codex CLI"），与协议写的 evidence-verifier 都属于「在 codex 之外再叠 LLM 评审」。用户要求统一收敛到 codex CLI 一个 code-review 源。
+  - **改了什么**：① §0 流程图 ⑥、§2 闸-2/降级/降级分层、§2 引言、§3 账本 `verifier_refuted` 弃用；② 单任务 wrapper `chexian-evidence-loop.md` §4 闸-2 + 降级 + Pre-flight 第 4 项；③ `dispatch.mjs` `sessionPrompt` 第 4/6 步（多任务会话实际遵循的指令）。**未动**：`evidence-verifier.md` agent 文件（frozen，仍可作 ad-hoc 正确性证伪，只是不再是 loop 闸必需源）；步骤 ⑤ 确定性闸（`verify:full`/`governance`/golden-baseline/duckdb 直查）= correctness oracle，与 code-review 闸正交，**不受影响**。
+  - **降级语义变更**：单源后 codex 全不可用时**无 LLM 兜底闸**——标 `unavailable` + 向用户报缺口请授权（`feedback_no_giveup_ask_authorization`），**禁止**擅自回退 evidence-verifier/CI；确定性闸照跑。
+  - **三问复盘**：① 重来更好？协议早该与实跑对齐——文档写 evidence-verifier、实跑用 code-reviewer，双轨漂移半个月才被用户拍平；写协议时应同步固化「code review 用哪个源」单一事实，别留两套。② 复用价值？「对抗源单一事实 + 确定性 oracle 与 LLM 对抗正交」这条边界对其它 review 编排通用。③ 自动化？本条是协议/提示词文本收敛，无运行时强制点；残留人工点 = 执行会话须真的只调 codex、不擅自加 code-reviewer——`sessionPrompt` 已固化措辞，但仍依赖会话遵从（`feedback_prompt_needs_code_backup`：提示遵从非 100%）。`needs_automation: true`（可加 governance 闸：扫 loop PR 的 pr-evolution/账本若出现 `code-reviewer`/`evidence-verifier` 作闸源即告警）`expires: 2026-09-25`。
 
 ---
 
