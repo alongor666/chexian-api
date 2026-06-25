@@ -13,42 +13,109 @@ on:
   workflow_dispatch:
 
 jobs:
+  # docs/harness 快车道（精准分流，2026-06-25）：仅 pull_request 事件、且改动文件**全部**命中
+  # harness/docs 白名单时 skip=true → 下游重活全部跳过，但 production-gate job 仍以 success 报出
+  # 同名必需检查（"Production Readiness Gate"），避免 paths-ignore 让必需检查永远 pending 卡死。
+  # 白名单：.claude/** · 开发文档/** · 共享知识库_* · *.md · BACKLOG_LOG.jsonl。
+  # 任何一个文件在白名单外（src/** · server/** · scripts/**（含被单测覆盖的 scripts/loop/**）·
+  # 数据管理/** · package.json · *.config.* · .github/** 等）→ 从严跑全套。
+  # push: main / merge_group 一律跑全套（避开 base-ref 计算边界）。错误一律落"跑全套"，绝不误跳。
+  # Governance Consistency Check（governance-check.yml）不加快车道——它耦合 .claude/** 内容
+  # （CLAUDE.md 章节 / evidence-loop SSOT 漂移），harness 改动恰需它验，且更便宜。
+  changes:
+    name: Detect docs/harness-only
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.detect.outputs.skip }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # 仅对 PR 事件分流；push: main / merge_group 一律跑全套
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "事件 $EVENT_NAME（非 PR）→ 跑全套"
+            exit 0
+          fi
+          # PR 真实改动（base...head 三点 = 自合并基以来 PR 自身改动）
+          CHANGED=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          echo "── PR 改动文件 ──"; printf '%s\n' "$CHANGED"
+          if [ -z "$CHANGED" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ 无法解析改动文件 → 从严跑全套"
+            exit 0
+          fi
+          # 取"白名单外"文件：非空即含生产/被测路径 → 跑全套。grep 失配返回非零，|| true 兜底。
+          NON_DOC=$(printf '%s\n' "$CHANGED" | grep -vE '^(\.claude/|开发文档/|共享知识库_|BACKLOG_LOG\.jsonl$|.*\.md$)' || true)
+          if [ -z "$NON_DOC" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "✅ 纯 harness/docs 改动 → 跳过 Production Gate 重活（Governance Check 仍跑）"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "── 白名单外文件（→ 跑全套）──"; printf '%s\n' "$NON_DOC"
+          fi
+
   production-gate:
     name: Production Readiness Gate
+    needs: changes
     runs-on: ubuntu-latest
     env:
       CI: "1"
       CORS_ORIGIN: "http://localhost:5173,http://127.0.0.1:5173"
 
     steps:
+      # 重活步均守护 skip：纯 harness/docs 时全部跳过，job 仍以 success 报出必需检查（绿）。
       - name: Checkout repository
+        if: needs.changes.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Setup Bun
+        if: needs.changes.outputs.skip != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3"
 
       - name: Install dependencies
+        if: needs.changes.outputs.skip != 'true'
         run: bun install --frozen-lockfile && cd server && bun install --frozen-lockfile
 
       - name: Typecheck
+        if: needs.changes.outputs.skip != 'true'
         run: bun run typecheck
 
       - name: Frontend Build
+        if: needs.changes.outputs.skip != 'true'
         run: bun run build
 
       - name: Unit Tests
+        if: needs.changes.outputs.skip != 'true'
         run: bun run test --run
 
       - name: Backend Typecheck
+        if: needs.changes.outputs.skip != 'true'
         run: cd server && bun run build
 
       - name: Governance Check
+        if: needs.changes.outputs.skip != 'true'
         run: bun run governance
+
+      - name: Skipped (docs/harness-only)
+        if: needs.changes.outputs.skip == 'true'
+        run: echo "纯 harness/docs PR：Production Gate 重活跳过；harness 内容一致性由 Governance Consistency Check 验证。"
 
   e2e:
     name: E2E Tests (Playwright + CI fixture)
+    needs: changes
+    if: needs.changes.outputs.skip != 'true'   # 非必需检查 → docs/harness-only 时整 job 跳过，省 Playwright 安装
     runs-on: ubuntu-latest
     env:
       CI: "1"
