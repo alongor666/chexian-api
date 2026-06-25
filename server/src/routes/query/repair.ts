@@ -187,7 +187,8 @@ v2Router.get(
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
     const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
-    const data = await duckdbService.query(generateRepairCoopTierQuery(filters, whereClause, claimsBranchCode));
+    const repairBranchCode = await resolveBranchRlsCode(req, 'RepairDim');
+    const data = await duckdbService.query(generateRepairCoopTierQuery(filters, whereClause, claimsBranchCode, repairBranchCode));
     res.json({ success: true, data });
   })
 );
@@ -239,10 +240,11 @@ v2Router.get(
     const whereClause = await buildRepairWhere(req);
     const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
     const policyBranchCode = await resolveBranchRlsCode(req, 'PolicyFact');
+    const repairBranchCode = await resolveBranchRlsCode(req, 'RepairDim');
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(1000, Math.max(1, Number(req.query.pageSize) || 200));
     const data = await duckdbService.query(
-      generateRepairDiversionListQuery(filters, pageSize, (page - 1) * pageSize, whereClause, claimsBranchCode, policyBranchCode)
+      generateRepairDiversionListQuery(filters, pageSize, (page - 1) * pageSize, whereClause, claimsBranchCode, policyBranchCode, repairBranchCode)
     );
     res.json({ success: true, data, page, pageSize });
   })
@@ -256,8 +258,9 @@ v2Router.get(
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
     const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
+    const repairBranchCode = await resolveBranchRlsCode(req, 'RepairDim');
     const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
-    const data = await duckdbService.query(generateRepairOrphanShopsQuery(filters, limit, whereClause, claimsBranchCode));
+    const data = await duckdbService.query(generateRepairOrphanShopsQuery(filters, limit, whereClause, claimsBranchCode, repairBranchCode));
     res.json({ success: true, data });
   })
 );
