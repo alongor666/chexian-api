@@ -367,3 +367,29 @@ PR-6 只过滤 ClaimsDetail（赔案侧）。**RepairDim（登记表侧）无 br
 - **校正（作废上文相反表述）**：§「PR-2 cutover 数据发布步增量」/§「PR-5 后清单」写的「validation/SX 派生域 sync RLS-on 前必做」会打开 C 的污染窗口，**作废**。正确顺序固定为：**RLS-on（含 reload）→ 再 sync validation/SX 派生域**。理由：派生域含真实山西数据，进 VPS + reload 即被 loader 无条件 UNION，repair 影子端点 RLS-off 零过滤 → 必须 RLS 已 on 才安全。
 - 步骤 A（RepairDim，纯 SC）不受此约束，可 RLS-on 前安全同步（待 SSH 恢复，由日常发布自动携带）。
 - backlog `fe871b`（PR-3）已 note 本决策；`e6fac1`（步骤 A）状态不变。
+
+---
+
+## 实证追加（2026-06-25 · 生产 RLS-on dry-run：可逆开关→挖出"全员 branchCode 缺失"致命隐雷→修复→回滚 · append-only）
+
+> owner 授权在生产做一次**可逆**的 RLS-on 扫雷（零山西用户、零 SX 数据、可一键回滚）。结论：**RLS-on 机制对四川安全，但挖出一个未写进 cutover 清单的致命隐性前置并已修复（数据层）。完整 cutover 仍因 SSH(fail2ban) 卡 SX 同步未完成，已回滚 RLS 到关闭，所有修复持久保留。**
+
+### A. 致命隐雷（已修数据层 · PR-3 RLS-on 硬前置）：存量用户 user_store.json 缺 branchCode
+- **现象**：`BRANCH_RLS_ENABLED=true` + reload 后，**所有用户**（admin 在内）每次查询 `401 Token missing branchCode`，重登也没用 → 全员锁死。
+- **根因链**：登录读**内存 DuckDB `UserAccount`**（`access-control.ts:342 getUserByUsername`），该表启动时从 **`user_store.json`** 加载（`seedAccessControlData`/`loadFromStore`）。生产 `user_store.json`（6/10 生成，早于多分公司改造）**20 个用户全部无 `branchCode` 字段** → 内存 branch_code 全 NULL → JWT 无 branchCode → `permission.ts:89` fail-closed 401。`preset-users.ts` 虽带 branchCode='SC'，但 `ensurePresetUser` **只对"库里不存在的用户"生效**，存量用户走不到补全。
+- **修复（数据层，已落生产）**：备份后 `python3` 给 `/var/www/chexian/server/data/user_store.json` 全部 20 用户写 `branchCode='SC'`（全是四川、零 SX，已 `sqlite3` 核实）→ reload。验证：JWT 含 `"branchCode":"SC"`、RLS-on 下 admin kpi 200 + 2.06 亿。
+- **⚠️ 这是运行时数据修复，非代码修复**：若 `user_store.json` 被重新 seed/import 覆盖（无 branchCode），隐雷复发。**永久修复见 backlog（admin-import-users-from-json 带 branch_code + ensurePresetUser 对存量用户 reconcile branchCode）。**
+- **红鲱鱼**：起初误改 `state.db`（以为 `STATE_STORE_BACKEND=sqlite` 登录从它读）→ 无效。**state.db 只是写镜像，读/启动加载走 user_store.json**。已顺手把 state.db 也回填 'SC'，但非必需。
+
+### B. 管理员密码已重置（2026-06-25）
+- 旧泄漏密码 `CxAdmin@2026!` 早失效（实测 401）；本次 owner 重置为全新强密码（bcrypt 哈希更新进 `user_store.json` 的 admin + reload）。**明文在 owner 密码管理器，不落盘、不入任何文档/对话。** memory `reference_auth_credentials` 已更新。
+
+### C. 验证结论：RLS-on 对四川安全
+- 抓了 SC 生产黄金基线 `golden-baseline --build` **72/72**（并发=1 避开 2核4G VPS 并发瞬态——并发 4 会让重活查询返回"查询执行失败"假阴）。
+- RLS-on 后 `--compare`：**头部 KPI（保费/件数）、total_cases、所有结构/分类/字符串零差异**；唯二差异 =（1）浮点末位求和噪声；（2）`claims-detail/geo-comparison` 的 `cross_region_cases` 抖 15 例（0.014%）。
+- **(2) 已证与 RLS 无关**：PolicyFact 生产 100% 'SC'（duckdb 核 2,600,421 行）→ `branch_code='SC'` 过滤等于 `1=1` → 去重子查询输入输出相同 → total_cases 一致。15 例来自 `claims-detail.ts:48 ANY_VALUE(plate_no)`（DuckDB 非确定性聚合，对同保单号多车牌个例任意挑行，跨进程重启翻转），与 RLS 正交。**单独 cleanup backlog。**
+
+### D. 仍 GATED / 剩余
+- 完整 cutover 未完成：**第 4 步 SX 数据同步卡 Mac→VPS SSH(fail2ban，IP 151.244.134.80)**；第 6 步发账号待。
+- 下次（SSH 恢复后）一气呵成顺序：① 确认 user_store.json branchCode 仍在（或已上永久修复）→ ② `golden-baseline --build`（并发=1）抓基线 → ③ `BRANCH_RLS_ENABLED=true`+reload → admin kpi 非 401 冒烟 → ④ promote SX + `SYNC_VPS_BRANCH_CODE=SX` sync + `SYNC_VALIDATION_BRANCHES=1` sync 派生域 → ⑤ reload + post-cutover 验收 → ⑥ 发账号。
+- RLS 当前 = **关闭**（已回滚，生产 = 已知良好态，admin kpi 200 核实）。
