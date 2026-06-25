@@ -1322,3 +1322,28 @@ expires: 2026-09-24
 
 ### needs_automation: false
 （worktree-setup.md「cwd 漂移根治」+ pr-checklist「主仓只读」已覆盖原则；本次是「数据在主仓、代码在 worktree」诱发的**绝对路径**新变体，靠预防 1-4 纪律执行，无需新闸——硬闸化（如 pre-commit 检测主仓 server/src 有未提交改动即告警）可选但非必需。）
+
+---
+
+## 2026-06-25 · PR-6 repair 影子网点分省 RLS 隔离（`2bb22d`）+ 双对抗审查（code-reviewer + codex）
+
+### 做了什么
+山西 cutover 阶段 1 PR-6：repair.ts 5 端点 6 处 ClaimsDetail 影子扫描下推 `c.branch_code`，diversion 的 PolicyFact 加显式 branch 过滤，时间窗 MAX 基准同步过滤。TDD（单元 11 RED→GREEN + 集成 8 真 DuckDB 隔离）+ governance 44/44 + 全量 4113。
+
+### 关键教训：双对抗审查须用**不同 framing**，且**闸-1（审计划）能更早更省地抓「范围完整性」缺口**
+- **code-reviewer**（framing=审 diff）：0 CRITICAL，找出 PolicyFact 纵深防御缺口（HIGH-1，已修），判「可作 RLS-on 硬前置」。
+- **codex 闸-2**（framing=审「系统能不能安全开 RLS」）：构造真实 DuckDB repro，发现 **RepairDim（登记表侧）仍跨省**——我只过滤了 ClaimsDetail（赔案侧），影子分类用的 `NOT IN (SELECT FROM RepairDim)` 子查询 + RepairDim-only 端点对 branch_admin 全读，是**同一泄漏类的第二半**。判**不可作硬前置**。与本协议 §4「P0/P1 强制 codex，单一 verifier 会漏」既有 meta 再次互证。
+- **根因（方法层）**：「安全修复只过滤数据源行、没过滤分类子查询/维表」=**只隔离一半**。输出行省份纯净（看着像修好），但分类依赖跨省登记表 → 漏报 + 弱推断 + branch_admin 直接泄漏。「修一类不修一处」我做对一步（补 local-resource=端点 5），但**类比我想的更大**——跨省关系不止赔案表。
+- **二级教训（本次最该改的）**：我**跳过了闸-1（codex 审计划）**直接实现（因 backlog 已点名 ClaimsDetail，误以为方案确定）。但「只过滤 ClaimsDetail 够不够、该域还有哪些跨省关系」恰恰是**计划层（范围）问题**——闸-1 一句「枚举 repair 所有跨省读取点」就能在写码前抓到 RepairDim，比闸-2 抓到再登记 PR-7 便宜得多。**backlog 点名了「修哪个表」≠ 确认了「范围完整」**，范围完整性仍需计划对抗。
+
+### 三问复盘
+1. **重来怎样更好**：① 不跳闸-1——即便 backlog 点名具体表，对「域级隔离完整性」类任务仍跑一轮计划对抗（枚举该域**所有**跨省读取点：数据源行扫描 / 分类子查询 NOT IN·IN / 维表 JOIN，逐类判隔离）。② 开工先画该域「跨省关系三类清单」再动手。
+2. **复用价值**：「双对抗用不同 framing（审 diff vs 审系统就绪）」+「闸-1 专治范围完整性」固化为打法，对所有 RLS/安全前置任务通用。
+3. **如何更高质量自动化**：建「域跨省关系清单」静态闸——扫域 SQL 里所有 `FROM/JOIN/IN (SELECT FROM) <表>`，对照该表是否 province-aware（含 branch_code 列 或 经 org 隔离），未覆盖即告警。把「漏 RepairDim 这半」从人工对抗降到静态检测。归 PR-7（`e6fac1`）一并评估。
+
+### 处置
+PR-6 对其范围正确、安全可合并（增量·RLS-off 字节安全·不开 RLS）。codex 发现的第二半已登记 **PR-7 `e6fac1`** 为 PR-3（RLS-on）新增硬前置，接力文档 2026-06-25 段 + backlog fe871b/2bb22d note 同步。
+
+### needs_automation: true
+- 闸：「域跨省关系清单」静态闸（扫 SQL 生成器表读取点 × province-aware 对照表）。
+- expires: 2026-07-25（PR-7 评估时一并决策；届时未落地则复审是否仍需要或降级为纪律）。

@@ -186,7 +186,8 @@ v2Router.get(
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
-    const data = await duckdbService.query(generateRepairCoopTierQuery(filters, whereClause));
+    const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
+    const data = await duckdbService.query(generateRepairCoopTierQuery(filters, whereClause, claimsBranchCode));
     res.json({ success: true, data });
   })
 );
@@ -198,7 +199,8 @@ v2Router.get(
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
-    const data = await duckdbService.query(generateRepairScatterQuery(filters, whereClause));
+    const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
+    const data = await duckdbService.query(generateRepairScatterQuery(filters, whereClause, claimsBranchCode));
     res.json({ success: true, data });
   })
 );
@@ -210,7 +212,8 @@ v2Router.get(
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
-    const data = await duckdbService.query(generateRepairLocalResourceQuery(filters, whereClause));
+    const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
+    const data = await duckdbService.query(generateRepairLocalResourceQuery(filters, whereClause, claimsBranchCode));
     res.json({ success: true, data });
   })
 );
@@ -234,10 +237,12 @@ v2Router.get(
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
+    const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
+    const policyBranchCode = await resolveBranchRlsCode(req, 'PolicyFact');
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(1000, Math.max(1, Number(req.query.pageSize) || 200));
     const data = await duckdbService.query(
-      generateRepairDiversionListQuery(filters, pageSize, (page - 1) * pageSize, whereClause)
+      generateRepairDiversionListQuery(filters, pageSize, (page - 1) * pageSize, whereClause, claimsBranchCode, policyBranchCode)
     );
     res.json({ success: true, data, page, pageSize });
   })
@@ -250,8 +255,9 @@ v2Router.get(
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
+    const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
     const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
-    const data = await duckdbService.query(generateRepairOrphanShopsQuery(filters, limit, whereClause));
+    const data = await duckdbService.query(generateRepairOrphanShopsQuery(filters, limit, whereClause, claimsBranchCode));
     res.json({ success: true, data });
   })
 );
