@@ -79,6 +79,8 @@ const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_
 const LOCAL_PATROL_REPORTS_DIR = join(ROOT_DIR, '数据管理/patrol_reports');
 const LOCAL_HTML_REPORTS_DIR = join(ROOT_DIR, 'server/data/reports');
 const LOCAL_PUBLIC_REPORTS_DIR = join(ROOT_DIR, 'public/reports');
+// GATED 多省：非 SC 省派生域隔离副本根（warehouse/validation/<省>/<域>），sync 推到 VPS data/validation/<省>/<域>（PR-2）
+const LOCAL_VALIDATION_DIR = join(ROOT_DIR, '数据管理/warehouse/validation');
 
 const colors = {
   green: '\x1b[32m',
@@ -829,6 +831,46 @@ export function getSyncBranchCode() {
   return code;
 }
 
+// loader（data-bootstrapper resolveBranchFactExtras + resolveBranchClaimsDetailExtras）从 validation/<省>
+// 读取的派生域集合。维度域（salesman/plan/repair）SX 未隔离（validation/<省> 无 dim/ 子层），不在此列。
+const VALIDATION_SYNCED_DOMAINS = ['claims_detail', 'quotes_conversion', 'renewal_tracker', 'cross_sell', 'new_energy_claims'];
+
+/**
+ * GATED 多省：非 SC 省派生域 validation 隔离副本的同步任务（PR-2 · 部署链 cutover 能力）。
+ *
+ * 枚举 warehouse/validation/<省>/<派生域>，构建 rsync 任务推到 VPS data/validation/<省>/<域>，
+ * 让 VPS 服务端经 getValidationRootDir VPS 回退读到 SX 派生域。省份枚举与 data-bootstrapper
+ * resolveBranch*Extras 严格一致（`^[A-Z]{2}$` + 排除 SC + 升序）→「loader 读取域」==「sync 推送域」
+ * 对称，开 RLS 后不漏域。SC 走 fact/ 标准同步、premium 走 current/ promote，均不经 validation。
+ *
+ * 字节安全：validationRoot 不存在（生产当前 / CI）→ 返回 [] → buildStandardSyncTasks 逐字节等价历史。
+ * GATED：critical=false，RLS-off 时 VPS 不消费，任务失败不阻断日常同步。
+ *
+ * @param {string} remote - VPS 远端数据根目录
+ * @param {string} [validationRoot=LOCAL_VALIDATION_DIR] - validation 隔离区根（测试可注入临时目录）
+ * @returns {Array<{label:string, local:string, remote:string, critical:boolean}>}
+ */
+function buildValidationBranchSyncTasks(remote, validationRoot = LOCAL_VALIDATION_DIR) {
+  if (!existsSync(validationRoot)) return [];
+  const provinces = readdirSync(validationRoot)
+    .filter((entry) => entry !== 'SC' && /^[A-Z]{2}$/.test(entry))
+    .sort((a, b) => a.localeCompare(b));
+  const tasks = [];
+  for (const province of provinces) {
+    for (const domain of VALIDATION_SYNCED_DOMAINS) {
+      const localDomainDir = join(validationRoot, province, domain);
+      if (!existsSync(localDomainDir) || !statSync(localDomainDir).isDirectory()) continue;
+      tasks.push({
+        label: `validation/${province}/${domain}`,
+        local: localDomainDir,
+        remote: `${remote}/validation/${province}/${domain}`,
+        critical: false,
+      });
+    }
+  }
+  return tasks;
+}
+
 /**
  * 构建标准同步任务列表。
  *
@@ -867,6 +909,8 @@ function buildStandardSyncTasks(remote, frontendDist, opts = {}) {
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${remote}/patrol_reports`,        critical: false },
     { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${remote}/reports`,               critical: false, deleteRemote: false },
     { label: 'public_reports',       local: LOCAL_PUBLIC_REPORTS_DIR,     remote: `${frontendDist}/reports`,         critical: false, deleteRemote: false },
+    // GATED 多省：validation/<非SC省>/<派生域> → VPS data/validation/<省>/<域>（无 validation 时为空，字节安全）
+    ...buildValidationBranchSyncTasks(remote, LOCAL_VALIDATION_DIR),
   ];
 }
 
@@ -1320,6 +1364,7 @@ export {
   resolveRunConfig,
   buildDomainSyncTasks,
   buildStandardSyncTasks,
+  buildValidationBranchSyncTasks,
   buildSyncTasks,
   rsyncLatestAtomically,
   evaluateFreshness,
