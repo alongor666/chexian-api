@@ -187,7 +187,8 @@ v2Router.get(
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
     const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
-    const data = await duckdbService.query(generateRepairCoopTierQuery(filters, whereClause, claimsBranchCode));
+    const repairBranchCode = await resolveBranchRlsCode(req, 'RepairDim');
+    const data = await duckdbService.query(generateRepairCoopTierQuery(filters, whereClause, claimsBranchCode, repairBranchCode));
     res.json({ success: true, data });
   })
 );
@@ -236,13 +237,18 @@ v2Router.get(
   withRouteCache('repair-diversion-list'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = await buildRepairWhere(req);
+    // diversion 的 whereClause 仅用于 policy_dedup（FROM PolicyFact），故用 org-only 权限子句——
+    // 不含 RepairDim 的 branch_code（buildRepairWhere 会含），避免按 RepairDim gate 把 branch_code
+    // 污染进 PolicyFact（PolicyFact 未物化 branch_code 的 schema skew 态会 Binder Error）。PolicyFact
+    // 分省由 policyBranchCode 独立 gate 处理；RepairDim 子查询由 repairBranchCode 处理。codex 闸-2 PR-7 HIGH。
+    const whereClause = buildRepairPermissionWhere(req);
     const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
     const policyBranchCode = await resolveBranchRlsCode(req, 'PolicyFact');
+    const repairBranchCode = await resolveBranchRlsCode(req, 'RepairDim');
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(1000, Math.max(1, Number(req.query.pageSize) || 200));
     const data = await duckdbService.query(
-      generateRepairDiversionListQuery(filters, pageSize, (page - 1) * pageSize, whereClause, claimsBranchCode, policyBranchCode)
+      generateRepairDiversionListQuery(filters, pageSize, (page - 1) * pageSize, whereClause, claimsBranchCode, policyBranchCode, repairBranchCode)
     );
     res.json({ success: true, data, page, pageSize });
   })
@@ -256,8 +262,9 @@ v2Router.get(
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
     const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
+    const repairBranchCode = await resolveBranchRlsCode(req, 'RepairDim');
     const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
-    const data = await duckdbService.query(generateRepairOrphanShopsQuery(filters, limit, whereClause, claimsBranchCode));
+    const data = await duckdbService.query(generateRepairOrphanShopsQuery(filters, limit, whereClause, claimsBranchCode, repairBranchCode));
     res.json({ success: true, data });
   })
 );

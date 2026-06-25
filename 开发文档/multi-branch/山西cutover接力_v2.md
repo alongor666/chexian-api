@@ -257,14 +257,35 @@ PR-6 只过滤 ClaimsDetail（赔案侧）。**RepairDim（登记表侧）无 br
 → 已登记 **PR-7 `e6fac1`** 为 PR-3（`fe871b` RLS-on）新增硬前置。修法选项：RepairDim 物化 branch_code（如 #789 对 claims_detail/salesman）或 org_level_3→branch 派生映射；「孤儿=全省/本省未登记」语义需业务确认。**ADR §11「repair RLS 面外」的 cutover 阻断升级第二半。**
 
 ### cutover 前置清单更新（截至 2026-06-25）
-- 非 GATED 能力补齐：PR-1 ✅(#792) · PR-6 ✅(本 PR) · **PR-7 `e6fac1` 新增（RepairDim 省份化）** · PR-2(`a94c21` 部署链·禁 auto-merge) · PR-5(`34dae2` 前端空态)。
+- 非 GATED 能力补齐：PR-1 ✅(#792) · PR-6 ✅(#793) · **PR-7 ✅(本 PR·RepairDim 省份化)** · PR-2(`a94c21` 部署链·禁 auto-merge) · PR-5(`34dae2` 前端空态)。
 - GATED：PR-3(`fe871b` RLS-on，依赖 PR-1/2/6/**7** + 账号 + owner 凭据) · PR-4(`8e6e8a` 可选 edit-env)。
+
+---
+
+## 实证追加（2026-06-25 · PR-7 RepairDim 省份化完成 + codex 闸-2 两轮（抓 diversion PolicyFact 污染 HIGH→已修） · append-only）
+
+> 阶段 1 PR-7（`e6fac1`）已实现 + codex CLI 闸-2 两轮对抗 + 验证。repair RLS「两半」**全部闭合**（PR-6 赔案侧 + PR-7 登记表侧）。**RepairDim 真实物化 + sync 是后续数据发布步（类比 #790），cutover 仍全 GATED 未动。**
+
+### PR-7 已完成（代码·堆叠于 PR-6 #793·byte-safe·gated）
+- **ETL（镜像 #789 salesman 常量 'SC'，repair SC-only）**：`convert_repair.py` durable 落 `branch_code='SC'`；`materialize_branch_code_special.py` 加 repair 域（存量零刷新回填）；`oracle_mpdata_byte_safety.py` DOMAINS 加 repair。
+- **SQL（repair.ts）**：新增 `repairDimBranchAnd` + coop-tier/diversion/orphan 加 `repairBranchCode` 参数，5 处 bare RepairDim 子查询（coop-tier NOT IN / diversion active+past+none / orphan NOT IN）下推 `branch_code`。`repairBranchCode` 经 `resolveBranchRlsCode(req,'RepairDim')` **独立 gate**（gate b 在 RepairDim 列存在性，仅物化后为真）→ 与 ClaimsDetail 的 branchCode 分开 → RepairDim 未物化时不注入、不 Binder、字节安全。RepairDim-only 端点（overview/detail 等）经既有 buildRepairWhere 自动隔离。
+- **数据发布步（后续·类比 #790）**：本地 `python3 数据管理/pipelines/materialize_branch_code_special.py --domains repair --data-root 数据管理/warehouse` 给存量 RepairDim parquet 加 branch_code='SC' → `oracle_mpdata_byte_safety.py` 字节安全验证 → sync-vps 推 dim/repair。**RLS-on 前必做（否则 repair RLS 不激活）。**
+
+### 🔴 codex 闸-2 两轮（再证 codex 多模型对抗价值）
+- **第 1 轮**抓 HIGH：RepairDim 物化 branch_code 后 `buildRepairWhere` 的 whereClause 含 branch_code，diversion 经 `policyWhereExtra` 注入 PolicyFact → 绕过 policyBranchCode 独立 gate → PolicyFact 未物化 branch_code 的 schema skew 态 Binder Error（真 DuckDB 复现）。这是 PR-6 MEDIUM-1（当时 dormant）被 PR-7 **激活**。
+- **修法**：diversion 的 whereClause 仅用于 PolicyFact，改传 `buildRepairPermissionWhere`（org-only）；PolicyFact 分省由 policyBranchCode 独立 gate 处理。各表分省 gate 各管自己的列 → fail-safe。
+- **第 2 轮复审**：0 CRITICAL / 0 新 HIGH，原 HIGH 已闭合，可合并。另指出一个 MEDIUM（非本 PR 引入·非分省隔离）：diversion org 粒度泄漏（org_user 见同分公司他机构 claim 行，policy null）→ 已登记 P3 follow-up `6b021a`。
+
+### cutover 前置清单（PR-7 完成后）
+- 非 GATED：PR-1 ✅ · PR-6 ✅(#793) · PR-7 ✅(#794) · **PR-2(`a94c21` 部署链)** · **PR-5(`34dae2` 前端)** 待做。
+- 数据发布步：**RepairDim materialize+sync**（PR-7 激活）+ validation/SX 派生域 sync（PR-2）。
+- GATED：PR-3 RLS-on（依赖 PR-1/2/6/7 + RepairDim 物化 + 账号 + owner 凭据）· PR-4 可选。
 
 ---
 
 ## 实证追加（2026-06-25 · PR-2 部署链「VPS 读 SX 派生域」完成 + codex 闸-2 抓「日常 sync 把 SX 推进生产」CRITICAL · append-only）
 
-> 阶段 1 PR-2（`a94c21`）已实现 + 双对抗（codex 闸-2 两轮 + code-reviewer fresh-context）+ 验证。**关键修正：原 backlog 漏 renewal_tracker 域；codex 抓出「日常 sync 会让 SX 进生产」CRITICAL，已收口为 GATED 显式开关。cutover 仍全 GATED 未动。** 本 PR-2 分支从 origin/main 分叉（不含未合并的 PR-7 #794）。
+> 阶段 1 PR-2（`a94c21`）已实现 + 双对抗（codex 闸-2 两轮 + code-reviewer fresh-context）+ 验证。**关键修正：原 backlog 漏 renewal_tracker 域；codex 抓出「日常 sync 会让 SX 进生产」CRITICAL，已收口为 GATED 显式开关。cutover 仍全 GATED 未动。** 本 PR-2 分支从 PR-6 期 origin/main 分叉，收尾时已 merge origin/main 纳入 PR-7（#794 已合并）。
 
 ### PR-2 已完成（分支 claude/sx-cutover-pr2-deploychain，未合并；部署链·禁 auto-merge）
 - **paths.ts**：getValidationRootDir 加 VPS 回退（首个存在者：本地 warehouse 优先 → server/data/validation 回退）+ 纯函数 getValidationRootDirs（两候选）+ 可注入 candidates 参数（确定性测试）。VPS 无 warehouse → 原单路径恒不存在 → loader 探测 [] → SX 派生域永进不去；回退后能读到 sync 推送目标。

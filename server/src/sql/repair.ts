@@ -156,6 +156,20 @@ function claimsBranchAnd(branchCode: string | undefined, alias = 'c'): string {
   return branchCode ? ` AND ${alias}.branch_code = '${branchCode}'` : '';
 }
 
+/**
+ * RepairDim 登记表 bare 子查询的分省 RLS 过滤片段（PR-7 · RLS-on 硬前置第二半）。
+ *
+ * 影子分类用的 `NOT IN / IN (SELECT … FROM RepairDim …)` 子查询**不经 finalWhere**（buildRepairWhere
+ * 只注入主 CTE），故跨省登记表会误判本省赔案网点的登记状态。本片段在这些 bare 子查询就地下推
+ * `branch_code`。repairBranchCode 来自 `resolveBranchRlsCode(req,'RepairDim')` 双门控——**gate b
+ * 在 RepairDim 实测含 branch_code 列**（仅 PR-7 数据物化后为真），故与 ClaimsDetail 的 branchCode
+ * **独立 gate**：RepairDim 未物化时返回 undefined → 不注入 → 不 Binder Error（字节安全）。RepairDim
+ * 子查询无别名 → branch_code 不带前缀。branchCode 经 ^[A-Z]{2}$ 校验，无注入面。
+ */
+function repairDimBranchAnd(repairBranchCode: string | undefined): string {
+  return repairBranchCode ? ` AND branch_code = '${repairBranchCode}'` : '';
+}
+
 /** v2 WHERE 构造（兼容 v1） */
 function buildWhereV2(filters: RepairFiltersV2): string {
   const clauses: string[] = [NON_REPAIR_FILTER];
@@ -212,11 +226,12 @@ export function generateRepairChannelQuery(filters: RepairFiltersV2, whereClause
 }
 
 /** 【3】三态合作分布（含影子网点从 claims 反推） */
-export function generateRepairCoopTierQuery(filters: RepairFiltersV2, whereClause: string = '1=1', branchCode?: string): string {
+export function generateRepairCoopTierQuery(filters: RepairFiltersV2, whereClause: string = '1=1', branchCode?: string, repairBranchCode?: string): string {
   const where = buildWhereV2(filters);
   const finalWhere = whereClause !== '1=1' ? `${where} AND ${whereClause}` : where;
   const timeWhere = claimsTimeWindow(filters.timeWindow, 'c', branchCode);
   const claimsBranch = claimsBranchAnd(branchCode);
+  const repairBranch = repairDimBranchAnd(repairBranchCode);
   return `
     WITH repair_tiers AS (
       SELECT
@@ -232,7 +247,7 @@ export function generateRepairCoopTierQuery(filters: RepairFiltersV2, whereClaus
       FROM ClaimsDetail c
       WHERE c.subject_shop_code IS NOT NULL
         AND ${timeWhere}${claimsBranch}
-        AND c.subject_shop_code NOT IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE repair_shop_name IS NOT NULL)
+        AND c.subject_shop_code NOT IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE repair_shop_name IS NOT NULL${repairBranch})
     ),
     tier_agg AS (
       SELECT coop_tier, COUNT(DISTINCT shop_code) AS shop_count,
@@ -374,9 +389,10 @@ export function generateRepairToPremiumQuery(filters: RepairFiltersV2, whereClau
 }
 
 /** 【7】导流目标清单：送修在"曾合作/未合作/影子"的保单 */
-export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit = 500, offset = 0, whereClause: string = '1=1', branchCode?: string, policyBranchCode?: string): string {
+export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit = 500, offset = 0, whereClause: string = '1=1', branchCode?: string, policyBranchCode?: string, repairBranchCode?: string): string {
   const timeWhere = claimsTimeWindow(filters.timeWindow, 'c', branchCode);
   const claimsBranch = claimsBranchAnd(branchCode);
+  const repairBranch = repairDimBranchAnd(repairBranchCode);
   const orgClause = filters.orgName ? `AND p.org_level_3 = '${escapeSqlValue(filters.orgName)}'` : '';
   // whereClause 注入到 PolicyFact（有 org_level_3/is_telemarketing），实现保单维度权限收束
   const policyWhereExtra = whereClause !== '1=1' ? ` AND ${whereClause}` : '';
@@ -388,7 +404,7 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
     WITH active_shops AS (
       SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) AS shop_code
       FROM RepairDim
-      WHERE cooperation_status = '1生效中' AND ${NON_REPAIR_FILTER}
+      WHERE cooperation_status = '1生效中' AND ${NON_REPAIR_FILTER}${repairBranch}
     ),
     diversion_claims AS (
       SELECT DISTINCT
@@ -400,8 +416,8 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
         c.accident_time,
         CASE
           WHEN c.subject_shop_code IN (SELECT shop_code FROM active_shops) THEN 'active'
-          WHEN c.subject_shop_code IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE cooperation_status IN ('0暂停合作', '7已撤销', '8失效')) THEN 'past'
-          WHEN c.subject_shop_code IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE repair_shop_name IS NOT NULL) THEN 'none'
+          WHEN c.subject_shop_code IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE cooperation_status IN ('0暂停合作', '7已撤销', '8失效')${repairBranch}) THEN 'past'
+          WHEN c.subject_shop_code IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE repair_shop_name IS NOT NULL${repairBranch}) THEN 'none'
           ELSE 'none_shadow'
         END AS shop_tier
       FROM ClaimsDetail c
@@ -441,13 +457,14 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
 }
 
 /** 【8】影子网点（claims 中出现但 RepairDim 未登记）地理归属 */
-export function generateRepairOrphanShopsQuery(filters: RepairFiltersV2, limit = 100, whereClause: string = '1=1', branchCode?: string): string {
+export function generateRepairOrphanShopsQuery(filters: RepairFiltersV2, limit = 100, whereClause: string = '1=1', branchCode?: string, repairBranchCode?: string): string {
   // whereClause 为签名扩展，ClaimsDetail 无 org_level_3/is_telemarketing，机构维度不在此过滤
   // （void 保留入参兼容路由层统一传参）。PR-6：分省 RLS 经 branchCode 在 ClaimsDetail 扫描处
   // 下推（claimsBranch），将「全省维度」收束为「本省维度」——多省下不再跨省串读影子网点。
   void whereClause;
   const timeWhere = claimsTimeWindow(filters.timeWindow, 'c', branchCode);
   const claimsBranch = claimsBranchAnd(branchCode);
+  const repairBranch = repairDimBranchAnd(repairBranchCode);
   return `
     WITH orphan_claims AS (
       SELECT
@@ -460,7 +477,7 @@ export function generateRepairOrphanShopsQuery(filters: RepairFiltersV2, limit =
       WHERE c.subject_shop_code IS NOT NULL
         AND c.accident_district IS NOT NULL
         AND ${timeWhere}${claimsBranch}
-        AND c.subject_shop_code NOT IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE repair_shop_name IS NOT NULL)
+        AND c.subject_shop_code NOT IN (SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) FROM RepairDim WHERE repair_shop_name IS NOT NULL${repairBranch})
       GROUP BY c.subject_shop_code, c.subject_repair_shop, c.accident_district
     ),
     ranked AS (

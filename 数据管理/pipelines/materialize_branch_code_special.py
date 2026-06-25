@@ -6,6 +6,8 @@
 
   - salesman（维度·无 policy_no）：常量 'SC'（脚本仅消费四川源；生产者 generate_dim_tables.py
     已同步落列，本脚本物化当前 parquet）。
+  - repair（维修资源·维度·无 policy_no）：常量 'SC'（SC-only 域，无 SX 维修源；生产者
+    convert_repair.py 已同步落列，本脚本物化存量 parquet）。PR-7 RepairDim 省份化前置。
   - quotes_conversion（policy_no 92.5% NULL）：复用 quote_etl.derive_branch_code(df,'SC') warn 模式
     （非缺失行 prefix 校验全 610、缺失行 fillna 'SC'）。
   - renewal_tracker（无 policy_no，有 source/renewed_policy_no）：复用
@@ -52,6 +54,11 @@ from pipelines.convert_renewal_tracker import (  # noqa: E402
 
 def _branch_series_salesman(table: pa.Table, _root: Path) -> pd.Series:
     """维度业务员：常量 'SC'（脚本仅消费四川源 xlsx）。"""
+    return pd.Series([BRANCH_CODE] * table.num_rows, dtype="object")
+
+
+def _branch_series_repair(table: pa.Table, _root: Path) -> pd.Series:
+    """维修资源维度：常量 'SC'（SC-only 域，无 SX 维修源；convert_repair 仅消费四川源）。"""
     return pd.Series([BRANCH_CODE] * table.num_rows, dtype="object")
 
 
@@ -112,6 +119,7 @@ def _branch_series_new_energy(table: pa.Table, root: Path) -> pd.Series:
 
 DOMAINS = {
     "salesman": {"rel": "dim/salesman/latest.parquet", "fn": _branch_series_salesman},
+    "repair": {"rel": "dim/repair/latest.parquet", "fn": _branch_series_repair},
     "quotes_conversion": {"rel": "fact/quotes_conversion/latest.parquet", "fn": _branch_series_quotes},
     "renewal_tracker": {"rel": "fact/renewal_tracker/latest.parquet", "fn": _branch_series_renewal},
     "new_energy_claims": {"rel": "fact/new_energy_claims/latest.parquet", "fn": _branch_series_new_energy},

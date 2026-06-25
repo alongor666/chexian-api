@@ -81,6 +81,10 @@ class RepairConverter(BaseConverter):
             uniq_shops = df["repair_shop_name"].nunique()
             uniq_codes = df["shop_code"].nunique()
             print(f"   shop_code 编码: 网点 {uniq_shops:,} → 编码 {uniq_codes:,}（差异 {uniq_shops - uniq_codes} 表示同编码多名称）")
+        # 多省 RLS：维修资源域 SC-only（无 SX 维修源），常量 'SC'（镜像 salesman dim #789；
+        # convert_repair 仅消费四川源 03/07_维修资源.xlsx，非盲常量）。durable 落列使后续 ETL
+        # 重跑自然产 branch_code；存量旧 parquet 由 materialize_branch_code_special.py 一次性回填。
+        df["branch_code"] = "SC"
         return df
 
     def post_write_hook(self, df: pd.DataFrame, output_file: Path) -> None:

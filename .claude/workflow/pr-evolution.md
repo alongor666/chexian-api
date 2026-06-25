@@ -1362,3 +1362,23 @@ PR-6 对其范围正确、安全可合并（增量·RLS-off 字节安全·不开
 ### needs_automation: true
 - 闸：governance 静态对账——扫 data-bootstrapper 的 `resolveBranchFactExtras('X')` 调用集合 + `resolveBranchClaimsDetailExtras`，与 sync-vps `VALIDATION_SYNCED_DOMAINS` 比对，不一致即 fail（防 loader 域与 sync 域漂移）。
 - expires: 2026-09-25（当前两处人工同步 + codex 闸 + 单测覆盖；域集合变更频率低，P3。届时未落地则复审是否降级为纪律）。
+## 2026-06-25 · PR-7 RepairDim 省份化（`e6fac1`）+ codex 闸-2 两轮
+
+### 做了什么
+repair RLS 第二半（登记表侧）：ETL 给 RepairDim 物化常量 branch_code='SC'（镜像 #789）+ SQL 给 5 处 bare RepairDim 子查询下推 repairBranchCode（独立 gate 于 ClaimsDetail）。单元 16 + 集成 5 + governance 44/44 + 全量 4122。codex 闸-2 两轮：第 1 轮抓 1 HIGH（已修），第 2 轮复审 0 CRITICAL/0 新 HIGH 可合并。
+
+### 关键教训：**被推迟的「dormant MEDIUM」会因依赖变更落地而升级为 active HIGH**
+- PR-6 codex 闸-2 当时标了 MEDIUM-1：diversion 把 RepairDim 导向的 whereClause 注入 PolicyFact，「RepairDim 有列/PolicyFact 无列」的 skew 态会 Binder。当时判 dormant（RepairDim 无 branch_code → whereClause 不含 branch_code → 不触发），未在 PR-6 修。
+- **PR-7 正是给 RepairDim 加 branch_code 的变更——一落地就把那个 dormant MEDIUM 激活成 active HIGH**（buildRepairWhere 开始返回 branch_code → 污染 PolicyFact）。codex 闸-2 第 1 轮当场复现 Binder。
+- **根因（方法层）**：把一个 finding 判「dormant/非阻断」推迟时，**必须显式记录「什么变更会激活它」，并在那个变更落地时强制复检**。PR-6 当时只说「RepairDim 有列时才触发」，但没把「PR-7 = 那个触发变更」连起来——结果 PR-7 差点把激活的 Binder 带进 RLS-on 硬前置。codex 跨 PR 记忆补上了这一环。
+
+### 三问复盘
+1. **重来怎样更好**：推迟 MEDIUM 时在 backlog/复盘里写明「激活条件 = X 变更」并挂到 X 任务的前置检查项；做 X（PR-7）时第一步先扫「我这个变更会激活哪些先前推迟的 finding」。本次靠 codex 跨 PR 记忆兜底，不该依赖运气。
+2. **复用价值**：「dormant finding 激活台账」打法——任何判非阻断的 finding 记 `activated_by: <变更/条件>`，该变更落地时强制复检。对所有分阶段安全收口通用。
+3. **如何更高质量自动化**：归并到 R37 的「域跨省关系清单」静态闸——若该闸能标「关系 X 的 branch 过滤经 gate Y、但被 whereClause 旁路注入到关系 Z」，就能静态抓出本次的跨表 gate 旁路。expires 同 2026-07-25 一并评估。
+
+### 处置
+PR-7 对其范围正确、codex 复审可合并。HIGH 已修（diversion org-only whereClause）。codex 复审的 MEDIUM（diversion org 粒度泄漏·非分省·非本 PR 引入）登记 P3 `6b021a`。堆叠于 PR-6 #793。
+
+### needs_automation: false
+（本条教训「dormant finding 激活台账」并入 R37 的「域跨省关系清单」静态闸 expires 2026-07-25 一并决策，不另起闸。）

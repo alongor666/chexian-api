@@ -40,6 +40,7 @@ DATA_ROOT_DEFAULT = ROOT / "数据管理/warehouse"
 # 域 → parquet 相对 glob（相对 data-root）。multi=True 表示多分区（逐文件独立校验）。
 DOMAINS = [
     {"name": "salesman", "rel": "dim/salesman/latest.parquet", "multi": False},
+    {"name": "repair", "rel": "dim/repair/latest.parquet", "multi": False},
     {"name": "cross_sell", "rel": "fact/cross_sell/latest.parquet", "multi": False},
     {"name": "claims_detail", "rel": "fact/claims_detail/claims_*.parquet", "multi": True},
     {"name": "customer_flow", "rel": "fact/customer_flow/latest.parquet", "multi": False},
