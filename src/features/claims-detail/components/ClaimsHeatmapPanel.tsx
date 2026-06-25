@@ -11,6 +11,8 @@
  */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { cardStyles, colorClasses, cn, fontStyles, getTrendColorClass } from '@/shared/styles';
+import { EmptyState } from '@/shared/ui';
+import { isClaimsHeatmapEmpty } from './claimsEmptyState';
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
 
 // ── 类型定义 ──
@@ -268,6 +270,11 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
     [claimsHeatmap.data],
   );
 
+  // 空态保护（多省接入 ADR G8 / Day-1 SOP §5）：山西等新分公司装载中 / 缺数据时端点返回空数组或
+  // 全零行。原 periods.length===0 挡不住「有时间桶但规模锚全 0」的静默零矩阵 → 用规模锚判据
+  // （判据见 ./claimsEmptyState.ts），空则渲染「装载中」EmptyState 而非零，避免误判真实零赔案。
+  const isEmpty = useMemo(() => isClaimsHeatmapEmpty(claimsHeatmap.data as HeatmapRow[]), [claimsHeatmap.data]);
+
   const metricConfig = METRIC_OPTIONS.find(m => m.key === metric)!;
 
   // 整体汇总行：从绝对值聚合重算率值指标（禁止加权平均）
@@ -449,10 +456,12 @@ export const ClaimsHeatmapPanel: React.FC<Props> = ({ hook, params }) => {
           <div className="h-[300px] flex items-center justify-center">
             <span className={colorClasses.text.neutralMuted}>加载中...</span>
           </div>
-        ) : periods.length === 0 ? (
-          <div className="h-[200px] flex items-center justify-center">
-            <span className={colorClasses.text.neutralMuted}>暂无数据</span>
-          </div>
+        ) : isEmpty ? (
+          <EmptyState
+            size="md"
+            title="暂无赔付数据"
+            description="当前筛选范围或机构暂无赔付热力数据，可能正在装载，请稍后刷新。若持续为空，请联系管理员确认数据状态——这不代表真实零赔案。"
+          />
         ) : (
           <div ref={scrollRef} className="overflow-x-auto -mx-4 px-4">
             <table
