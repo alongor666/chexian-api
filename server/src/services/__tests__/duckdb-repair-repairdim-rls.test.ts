@@ -18,6 +18,7 @@ import { duckdbService } from '../duckdb.js';
 import {
   generateRepairCoopTierQuery,
   generateRepairOrphanShopsQuery,
+  generateRepairDiversionListQuery,
   type RepairFiltersV2,
 } from '../../sql/repair.js';
 
@@ -44,10 +45,19 @@ describe('repair RepairDim 登记表侧分省 RLS 隔离（PR-7）', () => {
       ) AS t(policy_no, claim_no, subject_shop_code, subject_repair_shop, accident_district,
              settled_vehicle_amount, accident_time, branch_code)
     `);
+    // PolicyFact **无 branch_code 列**（模拟 schema skew：RepairDim 已物化、PolicyFact 未物化）
+    // 用于验证 diversion 不再把 RepairDim 的 branch_code 污染进 PolicyFact（codex 闸-2 PR-7 HIGH）。
+    await duckdbService.query(`
+      CREATE OR REPLACE TABLE PolicyFact AS
+      SELECT * FROM (VALUES
+        ('618晋A', CAST(8000 AS DOUBLE), '山西机构', '李四', '私家车'),
+        ('618晋B', CAST(6000 AS DOUBLE), '山西机构', '王五', '私家车')
+      ) AS t(policy_no, premium, org_level_3, salesman_name, customer_category)
+    `);
   });
 
   afterAll(async () => {
-    for (const t of ['RepairDim', 'ClaimsDetail']) {
+    for (const t of ['RepairDim', 'ClaimsDetail', 'PolicyFact']) {
       try { await duckdbService.query(`DROP TABLE IF EXISTS ${t}`); } catch { /* ignore */ }
     }
     try { await duckdbService.close(); } catch { /* ignore */ }
@@ -87,5 +97,18 @@ describe('repair RepairDim 登记表侧分省 RLS 隔离（PR-7）', () => {
       generateRepairOrphanShopsQuery(F, 100, '1=1', 'SX', 'SX'),
     );
     expect(Array.isArray(rows)).toBe(true);
+  });
+
+  it('🔴 diversion skew fail-safe（codex 闸-2 PR-7 HIGH）：RepairDim 有列/PolicyFact 无列 → 不 Binder', async () => {
+    // 模拟 schema skew：RepairDim+ClaimsDetail 已物化 branch_code、PolicyFact 未物化。
+    // 修复后路由对 diversion 传 org-only whereClause（'1=1'，无 branch_code）+ policyBranchCode=undefined
+    // （PolicyFact gate b 不过）→ policy_dedup 不含 branch_code → 不 Binder。repairBranchCode='SX'
+    // 仍过滤 RepairDim 子查询。修复前路由传 buildRepairWhere（含 RepairDim branch_code）会污染 PolicyFact 致 Binder。
+    const rows = await duckdbService.query<{ subject_shop_code: string }>(
+      generateRepairDiversionListQuery(F, 500, 0, '1=1', 'SX', undefined, 'SX'),
+    );
+    expect(Array.isArray(rows)).toBe(true); // 执行成功，无 Binder Error
+    // diversion_claims 经 claimsBranchCode='SX' + repairBranchCode='SX'：两 SX 赔案均 none_shadow
+    expect(rows.map((r) => r.subject_shop_code).sort()).toEqual(['SCREG001', 'SXTRUE01']);
   });
 });

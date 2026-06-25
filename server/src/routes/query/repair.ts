@@ -237,7 +237,11 @@ v2Router.get(
   withRouteCache('repair-diversion-list'),
   asyncHandler(async (req, res) => {
     const filters = parseFiltersV2(req.query);
-    const whereClause = await buildRepairWhere(req);
+    // diversion 的 whereClause 仅用于 policy_dedup（FROM PolicyFact），故用 org-only 权限子句——
+    // 不含 RepairDim 的 branch_code（buildRepairWhere 会含），避免按 RepairDim gate 把 branch_code
+    // 污染进 PolicyFact（PolicyFact 未物化 branch_code 的 schema skew 态会 Binder Error）。PolicyFact
+    // 分省由 policyBranchCode 独立 gate 处理；RepairDim 子查询由 repairBranchCode 处理。codex 闸-2 PR-7 HIGH。
+    const whereClause = buildRepairPermissionWhere(req);
     const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
     const policyBranchCode = await resolveBranchRlsCode(req, 'PolicyFact');
     const repairBranchCode = await resolveBranchRlsCode(req, 'RepairDim');
