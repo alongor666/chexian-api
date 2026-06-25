@@ -166,3 +166,17 @@ duckdb CLI v1.5.2 兼容；Option A 扁平不触发子目录互斥闸。
 1. **计划维度未省份化**：`vehicle_plan_wan` 等计划字段对 SX token 也非零（dim 仍 SC-only）。兼容期无真实 SX 账号无影响；真实 SX 计划数据落地时需省份化。
 2. **stress-test cross-sell 覆盖缺口**：`/api/query/cross-sell` 在压测里 HTTP 400（路由参数过时），被当失败排除→该路由未进串读断言。补参数可扩覆盖。
 3. **sx-promote 测试卫生**：E2E 测试会把临时路径写进仓库跟踪的 `scripts/release/.sx-promote-manifest.json`（#783 自带），宜改写临时 manifest 或 gitignore。
+
+---
+
+## 实证追加（2026-06-24 · validation/SX 隔离区数据刷新到 0623 · append-only）
+
+> owner 给新 SX 源（签单/报价 0618-0623 增量 + 理赔 2021-2026 全量），ETL 到 validation/SX 隔离层（**非 GATED 数据准备，不碰 current/、不 sync VPS**，owner 明确选「仅 ETL 进 validation/SX 隔离层」）。**§1「已完成」的「山西数据 1,830,603 行」据此更新为以下基线。**
+
+- **签单**：历史 0617 分片 1,830,603（缓存命中未重转 485MB）+ 新增量 `20260618-20260623_01_签单清单_定稿.parquet` 2,577 行；合计 **1,833,180**，窗口 2021-01-01~2026-06-23 连续无重叠，全 `branch_code=SX`。
+- **理赔（首次接入）**：`validation/SX/claims_detail/` 8 年度分区共 **236,653 赔案**（2019-2026），立案 10.56 亿，报案截止 2026-06-23（新鲜），`branch_code` 派生(policy_no[:3]=618)全 SX。首次 ETL 漏做理赔，本次补齐；旧 `山西_理赔明细_2026`(仅2026,3.7MB)残缺文件作废，改用 2021-2026 全量(80MB)。
+- **报价**：历史 570,355 + 增量 9,818 = **580,173**，窗口 2025-12-01~2026-06-23，`branch_code` 全 SX（policy_no 缺失 90.7% 兜底 SX，B255 已知质量问题）。
+- **续保**：owner 未给新数据，`renewal_tracker/latest.parquet` 保留不动。
+- **🔒 隔离铁律守住**：`current/` 仍纯 SC 2,600,421（duckdb 核验）。源软链在 `staging/SX`（标准命名：`YYYYMMDD-YYYYMMDD_01_签单清单*` / `04_报价清单*` / `YYYYMMDD-YYYYMMDD_02_理赔明细*`）。
+- **ETL 入口**：`BRANCH_CODE=SX node 数据管理/daily.mjs {premium,claims_detail,quotes}`（多省 0a 路由，产物落 validation/SX 并自动跳过所有 SC 副作用）。
+- **cutover 仍 GATED**：本次只刷新隔离区数据。promote→开 RLS→sync→发账号 **未动**，须 owner 凭据矩阵（E2E_PASSWORD/JWT_SECRET/生产 env 写权限/USER_PASSWORDS）+ 逐步授权（见上文「2B 执行接力」）。
