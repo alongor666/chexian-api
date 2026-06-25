@@ -339,3 +339,31 @@ PR-6 只过滤 ClaimsDetail（赔案侧）。**RepairDim（登记表侧）无 br
 ### 本步剩余（待 SSH 恢复后一次正常发布即可）
 - 换网/IP 轮换/fail2ban 解封后，正常 `bun run release:daily`（或 `node scripts/sync-vps.mjs`）一次 → dim/repair 上 VPS → `sudo /usr/local/bin/deploy-chexian-api reload` → curl `/api/query/repair/*` 200 验证（RLS-off 故 SC 行为不变）。
 - backlog `e6fac1` 已 note 本步进度。
+
+---
+
+## 实证追加（2026-06-25 · 步骤 B validation/SX sync「顺序校正」+ SSH 仍 BLOCKED + repair 污染 oracle · append-only）
+
+> 承接上节「步骤1 RepairDim」。owner 指令「做数据发布步（A RepairDim + B validation/SX 一起），再到 PR-3 RLS-on」。本次会话核实两件事：(1) SSH 仍 fail2ban BLOCKED，真同步无法执行；(2) 用真实数据 oracle 发现**步骤 B 在 RLS-off 时执行会污染线上 SC 的 repair 视图**。owner 据证据拍板：**步骤 B 推迟到 PR-3 RLS-on 同窗口**。**本节 D 校正上文 §「PR-2」/§「PR-5 后清单」中「validation/SX sync RLS-on 前必做」的表述——以 §128 cutover 序列（先 RLS-on 再 sync）为准。**
+
+### A. 现状核实（PR 全合并 + 步骤 A 仍就绪）
+- PR #792-799 全部 MERGED（`gh pr view` 逐个权威核实）。非 GATED 代码前置全就绪。
+- 步骤 A RepairDim 本地物化保持就绪：`dim/repair/latest.parquet` 6,682 行全 `branch_code='SC'`、14 列、270,291 字节（本次 duckdb 复核）。
+- VPS 在线（`/health` HTTP 200）。
+
+### B. SSH 仍 BLOCKED（基础设施层·与 #799 同·本次单测未重试）
+- 本机当前公网 IP 仍 `151.244.134.80`（与 #799 被封 IP 相同）→ fail2ban 封禁未解除。
+- 单次 `ssh chexian-vps-deploy` → `kex_exchange_identification: read: Connection reset by peer` / `Connection reset by 162.14.113.44 port 22`；对照 github.com:22 不重置 → VPS 专属封禁。遵「SSH 部署窗口勿连试」单测即停。
+- 结论：步骤 A 真同步（⑤rsync/⑥reload）+ 步骤 B sync 本次均无法执行。步骤 A 顺延日常发布自动携带（`dim/repair` 在标准同步清单，dry-run 已复核）。
+
+### C. 🔴 步骤 B RLS-off 污染 oracle（真实数据·关键发现）
+- **机制**：步骤 B 把 `validation/SX/claims_detail`（236,653 山西赔案）推上 VPS → loader **无条件** UNION 进 `ClaimsDetail` 视图（PR-2 期 codex 标 CRITICAL：不看 `BRANCH_RLS_ENABLED`）→ repair 影子端点（coop-tier/scatter/orphan-shops）在 RLS-off 时**零过滤**（PR-6 字节安全 = 不注入 branch 条件）→ 山西维修网点灌入四川用户视图。
+- **duckdb oracle**（`dim/repair` 纯 SC 登记 + `fact/claims_detail`(SC) + `validation/SX/claims_detail`，影子 = `subject_shop_code NOT IN RepairDim`）：repair 影子/孤儿网点 **7,225**（推 SX 前·正确）→ **13,130**（推 SX 后 RLS-off）= **+5,905 个山西网点污染四川视图**。污染窗口直到 PR-3 RLS-on 才闭合（PR-6/PR-7 分省过滤激活）。
+- dry-run 复核：`SYNC_VALIDATION_BRANCHES=1` 推 `claims_detail`/`quotes_conversion`/`renewal_tracker` 3 派生域到 `data/validation/SX/<域>`（SX 专属目录，不与 SC 重叠，无 `--delete` 误删 SC 风险）。
+- **步骤 A（RepairDim）无此问题**：repair 域无山西数据，物化纯 SC + `branch_code` 列，RLS-off 字节安全（`resolveBranchRlsCode` RLS-off 返回 undefined → 不注入）。
+
+### D. owner 决策 + 顺序校正（2026-06-25·RED）
+- **owner 拍板**：步骤 B（validation/SX 派生域 sync）**推迟到 PR-3 RLS-on 同窗口**——先 `BRANCH_RLS_ENABLED=true` + reload，**再** `SYNC_VALIDATION_BRANCHES=1 node scripts/sync-vps.mjs` 推派生域。与本文 §128 cutover 序列（sync-vps 在 RLS-on 之后第 4 步）一致，零污染。
+- **校正（作废上文相反表述）**：§「PR-2 cutover 数据发布步增量」/§「PR-5 后清单」写的「validation/SX 派生域 sync RLS-on 前必做」会打开 C 的污染窗口，**作废**。正确顺序固定为：**RLS-on（含 reload）→ 再 sync validation/SX 派生域**。理由：派生域含真实山西数据，进 VPS + reload 即被 loader 无条件 UNION，repair 影子端点 RLS-off 零过滤 → 必须 RLS 已 on 才安全。
+- 步骤 A（RepairDim，纯 SC）不受此约束，可 RLS-on 前安全同步（待 SSH 恢复，由日常发布自动携带）。
+- backlog `fe871b`（PR-3）已 note 本决策；`e6fac1`（步骤 A）状态不变。
