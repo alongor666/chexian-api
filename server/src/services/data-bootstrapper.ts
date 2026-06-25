@@ -32,6 +32,7 @@ import {
   getValidationRootDir,
   getBranchValidationDimPath,
   getBranchValidationFactPath,
+  getBranchValidationClaimsDetailDir,
 } from '../config/paths.js';
 import { getDeploymentBranchCode } from '../config/sql-federation-policy.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
@@ -486,6 +487,32 @@ export class DataBootstrapper {
     return extras.sort((a, b) => a.branchCode.localeCompare(b.branchCode));
   }
 
+  /**
+   * 探测某省赔案明细的非 SC 隔离副本（validation/<省>/claims_detail/claims_*.parquet）（PR-1·ADR G4 扩展）。
+   *
+   * 与 resolveBranchFactExtras（派生域单 latest.parquet）刻意不同：赔案是 CDC 年度分区目录，探测目录内
+   * 是否有 claims_*.parquet 后拼 glob（与 SC current 同形态），保留 union_by_name 容忍分区 schema 漂移。
+   * 0a 期无 SX 副本 → 返回空 → loadClaimsDetail 单源 = 历史 SQL 逐字节一致（四川零变更）。GATED 多省
+   * 上线后 SX 副本就位 → UNION ALL BY NAME 携真实 branch_code。省份码白名单 `^[A-Z]{2}$`，排除 SC
+   * （SC 走 current/ claims_detail 标准 glob，作为基准源由调用方传入）。返回按 branchCode 升序确定性排序。
+   */
+  private resolveBranchClaimsDetailExtras(): Array<{ branchCode: string; path: string }> {
+    const validationRoot = getValidationRootDir();
+    if (!fs.existsSync(validationRoot)) return [];
+    const extras: Array<{ branchCode: string; path: string }> = [];
+    for (const entry of fs.readdirSync(validationRoot)) {
+      if (entry === 'SC' || !/^[A-Z]{2}$/.test(entry)) continue;
+      const dir = getBranchValidationClaimsDetailDir(entry);
+      if (
+        fs.existsSync(dir) &&
+        fs.readdirSync(dir).some((f) => f.startsWith('claims_') && f.endsWith('.parquet'))
+      ) {
+        extras.push({ branchCode: entry, path: `${dir.replace(/\\/g, '/')}/claims_*.parquet` });
+      }
+    }
+    return extras.sort((a, b) => a.branchCode.localeCompare(b.branchCode));
+  }
+
   // ============================================
   // Stage 10: 维度表加载（Parquet 优先，JSON 回退）— 保持 eager
   // ============================================
@@ -550,6 +577,8 @@ export class DataBootstrapper {
 
     // ClaimsDetail（280k 行，按年度分区，必须惰性）
     this.lazyRegistry.register('ClaimsDetail', async () => {
+      // ADR G4 扩展（PR-1）：探测 SX 等非 SC 省份 claims_detail 隔离副本（0a 期无 → 空 → 单源字节安全）
+      const claimsExtras = this.resolveBranchClaimsDetailExtras();
       // 优先：分区目录（claims_*.parquet glob）
       const dir = getClaimsDetailDirs().find(d =>
         fs.existsSync(d) && fs.readdirSync(d).some(f => f.startsWith('claims_') && f.endsWith('.parquet'))
@@ -557,7 +586,7 @@ export class DataBootstrapper {
       if (dir) {
         const globPath = `${dir.replace(/\\/g, '/')}/claims_*.parquet`;
         console.time('[Bootstrap:Lazy] ClaimsDetail (partitioned)');
-        await domainLoaders.loadClaimsDetail(db, globPath);
+        await domainLoaders.loadClaimsDetail(db, globPath, claimsExtras);
         console.timeEnd('[Bootstrap:Lazy] ClaimsDetail (partitioned)');
         return;
       }
@@ -565,7 +594,7 @@ export class DataBootstrapper {
       const p = getClaimsDetailPaths().find(p => fs.existsSync(p));
       if (!p) { console.warn('[Bootstrap:Lazy] ClaimsDetail: no file found'); return; }
       console.time('[Bootstrap:Lazy] ClaimsDetail');
-      await domainLoaders.loadClaimsDetail(db, p);
+      await domainLoaders.loadClaimsDetail(db, p, claimsExtras);
       console.timeEnd('[Bootstrap:Lazy] ClaimsDetail');
     });
 
