@@ -126,4 +126,28 @@ describe('赔案明细多省共存加载 + RLS 隔离（PR-1）', () => {
 
     await duckdbService.query('DROP TABLE IF EXISTS PolicyFact');
   });
+
+  it('🔴 P1（codex 闸-2）：单省 glob 混合分区（旧分区无/新分区有 branch_code）→ REPLACE COALESCE 兜底 NULL', async () => {
+    // 模拟 CDC：同省 glob 内 claims_2025 已派生 branch_code、claims_2026 旧产物无该列。
+    // union_by_name 对旧分区行补 NULL，裸 SELECT * 会漏 NULL（RLS WHERE branch_code='SX' 命中不到）。
+    const mixDir = path.join(tmpDir, 'sx_mixed');
+    fs.mkdirSync(mixDir, { recursive: true });
+    const p = (n: string) => path.join(mixDir, n).replace(/\\/g, '/');
+    await writeClaimsParquet(p('claims_2025.parquet'), { policy_no: '618晋新', claim_no: '晋新1', reserve: 1000, withBranch: 'SX' });
+    await writeClaimsParquet(p('claims_2026.parquet'), { policy_no: '618晋旧', claim_no: '晋旧1', reserve: 500, withBranch: null });
+    const mixGlob = `${mixDir.replace(/\\/g, '/')}/claims_*.parquet`;
+
+    await loadClaimsDetail(duckdbService, scClaims, [{ branchCode: 'SX', path: mixGlob }]);
+
+    // 旧分区无列行的 branch_code 被 COALESCE 兜底为 'SX'，无 NULL 漏网
+    const nullCnt = await duckdbService.query<{ c: number }>(
+      'SELECT CAST(COUNT(*) AS INTEGER) AS c FROM ClaimsDetail WHERE branch_code IS NULL',
+    );
+    expect(Number(nullCnt[0].c)).toBe(0);
+    // 旧+新分区两行都可被 WHERE branch_code='SX' 命中
+    const sxCnt = await duckdbService.query<{ c: number }>(
+      "SELECT CAST(COUNT(*) AS INTEGER) AS c FROM ClaimsDetail WHERE branch_code = 'SX'",
+    );
+    expect(Number(sxCnt[0].c)).toBe(2);
+  });
 });

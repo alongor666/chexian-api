@@ -714,15 +714,27 @@ export function composeClaimsDetailSelect(
   if (sources.length === 0) {
     throw new Error('composeClaimsDetailSelect: 至少需要一个赔案来源');
   }
+  // P2（codex 闸-2）：branchCode 在 builder 内自校验——导出函数不应只靠调用方注释约束。
+  // 与 fields.json branch_code 派生轴 / getDeploymentBranchCode / paths 层 `^[A-Z]{2}$` 同源。
+  for (const s of sources) {
+    if (!/^[A-Z]{2}$/.test(s.branchCode)) {
+      throw new Error(`composeClaimsDetailSelect: 非法 branchCode "${s.branchCode}"（须匹配 ^[A-Z]{2}$）`);
+    }
+  }
   if (sources.length === 1) {
     // 单源：逐字节等价历史 loadClaimsDetail（不补 branch_code、不 UNION）→ SC 默认字节安全
     return `SELECT * FROM read_parquet('${sources[0].safePath}', union_by_name=true)`;
   }
-  // 多源（GATED 多省）：每省 glob 各自 union_by_name；缺 branch_code 补常量；UNION ALL BY NAME
+  // 多源（GATED 多省）：每省 glob 各自 union_by_name；UNION ALL BY NAME。
+  // P1（codex 闸-2）：hasBranchCode=true 的源用 `REPLACE (COALESCE(branch_code, '<省>'))` 兜底——
+  // DESCRIBE 看到列 ≠ 该 glob 所有行都有值：同省 glob 内 CDC 旧分区无 branch_code、新分区有时，
+  // union_by_name 对旧分区行补 NULL，裸 SELECT * 会留 NULL（RLS `WHERE branch_code='SX'` 漏命中旧行、
+  // 或未来 repair shadow 加 c.branch_code 过滤时漏数据）。COALESCE 把 NULL 补省常量；纯净源（全有值）
+  // COALESCE 不改变值（原样）。缺列源（整源无 branch_code）走补常量列分支。
   return sources
     .map((s) =>
       s.hasBranchCode
-        ? `SELECT * FROM read_parquet('${s.safePath}', union_by_name=true)`
+        ? `SELECT * REPLACE (COALESCE(branch_code, '${s.branchCode}') AS branch_code) FROM read_parquet('${s.safePath}', union_by_name=true)`
         : `SELECT *, '${s.branchCode}' AS branch_code FROM read_parquet('${s.safePath}', union_by_name=true)`,
     )
     .join('\n      UNION ALL BY NAME\n      ');

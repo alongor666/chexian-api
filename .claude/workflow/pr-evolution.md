@@ -1306,3 +1306,19 @@ expires: 2026-09-23
 ### needs_automation: true
 expires: 2026-09-24
 （① 「current 域缺 branch_code」readiness 子闸（检测+提示存量补列）；② multiProvince-gated 路由 RLS 隔离验证 harness 固化（自签 token + 分域断言，取代 /tmp 临时脚本）；③ 任务书数据事实 pre-flight 必 duckdb 复核。到期未落地 meta-review 处置或撤项。）
+
+## 2026-06-25 · 代码改动泄漏进主仓 main（cwd 漂移 + 主仓绝对路径误用）· PR #792（山西 cutover PR-1）
+
+- **触发**：山西 cutover PR-1（ClaimsDetail loader 多省扩展）。会话锚点在 worktree `.claude/worktrees/quizzical-joliot-171ffc`，但调查阶段 `cd 主仓` 跑 grep/duckdb（数据在主仓 warehouse），随后用**主仓绝对路径** Read/Edit 代码文件 → 5 个代码文件改动全写进**主仓 main 工作区**（只读基线区），worktree 副本仍是 main 版本。
+- **症状**：commit 前 worktree `git status` 只见 BACKLOG+接力文档（worktree 路径编辑的），**5 代码文件不在列**；主仓 `git status` 才见（M 4 + ?? 1）。typecheck/单测/集成恰好 `cd 主仓` 跑而"通过"，但 worktree 全量 4096 跑的是 **main 版本**（回归证明无效）。
+- **根因**：会话锚点（primary working directory）是 harness 层状态、焊在 worktree；`cd` 是 shell 层、跨不了层。调查时 `cd 主仓` 只改 shell cwd，但我**手动用主仓绝对路径** Edit（Edit 用绝对路径，与 cwd/锚点无关）→ 直接写主仓。即「数据在主仓、代码在 worktree」两地，让代码跟随了数据的路径。worktree-setup.md「cwd 漂移」讲的是**相对路径回弹**，本次是**绝对路径主动写错地方**的新变体。
+- **二次事故**：迁移用 `for f in $FILES; cp ...`，**zsh 默认不对未引用变量 word-split**（`$FILES` 当单一路径）→ cp 全失败，但同一命令里的主仓清理（`git checkout`+`rm`）已执行 → 改动一度既不在主仓也不在 worktree。靠迁移前 `git diff > /tmp/pr1-tracked.patch` 备份 + 对话内 Write 内容恢复。
+- **修复**：① `git diff` 备份 patch；② `git apply` patch 到 worktree + 重写新测试文件；③ 主仓 `git checkout`+`rm` 恢复干净 main；④ worktree 重跑全链路（全量 4105 + 集成 4 + governance 44/44 + typecheck 0），证明改动落对位置。
+- **预防**：
+  1. **代码编辑铁律**：worktree 会话中 Read/Edit/Write **代码文件一律用 worktree 路径**（含 `.claude/worktrees/<name>/`）或重锚后相对路径；`cd 主仓` 只许跑**只读**数据查询（grep/duckdb/find），其输出的主仓路径**禁直接喂给 Edit**。
+  2. **commit 前必查锚点一致**：worktree `git status` 若缺预期的代码改动 → 立即 `git -C <主仓> status` 查泄漏 → 迁移+清理后再提交。
+  3. **zsh 批量 cp/mv 用显式引用** `"$a" "$b"` 或 `git apply` patch，禁裸 `$VAR` word-split（zsh 与 bash 不同，默认不 split）。
+  4. **破坏性迁移**（cp+清理同命令）**先 `git diff > patch` 备份再动手**——本次靠 patch 兜底未丢工作。
+
+### needs_automation: false
+（worktree-setup.md「cwd 漂移根治」+ pr-checklist「主仓只读」已覆盖原则；本次是「数据在主仓、代码在 worktree」诱发的**绝对路径**新变体，靠预防 1-4 纪律执行，无需新闸——硬闸化（如 pre-commit 检测主仓 server/src 有未提交改动即告警）可选但非必需。）

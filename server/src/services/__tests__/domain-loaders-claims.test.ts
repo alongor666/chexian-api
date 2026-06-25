@@ -199,14 +199,27 @@ describe('composeClaimsDetailSelect (PR-1 纯函数构造)', () => {
     expect(sql).toContain(
       "SELECT *, 'SC' AS branch_code FROM read_parquet('sc/claims_*.parquet', union_by_name=true)",
     );
-    // SX 含列原样
-    expect(sql).toContain("SELECT * FROM read_parquet('sx/claims_*.parquet', union_by_name=true)");
+    // SX 含列：REPLACE COALESCE 兜底 NULL（混合分区健壮性，P1 codex 闸-2）
+    expect(sql).toContain(
+      "SELECT * REPLACE (COALESCE(branch_code, 'SX') AS branch_code) FROM read_parquet('sx/claims_*.parquet', union_by_name=true)",
+    );
     // 关键：每源都保留 union_by_name（赔案 CDC 分区 schema 漂移必需，不同于派生域）
     expect((sql.match(/union_by_name=true/g) ?? []).length).toBe(2);
   });
 
   it('空源数组抛错', () => {
     expect(() => composeClaimsDetailSelect([])).toThrow(/至少需要一个赔案来源/);
+  });
+
+  it('P2（codex 闸-2）：非法 branchCode 抛错（须 ^[A-Z]{2}$，防注入/脏数据）', () => {
+    expect(() =>
+      composeClaimsDetailSelect([{ branchCode: 'sx', safePath: 'p/claims_*.parquet', hasBranchCode: true }]),
+    ).toThrow(/非法 branchCode/);
+    expect(() =>
+      composeClaimsDetailSelect([
+        { branchCode: "SX'; DROP TABLE x; --", safePath: 'p/claims_*.parquet', hasBranchCode: false },
+      ]),
+    ).toThrow(/非法 branchCode/);
   });
 });
 
@@ -243,7 +256,9 @@ describe('buildClaimsDetailSelectSql (PR-1 async 入口)', () => {
       { branchCode: 'SX', glob: 'sx/claims_*.parquet' },
     ]);
     expect(sql).toContain("SELECT *, 'SC' AS branch_code");
-    expect(sql).toContain("SELECT * FROM read_parquet('sx/claims_*.parquet', union_by_name=true)");
+    expect(sql).toContain(
+      "SELECT * REPLACE (COALESCE(branch_code, 'SX') AS branch_code) FROM read_parquet('sx/claims_*.parquet', union_by_name=true)",
+    );
     expect(sql).toContain('UNION ALL BY NAME');
     // DESCRIBE 也保留 union_by_name（容忍分区漂移）
     expect(queries.filter((q) => q.includes('DESCRIBE') && q.includes('union_by_name=true')).length).toBe(2);
