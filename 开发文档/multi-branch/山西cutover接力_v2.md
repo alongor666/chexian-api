@@ -318,3 +318,24 @@ PR-6 只过滤 ClaimsDetail（赔案侧）。**RepairDim（登记表侧）无 br
 - 非 GATED：PR-1 ✅(#792) · PR-6 ✅(#793) · PR-7 ✅(#794) · **PR-2 ✅(#795 已合并)** · **PR-5 ✅(本 PR·未合并)**。**非 GATED 代码前置全部就绪。**
 - 数据发布步（GATED 显式）：RepairDim materialize+sync（PR-7 激活）· validation/SX 派生域 sync（PR-2 激活，`SYNC_VALIDATION_BRANCHES=1`）。
 - 🔴 GATED：PR-3 RLS-on（依赖上面全部 + 数据发布 + 山西账号激活 + owner 凭据矩阵）· PR-4 可选 edit-env。
+
+---
+
+## 实证追加（2026-06-25 · 步骤1 RepairDim 数据发布步「物化+字节安全」已本地执行 · ⑤⑥同步待下次发布顺带 · append-only）
+
+> 承接上节 PR-7（`e6fac1`）「数据发布步（后续·类比 #790）」。本次按接力执行步骤1 的本地数据步 ①②③④——硬活（字节安全物化）已完成且 durable；⑤真同步/⑥reload 因本机当前 IP 被 VPS fail2ban 重置 SSH 而 BLOCKED，**顺延到下次正常发布自动携带**（dim/repair 已在标准同步清单）。RLS 仍 OFF，repair 分省 RLS 待 PR-3 RLS-on 才激活 → 同步延后对线上零影响。
+
+### ①②③④ 已执行（本地·byte-safe·SC-only）
+- **① 物化前快照**：`oracle_mpdata_byte_safety.py --snapshot /tmp/repair_base.json --data-root <主仓 warehouse>` → 8 域值级基线。物化前现状核实：repair 是**唯一**无 branch_code 域（13 列、6,682 行），其余 7 域（salesman/cross_sell/claims_detail/customer_flow/quotes_conversion/renewal_tracker/new_energy_claims）早已物化 branch_code='SC'。
+- **② 真物化**：`materialize_branch_code_special.py --domains repair --data-root <主仓 warehouse>` → 给存量 `dim/repair/latest.parquet` 仅追加 `branch_code='SC'`（零刷新·append_column）。结果：6,682 行、13→14 列、248,014→270,291 字节。
+- **③ 字节安全 verify**：`oracle_mpdata_byte_safety.py --verify /tmp/repair_base.json ...` → **exit 0**，8 域「非 branch 列值级逐行全等 + branch_code 全 SC、0 NULL」。
+- **④ sync dry-run**（不连 VPS·纯计划）：`node scripts/sync-vps.mjs --dry-run` → dim/repair 在 `buildStandardSyncTasks` 标准清单内；未设 `SYNC_VPS_BRANCH_CODE` → 单省 SC、省份保护 filter 不触发、无跨省 --delete 风险。
+
+### ⑤⑥ BLOCKED（基础设施层·非授权问题）
+- 本机当前 IP `151.244.134.80` 到 VPS:22 在 SSH 握手阶段被**持续重置**（`kex_exchange_identification: Connection reset by peer`；跨 30+ 分钟、沙箱内外、6+ 次一致）。VPS 本身在线（生产 HTTPS `/health` HTTP 200）。
+- 定位：到 VPS 路由 en0 直连（非代理隧道）；对照 github.com:22 不重置 → 重置是 **VPS 专属对该 IP**；典型 fail2ban（部署窗口失败连接 + 重试触发）。IP 动态会轮换，封禁过期/换网即恢复。
+- **结论：无需特殊补做**。`dim/repair` 已在标准同步清单 + 生产者 `convert_repair.py:87` durable 产 branch_code → 下次任一成功 `release:daily`/`sync-vps.mjs` 增量自动把新 repair parquet 推上 VPS。RLS-on（PR-3 `fe871b`）前完成同步即可。
+
+### 本步剩余（待 SSH 恢复后一次正常发布即可）
+- 换网/IP 轮换/fail2ban 解封后，正常 `bun run release:daily`（或 `node scripts/sync-vps.mjs`）一次 → dim/repair 上 VPS → `sudo /usr/local/bin/deploy-chexian-api reload` → curl `/api/query/repair/*` 200 验证（RLS-off 故 SC 行为不变）。
+- backlog `e6fac1` 已 note 本步进度。

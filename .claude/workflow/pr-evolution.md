@@ -1396,3 +1396,17 @@ PR-7 对其范围正确、codex 复审可合并。HIGH 已修（diversion org-on
 
 ### needs_automation: false
 （空态守卫覆盖率静态闸 P4：业务语义重、误报率高，人工 review + 本复盘范式更可靠，不另起闸。GeoRisk 完整守卫见 backlog 6a5aad。）
+
+---
+
+## 2026-06-25 · 山西 cutover 步骤1 RepairDim 数据发布步（本地物化完成·⑤⑥同步 SSH BLOCKED · backlog e6fac1）
+
+> 接力执行 RepairDim materialize+sync（类比 #790）。本地 ①②③④（快照→物化 branch_code='SC'→字节安全 verify exit 0→sync dry-run）完成且 durable；⑤真同步/⑥reload 因本机 IP 到 VPS 的 SSH 被持续重置（部署窗口 + fail2ban）而 BLOCKED。doc-only bookkeeping PR。
+
+### 三问复盘
+1. **重来怎样更好**：SSH 第一次被重置（`kex_exchange_identification: Connection reset by peer`）后，我又手动+后台共试了 ~6 次——这很可能把本机 IP 喂进 fail2ban、把「部署窗口瞬时不可连」**升级成更长的封禁**。教训：**SSH 握手期 RST 且站点 HTTPS 正常时，先查是否在 PR 合并后的部署窗口（`gh run list --workflow "Deploy to VPS"`）；是则等部署完成，期间最多试 1 次、禁连续重试**（连续失败连接正是 fail2ban 的触发条件，越试越糟）。
+2. **复用价值**：**「durable 本地物化 + 域已在标准同步清单 → 无需特殊补同步」**这一判断可复用于所有 cutover 数据发布步：物化产物落在 gitignored warehouse、生产者 ETL 已 durable 产列、`dim/repair` 已在 `buildStandardSyncTasks` → 下次任一成功 `release:daily`/`sync-vps` 增量自动携带。配合「RLS 仍 OFF → 延后零线上影响」，可把「被 SSH 阻断」从「任务失败」降级为「顺延到下次发布」，不强行绕过。
+3. **如何更高质量自动化**：可在 `sync-vps.mjs` / 接力 SOP 前置加一句「先 `gh run list --workflow 'Deploy to VPS' --limit 1` 确认无进行中部署再连 SSH」；但属低频人工运维步，**P4**（写进接力文档护栏即可，不另起闸）。诊断方法（路由 en0 直连判代理、github:22 对照判 VPS 专属重置、`/dev/tcp` 读 banner 定位 RST 层）已记本复盘供复用。
+
+### needs_automation: false
+（SSH 部署窗口探测 P4：低频人工运维，护栏写入接力文档 + 本复盘即可，不另起 governance 闸。）
