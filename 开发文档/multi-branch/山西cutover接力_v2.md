@@ -180,3 +180,35 @@ duckdb CLI v1.5.2 兼容；Option A 扁平不触发子目录互斥闸。
 - **🔒 隔离铁律守住**：`current/` 仍纯 SC 2,600,421（duckdb 核验）。源软链在 `staging/SX`（标准命名：`YYYYMMDD-YYYYMMDD_01_签单清单*` / `04_报价清单*` / `YYYYMMDD-YYYYMMDD_02_理赔明细*`）。
 - **ETL 入口**：`BRANCH_CODE=SX node 数据管理/daily.mjs {premium,claims_detail,quotes}`（多省 0a 路由，产物落 validation/SX 并自动跳过所有 SC 副作用）。
 - **cutover 仍 GATED**：本次只刷新隔离区数据。promote→开 RLS→sync→发账号 **未动**，须 owner 凭据矩阵（E2E_PASSWORD/JWT_SECRET/生产 env 写权限/USER_PASSWORDS）+ 逐步授权（见上文「2B 执行接力」）。
+
+---
+
+## 实证追加（2026-06-25 · cutover 能力体检：上文「2A 全部就绪」需修正 + 补齐路线图 · append-only）
+
+> validation/SX 刷新到 0623 后做 cutover 能力体检，发现上文「2A 代码前置全部就绪，新会话据此执行 cutover」**不准确**。**新会话 cutover 前必先补齐下列能力，不能直接进 §2B cutover 序列。**
+
+### 新增事实
+- **SC multiProvince 数据列已上线生产**（Task B #790，2026-06-24）：生产 `current/` 全 SC **2,600,421** 行已带 `branch_code='SC'` 列，reload 后启动日志 `TrendCube/SalesmanCube ready (branch_code=true)`。RLS 所需的生产数据列前置已就位（但 `BRANCH_RLS_ENABLED` 仍未开）。
+
+### 能力缺口（体检结论）
+1. **promote 工具链只覆盖签单**：`sx-promote.mjs` 只把 `validation/SX/*.parquet`（签单）promote 到 `current/`。**理赔 `validation/SX/claims_detail/` + 报价 `validation/SX/quotes_conversion/` 无 promote 路径** → 即使签单进生产，这两个派生域仍进不去。
+2. **VPS 读不到 validation/SX 派生域**：`paths.ts` + `sync-vps` 只覆盖 `current/` + 标准 fact/dim，不含 `validation/SX`。
+3. **开 RLS 机制偏差**：day1-sop 假设 `deploy-chexian-api edit-env`，wrapper 未实现该子命令。
+
+### 补齐路线图（5 任务 backlog，2026-06-25 登记）
+| PR | uid | 角色 | 部署链 |
+|----|-----|------|--------|
+| PR-1 | `5f1545` | **核心起点**：ClaimsDetail loader 多省扩展（`loadClaimsDetail` 加 extraSources，对齐 `loadQuoteConversion`；让 validation/SX/claims_detail 进 VIEW）。**风险 R1**：ClaimsAgg 聚合丢 branch_code → 赔付路由须经 PolicyFact JOIN 传 branch_code，否则开 RLS 报 Binder Error | 否 |
+| PR-2 | `a94c21` | `paths.ts getValidationRootDir` 加 VPS 回退 + sync-vps 追加 validation/SX claims_detail+quotes_conversion 同步 → 让 VPS 读到 SX 派生域 | **是·禁 auto-merge** |
+| PR-3 | `fe871b` | **GATED 终点**：ecosystem `BRANCH_RLS_ENABLED=true`。不可逆，人工窗口 merge+盯 CI；开前必跑 `stress-test --simulate-sx` + SC golden-baseline 零差异（需 owner E2E_PASSWORD/JWT_SECRET） | **是·禁 auto-merge** |
+| PR-4 | `8e6e8a` | wrapper 补 `edit-env` 子命令（可选，修 day1-sop 偏差） | **是·禁 auto-merge** |
+| PR-5 | `34dae2` | 前端空态保护（claims-detail/renewal-tracker KPI 空时显「数据装载中」，参 G8 范式） | 否 |
+
+### 路径架构选择（关键决策点，新会话开工先核对）
+两条 SX 派生域进生产路线，**二选一须先与 owner + 读 D6 ADR 钉死**：
+- **A. promote 到 `current/SX_*`**（sx-promote 模式）：需为理赔/报价扩 promote 工具链。
+- **B. loader 直读 `validation/SX` + sync validation 到 VPS**（当前 PR-1/2 backlog 按此设计）。
+⚠️ **D6 ADR（#788）已定「0a 隔离层终局 = 子目录 `current/<省>/`」**，与 B 的 validation/SX 直读可能冲突——**新会话开工先核对 D6 与 PR-1/2 路线是否一致**，不一致则先收敛架构再实现。
+
+### cutover 仍 GATED 未动
+promote/开 RLS/sync/发账号全部未执行，须 owner 凭据矩阵 + 逐步授权（见 §2B「执行接力」）。
