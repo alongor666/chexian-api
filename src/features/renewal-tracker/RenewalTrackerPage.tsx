@@ -18,6 +18,8 @@ import TimeFilter from './components/TimeFilter';
 import OverviewBand from './components/OverviewBand';
 import OrgTable from './components/OrgTable';
 import CategoryTable from './components/CategoryTable';
+import { EmptyState } from '@/shared/ui';
+import { isRenewalEmpty } from './utils/renewalEmptyState';
 import type { TimeView, SortField, SortDir, TimeRange, Selection } from './types';
 
 export default function RenewalTrackerPage() {
@@ -129,7 +131,18 @@ export default function RenewalTrackerPage() {
         <div className={cn('text-center py-8 text-sm', colorClasses.text.neutralMuted)}>查询中...</div>
       )}
 
-      {data && (
+      {/* 空态保护（多省接入 ADR G8 / Day-1 SOP §5）：山西等新分公司数据装载中 / 缺数据时，
+          续保端点返回全零应续行（A=0）。无此守卫会静默渲染 0 件应续 / 0.0% 续保率，被业务方
+          误判「真实零续保」。规模锚 A=0 即渲染 EmptyState 而非零（判据见 utils/renewalEmptyState.ts）。 */}
+      {data && isRenewalEmpty(data.overall, data.orgRows) && (
+        <EmptyState
+          size="lg"
+          title="暂无续保数据"
+          description="当前筛选范围或机构暂无应续保单，可能正在装载，请稍后刷新。若持续为空，请联系管理员确认数据状态——这不代表真实零续保。"
+        />
+      )}
+
+      {data && !isRenewalEmpty(data.overall, data.orgRows) && (
         <div className={isFetching ? 'opacity-50 pointer-events-none' : ''}>
           <OverviewBand
             overall={data.overall}
