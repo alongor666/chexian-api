@@ -676,6 +676,104 @@ export async function loadQuoteConversion(
 }
 
 /**
+ * 单个省份的赔案明细来源（PR-1 多省共存）：glob 已 escapeSqlValue + 正斜杠规整。
+ * 与 BranchDimSource 区别：赔案是 CDC 年度分区 glob（claims_*.parquet），非单 latest.parquet；
+ * 故每源内部必须保留 `union_by_name=true`（分区间 branch_code 列有无的 schema 漂移）。
+ */
+export interface BranchClaimsSource {
+  /** 省份码（CHAR(2)，'SC'/'SX'…）；由 paths/bootstrapper 层 `^[A-Z]{2}$` 白名单约束，可安全内插 */
+  branchCode: string;
+  /** 已 escapeSqlValue + 正斜杠规整的 glob 路径（如 '…/claims_*.parquet'） */
+  safePath: string;
+  /** 该 glob 是否已含 branch_code 列（DESCRIBE 实测；buildClaimsDetailSelectSql 填充） */
+  hasBranchCode: boolean;
+}
+
+/**
+ * 构造多省赔案明细的 read_parquet SELECT（纯函数，无 DuckDB → CI 单测）。
+ *
+ * 🔴 字节安全铁律（按构造证明）：
+ *   - **单一来源**（SC-only 默认部署，sources.length===1）→ 返回
+ *     `SELECT * FROM read_parquet('<glob>', union_by_name=true)`，**与历史 loadClaimsDetail 逐字节一致**：
+ *     不 DESCRIBE、不补 branch_code、不 UNION（即使 SC parquet 已含 branch_code 列也透传 SELECT *）。
+ *   - **多来源**（GATED 多省共存，sources.length>1）→ 各省 glob 各自 `union_by_name=true`
+ *     （容忍 CDC 分区 schema 漂移）后 `UNION ALL BY NAME` 合并；缺 branch_code 列的源补
+ *     `'<branchCode>' AS branch_code` 常量列，已含者原样（避免 `SELECT *, …` 重复列报错）。
+ *
+ * ⚠️ 与派生域 selectUnionWithBranchCode 的关键差异（刻意）：本函数每个 read_parquet **保留
+ *    `union_by_name=true`**（赔案 glob 多分区必需），而 selectUnionWithBranchCode 用裸 read_parquet
+ *    （派生域单 latest.parquet 无分区漂移）。故不能复用后者。
+ *
+ * ⚠️ ClaimsDetail VIEW 含 branch_code 列是安全的：claims-detail / claims-heatmap 路由的 RLS
+ *    branch_code 过滤注入到**内层 PolicyFact 子查询**（eligible_policies CTE 不 SELECT branch_code），
+ *    外层 `ClaimsDetail c JOIN eligible_policies p` 不裸引用 branch_code → 无歧义。详见 PR-1 描述。
+ */
+export function composeClaimsDetailSelect(
+  sources: ReadonlyArray<BranchClaimsSource>,
+): string {
+  if (sources.length === 0) {
+    throw new Error('composeClaimsDetailSelect: 至少需要一个赔案来源');
+  }
+  // P2（codex 闸-2）：branchCode 在 builder 内自校验——导出函数不应只靠调用方注释约束。
+  // 与 fields.json branch_code 派生轴 / getDeploymentBranchCode / paths 层 `^[A-Z]{2}$` 同源。
+  for (const s of sources) {
+    if (!/^[A-Z]{2}$/.test(s.branchCode)) {
+      throw new Error(`composeClaimsDetailSelect: 非法 branchCode "${s.branchCode}"（须匹配 ^[A-Z]{2}$）`);
+    }
+  }
+  if (sources.length === 1) {
+    // 单源：逐字节等价历史 loadClaimsDetail（不补 branch_code、不 UNION）→ SC 默认字节安全
+    return `SELECT * FROM read_parquet('${sources[0].safePath}', union_by_name=true)`;
+  }
+  // 多源（GATED 多省）：每省 glob 各自 union_by_name；UNION ALL BY NAME。
+  // P1（codex 闸-2）：hasBranchCode=true 的源用 `REPLACE (COALESCE(branch_code, '<省>'))` 兜底——
+  // DESCRIBE 看到列 ≠ 该 glob 所有行都有值：同省 glob 内 CDC 旧分区无 branch_code、新分区有时，
+  // union_by_name 对旧分区行补 NULL，裸 SELECT * 会留 NULL（RLS `WHERE branch_code='SX'` 漏命中旧行、
+  // 或未来 repair shadow 加 c.branch_code 过滤时漏数据）。COALESCE 把 NULL 补省常量；纯净源（全有值）
+  // COALESCE 不改变值（原样）。缺列源（整源无 branch_code）走补常量列分支。
+  return sources
+    .map((s) =>
+      s.hasBranchCode
+        ? `SELECT * REPLACE (COALESCE(branch_code, '${s.branchCode}') AS branch_code) FROM read_parquet('${s.safePath}', union_by_name=true)`
+        : `SELECT *, '${s.branchCode}' AS branch_code FROM read_parquet('${s.safePath}', union_by_name=true)`,
+    )
+    .join('\n      UNION ALL BY NAME\n      ');
+}
+
+/**
+ * loader 入口：把赔案分区 glob + 可选多省 extra 源拼成 SELECT。
+ * extra 为空（默认 SC-only）→ 单源短路（不 DESCRIBE）= 历史逐字节一致（字节安全）。
+ * 多源 → DESCRIBE 实测各 glob 是否含 branch_code（保留 union_by_name），交 composeClaimsDetailSelect。
+ */
+export async function buildClaimsDetailSelectSql(
+  db: DuckDBQueryable,
+  rawSources: ReadonlyArray<{ branchCode: string; glob: string }>,
+): Promise<string> {
+  if (rawSources.length === 0) {
+    throw new Error('buildClaimsDetailSelectSql: 至少需要一个赔案来源');
+  }
+  const escaped = rawSources.map((s) => ({
+    branchCode: s.branchCode,
+    safePath: escapeSqlValue(s.glob.replace(/\\/g, '/')),
+  }));
+  if (escaped.length === 1) {
+    // 单源短路：不 DESCRIBE，逐字节等价历史
+    return composeClaimsDetailSelect([{ ...escaped[0], hasBranchCode: false }]);
+  }
+  const resolved: BranchClaimsSource[] = [];
+  for (const s of escaped) {
+    const cols = await db.query<{ column_name: string }>(
+      `DESCRIBE SELECT * FROM read_parquet('${s.safePath}', union_by_name=true)`,
+    );
+    resolved.push({
+      ...s,
+      hasBranchCode: cols.some((c) => c.column_name?.toLowerCase() === 'branch_code'),
+    });
+  }
+  return composeClaimsDetailSelect(resolved);
+}
+
+/**
  * 加载赔案明细 Parquet → ClaimsDetail VIEW
  *
  * P3-A（codex 闸-2 P1 采纳）：用 `union_by_name=true` 与 PolicyFact 对齐 schema 漂移容忍，
@@ -683,15 +781,30 @@ export async function loadQuoteConversion(
  * 混读会因列数不匹配崩溃。schema 一致性由 ETL fields.json + governance #17（字段注册表
  * 一致性闸）+ schema 契约保证，无需在 loader 层兜底强一致性。同 PolicyFact `union_by_name`
  * 路径（duckdb-parquet-loader.ts）逻辑。
+ *
+ * PR-1 多省共存（ADR G4 扩展）：extraSources 为空（默认 SC-only）→ 单源短路 = 历史逐字节一致
+ * （字节安全）；非空（GATED 多省）→ SC glob + SX 等 glob 各自 union_by_name 后 UNION ALL BY NAME
+ * （SX validation 副本由 ETL 注入 branch_code → 携真实 per-row 省份）。R1：ClaimsAgg 仍 GROUP BY
+ * policy_no 不携 branch_code（刻意——赔付路由经 PolicyFact JOIN 隔离，给 ClaimsAgg 加列反致裸列名歧义）。
  */
-export async function loadClaimsDetail(db: DuckDBQueryable, parquetPath: string): Promise<void> {
-  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+export async function loadClaimsDetail(
+  db: DuckDBQueryable,
+  parquetPath: string,
+  extraSources: ReadonlyArray<RawBranchDimSource> = [],
+): Promise<void> {
+  const innerSelect = await buildClaimsDetailSelectSql(db, [
+    { branchCode: getDeploymentBranchCode(), glob: parquetPath },
+    ...extraSources.map((s) => ({ branchCode: s.branchCode, glob: s.path })),
+  ]);
   await db.query(`
     CREATE OR REPLACE VIEW ClaimsDetail AS
-    SELECT * FROM read_parquet('${safePath}', union_by_name=true)
+    ${innerSelect}
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM ClaimsDetail');
-  console.log(`[DuckDB] ClaimsDetail view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+  console.log(
+    `[DuckDB] ClaimsDetail view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}` +
+      (extraSources.length ? ` +${extraSources.length} branch(es)` : ''),
+  );
 }
 
 /**

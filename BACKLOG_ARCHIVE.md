@@ -1,6 +1,6 @@
 # 需求账本归档 (BACKLOG ARCHIVE)
 
-**用途**：存放已完成（DONE）任务，完整保留 ID、描述、证据，供历史追溯。当前 175 项。
+**用途**：存放已完成（DONE）任务，完整保留 ID、描述、证据，供历史追溯。当前 176 项。
 
 **铁律**：
 - 本文件是 [`BACKLOG_LOG.jsonl`](./BACKLOG_LOG.jsonl) 的**派生视图**，由 `bun scripts/governance-backlog-curate.mjs --apply` 折叠日志渲染，**禁止手工编辑**。
@@ -194,3 +194,4 @@
 | 2026-06-24-claude-9e5bac | 2026-06-24 | 多省·山西 cutover | @claude | 生产数据多省就绪：salesman dim 加 branch_code='SC' + 派生域 per-row branch_code（backfill+域ETL），本地 multiProvince=true + RLS-on 0 fail-close + 字节安全验证 | P1 | DONE | N/A | 数据管理/warehouse/dim/generate_dim_tables.py,数据管理/pipelines/backfill_derived_fields.py | commit 22e68c1b+32488c80(claude/loop-mpdata)；7域物化branch_code='SC'；值级字节安全oracle非branch列sha256全等；governance44/44+全量单测4096/4096+python26；RLS-on自签SC/SX token premium-plan/performance SC200带数据+SX空0fail-close+quotes跨省隔离无串读；codex闸-1/2双过(P2全修,P1→follow-up43e39b)+evidence-verifier CONFIRMED |
 | 2026-06-24-claude-f7bda2 | 2026-06-24 | Chore | @claude | 安全 promote SX premium 到生产 current/，dry-run 默认+duckdb 校验+回滚 | P1 | DONE | N/A | scripts/release/sx-promote.mjs | promotion 脚本 PR #783 merged；Option A 扁平前缀；codex+verifier 双闸两轮硬化 3P0+8P1 全修；56 测试 |
 | 2026-06-24-claude-sx-g7p2-test-b6699a | 2026-06-24 | Chore | claude/sx-g7p2-test | evidence-verifier留下的P2：对sxAdmin及山西org_user调用真实login路径，断言返回403(Account disabled)。补充G7静态测试的运行时覆盖 | P2 | DONE | N/A | N/A | server/src/services/__tests__/auth-sx-active-gate.test.ts: 19测试全绿；CI=1 bun run test --run 验证；typecheck通过；governance 44/44 |
+| 2026-06-25-claude-5f1545 | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-1(核心·不碰部署链): ClaimsDetail loader 多省扩展—loadClaimsDetail 加 extraSources 参数(对齐 loadQuoteConversion 已有模式)+ data-bootstrapper ClaimsDetail 注册追加 resolveBranchFactExtras claims_detail。让 validation/SX/claims_detail 进 ClaimsDetail VIEW。必验风险R1: ClaimsAgg 聚合丢 branch_code→赔付路由须经 PolicyFact JOIN 传 branch_code 否则开 RLS Binder Error | P1 | DONE | N/A | server/src/services/duckdb-domain-loaders.ts,server/src/services/data-bootstrapper.ts | loadClaimsDetail 加 extraSources(专属 composeClaimsDetailSelect/buildClaimsDetailSelectSql 保留 union_by_name,不套 loadQuoteConversion)+ data-bootstrapper resolveBranchClaimsDetailExtras 探测 validation/SX/claims_detail glob。验证:CI单测21(含8新)+集成4(真DuckDB R1隔离 SX=3000/SC=5000无串读无Binder)+全量4096 passed+typecheck0+governance44/44;duckdb真实数据oracle:多源SC288198+SX236653/SC看板赔款多源==纯SC 1421721840.37(字节安全)/policy_no跨省碰撞0。设计澄清:SC claims_detail已含branch_code列(ADR§11缺列结论过时);R1正解=ClaimsAgg不加branch_code(加反致裸列名歧义),全消费方经PolicyFact JOIN隔离。code-reviewer对抗审查发现repair 4端点shadow CTE泄漏→已登记PR-6(2bb22d)为PR-3硬前置 |

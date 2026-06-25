@@ -3,6 +3,9 @@ import {
   createClaimsAggFromDetail,
   buildWindowedClaimsAggCTE,
   CLAIMS_REPORTED_AMOUNT_CASE,
+  composeClaimsDetailSelect,
+  buildClaimsDetailSelectSql,
+  loadClaimsDetail,
 } from '../duckdb-domain-loaders.js';
 import type { DuckDBQueryable } from '../duckdb-types.js';
 
@@ -161,5 +164,150 @@ describe('createClaimsAggFromDetail — asOfDate 可选参数（B299 预防性�
     await createClaimsAggFromDetail(db, '2026-03-31');
     const sql = queries.find((s) => s.includes('CREATE OR REPLACE TABLE ClaimsAgg')) ?? '';
     expect(sql).toMatch(/CREATE\s+OR\s+REPLACE\s+TABLE\s+ClaimsAgg/i);
+  });
+});
+
+// ============================================
+// PR-1 多省赔案明细扩展（ADR G4 扩展 · GATED 上线能力预备）
+// ============================================
+
+describe('composeClaimsDetailSelect (PR-1 纯函数构造)', () => {
+  it('🔴 单源：逐字节等价历史 loadClaimsDetail（保留 union_by_name、不补 branch_code、不 UNION）', () => {
+    const sql = composeClaimsDetailSelect([
+      { branchCode: 'SC', safePath: 'wh/fact/claims_detail/claims_*.parquet', hasBranchCode: true },
+    ]);
+    expect(sql).toBe(
+      "SELECT * FROM read_parquet('wh/fact/claims_detail/claims_*.parquet', union_by_name=true)",
+    );
+  });
+
+  it('🔴 单源即使 hasBranchCode=false 也不补列（单源短路一律字节安全优先）', () => {
+    const sql = composeClaimsDetailSelect([
+      { branchCode: 'SC', safePath: 'p/claims_*.parquet', hasBranchCode: false },
+    ]);
+    expect(sql).toBe("SELECT * FROM read_parquet('p/claims_*.parquet', union_by_name=true)");
+    expect(sql).not.toContain('AS branch_code');
+  });
+
+  it('多源：UNION ALL BY NAME；含 branch_code 原样、缺列补省份常量；每源均保留 union_by_name', () => {
+    const sql = composeClaimsDetailSelect([
+      { branchCode: 'SC', safePath: 'sc/claims_*.parquet', hasBranchCode: false },
+      { branchCode: 'SX', safePath: 'sx/claims_*.parquet', hasBranchCode: true },
+    ]);
+    expect(sql).toContain('UNION ALL BY NAME');
+    // SC 缺列补常量
+    expect(sql).toContain(
+      "SELECT *, 'SC' AS branch_code FROM read_parquet('sc/claims_*.parquet', union_by_name=true)",
+    );
+    // SX 含列：REPLACE COALESCE 兜底 NULL（混合分区健壮性，P1 codex 闸-2）
+    expect(sql).toContain(
+      "SELECT * REPLACE (COALESCE(branch_code, 'SX') AS branch_code) FROM read_parquet('sx/claims_*.parquet', union_by_name=true)",
+    );
+    // 关键：每源都保留 union_by_name（赔案 CDC 分区 schema 漂移必需，不同于派生域）
+    expect((sql.match(/union_by_name=true/g) ?? []).length).toBe(2);
+  });
+
+  it('空源数组抛错', () => {
+    expect(() => composeClaimsDetailSelect([])).toThrow(/至少需要一个赔案来源/);
+  });
+
+  it('P2（codex 闸-2）：非法 branchCode 抛错（须 ^[A-Z]{2}$，防注入/脏数据）', () => {
+    expect(() =>
+      composeClaimsDetailSelect([{ branchCode: 'sx', safePath: 'p/claims_*.parquet', hasBranchCode: true }]),
+    ).toThrow(/非法 branchCode/);
+    expect(() =>
+      composeClaimsDetailSelect([
+        { branchCode: "SX'; DROP TABLE x; --", safePath: 'p/claims_*.parquet', hasBranchCode: false },
+      ]),
+    ).toThrow(/非法 branchCode/);
+  });
+});
+
+describe('buildClaimsDetailSelectSql (PR-1 async 入口)', () => {
+  it('🔴 单源短路：不 DESCRIBE（零 DESCRIBE 调用）+ 字节安全 SQL', async () => {
+    const { db, queries } = makeMockDb();
+    const sql = await buildClaimsDetailSelectSql(db, [
+      { branchCode: 'SC', glob: 'p/claims_*.parquet' },
+    ]);
+    expect(sql).toBe("SELECT * FROM read_parquet('p/claims_*.parquet', union_by_name=true)");
+    expect(queries.filter((q) => q.includes('DESCRIBE')).length).toBe(0);
+  });
+
+  it('多源：DESCRIBE 实测后 SC 补常量 / SX 原样', async () => {
+    const queries: string[] = [];
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql);
+        // SX glob DESCRIBE → 含 branch_code；SC glob DESCRIBE → 不含
+        if (sql.includes('DESCRIBE') && sql.includes('sx/')) {
+          return [{ column_name: 'branch_code' }, { column_name: 'policy_no' }];
+        }
+        if (sql.includes('DESCRIBE')) return [{ column_name: 'policy_no' }];
+        return [];
+      }),
+      getTableSchema: vi.fn(),
+      hasRelation: vi.fn(),
+      dropRelationIfExists: vi.fn(),
+      invalidateCache: vi.fn(),
+    } as unknown as DuckDBQueryable;
+
+    const sql = await buildClaimsDetailSelectSql(db, [
+      { branchCode: 'SC', glob: 'sc/claims_*.parquet' },
+      { branchCode: 'SX', glob: 'sx/claims_*.parquet' },
+    ]);
+    expect(sql).toContain("SELECT *, 'SC' AS branch_code");
+    expect(sql).toContain(
+      "SELECT * REPLACE (COALESCE(branch_code, 'SX') AS branch_code) FROM read_parquet('sx/claims_*.parquet', union_by_name=true)",
+    );
+    expect(sql).toContain('UNION ALL BY NAME');
+    // DESCRIBE 也保留 union_by_name（容忍分区漂移）
+    expect(queries.filter((q) => q.includes('DESCRIBE') && q.includes('union_by_name=true')).length).toBe(2);
+  });
+
+  it('glob 单引号转义（防 SQL 注入）', async () => {
+    const { db } = makeMockDb();
+    const sql = await buildClaimsDetailSelectSql(db, [
+      { branchCode: 'SC', glob: "p'; DROP TABLE x; --/claims_*.parquet" },
+    ]);
+    expect(sql).toContain("p''; DROP TABLE x; --");
+    expect(sql).not.toMatch(/read_parquet\('p';\s*DROP/);
+  });
+});
+
+describe('loadClaimsDetail (PR-1 多省扩展)', () => {
+  it('🔴 extraSources=[]（默认）：ClaimsDetail VIEW SQL 逐字节等价历史（字节安全 + 零 DESCRIBE）', async () => {
+    const { db, queries } = makeMockDb();
+    await loadClaimsDetail(db, 'wh/claims_*.parquet');
+    const viewSql = queries.find((q) => q.includes('CREATE OR REPLACE VIEW ClaimsDetail')) ?? '';
+    expect(viewSql).toContain(
+      "SELECT * FROM read_parquet('wh/claims_*.parquet', union_by_name=true)",
+    );
+    expect(viewSql).not.toContain('UNION');
+    expect(queries.filter((q) => q.includes('DESCRIBE')).length).toBe(0);
+  });
+
+  it('extraSources 非空：多省 UNION ALL BY NAME 进 ClaimsDetail VIEW', async () => {
+    const queries: string[] = [];
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql);
+        if (sql.includes('DESCRIBE') && sql.includes('SX')) return [{ column_name: 'branch_code' }];
+        if (sql.includes('DESCRIBE')) return [{ column_name: 'policy_no' }];
+        if (sql.includes('SELECT COUNT(*) AS cnt')) return [{ cnt: 1 }];
+        return [];
+      }),
+      getTableSchema: vi.fn(),
+      hasRelation: vi.fn(),
+      dropRelationIfExists: vi.fn(),
+      invalidateCache: vi.fn(),
+    } as unknown as DuckDBQueryable;
+
+    await loadClaimsDetail(db, 'sc/claims_*.parquet', [
+      { branchCode: 'SX', path: 'validation/SX/claims_detail/claims_*.parquet' },
+    ]);
+    const viewSql = queries.find((q) => q.includes('CREATE OR REPLACE VIEW ClaimsDetail')) ?? '';
+    expect(viewSql).toContain('UNION ALL BY NAME');
+    // SX 源含 branch_code → 原样；SC 基准源 DESCRIBE 无 branch_code → 补部署省常量
+    expect(viewSql).toContain('AS branch_code');
   });
 });

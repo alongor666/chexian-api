@@ -212,3 +212,27 @@ duckdb CLI v1.5.2 兼容；Option A 扁平不触发子目录互斥闸。
 
 ### cutover 仍 GATED 未动
 promote/开 RLS/sync/发账号全部未执行，须 owner 凭据矩阵 + 逐步授权（见 §2B「执行接力」）。
+
+---
+
+## 实证追加（2026-06-25 · PR-1 ClaimsDetail 多省扩展完成 + repair 泄漏发现 · append-only）
+
+> 阶段 1 能力补齐 PR-1（`5f1545`）已实现+验证（owner 授权"行动吧"，主会话执行）。**修正上文「能力体检」PR-1 表述 + 新增 repair 硬前置（PR-6）。cutover 仍全 GATED 未动。**
+
+### 路径架构（阶段 0）已与 D6 核对：不冲突
+D6 子目录终局（`current/<省>/`）仅约束 **PolicyFact（签单）**；派生域（claims_detail/quotes/renewal）走 G4 `validation/<省>/` 直读（loader `extraSources` + `resolveBranchFactExtras` 既有模式），D6 未涉及 → **PR-1/2 路线 B 与 D6 兼容**，无需先收敛架构。
+
+### PR-1 已完成（loader 层，不碰部署链）
+- **实现**：`loadClaimsDetail(db, parquetPath, extraSources=[])` 多省扩展。新增专属 `composeClaimsDetailSelect`（纯函数）/ `buildClaimsDetailSelectSql`（async）（`duckdb-domain-loaders.ts`）+ `resolveBranchClaimsDetailExtras` 探测 `validation/<省>/claims_detail/claims_*.parquet` glob（`data-bootstrapper.ts`）+ `getBranchValidationClaimsDetailDir`（`paths.ts`）。
+- **关键设计澄清（与体检 backlog 描述偏离，均已实证）**：
+  1. **SC claims_detail 已含 `branch_code` 列**（duckdb DESCRIBE 实测 YES，全 'SC' 288,198 行）——ADR §11 2026-06-23「claims_detail latest.parquet 缺列」结论**已过时**（#789 物化时补上）。
+  2. **不能套 `loadQuoteConversion` 补列模式**：ClaimsDetail 是 CDC 年度分区 glob，每源必须保留 `union_by_name=true`（分区间 branch_code 列有无的 schema 漂移），而派生域 `selectUnionWithBranchCode` 不带它 → 故 PR-1 写专属构造（单源短路逐字节等价历史，多源每源各自 union_by_name 后 UNION ALL BY NAME）。
+  3. **R1 正解 = ClaimsAgg 不加 branch_code**（与体检"加 branch_code"假设相反）：所有 ClaimsAgg 消费方都 `FROM PolicyFact ... LEFT JOIN ClaimsAgg ON policy_no`，RLS `branch_code='SX'` 解析到 PolicyFact（唯一含列）；给 ClaimsAgg 也加列反致**裸列名歧义 Binder Error**。全仓裸 `FROM ClaimsAgg`=0 已复核。
+- **验证**：CI 单测 21（含 8 新）+ 集成 4（真 DuckDB R1 隔离 SX=3000/SC=5000、无串读、无 Binder）+ 全量 4096 passed + typecheck 0 + governance 44/44；duckdb 真实数据 oracle：多源 SC 288,198+SX 236,653 / SC 看板赔款多源 == 纯 SC `1,421,721,840.37`（字节安全）/ policy_no 跨省碰撞 0。
+- **字节安全**：`extraSources=[]`（生产 SC-only）单源短路逐字节等价历史、不 DESCRIBE。本地 `validation/SX` 存在 → 多源，但 PolicyFact 纯 SC → SX 赔案孤儿经 `JOIN ON policy_no` 丢弃（前缀 610/618 不碰撞）→ SC 结果不变（oracle 已证）。
+
+### 🔴 新增 repair 硬前置（PR-6 · `2bb22d` · PR-3 RLS-on 前必修）
+code-reviewer 子代理 fresh-context 对抗审查发现：`repair.ts` 4 端点（coop-tier / scatter×2 / diversion / orphan-shops）的 shadow 网点 CTE `FROM ClaimsDetail c` **不经 PolicyFact JOIN、无 branch_code 过滤**（orphan-shops 还 `void whereClause` 丢弃全部过滤）。PR-1 让 ClaimsDetail 多源后，**RLS-on + SX 账号激活会让 repair 影子网点跨省串读**（SX 看 SC 赔案 / 反之）。
+- **当前不触发**：RLS 仍关、无 SX 账号 → PR-1 合并后安全。
+- **PR-3（`fe871b`）已加依赖**：开 RLS 前 PR-6 必须先合并。orphan-shops「全省维度」语义多省后需业务确认（本省/全国）。
+- **对比**：claims-detail / claims-heatmap **安全**（RLS 注入内层 PolicyFact 子查询，`eligible_policies` CTE 不 SELECT branch_code → 外层 `ClaimsDetail c JOIN eligible_policies p` 无歧义）。

@@ -83,6 +83,17 @@ export function getBranchValidationFactPath(branchCode: string, domain: string):
   return path.resolve(getValidationRootDir(), branchCode, domain, 'latest.parquet');
 }
 
+/**
+ * 某省赔案明细的 validation 隔离副本目录（warehouse/validation/<省>/claims_detail）（PR-1·ADR G4 扩展）。
+ * 与派生域（getBranchValidationFactPath 返回单 latest.parquet）刻意不同：claims_detail 是 CDC 年度分区
+ * 目录（claims_*.parquet glob），故返回**目录**，由 data-bootstrapper 探测目录内 claims_*.parquet 后拼 glob，
+ * 传入 loadClaimsDetail 的 extraSources（保留 union_by_name 容忍分区 schema 漂移）。
+ * 0a 期缺者 → 探测后不传，loadClaimsDetail 单源 = 字节安全。
+ */
+export function getBranchValidationClaimsDetailDir(branchCode: string): string {
+  return path.resolve(getValidationRootDir(), branchCode, 'claims_detail');
+}
+
 // ── 维度表 Parquet 路径（本地优先，VPS 回退）──
 
 export function getSalesmanDimPaths(): string[] {
