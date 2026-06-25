@@ -1347,3 +1347,18 @@ PR-6 对其范围正确、安全可合并（增量·RLS-off 字节安全·不开
 ### needs_automation: true
 - 闸：「域跨省关系清单」静态闸（扫 SQL 生成器表读取点 × province-aware 对照表）。
 - expires: 2026-07-25（PR-7 评估时一并决策；届时未落地则复审是否仍需要或降级为纪律）。
+
+---
+
+## 2026-06-25 · 山西 cutover PR-2 部署链「VPS 读 SX 派生域」（R39 · backlog a94c21 · 分支 claude/sx-cutover-pr2-deploychain）
+
+> paths.ts VPS 回退 + sync-vps validation 分省同步。双对抗（codex 闸-2 两轮 + code-reviewer fresh-context）。部署链 PR·禁 auto-merge。R38 由未合并的 PR-7 #794 占用，故本条用 R39 避号碰撞。
+
+### 三问复盘
+1. **重来怎样更好**：① 照 backlog 字面「claims_detail + quotes_conversion」二域实现会漏 renewal_tracker——根因=没先核对 loader 实际从 validation 读哪些域。教训：**部署链/数据流任务先核实 consumer（loader resolveBranch*Extras）真实读取集合，再定 producer（sync）推送集合**，而非照 backlog 字面。② 第 1 版差点让日常 sync 把 SX 推进生产（codex CRITICAL）——根因=把 PR-1「extraSources 字节安全」错当成「全域全场景字节安全」，但 PR-1 只对 claims 经 PolicyFact JOIN 丢弃验证过。教训：**字节安全证明有「域 × 场景」边界，跨域复用前必须重新核验消费路径是否同样丢弃异省**；「数据物理进生产」必须显式 cutover 开关，绝不由日常自动化触发。
+2. **复用价值**：① **「loader 读取域 == sync 推送域」三层对称模板**（省份枚举 + 域集合 + 文件级存在性，全锚定 data-bootstrapper resolveBranch*Extras）——加省/加域直接复用。② **GATED 数据进生产用显式 env 开关收口**（SYNC_VALIDATION_BRANCHES，默认 off），与 #790 RepairDim materialize+sync、BRANCH_RLS_ENABLED 同范式。③ **可注入参数做确定性测试**（getValidationRootDir(candidates) / buildValidationBranchSyncTasks(remote, root)）——避开「真实 fs 状态依赖 + skip-guard 假通过」反模式（code-reviewer + codex 双方都抓到旧测试这个问题）。④ **对抗 finding 独立核验否决**：codex 第 2 轮 LOW（customer_flow 漏同步）逐行核验 loadCustomerFlow 无 extras 参数 → 误读，否决不盲从（feedback_verify_merge_authoritative 同源纪律）。
+3. **如何更高质量自动化**：「loader 读取域 == sync 推送域」对称性现靠注释 + 测试 + codex 闸守，未来 loader 增删 validation 域时 sync 可能漂移。
+
+### needs_automation: true
+- 闸：governance 静态对账——扫 data-bootstrapper 的 `resolveBranchFactExtras('X')` 调用集合 + `resolveBranchClaimsDetailExtras`，与 sync-vps `VALIDATION_SYNCED_DOMAINS` 比对，不一致即 fail（防 loader 域与 sync 域漂移）。
+- expires: 2026-09-25（当前两处人工同步 + codex 闸 + 单测覆盖；域集合变更频率低，P3。届时未落地则复审是否降级为纪律）。

@@ -16,11 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（83 项 · 数据截至 2026-06-25 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（82 项 · 数据截至 2026-06-25 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（10 项）**
+**P1（9 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
@@ -29,7 +29,6 @@
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
 - 2026-06-24-claude-43e39b — achievement_cache/dim 兼容层跨省复合键（codex 闸-2 P1·
 - 2026-06-24-claude-85759a — D6 收敛
-- 2026-06-25-claude-a94c21 — cutover能力PR-2(deps PR-1·碰部署链禁auto-merge)
 - 2026-06-25-claude-e6fac1 — cutover能力PR-7(RLS-on新增硬前置·codex对抗审计2026-06-2
 - 2026-06-25-claude-fe871b — cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链)
 
@@ -198,6 +197,5 @@
 | 2026-06-24-claude-f7590d | 2026-06-24 | Chore | @claude | sx-promote.mjs 批量 staging→final rename 非跨进程崩溃原子（Option A 扁平固有）。已三层缓解（leftover preflight+幂等+ready-marker+SOP串行）。彻底闭合需 Option B 子目录单次目录 swap，或 sync-vps/data-bootstrapper 共守 promote lock。cutover 真用前须 VPS 真实 SX parquet dry-run。 | P2 | PROPOSED | N/A | scripts/release/sx-promote.mjs 数据管理/lib/branch-naming.mjs scripts/sync-vps.mjs |  |
 | 2026-06-25-claude-34dae2 | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-5(并行·day1-sop V9 §5): 前端空态保护—claims-detail/renewal-tracker 等页面 KPI 空时显示'山西数据装载中'而非静默零值(参 VariableCostKpiBoard ADR G8 范式),禁静默展示空 KPI | P2 | PROPOSED | N/A | src/features/claims-detail,src/features/renewal-tracker |  |
 | 2026-06-25-claude-8e6e8a | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-4(可选·碰部署链): deploy/vps-wrapper/deploy-chexian-api.sh 补 edit-env 子命令(sed 改 ecosystem env+reload),修 day1-sop 假设的 edit-env 与 wrapper 实现偏差。优先级低于 PR-1/2/3 | P2 | PROPOSED | N/A | deploy/vps-wrapper/deploy-chexian-api.sh |  |
-| 2026-06-25-claude-a94c21 | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-2(deps PR-1·碰部署链禁auto-merge): paths.ts getValidationRootDir 加 VPS 回退 server/data/validation/ + sync-vps buildStandardSyncTasks 追加 validation/SX 的 claims_detail+quotes_conversion 同步任务到 data/validation/SX/。让 VPS 读到 SX 派生域 | P1 | PROPOSED | N/A | server/src/config/paths.ts,scripts/sync-vps.mjs |  |
 | 2026-06-25-claude-e6fac1 | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-7(RLS-on新增硬前置·codex对抗审计2026-06-25发现): RepairDim无branch_code列→多省repair端点RLS不完整。(a)RepairDim-only端点(overview/detail/status/metadata/city/channel/to-premium)对branch_admin未省份隔离(org_user经org隔离,但branch_admin的permissionFilter无org_level_3→buildRepairWhere降为1=1→RepairDim全读)→SX branch_admin看SC维修网点=直接泄漏;(b)影子/孤儿CTE的bare RepairDim子查询(coop-tier shadow_shops NOT IN/diversion active_shops+past+none/orphan orphan_claims NOT IN)跨省全读→SX影子分类被SC注册误判(codex真DuckDB复现:ClaimsDetail1条SX赔案+RepairDim同码SC登记店→SX视角orphan/coop none_shadow/diversion全空,漏报本省影子+弱推断信道);(c)diversion policyWhereExtra把RepairDim whereClause注入PolicyFact,RepairDim有列/PolicyFact无列的schema skew态会Binder Error(WHERE 1=1 AND branch_code='SX'打在无列PolicyFact)。修法选项:RepairDim物化branch_code(如#789对claims_detail/salesman)或org_level_3→branch派生映射;orphan语义(全省未登记 vs 本省未登记)需业务确认。PR-6(2bb22d)已闭ClaimsDetail/PolicyFact行泄漏,本任务闭RepairDim侧。ADR§11已标repair RLS面外,本为其cutover阻断升级(第二半) | P1 | PROPOSED | N/A | server/src/sql/repair.ts,server/src/routes/query/repair.ts,数据管理/warehouse/dim |  |
 | 2026-06-25-claude-fe871b | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链): ecosystem.config.cjs env 加 BRANCH_RLS_ENABLED true。不可逆生产 RLS 开启,人工监控窗口 merge+盯CI。开前必跑 multi-branch-stress-test --simulate-sx + SC golden-baseline 零差异(需 owner 给 E2E_PASSWORD/JWT_SECRET) | P1 | PROPOSED | N/A | server/ecosystem.config.cjs | RLS-on 硬前置升级（2026-06-25）：除 stress-test --simulate-sx + SC golden-baseline 零差异外，新增依赖 PR-6(2bb22d) repair shadow 网点 ClaimsDetail branch 隔离——PR-1(5f1545) 让 ClaimsDetail 多源后，repair 4 端点 RLS-on 会跨省串读。开 RLS 前 PR-6 必须先合并。 <br>RLS-on 硬前置再升级（2026-06-25 codex 对抗审计）：新增依赖 PR-7(e6fac1) RepairDim 省份化。PR-6(2bb22d) 只闭 ClaimsDetail/PolicyFact 行泄漏；RepairDim-only 端点(overview/detail等)对 branch_admin 未省份隔离 + 影子 CTE bare RepairDim 子查询跨省全读仍未闭。开 RLS 前 PR-6 + PR-7 都必须先合并。 |

@@ -259,3 +259,23 @@ PR-6 只过滤 ClaimsDetail（赔案侧）。**RepairDim（登记表侧）无 br
 ### cutover 前置清单更新（截至 2026-06-25）
 - 非 GATED 能力补齐：PR-1 ✅(#792) · PR-6 ✅(本 PR) · **PR-7 `e6fac1` 新增（RepairDim 省份化）** · PR-2(`a94c21` 部署链·禁 auto-merge) · PR-5(`34dae2` 前端空态)。
 - GATED：PR-3(`fe871b` RLS-on，依赖 PR-1/2/6/**7** + 账号 + owner 凭据) · PR-4(`8e6e8a` 可选 edit-env)。
+
+---
+
+## 实证追加（2026-06-25 · PR-2 部署链「VPS 读 SX 派生域」完成 + codex 闸-2 抓「日常 sync 把 SX 推进生产」CRITICAL · append-only）
+
+> 阶段 1 PR-2（`a94c21`）已实现 + 双对抗（codex 闸-2 两轮 + code-reviewer fresh-context）+ 验证。**关键修正：原 backlog 漏 renewal_tracker 域；codex 抓出「日常 sync 会让 SX 进生产」CRITICAL，已收口为 GATED 显式开关。cutover 仍全 GATED 未动。** 本 PR-2 分支从 origin/main 分叉（不含未合并的 PR-7 #794）。
+
+### PR-2 已完成（分支 claude/sx-cutover-pr2-deploychain，未合并；部署链·禁 auto-merge）
+- **paths.ts**：getValidationRootDir 加 VPS 回退（首个存在者：本地 warehouse 优先 → server/data/validation 回退）+ 纯函数 getValidationRootDirs（两候选）+ 可注入 candidates 参数（确定性测试）。VPS 无 warehouse → 原单路径恒不存在 → loader 探测 [] → SX 派生域永进不去；回退后能读到 sync 推送目标。
+- **sync-vps.mjs**：buildValidationBranchSyncTasks 枚举 warehouse/validation/<非SC省>/<派生域> → 推 VPS data/validation/<省>/<域>，append 到 buildStandardSyncTasks。
+- **对称性三层**（与 data-bootstrapper resolveBranch*Extras 一致）：① 省份 `^[A-Z]{2}$`+排除 SC+升序 ② 域集合 = loader 真读的 5 域 {claims_detail,quotes_conversion,renewal_tracker,cross_sell,new_energy_claims}（修正 backlog 漏 renewal_tracker；customer_flow 从 PolicyFact 派生、loadCustomerFlow 无 extras 参数 → 正确排除——codex 第 2 轮误判为「漏」，已逐行核验否决，不盲从）③ 文件级 claims_*.parquet / latest.parquet。
+- **验证**：单元 15（paths 5 + sync 10）+ 全量 4132 + typecheck + governance 44/44 + 字节安全 node 实测（flag 默认 false → 标准任务 15、validation 项 0）。
+
+### 🔴 codex 闸-2 第 1 轮抓 CRITICAL（日常 sync 把 SX 推进生产 = 破坏字节安全）
+- buildStandardSyncTasks 无条件 append validation 任务 + bootstrapper resolveBranch*Extras 不检查 BRANCH_RLS_ENABLED + loader 无条件 UNION ALL BY NAME → **RLS-off 生产机跑过这版 sync+reload 即让 SX validation 进生产派生关系**。
+- **修法**：validationBranchSyncEnabled() 总开关（SYNC_VALIDATION_BRANCHES，默认 off）→ SX validation 进生产收口为 **GATED cutover 显式数据发布步**（类比 #790 / RepairDim），日常 sync 默认不推 → 逐字节等价历史。HIGH（文件门禁）：validationDomainHasData 防空目录 rsync --delete 清空 VPS。
+- **第 2 轮复审**：CRITICAL/HIGH/MEDIUM 全闭合、0 新阻断；1 LOW（customer_flow）核验为误读否决。
+
+### cutover 数据发布步增量（PR-2 激活）
+- validation/SX 派生域 sync 是 **GATED 显式步**：`SYNC_VALIDATION_BRANCHES=1` + `node scripts/sync-vps.mjs`（RLS-on 前置序列内，类比 RepairDim materialize+sync）。日常 `release:daily` 不带此 env → 不推 SX。**RLS-on 前必做（否则 VPS 读不到 SX 派生域）。**
