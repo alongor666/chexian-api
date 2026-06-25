@@ -71,12 +71,14 @@ export function getValidationRootDirs(): string[] {
 
 /**
  * validation 隔离区根目录：返回首个存在的候选（本地 warehouse 优先，VPS data/validation 回退）。
- * 两者皆不存在 → 默认返回 warehouse 候选（dirs[0]），调用方（data-bootstrapper）existsSync guard
- * 兜底返回 [] → 与历史行为逐字节等价（字节安全）。维度副本镜像 SC 的 dim/<域> → validation/<省>/dim/<域>/。
+ * 两者皆不存在 → 默认返回首个候选（candidates[0]=warehouse），调用方（data-bootstrapper）existsSync
+ * guard 兜底返回 [] → 与历史行为逐字节等价（字节安全）。维度副本镜像 SC 的 dim/<域> → validation/<省>/dim/<域>/。
+ *
+ * @param candidates 候选根目录列表（默认 getValidationRootDirs()）；可注入以确定性测试选择逻辑，
+ *   不依赖真实机器的 warehouse/data 文件系统状态（生产调用方一律用默认）。
  */
-export function getValidationRootDir(): string {
-  const dirs = getValidationRootDirs();
-  return dirs.find((d) => existsSync(d)) ?? dirs[0];
+export function getValidationRootDir(candidates: string[] = getValidationRootDirs()): string {
+  return candidates.find((d) => existsSync(d)) ?? candidates[0];
 }
 
 /**

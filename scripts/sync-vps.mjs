@@ -836,21 +836,52 @@ export function getSyncBranchCode() {
 const VALIDATION_SYNCED_DOMAINS = ['claims_detail', 'quotes_conversion', 'renewal_tracker', 'cross_sell', 'new_energy_claims'];
 
 /**
+ * validation 分省同步总开关（codex 闸-2 CRITICAL 修复）。
+ *
+ * 把非 SC 省 validation 派生域推到生产是 GATED cutover **显式数据发布步**（类比 #790），**绝不**
+ * 随日常 sync 自动发生：RLS-off 时若 SX validation 进生产，bootstrapper resolveBranch*Extras 不检查
+ * BRANCH_RLS_ENABLED、loader 无条件 UNION ALL BY NAME → SX 数据进派生关系。PR-1 仅对 claims 经
+ * PolicyFact JOIN 丢弃验证过字节安全，quotes_conversion/renewal_tracker 等直接聚合域未必丢弃 SX 行
+ * → 违反「RLS-on 前 SX 绝不进生产」。故默认 off：日常 sync 逐字节等价历史。操作者在 cutover 数据
+ * 发布步显式设 SYNC_VALIDATION_BRANCHES=1 才推。
+ */
+function validationBranchSyncEnabled() {
+  const v = (process.env.SYNC_VALIDATION_BRANCHES ?? '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+/**
+ * 某 validation 派生域目录是否含真实数据文件（codex 闸-2 HIGH 修复，与 bootstrapper 文件级对称）。
+ * 缺数据文件即不同步：rsyncDir 默认 --delete，空/半成品目录会清空 VPS data/validation/<省>/<域>。
+ * - claims_detail：CDC 年度分区 → 须有 `claims_*.parquet`（同 resolveBranchClaimsDetailExtras）。
+ * - 其余派生域：单文件 → 须有 `latest.parquet`（同 getBranchValidationFactPath）。
+ */
+function validationDomainHasData(domainDir, domain) {
+  if (domain === 'claims_detail') {
+    return readdirSync(domainDir).some((f) => f.startsWith('claims_') && f.endsWith('.parquet'));
+  }
+  return existsSync(join(domainDir, 'latest.parquet'));
+}
+
+/**
  * GATED 多省：非 SC 省派生域 validation 隔离副本的同步任务（PR-2 · 部署链 cutover 能力）。
  *
  * 枚举 warehouse/validation/<省>/<派生域>，构建 rsync 任务推到 VPS data/validation/<省>/<域>，
  * 让 VPS 服务端经 getValidationRootDir VPS 回退读到 SX 派生域。省份枚举与 data-bootstrapper
- * resolveBranch*Extras 严格一致（`^[A-Z]{2}$` + 排除 SC + 升序）→「loader 读取域」==「sync 推送域」
- * 对称，开 RLS 后不漏域。SC 走 fact/ 标准同步、premium 走 current/ promote，均不经 validation。
+ * resolveBranch*Extras 严格一致（`^[A-Z]{2}$` + 排除 SC + 升序 + 文件级存在性）→「loader 读取域」==
+ * 「sync 推送域」对称，开 RLS 后不漏域。SC 走 fact/ 标准同步、premium 走 current/ promote，均不经 validation。
  *
- * 字节安全：validationRoot 不存在（生产当前 / CI）→ 返回 [] → buildStandardSyncTasks 逐字节等价历史。
- * GATED：critical=false，RLS-off 时 VPS 不消费，任务失败不阻断日常同步。
+ * **字节安全双闸**：
+ *   1. 总开关 SYNC_VALIDATION_BRANCHES 默认 off → 返回 [] → 日常 sync 逐字节等价历史，SX 绝不进生产。
+ *   2. validationRoot / 域数据文件不存在 → 跳过该域（防 rsync --delete 误删 VPS）。
+ * GATED：critical=false，RLS-off 时 VPS 不消费、任务失败不阻断日常同步。
  *
  * @param {string} remote - VPS 远端数据根目录
  * @param {string} [validationRoot=LOCAL_VALIDATION_DIR] - validation 隔离区根（测试可注入临时目录）
  * @returns {Array<{label:string, local:string, remote:string, critical:boolean}>}
  */
 function buildValidationBranchSyncTasks(remote, validationRoot = LOCAL_VALIDATION_DIR) {
+  if (!validationBranchSyncEnabled()) return []; // GATED 总开关：默认不推（字节安全：日常 sync 不变）
   if (!existsSync(validationRoot)) return [];
   const provinces = readdirSync(validationRoot)
     .filter((entry) => entry !== 'SC' && /^[A-Z]{2}$/.test(entry))
@@ -860,6 +891,7 @@ function buildValidationBranchSyncTasks(remote, validationRoot = LOCAL_VALIDATIO
     for (const domain of VALIDATION_SYNCED_DOMAINS) {
       const localDomainDir = join(validationRoot, province, domain);
       if (!existsSync(localDomainDir) || !statSync(localDomainDir).isDirectory()) continue;
+      if (!validationDomainHasData(localDomainDir, domain)) continue; // 防空目录 rsync --delete 误删 VPS
       tasks.push({
         label: `validation/${province}/${domain}`,
         local: localDomainDir,
@@ -909,7 +941,8 @@ function buildStandardSyncTasks(remote, frontendDist, opts = {}) {
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${remote}/patrol_reports`,        critical: false },
     { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${remote}/reports`,               critical: false, deleteRemote: false },
     { label: 'public_reports',       local: LOCAL_PUBLIC_REPORTS_DIR,     remote: `${frontendDist}/reports`,         critical: false, deleteRemote: false },
-    // GATED 多省：validation/<非SC省>/<派生域> → VPS data/validation/<省>/<域>（无 validation 时为空，字节安全）
+    // GATED 多省：validation/<非SC省>/<派生域> → VPS data/validation/<省>/<域>
+    // 默认 off（需 SYNC_VALIDATION_BRANCHES=1，cutover 数据发布步显式开）→ 日常 sync 字节安全
     ...buildValidationBranchSyncTasks(remote, LOCAL_VALIDATION_DIR),
   ];
 }
@@ -1365,6 +1398,7 @@ export {
   buildDomainSyncTasks,
   buildStandardSyncTasks,
   buildValidationBranchSyncTasks,
+  validationBranchSyncEnabled,
   buildSyncTasks,
   rsyncLatestAtomically,
   evaluateFreshness,

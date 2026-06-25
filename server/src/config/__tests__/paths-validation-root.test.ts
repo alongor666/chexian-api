@@ -10,8 +10,9 @@
  * 字节安全：本地 warehouse/validation 存在时 getValidationRootDir 返回它（与历史一致）；
  * 两者皆不存在 → default warehouse 候选 + 调用方 existsSync guard → 行为逐字节等价历史。
  */
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync } from 'fs';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, mkdirSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import { getValidationRootDirs, getValidationRootDir, getDataDir } from '../paths.js';
 
@@ -24,24 +25,34 @@ describe('getValidationRootDirs（VPS 回退候选）', () => {
   });
 });
 
-describe('getValidationRootDir（首个存在者，default warehouse）', () => {
-  const dataValidation = path.resolve(getDataDir(), 'validation');
+// 注入临时候选 → 确定性覆盖「首个存在者」选择逻辑，不依赖本机 warehouse/data 真实状态
+// （否则在跑过 SX ETL 的开发机上 warehouse/validation 存在会让回退用例被 skip 成空操作）。
+describe('getValidationRootDir（首个存在者，注入候选）', () => {
+  let root: string;
+  beforeEach(() => { root = mkdtempSync(path.join(tmpdir(), 'val-root-')); });
+  afterEach(() => { try { rmSync(root, { recursive: true, force: true }); } catch { /* ignore */ } });
 
-  afterEach(() => {
-    try { rmSync(dataValidation, { recursive: true, force: true }); } catch { /* ignore */ }
+  it('第一候选存在 → 优先返回第一（本地 warehouse 优先）', () => {
+    const warehouse = path.join(root, 'warehouse-val');
+    const dataVal = path.join(root, 'data-val');
+    mkdirSync(warehouse); mkdirSync(dataVal);
+    expect(getValidationRootDir([warehouse, dataVal])).toBe(warehouse);
   });
 
-  it('两候选皆不存在 → 默认返回 warehouse 候选（=dirs[0]，existsSync guard 兜底字节安全）', () => {
-    const dirs = getValidationRootDirs();
-    // 测试环境 warehouse/validation 与 data/validation 通常均不存在（CI/clean checkout）
-    if (existsSync(dirs[0]) || existsSync(dirs[1])) return; // 本地 dev 有 warehouse 数据则跳过
-    expect(getValidationRootDir()).toBe(dirs[0]);
+  it('仅第二候选存在（warehouse 缺）→ 回退到 data/validation（VPS 场景）', () => {
+    const warehouse = path.join(root, 'missing-warehouse'); // 不创建
+    const dataVal = path.join(root, 'data-val');
+    mkdirSync(dataVal);
+    expect(getValidationRootDir([warehouse, dataVal])).toBe(dataVal);
   });
 
-  it('仅 VPS data/validation 存在（warehouse 缺）→ 回退到 data/validation（VPS 场景）', () => {
-    const dirs = getValidationRootDirs();
-    if (existsSync(dirs[0])) return; // warehouse/validation 存在（本地 dev）则本用例不适用
-    mkdirSync(dataValidation, { recursive: true });
-    expect(getValidationRootDir()).toBe(dataValidation);
+  it('两候选皆不存在 → 默认返回首个候选（candidates[0]，existsSync guard 兜底字节安全）', () => {
+    const warehouse = path.join(root, 'none-warehouse');
+    const dataVal = path.join(root, 'none-data');
+    expect(getValidationRootDir([warehouse, dataVal])).toBe(warehouse);
+  });
+
+  it('默认无参 → 等价 getValidationRootDirs() 的选择（生产调用方路径）', () => {
+    expect(getValidationRootDir()).toBe(getValidationRootDir(getValidationRootDirs()));
   });
 });
