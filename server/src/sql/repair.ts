@@ -374,12 +374,16 @@ export function generateRepairToPremiumQuery(filters: RepairFiltersV2, whereClau
 }
 
 /** 【7】导流目标清单：送修在"曾合作/未合作/影子"的保单 */
-export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit = 500, offset = 0, whereClause: string = '1=1', branchCode?: string): string {
+export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit = 500, offset = 0, whereClause: string = '1=1', branchCode?: string, policyBranchCode?: string): string {
   const timeWhere = claimsTimeWindow(filters.timeWindow, 'c', branchCode);
   const claimsBranch = claimsBranchAnd(branchCode);
   const orgClause = filters.orgName ? `AND p.org_level_3 = '${escapeSqlValue(filters.orgName)}'` : '';
   // whereClause 注入到 PolicyFact（有 org_level_3/is_telemarketing），实现保单维度权限收束
   const policyWhereExtra = whereClause !== '1=1' ? ` AND ${whereClause}` : '';
+  // PR-6 review HIGH-1：PolicyFact 显式分省 RLS——不再仅依赖 policy_no 610/618 前缀不碰撞的数据
+  // 约定（虽 ETL 强制、零碰撞，但应代码强制隔离边界）。policyBranchCode 经 resolveBranchRlsCode
+  // (req,'PolicyFact') 双门控；undefined → 空串 → 字节安全。PolicyFact 无别名故 branch_code 不带前缀。
+  const policyBranch = policyBranchCode ? ` AND branch_code = '${policyBranchCode}'` : '';
   return `
     WITH active_shops AS (
       SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) AS shop_code
@@ -412,7 +416,7 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
         ANY_VALUE(salesman_name) AS salesman_name,
         ANY_VALUE(customer_category) AS customer_category
       FROM PolicyFact
-      WHERE 1=1${policyWhereExtra}
+      WHERE 1=1${policyWhereExtra}${policyBranch}
       GROUP BY policy_no
       HAVING SUM(premium) > 0
     )

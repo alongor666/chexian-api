@@ -53,11 +53,14 @@ describe('repair 影子网点分省 RLS 隔离（PR-6）', () => {
              settled_vehicle_amount, accident_time, branch_code)
     `);
     // 保单（PolicyFact）：diversion 的 policy_dedup FROM PolicyFact 需存在。
+    // 第 3 行：review HIGH-2 模拟 policy_no 碰撞（同 '618晋B' 但 branch_code='SC'，违反 618=SX
+    // 不变式）以验证 PolicyFact 显式 branch 过滤的必要性——不过滤则该保单 premium 聚合泄漏 SC。
     await duckdbService.query(`
       CREATE OR REPLACE TABLE PolicyFact AS
       SELECT * FROM (VALUES
         ('610川A', CAST(10000 AS DOUBLE), '测试机构', '张三', '私家车', 'SC'),
-        ('618晋B', CAST(8000 AS DOUBLE), '测试机构', '李四', '私家车', 'SX')
+        ('618晋B', CAST(8000 AS DOUBLE), '测试机构', '李四', '私家车', 'SX'),
+        ('618晋B', CAST(99999 AS DOUBLE), '四川机构', '王五', '私家车', 'SC')
       ) AS t(policy_no, premium, org_level_3, salesman_name, customer_category, branch_code)
     `);
   });
@@ -112,6 +115,20 @@ describe('repair 影子网点分省 RLS 隔离（PR-6）', () => {
     const allCodes = all.map((r) => r.subject_shop_code);
     expect(allCodes).toContain('SXORPH01');
     expect(allCodes).toContain('SCORPH01');
+  });
+
+  it('🔴 diversion-list PolicyFact 显式分省（review HIGH-2）：policy_no 碰撞下 policyBranchCode=SX 仅聚合 SX 保费', async () => {
+    // PolicyFact 有两条 '618晋B'（SX premium=8000 / 模拟碰撞 SC premium=99999）。
+    // policyBranchCode='SX' → 该保单 premium=8000；不传 → 聚合泄漏成 107999（证明显式过滤必要）。
+    const filtered = await duckdbService.query<{ subject_shop_code: string; premium: number }>(
+      generateRepairDiversionListQuery(F, 500, 0, '1=1', 'SX', 'SX'),
+    );
+    expect(Number(filtered.find((r) => r.subject_shop_code === 'SXORPH01')?.premium ?? 0)).toBe(8000);
+
+    const unfiltered = await duckdbService.query<{ subject_shop_code: string; premium: number }>(
+      generateRepairDiversionListQuery(F, 500, 0, '1=1', 'SX'),
+    );
+    expect(Number(unfiltered.find((r) => r.subject_shop_code === 'SXORPH01')?.premium ?? 0)).toBe(107999);
   });
 
   it('local-resource：同码跨省登记厂 branchCode=SX 仅计 SX 赔案（防跨省灌入），RLS-off 计两省', async () => {

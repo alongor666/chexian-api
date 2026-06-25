@@ -238,10 +238,11 @@ v2Router.get(
     const filters = parseFiltersV2(req.query);
     const whereClause = await buildRepairWhere(req);
     const claimsBranchCode = await resolveBranchRlsCode(req, 'ClaimsDetail');
+    const policyBranchCode = await resolveBranchRlsCode(req, 'PolicyFact');
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(1000, Math.max(1, Number(req.query.pageSize) || 200));
     const data = await duckdbService.query(
-      generateRepairDiversionListQuery(filters, pageSize, (page - 1) * pageSize, whereClause, claimsBranchCode)
+      generateRepairDiversionListQuery(filters, pageSize, (page - 1) * pageSize, whereClause, claimsBranchCode, policyBranchCode)
     );
     res.json({ success: true, data, page, pageSize });
   })

@@ -54,6 +54,15 @@ describe('repair 影子网点 CTE 分省 RLS 注入（PR-6）', () => {
     expect(generateRepairDiversionListQuery(filters, 500, 0, '1=1', 'SX')).toContain(BRANCH);
   });
 
+  it('传 policyBranchCode → diversion-list policy_dedup（PolicyFact）显式分省过滤（review HIGH-1 纵深防御）', () => {
+    // PolicyFact 无别名，故 branch_code 不带前缀；不再仅靠 policy_no 610/618 前缀约定隔离
+    expect(generateRepairDiversionListQuery(filters, 500, 0, '1=1', 'SX', 'SX')).toContain("WHERE 1=1 AND branch_code = 'SX'");
+  });
+
+  it('不传 policyBranchCode → policy_dedup 不含 PolicyFact branch 过滤（字节安全）', () => {
+    expect(generateRepairDiversionListQuery(filters, 500, 0, '1=1', 'SX')).not.toContain("WHERE 1=1 AND branch_code = 'SX'");
+  });
+
   it('传 branchCode → orphan-shops orphan_claims 含 c.branch_code 过滤（修复 void whereClause 泄漏）', () => {
     expect(generateRepairOrphanShopsQuery(filters, 100, '1=1', 'SX')).toContain(BRANCH);
   });
@@ -64,11 +73,23 @@ describe('repair 影子网点 CTE 分省 RLS 注入（PR-6）', () => {
     expect(sql).toContain("FROM ClaimsDetail WHERE branch_code = 'SX'");
   });
 
+  it('传 branchCode + timeWindow → scatter 两处 MAX 基准子查询均按本省过滤（review MEDIUM-1）', () => {
+    const sql = generateRepairScatterQuery({ timeWindow: 'rolling12' }, '1=1', 'SX');
+    // shadow_geo + shadow_premium 各含一个 MAX(accident_time) 基准子查询
+    expect(count(sql, "FROM ClaimsDetail WHERE branch_code = 'SX'")).toBe(2);
+  });
+
   it('不传 branchCode → 5 端点均不含 branch_code 过滤（字节安全 · RLS-off 生产零变更）', () => {
     expect(generateRepairCoopTierQuery(filters)).not.toContain(NO_BRANCH);
     expect(generateRepairScatterQuery(filters)).not.toContain(NO_BRANCH);
     expect(generateRepairLocalResourceQuery(filters)).not.toContain(NO_BRANCH);
     expect(generateRepairDiversionListQuery(filters)).not.toContain(NO_BRANCH);
     expect(generateRepairOrphanShopsQuery(filters)).not.toContain(NO_BRANCH);
+  });
+
+  it('不传 branchCode + timeWindow=rolling12 → 仍零 branch_code（字节安全·时间窗场景，review MEDIUM-2）', () => {
+    expect(generateRepairCoopTierQuery({ timeWindow: 'rolling12' })).not.toContain(NO_BRANCH);
+    expect(generateRepairScatterQuery({ timeWindow: 'rolling12' })).not.toContain(NO_BRANCH);
+    expect(generateRepairOrphanShopsQuery({ timeWindow: 'rolling12' })).not.toContain(NO_BRANCH);
   });
 });
