@@ -1431,3 +1431,23 @@ PR-7 对其范围正确、codex 复审可合并。HIGH 已修（diversion org-on
 
 ### needs_automation: false
 （CPU-bound 测试 timeout 属低频；自审纪律「含 bcrypt/crypto 的新测试用 `CI=1 bun run test --run` 全量验证」+ 本复盘覆盖，不另起 governance 闸。）
+## 2026-06-25 · 山西 cutover renewal 分省 RLS 修复（typed 路由 + cube + agent 续保诊断 · 分支 claude/renewal-branch-rls）
+
+> 续 #802（cross-sell branch_code）。任务原表述「RenewalTrackerFact 缺 branch_code 列、需 ETL 派生」——但 grep-all 后发现**根因不是 ETL 缺列**：ETL 自 P3-C（#765）已派生 branch_code，本地 parquet 全 128,016 行均带 `branch_code='SC'`，cx sql 联邦路径也早已注入。真正串读在**查询层**：renewal-tracker / cube 续保路径走 `buildOrgScopedPermissionWhere` 只抽 org_level_3，对 branch_admin（RLS-on 下 permissionFilter=`branch_code='SX'` 无 org 段）返回 `1=1` → 看全省。修法 = 套既有 `resolveBranchRlsCode` 双门控注入 branch_code（与联邦路径口径一致），并给 universe 元数据查询加 branchCode 参。非部署链。
+
+### 三问复盘
+1. **重来怎样更好**：① 任务交接表述「ETL 缺列」是上一会话的旧心智模型残留——若开工就直接照此重跑 ETL，会白做（列早已派生）。教训：**接力任务的「根因假设」必须先用 grep-all + duckdb 直查证伪/证实，再动手**（本次正确地先查 convert_renewal_tracker.py 与 parquet schema，才发现 ETL 已就绪、问题在查询层）。② **「修一处≠修一类」SOP 救场**：renewal-tracker.ts 改完后没有收手，grep 全部 RenewalTrackerFact 消费方，又揪出 cube.ts（同款 buildOrgScoped）与 agent 续保诊断（meta 查询裸调 `generateRenewalTrackerMetaQuery()` → universe 元数据跨省）两处。若只修第一处，agent 诊断的 universe 计数仍会向 SX branch_admin 泄漏全省规模。
+2. **复用价值**：① **`resolveBranchRlsCode` 双门控（gate a: pf 含 branch_code；gate b: 视图实测含列）是派生域分省隔离的标准件**，repair/kpi/premium-plan 已用十余处，本次推广到 renewal——新派生域接入直接照搬。② **「主查询 vs 元数据查询」双泄漏点**：无筛选的 universe/meta 查询是 RLS 易漏点（cross-sell、renewal 都中招），排查 RLS 必须同时检查「带筛选的明细查询」与「裸聚合的 universe 查询」两条路径。③ **agent 路径与 typed 路径的隔离机制不同**：agent 主查询 push 完整原始 permissionFilter（含 branch_code，故主查询本就隔离），typed 路径 strip 成 org-only——同一域两种范式并存时，补丁要分别核到每条路径。
+3. **cross-sell 误判纠偏（补记 #802 复盘）**：#802 步③我曾把 cross-sell 黄金基线的 400 误判为「预存参数 400」（pre-existing），实为 RLS-on 引入的「列不存在 branch_code」回归，是 Agent 4 独立安全审计揪出的。教训：**RLS cutover 后出现的任何新 4xx/5xx，默认假设为 RLS 引入的回归（fail-closed 心智），用 RLS-off 基线逐端点对账证伪，不得归因「预存」而放过**。
+4. **如何更高质量自动化**：派生域 typed 路由「消费 permissionFilter 但漏 branch_code 段」目前无静态闸——governance #32 只校验「路由二选一消费 permissionFilter 或 requireBranchAdmin」，不校验「分省码是否真下推」。可加闸：扫描 query 路由若 `import buildOrgScopedPermissionWhere` 但未配套 `resolveBranchRlsCode` → 告警。但 buildOrgScoped 也用于不需要分省的场景，**误报率待评估，P3**（先靠本复盘 + 「修一处≠修一类」SOP）。
+
+### needs_automation: false
+（派生域 branch_code 下推静态闸 P3：与 R37「域跨省关系清单」静态闸合并决策；当前靠 resolveBranchRlsCode 范式 + grep-all SOP + 本复盘覆盖。数据完整性「SX 续保行回填 + 生产 parquet 列核验」属 SSH BLOCKED 的 follow-up，非本 PR。）
+
+### 附：codex 对抗评审轮（PR #804）
+codex CLI 0.141 对抗评审结论「有 P1 无 P0」，两条 P1 均接受并修复：
+- **P1-1 fail-open（permission.ts:89）**：branchCode 只判空不校验形态。小写 `'sx'` / 含引号 `S'C` / 长度不符 → permissionFilter 里的 branch_code 字面量匹配不上 resolveBranchRlsCode 的 gate-a 正则 `'[A-Z]{2}'` → 返回 undefined → branch_admin（无 org 段）退成 1=1 → **fail-open 串读**。修：permission.ts RLS-on 分支加 `^[A-Z]{2}$` fail-closed 403（SSOT，保证 permissionFilter 只含合法字面量 → 下游 gate-a 必命中，无需改 resolveBranchRlsCode）。原"含单引号转义后放行"测试改为 fail-closed 403。
+- **P1-2 四川漏行（duckdb-domain-loaders.ts selectUnionWithBranchCode）**：含 branch_code 列的源裸 `SELECT *` 透传；若生产 SC parquet 有 NULL branch_code 行，注入 `branch_code='SC'` 会漏掉 → 四川零回归被证伪。claims composeClaimsDetailSelect 早有 COALESCE 先例、renewal 派生域没有。修：含列分支改 `SELECT * REPLACE (COALESCE(branch_code,'<省>'))`，无 NULL 时恒等（字节安全）、有 NULL 时兜底部署省。加 NULL COALESCE 集成测试。
+- **P2**：ecosystem.config.cjs 注释"RenewalTrackerFact 仍缺列"与事实矛盾（视图实含列）→ 同步更正。
+
+**教训**：① 对抗评审揪出的两条都不是我改动文件内的"新 bug"，而是**改动激活的既存隐患**（permission.ts fail-open 一直在、但只有多省 RLS-on + 派生域注入后才可利用；NULL 漏行同理）——印证「RLS cutover 把休眠隐患转成活跃漏洞」，安全评审必须看「本改动让哪些既存代码进入新状态」而非只看 diff 行。② claims 早有 COALESCE 先例而 renewal 没有 = 同类防护未横向拉齐，「修一处≠修一类」也适用于**防护模式的横向一致性**（不只是 bug）。

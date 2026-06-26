@@ -36,6 +36,20 @@ describe('agent renewal tracker diagnosis route contract', () => {
     expect(schema).toContain("z.literal('renewal_tracker_diagnosis')");
   });
 
+  it('scopes the universe metadata query by branch_code (防 branch_admin 元数据跨省串读)', () => {
+    const service = readSource('server/src/agent/services/agent-renewal-tracker-diagnosis-service.ts');
+    const route = readSource('server/src/agent/routes/agent-diagnosis.ts');
+
+    // service：meta 查询必须把分省码下推（不得再裸调 generateRenewalTrackerMetaQuery()）
+    expect(service).toContain('generateRenewalTrackerMetaQuery(input.branchCode)');
+    expect(service).not.toMatch(/generateRenewalTrackerMetaQuery\(\s*\)/);
+
+    // route：两处 runRenewalTrackerDiagnosis 调用都从 permissionFilter 派生并传入 branchCode
+    expect(route).toContain('deriveRenewalBranchCode');
+    expect(route).toContain('branchCode: deriveRenewalBranchCode(permissionFilter)');
+    expect(route).toContain('branchCode: deriveRenewalBranchCode(req.permissionFilter)');
+  });
+
   it('keeps this PR scoped to current renewal-tracker only', () => {
     const service = readSource('server/src/agent/services/agent-renewal-tracker-diagnosis-service.ts');
     const combined = `${service}\n${readSource('server/src/agent/routes/agent-diagnosis.ts')}`;

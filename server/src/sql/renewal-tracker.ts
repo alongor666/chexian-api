@@ -314,8 +314,17 @@ export function generateRenewalCubeQuery(params: RenewalCubeQueryParams): string
  * 生成查询元数据的 SQL — universe 统计（暴露数 / 去重 VIN / 日期范围）
  *
  * 供前端在页面顶部展示"数据截至 / Universe 统计"信息。
+ *
+ * 分省 RLS（branchCode）：本 universe 查询不接受其他筛选条件，若不按用户省份下推
+ * branch_code，多省部署下 branch_admin 看到的 universe 统计会跨省（含他省计数）→ 元数据
+ * 串读。branchCode 由路由层 resolveBranchRlsCode 双门控解析（已 ^[A-Z]{2}$ 校验），
+ * 此处防御性再校验后内插（无注入面）；undefined → 不加 WHERE → 单租户/RLS-off 字节安全。
  */
-export function generateRenewalTrackerMetaQuery(): string {
+export function generateRenewalTrackerMetaQuery(branchCode?: string): string {
+  if (branchCode !== undefined && !/^[A-Z]{2}$/.test(branchCode)) {
+    throw new Error(`Invalid branchCode for renewal meta query: ${branchCode}`);
+  }
+  const whereSql = branchCode ? `\n    WHERE branch_code = '${branchCode}'` : '';
   return `
     SELECT
       COUNT(*) AS exposure_row_count,
@@ -325,6 +334,6 @@ export function generateRenewalTrackerMetaQuery(): string {
         COALESCE(first_quote_time, DATE '1970-01-01'),
         COALESCE(renewed_date, DATE '1970-01-01')
       )) AS DATE) AS latest_data_date
-    FROM RenewalTrackerFact
+    FROM RenewalTrackerFact${whereSql}
   `.trim();
 }
