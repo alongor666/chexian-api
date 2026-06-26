@@ -58,6 +58,14 @@ export interface RunRenewalTrackerDiagnosisInput {
   filters: RenewalTrackerDiagnosisFilters;
   extraConditions: string[];
   limit: number;
+  /**
+   * 分省 RLS 省份码（CHAR(2)，'SC'/'SX'）。由路由层从 permissionFilter 派生。
+   * universe 元数据查询（generateRenewalTrackerMetaQuery）无其他筛选，必须按此下推，
+   * 否则 branch_admin 看到的 exposureRowCount/distinctVehicleCount 会跨省（元数据串读）。
+   * undefined → 不下推（单租户 / RLS-off，字节安全）。主查询的 branch_code 隔离另由
+   * extraConditions 携带的原始 permissionFilter 负责。
+   */
+  branchCode?: string;
 }
 
 function toNullableNumber(value: unknown): number | null {
@@ -215,7 +223,7 @@ export async function runRenewalTrackerDiagnosis(input: RunRenewalTrackerDiagnos
       cutoff: input.cutoff,
       extraConditions: input.extraConditions,
     })),
-    duckdbService.query<RenewalTrackerMetaRow>(generateRenewalTrackerMetaQuery()),
+    duckdbService.query<RenewalTrackerMetaRow>(generateRenewalTrackerMetaQuery(input.branchCode)),
   ]);
 
   return diagnoseRenewalTrackerRows({

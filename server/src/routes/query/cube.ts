@@ -25,6 +25,7 @@ import {
   withRouteCache,
   parseFiltersAndBuildWhere,
   buildOrgScopedPermissionWhere,
+  resolveBranchRlsCode,
 } from './shared.js';
 import { buildInCondition } from '../../utils/sql-sanitizer.js';
 import {
@@ -74,7 +75,7 @@ function round1(x: number): number {
  * 仅支持 RenewalTrackerFact 已派生字段 + 权限过滤；不走 parseFiltersAndBuildWhere
  * （后者引用 PolicyFactRealtime 特有列）。
  */
-function buildRenewalExtraConditions(req: import('express').Request): string[] {
+export async function buildRenewalExtraConditions(req: import('express').Request): Promise<string[]> {
   const extra: string[] = [];
 
   const orgNames = parseCsv(req.query.orgNames);
@@ -109,15 +110,21 @@ function buildRenewalExtraConditions(req: import('express').Request): string[] {
     if (cond) extra.push(cond);
   }
 
-  // 权限过滤（RLS）：RenewalTrackerFact 视图当前只含 org_level_3（is_telemarketing 由 loader
-  // 视图层补 `FALSE AS is_telemarketing` 常量；branch_code 由 loader buildFactSelectSql 的
-  // DESCRIBE 自适应路径处理——P3-C #765 起 ETL 已派生该列写入 parquet，但 cube 路由保守
-  // 走 buildOrgScopedPermissionWhere 安全降级，只保留视图真实存在的 org_level_3 段，避免
-  // 因 loader 路径切换造成 Binder Error 500，对齐 repair.ts 既定模式。
-  // 注：renewal-tracker 路由仍是朴素追加，同款既存 bug 已单独登 BACKLOG，不在本 PR 偷修。
+  // 权限过滤（RLS）：分两段互补下推（与 /renewal-tracker typed 路由完全一致）。
+  // (1) org_level_3 段 — buildOrgScopedPermissionWhere 安全降级：只保留视图真实存在的
+  //     org_level_3 段；电销用户（is_telemarketing 由 loader 补 `FALSE` 常量，非真实列）
+  //     降为 '1=1' 不注入，防 Binder Error 500，对齐 repair.ts 既定模式。
   const orgScoped = buildOrgScopedPermissionWhere(req);
   if (orgScoped !== '1=1') {
     extra.push(`(${orgScoped})`);
+  }
+  // (2) branch_code 段 — branch_admin 仅含 branch_code、无 org_level_3，若不单独下推则
+  //     buildOrgScoped 返回 '1=1' → 跨省串读。RenewalTrackerFact 自 P3-C（#765）ETL 已派生
+  //     branch_code 列，经 resolveBranchRlsCode 双门控注入（gate b 视图实测含列才注入），
+  //     与 cx sql 联邦路径口径一致。flag off / 视图无列 → undefined → 不注入 → 字节安全。
+  const branchCode = await resolveBranchRlsCode(req, 'RenewalTrackerFact');
+  if (branchCode) {
+    extra.push(`branch_code = '${branchCode}'`);
   }
 
   return extra;
@@ -183,7 +190,7 @@ router.get(
         await bootstrapper.ensureDomainLoaded('RenewalTracker');
       }
 
-      const extraConditions = buildRenewalExtraConditions(req);
+      const extraConditions = await buildRenewalExtraConditions(req);
       const sql = generateRenewalCubeQuery({ start, end, cutoff, dims: dimNames, extraConditions, limit });
       const rawRows = await duckdbService.query<Record<string, unknown>>(sql, QUERY_CACHE.hotspotShort);
 

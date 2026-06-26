@@ -24,6 +24,7 @@ import {
   createDomainMiddleware,
   withRouteCache,
   buildOrgScopedPermissionWhere,
+  resolveBranchRlsCode,
 } from './shared.js';
 import { buildInCondition } from '../../utils/sql-sanitizer.js';
 import {
@@ -140,16 +141,23 @@ router.get(
       if (cond) extraConditions.push(cond);
     }
 
-    // 权限过滤（RLS 安全降级）：RenewalTrackerFact 只含 org_level_3，
-    // 不含 is_telemarketing / branch_code。直接追加 permissionFilter 对电销用户
-    // （'is_telemarketing = true'）或多分公司用户（含 branch_code）会触发
-    // DuckDB Binder Error（列不存在）→ 500。
-    // 平移 cube.ts 已验证的修法：buildOrgScopedPermissionWhere 只保留视图
-    // 真实存在的 org_level_3 段，对齐 repair.ts 既定模式。
-    // 四川单租户 permissionFilter='1=1' 短路，行为不变（字节安全）。
+    // 权限过滤（RLS）：分两段互补下推。
+    // (1) org_level_3 段 — buildOrgScopedPermissionWhere 安全降级：org_user 提取
+    //     `org_level_3='...'`；电销用户（'is_telemarketing = true'，视图无此真实列）降为
+    //     '1=1' 不注入，防 DuckDB Binder Error 500（对齐 repair.ts / cube.ts 既定模式）。
     const orgScoped = buildOrgScopedPermissionWhere(req);
     if (orgScoped !== '1=1') {
       extraConditions.push(`(${orgScoped})`);
+    }
+    // (2) branch_code 段 — RLS-on 下每个用户的 permissionFilter 都含 branch_code（见
+    //     middleware/permission.ts）；branch_admin 仅含 branch_code、无 org_level_3，若不单独
+    //     下推则 buildOrgScoped 返回 '1=1' → 跨省串读。RenewalTrackerFact 自 P3-C（#765）ETL
+    //     已派生 branch_code 列，经 resolveBranchRlsCode 双门控（gate a: pf 含 branch_code；
+    //     gate b: 视图实测含该列）注入 `branch_code='XX'`，与 cx sql 联邦路径口径一致。
+    //     flag off / 视图无列 → undefined → 不注入 → 四川字节安全（零回归）。
+    const branchCode = await resolveBranchRlsCode(req, 'RenewalTrackerFact');
+    if (branchCode) {
+      extraConditions.push(`branch_code = '${branchCode}'`);
     }
 
     // 主查询
@@ -169,8 +177,9 @@ router.get(
       C: number;
     }>(mainSql, QUERY_CACHE.hotspotShort);
 
-    // 元数据查询（universe 统计，无筛选，命中缓存效率高）
-    const metaSql = generateRenewalTrackerMetaQuery();
+    // 元数据查询（universe 统计，除分省 RLS 外无其他筛选，命中缓存效率高）。
+    // 必须按 branchCode 下推，否则 branch_admin 的 universe 计数会跨省（元数据串读）。
+    const metaSql = generateRenewalTrackerMetaQuery(branchCode);
     const metaRows = await duckdbService.query<{
       exposure_row_count: number;
       distinct_vehicle_count: number;

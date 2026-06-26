@@ -93,8 +93,11 @@ export function requireBranchAdmin(req: Request, _res: Response, next: NextFunct
  *   - org_user（含 org_level_3='...'）→ 提取该条件（视图有此列，照常隔离）
  *   - telemarketing_user（'is_telemarketing=true'，无 org_level_3）→ '1=1'（视图无电销维度，
  *     与 repair.ts 既定口径一致：电销在此类派生视图看 org 范围内全部数据，非泄漏放大）
- *   - 多分公司（org_level_3=X AND branch_code=Y）→ 仅保留 org_level_3 段
- *     （branch_code 真正下推依赖 P0.5 派生域补列，BACKLOG 跟踪）
+ *   - 多分公司（org_level_3=X AND branch_code=Y）→ 仅保留 org_level_3 段；
+ *     **branch_code 段不在本函数下推**，由配套的 resolveBranchRlsCode（双门控、视图实测含列
+ *     才注入）单独负责。两者在路由层互补调用（见 renewal-tracker.ts / cube.ts）——本函数管
+ *     org_level_3、resolveBranchRlsCode 管 branch_code，避免对纯 branch_admin（无 org_level_3）
+ *     漏掉分省隔离而跨省串读。
  *
  * repair.ts 现有同名局部函数为等价实现；后续可统一到本函数（DRY，未在本变更内合并以控范围）。
  */
