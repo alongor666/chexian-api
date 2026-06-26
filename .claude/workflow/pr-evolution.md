@@ -1425,3 +1425,11 @@ PR-7 对其范围正确、codex 复审可合并。HIGH 已修（diversion org-on
 
 ### needs_automation: false
 （派生域 branch_code 下推静态闸 P3：与 R37「域跨省关系清单」静态闸合并决策；当前靠 resolveBranchRlsCode 范式 + grep-all SOP + 本复盘覆盖。数据完整性「SX 续保行回填 + 生产 parquet 列核验」属 SSH BLOCKED 的 follow-up，非本 PR。）
+
+### 附：codex 对抗评审轮（PR #804）
+codex CLI 0.141 对抗评审结论「有 P1 无 P0」，两条 P1 均接受并修复：
+- **P1-1 fail-open（permission.ts:89）**：branchCode 只判空不校验形态。小写 `'sx'` / 含引号 `S'C` / 长度不符 → permissionFilter 里的 branch_code 字面量匹配不上 resolveBranchRlsCode 的 gate-a 正则 `'[A-Z]{2}'` → 返回 undefined → branch_admin（无 org 段）退成 1=1 → **fail-open 串读**。修：permission.ts RLS-on 分支加 `^[A-Z]{2}$` fail-closed 403（SSOT，保证 permissionFilter 只含合法字面量 → 下游 gate-a 必命中，无需改 resolveBranchRlsCode）。原"含单引号转义后放行"测试改为 fail-closed 403。
+- **P1-2 四川漏行（duckdb-domain-loaders.ts selectUnionWithBranchCode）**：含 branch_code 列的源裸 `SELECT *` 透传；若生产 SC parquet 有 NULL branch_code 行，注入 `branch_code='SC'` 会漏掉 → 四川零回归被证伪。claims composeClaimsDetailSelect 早有 COALESCE 先例、renewal 派生域没有。修：含列分支改 `SELECT * REPLACE (COALESCE(branch_code,'<省>'))`，无 NULL 时恒等（字节安全）、有 NULL 时兜底部署省。加 NULL COALESCE 集成测试。
+- **P2**：ecosystem.config.cjs 注释"RenewalTrackerFact 仍缺列"与事实矛盾（视图实含列）→ 同步更正。
+
+**教训**：① 对抗评审揪出的两条都不是我改动文件内的"新 bug"，而是**改动激活的既存隐患**（permission.ts fail-open 一直在、但只有多省 RLS-on + 派生域注入后才可利用；NULL 漏行同理）——印证「RLS cutover 把休眠隐患转成活跃漏洞」，安全评审必须看「本改动让哪些既存代码进入新状态」而非只看 diff 行。② claims 早有 COALESCE 先例而 renewal 没有 = 同类防护未横向拉齐，「修一处≠修一类」也适用于**防护模式的横向一致性**（不只是 bug）。

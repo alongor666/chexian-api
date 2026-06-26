@@ -53,8 +53,11 @@ module.exports = {
         SQL_FEDERATION_ENABLED: 'true',
         // 多分公司行级安全（山西 cutover · 2026-06-25 开启）：按用户 branchCode 注入 branch_code 过滤。
         // 派生视图 branch_code 列就绪进度：PolicyFact / claims_detail / RepairDim / QuoteConversion /
-        // CustomerFlow / CrossSellDailyAgg（本 PR 物化补列）均已含；RenewalTrackerFact 仍缺列
-        // —— branch_admin 续保隔离待 ETL follow-up（org_user 经 org_level_3 隔离不受影响）。
+        // CustomerFlow / CrossSellDailyAgg / RenewalTrackerFact 均已含列（RenewalTrackerFact 自 P3-C #765
+        // ETL 派生 + loader selectUnionWithBranchCode COALESCE 兜底 NULL）；renewal 的 typed/cube/agent
+        // 路由分省下推（branch_admin 续保隔离）已由 PR #804 收口。残留：生产 renewal_tracker parquet 的
+        // branch_code 列/NULL 实测 + SX 续保行回填（数据完整性 follow-up，不影响隔离——SX branch_admin
+        // 最坏看空续保页，绝无 SC 泄漏）。
         // 回滚：scripts/rollback-multi-branch.mjs --apply（改回 false + reload）。
         BRANCH_RLS_ENABLED: 'true',
       },

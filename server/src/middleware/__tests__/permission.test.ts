@@ -110,10 +110,31 @@ describe('permissionMiddleware: 0F BRANCH_RLS_ENABLED=true 矩阵', () => {
     expect(req.permissionFilter).toBe(`branch_code = 'SX'`);
   });
 
-  it('SQL 注入防御：branchCode 含单引号必须转义', async () => {
+  // codex PR #804 评审 P1：malformed branchCode 必须 fail-closed（不再"转义后放行"）。
+  // 含单引号 / 注入尝试不符 ^[A-Z]{2}$ → 403 拒绝，从源头杜绝 RLS gate-a 解析失效导致的 fail-open。
+  it('fail-closed: branchCode 含单引号（注入尝试）不符 ^[A-Z]{2}$ → 403 拒绝', async () => {
     const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: `S'C` });
-    await runMiddleware(req);
-    expect(req.permissionFilter).toBe(`branch_code = 'S''C'`);
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+    expect((err as AppError).message).toMatch(/branchCode/);
+    expect(req.permissionFilter).toBeUndefined();
+  });
+
+  it('fail-closed: 小写 branchCode（脏配置 sx）不符 ^[A-Z]{2}$ → 403（防 gate-a 不匹配的 fail-open）', async () => {
+    const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: 'sx' });
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+    expect(req.permissionFilter).toBeUndefined();
+  });
+
+  it('fail-closed: 长度不符 branchCode（如 SCX / S）→ 403', async () => {
+    for (const bad of ['SCX', 'S', '12']) {
+      const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: bad });
+      const err = await runMiddleware(req);
+      expect((err as AppError)?.statusCode).toBe(403);
+    }
   });
 
   // codex PR #492 P1 fail-closed：旧 JWT / 旧 user_store.json 无 branchCode → 必须 401

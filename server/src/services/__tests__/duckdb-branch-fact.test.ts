@@ -22,6 +22,7 @@ import { loadQuoteConversion, loadCrossSell, loadNewEnergyClaims } from '../duck
 let tmpDir: string;
 let scQuote: string, sxQuote: string, scCross: string, sxCrossNoBc: string;
 let scNec: string, sxNecNoBc: string;
+let scQuoteNullBc: string;
 
 describe('派生域多省共存加载（ADR G4）', () => {
   beforeAll(async () => {
@@ -31,6 +32,7 @@ describe('派生域多省共存加载（ADR G4）', () => {
     scQuote = p('sc_quote.parquet'); sxQuote = p('sx_quote.parquet');
     scCross = p('sc_cross.parquet'); sxCrossNoBc = p('sx_cross_nobc.parquet');
     scNec = p('sc_nec.parquet'); sxNecNoBc = p('sx_nec_nobc.parquet');
+    scQuoteNullBc = p('sc_quote_nullbc.parquet');
 
     // SC 报价源：不含 branch_code（模拟 SC fact parquet）
     // is_telemarketing 列（varchar 电销/非电销）— loadQuoteConversion REPLACE 转 boolean 必需
@@ -44,6 +46,17 @@ describe('派生域多省共存加载（ADR G4）', () => {
       COPY (SELECT '晋报价' AS policy_no, '太原' AS org_level_3, '晋业务员' AS salesman_name,
                    '非电销' AS is_telemarketing, 'SX' AS branch_code)
       TO '${sxQuote}' (FORMAT PARQUET)
+    `);
+    // SC 报价源：含 branch_code 列但有一行为 NULL（模拟 ETL strictNonNull 失守 / 旧产物脏行）
+    // —— codex PR #804 评审 P1-2：loader 须 COALESCE 兜底，否则 RLS 注入 branch_code='SC' 漏此行
+    await duckdbService.query(`
+      COPY (
+        SELECT '川报价A' AS policy_no, '乐山' AS org_level_3, '川业务员' AS salesman_name,
+               '非电销' AS is_telemarketing, 'SC' AS branch_code
+        UNION ALL
+        SELECT '川报价B', '成都', '川业务员2', '非电销', CAST(NULL AS VARCHAR)
+      )
+      TO '${scQuoteNullBc}' (FORMAT PARQUET)
     `);
     // SC 交叉销售源：不含 branch_code
     await duckdbService.query(`
@@ -97,6 +110,20 @@ describe('派生域多省共存加载（ADR G4）', () => {
     expect(cols.some(c => c.column_name.toLowerCase() === 'branch_code')).toBe(true);
     const rows = await duckdbService.query<{ branch_code: string }>('SELECT DISTINCT branch_code FROM QuoteConversion');
     expect(rows.map(r => r.branch_code)).toEqual(['SC']);
+  });
+
+  // codex PR #804 评审 P1-2：含 branch_code 列但有 NULL 行 → COALESCE 兜底为部署省，不漏行
+  it('🔴 含列源有 NULL branch_code 行 → COALESCE 兜底部署省 SC（防 RLS 注入漏四川行）', async () => {
+    await loadQuoteConversion(duckdbService, scQuoteNullBc);
+    // NULL 行被兜底为 'SC'，两行都归 SC（无 NULL 残留 → RLS branch_code='SC' 不会漏掉 NULL 行）
+    const nullLeft = await duckdbService.query<{ c: number }>(
+      "SELECT CAST(COUNT(*) AS INTEGER) AS c FROM QuoteConversion WHERE branch_code IS NULL",
+    );
+    expect(Number(nullLeft[0].c)).toBe(0);
+    const scRows = await duckdbService.query<{ c: number }>(
+      "SELECT CAST(COUNT(*) AS INTEGER) AS c FROM QuoteConversion WHERE branch_code = 'SC'",
+    );
+    expect(Number(scRows[0].c)).toBe(2);
   });
 
   it('多省（SC+SX）：QuoteConversion SC 补常量 / SX 携源 branch_code，按省精确过滤', async () => {

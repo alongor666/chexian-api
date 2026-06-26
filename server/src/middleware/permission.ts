@@ -92,6 +92,17 @@ export function permissionMiddleware(
           'Token missing branchCode (multi-branch RLS enabled). Please re-login to refresh your token.'
         );
       }
+      // fail-closed 校验 branchCode 形态（codex PR #804 评审 P1）：必须 CHAR(2) 大写（SC/SX…）。
+      // 否则脏配置/异常 token（如小写 'sx'、含单引号 `S'C`、长度不符）会让下游 RLS 解析失效——
+      // resolveBranchRlsCode 的 gate-a 正则 `branch_code = '[A-Z]{2}'` 匹配不上 → 返回 undefined →
+      // 不注入 → branch_admin（无 org_level_3 段）退成 1=1 → 跨省/全省串读（fail-open）。
+      // 在此源头拒绝（403），保证 permissionFilter 只含合法 branch_code 字面量，下游必命中。
+      if (!/^[A-Z]{2}$/.test(branchCode)) {
+        throw new AppError(
+          403,
+          `Invalid branchCode '${branchCode}' (multi-branch RLS requires uppercase CHAR(2), e.g. SC/SX). 请联系管理员修正账号 branchCode。`
+        );
+      }
       const branchClause = `branch_code = '${escapeSqlString(branchCode)}'`;
       req.permissionFilter = baseFilter === '1=1' ? branchClause : `(${baseFilter}) AND ${branchClause}`;
     } else {
