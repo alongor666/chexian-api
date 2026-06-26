@@ -239,6 +239,7 @@ export async function createCrossSellRealtimeView(db: DuckDBQueryable): Promise<
         SELECT
           CAST(p.policy_date AS DATE) AS policy_date,
           COALESCE(CAST(p.insurance_start_date AS DATE), CAST(p.policy_date AS DATE)) AS insurance_start_date,
+          ${pfCols.has('branch_code') ? 'p.branch_code' : "'SC'"} AS branch_code,
           p.org_level_3, p.salesman_name, p.customer_category, p.coverage_combination,
           ${colStr('renewal_mode')} AS renewal_mode,
           ${colStr('tonnage_segment')} AS tonnage_segment,
@@ -267,7 +268,7 @@ export async function createCrossSellRealtimeView(db: DuckDBQueryable): Promise<
     // ⚠️ groupByColumns 增删筛选维度列（insurance_type/fuel_type/tonnage_segment/
     // vehicle_model 等）时，必须同步 filter-dimension-capability.ts 能力矩阵（前后端两份）
     // 与 cross-sell 路由的 sanitizeAggQuery 剥离清单——否则前端会放出 Binder Error chip
-    const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
+    const groupByColumns = `policy_date, insurance_start_date, branch_code, org_level_3, salesman_name,
         customer_category, coverage_combination, renewal_mode, tonnage_segment,
         insurance_grade, is_commercial_insure,
         is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,
@@ -317,6 +318,7 @@ export async function createCrossSellRealtimeView(db: DuckDBQueryable): Promise<
         SELECT
           CAST(policy_date AS DATE) AS policy_date,
           CAST(insurance_start_date AS DATE) AS insurance_start_date,
+          ${legacyCols.has('branch_code') ? 'branch_code' : "'SC'"} AS branch_code,
           org_level_3, salesman_name, customer_category, coverage_combination,
           ${lColStr('renewal_mode')} AS renewal_mode,
           ${lColStr('tonnage_segment')} AS tonnage_segment,
@@ -341,7 +343,7 @@ export async function createCrossSellRealtimeView(db: DuckDBQueryable): Promise<
         FROM PolicyFact
         WHERE policy_date IS NOT NULL`;
 
-    const groupByColumns = `policy_date, insurance_start_date, org_level_3, salesman_name,
+    const groupByColumns = `policy_date, insurance_start_date, branch_code, org_level_3, salesman_name,
         customer_category, coverage_combination, renewal_mode, tonnage_segment,
         insurance_grade, is_commercial_insure,
         is_transfer, is_telemarketing, is_renewal, is_nev, is_new_car,

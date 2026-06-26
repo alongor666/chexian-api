@@ -45,12 +45,18 @@ module.exports = {
         // 'true' = cx sql 准入从单一 PolicyFact 扩展为已实证权限列的派生视图（RenewalTrackerFact/
         // QuoteConversion/CrossSellFact/NewEnergyClaims direct + BrandDim/PlateRegionMap exempt），
         // 每视图 fail-closed RLS（过滤列缺失即拒绝，绝不丢弃过滤）。PolicyFact 行为逐字节不变。
-        // 硬前置：BRANCH_RLS_ENABLED 须为 false（本配置未设=false）。派生视图缺 branch_code 列，
-        // 开 BRANCH_RLS 会令所有用户派生查询 fail-closed（安全无泄漏但功能不可用，详见计划 P0.5）。
+        // 历史硬前置（已解除·山西 cutover 2026-06-25 开 RLS）：原要求 BRANCH_RLS_ENABLED=false，
+        // 因派生视图缺 branch_code 列开 RLS 会 fail-closed；现状与残留 follow-up 见下方 BRANCH_RLS_ENABLED 注释。
         // 本地全栈预验证：续保逐机构与 duckdb 基线零差异 + RLS 隔离 + 边界拒绝 + fail-closed
         // 全绿（见 pr-evolution.md 2026-06-19 两条记分卡）。
         // 回滚：删除本行 revert PR，或 VPS 上改 'false' + sudo /usr/local/bin/deploy-chexian-api reload。
         SQL_FEDERATION_ENABLED: 'true',
+        // 多分公司行级安全（山西 cutover · 2026-06-25 开启）：按用户 branchCode 注入 branch_code 过滤。
+        // 派生视图 branch_code 列就绪进度：PolicyFact / claims_detail / RepairDim / QuoteConversion /
+        // CustomerFlow / CrossSellDailyAgg（本 PR 物化补列）均已含；RenewalTrackerFact 仍缺列
+        // —— branch_admin 续保隔离待 ETL follow-up（org_user 经 org_level_3 隔离不受影响）。
+        // 回滚：scripts/rollback-multi-branch.mjs --apply（改回 false + reload）。
+        BRANCH_RLS_ENABLED: 'true',
       },
 
       // 日志配置

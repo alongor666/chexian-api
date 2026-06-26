@@ -393,3 +393,31 @@ PR-6 只过滤 ClaimsDetail（赔案侧）。**RepairDim（登记表侧）无 br
 - 完整 cutover 未完成：**第 4 步 SX 数据同步卡 Mac→VPS SSH(fail2ban，IP 151.244.134.80)**；第 6 步发账号待。
 - 下次（SSH 恢复后）一气呵成顺序：① 确认 user_store.json branchCode 仍在（或已上永久修复）→ ② `golden-baseline --build`（并发=1）抓基线 → ③ `BRANCH_RLS_ENABLED=true`+reload → admin kpi 非 401 冒烟 → ④ promote SX + `SYNC_VPS_BRANCH_CODE=SX` sync + `SYNC_VALIDATION_BRANCHES=1` sync 派生域 → ⑤ reload + post-cutover 验收 → ⑥ 发账号。
 - RLS 当前 = **关闭**（已回滚，生产 = 已知良好态，admin kpi 200 核实）。
+
+---
+
+## 实证追加（2026-06-25 · cutover 步①-⑤ 执行完成，停在「数据上线+隔离验证」安全点，步⑥发账号待 owner · append-only）
+
+> owner 授权「启动完整 cutover」，主会话执行。**SSH fail2ban 已自然解除**（IP 151.244.134.80 现可连，与 #801 同 IP；root 通道 `ssh chexian-vps` 免密 key 可用）。步①-⑤全部完成，**RLS 当前 = 开启，山西数据已上线生产**。停在步⑥发账号前（owner 选「先停安全点准备前置」）。
+
+### 已执行（按 #801 §D 顺序）
+- **凭据/通道**：owner 填 E2E_PASSWORD + JWT_SECRET 进 `~/.chexian-cutover.env`（chmod 600；值不入对话/文档）。**关键发现：deployer 仅 `NOPASSWD: /usr/local/bin/deploy-chexian-api` 一条、无通用 sudo**（owner 输密码总错的根因）→ 改 root 文件/读 secret 一律走 **root 通道 `ssh chexian-vps`**（config 有 `Host chexian-vps User root`，免密 key）。`edit-env` 子命令**仓库无实现**（PR-4 未合并），day1-sop §67 那条会报错。
+- **步②基线**：`SNAPSHOT_SERVER_URL=生产 BASELINE_CONCURRENCY=1 golden-baseline --build` → **71/72**（cost-claim-ratio 批量抓取间歇 400、手动 curl 200 健康 → 单独存 RLS-off oracle `/tmp/cutover-cost-claimratio-rlsoff.json`）。
+- **步③开 RLS**：root 通道在 `ecosystem.config.cjs` env 块 NODE_ENV 后 sed 插入 `BRANCH_RLS_ENABLED: 'true',`（备份 `ecosystem.config.cjs.bak-rls-pre`）→ deployer wrapper reload → 验证三连：admin kpi 2.06 亿（四川没崩）/ **删 branchCode token→401**（RLS 真生效）/ 含 branchCode→200（JWT_SECRET 正确）。`Environment production not defined` WARN **无害**（PM2 回退 env 块，token 测试为证；`/proc environ` 查不到因 root 直连与 wrapper-sudo 是不同 PM2 daemon）。
+- **golden-baseline --compare 30 FAIL 已铁证为非确定性噪声**：**RLS-on 自我对比（同状态零 reload）反而 36 FAIL > 跨 RLS 30 FAIL** → 浮点末位求和 + `ANY_VALUE(plate_no)` + 无序数组排序，整数部分全一致、与 RLS 正交。严格 deep-equal 是 SQL 重构 oracle、不适合生产快照对比。
+- **隔离验证**（单请求确定性，替代被 503 打崩的并发压测）：SC token→2.06 亿 / SX token→0（步③时 current 尚无 SX），无串读。
+- **步④ promote+sync**：`sx-promote.mjs --apply --rls-confirmed` → 1,833,180 行全 branch_code=SX（staging→rename + ready-marker）→ `SYNC_VPS_BRANCH_CODE=SX sync`：policy/current 的 `--filter 'P *.parquet'` 保护远端**四川 4 文件逐字节一致**、SX_ 2 文件新增（85MB+196KB）；**dim/repair 顺带同步 → #799 BLOCKED 的步骤 A 一并完成**；`SYNC_VALIDATION_BRANCHES=1` 推三派生域（**首次失败=远端缺 `data/validation/SX/` 父目录，手动 `mkdir -p` 后成功**：claims_detail 8 文件 / quotes 1 / renewal 1）。
+- **步⑤ reload+验收**：reload 后进程加载 4.43M 行需时（前 8 次 login 撞我自己压测累积的限流，第 9 次 ready）；**SC 四川 2.06 亿零回归 / SX 山西 9,795 万 + 最新签单 2026-06-23 首次可查 / 无串读**。SX `vehicle_plan_wan`=0（plan 维度无山西计划，非阻断迭代项）。
+
+### 当前生产状态（安全可交付中间态）
+- RLS = **开启**；current/ = 四川 4 文件(原样) + 山西 SX_ 2 文件；validation/SX 三派生域落盘；**山西账号仍 active:false（无人能登山西）**。
+- **回滚（账号未发，仍可一键）**：root 通道恢复 `ecosystem.config.cjs.bak-rls-pre`（或删 BRANCH_RLS_ENABLED 行）+ deployer reload。
+
+### 步⑥发账号待 owner 准备（最终不可逆）
+USER_PASSWORDS（只走生产 env、禁 PR）+ 账号清单确认（sxAdmin + 11 org_user，G7 #775）+ 密码交付方式 + 上线通知（含太原二部历史机构 caveat）。PR 只改 `preset-users.ts` active:true（禁含密码、人工合并）。发账号后回滚须先禁 SX 登录再关 RLS。
+
+### follow-up（非阻断，cutover 后处理）
+1. **sync-vps 推 `validation/<省>` 派生域前未 `mkdir -p` 远端父目录** → 首次必失败（PR-2 缺口，本次手动绕过）。
+2. **golden-baseline --compare 严格 deep-equal 不适合生产快照**（浮点/ANY_VALUE/排序非确定性）→ 需容差或区分两用途。
+3. **stress-test 并发 10 打崩 2核4G**（全 503、串读断言空洞通过）→ 降默认并发或加 `--concurrency`。
+4. **user_store branchCode 永久修复**（#801 P1 `a80133` 仍 PROPOSED）：当前生产是运行时回填，重 seed 即复发全员 401。
