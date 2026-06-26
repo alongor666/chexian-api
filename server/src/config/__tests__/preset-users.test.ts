@@ -134,12 +134,13 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
     }
   }, 30000);
 
-  it('SX 账号全部 active:false — 山西上线前不可登录（auth.ts 第 121 行闸：!user.active → 403）', () => {
+  it('SX 账号全部 active:true — 山西已于 2026-06-26 完成 cutover 步⑥发账号上线', () => {
     const sxUsers = Object.values(PRESET_USERS).filter((u) => u.branchCode === 'SX');
-    // 确保所有 SX 账号都显式设置了 active:false
+    // 山西上线后预置表 active 翻 true（passwordHash 仍 tombstone：见上一条 tombstone 行为闸，
+    // 即便 re-seed 也需生产 USER_PASSWORDS 真凭据才能登录，源码本身永不成后门）。
     expect(sxUsers.length).toBeGreaterThan(0);
     for (const u of sxUsers) {
-      expect(u.active).toBe(false);
+      expect(u.active).toBe(true);
     }
   });
 });

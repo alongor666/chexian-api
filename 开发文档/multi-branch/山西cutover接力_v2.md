@@ -421,3 +421,31 @@ USER_PASSWORDS（只走生产 env、禁 PR）+ 账号清单确认（sxAdmin + 11
 2. **golden-baseline --compare 严格 deep-equal 不适合生产快照**（浮点/ANY_VALUE/排序非确定性）→ 需容差或区分两用途。
 3. **stress-test 并发 10 打崩 2核4G**（全 503、串读断言空洞通过）→ 降默认并发或加 `--concurrency`。
 4. **user_store branchCode 永久修复**（#801 P1 `a80133` 仍 PROPOSED）：当前生产是运行时回填，重 seed 即复发全员 401。
+
+---
+
+## 实证追加（2026-06-26 · 步⑥发账号完成 + 清理一次跑偏的发账号 + 发现并修 visibleOrganizations 省份化 bug · append-only）
+
+> owner 指令"山西 ETL 到生产、全权授权、不要我动手"。承接 #802「步①-⑤完成、RLS-on、山西数据已上线、停在步⑥」。本次主会话（root 通道 `ssh chexian-vps`）：先回滚一次**跑偏的步⑥**，再**规范执行步⑥发 13 账号**并逐账号隔离验证，且在验证中发现并修复一个跨省下拉泄漏 bug。**RLS 全程保持 on，四川零回归。**
+
+### A. 先回滚一次跑偏的步⑥（安全归位）
+- 现状核实：6/26 有会话把步⑥做坏——store 13 SX 账号 `active:true` 但用**小写 sxadmin**（偏离源码 sxAdmin）+ 明文密码进过聊天 + **给 yangjie0621 塞了正常 bcrypt 真哈希**（非 tombstone）→ 漏注入 USER_PASSWORDS 时即后门（正是 #803 要消除的 fail-open）。
+- 回滚：store 删 13 SX、.env USER_PASSWORDS 删 13 SX key、删残留 `/root/fix-sx.cjs` + 本轮 .bak、reload。验证：`loadFromStore` 加载 20（纯 SC）、山西登录 403/不可登、admin 401-wrong-pw 健康、14 川 key 逐字节未变。那批泄漏明文全部作废。
+- 顺带澄清两处过时交接信息：① **RLS 无地雷**（6/25 备份无 RLS 行；RLS-on 由 ecosystem.config.cjs:62 持久化、`/proc/<pid>/environ` 实测 true，`.env` 的 false 被 PM2 覆盖无效）；② **数据口径其实对齐**（parquet org_level_3 实际值 = SX.json 11 单元，交接说的"岚县/平遥/忻州/朔州"在真实数据里不存在）。
+
+### B. 规范执行步⑥（发 13 账号，owner 选"全 13 个一次发齐"）
+- **凭据安全模型**：store 存 preset **tombstone 占位**（fail-safe）+ 真凭据**只进生产 .env USER_PASSWORDS**（全新强随机密码，bcrypt cost=10）+ 明文**只写 `/root/sx-creds-<stamp>.txt`（chmod 600）供 owner 自取**，从未进 stdout/聊天/git。账号定义**直接从生产 `dist/config/preset-users.js` 的 PRESET_USERS 读**（零手抄、与源码零漂移），用户名小写化（避开 `sxAdmin` 大写 → normalizeUsername 后 401 的坑）。
+- 落盘：store 20→33、USER_PASSWORDS 14→27，reload 后 `loadFromStore` 加载 33。
+- **逐账号隔离验证（13 全验，限流间隔登录）**：13 全部 200 + JWT branchCode=SX + 角色正确；2 个 branch_admin KPI=15.3 亿（=全省，与隔离区 15.28 亿基线吻合）；11 个 org_user 各看到本机构保费（太原一部 9132 万 / 太原二部 4.13 亿 / 经代车商重客 1.15 亿…）+ `orgs` 筛选 = 仅本机构 + salesmen 仅本机构。四川数据/凭据未动（RLS + 未触 SC 行）。
+
+### C. 🔴 验证中发现新 bug 并修复：visibleOrganizations 未省份化（本 PR）
+- **现象**：山西 branch_admin 的 `/api/filters/options` `visibleOrganizations` 返回**四川机构名**（乐山/天府/…）且**不含山西机构**。`orgs`（数据派生、RLS 过滤）正确，但 `visibleOrganizations`（permission 派生、前端 `FilterLayoutV2` 机构下拉用）错。
+- **根因**：`permission.ts getVisibleOrganizations` 对所有 branch_admin 返回静态四川常量 `ORGANIZATIONS`，从未省份化（cutover 把数据查询省份化了，漏了这个权限辅助函数）。`canViewOrganization`（permission 版）server 端**无调用点** → 不拦数据（RLS 仍隔离），故为信息泄漏 + 下拉错，非数据泄漏。仅影响 2 个山西 branch_admin。
+- **修复**：新增 `SX_ORGANIZATIONS`（11，SSOT=SX.json）+ `BRANCH_ORGANIZATIONS` 按 branchCode 映射；`getVisibleOrganizations` 按 `user.branchCode` 取，未登记省回落 SC。SC 保持静态不变（零回归）。新增 `permission.test.ts`（省份化 8 例 + 漂移守卫对账 PRESET_USERS）。
+- **同 PR**：`preset-users.ts` 13 个 SX `active:false→true` 持久化（passwordHash 保持 tombstone，符合"PR 只改 active 不含密码"）+ 同步改锁定测试 `preset-users.test.ts`。验证：typecheck 0 + 相关单测 38 passed + governance 44/44。
+
+### D. 当前生产状态 + 剩余
+- RLS=on；current/ = 四川 4 + 山西 SX_ 2 文件；**13 山西账号已上线可登录、数据隔离验证通过**；凭据明文在 `chexian-vps:/root/sx-creds-2026-06-26T2320.txt`（owner 自取分发后删）。
+- 本 PR（visibleOrganizations 省份化 + preset active:true）走 governance + 人工合并（账号链禁 auto-merge）+ 部署验证。
+- **剩余（owner 动作）**：① 取凭据文件分发 + 删除；② 发上线通知（含太原二部历史机构 caveat）。
+- 回滚（账号已发）：先禁 SX 登录（active:false 或撤 USER_PASSWORDS）+ 撤 session + 通知山西，再决定是否关 RLS（见 §3）。
