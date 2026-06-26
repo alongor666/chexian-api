@@ -477,8 +477,11 @@ export async function buildAchievementView(
  *
  * 与维度表 buildBranchDimSelect 的差异（刻意）：派生域为 federation RLS 视图，**恒含 branch_code**；
  * 维度表单源不补（按构造字节安全优先）。故本函数：
- *   - **单一来源**（SC-only 默认）→ 与 P0.5 历史单源补列行为**逐字节一致**：
- *     parquet 含 branch_code → `SELECT * FROM read_parquet('<p>')`（守卫：避免 `SELECT *, …` 重复列）；
+ *   - **单一来源**（SC-only 默认）→ 与 P0.5 历史单源补列行为结果**逐字节一致**（无 NULL 时）：
+ *     parquet 含 branch_code → `SELECT * REPLACE (COALESCE(branch_code, '<部署省>') AS branch_code)
+ *     FROM read_parquet('<p>')`（NULL 行兜底为部署省，避免 RLS 注入 `branch_code='<省>'` 时漏掉
+ *     NULL 行 = 本省用户少看数据；非 NULL 时 COALESCE 恒等，与历史 `SELECT *` 逐字节一致——codex
+ *     PR #804 评审 P1，与 claims composeClaimsDetailSelect 同款）；
  *     不含 → `SELECT *, '<部署省>' AS branch_code FROM read_parquet('<p>')`。
  *   - **多来源**（GATED 多省）→ 各源同上映射后 `UNION ALL BY NAME` 合并（缺列补对应省份常量、
  *     已含者原样；SX validation 副本由 G1 ETL 注入 branch_code → 携真实 per-row 省份）。
@@ -501,7 +504,11 @@ export async function selectUnionWithBranchCode(
     const hasBranchCode = cols.some((c) => c.column_name?.toLowerCase() === 'branch_code');
     parts.push(
       hasBranchCode
-        ? `SELECT * FROM read_parquet('${safePath}')`
+        // P1（codex PR #804 评审）：含列源用 `REPLACE (COALESCE(branch_code, '<省>'))` 兜底——
+        // 若某些行 branch_code 为 NULL，federation/typed RLS 注入 `branch_code='<省>'` 会漏掉它们
+        // （本省用户少看数据 = 字节回归）。非 NULL 时 COALESCE 为恒等 → 与历史 `SELECT *` 逐字节一致。
+        // 与 claims composeClaimsDetailSelect 同款兜底（DRY 口径）。
+        ? `SELECT * REPLACE (COALESCE(branch_code, '${s.branchCode}') AS branch_code) FROM read_parquet('${safePath}')`
         : `SELECT *, '${s.branchCode}' AS branch_code FROM read_parquet('${safePath}')`,
     );
   }

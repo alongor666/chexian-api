@@ -102,6 +102,21 @@ function buildRenewalTrackerExtraConditions(
   return conditions;
 }
 
+/**
+ * 从 permissionFilter 派生分省 RLS 省份码（CHAR(2)）供续保 universe 元数据查询下推。
+ *
+ * 主查询（buildRenewalTrackerExtraConditions）已把完整 permissionFilter（含 `branch_code='XX'`）
+ * 追加进 WHERE，故主查询的分省隔离生效；但 universe 元数据查询无其他筛选，必须单独按本码
+ * 下推 branch_code，否则 branch_admin 看到的 universe 计数会跨省（元数据串读）。
+ * 与主查询同源（同一 permissionFilter 的 gate-a 正则），行为一致：permissionFilter 无 branch_code
+ * （单租户 / RLS-off）→ undefined → 不下推 → 字节安全。
+ */
+function deriveRenewalBranchCode(permissionFilter: string | undefined): string | undefined {
+  if (!permissionFilter) return undefined;
+  const m = permissionFilter.match(/branch_code\s*=\s*'([A-Z]{2})'/);
+  return m ? m[1] : undefined;
+}
+
 function applyClaimsRiskPermissionFilters(
   filters: ClaimsRiskDiagnosisFilters,
   user: AgentDiagnosisUserContext | undefined
@@ -211,6 +226,7 @@ function buildBusinessPatrolTasks(
           cutoff: input.diagnostics.renewalTracker.cutoff,
           filters: input.diagnostics.renewalTracker.filters,
           extraConditions,
+          branchCode: deriveRenewalBranchCode(permissionFilter),
           limit: input.diagnostics.renewalTracker.limit,
         });
       },
@@ -358,6 +374,7 @@ router.post(
       cutoff: input.cutoff,
       filters: input.filters,
       extraConditions: buildRenewalTrackerExtraConditions(input.filters, req.permissionFilter, req.user),
+      branchCode: deriveRenewalBranchCode(req.permissionFilter),
       limit: input.limit,
     });
 
