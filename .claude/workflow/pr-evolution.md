@@ -1413,6 +1413,24 @@ PR-7 对其范围正确、codex 复审可合并。HIGH 已修（diversion org-on
 
 ---
 
+## 2026-06-25 · SX 账号 tombstone 加固（PR #803 · 安全 fail-safe）
+
+> 发账号核实触发：`yangjie0621` 的 passwordHash 是正常 bcrypt 真哈希（非构造式 tombstone），与同权限 `sxAdmin` fail-safe 不对称。13 个 SX 账号统一为构造式 tombstone + 测试加行为闸 + SOP 补 Step 4.0。非部署链。
+
+### 失败现象（pre-push 一次失败）
+新增的「bcrypt.compare 行为闸」测试隔离跑 4.2s 通过，但 pre-push 跑**全量套件**（4153 测试争 CPU）时该单测涨到 7.3s，**超过 vitest 默认 5s timeout → 变红**，push 被拒。
+
+- **根因**：bcrypt cost=10 单次 compare ~70ms，原测试 13 账号 × 4 明文 = 52 次 compare；隔离环境 CPU 空闲下 4.2s，但满载套件并发争抢使其逼近并超过默认 timeout。**「隔离测通过」≠「满载套件下通过」**——CPU-bound 测试的耗时随并发负载放大。
+- **修复**：① 候选明文从 4 个减到 2 个（用户名 + 空串，足以证占位哈希体为废值，多测不增加保证）；② 显式 `it(..., 30000)` 给足 timeout 兜底。改后全量套件 4153/4153 绿。
+- **预防**：§3 自审时，**任何含 bcrypt/crypto/CPU-bound 循环的新测试，必须用「`CI=1 bun run test --run`（全量）」而非单文件隔离来验证**——单文件隔离会掩盖满载 timeout。本次我审查中已自标该测试「4.2s 偏慢」为 NIT 却未升级处置，教训：**评审标了「慢」就该当场量化到 timeout 风险，而非留作 NIT**。
+
+### 三问复盘
+1. **重来怎样更好**：自审阶段已发现「行为闸 4.2s」并写进 review 的 NIT，但未连到「满载会 timeout」。应在写完慢测试的当下就用全量套件验一次，而不是隔离跑过就提交。
+2. **复用价值**：「CPU-bound 测试隔离过 ≠ 满载过」+「bcrypt 行为验证只需 1-2 个明文即证伪占位」可复用于任何 crypto/hash 测试。构造式 tombstone（含可辨标记 + compare 恒 false）是多分公司账号接入的标准 fail-safe 占位范式。
+3. **如何更高质量自动化**：可在 pre-commit 对「新增/改动的测试文件」预跑一次全量套件——但成本高（20s）、且仅 CPU-bound 测试受益，**P4**（自审纪律「慢测试用全量验」+ 本复盘即可，不另起闸）。
+
+### needs_automation: false
+（CPU-bound 测试 timeout 属低频；自审纪律「含 bcrypt/crypto 的新测试用 `CI=1 bun run test --run` 全量验证」+ 本复盘覆盖，不另起 governance 闸。）
 ## 2026-06-25 · 山西 cutover renewal 分省 RLS 修复（typed 路由 + cube + agent 续保诊断 · 分支 claude/renewal-branch-rls）
 
 > 续 #802（cross-sell branch_code）。任务原表述「RenewalTrackerFact 缺 branch_code 列、需 ETL 派生」——但 grep-all 后发现**根因不是 ETL 缺列**：ETL 自 P3-C（#765）已派生 branch_code，本地 parquet 全 128,016 行均带 `branch_code='SC'`，cx sql 联邦路径也早已注入。真正串读在**查询层**：renewal-tracker / cube 续保路径走 `buildOrgScopedPermissionWhere` 只抽 org_level_3，对 branch_admin（RLS-on 下 permissionFilter=`branch_code='SX'` 无 org 段）返回 `1=1` → 看全省。修法 = 套既有 `resolveBranchRlsCode` 双门控注入 branch_code（与联邦路径口径一致），并给 universe 元数据查询加 branchCode 参。非部署链。

@@ -92,6 +92,26 @@ ssh deployer@162.14.113.44 'ls -la /var/www/chexian/server/data/policy/current/ 
 
 ## 4. T-0：发山西账号
 
+### Step 4.0 — 核验生产 store 内 SX 账号 passwordHash 不是真实可登录哈希（激活前硬前置）
+
+> 根因：`preset-users.ts` 的 passwordHash 是**源码占位**，但登录读的是 DB/store。`seedAccessControlData()`（[../../server/src/services/access-control.ts](../../server/src/services/access-control.ts)）逻辑为「有存档 → `loadFromStore`（用 store 里的旧哈希，**不读 preset**）；无存档 → `seedFromPreset`」。因此**源码把占位改成 fail-safe tombstone，不会自动覆盖生产 store 里已落地的旧哈希**。若 store 内某 SX 账号存的是真实可登录哈希，一旦 `active` 改 true 且**漏注入 `USER_PASSWORDS`**，登录会回落到该真哈希（[auth.ts](../../server/src/services/auth.ts) login: `passwordOverride ?? user.passwordHash`）→ 后门。
+
+```bash
+# 在生产 VPS 上导出 SX 账号 passwordHash（只读核验，不改库）。
+# store 由 access-control.ts persistToFile 写到 getUserStorePath()=<dataDir>/user_store.json
+#   （paths.ts:135；非 access-control.json），结构 { users:[{username,passwordHash,branchCode,...}], roles:[...] }（camelCase）。
+ssh deployer@162.14.113.44 \
+  "cd /var/www/chexian/server && node -e \"try{const s=require('./data/user_store.json');(s.users||[]).filter(u=>u.branchCode==='SX').forEach(u=>console.log(u.username,u.passwordHash));}catch(e){console.log('user_store.json 无存档 → 启动走 seedFromPreset 用源码 tombstone，安全');}\""
+# 期望：每行哈希均含字面 'Tombstone'（构造式占位）；或提示「无存档」（亦安全）
+```
+
+**判断**：
+- 全部含 `Tombstone` ✅ → store 已是 fail-safe，继续 Step 4.1。
+- 任一为正常 bcrypt 真哈希（不含 `Tombstone`）→ **STOP**。二选一修复后再激活：
+  1. **强制走 override**：cutover 时**必须**为该账号在 `USER_PASSWORDS` 注入真实哈希（override 恒胜过 store）——这是兜底，但依赖运维不漏注入；
+  2. **根治**：把 store 内该账号 `password_hash` UPDATE 成构造式 tombstone（与 `preset-users.ts` 对齐），或在停机窗口 re-seed（`seedFromPreset` 是 `DELETE`+全量 `INSERT`，会清空自定义用户，慎用）。
+- ❌ 禁止「源码已改 tombstone」就默认生产已安全——store 与源码是两套事实，必须亲验。
+
 ### Step 4.1 — 在 PRESET_USERS 加 SX 超管 + 山西机构用户
 
 ```typescript
