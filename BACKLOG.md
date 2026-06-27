@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（103 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（102 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -24,7 +24,7 @@
 
 - 2026-06-27-claude-d9318c — 治理工程一·省份解析fail-closed(消灭?? 'SC'反模式)
 
-**P1（18 项）**
+**P1（17 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
@@ -41,7 +41,6 @@
 - 2026-06-27-claude-8f71c0 — 报价转化页(/quote-conversion/*)+客户来源页(/customer-f
 - 2026-06-27-claude-96e597 — 治理工程三·SX数据域补全(修SX当前故障)
 - 2026-06-27-claude-a41779 — 治理工程四·多省可扩展性收口+防回归
-- 2026-06-27-claude-a5c684 — 新增元规则skill-caliber-ssot.md
 - 2026-06-27-claude-c68b54 — 业绩分析页(/performance-analysis,org_user核心页)子板块对
 - 2026-06-27-claude-e96d85 — 治理工程二·机构省份元数据单一事实源(含山西在线bug)
 
@@ -238,7 +237,6 @@
 | 2026-06-27-claude-901f0d | 2026-06-27 | 多省/权限 | @claude | 派生域 ALL IN-scope 升级（codex 闸-2 P2·第3省上线前必修）：全国超管 targetBranch=ALL 时 permissionFilter=branch_code IN(visibleBranches)，但 resolveBranchRlsCode 只反解单码 branch_code='XX'、不识别 IN(...)→派生域(RepairDim/ClaimsDetail/RenewalTrackerFact/achievement_cache/SalesmanTeamMapping)在 ALL 下不分省下推(unfiltered)。当前靠省份注册表三者耦合不变量(visibleBranches==getAllBranchCodes==BRANCH_ORGANIZATIONS keys)保证 unfiltered==所有已注册省 安全。第3省上线前把 resolveBranchRlsCode 升级成可返回 branch set/IN clause，或逐路由显式处理 ALL。注意 kpi-detail SAME_CITY_ORGS_BY_BRANCH 等单省专属语义需同步泛化 | P2 | PROPOSED | 开发文档/multi-branch/全国超管切省设计_2026-06-26.md | server/src/routes/query/shared.ts |  |
 | 2026-06-27-claude-96e597 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程三·SX数据域补全(修SX当前故障): generate_dim_tables.py业务员/计划维度表仅四川xlsx→SX salesman/plan维度表空→performance-drilldown/bundle JOIN Binder Error空body。动作:加--branch-code+SX xlsx生成SX维度表;定位quote-conversion/customer-flow policy_date真根因(VIEW/JOIN/cache);SQL生成器quote/customer-flow补branchCode参数。合并自c68b54+8f71c0。来源:地域硬编码全域审计(2026-06-27) | P1 | PROPOSED | N/A | server/src/sql/quote-conversion.ts |  |
 | 2026-06-27-claude-a41779 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程四·多省可扩展性收口+防回归: 当前新增一省≈改20+处跨4链路含多个静默失效陷阱(鉴权6文件9触点/ETL5类/前端整套机构清单/脚本3必改)。动作:新增省checklist配置驱动或codegen;oracle字节断言参数化(oracle_mpdata/p4_backfill死认['SC']→[declared_branch]);sync-vps SUPPORTED_BRANCH_CODES白名单+sx-promote通用化(--branch);governance加多省一致性校验+哨兵分省。来源:地域硬编码全域审计(2026-06-27) | P1 | PROPOSED | N/A | scripts/release/sx-promote.mjs |  |
-| 2026-06-27-claude-a5c684 | 2026-06-27 | 技能口径治理 | @claude | 新增元规则skill-caliber-ssot.md：技能(commands+skills)禁内联口径公式/字段名/枚举/阈值，必须引用指标·字段注册表或rules SSOT；CLAUDE.md §2注册表RED LINE延伸覆盖技能文档 | P1 | PROPOSED | 开发文档/plans/2026-06-27-技能口径挂靠SSOT治理.md | .claude/rules/skill-caliber-ssot.md |  |
 | 2026-06-27-claude-c68b54 | 2026-06-27 | SQL/查询 | @claude | 业绩分析页(/performance-analysis,org_user核心页)子板块对SX故障：/performance-drilldown 与 /performance-bundle 带正确参数(startDate/endDate/organization)仍持续返回 400+零字节响应体，前端无法解析错误。来源：山西13账号VPS验证(2026-06-27)，干净复测确认 | P1 | PROPOSED | N/A | server/src/sql | 根因定位(硬编码审计): 非SQL字面硬编码,真根因疑为SX业务员/计划维度表未生成(generate_dim_tables.py仅四川xlsx)→JOIN触发DuckDB Binder Error被吞成空body。归入治理工程三。 |
 | 2026-06-27-claude-cf6633 | 2026-06-27 | Loop v2 进化 | @claude | E5 样本多样性意识（治茧房2·过拟合）：quality-report 增样本主题集中度指标（域分布 + 单一主题占比/集中度指数）；meta-review 在样本单一时给提炼的规则打『待跨域验证』标签。验收 oracle：loop:quality 输出主题集中度（当前应显示山西多省 ~59% 高集中）。无依赖、工程量小。 | P2 | PROPOSED | 开发文档/loop-v2-进化规划.md | scripts/loop/quality-report.mjs |  |
 | 2026-06-27-claude-d9318c | 2026-06-27 | 架构治理/多省 | @claude | 治理工程一·省份解析fail-closed(消灭?? 'SC'反模式): 全栈23处?? 'SC'/\|\| 'SC'静默默认四川(致命变体getDeploymentBranchCode()缺省返回SC→Parquet打错branch_code码RLS静默失效;daily.mjs 6处env拼错静默查四川)。建单一resolveBranchCode()漏配/未知→抛错告警;替换23处;governance加lint禁新增?? 'SC'。来源:地域硬编码全域审计(2026-06-27) | P0 | PROPOSED | N/A | 数据管理/daily.mjs |  |
