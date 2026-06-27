@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（84 项 · 数据截至 2026-06-25 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（85 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -32,7 +32,7 @@
 - 2026-06-25-claude-a80133 — RLS-on 硬前置(永久修复)
 - 2026-06-25-claude-fe871b — cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链)
 
-**P2（45 项）**
+**P2（46 项）**
 
 - B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -79,6 +79,7 @@
 - 2026-06-24-claude-2a7e17 — 计划维度省份化
 - 2026-06-24-claude-f7590d — sx-promote.mjs 批量 staging→final rename 非跨进程崩
 - 2026-06-25-claude-8e6e8a — cutover能力PR-4(可选·碰部署链)
+- 2026-06-27-claude-701830 — 全国超管 xuechenglong 切省+全国合并视图（方案B 前端省份切换器）
 
 **P3（30 项）**
 
@@ -203,3 +204,4 @@
 | 2026-06-25-claude-8e6e8a | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-4(可选·碰部署链): deploy/vps-wrapper/deploy-chexian-api.sh 补 edit-env 子命令(sed 改 ecosystem env+reload),修 day1-sop 假设的 edit-env 与 wrapper 实现偏差。优先级低于 PR-1/2/3 | P2 | PROPOSED | N/A | deploy/vps-wrapper/deploy-chexian-api.sh |  |
 | 2026-06-25-claude-a80133 | 2026-06-25 | Auth · 多省(山西) RLS-on 硬前置 | @claude | RLS-on 硬前置(永久修复): 存量用户 user_store.json 缺 branchCode 致开 RLS 全员 401 fail-closed。2026-06-25 生产 dry-run 已数据层回填(20 用户全 branchCode='SC')但属运行时修复,user_store.json 重 seed/import 即复发。永久修复: (1) admin-import-users-from-json 导入时带 branch_code; (2) ensurePresetUser/seed 对存量用户 reconcile branchCode(现仅对不存在用户生效)。是 PR-3(fe871b) RLS-on 硬前置。详见 开发文档/multi-branch/山西cutover接力_v2.md 实证追加(2026-06-25 RLS-on dry-run)。 | P1 | PROPOSED | 开发文档/multi-branch/山西cutover接力_v2.md | server/src/services/access-control.ts,server/src/scripts/admin-import-users-from-json.ts |  |
 | 2026-06-25-claude-fe871b | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链): ecosystem.config.cjs env 加 BRANCH_RLS_ENABLED true。不可逆生产 RLS 开启,人工监控窗口 merge+盯CI。开前必跑 multi-branch-stress-test --simulate-sx + SC golden-baseline 零差异(需 owner 给 E2E_PASSWORD/JWT_SECRET) | P1 | PROPOSED | N/A | server/ecosystem.config.cjs | RLS-on 硬前置升级（2026-06-25）：除 stress-test --simulate-sx + SC golden-baseline 零差异外，新增依赖 PR-6(2bb22d) repair shadow 网点 ClaimsDetail branch 隔离——PR-1(5f1545) 让 ClaimsDetail 多源后，repair 4 端点 RLS-on 会跨省串读。开 RLS 前 PR-6 必须先合并。 <br>RLS-on 硬前置再升级（2026-06-25 codex 对抗审计）：新增依赖 PR-7(e6fac1) RepairDim 省份化。PR-6(2bb22d) 只闭 ClaimsDetail/PolicyFact 行泄漏；RepairDim-only 端点(overview/detail等)对 branch_admin 未省份隔离 + 影子 CTE bare RepairDim 子查询跨省全读仍未闭。开 RLS 前 PR-6 + PR-7 都必须先合并。 <br>步骤B(validation/SX派生域sync)经owner决策(2026-06-25)并入RLS-on同窗口:先BRANCH_RLS_ENABLED=true+reload,再SYNC_VALIDATION_BRANCHES=1 sync派生域(claims_detail/quotes/renewal)。禁RLS-off前推——duckdb oracle证:RLS-off推validation/SX/claims_detail(236653山西赔案)上VPS→loader无条件UNION→repair影子端点(coop-tier/scatter/orphan)零过滤→SC repair影子网点7225→13130(+5905山西网点污染四川视图),直到RLS-on才闭合。校正接力文档§PR-2/§PR-5「RLS-on前必做」表述(作废)。本次SSH仍fail2ban BLOCKED(IP151.244.134.80未变),真同步无法执行。步骤A(RepairDim纯SC)无此风险,顺延日常发布携带。 <br>2026-06-25 生产 RLS-on dry-run(可逆,已回滚): 证 RLS-on 对四川安全(基线72/72 + 头部KPI/total_cases零差异);但挖出致命隐雷=存量 user_store.json 用户缺 branchCode→开RLS全员401,已数据层回填修复(详见接力文档实证追加)。新增 RLS-on 硬前置=user_store.json branchCode 永久修复(见新登记 P1)。完整cutover仍卡SSH(SX同步)。 |
+| 2026-06-27-claude-701830 | 2026-06-27 | 多省/权限 | @claude | 全国超管 xuechenglong 切省+全国合并视图（方案B 前端省份切换器）：PresetUser/JwtPayload 加 visibleBranches 字段 + targetBranch 全局查询参数 + permission.ts 白名单注入（普通用户传参忽略防越权）+ 前端 BranchContext + 顶栏省份下拉 + cache key 区分 + 测试矩阵。设计见 开发文档/multi-branch/全国超管切省设计_2026-06-26.md | P2 | PROPOSED | 开发文档/multi-branch/全国超管切省设计_2026-06-26.md | server/src/middleware/permission.ts,server/src/config/preset-users.ts,src/components/layout/TopNavigation.tsx |  |
