@@ -35,6 +35,8 @@ import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import os from 'os';
+import { recordEvent, LEDGER_PATH } from './etl-ledger/record.mjs';
+import { writeReport } from './etl-ledger/render.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -273,6 +275,8 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const sshAlias = process.env.SYNC_VPS_SSH_ALIAS || 'chexian-vps-deploy';
   const healthUrl = process.env.SYNC_AND_RELOAD_HEALTH_URL || 'https://chexian.cretvalu.com/health';
+  // ETL 台账 run_id：贯穿全链路（透传给 daily.mjs 子进程 + 本脚本各埋点），串起一次发布的所有事件
+  process.env.ETL_RUN_ID = process.env.ETL_RUN_ID || new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
 
   log('bold', '════════════════════════════════════════════════');
   log('bold', '  sync-and-reload：ETL → governance → reload → /health');
@@ -430,6 +434,10 @@ async function main() {
       { dryRun: opts.dryRun, timeoutMs: 180000 }
     );
   }
+  // ⑤reload 埋点：reload 完成（runCmd 失败会 throw → main catch，故到此即成功）
+  if (!opts.skipReload && !opts.dryRun) {
+    recordEvent({ stage: 'reload', step: shouldRunProcessReload ? 'pm2_reload' : 'data_reload', status: 'success' });
+  }
 
   // Stage 4: 健康检查 + 闭环验证 + 稳定性二次确认
   if (opts.dryRun) {
@@ -462,6 +470,17 @@ async function main() {
       process.exit(1);
     }
     log('green', '  ✓ 30s 稳定性二次校验通过');
+    // ⑥health + ⑦frontend 埋点：回读 VPS 当前对外数据版本（= 前端将消费的版本，见设计诚实边界）
+    let dataVersion = null;
+    try {
+      const resp = await fetch(`${healthUrl.replace(/\/health$/, '')}/api/data/version`);
+      if (resp.ok) {
+        const dv = await resp.json();
+        dataVersion = dv?.etlDate || dv?.buildTime || null;
+      }
+    } catch { /* 回读失败不阻断 */ }
+    recordEvent({ stage: 'health', step: 'health_check', status: 'success', data_version: dataVersion });
+    recordEvent({ stage: 'frontend', step: 'data_version_readback', status: 'success', data_version: dataVersion, note: 'VPS 当前对外版本=前端将消费版本' });
   }
 
   // Stage 4.5: 静态报告同步 + manifest 生成 —— 已统一下沉到 Stage 3 的 sync-vps.mjs
@@ -529,6 +548,15 @@ async function main() {
   }
 
   log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
+
+  // 全流程结束：从台账 JSONL 重渲染中文报告（数据流转台账.md）
+  try {
+    const mdPath = join(dirname(LEDGER_PATH), '数据流转台账.md');
+    writeReport(LEDGER_PATH, mdPath);
+    log('green', `  📊 数据流转台账已刷新 → ${mdPath}`);
+  } catch (e) {
+    log('yellow', `  ⚠ 台账报告刷新失败（不阻断）：${e.message}`);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
