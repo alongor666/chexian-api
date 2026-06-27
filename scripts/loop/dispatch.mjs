@@ -29,10 +29,15 @@ import { fileURLToPath } from 'url';
 import { parseLog, fold, loadLog } from '../backlog/lib.mjs';
 // 跨会话认领锁的「辅助信号」：远程 loop 分支存在性（边界匹配，复用 stale-scan 同一实现避免漂移）。
 import { branchMatchesUid } from './stale-scan.mjs';
+// E1 失败记账：复用 quality-report 的 verdict 归一 + 规范 uid + 完成态集合（单一事实源·codex 闸-1 P2-4），
+// 避免 dispatch 与 quality-report 对「已入账」理解分叉。
+import { normalizeVerdict, ledgerUid, COMPLETION_VERDICTS } from './quality-report.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..', '..');
-const LOG_PATH = path.join(ROOT, 'BACKLOG_LOG.jsonl');
+// 路径 env 可覆盖（默认指向真实文件，prod 行为不变；供 e2e 用 temp 路径隔离·不污染真实账本）。
+const LOG_PATH = process.env.LOOP_BACKLOG_LOG || path.join(ROOT, 'BACKLOG_LOG.jsonl');
+const LEDGER_PATH = process.env.LOOP_LEDGER_PATH || path.join(ROOT, '.claude/workflow/loop-quality-ledger.jsonl');
 const CONFIG_PATH = path.join(ROOT, 'scripts/loop/dispatch-config.json');
 
 /** 视为「未完成、可推进」的状态（BLOCKED 单列：不进前沿，但状态板展示）。 */
@@ -291,6 +296,111 @@ export function mergeGate(tasks, config = {}) {
   return { slot: order[0] || null, queue: order.slice(1), skipped };
 }
 
+/**
+ * E1 账本记失败（治茧房1 幸存者偏差·纯函数·codex 闸-1 已硬化）：把本轮调度发现的「陈旧认领（孤儿）」与
+ * 「BLOCKED」任务，算出需追加到质量账本的失败行——这些任务流程上走不到「成功收尾记账步」，不记账则北极星
+ * 「一次过率」只在幸存样本上算、放弃率不可见。
+ *
+ * 三层防重复（确保 oracle「连跑两次 dispatch 仍只 1 条 orphaned」+ 并发安全）：
+ *  1. **accounted 守卫**：uid 已在账本有「完成态」行（pass/partial/reverted）→ 跳过。避免把「完成了但 BACKLOG
+ *     状态没翻 DONE」的任务（其陈旧认领仍出现在 released）误记孤儿——那是 stale-scan「已完成未流转」域，
+ *     非 E1「失败失明」域（codex 闸-1 假阳性防护；实测排除 b244/b255/b320 三例）。
+ *  2. **orphaned (uid, claim_at) 写时去重**：claim_at=认领时刻（latestClaims 的 `at`，跨 dispatch 稳定，
+ *     **非**刷新的 lastAt）；同键已记 → 跳过。重新认领（新 claim_at）= 新尝试 → 记新行（codex 闸-1 P1-3）。
+ *  3. **blocked uid 写时去重**：BLOCKED 是任务级状态（非 attempt），同 uid 只记一次。
+ *  schema 漂移（uid/backlog_uid）由 ledgerUid 吸收（codex 闸-1 P1-6）；并发/union 重复由 quality-report 读时去重兜底。
+ *
+ * 失败行**故意不造** rounds_to_green/governance_pass 等完成指标（无完成=无指标；aggregate avg 只算有指标的行）。
+ *
+ * @param {object} p
+ * @param {Array<{task:object,actor?:string,at?:string,ageMs?:number}>} p.released computeFrontier 的 released（陈旧认领）
+ * @param {Array<object>} p.blocked computeFrontier 的 blocked（status=BLOCKED）
+ * @param {Array<object>} p.ledgerRows 既有账本解析行（判 accounted + 幂等）
+ * @param {string} [p.ts] 记账日期 YYYY-MM-DD
+ * @returns {Array<object>} 需 append 的新失败行（已去重；可能为空）
+ */
+export function failureLedgerRows({ released = [], blocked = [], ledgerRows = [], ts = '' } = {}) {
+  const accounted = new Set();    // 已到达记账点（完成态）的 uid → 不再当失败
+  const orphanedSeen = new Set(); // 既有 orphaned 的 (uid,claim_at) 键
+  const blockedSeen = new Set();  // 既有 blocked 的 uid
+  for (const r of ledgerRows) {
+    const uid = ledgerUid(r);
+    if (!uid) continue;
+    const v = normalizeVerdict(r.verdict).verdict;
+    // accounted = 已达定论的 uid：完成态（pass/partial/reverted）∪ 终态失败 `abandoned` → 不再补失败行。
+    // abandoned 是显式终止（合同终态之一），若仍出现在 released 不可再补 orphaned 致双计（codex 闸-2 P1）。
+    if (COMPLETION_VERDICTS.has(v) || v === 'abandoned') accounted.add(uid);
+    else if (v === 'orphaned') orphanedSeen.add(`${uid}@@${r.claim_at || ''}`);
+    else if (v === 'blocked') blockedSeen.add(uid);
+  }
+
+  const out = [];
+  const domainsOf = (task) => [...taskDomains(task)];
+  const hours = (ms) => (typeof ms === 'number' && Number.isFinite(ms) ? Math.round(ms / 360000) / 10 : null);
+
+  // 孤儿（陈旧认领）→ orphaned
+  for (const r of released) {
+    const uid = r.task && r.task.uid;
+    const claimAt = r.at || '';
+    if (!uid || !claimAt) continue;        // 缺稳定去重键 → 保守不记（防重复污染）
+    if (accounted.has(uid)) continue;      // 已完成（状态未流转）→ 非孤儿
+    const key = `${uid}@@${claimAt}`;
+    if (orphanedSeen.has(key)) continue;   // 幂等：同认领已记
+    orphanedSeen.add(key);                 // 同轮多条同键也只记一次
+    const h = hours(r.ageMs);
+    out.push({
+      uid, ts, task: String((r.task && r.task.desc) || '').slice(0, 80), domain: domainsOf(r.task),
+      verdict: 'orphaned', claim_at: claimAt, actor: r.actor || '?',
+      reason: `认领锁 TTL 超时无推进（认领人 ${r.actor || '?'}，认领于 ${claimAt}${h != null ? `，陈旧 ${h}h` : ''}）→ 视为孤儿尝试`,
+    });
+  }
+
+  // BLOCKED（任务级阻塞可见性）→ blocked
+  for (const t of blocked) {
+    const uid = ledgerUid(t) || (t && t.uid);
+    if (!uid) continue;
+    if (accounted.has(uid)) continue;
+    if (blockedSeen.has(uid)) continue;
+    blockedSeen.add(uid);
+    out.push({
+      uid, ts, task: String((t && t.desc) || '').slice(0, 80), domain: domainsOf(t),
+      verdict: 'blocked', reason: 'BACKLOG status=BLOCKED（未达成功记账点，幸存者偏差补记）',
+    });
+  }
+  return out;
+}
+
+/** 把失败行安全追加到账本（文件末换行安全；缺文件即创建）。返回写入条数。 */
+function appendLedgerRows(ledgerPath, rows) {
+  if (!rows.length) return 0;
+  let prefix = '';
+  try {
+    const cur = fs.readFileSync(ledgerPath, 'utf-8');
+    if (cur.length && !cur.endsWith('\n')) prefix = '\n'; // 末行无换行 → 先补，免拼成一行
+  } catch { /* 文件不存在 → 直接创建 */ }
+  fs.appendFileSync(ledgerPath, prefix + rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  return rows.length;
+}
+
+/**
+ * 只读/查询模式判定（不写账本·codex 闸-2 P2）：`--json`(机读编排) / `--board`(看板) / `--merge-gate`(门禁)
+ * 是查询用途，不应改历史数据；唯有**默认交互模式**（驱动 loop 的主入口）才幂等补记失败。集中判定便于单测锁定。
+ */
+export function isInspectMode(args) {
+  return args.includes('--json') || args.includes('--board') || args.includes('--merge-gate');
+}
+
+/** 读账本 → 算失败行 → 幂等 append（CLI 侧 I/O 封装，读 LEDGER_PATH）。返回写入条数。 */
+function reconcileFailureLedger(result, ts) {
+  let ledgerRows = [];
+  try {
+    ledgerRows = fs.readFileSync(LEDGER_PATH, 'utf-8').split('\n').map((s) => s.trim()).filter(Boolean)
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  } catch { /* 无账本 → 空 */ }
+  const rows = failureLedgerRows({ released: result.released || [], blocked: result.blocked || [], ledgerRows, ts });
+  return appendLedgerRows(LEDGER_PATH, rows);
+}
+
 /** 生成单个前沿任务的可粘贴会话提示词（off 最新 main + 并行安全协议 + 双闸）。 */
 export function sessionPrompt({ task, domains }) {
   const slug = task.uid.split('-').pop();
@@ -441,6 +551,13 @@ function main() {
   const now = new Date().toISOString();
   const result = computeFrontier(tasks, { ...config, claims, now });
   const gate = mergeGate(tasks, config);
+
+  // E1 失败记账（治幸存者偏差）：**仅默认交互模式**幂等补记孤儿/阻塞（codex 闸-1 P1-4）——
+  // --json/--board/--merge-gate 是查询/编排/门禁，不应改历史数据；--no-orphan-ledger 显式退出。
+  if (!isInspectMode(args) && !args.includes('--no-orphan-ledger')) {
+    const wrote = reconcileFailureLedger(result, now.slice(0, 10));
+    if (wrote) console.error(`♻️ [dispatch] 失败记账：质量账本追加 ${wrote} 条（孤儿/阻塞·治幸存者偏差，已 (uid,claim_at)/uid 幂等去重）`);
+  }
 
   // 辅助信号：仍在前沿、却有匹配远程 loop 分支但无认领事件 → 疑似别会话已开工未认领（弱信号，软提示不硬锁）。
   const branchOnly = result.frontier.filter((f) => branches.some((b) => branchMatchesUid(b, f.task.uid)));

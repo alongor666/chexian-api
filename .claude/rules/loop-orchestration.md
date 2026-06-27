@@ -98,6 +98,12 @@ policy: append-only
   - **`verifier_refuted` 字段 2026-06-25 起弃用**：闸-2 收敛为 codex CLI 单源、不再跑 evidence-verifier，新行**不再产出**该字段（`quality-report.mjs` 以 `Number(...)||0` 兜底，缺失即计 0，旧行兼容保留）。对抗命中以 `codex_plan`/`codex_done` 为准。
 - **`bun run loop:quality`**（`quality-report.mjs`）聚合 → 北极星：**一次过率**（rounds_to_green=1 且 rework=0）/ 平均转绿轮次 / 平均返工 / codex 命中（plan+done 各级合计）/ governance 通过率，按域 + 按 round 趋势。
 - 与 `pr-evolution.md` 互补：**账本=量化指标，复盘=定性教训**。两者同一收尾步一起写。
+- **E1 失败记账（治茧房1 幸存者偏差·2026-06-27）**：账本原只在「成功收尾步」记账 → 失败/孤儿/放弃任务走不到记账点 → 北极星只算幸存样本、放弃率不可见（实测 58 样本 0 fail/orphaned，一次过率 36.2% 是幸存值）。E1 补齐：
+  - **verdict 规范集扩**为 `pass | partial | reverted | abandoned | orphaned | blocked`（`reason` 必附）；既有历史成功变体（实测 5 种顶层 `pass-*` 共 7 行 + `all_fixed`/`mergeable` 同义词）由 `quality-report.normalizeVerdict`（**单一事实源**，`dispatch` import 复用·前缀 `pass-*`/`pass_*` + 同义词白名单归一）**读时归一**到 `pass`+子标记——**不迁移既有 append-only 行**（改写历史行会在 `merge=union` 下产生新旧重复），归一在读时做，「非 pass 纳入分母」口径据归一后判定才稳。
+  - **失败行**（`dispatch` 自动记账）`{uid, ts, task, domain, verdict, reason, claim_at?(orphaned 去重键), actor?}`——**不造** `rounds_to_green/governance_pass` 等完成指标（`aggregate` avg 只算有指标的行，缺失≠0）。
+  - **孤儿/阻塞幂等记账**：`bun run loop:dispatch`（**仅默认交互模式**，非 `--json/--board/--merge-gate`；`--no-orphan-ledger` 退出）把 `computeFrontier` 的 `released`（陈旧认领→`orphaned`）与 `blocked`（→`blocked`）补记账本。三层防重复：① **accounted 守卫**（uid 已有完成态行 pass/partial/reverted → 跳过，排除「完成未流转」假阳性，属 `stale-scan` 域非 E1 域）② **orphaned (uid,claim_at) 写时去重**（claim_at=认领时刻，跨 dispatch 稳定，**非**刷新的 lastAt；重新认领=新尝试记新行）③ **blocked uid 去重**（任务级状态）。并发/`union` 重复由 `aggregate` **读时去重**兜底（orphaned 按 (uid,claim_at)、blocked 按 uid）——单 owner 串行非幂等证明，读时去重才是并发下的真保证。
+  - **会话异常退出**经「认领先于实现」步留下 IN_PROGRESS 认领 → 超 TTL 无活动 → `released` → `orphaned`，故异常退出由孤儿路径覆盖（前提=已认领）。
+  - **指标口径**：放弃率=（abandoned+orphaned）/n（blocked 单列阻塞率，BLOCKED 多为等待非放弃）；孤儿率=orphaned/n；阻塞率=blocked/n；governance 通过率分母=全部尝试（失败行计未过，诚实）。**残留诚实边界**：静默活跃长任务（>TTL 无事件但实际在做）会被记 orphaned，靠 accounted 守卫自愈（完成后不再记）+ reason 带陈旧时长，不做两阶段确认（既有 `released` 机制已判 TTL-stale=死，加状态复杂度过工程）。`env LOOP_LEDGER_PATH/LOOP_BACKLOG_LOG` 可覆盖路径（默认真实文件，供 e2e 隔离）。
 
 ---
 
@@ -173,6 +179,12 @@ policy: append-only
   - **三问复盘**：① 重来更好？2026-06-25 那次就该改主体而非只在 §4 追加 meta 声明——「声称改了」与「实际改了」漂移是协议类 append-only 文件高发坑（同 `feedback_codex_review_fix_sop`「修一处≠修一类」：声明一处≠落实全文）。② 复用价值？「append-only 协议的 meta 声明必须同步落实到主体，否则主体即权威、meta 被忽略」对所有 append-only 护栏通用。③ 自动化？`needs_automation: false`（本次为文字落实，无新运行时机制；2026-06-25 已登记的「扫 loop PR 出现 code-reviewer/evidence-verifier 作闸源即告警」governance 闸 expires 2026-09-25 已覆盖本方向）。
   - **本 PR codex CLI 闸-2 实跑（以身作则用 CLI 而非 skill）**：判 PARTIAL，抓 1 P1（第 148 行旧三源/skill 降级残留，本应 2026-06-25 一并清理）+ 2 P2（skills-map 第一列路由歧义、commit/PR 须带 `[policy-override]`），均已处置。又一个「修一处≠修一类」实例——改 §2 主体须连同 §4 历史 meta 的「当前性」措辞一起扫；也实证「评审走 codex CLI」能抓出单看 diff 易漏的跨节冲突。
   - **同 PR 追加（2026-06-27 · 用户追问「codex 自跑搜索扫到会话 JSONL、输出 81KB，怎么根治」）· §2 新增「评审 prompt 编排」铁律**：根因＝codex agentic CLI 自跑宽范围 grep，命中机器上记录本对话的 `~/.claude/projects/*.jsonl`（read-only sandbox 不挡读）。根治＝**任务自包含**（调用方备好 diff/片段喂 stdin）+ 硬禁令兜底 +「**消除搜索动机 > 下禁令**」。落到 §2「调用方式」后一条 + memory `codex-review-is-cli-adversarial` 的 How to apply。实证 81KB→23KB。`needs_automation: false`（prompt 编排属调用纪律，无运行时强制点；残留人工点＝执行会话须真的自包含喂入，依赖会话遵从）。
+- **meta（2026-06-27 · 本 PR · Loop V2 进化 E1「账本记失败」治茧房1 幸存者偏差）**：承接 `开发文档/loop-v2-进化规划.md` §4 E1（PR #812 合同），落地「真相输入」阶段第一项。详细 schema 见 §3「E1 失败记账」bullet。
+  - **诊断实证**：实测 58 样本顶层 verdict = 57 pass 系（pass×50 + 5 种 pass-* 变体×7）+ partial×1 + **0 fail/orphaned/blocked**——失败任务流程上走不到「成功收尾记账步」。北极星「一次过率 36.2%」是幸存样本上算的。
+  - **落地（codex 闸-1 硬化后）**：① `normalizeVerdict` 单一事实源（读时归一历史 pass-* 变体：5 种顶层 + all_fixed/mergeable 同义词，**不迁移 append-only 历史行**）；② `aggregate` 非 pass 纳分母 + 放弃率/孤儿率/阻塞率 + verdict 分布 + 读时去重（并发安全）+ avg 只算完成行（缺失≠0）；③ `dispatch.failureLedgerRows` 纯函数把 `released`/`blocked` 幂等补记（accounted 守卫排假阳性 + (uid,claim_at)/uid 去重），**仅默认模式**写、不碰调度决策逻辑。
+  - **codex 闸-1 价值**：7 P1/6 P2，关键修正进设计——并发幂等（读时去重兜底，非靠单 owner 串行）、blocked 拆独立阻塞率（非混入放弃）、avg 只算完成行、schema 漂移 uid/backlog_uid、默认模式才写。**最关键**：阶段 A 自查 + codex 共同发现「accounted 守卫」必要性——朴素记 orphaned 会把「完成但状态未流转」的 b244/b255/b320 误记孤儿（属 stale-scan 域）。
+  - **oracle 实证**：构造孤儿→`loop:dispatch`→账本 +1 orphaned；连跑 3 次仍 1 条（幂等）；`loop:quality` 放弃率 100%（temp）。真实首次对账记 2 orphaned + 6 blocked（守卫排除 3 已完成者），北极星 **36.2%→30.3%**（含失败 + partial 口径修正）、放弃率 **0%→3.0%**、阻塞率 9.1%——幸存者偏差消除、放弃代价首次可见。22 新单测，loop 全量 82 passed。
+  - **三问复盘**：① 重来更好？「accounted 守卫」本可更早识别——`released` 同时含「真孤儿」与「完成未流转」两类，设计时要先分清 E1 域 vs stale-scan 域，否则假阳性。② 复用价值？「失败记账纯函数 + 读时去重兜并发 + accounted 守卫分域」对任何「自产自评闭环装失败可见性」通用；「读时归一不迁移 append-only 历史」是 union 文件演进的标准手法。③ 自动化？本项即「把放弃率从不可见变机制化可见」。`needs_automation: true`（E6 拟把「账本必含失败记账维度，缺则告警」入 `bun run governance`，与 E4 死规则审计同窗）`expires: 2026-09-27`。
 
 ---
 

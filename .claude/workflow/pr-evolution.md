@@ -1579,3 +1579,26 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （worktree 绝对路径逃逸已由本 PreToolUse hook 硬拦截 + 10 vitest 回归锁定，纪律已机制化，无新增待自动化项。「未重锚会话不介入」是设计取舍而非缺口——属 EnterWorktree 重锚域，见 worktree-setup.md §A「cwd 漂移根治」。）
+
+---
+
+## 2026-06-27 · Loop V2 进化 E1「账本记失败」治茧房1 幸存者偏差（evidence-loop scorecard）
+
+> 承接 `开发文档/loop-v2-进化规划.md` §4 E1（PR #812 合同），落地「真相输入」阶段第一项。协议演进细节见 `loop-orchestration.md §4` 同日 meta entry，本条是 evidence-loop scorecard（基线/候选/oracle/双闸/决策）。
+
+- **业务目标**：让失败/孤儿/放弃任务进质量账本，使北极星「一次过率」不再只算幸存样本，且放弃率可见。
+- **基线（实测·禁口算）**：`bun run loop:quality` = 一次过率 **36.2%**（58 样本，全 pass 系，0 fail/orphaned）。诊断：记账绑「成功收尾步」→ 失败任务走不到记账点 = 幸存者偏差。
+- **候选（改动）**：`quality-report.normalizeVerdict`（单一事实源·读时归一历史 pass-* 变体，**不迁移 append-only 历史行**）+ `aggregate` 非 pass 纳分母 + 放弃率/孤儿率/阻塞率 + 读时去重（并发安全）+ avg 只算完成行；`dispatch.failureLedgerRows`（纯函数·accounted 守卫 + (uid,claim_at)/uid 幂等）+ 仅默认模式记账（`isInspectMode` 闸）。**不碰调度决策逻辑**（风险低）。
+- **oracle 实证**：① 构造孤儿（认领超 TTL）→ `loop:dispatch` → 账本 +1 orphaned ✓ ② 连跑 3 次仍 1 条（幂等）✓ ③ `loop:quality` 放弃率>0 ✓ ④ 真实首次对账记 2 orphaned + 6 blocked（accounted 守卫排除 b244/b255/b320 三个「完成未流转」假阳性）→ 北极星 **36.2%→30.3%**（含失败 + partial 口径修正）、放弃率 **0%→3.0%**、阻塞率 9.1%。
+- **回归门禁**：loop 单测 60→**86**（26 新）· 全量 **4255/4255** · governance **45/45** · typecheck ✓。
+- **双闸（codex CLI·read-only·自包含 prompt）**：闸-1 计划对抗 7 P1/6 P2（关键修正：读时去重兜并发、blocked 拆独立阻塞率、avg 只算完成行、schema 漂移、仅默认模式写；**最关键**：与阶段 A 自查共同发现 accounted 守卫必要性，避免把「完成未流转」误记孤儿）；闸-2 完成对抗 1 P1（accounted 纳 abandoned 终态防双计）+ 3 P2（变体清单锁定/坏行不归并/isInspectMode 抽出），复审通过（残留注释口径一并修）。
+- **决策**：promote。8 条真实失败行 = 首次幸存者偏差纠正（一次性），随机制一起落地（非未来 PR 被动承接）。
+
+### 三问复盘
+1. **重来怎样更好**：「accounted 守卫」本可更早识别——`released` 同时含「真孤儿」与「完成未流转」两类，设计时先分清 E1 域 vs stale-scan 域才不假阳性；阶段 A 用真实数据自查（5 released 中 3 已有 pass 行）当场暴露了这点，比纯写码后被 codex 抓更省返工。
+2. **复用价值**：① **「失败记账纯函数 + 读时去重兜并发 + accounted 守卫分域」** 对任何「自产自评闭环装失败可见性」通用；② **「读时归一不迁移 append-only 历史行」** 是 `merge=union` 文件演进标准手法（改写历史行会产生新旧重复）；③ **「双闸 framing 互证」**：闸-1 治范围（写码前 7 P1）、闸-2 治完成质量（1 P1 终态守卫），再次实证窄范围多模型对抗的增量价值。
+3. **如何更高质量自动化**：本项即「把放弃率从不可见变机制化可见」。`needs_automation: true`（E6 拟把「账本必含失败记账维度，缺则告警」入 `bun run governance`，与 E4 死规则审计同窗）。
+
+### needs_automation: true
+- 闸：E6 把「质量账本失败记账维度（放弃率/孤儿率可算）」入 `bun run governance` 强制——回退（删失败记账 / dispatch 不再记 orphaned）即 governance fail，防进化成果回退。依赖 E1（本项）+ E4 先落地，随 E6 一并实现。
+- expires: 2026-09-27（与 loop-orchestration §4 同日 meta 同窗；属 loop-meta，单 owner 串行落地）。
