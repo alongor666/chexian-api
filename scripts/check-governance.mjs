@@ -51,6 +51,7 @@ import {
   syncQuickReferenceFile,
 } from '../数据管理/pipelines/quick_reference.mjs';
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
+import { evaluateLedgerFreshness } from './etl-ledger/governance-check.mjs';
 import {
   parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow,
 } from './backlog/lib.mjs';
@@ -3397,6 +3398,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '.github/workflows YAML 语法', fn: checkWorkflowYamlSyntax },
   { name: '分层依赖边界', fn: checkArchLayerBoundaries },
   { name: 'spawn参数引号安全', fn: checkSpawnArgQuoteSafety },
+  { name: 'ETL台账新鲜度', fn: checkEtlLedgerFreshness },
 ];
 
 // ============================================================
@@ -3516,6 +3518,22 @@ except Exception as e:
   error('  修复：用 `python3 -c "import yaml; yaml.safe_load(open(...))"` 本地验证；');
   error('  多行 commit 用 `-m "line1" -m "line2"` 多次 -m 替代 YAML block scalar 缩进陷阱');
   return false;
+}
+
+function checkEtlLedgerFreshness() {
+  info('检查 ETL 台账新鲜度（防漏记）...');
+  const ledgerPath = path.join(ROOT_DIR, '数据管理/ledger/etl-ledger.jsonl');
+  const dataSourcesPath = path.join(ROOT_DIR, '数据管理/data-sources.json');
+  const ledgerExists = fs.existsSync(ledgerPath);
+  const ledgerMtimeMs = ledgerExists ? fs.statSync(ledgerPath).mtimeMs : 0;
+  const dataSourcesMtimeMs = fs.existsSync(dataSourcesPath) ? fs.statSync(dataSourcesPath).mtimeMs : 0;
+  const { level, message } = evaluateLedgerFreshness({ ledgerExists, ledgerMtimeMs, dataSourcesMtimeMs });
+  if (level === 'ok') {
+    success(message);
+    return true;
+  }
+  warning(message);
+  return true; // warn 级：防漏记是提示，不阻断 governance（对标 checkPrEvolutionExpired）
 }
 
 function checkPrEvolutionExpired() {

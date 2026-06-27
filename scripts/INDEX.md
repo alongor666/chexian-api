@@ -32,6 +32,7 @@
 | 校验 codegen 产物是否与注册表同步 | `field-registry/generate.mjs --check` | `node scripts/field-registry/generate.mjs --check` |
 | Phase 0 better-sqlite3 沙盒预检（验证 ESM/PRAGMA/CRUD/backup） | `state-db-smoke.mjs` | `node scripts/state-db-smoke.mjs`（沙盒中需先 `bun add better-sqlite3`） |
 | ETL 后异常哨兵（统计判定+LLM 归因，异常才告警） | `sentinel/etl-anomaly-sentinel.mjs` | `CX_PAT=... node scripts/sentinel/etl-anomaly-sentinel.mjs --dry-run` |
+| 查看/刷新 ETL 全链路数据流转台账（断点/数据量/时间段） | `etl-ledger/{record,render,backfill-from-git}.mjs` | `node scripts/etl-ledger/render.mjs`（刷新报告）· `node scripts/etl-ledger/backfill-from-git.mjs`（首次 git 历史回填） |
 
 ---
 

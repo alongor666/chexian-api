@@ -50,6 +50,7 @@ import { createHash } from 'crypto';
 import { generateReportsManifests } from './gen-reports-manifest.mjs';
 import os from 'os';
 import { assertNoPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
+import { recordEvent } from './etl-ledger/record.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -1362,6 +1363,8 @@ async function main(argv = process.argv.slice(2)) {
     }, runConfig.branchCode ?? null);
     if (!freshnessOk) {
       log('red', '  本地数据疑似不全。若确属正常（如上游修正删重），请在数据完整的 ETL 机重跑，或人工核对后再同步。');
+      // ④vps_sync 埋点（失败）：完整性闸门拒绝 = 典型断点（本地数据倒退被拦）
+      recordEvent({ stage: 'vps_sync', step: 'integrity_gate', status: 'failure', error: '完整性闸门拒绝：本地 policy 数据比 VPS 现役更旧/更少，疑似不全' });
       process.exit(1);
     }
   }
@@ -1383,6 +1386,9 @@ async function main(argv = process.argv.slice(2)) {
   }
 
   await runStandardMode(sshConfig, runConfig);
+  // ④vps_sync 埋点（成功）：runStandardMode 正常返回 = rsync 全目录同步成功
+  // （内部 critical 目录失败会 process.exit(1) 不到此，属已知边界——细粒度失败暂不单记）
+  recordEvent({ stage: 'vps_sync', step: 'rsync_all', status: 'success' });
 }
 
 // 注：buildRsyncBranchFilterArgs / getSyncBranchCode / queryLocalPolicyFingerprintForBranch / isFileInBranch
