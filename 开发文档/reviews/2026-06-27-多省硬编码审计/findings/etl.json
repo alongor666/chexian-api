@@ -1,0 +1,275 @@
+{
+  "domain": "ETL/数据管道域",
+  "summary": {
+    "A": 10,
+    "B": 5,
+    "C": 6,
+    "D": 3,
+    "致命": 2,
+    "高": 6,
+    "中": 7,
+    "低": 3
+  },
+  "top": [
+    "daily.mjs:688 process.env.BRANCH_CODE || 'SC' —— 6处SC默认fallback，漏传BRANCH_CODE静默查四川（A象限·致命）",
+    "daily.mjs:1433 __branchReadyDomains 白名单仅7域，premium/claims_detail/quotes/repair/brand/cross_sell/customer_flow；new_energy_claims/new_energy/renewal_tracker/all 非SC直接exit1（B象限·高：新省接入必须把缺失域branch化才能跑全量）",
+    "generate_dim_tables.py:49/56 SALESMAN_BRANCH_CODE='SC'写死四川xlsx，山西业务员/计划维度表无对应脚本（B象限·高：SX无法生成salesman/plan dim表）",
+    "fixed-cost-params.json:mgmt_cost_rate 枚举了14个四川机构（天府/宜宾/泸州…），无SX机构参数，新省接入管理费率全走兜底均值（D象限·待业务确认）",
+    "sync_org_renewal_from_xlsx.py:55-80 ORG_SLUGS/ORG_ENVS 硬编码12个四川机构名→slug/env映射，无山西机构入口（B象限·高：SX机构续保企微同步完全无法接入）"
+  ],
+  "findings": [
+    {
+      "file": "数据管理/daily.mjs",
+      "line": 688,
+      "snippet": "const BRANCH_CODE = process.env.BRANCH_CODE || 'SC';",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "致命",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "总入口已通过isBranch检测做路径分流，SC默认链路是有意向后兼容；但若环境变量拼错（如BRANCH_CDOE），将静默查四川——考虑在非交互运维环境加explicit check或warn"
+    },
+    {
+      "file": "数据管理/daily.mjs",
+      "line": 1108,
+      "snippet": "const branch = process.env.BRANCH_CODE || 'SC'; if (branch !== 'SC') return;",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "QUICK_REFERENCE知识库是SC-only全局事实源，SX防御性return是正确设计，保持不动"
+    },
+    {
+      "file": "数据管理/daily.mjs",
+      "line": 1141,
+      "snippet": "const BRANCH_CODE = process.env.BRANCH_CODE || 'SC'; …claimsDetailDir = BRANCH_CODE === 'SC' ? CLAIMS_DETAIL_DIR : join(branchPolicyDir, 'claims_detail');",
+      "quadrant": "A",
+      "category": "数据路径",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "已通过isBranch做路径分流，SX落隔离目录，逻辑正确；SC默认fallback是有意向后兼容，风险中"
+    },
+    {
+      "file": "数据管理/daily.mjs",
+      "line": 1433,
+      "snippet": "const __branchReadyDomains = new Set(['claims_detail', 'quotes', 'repair', 'brand', 'cross_sell', 'customer_flow']);",
+      "quadrant": "B",
+      "category": "省份schema",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "新增省接入时，premium已branch-aware，但new_energy_claims/new_energy/renewal_tracker未纳入白名单，非SC跑单域直接exit1；需逐域branch化后加入Set"
+    },
+    {
+      "file": "数据管理/daily.mjs",
+      "line": 1382,
+      "snippet": "const BRANCH_CODE = process.env.BRANCH_CODE || 'SC'; runPythonScript(python, scriptPath, ['-o', `\"${tmpPath}\"`, '--branch-code', BRANCH_CODE]);",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "renewal_tracker域已透传branch_code到Python脚本，但未在branchReadyDomains白名单，SX单域调用被上层exit1拦截在进入此处之前"
+    },
+    {
+      "file": "数据管理/pipelines/transform.py",
+      "line": 85,
+      "snippet": "_branch_for_report = args.branch_code if args.branch_code else os.environ.get('BRANCH_CODE', 'SC')",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "质量报告路径已按省隔离（SC不变/非SC写入数据分析报告/<省>/），逻辑正确；SC默认fallback有意兼容"
+    },
+    {
+      "file": "数据管理/pipelines/transform.py",
+      "line": 131,
+      "snippet": "branch = os.environ.get('BRANCH_CODE', 'SC')\nif branch == 'SC' or '三级机构' not in df.columns:\n    return df",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "normalize_branch_org通过读BRANCH_CODE env来判断是否做机构规范化，SC直接原样返回（向后兼容）；SX时按branch-org-mapping/SX.json映射——逻辑正确但env读取方式vs参数传入不一致（transform.py顶层用args.branch_code，此函数内部读env）"
+    },
+    {
+      "file": "数据管理/pipelines/renewal_common.py",
+      "line": 26,
+      "snippet": "BRANCH_CODE = (os.environ.get('BRANCH_CODE') or 'SC').strip() or 'SC'",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "renewal_common.py级SC默认，SX时已路由到validation/<省>/隔离路径，逻辑正确；但renewal_tracker域未在branchReadyDomains白名单，SX全量跑all时renewal_tracker仍是SC-only"
+    },
+    {
+      "file": "数据管理/pipelines/renewal_common.py",
+      "line": 42,
+      "snippet": "DEFAULT_LIST = Path.home() / 'Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/四川5-7月 - 智能表.xlsx'",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "iCloud路径写死了四川续保智能表。新省接入续保诊断脚本时，该DEFAULT_LIST需要按province参数化（或由调用方传入--list参数覆盖），否则SX续保诊断脚本默认会尝试读四川智能表"
+    },
+    {
+      "file": "数据管理/pipelines/convert_repair.py",
+      "line": 87,
+      "snippet": "df['branch_code'] = 'SC'",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "repair维修资源域是SC-only（无SX维修数据源），常量SC是正确设计，注释已标明（ADR G3）；保持不动"
+    },
+    {
+      "file": "数据管理/pipelines/materialize_branch_code_special.py",
+      "line": 45,
+      "snippet": "BRANCH_CODE = 'SC'  # salesman/repair维度SC-only脚本",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "回填脚本针对SC-only维度，常量SC正确；repair/salesman维度已有ADR G3注释；保持不动"
+    },
+    {
+      "file": "数据管理/warehouse/dim/generate_dim_tables.py",
+      "line": 49,
+      "snippet": "SRC_ORG_DAILY = _find_src('四川分公司机构业务日报（截止2026年3月23日） .xlsx')\nSALESMAN_BRANCH_CODE = 'SC'",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "generate_dim_tables.py的源xlsx写死四川，业务员/计划维度表只有SC版本。接入SX需要：1)提供SX版机构业务日报xlsx；2)新建/扩展generate_dim_tables.py支持--branch-code参数；3)SX业务员维度落validation/SX/dim/或单独parquet"
+    },
+    {
+      "file": "数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py",
+      "line": 59,
+      "snippet": "ORG_SLUGS = {'高新':'gaoxin','自贡':'zigong','青羊':'qingyang','宜宾':'yibin','天府':'tianfu','达州':'dazhou','德阳':'deyang','武侯':'wuhou','新都':'xindu','泸州':'luzhou','乐山':'leshan','资阳':'ziyang'}",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "企微机构续保批量同步的机构白名单写死12个四川机构名→webhook slug。SX接入需新增SX版机构slug映射（可把ORG_SLUGS改为按branch_code分省的配置文件），并提供对应SX机构YAML实例"
+    },
+    {
+      "file": "数据管理/integrations/wecom_smartsheet/instances/",
+      "line": 0,
+      "snippet": "所有实例文件均命名 sichuan_*.yaml；无山西实例文件",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "企微智能表续保同步实例配置全是四川机构。SX接入需新建 shanxi_*.yaml 实例（webhook_env/filters/organization_in按SX机构名填写）"
+    },
+    {
+      "file": "数据管理/config/fixed-cost-params.json",
+      "line": 27,
+      "snippet": "\"mgmt_cost_rate\": {\"宜宾\":0.082,\"泸州\":0.083,...\"天府\":0.085,...}（14个四川机构）",
+      "quadrant": "D",
+      "category": "业务参数",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "固定成本费率表仅有四川机构，注释已标注'其他机构使用全公司加权均值'。SX接入后是否需要SX机构费率，需业务确认——若SX费率不同，需在此JSON新增SX机构条目"
+    },
+    {
+      "file": "数据管理/config/branch-org-mapping/",
+      "line": 0,
+      "snippet": "目录下只有 SX.json（山西机构映射），无其他省文件",
+      "quadrant": "C",
+      "category": "数据路径",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "branch-org-mapping目录按省存放映射文件，SX.json已存在；新省接入只需新增对应<BRANCH_CODE>.json，transform.py会自动按BRANCH_CODE读取——设计正确"
+    },
+    {
+      "file": "数据管理/pipelines/quote_etl.py",
+      "line": 381,
+      "snippet": "declared_branch = resolve_declared_branch(args) or 'SC'",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "已通过白名单校验（P1.2）防止非法省份值；SC默认是有意向后兼容（与daily.mjs同语义）；非SC时跳过data-sources.json写入；逻辑完整，风险中（漏配env静默查四川）"
+    },
+    {
+      "file": "数据管理/pipelines/convert_renewal_tracker.py",
+      "line": 290,
+      "snippet": "declared_branch = resolve_declared_branch(args) or 'SC'",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "renewal_tracker脚本已支持branch_code派生，但整域未在daily.mjs branchReadyDomains白名单，SX单域跑被上层拦截；本行SC默认是防御性兜底，等域branch化后加入白名单即生效"
+    },
+    {
+      "file": "数据管理/pipelines/diagnose_renewal.py / diagnose_renewal_branch.py",
+      "line": 0,
+      "snippet": "续保诊断脚本通过renewal_common.py的BRANCH_CODE路由，SX时读validation/SX/路径",
+      "quadrant": "A",
+      "category": "数据路径",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "续保诊断已通过renewal_common.py的BRANCH_CODE路由正确分流，但renewal_common.py:42的DEFAULT_LIST iCloud四川xlsx路径是额外陷阱（见top5第3条）"
+    },
+    {
+      "file": "数据管理/integrations/wecom_smartsheet/sync_renewal.py",
+      "line": 63,
+      "snippet": "org_level_3: str | None = '自贡'  # None表示不按机构过滤",
+      "quadrant": "D",
+      "category": "机构名",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "InstanceConfig默认org_level_3='自贡'（四川机构名）是示例默认，实际走YAML实例配置覆盖；新省接入时YAML中organization_in填SX机构名即可，本行为D象限——建议改为None消除省份歧义"
+    },
+    {
+      "file": "数据管理/integrations/wecom_smartsheet/instances/sichuan_2025_h1.yaml",
+      "line": 22,
+      "snippet": "organization_in: null  # null=不按 policy.org_level_3 过滤；当前数据=全四川",
+      "quadrant": "D",
+      "category": "机构名",
+      "severity": "低",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "YAML配置文件org_level_3=null等价于全省，数据通过Parquet路径已隔离为SC；注释里'全四川'是人类备注，不影响逻辑；D象限保持观察"
+    },
+    {
+      "file": "数据管理/daily.mjs",
+      "line": 1500,
+      "snippet": "const stagingDir = BRANCH_CODE === 'SC' ? join(scriptDir, 'staging') : join(scriptDir, 'staging', BRANCH_CODE);",
+      "quadrant": "C",
+      "category": "数据路径",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "premium域staging路径已按省份参数化（SC直接staging/，非SC走staging/<省>/），设计正确"
+    },
+    {
+      "file": "数据管理/pipelines/base_converter.py",
+      "line": 188,
+      "snippet": "df = apply_registry_derivations(df, declared_branch or 'SC')",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "base_converter的SC兜底是覆盖6+个标准域（brand/cross_sell/customer_flow等），各域由daily.mjs透传--branch-code后declared_branch有值，'or SC'仅是防御性兜底"
+    }
+  ]
+}

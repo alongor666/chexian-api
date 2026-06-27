@@ -1,0 +1,247 @@
+{
+  "domain": "SQL 生成器域 (server/src/sql/**)",
+  "summary": {
+    "A": 1,
+    "B": 5,
+    "C": 12,
+    "D": 1,
+    "致命": 3,
+    "高": 3
+  },
+  "top": [
+    "claims-detail.ts:294-314 — 20 条四川专属车牌前缀映射（'川A%'→'成都' 等），SX 保单 plate_no 全落 ELSE NULL，地理分布功能对 SX 完全哑，且生成城市维度结果虚假（B 象限·高）",
+    "kpi-detail.ts:53 — SAME_CITY_ORGS_BY_BRANCH[branchCode ?? 'SC']：漏传 branchCode 时静默查四川同城名单，SX 用户同城/异地占比数据错误且无告警（A 象限·致命）",
+    "cross-sell.ts:175+276 — summaryGroupName 默认 '四川分公司'：路由层未传时 SX 用户的汇总行显示为'四川分公司'，身份标签错误（B 象限·高；路由层 0E 未完成传参）",
+    "quote-conversion.ts — SQL 生成器整体未接 branchCode 参数：QuoteConversion 视图已通过 UNION ALL BY NAME 载入 SX 数据（validation/SX/quotes_conversion），但 SQL 生成器无 branchCode 入参，WHERE 子句依赖 permissionFilter 注入；BRANCH_RLS_ENABLED='false'（当前生产）时 permissionFilter='1=1'，SX 用户查到 SC+SX 混合数据（B 象限·致命）",
+    "customer-flow.ts — CustomerFlow VIEW 派生自 PolicyFact，SQL 生成器无 branchCode 入参，permissionFilter 是唯一 RLS 边界；BRANCH_RLS=false 时 SX 用户串读 SC 数据，注释说'RLS 经 whereClause 注入'但实际 flag 默认关（B 象限·致命）"
+  ],
+  "findings": [
+    {
+      "file": "server/src/sql/kpi-detail.ts",
+      "line": 53,
+      "snippet": "const sameCityOrgs = SAME_CITY_ORGS_BY_BRANCH[branchCode ?? 'SC'] ?? SAME_CITY_ORGS_BY_BRANCH.SC;",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "致命",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "改 fail-closed：branchCode 未传时抛错，不静默回退 SC 同城名单；路由层保证必传"
+    },
+    {
+      "file": "server/src/sql/cross-sell.ts",
+      "line": 175,
+      "snippet": "summaryGroupName: string = '四川分公司'",
+      "quadrant": "B",
+      "category": "省份名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "路由层完成 0E：按 req.user.branchCode 调用 getBranchCompanyName() 传入；SQL 层默认值应改为空字符串+必填校验，而非硬编码省份名 [codex#816订正:cross-sell.ts:137已传getBranchCompanyName(req.user.branchCode);真因是branch-names.ts:22注释SX中文名→显示「SX分公司」;修点在branch-names补全,非路由未传参]"
+    },
+    {
+      "file": "server/src/sql/cross-sell.ts",
+      "line": 276,
+      "snippet": "summaryGroupName: string = '四川分公司'  // generateCrossSellSalesmanQuery",
+      "quadrant": "B",
+      "category": "省份名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "同上；generateCrossSellSalesmanQuery 的默认 summaryGroupName 也需路由层传参 [codex#816订正:cross-sell.ts:137已传getBranchCompanyName(req.user.branchCode);真因是branch-names.ts:22注释SX中文名→显示「SX分公司」;修点在branch-names补全,非路由未传参]"
+    },
+    {
+      "file": "server/src/sql/quote-conversion.ts",
+      "line": 1,
+      "snippet": "所有生成函数签名：generateQuoteKpiQuery(filters, whereClause) — 无 branchCode 参数",
+      "quadrant": "B",
+      "category": "省份schema",
+      "severity": "致命",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "添加 branchCode 参数并在 buildWhere 内补 branch_code 等值条件；同时 permissionFilter 注入已有 whereClause 覆盖，但 BRANCH_RLS=false 时是'1=1'，故需显式 branchCode 注入作为第二道闸"
+    },
+    {
+      "file": "server/src/sql/customer-flow.ts",
+      "line": 1,
+      "snippet": "所有生成函数签名：generateInflowQuery(filters, whereClause) — 无 branchCode 参数",
+      "quadrant": "B",
+      "category": "省份schema",
+      "severity": "致命",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "CustomerFlow VIEW 派生自 PolicyFact（含 branch_code 列），SQL 生成器应接 branchCode 参数并在 WHERE 补 branch_code 等值过滤，不能仅依赖 permissionFilter"
+    },
+    {
+      "file": "server/src/sql/claims-detail.ts",
+      "line": 294,
+      "snippet": "WHEN p.plate_no LIKE '川A%' THEN '成都'\n          WHEN p.plate_no LIKE '川B%' THEN '绵阳' ... (20条四川专属映射)",
+      "quadrant": "B",
+      "category": "省份schema",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "抽按省车牌前缀配置表（plateRegionMap by branchCode），SX 对应晋A%/晋B%等；或接 branchCode 参数后按省选不同映射分支"
+    },
+    {
+      "file": "server/src/sql/claims-detail.ts",
+      "line": 346,
+      "snippet": "WHEN p.plate_no LIKE '川A%' THEN '成都' ... (第二处，行政区划代码版本 '510100成都市')",
+      "quadrant": "B",
+      "category": "省份schema",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "同上，两处车牌映射均需按省参数化"
+    },
+    {
+      "file": "server/src/sql/cost/earned-premium.ts",
+      "line": 249,
+      "snippet": "CASE org_level_3 WHEN '四川' THEN 1 WHEN '同城' THEN 2 WHEN '异地' THEN 3 WHEN '合计' THEN 4 ELSE 5 END",
+      "quadrant": "D",
+      "category": "省份名",
+      "severity": "中",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "待业务确认：'四川'是聚合行标签还是org_level_3的实际值？如是聚合行，SX对应值应为'山西'，需按省参数化；如是通用排序，查D象限"
+    },
+    {
+      "file": "server/src/sql/kpi-detail.ts",
+      "line": 25,
+      "snippet": "export const SAME_CITY_ORGS_BY_BRANCH: Record<string, readonly string[]> = { SC: ['天府','高新','新都','青羊','武侯','重客','本部'], SX: ['太原一部','太原二部','经代、车商、重客'] }",
+      "quadrant": "C",
+      "category": "机构名",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "正确，已按省配置；不动"
+    },
+    {
+      "file": "server/src/sql/kpi.ts",
+      "line": 13,
+      "snippet": "options.branchCode → branch_code 等值条件注入到 achievement_cache CTE",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "正确参数化；已接 branchCode 并正确注入，不动"
+    },
+    {
+      "file": "server/src/sql/repair.ts",
+      "line": 136,
+      "snippet": "function claimsTimeWindow(window, alias, branchCode?: string) { const baseWhere = branchCode ? ` WHERE branch_code = '${branchCode}'` : ''; }",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "正确参数化；已接 branchCode 并正确注入，不动"
+    },
+    {
+      "file": "server/src/sql/renewal-tracker.ts",
+      "line": 323,
+      "snippet": "export function generateRenewalTrackerMetaQuery(branchCode?: string): string { if (branchCode !== undefined && !/^[A-Z]{2}$/.test(branchCode)) throw new Error(...); const whereSql = branchCode ? `WHERE branch_code = '${branchCode}'` : ''; }",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "正确参数化+校验；不动"
+    },
+    {
+      "file": "server/src/sql/comprehensive-analysis.ts",
+      "line": 13,
+      "snippet": "if (options.branchCode) { conditions.push(`branch_code = '${esc(options.branchCode)}'`); }",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "正确参数化；不动"
+    },
+    {
+      "file": "server/src/sql/performance-analysis/drilldown.ts",
+      "line": 56,
+      "snippet": "dateField: string = 'policy_date' (默认值)",
+      "quadrant": "C",
+      "category": "口径",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "policy_date 在 SX PolicyFact 中确实存在（实测证实），故 dateField 默认值为 C 象限通用列，不是省份专有列；查询通过 whereClause 传入，不硬编码省份"
+    },
+    {
+      "file": "server/src/sql/performance-analysis/shared.ts",
+      "line": 283,
+      "snippet": "dateField: string = 'policy_date' (buildPeriodBoundsCte 默认值)",
+      "quadrant": "C",
+      "category": "口径",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "同上；policy_date 在 SX 保单 Parquet 中存在；通用列，不动"
+    },
+    {
+      "file": "server/src/sql/cross-sell-summary.ts",
+      "line": 171,
+      "snippet": "SELECT MAX(CAST(policy_date AS DATE)) AS max_date FROM PolicyFact",
+      "quadrant": "C",
+      "category": "口径",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "policy_date 是 PolicyFact 通用列（SC/SX 均存在）；不硬编码省份；C 象限，不动 [codex#816订正:cross-sell.ts:137已传getBranchCompanyName(req.user.branchCode);真因是branch-names.ts:22注释SX中文名→显示「SX分公司」;修点在branch-names补全,非路由未传参]"
+    },
+    {
+      "file": "server/src/sql/premiumPlan.ts",
+      "line": 371,
+      "snippet": "policy_date >= DATE '${planYear}-01-01' (年计划 SQL 的日期筛选)",
+      "quadrant": "C",
+      "category": "口径",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "policy_date 通用，SQL 按 branchCode 注入（resolveBranchRlsCode 双门控）；C 象限，不动"
+    },
+    {
+      "file": "server/src/sql/claims-heatmap.ts",
+      "line": 326,
+      "snippet": "SELECT MAX(CAST(policy_date AS DATE)) AS max_date FROM PolicyFact",
+      "quadrant": "C",
+      "category": "口径",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "通用列，不动"
+    },
+    {
+      "file": "server/src/sql/__tests__/trend.test.ts",
+      "line": 70,
+      "snippet": "org_level_3 = '天府' (测试用四川机构名)",
+      "quadrant": "C",
+      "category": "机构名",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "测试代码，传入 whereClause 参数测试 SQL 拼接，非硬编码运行逻辑；C 象限，不动"
+    }
+  ],
+  "root_cause_analysis": {
+    "quote_conversion_sx_broken": {
+      "symptom": "quote-conversion/* 对 SX 报「列不存在：policy_date」",
+      "actual_finding": "SX quotes_conversion parquet（validation/SX/quotes_conversion/latest.parquet）经 DuckDB DESCRIBE 实测确认：无 policy_date 列，仅有 quote_time、insurance_start_date 等。QuoteConversion 视图通过 UNION ALL BY NAME 合并 SC+SX 时，quote_time 是公共列，但如果某处 SQL 的 WHERE 或 SELECT 中引用了 policy_date 则 SX 数据行失败。实际 SQL 生成器（quote-conversion.ts）未使用 policy_date（使用 quote_time），故 SQL 层本身无此 bug。真正根因：RLS 未激活（BRANCH_RLS_ENABLED=false）时 SX 用户的 permissionFilter='1=1'，导致查到 SC+SX 混合数据而非报错'列不存在'——此处症状描述可能是路由层的 zod 参数校验 400，或是 GATED 多省数据未加载（SX validation 目录存在 latest.parquet 但 GATED 闸未开时 loader 不执行 UNION ALL，只加载 SC，SX 用户请求时 QuoteConversion 无 SX 数据返回空结果或 400）",
+      "real_root_cause": "BRANCH_RLS_ENABLED=false（生产默认）且多省联邦闸未开时，loadQuoteConversion 仅加载 SC parquet（resolveBranchFactExtras 返回 SX 路径但 loader 的 UNION ALL 只在 extraSources.length>0 时激活）；SX 用户请求时返回 SC 数据（串读），而非 policy_date 列错误。若 BRANCH_RLS=true 且 GATED 已开但 SX validation 数据缺字段，则 UNION ALL BY NAME 会补 NULL；'列不存在'错误更可能是特定 SQL 片段引用了 QuoteConversion 视图中不存在的列名",
+      "b_quadrant_confirmed": "SQL 生成器整体无 branchCode 参数，完全依赖 permissionFilter（RLS 关闭时=1=1），是 B 象限高危"
+    },
+    "customer_flow_sx_broken": {
+      "symptom": "customer-flow/* 对 SX 返回错误数据",
+      "actual_finding": "CustomerFlow VIEW 派生自 PolicyFact（在 loadCustomerFlow 中 CREATE OR REPLACE VIEW CustomerFlow AS SELECT policy_no, insurance_start_date, previous_insurer, next_insurer, org_level_3, branch_code, ... FROM PolicyFact）。PolicyFact 本身是 SC+SX 混合加载（validation/ 目录 SX 签单清单已确认含 branch_code 列）。SQL 生成器（customer-flow.ts）使用 insurance_start_date 而非 policy_date，无 policy_date 列问题。根因同上：BRANCH_RLS=false 时 permissionFilter=1=1，SX 用户读到全省混合数据",
+      "real_root_cause": "customer-flow.ts SQL 生成器无 branchCode 入参，所有函数仅接 whereClause，而 whereClause 来自 parseFiltersAndBuildWhere(req)（包含 permissionFilter）；flag off 时 permissionFilter 不含 branch_code 等值条件 → SX 用户串读 SC 数据"
+    },
+    "performance_drilldown_bundle_sx_400": {
+      "symptom": "performance-drilldown/performance-bundle 对 SX 返回 400+空 body",
+      "actual_finding": "performance-drilldown 路由接 dateField 参数并透传给 SQL 生成器，SQL 使用 PolicyFact.policy_date（通过 `CAST(p.${dateField} AS DATE)`）。实测 SX 签单清单 Parquet 确实包含 policy_date 列，故列不存在不是根因。400 更可能来自：(a) performanceDrilldownSchema 的 drillPath JSON 解析失败（Invalid drillPath JSON 抛 AppError(400)），或 (b) GATED 多省相关的 zod 参数校验失败，或 (c) achievement_cache 在 SX 未加载时 resolveBranchRlsCode 返回 SX 但表无该 branch_code 数据导致 DuckDB 异常被上层转为 400。SQL 层无省份硬编码（dateField 参数化、branchCode 经 resolveBranchRlsCode 双门控），故 SQL 生成器本身是 C 象限，400 根因在路由/中间件层（不在 SQL 域审计范围内）",
+      "real_root_cause": "SQL 生成器层无省份硬编码，performance 400 的根因在路由/中间件层（非 SQL 生成器域）。最可能是 achievement_cache 或 SalesmanTeamMapping 在 SX 多省未加载时的 DuckDB Binder Error，被 asyncHandler 捕获转为 500，而前端收到空 body 误报为 400"
+    }
+  }
+}

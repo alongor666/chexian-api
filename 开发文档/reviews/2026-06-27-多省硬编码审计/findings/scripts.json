@@ -1,0 +1,167 @@
+{
+  "domain": "运维脚本域 scripts/**",
+  "summary": { "A": 2, "B": 5, "C": 3, "D": 2, "致命": 0, "高": 3 },
+  "top": [
+    "sync-vps.mjs:817 SUPPORTED_BRANCH_CODES = new Set(['SC','SX']) — 新省接入必须手动扩展此集合，否则 getSyncBranchCode 抛错拒同步（B类·高）",
+    "oracle_p4_backfill_byte_safety.py:68/88 declared_branch='SC' 硬编码 — Oracle 仅验证 SC 单省字节安全，SX/新省 backfill 无等价 oracle 覆盖（B类·高）",
+    "oracle_mpdata_byte_safety.py:163-164 distinct != ['SC'] 硬编码断言 — 多域物化 oracle 期望 branch_code 全 'SC'，SX 数据物化后会触发 exit(1)（B类·高）",
+    "multi-branch-stress-test.mjs:245-246 signServiceToken('SC') + allBranches=['SC'] — 压测只覆盖 SC；第三省接入需手动添加 token 和 Phase2 分支，否则漏测（D类·扩展性债务）",
+    "etl-anomaly-sentinel.mjs — 哨兵 API 调用无 branchCode 参数，全量取数覆盖所有省；但配置文件 sentinel.config.json 无省份维度分级，未来 SX 异常可能与 SC 信号混叠（D类·待业务确认）"
+  ],
+  "findings": [
+    {
+      "file": "scripts/sync-vps.mjs",
+      "line": 817,
+      "snippet": "const SUPPORTED_BRANCH_CODES = new Set(['SC', 'SX']);",
+      "quadrant": "B",
+      "category": "省份代码",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "新省接入时将省份编码追加到 SUPPORTED_BRANCH_CODES，并在注释中标记为 '必改清单 §1'；可配置化为 env 列表减少代码改动"
+    },
+    {
+      "file": "scripts/sync-vps.mjs",
+      "line": 471,
+      "snippet": "export function buildRsyncBranchFilterArgs(branchCode, _knownBranches = ['SC', 'SX'])",
+      "quadrant": "A",
+      "category": "省份代码",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "_knownBranches 参数已废弃（注释标注），但函数签名保留旧枚举；新省接入不依赖此参数，当前不危险，但可清理"
+    },
+    {
+      "file": "scripts/sync-vps.mjs",
+      "line": 433,
+      "snippet": "return m ? m[1] : 'SC'; // 裸名 = 历史 SC 分片",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "裸名文件历史约定归属 SC 是正确语义（SC 历史无前缀），C 象限·不动"
+    },
+    {
+      "file": "scripts/sync-vps.mjs",
+      "line": 836,
+      "snippet": "// 维度域（salesman/plan/repair）SX 未隔离（validation/<省> 无 dim/ 子层），不在此列。",
+      "quadrant": "D",
+      "category": "省份schema",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "dim 表（salesman/plan/brand/repair）目前全量同步无省份隔离——SX 将使用与 SC 相同的计划/业务员表。需业务确认是否需要分省 dim；未分省前新省看到 SC 的计划值（multi-branch-stress-test.mjs:86 已有注释说明）"
+    },
+    {
+      "file": "scripts/oracle_p4_backfill_byte_safety.py",
+      "line": 68,
+      "snippet": "after, status = apply_derivation(after, branch_rule, force=True, declared_branch=\"SC\")",
+      "quadrant": "B",
+      "category": "省份代码",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "SX/新省 premium backfill 无等价 oracle；新省接入需复制此脚本并传 declared_branch=<新省代码>，或改为从 CLI 参数读取（已有 --declared-branch 参数但默认写死 SC）"
+    },
+    {
+      "file": "scripts/oracle_p4_backfill_byte_safety.py",
+      "line": 88,
+      "snippet": "if distinct != [\"SC\"]:\n    fails.append(f\"branch_code 非单省 SC，实际 {distinct}\")",
+      "quadrant": "B",
+      "category": "省份代码",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "断言 distinct==['SC'] 在多省数据场景会误报失败；SX premium 文件通过此 oracle 校验时会 exit(1)；应改为断言 distinct==[declared_branch]"
+    },
+    {
+      "file": "scripts/oracle_mpdata_byte_safety.py",
+      "line": 163,
+      "snippet": "if bi[\"distinct\"] != [\"SC\"]:\n    fails.append(f\"{name}/{fn}: branch_code 非单省 SC，实际 {bi['distinct']}\")",
+      "quadrant": "B",
+      "category": "省份代码",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "多域物化 oracle 断言全局 branch_code 只能是 ['SC']；SX 物化后跑此脚本会 exit(1)；需参数化 expected_branch 或按传入参数动态断言"
+    },
+    {
+      "file": "scripts/oracle_renewal_tracker_byte_safety.py",
+      "line": 49,
+      "snippet": "ap.add_argument(\"--declared-branch\", default=\"SC\", help=\"声明省份代码（默认 SC）\")",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "已参数化，--declared-branch 可传 SX；默认回落 SC 不影响功能（新省显式传参即可），A 象限·中危"
+    },
+    {
+      "file": "scripts/multi-branch-stress-test.mjs",
+      "line": 245,
+      "snippet": "const scToken = signServiceToken(jwtSecret, 'SC');\nconst allBranches = simulateSx ? ['SC', 'SX'] : ['SC'];",
+      "quadrant": "D",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "测试数据：第三省接入时需手动添加 'XX' 到 allBranches 枚举，并添加对应 token + 串读断言分支；脚本有注释说明测试扩展点（multi-branch-stress-test.mjs:86）"
+    },
+    {
+      "file": "scripts/sentinel/etl-anomaly-sentinel.mjs",
+      "line": 117,
+      "snippet": "const apiBase = args.apiBase || process.env.SENTINEL_API_BASE || config.apiBase;",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "哨兵取全量数据（admin 权限，无 branchCode 过滤），多省后数据会混叠在一个系列里进行统计，属通用设计——多省 SX 真实上线后，需业务确认是否需要分省哨兵实例（D 象限·待业务确认）"
+    },
+    {
+      "file": "scripts/sentinel/sentinel.config.json",
+      "line": 1,
+      "snippet": "{ \"apiBase\": \"https://chexian.cretvalu.com\", ... }",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "哨兵配置面向单一生产端点，无省份维度；SX 上线后若需分省告警，须建新配置实例 + 独立 workflow；当前 SX 数据 GATED 未进生产，不危险"
+    },
+    {
+      "file": "scripts/release/sx-promote.mjs",
+      "line": 112,
+      "snippet": "const BRANCH_PREFIX = 'SX';",
+      "quadrant": "B",
+      "category": "省份代码",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "sx-promote.mjs 完全针对 SX 省份定制（SX 前缀、源目录 validation/SX、branch_code='SX' 校验）；新省接入需复制此脚本并替换省份常量，或重构为通用 promote 脚本加 --branch 参数"
+    },
+    {
+      "file": "scripts/release/cube-promote.mjs",
+      "line": 1,
+      "snippet": "整个脚本无 branchCode / province 逻辑",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "立方体灰度推进决策是基础设施层逻辑（不依赖省份），C 象限·不动"
+    },
+    {
+      "file": "scripts/benchmark-key-routes.mjs",
+      "line": 1,
+      "snippet": "整个脚本无 branchCode 硬编码，token 从外部传入",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "基准测试通过 --token/--username/--password 传入，省份隔离由 token 携带的 branchCode JWT 声明控制；无硬编码，C 象限·不动"
+    }
+  ]
+}
