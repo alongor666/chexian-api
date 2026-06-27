@@ -19,3 +19,6 @@ BACKLOG_ARCHIVE.md merge=union
 # loop-quality-ledger.jsonl 是 Loop v2 质量账本（append-only，每任务收尾追加一行 JSON 指标）。
 # 多会话并行各自追加不同行 → merge=union 自动并、不冲突（同 BACKLOG_LOG.jsonl）。见 .claude/rules/loop-orchestration.md §3。
 .claude/workflow/loop-quality-ledger.jsonl merge=union
+# ETL 流转台账：每行一个 JSON 事件、按内容唯一 → merge=union 自动并入多分支新增（同 BACKLOG_LOG.jsonl）。
+# 派生视图 数据管理/ledger/数据流转台账.md 全量重渲染、非纯追加 → 不设 union，冲突时重跑 render.mjs。
+数据管理/ledger/etl-ledger.jsonl merge=union
