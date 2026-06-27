@@ -5,8 +5,8 @@
  * 安全核心：调度的「域互斥独立集」「deps/inflight/gated 排除」「过期分类」必须确定可复现。
  */
 import { describe, it, expect } from 'vitest';
-import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate, latestClaims } from '../dispatch.mjs';
-import { parseLedger, aggregate } from '../quality-report.mjs';
+import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate, latestClaims, failureLedgerRows, isInspectMode } from '../dispatch.mjs';
+import { parseLedger, aggregate, normalizeVerdict } from '../quality-report.mjs';
 import { scanEntries, classify, isoAddDays } from '../automation-due.mjs';
 import { scanNotes, classifyStale, scanStale, uidToken, branchMatchesUid } from '../stale-scan.mjs';
 
@@ -360,6 +360,213 @@ describe('quality-report.aggregate', () => {
     expect(a.byDomain['be-sql'].n).toBe(2);
   });
   it('空账本', () => { expect(aggregate([]).n).toBe(0); });
+});
+
+// ============ E1 账本记失败（治幸存者偏差·2026-06-27）============
+
+describe('quality-report.normalizeVerdict（verdict 归一·单一事实源）', () => {
+  it('bare pass → {pass, null}', () => {
+    expect(normalizeVerdict('pass')).toEqual({ verdict: 'pass', qualifier: null });
+  });
+  it('pass-* 变体 → {pass, 子标记}（口径稳定：归一后非 pass 才计失败）', () => {
+    expect(normalizeVerdict('pass-after-fix')).toEqual({ verdict: 'pass', qualifier: 'after-fix' });
+    expect(normalizeVerdict('pass-pending-user-merge')).toEqual({ verdict: 'pass', qualifier: 'pending-user-merge' });
+    expect(normalizeVerdict('pass-after-gate2-fix')).toEqual({ verdict: 'pass', qualifier: 'after-gate2-fix' });
+    expect(normalizeVerdict('pass-with-documented-residual')).toEqual({ verdict: 'pass', qualifier: 'with-documented-residual' });
+    expect(normalizeVerdict('pass-scoped')).toEqual({ verdict: 'pass', qualifier: 'scoped' });
+  });
+  it('历史成功同义词 all_fixed/mergeable → pass（防未来顶层使用误判为非 pass）', () => {
+    expect(normalizeVerdict('all_fixed').verdict).toBe('pass');
+    expect(normalizeVerdict('mergeable').verdict).toBe('pass');
+  });
+  it('非 pass 规范终态原样透传', () => {
+    for (const v of ['partial', 'reverted', 'abandoned', 'orphaned', 'blocked']) {
+      expect(normalizeVerdict(v)).toEqual({ verdict: v, qualifier: null });
+    }
+  });
+  it('大小写/空白容错；未知值小写保留（不臆造）；空/缺失 → unknown', () => {
+    expect(normalizeVerdict('  PASS ').verdict).toBe('pass');
+    expect(normalizeVerdict('Weird-State').verdict).toBe('weird-state');
+    expect(normalizeVerdict('')).toEqual({ verdict: 'unknown', qualifier: null });
+    expect(normalizeVerdict(null)).toEqual({ verdict: 'unknown', qualifier: null });
+    expect(normalizeVerdict(undefined)).toEqual({ verdict: 'unknown', qualifier: null });
+  });
+});
+
+describe('quality-report.aggregate · 失败记账（非 pass 纳分母 + 放弃率/孤儿率/阻塞率）', () => {
+  it('失败行纳入分母；放弃率=（abandoned+orphaned）/n；孤儿率/阻塞率独立', () => {
+    const rows = [
+      { uid: 'p1', rounds_to_green: 1, rework_count: 0, governance_pass: true, verdict: 'pass' },
+      { uid: 'p2', rounds_to_green: 1, rework_count: 0, governance_pass: true, verdict: 'pass-after-fix' }, // 归一后仍 pass
+      { uid: 'part', rounds_to_green: 1, rework_count: 0, governance_pass: true, verdict: 'partial' },       // 非 pass → 不计一次过
+      { uid: 'orph', verdict: 'orphaned', claim_at: '2026-06-20T00:00:00.000Z' },
+      { uid: 'blk', verdict: 'blocked' },
+    ];
+    const a = aggregate(rows);
+    expect(a.n).toBe(5);                                  // 失败行进分母（治幸存者偏差）
+    expect(a.first_pass_rate).toBe(+(2 / 5).toFixed(3));  // 仅 p1/p2 一次过（part/orph/blk 不计）
+    expect(a.orphan_rate).toBe(+(1 / 5).toFixed(3));
+    expect(a.blocked_rate).toBe(+(1 / 5).toFixed(3));
+    expect(a.abandonment_rate).toBe(+(1 / 5).toFixed(3)); // (abandoned0 + orphaned1)/5，blocked 不混入放弃
+    expect(a.verdict_breakdown).toMatchObject({ pass: 2, partial: 1, orphaned: 1, blocked: 1 });
+  });
+
+  it('partial（rtg=1/rework=0）不再被误计为一次过（口径修正·codex #812 P2）', () => {
+    expect(aggregate([{ uid: 'x', rounds_to_green: 1, rework_count: 0, verdict: 'partial' }]).first_pass_rate).toBe(0);
+  });
+
+  it('avg 转绿/返工只算「有完成指标」的行（孤儿/阻塞无 rtg → 不拉低均值，missing≠0·codex P2-5）', () => {
+    const rows = [
+      { uid: 'a', rounds_to_green: 2, rework_count: 1, verdict: 'pass' },
+      { uid: 'o', verdict: 'orphaned', claim_at: 't' }, // 无 rtg/rework
+    ];
+    const a = aggregate(rows);
+    expect(a.avg_rounds_to_green).toBe(2);  // 仅 a 计入（不是 (2+0)/2=1）
+    expect(a.avg_rework).toBe(1);
+  });
+
+  it('读时去重：并发/union 产生的相同 orphaned (uid,claim_at) 只计 1 次（codex P1-1 并发安全）', () => {
+    const rows = [
+      { uid: 'o', verdict: 'orphaned', claim_at: '2026-06-20T00:00:00.000Z' },
+      { uid: 'o', verdict: 'orphaned', claim_at: '2026-06-20T00:00:00.000Z' }, // union 重复行
+      { uid: 'p', verdict: 'pass', rounds_to_green: 1, rework_count: 0 },
+    ];
+    const a = aggregate(rows);
+    expect(a.n).toBe(2);                       // 去重后分母不被重复行污染
+    expect(a.verdict_breakdown.orphaned).toBe(1);
+    expect(a.orphan_rate).toBe(+(1 / 2).toFixed(3));
+  });
+
+  it('不同 claim_at 同 uid = 两次孤儿尝试（不去重·attempt 维度）', () => {
+    const rows = [
+      { uid: 'o', verdict: 'orphaned', claim_at: '2026-06-20T00:00:00.000Z' },
+      { uid: 'o', verdict: 'orphaned', claim_at: '2026-06-21T00:00:00.000Z' },
+    ];
+    expect(aggregate(rows).verdict_breakdown.orphaned).toBe(2);
+  });
+
+  it('blocked 读时按 uid 去重（任务级可见性）', () => {
+    const rows = [{ uid: 'b', verdict: 'blocked' }, { uid: 'b', verdict: 'blocked' }];
+    expect(aggregate(rows).verdict_breakdown.blocked).toBe(1);
+  });
+
+  it('未知/缺失 verdict 落 other 桶（不在分布里消失·codex P2-3）', () => {
+    const a = aggregate([{ uid: 'x', verdict: 'weird-state' }, { uid: 'y' }]);
+    expect(a.verdict_breakdown.other).toBe(2);
+  });
+
+  it('归一覆盖全部历史成功变体（bare pass + 5 种顶层 pass-* + all_fixed/mergeable 同义词）→ 计入 pass（codex 闸-2 P2 锁清单）', () => {
+    const successVariants = ['pass', 'pass-after-fix', 'pass-pending-user-merge', 'pass-after-gate2-fix', 'pass-with-documented-residual', 'pass-scoped', 'all_fixed', 'mergeable'];
+    const rows = successVariants.map((v, i) => ({ uid: `u${i}`, rounds_to_green: 1, rework_count: 0, verdict: v }));
+    const a = aggregate(rows);
+    expect(a.verdict_breakdown.pass).toBe(successVariants.length); // 全部归一 pass
+    expect(a.abandonment_rate).toBe(0);
+    expect(a.first_pass_rate).toBe(1); // 全部一次过（归一后皆 pass）
+  });
+
+  it('缺 uid 的坏 schema orphaned 行不被归并（保留可见·codex 闸-2 P2）', () => {
+    const rows = [
+      { verdict: 'orphaned', claim_at: 'same' }, // 无 uid
+      { verdict: 'orphaned', claim_at: 'same' }, // 无 uid 同 claim_at → 不应归并
+    ];
+    expect(aggregate(rows).verdict_breakdown.orphaned).toBe(2);
+  });
+});
+
+describe('dispatch.failureLedgerRows（孤儿/阻塞幂等记账·纯函数）', () => {
+  const T = (uid, extra = {}) => ({ uid, desc: `任务${uid}`, code: 'src/a.tsx', ...extra });
+
+  it('released（陈旧认领）→ orphaned 行（含 claim_at/actor/reason/domain）', () => {
+    const released = [{ task: T('t1'), actor: '@sess', at: '2026-06-20T00:00:00.000Z', ageMs: 36 * 3600 * 1000 }];
+    const rows = failureLedgerRows({ released, blocked: [], ledgerRows: [], ts: '2026-06-27' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ uid: 't1', verdict: 'orphaned', claim_at: '2026-06-20T00:00:00.000Z', actor: '@sess', ts: '2026-06-27' });
+    expect(rows[0].domain).toEqual(['frontend']);
+    expect(rows[0].reason).toMatch(/TTL|超时|孤儿/);
+    expect(rows[0].rounds_to_green).toBeUndefined(); // 失败行不造完成指标
+  });
+
+  it('accounted 守卫：released uid 已有 pass 行 → 跳过（完成未流转≠孤儿·假阳性防护）', () => {
+    const released = [{ task: T('t1'), actor: '@s', at: '2026-06-20T00:00:00.000Z' }];
+    expect(failureLedgerRows({ released, blocked: [], ledgerRows: [{ uid: 't1', verdict: 'pass' }], ts: '2026-06-27' })).toHaveLength(0);
+    // pass-* 变体同样视为已入账
+    expect(failureLedgerRows({ released, blocked: [], ledgerRows: [{ uid: 't1', verdict: 'pass-after-fix' }], ts: '2026-06-27' })).toHaveLength(0);
+    // partial/reverted 也算到达记账点
+    expect(failureLedgerRows({ released, blocked: [], ledgerRows: [{ uid: 't1', verdict: 'reverted' }], ts: '2026-06-27' })).toHaveLength(0);
+  });
+
+  it('accounted 守卫吸收 schema 漂移：backlog_uid 而非 uid 也识别（codex P1-6）', () => {
+    const released = [{ task: T('t1'), at: '2026-06-20T00:00:00.000Z' }];
+    expect(failureLedgerRows({ released, blocked: [], ledgerRows: [{ backlog_uid: 't1', verdict: 'pass' }], ts: '2026-06-27' })).toHaveLength(0);
+  });
+
+  it('accounted 守卫含终态 abandoned：已 abandoned 的 uid 不再补 orphaned（防双计·codex 闸-2 P1）', () => {
+    const released = [{ task: T('t1'), at: '2026-06-25T00:00:00.000Z' }]; // 即便是不同认领时刻
+    const ledgerRows = [{ uid: 't1', verdict: 'abandoned', reason: '人工终止' }];
+    expect(failureLedgerRows({ released, blocked: [], ledgerRows, ts: '2026-06-27' })).toHaveLength(0);
+    // blocked 同理：abandoned 终态 uid 不再补 blocked
+    expect(failureLedgerRows({ released: [], blocked: [{ uid: 't1', desc: 'x' }], ledgerRows, ts: '2026-06-27' })).toHaveLength(0);
+  });
+
+  it('幂等：已存在同 (uid,claim_at) orphaned → 不重复记（连跑两次只 1 条·oracle）', () => {
+    const released = [{ task: T('t1'), at: '2026-06-20T00:00:00.000Z' }];
+    const ledgerRows = [{ uid: 't1', verdict: 'orphaned', claim_at: '2026-06-20T00:00:00.000Z' }];
+    expect(failureLedgerRows({ released, blocked: [], ledgerRows, ts: '2026-06-27' })).toHaveLength(0);
+  });
+
+  it('重新认领（不同 claim_at）→ 记新 orphaned 行（attempt 维度·codex P1-3）', () => {
+    const released = [{ task: T('t1'), at: '2026-06-25T00:00:00.000Z' }];
+    const ledgerRows = [{ uid: 't1', verdict: 'orphaned', claim_at: '2026-06-20T00:00:00.000Z' }];
+    const rows = failureLedgerRows({ released, blocked: [], ledgerRows, ts: '2026-06-27' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].claim_at).toBe('2026-06-25T00:00:00.000Z');
+  });
+
+  it('缺 claim_at → 跳过（无稳定去重键，保守不记防重复污染）', () => {
+    expect(failureLedgerRows({ released: [{ task: T('t1'), at: '' }], blocked: [], ledgerRows: [], ts: '2026-06-27' })).toHaveLength(0);
+  });
+
+  it('同一轮多条同 (uid,claim_at) released → 批内去重只记 1 条', () => {
+    const released = [
+      { task: T('t1'), at: '2026-06-20T00:00:00.000Z' },
+      { task: T('t1'), at: '2026-06-20T00:00:00.000Z' },
+    ];
+    expect(failureLedgerRows({ released, blocked: [], ledgerRows: [], ts: '2026-06-27' })).toHaveLength(1);
+  });
+
+  it('blocked → blocked 行；幂等（已有 blocked uid 跳过）；accounted 守卫', () => {
+    const blocked = [{ uid: 'b1', desc: '阻塞', code: 'server/src/sql/x.ts' }];
+    const rows = failureLedgerRows({ released: [], blocked, ledgerRows: [], ts: '2026-06-27' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ uid: 'b1', verdict: 'blocked', ts: '2026-06-27' });
+    expect(rows[0].domain).toEqual(['be-sql']);
+    expect(failureLedgerRows({ released: [], blocked, ledgerRows: [{ uid: 'b1', verdict: 'blocked' }], ts: '2026-06-27' })).toHaveLength(0);
+    expect(failureLedgerRows({ released: [], blocked, ledgerRows: [{ uid: 'b1', verdict: 'pass' }], ts: '2026-06-27' })).toHaveLength(0);
+  });
+
+  it('released + blocked 混合一轮记两类行；空输入安全（无 ts 不崩）', () => {
+    const rows = failureLedgerRows({
+      released: [{ task: T('o1'), at: '2026-06-20T00:00:00.000Z' }],
+      blocked: [{ uid: 'b1', desc: 'x', code: 'src/y.tsx' }],
+      ledgerRows: [], ts: '2026-06-27',
+    });
+    expect(rows.map((r) => r.verdict).sort()).toEqual(['blocked', 'orphaned']);
+    expect(failureLedgerRows({ released: [], blocked: [], ledgerRows: [] })).toEqual([]);
+  });
+});
+
+describe('dispatch.isInspectMode（只读模式不写账本·codex 闸-2 P2）', () => {
+  it('--json/--board/--merge-gate 为只读模式（不记账）', () => {
+    expect(isInspectMode(['--json'])).toBe(true);
+    expect(isInspectMode(['--board'])).toBe(true);
+    expect(isInspectMode(['--merge-gate'])).toBe(true);
+    expect(isInspectMode(['--no-fetch', '--json'])).toBe(true); // 组合参数仍判只读
+  });
+  it('默认模式 / 仅 --no-fetch / --no-orphan-ledger 非只读（默认模式才记账）', () => {
+    expect(isInspectMode([])).toBe(false);
+    expect(isInspectMode(['--no-fetch'])).toBe(false);
+    expect(isInspectMode(['--no-orphan-ledger'])).toBe(false);
+  });
 });
 
 describe('automation-due', () => {

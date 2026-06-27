@@ -16,11 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（91 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（90 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（11 项）**
+**P1（10 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
@@ -31,7 +31,6 @@
 - 2026-06-24-claude-85759a — D6 收敛
 - 2026-06-25-claude-a80133 — RLS-on 硬前置(永久修复)
 - 2026-06-25-claude-fe871b — cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链)
-- 2026-06-27-claude-43aadc — E1 账本记失败（治茧房1·幸存者偏差）
 - 2026-06-27-claude-633735 — E2 注入外部真相（治茧房3·自指闭环）
 
 **P2（49 项）**
@@ -210,7 +209,6 @@
 | 2026-06-25-claude-a80133 | 2026-06-25 | Auth · 多省(山西) RLS-on 硬前置 | @claude | RLS-on 硬前置(永久修复): 存量用户 user_store.json 缺 branchCode 致开 RLS 全员 401 fail-closed。2026-06-25 生产 dry-run 已数据层回填(20 用户全 branchCode='SC')但属运行时修复,user_store.json 重 seed/import 即复发。永久修复: (1) admin-import-users-from-json 导入时带 branch_code; (2) ensurePresetUser/seed 对存量用户 reconcile branchCode(现仅对不存在用户生效)。是 PR-3(fe871b) RLS-on 硬前置。详见 开发文档/multi-branch/山西cutover接力_v2.md 实证追加(2026-06-25 RLS-on dry-run)。 | P1 | PROPOSED | 开发文档/multi-branch/山西cutover接力_v2.md | server/src/services/access-control.ts,server/src/scripts/admin-import-users-from-json.ts |  |
 | 2026-06-25-claude-fe871b | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链): ecosystem.config.cjs env 加 BRANCH_RLS_ENABLED true。不可逆生产 RLS 开启,人工监控窗口 merge+盯CI。开前必跑 multi-branch-stress-test --simulate-sx + SC golden-baseline 零差异(需 owner 给 E2E_PASSWORD/JWT_SECRET) | P1 | PROPOSED | N/A | server/ecosystem.config.cjs | RLS-on 硬前置升级（2026-06-25）：除 stress-test --simulate-sx + SC golden-baseline 零差异外，新增依赖 PR-6(2bb22d) repair shadow 网点 ClaimsDetail branch 隔离——PR-1(5f1545) 让 ClaimsDetail 多源后，repair 4 端点 RLS-on 会跨省串读。开 RLS 前 PR-6 必须先合并。 <br>RLS-on 硬前置再升级（2026-06-25 codex 对抗审计）：新增依赖 PR-7(e6fac1) RepairDim 省份化。PR-6(2bb22d) 只闭 ClaimsDetail/PolicyFact 行泄漏；RepairDim-only 端点(overview/detail等)对 branch_admin 未省份隔离 + 影子 CTE bare RepairDim 子查询跨省全读仍未闭。开 RLS 前 PR-6 + PR-7 都必须先合并。 <br>步骤B(validation/SX派生域sync)经owner决策(2026-06-25)并入RLS-on同窗口:先BRANCH_RLS_ENABLED=true+reload,再SYNC_VALIDATION_BRANCHES=1 sync派生域(claims_detail/quotes/renewal)。禁RLS-off前推——duckdb oracle证:RLS-off推validation/SX/claims_detail(236653山西赔案)上VPS→loader无条件UNION→repair影子端点(coop-tier/scatter/orphan)零过滤→SC repair影子网点7225→13130(+5905山西网点污染四川视图),直到RLS-on才闭合。校正接力文档§PR-2/§PR-5「RLS-on前必做」表述(作废)。本次SSH仍fail2ban BLOCKED(IP151.244.134.80未变),真同步无法执行。步骤A(RepairDim纯SC)无此风险,顺延日常发布携带。 <br>2026-06-25 生产 RLS-on dry-run(可逆,已回滚): 证 RLS-on 对四川安全(基线72/72 + 头部KPI/total_cases零差异);但挖出致命隐雷=存量 user_store.json 用户缺 branchCode→开RLS全员401,已数据层回填修复(详见接力文档实证追加)。新增 RLS-on 硬前置=user_store.json branchCode 永久修复(见新登记 P1)。完整cutover仍卡SSH(SX同步)。 |
 | 2026-06-27-claude-054a3a | 2026-06-27 | Loop v2 进化 | @claude | E6 固化防复发（元闸·治全部回归）：把 E1/E4 能力固化成 governance 强制——ledger 必含失败记账维度（缺则告警）+ 死规则审计入 meta-review 强制项 + automation 真升级校验入 bun run governance。验收 oracle：回退（删失败记账/跳审计）即 governance fail。依赖 E1·E4。 | P3 | PROPOSED | 开发文档/loop-v2-进化规划.md | scripts/check-governance.mjs |  |
-| 2026-06-27-claude-43aadc | 2026-06-27 | Loop v2 进化 | @claude | E1 账本记失败（治茧房1·幸存者偏差）：ledger 的 verdict 扩 abandoned/orphaned/blocked + reason；dispatch.mjs 认领锁 TTL 释放孤儿任务时自动 append 一条 orphaned 记账（释放点已存在）；quality-report 北极星把非 pass 纳入分母 + 新增放弃率/孤儿率。验收 oracle：构造孤儿任务（认领后超 TTL 无事件）→ 跑 loop:dispatch → ledger 自动多一条 orphaned 行 + 放弃率>0 + 单测覆盖失败记账路径。根项无依赖，最小可落地。 | P1 | PROPOSED | 开发文档/loop-v2-进化规划.md | scripts/loop/dispatch.mjs scripts/loop/quality-report.mjs |  |
 | 2026-06-27-claude-62ca94 | 2026-06-27 | Loop v2 进化 | @claude | E3 高风险双源对抗（治茧房4·单一化）⚠须 owner 拍板：高风险任务（碰 RLS/安全/部署链/跨模块）的闸-2 例外升级保留第二正交对抗源。张力：与 owner 2026-06-25『code review 收敛 codex 单源、去 evidence-verifier』指令直接冲突，须 owner 确认是否要『高风险例外升级双源』，否则不动。落点 loop-orchestration §2 + dispatch sessionPrompt。 | P2 | PROPOSED | 开发文档/loop-v2-进化规划.md | .claude/rules/loop-orchestration.md |  |
 | 2026-06-27-claude-633735 | 2026-06-27 | Loop v2 进化 | @claude | E2 注入外部真相（治茧房3·自指闭环）：quality-report 增 `git log -E --grep='revert\|回滚\|hotfix'` 反查（必须 -E：git grep 默认不解析 \| alternation，无 -E 命中 0，codex #812 P1）、比对 ledger pr 号，自动把被回滚的 loop PR 标 reverted；定义 owner『重做/不是我要的』信号采集；北极星加事后回滚率。验收：人为加 revert commit → loop:quality 自动标 reverted。依赖 E1。 | P1 | PROPOSED | 开发文档/loop-v2-进化规划.md | scripts/loop/quality-report.mjs |  |
 | 2026-06-27-claude-794df9 | 2026-06-27 | Loop v2 进化 | @claude | E4 砍死规则 + 真升级校验（治茧房5+6·只增不减）：新脚本 scripts/loop/rule-hit-rate.mjs 扫 loop-orchestration 各 meta 规则/dispatch 各闸，统计每条在 ledger/pr-evolution 的触发次数，输出命中率0=死规则/过度设计清单；automation-due 增『是否真升级为机制』校验（识别处置=又写一条文档的假处置）。借 extract-backlog-governance 方法。验收：跑一次输出死规则清单。依赖 E1。 | P2 | PROPOSED | 开发文档/loop-v2-进化规划.md | scripts/loop/automation-due.mjs |  |
