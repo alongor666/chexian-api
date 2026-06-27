@@ -9,7 +9,11 @@
   },
   "gatedKeywords": ["cutover", "RLS-on 上线", "sync VPS 发账号", "RLS-on→", "进 current/ →", "发山西账号"],
   "deps": {
-    "2026-06-24-claude-533e57": ["2026-06-24-claude-9e5bac"]
+    "2026-06-24-claude-533e57": ["2026-06-24-claude-9e5bac"],
+    "2026-06-27-claude-a5c684": ["2026-06-27-claude-eac186"],
+    "2026-06-27-claude-6f3275": ["2026-06-27-claude-eac186"],
+    "2026-06-27-claude-29343a": ["2026-06-27-claude-eac186"],
+    "2026-06-27-claude-2c800b": ["2026-06-27-claude-eac186", "2026-06-27-claude-a5c684", "2026-06-27-claude-29343a"]
   },
   "inflight": [],
   "claimTtlHours": 8,
