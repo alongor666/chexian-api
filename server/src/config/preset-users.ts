@@ -229,15 +229,15 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   // ===== 山西分公司（SX）— G7 多省接入账号定义 =====
   // BRANCH_RLS_ENABLED 默认关，加账号不改默认行为；RLS-on 时 permission.ts 按 branch_code='SX' 过滤。
-  // 全部 passwordHash 为「构造式 tombstone」占位（含 "Tombstone" 可辨标记，bcrypt.compare 对任意明文恒 false，
-  //   fail-safe：即便误激活也无法登录、无明文硬编码）。真实凭据仅由 USER_PASSWORDS 注入
-  //   （auth.ts login: `passwordOverride ?? user.passwordHash`，漏注入则回落到此处占位 → 恒拒绝）。
-  // 全部显式 active:false —— seedFromPreset 默认 active ?? true；必须明确设 false 才能阻断登录。
+  // 全部 passwordHash 仍为「构造式 tombstone」占位（含 "Tombstone" 可辨标记，bcrypt.compare 对任意明文恒 false，
+  //   fail-safe：源码永不含真实凭据/明文）。真实凭据仅由生产 USER_PASSWORDS 环境变量注入
+  //   （auth.ts login: `passwordOverride ?? user.passwordHash`，漏注入则回落到此处占位 → 恒拒绝，绝不成后门）。
+  // active:true —— 山西已于 2026-06-26 完成 cutover 步⑥发账号（RLS-on + SX 进 current/ + 生产 store/USER_PASSWORDS
+  //   已激活并逐账号隔离验证）。passwordHash 保持 tombstone 不变：即便 store 被 re-seed，无 env 真凭据仍无法登录。
   //   auth.ts: if (!user.active) throw new AppError(403, 'Account disabled')
-  //   真实凭据于 🔴 GATED cutover 时由 USER_PASSWORDS 环境变量注入 + active 改为 true。
   // organization 取自 数据管理/config/branch-org-mapping/SX.json 的 11 经营单元（= ETL 规范化后 org_level_3），禁臆造。
   sxAdmin: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sxAdmin',
     // tombstone 占位（不可登录）：山西超管凭据仅由 USER_PASSWORDS 环境变量提供。
     // 以下为标准 bcrypt 格式 tombstone（60 字符，无对应明文，bcrypt.compare 必然返回 false）
@@ -246,19 +246,19 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     role: 'branch_admin',
     branchCode: 'SX',
     specialFeatures: ['cost', 'moto_cost'],
-    active: false,
+    active: true,
   },
   yangjie0621: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'yangjie0621',
     passwordHash: '$2b$10$YangjieTombstone000000000000000000000000000000000000u',
     displayName: '山西管理员（杨杰）',
     role: 'branch_admin',
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_taiyuan1: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_taiyuan1',
     passwordHash: '$2b$10$SxTaiyuan1Tombstone000000000000000000000000000000000u',
     displayName: '太原一部机构',
@@ -267,10 +267,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_taiyuan2: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_taiyuan2',
     passwordHash: '$2b$10$SxTaiyuan2Tombstone000000000000000000000000000000000u',
     displayName: '太原二部机构',
@@ -279,10 +279,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_jdcszk: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_jdcszk',
     passwordHash: '$2b$10$SxJdcszkTombstone00000000000000000000000000000000000u',
     displayName: '经代、车商、重客机构',
@@ -291,10 +291,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_datong: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_datong',
     passwordHash: '$2b$10$SxDatongTombstone00000000000000000000000000000000000u',
     displayName: '大同机构',
@@ -303,10 +303,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_yangquan: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_yangquan',
     passwordHash: '$2b$10$SxYangquanTombstone000000000000000000000000000000000u',
     displayName: '阳泉机构',
@@ -315,10 +315,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_changzhi: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_changzhi',
     passwordHash: '$2b$10$SxChangzhiTombstone000000000000000000000000000000000u',
     displayName: '长治机构',
@@ -327,10 +327,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_jincheng: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_jincheng',
     passwordHash: '$2b$10$SxJinchengTombstone000000000000000000000000000000000u',
     displayName: '晋城机构',
@@ -339,10 +339,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_jinzhong: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_jinzhong',
     passwordHash: '$2b$10$SxJinzhongTombstone000000000000000000000000000000000u',
     displayName: '晋中机构',
@@ -351,10 +351,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_yuncheng: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_yuncheng',
     passwordHash: '$2b$10$SxYunchengTombstone000000000000000000000000000000000u',
     displayName: '运城机构',
@@ -363,10 +363,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_linfen: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_linfen',
     passwordHash: '$2b$10$SxLinfenTombstone00000000000000000000000000000000000u',
     displayName: '临汾机构',
@@ -375,10 +375,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   sx_lvliang: {
-    // GATED：山西上线(RLS-on + SX 进 current/)前不可登录，cutover 时经 USER_PASSWORDS 注入密码 + 激活
+    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_lvliang',
     passwordHash: '$2b$10$SxLvliangTombstone0000000000000000000000000000000000u',
     displayName: '吕梁机构',
@@ -387,7 +387,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',
-    active: false,
+    active: true,
   },
   test_org_user: {
     username: 'test_org_user',

@@ -9,7 +9,7 @@ import { JwtPayload } from '../middleware/auth.js';
 import { UserRole } from '../middleware/permission.js';
 
 /**
- * 机构列表（从前端复用）
+ * 四川（SC）机构列表（从前端复用）
  */
 export const ORGANIZATIONS = [
   '乐山',
@@ -25,6 +25,35 @@ export const ORGANIZATIONS = [
   '青羊',
   '高新',
 ] as const;
+
+/**
+ * 山西（SX）经营单元列表（11）。
+ * SSOT：数据管理/config/branch-org-mapping/SX.json 的 "units"（= ETL 规范化后的 org_level_3 值），
+ * 与 preset-users.ts 的 11 个 SX org_user `organization` 字段一致。漂移由 permission.test.ts 对账 PRESET_USERS 锁定。
+ */
+export const SX_ORGANIZATIONS = [
+  '太原一部',
+  '太原二部',
+  '经代、车商、重客',
+  '大同',
+  '阳泉',
+  '长治',
+  '晋城',
+  '晋中',
+  '运城',
+  '临汾',
+  '吕梁',
+] as const;
+
+/**
+ * branchCode → 该分公司机构列表。新增省份上线时须在此登记，否则该省 branch_admin 的机构下拉会回落到默认（SC）。
+ * 多省 RLS-on 后，branch_admin 的可见机构必须按本人 branchCode 取，禁止再硬编码单省常量
+ * （历史 bug：getVisibleOrganizations 对所有 branch_admin 返回静态 SC 列表 → 山西管理员下拉泄漏四川机构名且缺山西机构）。
+ */
+export const BRANCH_ORGANIZATIONS: Record<string, readonly string[]> = {
+  SC: ORGANIZATIONS,
+  SX: SX_ORGANIZATIONS,
+};
 
 /**
  * 权限服务类
@@ -78,8 +107,11 @@ class PermissionService {
    */
   getVisibleOrganizations(user: JwtPayload): string[] {
     if (user.role === UserRole.BRANCH_ADMIN || user.role === UserRole.TELEMARKETING_USER) {
-      // 分公司管理员/电销用户：可见所有机构
-      return ['全部', ...ORGANIZATIONS];
+      // 分公司管理员/电销用户：可见本分公司（branchCode）的所有机构。
+      // 多省 RLS-on 后必须按 branchCode 取；未登记的 branchCode 回落到 SC（保守默认，避免泄漏）。
+      const branchOrgs =
+        (user.branchCode && BRANCH_ORGANIZATIONS[user.branchCode]) || ORGANIZATIONS;
+      return ['全部', ...branchOrgs];
     }
 
     if (user.role === UserRole.ORG_USER && user.organization) {
