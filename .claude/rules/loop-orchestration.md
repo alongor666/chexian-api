@@ -157,6 +157,12 @@ policy: append-only
   - **改了什么**：① §0 流程图 ⑥、§2 闸-2/降级/降级分层、§2 引言、§3 账本 `verifier_refuted` 弃用；② 单任务 wrapper `chexian-evidence-loop.md` §4 闸-2 + 降级 + Pre-flight 第 4 项；③ `dispatch.mjs` `sessionPrompt` 第 4/6 步（多任务会话实际遵循的指令）。**未动**：`evidence-verifier.md` agent 文件（frozen，仍可作 ad-hoc 正确性证伪，只是不再是 loop 闸必需源）；步骤 ⑤ 确定性闸（`verify:full`/`governance`/golden-baseline/duckdb 直查）= correctness oracle，与 code-review 闸正交，**不受影响**。
   - **降级语义变更**：单源后 codex 全不可用时**无 LLM 兜底闸**——标 `unavailable` + 向用户报缺口请授权（`feedback_no_giveup_ask_authorization`），**禁止**擅自回退 evidence-verifier/CI；确定性闸照跑。
   - **三问复盘**：① 重来更好？协议早该与实跑对齐——文档写 evidence-verifier、实跑用 code-reviewer，双轨漂移半个月才被用户拍平；写协议时应同步固化「code review 用哪个源」单一事实，别留两套。② 复用价值？「对抗源单一事实 + 确定性 oracle 与 LLM 对抗正交」这条边界对其它 review 编排通用。③ 自动化？本条是协议/提示词文本收敛，无运行时强制点；残留人工点 = 执行会话须真的只调 codex、不擅自加 code-reviewer——`sessionPrompt` 已固化措辞，但仍依赖会话遵从（`feedback_prompt_needs_code_backup`：提示遵从非 100%）。`needs_automation: true`（可加 governance 闸：扫 loop PR 的 pr-evolution/账本若出现 `code-reviewer`/`evidence-verifier` 作闸源即告警）`expires: 2026-09-25`。
+- **meta（2026-06-27 · 本 PR · Loop v2 元复盘）· automation-due 补「疑似已机制化」检测 + expires 应绑可验证节点**：
+  - **触发**：用户「做 loop v2 元复盘」。按 §4 跑 `loop:automation-due`+`loop:quality` → 处置 3 个缺 expires 存量项（详见 `pr-evolution.md` 2026-06-27 entry）：项1 cx UX harness **撤项**（`cli-ux-sentinel.yml` 已建、标记陈旧挂 9 天）；项2/3 `verify-branch-domain` harness **补 expires 2026-09-21** 与 R9-R11 合并。缺 expires 3→0、健康 28→30。
+  - **洞察1（expires 归属）**：`verify-branch-domain` harness 被 R4/R5/R9/R10/R11 提 5 次未建，根因＝它依赖源 Excel+warehouse 数据，与 loop 隔离 worktree 无数据**结构性冲突**，只能在 GATED 上线（有数据的主目录）时落地。**自进化项 expires 应绑「该机制真能被验证的环境/节点」，非机械顺延 90 天。**
+  - **洞察2（账本实证收敛）**：对抗命中 codex 281 ∶ verifier 2（58 样本，140 倍）——从量化角度实证 2026-06-25「code review 单源＝codex CLI」决策：verifier 独立边际价值极低，收敛未损对抗强度。一次过率 36.2% 偏低部分是 codex 闸-2 健康拦截返工（非质量退化），`quality-report.mjs` 暂不区分两类返工。
+  - **本轮已修（代码）**：① `scanEntries` 格式漂移——`###` 标题行书写的 needs_automation 被标题分支吞掉、静默脱离催办网（尾部 6 条 entry + 本轮 entry 漏计近一月）；修＝needs_automation 检测移到标题前 + 单测（`loop.test.mjs` 60 passed）。② 本 entry 裸字符串自污染（误增幽灵健康项）一并修正。
+  - **新机制登记（expires 2026-09-27）**：① automation-due「疑似已机制化」启发式（项1 闸建好挂 9 天没撤）；② meta-review 自动触发（免等用户触发）。属 loop-meta 代码改动，单 owner 串行落地，本轮仅登记。
 
 ---
 

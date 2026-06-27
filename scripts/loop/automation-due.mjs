@@ -23,7 +23,8 @@ const PR_EVO_PATH = path.join(ROOT, '.claude/workflow/pr-evolution.md');
 
 /**
  * 扫描 pr-evolution 文本 → 每个 needs_automation 项 {entry, line, expires|null}。
- * entry = 最近的 ## / ### 标题（R 区块名）。窗口同 #703：needs_automation 后 10 行内找 expires。
+ * entry = 最近的「任务级标题」（`## ` 级，或以日期 YYYY-MM-DD 开头的标题；纯子节 ###
+ * 如「三问复盘」「体检结果（基准日 …）」不更新 entry）。窗口同 #703：needs_automation 后 10 行内找 expires。
  */
 export function scanEntries(content) {
   const lines = content.split('\n');
@@ -31,8 +32,10 @@ export function scanEntries(content) {
   let entry = '(unknown)';
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const m = line.match(/^#{2,3}\s+(.+)/);
-    if (m) { entry = m[1].trim(); continue; }
+    // 先判 needs_automation，再判标题：兼容「列表项 `- needs_automation: true`」与
+    // 「标题 `### needs_automation: true`」两种格式。后者若先被标题分支 continue 吞掉会静默
+    // 脱离催办网（2026-06-27 meta-review 实证尾部 6 条 entry 漏计近一个月）。标题形式归到
+    // 其上一个真 entry 标题。
     if (/needs_automation:\s*true/.test(line)) {
       let expires = null;
       for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
@@ -40,6 +43,17 @@ export function scanEntries(content) {
         if (em) { expires = em[1]; break; }
       }
       out.push({ entry, line: line.trim().slice(0, 90), expires });
+      continue;
+    }
+    const m = line.match(/^#{2,3}\s+(.+)/);
+    if (m) {
+      const title = m[1].trim();
+      // 仅「任务级标题」更新 entry：`## ` 级或**以日期 `YYYY-MM-DD` 开头**的标题（任务标题
+      // 形如「2026-06-27 · …」日期在首）。纯子节标题（### 三问复盘 / ### 做了什么 / ### 处置 /
+      // ### 体检结果（基准日 2026-…）等——括号内含日期的也不算）不更新，否则标题形式
+      // needs_automation 会归到子节名而非任务名、可定位性差（codex 闸-2 P2·2026-06-27 修正）。
+      if (/^##\s/.test(line) || /^\d{4}-\d{2}-\d{2}/.test(title)) entry = title;
+      continue;
     }
   }
   return out;
