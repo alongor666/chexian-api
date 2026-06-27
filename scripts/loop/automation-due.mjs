@@ -23,7 +23,8 @@ const PR_EVO_PATH = path.join(ROOT, '.claude/workflow/pr-evolution.md');
 
 /**
  * 扫描 pr-evolution 文本 → 每个 needs_automation 项 {entry, line, expires|null}。
- * entry = 最近的 ## / ### 标题（R 区块名）。窗口同 #703：needs_automation 后 10 行内找 expires。
+ * entry = 最近的「任务级标题」（`## ` 级，或以日期 YYYY-MM-DD 开头的标题；纯子节 ###
+ * 如「三问复盘」「体检结果（基准日 …）」不更新 entry）。窗口同 #703：needs_automation 后 10 行内找 expires。
  */
 export function scanEntries(content) {
   const lines = content.split('\n');
