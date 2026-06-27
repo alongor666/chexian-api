@@ -10,6 +10,7 @@
 import { Router } from 'express';
 import {
   asyncHandler, parseFiltersAndBuildWhere, duckdbService, withRouteCache,
+  requirePermissionFilter,
 } from './shared.js';
 import {
   generateExpenseRatioDevelopmentQuery,
@@ -40,7 +41,7 @@ router.get(
     }
     const whereClause = buildWhereFromFilterParamsWithoutDate(
       parseResult.data,
-      req.permissionFilter || '1=1'
+      requirePermissionFilter(req.permissionFilter)
     );
 
     const cohortYearsStr = req.query.cohortYears;

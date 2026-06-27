@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/auth.js';
 import { readonlyMiddleware } from '../../middleware/readonly.js';
-import { permissionMiddleware, UserRole } from '../../middleware/permission.js';
+import { permissionMiddleware, requirePermissionFilter, UserRole } from '../../middleware/permission.js';
 import { asyncHandler, AppError } from '../../middleware/error.js';
 import {
   ProfitScenarioRequestSchema,
@@ -48,7 +48,7 @@ router.post(
 
     const result = await buildForecastBaseline({
       request: parsed.data,
-      permissionFilter: req.permissionFilter || '1=1',
+      permissionFilter: requirePermissionFilter(req.permissionFilter),
     });
     const response = ForecastBaselineResponseSchema.parse(result);
     res.json(response);

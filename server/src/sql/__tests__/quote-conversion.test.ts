@@ -82,6 +82,7 @@ describe('quote-conversion SQL contract', () => {
         ncdMin: '0.9',
         ncdMax: '1.2',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json,
@@ -109,6 +110,7 @@ describe('quote-conversion SQL contract', () => {
       query: {
         isTelemarketing: '非电销',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json,
@@ -131,6 +133,7 @@ describe('quote-conversion SQL contract', () => {
         ncdMin: '',
         ncdMax: '',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json,
@@ -153,6 +156,7 @@ describe('quote-conversion SQL contract', () => {
         ncdMin: '   ',
         ncdMax: '  ',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json,
@@ -177,6 +181,7 @@ describe('quote-conversion SQL contract', () => {
         isTransferred: '',
         riskGrade: '',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json,
@@ -202,6 +207,7 @@ describe('quote-conversion SQL contract', () => {
         dateEnd: '  ',
         orgName: '北京',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json,
@@ -226,6 +232,7 @@ describe('quote-conversion SQL contract', () => {
         insuranceCombo: '',
         orgName: '   ',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json,
@@ -249,6 +256,7 @@ describe('quote-conversion SQL contract', () => {
         ncdMin: '1.2',
         ncdMax: '0.9',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json: vi.fn(),
@@ -271,6 +279,7 @@ describe('quote-conversion SQL contract', () => {
       query: {
         level: 'invalid',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json: vi.fn(),
@@ -291,6 +300,7 @@ describe('quote-conversion SQL contract', () => {
       query: {
         granularity: 'invalid',
       },
+      permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
     } as unknown as Request;
     const res = {
       json: vi.fn(),
@@ -313,6 +323,7 @@ describe('quote-conversion SQL contract', () => {
       vi.clearAllMocks();
       const req = {
         query: { riskGrade: grade },
+        permissionFilter: '1=1', // B326：stub 模拟 permissionMiddleware 已注入（branch_admin='1=1'）
       } as unknown as Request;
       const res = { json } as unknown as Response;
 

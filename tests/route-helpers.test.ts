@@ -19,7 +19,10 @@ function mockReq(
 ): Request {
   return {
     query,
-    permissionFilter: overrides.permissionFilter,
+    // B326 fail-closed：生产中每个已认证请求都由 permissionMiddleware 注入 permissionFilter
+    // （branch_admin='1=1'）。直接调用 helper 的特征测试不过中间件，stub 须显式提供，
+    // 未覆盖时默认取 branch_admin 的合法值 '1=1'（等价改动前 `|| '1=1'` 的行为）。
+    permissionFilter: overrides.permissionFilter ?? '1=1',
     user: overrides.user,
   } as unknown as Request;
 }

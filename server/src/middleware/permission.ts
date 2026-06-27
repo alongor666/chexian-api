@@ -203,3 +203,25 @@ export function requireRole(...allowedRoles: UserRole[]) {
     next();
   };
 }
+
+/**
+ * fail-closed 收窄（B326 / plan 风险表 m1）：req.permissionFilter 必由 permissionMiddleware
+ * 为**每个**已认证请求生成（branch_admin=`'1=1'` / org_user=`org_level_3='...'` /
+ * 电销=`is_telemarketing=true`，多分公司 RLS 下再 AND `branch_code='XX'`）。
+ *
+ * `undefined` = permissionMiddleware **未执行**（路由漏挂中间件 / 装配回归 / 绕过）= bug。
+ * 此时必须 **fail-closed 拒绝**，绝不退化为 `|| '1=1'` 放行全表——后者在派生域联邦 /
+ * 多分公司下 = 跨机构、跨省越权泄漏面。
+ *
+ * `'1=1'` 是 branch_admin 的**合法**值（下游短路放行），原样返回，**不**在此拦截。
+ * 与 utils/sql-permission-injector.ts `isPermissionFilterMissing` 同源（sql-passthrough.ts m1 守卫）。
+ */
+export function requirePermissionFilter(permissionFilter: string | undefined): string {
+  if (permissionFilter === undefined) {
+    throw new AppError(
+      403,
+      '权限过滤缺失（permissionMiddleware 未生成 req.permissionFilter）— fail-closed 拒绝执行',
+    );
+  }
+  return permissionFilter;
+}

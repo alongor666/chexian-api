@@ -12,6 +12,7 @@
 
 import { Request } from 'express';
 import { AppError } from '../middleware/error.js';
+import { requirePermissionFilter } from '../middleware/permission.js';
 import {
   commonFilterSchema,
   buildWhereFromFilterParams,
@@ -44,7 +45,7 @@ export function parseFiltersAndBuildWhere(
 
   const whereClause = buildWhereFromFilterParams(
     parseResult.data,
-    req.permissionFilter || '1=1'
+    requirePermissionFilter(req.permissionFilter)
   );
 
   return { filterData: parseResult.data, whereClause };
@@ -71,7 +72,7 @@ export function parseFiltersAndBuildBothWhere(
     throw new AppError(400, parseResult.error.issues[0].message);
   }
 
-  const permissionFilter = req.permissionFilter || '1=1';
+  const permissionFilter = requirePermissionFilter(req.permissionFilter);
   const dateField: DateFieldType = parseResult.data.dateField || 'policy_date';
 
   const whereWithDate = buildWhereFromFilterParams(

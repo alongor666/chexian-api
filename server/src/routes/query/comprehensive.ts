@@ -10,7 +10,7 @@ import {
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
   resolveCutoffDate, computeTimeProgress, toFiniteNumber,
   DEFAULT_COMPREHENSIVE_THRESHOLDS,
-  buildComprehensiveAlerts, withRankByDimType,
+  buildComprehensiveAlerts, withRankByDimType, requirePermissionFilter,
   type ComprehensiveMetricRow,
 } from './shared.js';
 import {
@@ -250,7 +250,7 @@ async function handleComprehensiveBundle(req: Request, res: Response): Promise<v
       maxDataDate,
       planYear: resolvedPlanYear,
       orgScope,
-      permissionFilter: req.permissionFilter || '1=1',
+      permissionFilter: requirePermissionFilter(req.permissionFilter),
       thresholds,
       timeProgress,
     },

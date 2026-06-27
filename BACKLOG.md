@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（86 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（85 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -81,7 +81,7 @@
 - 2026-06-25-claude-8e6e8a — cutover能力PR-4(可选·碰部署链)
 - 2026-06-27-claude-901f0d — 派生域 ALL IN-scope 升级（codex 闸-2 P2·第3省上线前必修）
 
-**P3（31 项）**
+**P3（30 项）**
 
 - B246 `BLOCKED` — VPS 分层查询改造（KPI variable_cost_ratio）
 - B247 — 图表 hex 色值审计
@@ -92,7 +92,6 @@
 - B277 — 其他比率指标的双重舍入
 - B276 — *_rate (0-1 小数) vs *_ratio (×100 百分比) 命名约定
 - B321 — super-powers 精髓 skills 两项后续（PR #469 审计衍生）
-- B326 — req.permissionFilter \|\| '1=1' 防御性兜底 fail-c
 - 2026-06-09-claude-44f2ca — 确认 ai.analyzeTrend 是预留接口还是死代码（既有问题·非迁移引入）
 - 2026-06-09-claude-530bf5 — claims 报案截止日新鲜度告警（B191e0f）目前仅在 daily.mjs Ste
 - 2026-06-09-claude-66b2eb — 命名空间子客户端富类型提升为命名接口（gold-plating·非阻塞）
@@ -144,7 +143,6 @@
 | B320 | 2026-05-31 | Security/Frontend | @claude | **CSP 移除 'unsafe-eval'（后端架构审计·范围 B·待 E2E）**：`app.ts:51` `scriptSrc` 含 `'unsafe-eval'`（且 `'unsafe-inline'`），放宽了 XSS 防护。**用户决策**：缓行——本环境无法跑前端 E2E，盲删若某依赖用 `eval`/`new Function` 会致生产白屏。**落地前置**：在能跑前端的环境用 E2E 验证移除 `'unsafe-eval'`（及评估收紧 `'unsafe-inline'`）后 ECharts/SPA 正常，再合入 | P2 | IN_PROGRESS | 后端架构审计报告（本次会话） | `server/src/app.ts`(47-58 helmet CSP) | PR #755（ready，不 auto-merge）已建。前端 E2E 已通过：Playwright(bypassCSP=false) 实测 SPA+真实 ECharts geo 在收紧 CSP 下 0 违规、canvas 渲染；CSP 生效对照(eval/new Function 被 BLOCKED)；3773 单测+governance44+typecheck 全绿；codex 双闸+evidence-verifier 7项PASS。待用户复核后手动合并。 |
 | B322 | 2026-06-02 | Security/Config | @claude | **claude-to-im 飞书 app_secret 明文存储 + 已暴露至本次会话上下文**（跨项目全局配置，记此 BACKLOG 为追踪）：`~/.claude-to-im/config.env` 明文存 `CTI_FEISHU_APP_SECRET`（app_id `cli_a94d08f46539dbcd`，对应租户 `2d26b50cf94f175e`）。本次会话为定位"Mac_飞侠" P2P bot 的 chat_id 在 Bash 中 cat 了 config.env，secret 进入 Opus 模型上下文（已尽量 mask 但 stdout 已发生）。**修复**：(1) 飞书开发者后台 rotate `cli_a94d08f46539dbcd` 的 app_secret；(2) 更新本机 `~/.claude-to-im/config.env`；(3) 重启 bridge daemon（`bridge.pid` 在 runtime/）验证连通；(4) 长期：考虑用系统 Keychain / 1Password CLI 替代明文 .env（参考 `claude-to-im` skill 的 reconfigure 子命令） | P2 | PROPOSED | 本会话；`~/.claude/skills/claude-to-im/SKILL.md` | `~/.claude-to-im/config.env`（用户私域，不在本 repo） | rotate 后旧 secret `lark-cli` 调用应 401；新 secret 写入 config.env 后 bridge daemon 重启正常，飞书内向 Mac_飞侠 发消息触发 Claude 启动如常 |
 | B321 | 2026-06-03 | Refactor/Governance | @claude | **super-powers 精髓 skills 两项后续**（PR #469 审计衍生）：(1) **上提共享仓**——`code-search-routing` / `agent-system-design-principles` 整体，及 `silent-failure-guard` 五律内核、`rule-promotion-gate` judge-not-lawyer、`adr-tiered-response` 分级响应的**通用内核**，均过语义独立测试，待项目级实战验证（≥2 场景命中）后经 `chexian-crystallize-skill` 上提到 `alongor666/alongor666-skills`（本会话 GitHub 工具仅限 chexian-api，无法跨库推送）。(2) **引入 ESLint AST 硬门**——补 `silent-failure-guard` 的"catch 返回空值无日志/无判别"检测（正则 100% 误报，#25 空catch门只覆盖纯空块），用 `no-useless-catch` + 自定义 rule；项目当前无 ESLint，需从零搭配置+CI 接线，属重改动宜独立 PR | P3 | PROPOSED | PR #469 审计；`.claude/skills/silent-failure-guard.md`；`.claude/skills/rule-promotion-gate.md` | `.claude/skills/*.md`（上提候选）<br>`scripts/check-governance.mjs`(#25 空catch门已落地)<br>新增 `eslint.config.*`（待建） | 候选 skill 验证后上提共享仓且通用层无重复；ESLint AST 门在当前库零误报通过 + 拦截真实吞异常 |
-| B326 | 2026-06-05 | Security/Backend | @claude | **`req.permissionFilter \|\| '1=1'` 防御性兜底 fail-closed 加固（纵深防御·非活漏洞·登记）**（B325 基线核查衍生）：governance `check-permission-coverage` 每次标 5 处 `[unsafe-fallback]`（agent-diagnosis.ts:156/157/261/290、agent-forecast.ts:51），全项目共 17 处同模式。**定性结论（非活 fail-open）**：agent 路由已在 router 级挂 `authMiddleware + readonlyMiddleware + permissionMiddleware`（agent-diagnosis.ts:41-43），而 `permissionMiddleware` 恒把 `req.permissionFilter` 设为具体值（admin=`1=1` / `org_level_3='...'` / `is_telemarketing=true`，见 permission.ts:55-64），故 `\|\| '1=1'` 是**防御性死代码**而非运行时漏洞；且真实 SQL 注入读取路径已由 B307（RLS 子查询绕过修复）+ B316（isValidPermissionFilter 白名单 fail-closed 接入）加固。**待办**：把 17 处 `permissionFilter \|\| '1=1'` 统一为 fail-closed（中间件缺失时拒绝/空集而非放行全量），需逐路由确认 permissionMiddleware 挂载 + 加"中间件缺失→fail-closed"回归测试，属独立安全 PR（红线"修补不拆除"，禁随手批量改 auth 语义）。登记以终止每次 governance 重复调查。 | P3 | PROPOSED | governance `check-permission-coverage` 输出；`server/src/middleware/permission.ts:55-64`；BACKLOG B307 / B316 | `server/src/agent/routes/agent-diagnosis.ts`<br>`server/src/agent/routes/agent-forecast.ts`<br>（全项目 17 处 `permissionFilter \|\| '1=1'`） | 待实施：改后 governance unsafe-fallback 提示清零 + agent 路由"中间件缺失→fail-closed"回归测试覆盖 |
 | B335 | 2026-06-05 | Refactor/Quality | @claude | **批量卫生项**（21 目录排查 §3 P2 汇总）：any 收敛（前端 ECharts 回调 ~130+、services 31 用 CallbackDataParams）、escapeSqlValue @deprecated 迁 escapeSqlLiteral（10+ SQL 模块）、目录碎片合并（charts/services 单文件并入 widgets/shared-export、widgets table+tables）、ui↔components 边界、INDEX.md 漂移、@deprecated 别名（conversion_rate/UserLoginPanel）、underwriting-recommendation 死红线策略 | P2 | PROPOSED | 开发文档/目录排查报告_2026-06-05.md §3 | src/widgets；src/shared；server/src/utils/security.ts；server/src/sql | 分批清理；各项 build/governance 绿 |
 | B340 | 2026-06-06 | Bug/Backend | @claude | **生产 claims 域加载器缺 union_by_name（潜伏，B339 闸门镜像时发现）**：`server/src/services/duckdb-domain-loaders.ts` 的 11 处 `read_parquet('${path}')` 均为裸读，无 `union_by_name=true`；而 policy 加载器 `duckdb-parquet-loader.ts` 显式带 `union_by_name`。一旦 claims/域分区出现兼容 schema 漂移（如新增可选字段、字段顺序变动），生产**首次惰性加载** ClaimsDetail/ClaimsAgg 等端点会因按位置 union 失败而崩。当前 8 个 claims 分区（2019–2026）同一 ETL 产出、列集合一致（均 40 列）→ **暂未触发，是定时炸弹非现行故障**。B339 闸门选「忠实镜像生产」（claims 同样裸读）以保留金丝雀探测力，故未在闸门层擅自加 union_by_name 掩盖此问题。修复：评估给 `duckdb-domain-loaders.ts` 各域读法统一加 `union_by_name=true`（与 policy 对齐），同步把 B339 claims 模板改回带 union_by_name；需回归测试惰性加载 8 端点 + 真实分区 schema 漂移场景。 | P2 | TODO | B339 codex PR #513 第3轮 3a；`duckdb-parquet-loader.ts`(对照：policy 已带 union_by_name) | `server/src/services/duckdb-domain-loaders.ts`(11 处裸 read_parquet 待评估加 union_by_name)<br>`scripts/prepublish-gate/lib/fetch-local-metrics.mjs`(claims 模板随生产改) | 待办 <br>[计数校正 2026-06-20] 描述中'duckdb-domain-loaders.ts 的 11 处 read_parquet'为旧计数；2026-06-20 PR #691 架构评审逐文件核验：当前该文件全域共 9 处裸 read_parquet，claims 域专属仅 1 处(loadClaimsDetail, duckdb-domain-loaders.ts:449)。底层结论不变(claims 加载器无 union_by_name=true、与 policy 域 loadMultipleParquet 不一致、schema 漂移会令首次惰性加载崩)，仅数量更正。 |
 | 2026-06-08-claude-691a87 | 2026-06-08 | Chore/Governance | @claude | **BACKLOG 增弃置状态 + 过时项剪枝（治理体检缺口②）**：event-log status 词表缺 CANCELLED/WONTFIX 弃置路径，append-only 下过时/放弃任务只增不剪——2026-06-08 extract-backlog-governance 体检发现 33 项任务终态滞留 PROPOSED（最早 2026-04-11，约 2 个月）。建议：①scripts/backlog/lib.mjs 增 CANCELLED 终态枚举；②backlog.mjs status 支持置 CANCELLED 带 --reason；③定期对账剪枝陈旧 PROPOSED。属待观察软缺口，先建机制不强制。来源：体检报告原则6 同步现实陈旧即剪。 | P2 | PROPOSED | .claude/rules/backlog-eventlog.md | scripts/backlog/lib.mjs<br>scripts/backlog.mjs |  |

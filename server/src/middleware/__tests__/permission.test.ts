@@ -15,7 +15,7 @@ vi.mock('../../config/env.js', () => ({
   dbEnv: envMock,
 }));
 
-import { permissionMiddleware, UserRole } from '../permission.js';
+import { permissionMiddleware, requirePermissionFilter, UserRole } from '../permission.js';
 import { AppError } from '../error.js';
 
 function makeReq(user?: any) {
@@ -313,5 +313,28 @@ describe('permissionMiddleware: 全国超管 visibleBranches 切省（flag on）
     const req = makeReqQ(superAdmin(), 'SX');
     await runMiddleware(req);
     expect(req.permissionFilter).toBe('1=1');
+  });
+});
+
+// ── B326：requirePermissionFilter fail-closed 收窄 ────────
+describe('requirePermissionFilter: B326 fail-closed 收窄', () => {
+  it('fail-closed: undefined（中间件未执行）→ 抛 AppError 403', () => {
+    let caught: unknown;
+    try { requirePermissionFilter(undefined); } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(AppError);
+    expect((caught as AppError).statusCode).toBe(403);
+  });
+  it("branch_admin '1=1' 原样返回", () => {
+    expect(requirePermissionFilter('1=1')).toBe('1=1');
+  });
+  it('org_user 过滤原样返回', () => {
+    expect(requirePermissionFilter("org_level_3 = '乐山'")).toBe("org_level_3 = '乐山'");
+  });
+  it('电销过滤原样返回', () => {
+    expect(requirePermissionFilter('is_telemarketing = true')).toBe('is_telemarketing = true');
+  });
+  it('多分公司 RLS 合成过滤原样返回', () => {
+    const f = "(org_level_3 = '乐山') AND branch_code = 'SC'";
+    expect(requirePermissionFilter(f)).toBe(f);
   });
 });
