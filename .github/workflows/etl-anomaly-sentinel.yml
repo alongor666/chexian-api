@@ -134,9 +134,12 @@ jobs:
         # 自身故障会让 job failure，上方所有发 issue 的 step 都被 skip → 静默失明。
         # 2026-06-19~27 CX_PAT 被吊销致 17 连败、监控失明 8 天无人察觉，即此盲区。
         # 条件排除 has_new_anomalies=='true'（防御性，ETL 哨兵业务异常本不 failure）。
+        # GH_REPO：checkout 失败时工作目录无 git 上下文，gh 无法从 remote 推断 repo →
+        # 兜底自己会 "not a git repository" 失败；显式 GH_REPO 让 gh 脱离 git 仍能定位（codex 评审 P2）。
         if: failure() && steps.run.outputs.has_new_anomalies != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail

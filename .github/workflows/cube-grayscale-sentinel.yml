@@ -106,9 +106,12 @@ jobs:
         # 兜底告警：哨兵「自身」崩溃（脚本异常/checkout/setup 失败 → job=failure 且
         # has_anomalies 未产出）时往追踪 issue 发评论。业务 CRITICAL（脚本 exit 1 + has_anomalies=true）
         # 已由上方 Post anomaly（always()）处理，故此处排除 has_anomalies=='true' 避免重复告警。
+        # GH_REPO：checkout 失败时工作目录无 git 上下文，gh 无法从 remote 推断 repo →
+        # 兜底自己会 "not a git repository" 失败；显式 GH_REPO 让 gh 脱离 git 仍能定位（codex 评审 P2）。
         if: failure() && steps.run.outputs.has_anomalies != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
