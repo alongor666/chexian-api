@@ -1626,3 +1626,26 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 ### needs_automation: true
 - 闸：E6 把「质量账本失败记账 + 外部真相维度（事后回滚率/返工率可算），缺则告警」入 `bun run governance` 强制——回退（删 git 反查 / 删 owner sink 聚合 / 删双率）即 governance fail，防进化成果回退。依赖 E1 + E2（本项）+ E4 先落地，随 E6 一并实现。
 - expires: 2026-09-27（与 E1 / loop-orchestration §4 E2 meta 同窗；属 loop-meta，单 owner 串行落地）。
+
+---
+
+## 2026-06-27 · K1 省份数据隔离 SSOT + chexian-data-kpi P0 修正（技能口径治理·evidence-loop scorecard）
+
+> 承接 `开发文档/plans/2026-06-27-技能口径挂靠SSOT治理.md` §4 K1（P0 止血首波，解锁 K2/K3/K4）。执行 `/chexian-data-kpi` 山西诊断暴露技能内联影子口径（裸 glob 跨省混查 + `endorsement_type` 跑挂 SQL）。
+
+- **业务目标**：rules 体系建省份隔离 SSOT（消除裸 glob 跨省混查静默错误）+ 修正 kpi 命令跑挂示例 SQL + 加省份/时间参数 + 引 time-caliber 反问，让技能挂靠 SSOT。
+- **基线（实测·禁口算）**：裸 `current/*.parquet` 混查 SC 261.6万 + SX 183.3万行；SX 2026YTD 隔离 113846件/9865万 vs 混查 388675件/32006万（放大 3.4x，零报错）。原示例 `WHERE endorsement_type IS NULL` 实测 `Binder Error`（fields.json 注册但 ETL 未落 Parquet）。
+- **候选（2 文件 96+/23-）**：data-pipeline.md 新增「省份数据隔离 RED LINE」（branch_code 权威键 + SC/SX glob 表 + 赔案路径 + fail-closed + GATED）；chexian-data-kpi.md 加 `--province/--year/--start/--end` + 净额 CTE 双示例 + 删 endorsement_type 改 endorsement_no + 引 time-caliber/省份隔离。
+- **oracle 实证**：duckdb 直查裁决三 P0——brace `{a,b}` 实测 `IO Error`（DuckDB 不支持→列表 glob）；同一 policy_no 13 例跨机构（→消 ANY_VALUE，org 进 group key）；文档两示例 SQL 零 Binder Error，SX 隔离 113846件 与混查 388675件 显著不同（隔离生效）。
+- **回归门禁**：`bun run governance` 45/45 全过；pre-commit typecheck 通过。
+- **双闸（codex CLI·read-only·scratchpad 隔离 cwd·自包含 prompt）**：闸-1 计划对抗 5 P0/7 P1/3 P2——关键 P0 = brace glob 会跑挂（实测坐实）+ 净额 CTE 粒度/ANY_VALUE 影子口径 + 时间参数成对 + worktree 路径，全采纳（含 duckdb 实测裁决）；闸-2 完成对抗 0 P0 GO，采纳 3 P1（赔案路径统一 glob/件数口径拆分全省 vs 维度/premium 说明对齐维度）+ 2 P2，复审通过。
+- **决策**：promote。K1 P0 止血落地 = 治理链首波。
+
+### 三问复盘
+1. **重来怎样更好**：① brace glob 险些自己写出跑挂 SQL——幸 codex 闸-1 质疑"未证明 DuckDB 支持 `{a,b}`" + 我 duckdb 实测坐实 `IO Error`；教训＝凡 glob/SQL 语法必实测不猜（`CLAUDE.md §6`），这正是 K1 要根治的"技能内联未验证口径"反讽。② 首批 Edit 误用主仓绝对路径被 worktree 护栏拦截——worktree 会话写文件必用 worktree 路径（绝对路径不受锚点影响），worktree-setup §A 代码兜底实证。
+2. **复用价值**：① 「duckdb 实测裁决口径设计而非凭假设」对任何 SQL/数据口径文档通用——闸-1 三个 P0 全靠实测定写法（brace/粒度/隔离值）；② 「branch_code 列权威隔离 + 文件名 glob 性能辅助 + fail-closed」三层范式可复制到所有多省 Parquet 查询；③ 「codex 闸-1 审设计（动手前）+ duckdb 实测裁决」比"先写后审"省返工。
+3. **如何更高质量自动化**：K1 文档/规则层"技能挂靠 SSOT"靠自觉——K3（governance 技能字段闸）将机制化兜底。
+
+### needs_automation: true
+- 闸：K3（`2026-06-27-claude-6f3275`）把"技能内 Parquet 字段名比对实际落列、注册表外/未落列字段即 error"入 `bun run governance`，把 K1/K5 的"技能挂靠 SSOT"从自觉变强制。关键设计修正（K1 实证）：K3 不能只比对 `fields.json` 字段集（`endorsement_type` 在 fields.json 却 Parquet 未落，比对字段集抓不到），须比对 Parquet 实际 schema。依赖 K1（本项）落地。
+- expires: 2026-09-27（与治理链 K2-K5 同窗；属技能口径治理，单 owner 串行落地）。
