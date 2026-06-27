@@ -14,7 +14,7 @@
 | # | 失败模式 | 发作 | 各次（PR / 日期） | 当前拦截层（源码 / `ls` 核实） | 升级触发线 · 当前债 |
 |---|---------|:---:|-----------------|------------------------------|---------------------|
 | P1 | 工具链严格度漂移：`build`/vitest 过但 `tsc --noEmit` 挂 | 2 | #459(05-31)、#644(06-15「重蹈覆辙」) | ✅ pre-push 跑 `typecheck` + `server tsc`（`scripts/hooks/pre-push:10,13`） | 主会话已硬拦；**残留**：sub-agent 自验只跑 vitest → 模板须强制 `typecheck` |
-| P2 | worktree 下 Write/Edit 绝对路径落主目录 main | **3** | #476(06-03)、#644(06-15)、#792(06-25) | 🔴 仅文档（worktree-setup + Pre-flight + memory）；settings `Write\|Edit` hook 只挂 user-only-guard，**未拦 worktree 路径**（`settings.json:32-38` 核实） | 🔴 **头号债**：3 次发作、3 次写"加 hook 拦路径不含 `.claude/worktrees/`"，至今未落。应升级 hook 或 `EnterWorktree` 重锚根治 |
+| P2 | worktree 下 Write/Edit 绝对路径落主目录 main | 3 | #476(06-03)、#644(06-15)、#792(06-25) | ✅ **已落地（#813）**：`scripts/hooks/claude-worktree-guard.sh` PreToolUse 拦主仓绝对路径逃逸 + 测试 + `settings.json` 挂载 | 🟢 **头号债已清**：发作 3 次后由 #813 hook 根治。本登记表「暴露债 → spawn_task → #813 落地」是其价值首次实战闭环 |
 | P3 | codex review 同 pattern 多轮（盘点不全 · grep 漏 N 处） | 4 | #669 v1→v2→v3→hotfix(06-17~18) | 🔵 codex 闸-2 兜底（贵）+ 自审"已 grep 全仓 N 处"（文档） | 兜底有效但成本高；再发生 1 次 → "已 grep 全仓 N 处？"列为提交硬证据 |
 | P4 | perf baseline 写盘未 warmup + CI/本地阈值未分层 | 1 | #647(06-15) | ✅ benchmark `--warmup` 默认 3 + 回归/目标双校验（已进工具） | 已机制化；高离散度拒写为后续硬化点 |
 | P5 | 字典/文档指标公式 vs registry SQL 漂移 | 1 | #408(05-18) | 🟡 自审"逐 id grep registry SQL 对照"（文档） | 触发线 = 再 2 次 → governance"公式 token 重叠率"检查 |
