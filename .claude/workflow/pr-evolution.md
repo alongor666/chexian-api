@@ -362,8 +362,9 @@
 - **未验证声明已自纠**: Phase A 我看到 config.json 有 `token` 字段就断言"本地 PAT 有效" → 实测 whoami **exit 2 token expired**。"有 token 字段 ≠ token 有效"。教训同 §3 证据七项：状态推断必须实跑验证
 - **BLOCKED（§6 测试数据缺失）**: ③ 旅程维度需有效 PAT，本地 token 已过期 → harness 正确判 `unavailable` 未伪造 0ms 数据（verifier 隔离原则生效）。用户 `cx login` 换新 PAT 后 `bun run ux:write -- --journey` 补齐
 - **零回归**: cli 单测 72 passed · governance 40/40 · scope 无 creep（未动 CLI 源码）
-- needs_automation: true
+- needs_automation: false
 - rationale: `ux:check` 已可手动跑，但尚未挂 CI/governance 闸（下一步：仿 bench:check 接入 cli 测试链或 governance-check.yml）；旅程维度待 PAT 解 BLOCKED
+- meta-review 2026-06-27 撤项：CI 闸已于本 entry 同会话收口落地（`.github/workflows/cli-ux-sentinel.yml` + `cli` 的 `ux`/`ux:write`/`ux:check` 棘轮，随 PR #674 合并；本次 meta-review 已 `ls` 核实文件存在）。原「尚未挂 CI」理由已被本 entry 上文「CI 闸已接」收口解决，故 needs_automation 撤为 false。
 
 **—— 同会话收口更新（用户重置 PAT + 选「修债务 + 接 CI + 提 PR」）**:
 - ③ 旅程 BLOCKED 解除：用户 `cx login` 换新 PAT（whoami exit 0，xuechenglong/branch_admin）→ `ux:write --journey` 测得首次成功 ✓。⚠️ time-to-first-success **CV 1.43 ≫ 0.10**（冷连接 TLS 离群 p95 11s），按 §6 标"噪声大"——故计时只记录不硬闸，仅功能门禁参与判定
@@ -557,6 +558,7 @@
 - 重来更好：以为"跑命令"，实为编排手术（policy-dir 富集 + CDC + sync 副作用护栏）→ ETL 域接入开工先画"源→convert→partition→副作用"全链路再估工。SC 字节安全靠代码构造证（受数据环境争用限制未跑 SC claims 回归）→ 理想应补 SC claims golden 对比。
 - 复用价值：高。daily.mjs branch-routing 模式（branchSourceDir/Root + 非 SC 早退 + convert --branch-code）现 premium+claims 两域复用，是 quotes/repair/brand 的直接模板；非 branch-aware 域硬拦截护栏可推广。
 - needs_automation: true → `scripts/verify-branch-domain.mjs <省> <域>`（行数/金额 vs 源 ≤ 万分之一 + branch_code 全省 + SC 目录零新增 parquet）+ governance 闸"非 SC 域必须有早退护栏"。
+  - expires: 2026-09-21（meta-review 2026-06-27 补：与 R9/R10/R11 `verify-branch-domain` harness 同一缺口合并，GATED 多省上线前机制化为 harness + governance 闸；本项是该 harness 最早提出处，当时漏配到期日，今对齐 R9-R11。根因见本次 meta entry：该 harness 依赖源 Excel + warehouse 数据，与隔离 worktree 无数据结构性冲突，故只能绑 GATED 上线节点。）
 - 下一实验：G1 余域 quotes/repair/brand（套同模板）/ G3 维度表省份化。
 
 ---
@@ -576,6 +578,7 @@
 - **重来更好**：本轮真正的工程价值在"通用处理器 + BaseConverter 一次省份化 → brand/repair 几乎零成本"，这一杠杆点开工时未预判，先读全调用图（谁继承 BaseConverter / 谁 standalone）能更早锁定最小改动面。SC 字节安全仍靠代码构造证（worktree 无 SC quote 源，未跑 SC 回归）→ 理想补 SC golden 对比。
 - **复用价值**：极高。`runStandardDomain` 一处省份化覆盖 5 个标准域；BaseConverter 的 `--branch-code` 让所有子类域（brand/repair/cross_sell/customer_flow/new_energy）天然 branch-aware，剩余域接入塌缩为"白名单 + 暂存源 + 验证"三步。
 - **needs_automation: true** → R4 已提的 `scripts/verify-branch-domain.mjs <省> <域>`（行数/金额 vs 源 ≤ 万分之一 + branch_code 全省 + SC 零新增 parquet）本轮再次手工复刻同一套 duckdb+pandas 对账，固化收益已确定；可顺带加 governance 闸"标准域非 SC 必经 `__branchReadyDomains` 白名单"。
+  - expires: 2026-09-21（meta-review 2026-06-27 补：与 R9/R10/R11 `verify-branch-domain` harness 同一缺口合并，GATED 多省上线前机制化；R4/R5 是该 harness 最早两次提出处，当时漏配到期日，今对齐 R9-R11。）
 - **下一实验**：repair（multi_file_merge）→ brand（single），均仅需白名单+暂存源+验证；之后 G3 维度表省份化（6ae4d7）。派生域 cross_sell/customer_flow/new_energy 依赖 policy+claims，排其后。
 
 **R6 · G1-repair 接入（同 PR，携带 R5 quotes-meta）**
@@ -1479,3 +1482,39 @@ PresetUser/JwtPayload/UserCredential 加 `visibleBranches`；permission.ts RLS-o
 ### needs_automation: true
 - 闸：派生域 ALL IN-scope 静态检查（扫 resolveBranchRlsCode 消费方 × ALL 支持），并入 follow-up 901f0d 第3省上线前评估。
 - expires: 2026-09-27（第3省上线前；届时未落地则随 901f0d 一并决策是否升级 resolveBranchRlsCode 或降级为纪律）。
+
+---
+
+## 2026-06-27 · Loop v2 元复盘（按 §4 自进化回路 · 单 owner 串行 · 零功能代码改动）
+
+> 用户指令「专项治理 loop v2 沉淀的进化文档」→ 澄清为「做 loop v2 元复盘」。按 `loop-orchestration.md §4` 跑一轮自进化回路：`loop:automation-due` + `loop:quality` 体检 → 处置存量自进化项 → 沉淀本 entry。本轮只动两份进化文档（pr-evolution + loop-orchestration §4），零功能代码改动，符合 §4 wave-2 元教训「loop-meta 改动单 owner 串行」（本会话即单 owner）。
+
+### 体检结果（基准日 2026-06-27）
+- **自进化催办**（automation-due）：处置前「缺 expires 3 · 健康 28」→ 处置后「缺 expires 0 · 健康 30」（已过期 / 临期恒 0）。
+- **质量账本**（quality-report，58 任务样本）：一次过率 36.2% · 平均转绿 1.16 轮 · 平均返工 0.78 · 治理通过率 96.6% · 回滚 0 · 对抗命中 codex 281（计划 160 + 完成 121）∶ 独立证伪（evidence-verifier）2 · 新增测试 719。
+
+### 处置 3 个缺到期日存量项（全程 `ls` 核实，不采信 entry 文字）
+1. **项1 撤项**（cx CLI 用户体验黄金标准 harness，PR #674，2026-06-18）：needs_automation 挂「尚未挂 CI 闸」已 9 天，但 `ls` 核实 `.github/workflows/cli-ux-sentinel.yml`（1195 B）+ `cli` 的 `ux`/`ux:write`/`ux:check` 脚本**均已存在**——同 entry 收口更新（「CI 闸已接」）早已机制化，标记陈旧。把该项 `needs_automation` 字段从 true 翻为 false 并就地留痕撤项（原教训正文一字未动）。
+2. **项2/3 补到期日合并**（`scripts/verify-branch-domain.mjs`，R4 G1-claims / R5 G1-quotes）：`ls` 核实该脚本确未建。它与 R9 / R10 / R11（均已配 `expires: 2026-09-21`）是**同一 harness 缺口的最早两次提出**，当时漏配到期日。各补 `expires: 2026-09-21` 子行与后续合并对齐（纯追加元数据，不改原文字）。
+
+### 根因洞察：`verify-branch-domain` harness 被提 5 次未落地，不是「忘了」
+R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是**结构性冲突**：该 harness 要做「产物 vs 源 Excel 行数 / 金额 ≤ 万分之一对账」，依赖源 Excel + warehouse 数据；而 loop 的隔离 worktree 是纯代码检出**无数据**（这些 entry 多次自述「worktree 无 SC / SX 源，字节安全靠代码构造证」）。→ 该 harness 只能在有数据的主目录、且天然属于 GATED 上线动作时落地。绑 `expires: 2026-09-21`（GATED 多省上线前）是**正确归属**，而非「本该早建」。**教训：自进化项的 expires 应绑到「该机制真正能被验证的环境 / 节点」，而非机械顺延 90 天。**
+
+### 质量账本两条发现
+1. **对抗命中 codex 281 ∶ verifier 2（140 倍）— 量化实证 2026-06-25「code review 单源收敛为 codex CLI」决策**：58 样本里独立证伪（evidence-verifier）仅命中 2 次，codex 命中 281 次。这与尾部多条定性教训（2026-06-24 promotion 脚本 codex 抓 3 P0 而 verifier 判 PASS、PR-6/PR-7「codex 比单一 verifier 更全」）从**量化角度**互证：verifier 作为独立闸源的边际价值极低，收敛到 codex CLI 单源未损失对抗强度。
+2. **一次过率 36.2% 偏低，但须区分「缺陷返工」与「对抗闸健康拦截返工」**：平均返工 0.78 中相当部分是 codex 闸-2 在合并前抓到 P0 / P1 后的**必要返工**（账本里 codex-gate2 / codex-recheck 等 round 转绿 2.00、返工 2.00 即此类）。这是「对抗闸在起作用」的健康成本，不是质量退化信号。当前 `quality-report.mjs` 不区分这两类返工 → 一次过率可能被误读为「质量差」。
+
+### 本轮 meta-review 当场根治的催办网解析缺陷（loop 改 loop · 最重要发现）
+确定性验证（用 `scanEntries` 实跑解析本文件）揪出两个缺陷，**均本轮代码修复**：
+- **问题 A（格式漂移·已修 + 单测）**：`scanEntries` 遇 `^#{2,3}\s+` 先当标题 `continue`，导致**以 `###` 标题行书写的 needs_automation 项（而非 `-` 列表项）静默脱离催办网**——尾部最近 6 条 entry（R37/R41 等）+ 本 entry 的自进化项全部漏计，催办机制对最近近一个月的 entry 实质失效。修＝把 needs_automation 检测移到标题检测之前（标题形式归到上一个真 entry 标题）+ 单测覆盖（`loop.test.mjs` 60 passed）。
+- **问题 B（本 entry 自污染·已修）**：本 entry 初稿用裸字符串描述撤项动作（needs_automation 后直接跟冒号与 true），被 `scanEntries` 误判为真 needs_automation 项（健康数虚增 1 的幽灵）。修＝撤项描述改用「字段从 true 翻为 false」措辞，避开裸「冒号紧跟 true」模式。
+
+### 三问复盘
+1. **重来怎样更好**：meta-review 不该等用户触发——§4 已写「每 ~10 任务或每周」跑一次，但项1「闸建好却没撤标记」挂了 9 天、格式漂移让 6 条 entry 漏计近一个月，都因定期触发从未真正执行。残留人工点＝缺自动触发 meta-review 的机制。
+2. **复用价值**：「自进化项 expires 绑可验证节点而非机械顺延」+「账本对抗命中比可量化实证闸源收敛决策」+「催办网解析必须覆盖所有书写格式——格式纪律靠不住、要解析器兼容（`feedback_prompt_needs_code_backup` 同理）」三条对其它 loop 编排通用。
+3. **如何更高质量自动化**：格式漂移已本轮代码兜底；「疑似已机制化检测」+「meta-review 自动触发」登记待办（见下）。
+
+### needs_automation: true
+- 闸①：`automation-due.mjs` 增「疑似已机制化」启发式——某 needs_automation 文字含明确文件路径（`scripts/**.mjs` / `.github/workflows/*.yml`）且该路径已存在时，单列「⚠️ 疑似已机制化，复核可否撤项」（仅覆盖含显式路径项，避免误报）。本轮项1 正是「闸建好挂 9 天没撤」，该启发式可机器提示。
+- 闸②（P4·可选）：meta-review 自动触发（每 ~N 任务或每周，挂 Stop hook 或 cron），免「等用户触发才跑」。质量账本「返工归因」（区分缺陷返工 vs 闸拦截返工）需改 ledger schema、另立不并入。
+- expires: 2026-09-27（与 R41 同窗；属 loop-meta 代码改动，单 owner 串行落地，本轮仅登记闸①②不并发硬化。届时未落地则复审或降级为纪律。）

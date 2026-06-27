@@ -389,6 +389,17 @@ describe('automation-due', () => {
     const c = classify(scanEntries(md), '2026-12-20', 14); // 距 12-31 仅 11 天 → soon
     expect(c.soon.map((x) => x.entry)).toEqual(['R2 · 任务二']);
   });
+  it('scanEntries 兼容标题形式 `### needs_automation: true`（防催办网漏计·2026-06-27 meta）', () => {
+    const titleMd = [
+      '## R5 · 标题形式任务',
+      '### 三问复盘',
+      '### needs_automation: true',
+      '- expires: 2026-11-30',
+    ].join('\n');
+    const items = scanEntries(titleMd);
+    expect(items).toHaveLength(1); // 标题形式不再被标题分支吞掉
+    expect(items[0].expires).toBe('2026-11-30'); // 且正确配对后续 expires
+  });
 });
 
 describe('stale-scan.scanNotes', () => {

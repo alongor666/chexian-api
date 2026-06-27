@@ -31,8 +31,10 @@ export function scanEntries(content) {
   let entry = '(unknown)';
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const m = line.match(/^#{2,3}\s+(.+)/);
-    if (m) { entry = m[1].trim(); continue; }
+    // 先判 needs_automation，再判标题：兼容「列表项 `- needs_automation: true`」与
+    // 「标题 `### needs_automation: true`」两种格式。后者若先被标题分支 continue 吞掉会静默
+    // 脱离催办网（2026-06-27 meta-review 实证尾部 6 条 entry 漏计近一个月）。标题形式归到
+    // 其上一个真 entry 标题。
     if (/needs_automation:\s*true/.test(line)) {
       let expires = null;
       for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
@@ -40,7 +42,10 @@ export function scanEntries(content) {
         if (em) { expires = em[1]; break; }
       }
       out.push({ entry, line: line.trim().slice(0, 90), expires });
+      continue;
     }
+    const m = line.match(/^#{2,3}\s+(.+)/);
+    if (m) { entry = m[1].trim(); continue; }
   }
   return out;
 }
