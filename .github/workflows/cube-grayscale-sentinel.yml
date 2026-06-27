@@ -102,6 +102,39 @@ jobs:
           } | gh issue comment "$ISSUE" --body-file -
           echo "posted anomaly (severity=$SEVERITY) to issue #$ISSUE"
 
+      - name: Report sentinel self-failure
+        # 兜底告警：哨兵「自身」崩溃（脚本异常/checkout/setup 失败 → job=failure 且
+        # has_anomalies 未产出）时往追踪 issue 发评论。业务 CRITICAL（脚本 exit 1 + has_anomalies=true）
+        # 已由上方 Post anomaly（always()）处理，故此处排除 has_anomalies=='true' 避免重复告警。
+        # GH_REPO：checkout 失败时工作目录无 git 上下文，gh 无法从 remote 推断 repo →
+        # 兜底自己会 "not a git repository" 失败；显式 GH_REPO 让 gh 脱离 git 仍能定位（codex 评审 P2）。
+        if: failure() && steps.run.outputs.has_anomalies != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="立方体灰度哨兵追踪"
+          LABEL="cube-grayscale-anomaly"
+          gh label create "$LABEL" --color D93F0B --description "立方体灰度哨兵告警" 2>/dev/null || true
+          ISSUE=$(gh issue list --state open --search "in:title $TITLE" --json number,title \
+            --jq ".[] | select(.title==\"$TITLE\") | .number" | head -n1)
+          if [ -z "$ISSUE" ]; then
+            ISSUE=$(gh issue create --title "$TITLE" --label "$LABEL" \
+              --body "立方体灰度哨兵的集中追踪 issue。每次检测到异常会在此追加评论；CRITICAL 才退出码 1，WARN/INFO 仅记录。" \
+              | grep -oE '[0-9]+$' | head -n1)
+          fi
+          {
+            echo "## ⚠️ 哨兵自身故障（非业务异常 · 观测中断）"
+            echo ""
+            echo "立方体灰度哨兵本次运行 **失败** 且未产出判定（脚本异常或环境/网络问题）。修复前，立方体灰度健康度观测中断。"
+            echo ""
+            echo "- 运行日志：$RUN_URL"
+            echo "- 排查：点开 run 看 \`Run cube grayscale sentinel\` 步骤日志"
+          } | gh issue comment "$ISSUE" --body-file -
+          echo "posted self-failure alert to issue #$ISSUE"
+
   # ── 每日晋级判定：cube-promote 确定性判定器，canAdvance 时通知人工起切流 PR ──
   # 与哨兵互补：哨兵每小时盯「有没有出问题」，本 job 每天判「能不能推进」。
   # 起 PR + 合并都人工（部署链红线 pr-checklist §4 / deploy-chain-sop 禁 auto-merge）。

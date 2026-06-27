@@ -127,3 +127,39 @@ jobs:
           gh issue edit "$ISSUE" --add-label "$LABEL" 2>/dev/null || true
           gh issue comment "$ISSUE" --body-file "$SUMMARY_PATH"
           echo "posted anomaly to issue #$ISSUE"
+
+      - name: Report sentinel self-failure
+        # 兜底告警：哨兵「自身」故障（PAT 吊销/API 不可达/脚本崩溃 → job=failure）时，
+        # 往同一追踪 issue 发评论。区别于业务异常（脚本 exit 0 + has_new_anomalies，job=success）：
+        # 自身故障会让 job failure，上方所有发 issue 的 step 都被 skip → 静默失明。
+        # 2026-06-19~27 CX_PAT 被吊销致 17 连败、监控失明 8 天无人察觉，即此盲区。
+        # 条件排除 has_new_anomalies=='true'（防御性，ETL 哨兵业务异常本不 failure）。
+        # GH_REPO：checkout 失败时工作目录无 git 上下文，gh 无法从 remote 推断 repo →
+        # 兜底自己会 "not a git repository" 失败；显式 GH_REPO 让 gh 脱离 git 仍能定位（codex 评审 P2）。
+        if: failure() && steps.run.outputs.has_new_anomalies != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="ETL 异常哨兵追踪"
+          LABEL="sentinel-anomaly"
+          gh label create "$LABEL" --color B60205 --description "ETL 异常哨兵告警" 2>/dev/null || true
+          ISSUE=$(gh issue list --state open --search "in:title $TITLE" --json number,title \
+            --jq ".[] | select(.title==\"$TITLE\") | .number" | head -n1)
+          if [ -z "$ISSUE" ]; then
+            ISSUE=$(gh issue create --title "$TITLE" --label "$LABEL" \
+              --body "ETL 异常哨兵的集中追踪 issue。每次检测到异常会在此追加评论；无异常静默。" \
+              | grep -oE '[0-9]+$' | head -n1)
+          fi
+          {
+            echo "## ⚠️ 哨兵自身故障（非业务异常 · 监控暂时失明）"
+            echo ""
+            echo "ETL 异常哨兵本次运行 **失败**，未能完成业务指标判定。修复前，满期赔付率/保费/件数的异常监控处于失明状态。"
+            echo ""
+            echo "- 运行日志：$RUN_URL"
+            echo "- 常见根因：\`CX_PAT\` 被吊销/过期（HTTP 401）、生产 API 不可达、脚本异常"
+            echo "- 排查：点开 run 看 \`Run sentinel\` 步骤日志；若 PAT 失效，重新生成只读 PAT 并更新 GitHub Secret \`CX_PAT\`（见 scripts/sentinel/README.md「一次性设置」）"
+          } | gh issue comment "$ISSUE" --body-file -
+          echo "posted self-failure alert to issue #$ISSUE"
