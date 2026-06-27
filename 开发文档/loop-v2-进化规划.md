@@ -54,14 +54,14 @@ Loop V2 是一台**真在转的自进化引擎**（8 条 meta 实证 loop 改 lo
 
 ### E1 · 账本记失败（治茧房 1 · 幸存者偏差）
 
-- **动作**：① ledger schema `verdict` 扩 `abandoned / orphaned / blocked` + `reason`；② `dispatch.mjs` 认领锁 TTL 释放孤儿任务时**自动 append 一条 `verdict:orphaned` 记账**（释放点已存在，加记账逻辑）；③ `quality-report.mjs` 北极星把非 pass 纳入分母 + 新增「放弃率 / 孤儿率」；④ BLOCKED / 会话异常退出补记账路径。
+- **动作**：① ledger schema `verdict` 扩 `abandoned / orphaned / blocked` + `reason`；**并先规范化既有 7 个 `pass-*` 变体**（`pass-after-fix` / `pass-pending-user-merge` 等归一为 `pass` + 子标记，否则「非 pass 纳入分母」口径不稳——codex #812 P2）；② `dispatch.mjs` 认领锁 TTL 释放孤儿任务时 append `verdict:orphaned` 记账，**必须幂等**：`released` 是每次 `loop:dispatch` 重算的无状态报表（`dispatch.mjs:235/425`），直接 append 会让同一陈旧 IN_PROGRESS 每次重复记 orphaned 行污染孤儿率（codex #812 P1）→ 须**写回 BACKLOG 一个 orphaned 终态事件**（event-log 天然去重）或用 `(uid, claimAt)` 去重键，每个孤儿只记一次；③ `quality-report.mjs` 北极星把非 pass 纳入分母（口径以 ① 规范化后为准）+ 新增「放弃率 / 孤儿率」；④ BLOCKED / 会话异常退出补记账路径。
 - **落点**：`scripts/loop/{dispatch,quality-report}.mjs` · ledger schema · `loop-orchestration.md §3`。
-- **验收 oracle**：构造一个孤儿任务（认领后超 TTL 无事件）→ 跑 `loop:dispatch` → ledger 自动多一条 `orphaned` 行；`loop:quality` 放弃率 > 0；单测覆盖失败记账路径。
+- **验收 oracle**：构造一个孤儿任务（认领后超 TTL 无事件）→ 跑 `loop:dispatch` → ledger 自动多一条 `orphaned` 行；**连跑两次 `loop:dispatch` 仍只 1 条 orphaned 行**（幂等验证，codex #812 P1）；`loop:quality` 放弃率 > 0；单测覆盖失败记账路径 + 幂等去重。
 - **风险**：低（纯增量记账，不改调度决策逻辑）。
 
 ### E2 · 注入外部真相（治茧房 3 · 自指闭环）
 
-- **动作**：① `quality-report` 增 `git log --grep 'revert|回滚|hotfix'` 反查，比对 ledger `pr` 号，自动把被回滚的 loop PR 标 `reverted`；② 定义 owner「重做 / 不是我要的」信号采集口径（pr-evolution 增 `user_rework:N` 字段或专门 sink）；③ 北极星加「事后回滚率」。
+- **动作**：① `quality-report` 增 `git log -E --grep='revert|回滚|hotfix'` 反查（**必须 `-E`**——git grep 默认不解析 `|` alternation，无 `-E` 实测命中 0，codex #812 P1），比对 ledger `pr` 号，自动把被回滚的 loop PR 标 `reverted`；② 定义 owner「重做 / 不是我要的」信号采集口径（pr-evolution 增 `user_rework:N` 字段或专门 sink）；③ 北极星加「事后回滚率」。
 - **落点**：`scripts/loop/quality-report.mjs`（git 反查）+ owner 信号采集约定。
 - **验收 oracle**：人为在某 loop PR 后加一个 revert commit → `loop:quality` 自动检出并标该 PR `reverted`；owner 返工计数可聚合。
 - **风险**：中（owner 信号源口径需 owner 参与定义）。
