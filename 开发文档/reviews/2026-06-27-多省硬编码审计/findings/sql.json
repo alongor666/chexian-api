@@ -36,7 +36,7 @@
       "severity": "高",
       "isVariable": true,
       "sxBroken": true,
-      "fix": "路由层完成 0E：按 req.user.branchCode 调用 getBranchCompanyName() 传入；SQL 层默认值应改为空字符串+必填校验，而非硬编码省份名"
+      "fix": "路由层完成 0E：按 req.user.branchCode 调用 getBranchCompanyName() 传入；SQL 层默认值应改为空字符串+必填校验，而非硬编码省份名 [codex#816订正:cross-sell.ts:137已传getBranchCompanyName(req.user.branchCode);真因是branch-names.ts:22注释SX中文名→显示「SX分公司」;修点在branch-names补全,非路由未传参]"
     },
     {
       "file": "server/src/sql/cross-sell.ts",
@@ -47,7 +47,7 @@
       "severity": "高",
       "isVariable": true,
       "sxBroken": true,
-      "fix": "同上；generateCrossSellSalesmanQuery 的默认 summaryGroupName 也需路由层传参"
+      "fix": "同上；generateCrossSellSalesmanQuery 的默认 summaryGroupName 也需路由层传参 [codex#816订正:cross-sell.ts:137已传getBranchCompanyName(req.user.branchCode);真因是branch-names.ts:22注释SX中文名→显示「SX分公司」;修点在branch-names补全,非路由未传参]"
     },
     {
       "file": "server/src/sql/quote-conversion.ts",
@@ -190,7 +190,7 @@
       "severity": "低",
       "isVariable": false,
       "sxBroken": false,
-      "fix": "policy_date 是 PolicyFact 通用列（SC/SX 均存在）；不硬编码省份；C 象限，不动"
+      "fix": "policy_date 是 PolicyFact 通用列（SC/SX 均存在）；不硬编码省份；C 象限，不动 [codex#816订正:cross-sell.ts:137已传getBranchCompanyName(req.user.branchCode);真因是branch-names.ts:22注释SX中文名→显示「SX分公司」;修点在branch-names补全,非路由未传参]"
     },
     {
       "file": "server/src/sql/premiumPlan.ts",
