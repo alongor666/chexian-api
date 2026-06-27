@@ -205,4 +205,40 @@ export const foundationMetrics: readonly MetricDefinition[] = [
     changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增车均保费指标，分母为去重车架号数' }],
   },
 
+  {
+    id: 'avg_premium_per_policy',
+    timeWindow: 'any',
+    additive: false,
+    version: '1.0.0',
+    name: '件均保费',
+    category: 'foundation',
+    tags: ['core', 'kpi', 'foundation'],
+    formula: {
+      description: '保费总额 / 保单件数（按保单号去重）',
+      numerator: 'SUM(premium)',
+      denominator: 'COUNT(DISTINCT policy_no)',
+      unit: '元',
+    },
+    sql: {
+      expression: 'SUM(premium) / NULLIF(COUNT(DISTINCT policy_no), 0) AS avg_premium_per_policy',
+      requiredColumns: ['premium', 'policy_no'],
+      notes: 'NULLIF 防除零。分母按 policy_no 去重（一张保单计一件）；区别于车均（车架号去重，一台车含交强+商业两单时车均>件均）、人均（业务员）。',
+    },
+    display: {
+      formatter: 'average',
+      label: '件均保费',
+      unit: '元',
+      decimals: 0,
+      tooltip: '件均保费 = 总保费 / 去重保单数；区别于车均保费（按车架号）、人均保费（按业务员）。',
+    },
+    testCases: [
+      {
+        name: '件均保费大于零',
+        input: { whereClause: '1=1' },
+        assertions: { avg_premium_per_policy: { op: 'gt', value: 0 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-06-27', changes: '新增件均保费指标（保费÷保单件数），消除"人均/件均/总保费"三义（K4 治理链）' }],
+  },
+
 ];

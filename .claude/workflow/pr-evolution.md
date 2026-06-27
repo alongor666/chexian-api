@@ -1671,3 +1671,24 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （K2 是审查期规范，自动化兜底明确委托 K3 字段闸；公式/枚举/阈值/输入契约四类的自动闸属未来独立 backlog，§5 已诚实标注边界。强行给四类建闸属过度工程——先让 K3 字段闸落地验证模式。）
+
+---
+
+## 2026-06-27 · K4 指标注册表新增件均保费 avg_premium_per_policy（技能口径治理·evidence-loop scorecard）
+
+> 承接计划 §4 K4（治理链第二波，dep K1 已合并 PR#819）。dispatch 因别批次 62e84c 占 be-config 域推迟 K4，但 62e84c 无人认领（在飞 0），主动推进。
+
+- **业务目标**：注册原子指标 avg_premium_per_policy（件均保费=保费÷保单件数），消除四象限/前端"人均/件均/总保费"三义。
+- **基线**：foundation.ts 已有 per_capita_premium（人均）+ per_vehicle_premium（车均），缺件均保费；前端 GeoSection 用含糊的 d.avg_premium 字段（非注册表 SSOT）。
+- **候选（2 文件 +41/-2）**：foundation.ts 加 avg_premium_per_policy（仿 per_vehicle_premium 范式）+ generate-frontend-map 同步 metric-display-map.ts。
+- **oracle 实证**：duckdb 实测 SX 件均 847.9 元 < 车均 1240 < 人均 56万（三口径数量级各异，消除三义坐实）；expression 跑通；validate 56 指标通过；typecheck + governance 45/45。
+- **双闸（codex CLI）**：闸-1 GO（0P0/0P1，确认 additive:false 比率正确 + NULLIF 防除零 + 原子口径与 total_premium/policy_count 一致 + 不与 per_capita/per_vehicle 重复；采纳 P2 压缩 notes/tooltip）；闸-2 GO（0P0/P1/P2，确认 codegen 三处一致 + 只增不动其他）。
+- **决策**：promote。K4 落地解锁 K5（dep K1+K2+K4 满足）。
+
+### 三问复盘
+1. **重来怎样更好**：① 跑 generate-metric-doc 意外暴露指标字典.md 严重 pre-existing drift（停 52 vs 注册表 56）——果断撤销不混入 K4（§2 流程只要求 generate-frontend-map），spawn_task 登记独立治理债。教训＝codegen 产物 regen 时若 diff 远超本次改动，先判断是否 pre-existing drift，别让历史债污染当前 PR 范围。② dispatch 域调度把 K4 推迟（别批次 62e84c 占 be-config），核实 62e84c 无人认领（在飞 0）后主动推进——dispatch 域互斥是粗粒度保守，PROPOSED≠在做。
+2. **复用价值**：① 「仿最近邻范式注册新指标」（per_vehicle_premium → avg_premium_per_policy）确保字段/formatter/changelog 一致；② 「codegen 产物 diff 远超手改 → 识别 pre-existing drift 撤销 + spawn_task」防范围蔓延通用；③ 「duckdb 实测三口径数量级各异坐实消除歧义必要性」是数据口径类改动的标准证据。
+3. **如何更高质量自动化**：指标字典.md drift 暴露 generate-metric-doc 未纳入常规 codegen/CI（spawn_task 已登记排查 + 拟加 governance「指标字典与注册表一致」检查）。K4 本身的 metric-display-map 由 §2 流程 + governance 守护，无新增自动化缺口。
+
+### needs_automation: false
+（K4 注册指标走既有 §2 codegen 流程 + governance 守护，无新增待自动化项。指标字典.md drift 的自动化排查已 spawn_task 独立登记，不属 K4 范围。）
