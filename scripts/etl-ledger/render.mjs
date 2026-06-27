@@ -3,8 +3,12 @@
  * 设计：docs/plans/2026-06-27-etl-ledger-design.md §7
  * 派生视图禁手编：本文件全量重渲染 数据管理/ledger/数据流转台账.md。
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { LEDGER_PATH } from './record.mjs';
+
+const DEFAULT_MD_PATH = join(dirname(fileURLToPath(import.meta.url)), '../..', '数据管理/ledger/数据流转台账.md');
 
 const STAGES = ['source', 'etl', 'validate', 'vps_sync', 'reload', 'health', 'frontend'];
 const LIGHT = { success: '🟢', info: '🔵', warning: '🟡', failure: '🔴', skipped: '⚪' };
@@ -114,4 +118,10 @@ export function writeReport(ledgerPath, mdPath) {
   mkdirSync(dirname(mdPath), { recursive: true });
   writeFileSync(mdPath, md, 'utf8');
   return md;
+}
+
+// CLI：直接运行时从默认台账重渲染报告；realpathSync 两边归一化，兼容中文路径 + 相对调用
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
+  const md = writeReport(LEDGER_PATH, DEFAULT_MD_PATH);
+  console.log(`[etl-ledger] 报告已生成（${md.split('\n').length} 行）→ ${DEFAULT_MD_PATH}`);
 }
