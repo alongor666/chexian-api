@@ -70,16 +70,16 @@ policy: append-only
 ## 2. 双对抗闸（codex）
 
 > codex 平台 auto-review 已失效（memory `feedback_codex_review_auto_off`）。
-> codex **CLI 经 `codex` skill 仍可手动调**（"ask codex"/"codex review"）。本协议把对抗审计固化为**两道强制闸**。
+> codex 评审**一律走 codex CLI 直接调**（`codex exec --sandbox read-only - < <prompt 文件>`），**不经 `codex` skill**（2026-06-27 用户指令「安排 codex 做评审就是让 codex CLI 做对抗性评审，不要当成技能」，见 §4 末 meta）。本协议把对抗审计固化为**两道强制闸**。
 >
 > **🔴 code review 单源 = codex CLI（2026-06-25 用户指令，见 §4 末 meta）**：闸-1 审【计划】、闸-2 审【完成 diff】**只用 codex CLI**。
 > **不再起 `code-reviewer` / `evidence-verifier` 等 Claude 子代理做 LLM 对抗，也不把 `claude-code.yml` CI auto-review 计作闸源**（CI job 仍可在 PR 上空跑，但不作为闸-2 的判定源）。
 > correctness oracle 由阶段 ⑤ 确定性闸（`verify:full` / `governance` / golden-baseline / duckdb 直查）承担，与本 code-review 闸正交、不受本收敛影响。
 
-- **闸-1（计划对抗·阶段 ②后）**：合同/计划写好后，调 `codex` skill 对抗审查**设计**（缺陷 / 遗漏 / 更优解 / 边界）。P0/P1 修复后才进实现。结论计入质量账本 `codex_plan`。
-- **闸-2（完成对抗·阶段 ⑤后、enable --auto 前）**：调 `codex` skill（或 CLI）审 **diff 完成质量** —— **code review 单源 = codex CLI**（2026-06-25 用户指令）。**P0/P1 全修 + 复审通过**才合并。结论计入 `codex_done`。**不再起 `code-reviewer` / `evidence-verifier` 子代理，也不把 CI auto-review 计作闸源**；correctness 由阶段 ⑤ 确定性闸承担（正交）。
+- **闸-1（计划对抗·阶段 ②后）**：合同/计划写好后，**直接调 codex CLI**（`codex exec --sandbox read-only`，不经 skill）对抗审查**设计**（缺陷 / 遗漏 / 更优解 / 边界）。P0/P1 修复后才进实现。结论计入质量账本 `codex_plan`。
+- **闸-2（完成对抗·阶段 ⑤后、enable --auto 前）**：**直接调 codex CLI**（`codex exec --sandbox read-only`，不经 skill）审 **diff 完成质量** —— **code review 单源 = codex CLI**（2026-06-25 + 2026-06-27 用户指令）。**P0/P1 全修 + 复审通过**才合并。结论计入 `codex_done`。**不再起 `code-reviewer` / `evidence-verifier` 子代理，也不把 CI auto-review 计作闸源**；correctness 由阶段 ⑤ 确定性闸承担（正交）。
 - **降级**：code review 已收敛为 codex CLI 单源 → codex 完全不可用时**无 LLM 兜底闸**：标 `codex_*: {"unavailable":true}` 并**向用户报缺口请授权**（`feedback_no_giveup_ask_authorization`），**不得静默跳过、也不得擅自回退 `evidence-verifier` / CI 兜底**；阶段 ⑤ 确定性闸照常跑。
-- **降级分层（2026-06-22 · PR #732 补；2026-06-25 据单源收敛更新尾级）**：codex 在 codex CLI 内**逐级**取用，**不得**因 `codex` skill 报 `Unknown skill` 就判"对抗源不可用"：① skill 在 → 经 skill 调；② **skill 包装缺失但 CLI 在**（`command -v codex` 命中，如 `/opt/homebrew/bin/codex`）→ 直接 `codex exec --sandbox read-only - < <prompt 文件>`（prompt 走 stdin 文件，避开反引号 / `${}` 的 shell 转义事故）；③ CLI 也不可用 → 标 `unavailable` 并**向用户报缺口请授权**（不回退 `evidence-verifier`/CI；阶段 ⑤ 确定性闸照跑）。**教训**：`Unknown skill: codex` 但 `/opt/homebrew/bin/codex` 实际可用，险被误判"对抗源不可用"。
+- **调用方式（2026-06-22 · PR #732 引入"逐级取用"；2026-06-27 据"不经 skill"用户指令收敛为 CLI 直调两级）**：**默认直接调 codex CLI，不经 `codex` skill**：① CLI 在（`command -v codex` 命中，如 `/opt/homebrew/bin/codex`）→ `codex exec --sandbox read-only - < <prompt 文件>`（prompt 走 stdin 文件，避开反引号 / `${}` 的 shell 转义事故）；② CLI 不可用 → 标 `unavailable` 并**向用户报缺口请授权**（不回退 `codex` skill / `evidence-verifier` / CI；阶段 ⑤ 确定性闸照跑）。**教训（保留）**：曾因 `codex` skill 报 `Unknown skill` 险误判"对抗源不可用"，而 `/opt/homebrew/bin/codex` 实际可用——故现在**不经 skill、直接认 CLI**。
 
 ---
 
@@ -145,7 +145,7 @@ policy: append-only
   - **三问复盘**：① 重来更好？认领锁本可与 wave-2 同期落地（根因当时已诊断清楚），延后一波才补——根因明确即应同 PR 修，勿只登记。② 复用价值？`latestClaims`（事件日志取最新认领态）可被 stale-scan / 其他 loop 工具复用，避免各自实现折叠。③ 自动化？认领锁本身即「把纪律变机制」；残留人工点=会话必须真的执行「认领先于实现」步——`sessionPrompt` 已固化，但仍依赖会话遵从。`needs_automation: true`（认领遗漏的硬闸：dispatch 检出「远程分支存在但无认领」时可升级为更强提示/pre-push 闸）`expires: 2026-09-22`。
 - **meta（2026-06-22 · 本 PR · 用户指令）· 单任务 loop 的 P0/P1 复杂 PR：codex 闸-2 强制 + 三源过清后自动合并**：
   - **用户指令**：「单任务 loop 也应安排 codex 对 P0/P1 级复杂任务的 PR 做对抗性审查后自动合并」。即 ① 单任务 loop **不豁免**闸-2 的 codex 对抗（此前我对本 PR 只跑了 evidence-verifier，跳过 codex，属漏闸）；② 闸-2 三源 P0/P1 全清后**应自动合并**，不留人工交接——澄清「禁 auto-merge」**仅限部署链 PR**（`.claude/pr-checklist.md §4`），P0/P1 普通任务过了对抗就自动合。
-  - **闸-2 的两层强度（按任务复杂度）**：**P0/P1 复杂任务 = codex 对抗强制不可跳**（§2 降级分层：codex skill → CLI `codex exec --sandbox read-only - < prompt 文件` → evidence-verifier+CI；本机 `/opt/homebrew/bin/codex` 0.141.0 可用，故走 CLI）；P2-P4 常规任务按需（evidence-verifier+CI 即可，codex 留给可疑口径/跨模块）。三源 = codex + evidence-verifier + CI auto-review。
+  - **闸-2 的两层强度（按任务复杂度）**：**P0/P1 复杂任务 = codex 对抗强制不可跳**（§2 降级分层：codex skill → CLI `codex exec --sandbox read-only - < prompt 文件` → evidence-verifier+CI；本机 `/opt/homebrew/bin/codex` 0.141.0 可用，故走 CLI）；P2-P4 常规任务按需（evidence-verifier+CI 即可，codex 留给可疑口径/跨模块）。三源 = codex + evidence-verifier + CI auto-review。（⚠️ **本 bullet 的「skill→CLI→evidence-verifier+CI 降级」与「三源」是 2026-06-22 当时写法，已被 2026-06-25「codex CLI 单源」+ 2026-06-27「不经 skill」收敛废止**：闸-2 现 = codex CLI 单源、降级见 §2「调用方式」两级、无 LLM 兜底，**以 §2 为准**。）
   - **自动合并判据（全满足才 enable --auto）**：① 闸-2 三源 P0/P1 全修 + 复审通过；② CI 双绿（Production Gate + Governance Check）；③ **非部署链**（不碰 `deploy.yml`/`vps-wrapper/**`/`sync-vps.mjs`/`ecosystem.config.cjs`）；④ 合并门 slot holder（`bun run loop:dispatch --merge-gate`）。满足 → `gh pr merge --auto --squash`（队列/strict=false 下 = 加入合并门，CI 过即自动落地）。**部署链 PR** 恒禁 auto-merge，人工选窗口合并并盯 CI 前 5 分钟。合并判成功一律 `gh pr view --json state`（==MERGED），禁 grep "merged"。
   - **enable --auto 后禁再 push**（memory `feedback_auto_merge_no_followup_push`：跟进提交竞态丢失）→ codex 若抓 P0/P1，先全修 + 复审 + CI 再绿，**才** enable --auto；收尾 bundle（backlog/复盘/账本）也须在 enable 前一次推完。
   - **落地**：`sessionPrompt` 第 4 步标注「P0/P1 强制 codex 闸-2 + CLI 降级路径」，第 6 步改为「三源过清 + CI 双绿 + 非部署链 → `gh pr merge --auto --squash` 自动合并；部署链人工合」。本 PR 自身即首个按新流程执行者（P0 级 → 跑 codex CLI 对抗 → 三源清 → 自动合并）。
@@ -163,6 +163,14 @@ policy: append-only
   - **洞察2（账本实证收敛）**：对抗命中 codex 281 ∶ verifier 2（58 样本，140 倍）——从量化角度实证 2026-06-25「code review 单源＝codex CLI」决策：verifier 独立边际价值极低，收敛未损对抗强度。一次过率 36.2% 偏低部分是 codex 闸-2 健康拦截返工（非质量退化），`quality-report.mjs` 暂不区分两类返工。
   - **本轮已修（代码）**：① `scanEntries` 格式漂移——`###` 标题行书写的 needs_automation 被标题分支吞掉、静默脱离催办网（尾部 6 条 entry + 本轮 entry 漏计近一月）；修＝needs_automation 检测移到标题前 + 单测（`loop.test.mjs` 60 passed）。② 本 entry 裸字符串自污染（误增幽灵健康项）一并修正。
   - **新机制登记（expires 2026-09-27）**：① automation-due「疑似已机制化」启发式（项1 闸建好挂 9 天没撤）；② meta-review 自动触发（免等用户触发）。属 loop-meta 代码改动，单 owner 串行落地，本轮仅登记。
+- **meta（2026-06-27 · 本 PR · 用户指令）· §2 措辞落实：codex 评审「不经 skill、直接 CLI」彻底清理（兑现 2026-06-25 未改干净的主体）**：
+  - **用户指令**：「请记住，安排 codex 做评审，就是让 codex CLI 做对抗性评审，不要再当成技能。」即 codex 评审默认**直接调 codex CLI**（`codex exec --sandbox read-only - < <prompt 文件>`），**不经 `codex` skill**。
+  - **根因（为何改主体而非只追加 meta）**：上一节 2026-06-25 meta 声称已把「§2 闸-2/降级/降级分层/引言」收敛为 CLI 单源，但**实际只改了闸-2 的判定源措辞**——§2 引言、闸-1、降级分层①「skill 在→经 skill 调」、§7 关联「对抗第二模型：codex skill」**至今仍写「经 codex skill 调」**，主体与结论漂移留存近半月。append-only 文件里**主体即权威、§4 旁注 meta 易被忽略**，故下次会话读 §2 降级分层①仍会先试 skill。本次按用户指令**直接改 §2/§7 主体那几处措辞**，不再靠 meta 旁路声明。
+  - **改了什么**：① §2 引言「CLI 经 skill 仍可手动调」→「评审一律走 codex CLI 直接调，不经 skill」；② 闸-1/闸-2 → 「直接调 codex CLI（不经 skill）」；③ 原「降级分层」三级（① skill 在→经 skill 调 ② CLI 在→codex exec ③ 都不可用→报缺口）**收敛为两级**（① CLI 在→`codex exec`；② 不可用→报用户请授权），标题改「调用方式」；④ §7 关联「对抗第二模型：codex skill」→「codex CLI」；⑤ `skills-map.md` E 段 codex 行标注「评审走 CLI 不经 skill」；⑥ 给第 148 行（2026-06-22 meta「闸-2 两层强度」）的「skill→CLI→evidence-verifier+CI 降级 / 三源」就地加**废止标注**（codex 闸-2 抓出的 P1 残留：旧 meta 措辞像当前有效流程、与 §2「单源/不经 skill」冲突），明确以 §2 为准。**未动**：闸-2 correctness 正交边界、确定性闸、`evidence-verifier.md`（frozen）、第 75-77 行「code review 单源=codex CLI」blockquote（已对，无需改）。
+  - **新增 memory**：`codex-review-is-cli-adversarial`（feedback）固化「安排 codex 评审 = codex CLI 对抗，不当 skill」，供跨会话召回。
+  - **append-only 处置（`[policy-override]`）**：本次**修改既有 §2/§7 主体内容**（非纯追加），按 AGENTS.md §8.2 已获用户 2026-06-27「改」指令 `[policy-override]` 授权；旧措辞经本 meta + git 历史留痕，无信息丢失。
+  - **三问复盘**：① 重来更好？2026-06-25 那次就该改主体而非只在 §4 追加 meta 声明——「声称改了」与「实际改了」漂移是协议类 append-only 文件高发坑（同 `feedback_codex_review_fix_sop`「修一处≠修一类」：声明一处≠落实全文）。② 复用价值？「append-only 协议的 meta 声明必须同步落实到主体，否则主体即权威、meta 被忽略」对所有 append-only 护栏通用。③ 自动化？`needs_automation: false`（本次为文字落实，无新运行时机制；2026-06-25 已登记的「扫 loop PR 出现 code-reviewer/evidence-verifier 作闸源即告警」governance 闸 expires 2026-09-25 已覆盖本方向）。
+  - **本 PR codex CLI 闸-2 实跑（以身作则用 CLI 而非 skill）**：判 PARTIAL，抓 1 P1（第 148 行旧三源/skill 降级残留，本应 2026-06-25 一并清理）+ 2 P2（skills-map 第一列路由歧义、commit/PR 须带 `[policy-override]`），均已处置。又一个「修一处≠修一类」实例——改 §2 主体须连同 §4 历史 meta 的「当前性」措辞一起扫；也实证「评审走 codex CLI」能抓出单看 diff 易漏的跨节冲突。
 
 ---
 
@@ -187,6 +195,6 @@ policy: append-only
 - 单任务闭环基座：`~/.claude/skills/evidence-loop-core/SKILL.md` · wrapper [`.claude/commands/chexian-evidence-loop.md`](../commands/chexian-evidence-loop.md)
 - §4 harness 表：[`.claude/rules/evidence-loop.md`](./evidence-loop.md)
 - 并发纪律（worktree/分支/簿记 union）：[`.claude/rules/worktree-setup.md`](./worktree-setup.md)
-- verifier：[`.claude/agents/evidence-verifier.md`](../agents/evidence-verifier.md) · 对抗第二模型：`codex` skill
+- verifier：[`.claude/agents/evidence-verifier.md`](../agents/evidence-verifier.md)（frozen·非 loop 闸必需源）· 对抗第二模型：**codex CLI**（`codex exec`，不经 skill）
 - scorecard/复盘 sink：`.claude/workflow/pr-evolution.md`（AGENTS.md §8.3 user-only 路径只读）
 - 本文件 append-only（AGENTS.md §8.2）：新增独立护栏文件，无需 `[policy-override]`。
