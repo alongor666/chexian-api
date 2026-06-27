@@ -1485,9 +1485,9 @@ PresetUser/JwtPayload/UserCredential 加 `visibleBranches`；permission.ts RLS-o
 
 ---
 
-## 2026-06-27 · Loop v2 元复盘（按 §4 自进化回路 · 单 owner 串行 · 零功能代码改动）
+## 2026-06-27 · Loop v2 元复盘（按 §4 自进化回路 · 单 owner 串行 · 含 loop 元工具修复）
 
-> 用户指令「专项治理 loop v2 沉淀的进化文档」→ 澄清为「做 loop v2 元复盘」。按 `loop-orchestration.md §4` 跑一轮自进化回路：`loop:automation-due` + `loop:quality` 体检 → 处置存量自进化项 → 沉淀本 entry。本轮只动两份进化文档（pr-evolution + loop-orchestration §4），零功能代码改动，符合 §4 wave-2 元教训「loop-meta 改动单 owner 串行」（本会话即单 owner）。
+> 用户指令「专项治理 loop v2 沉淀的进化文档」→ 澄清为「做 loop v2 元复盘」。按 `loop-orchestration.md §4` 跑一轮自进化回路：`loop:automation-due` + `loop:quality` 体检 → 处置存量自进化项 → 沉淀本 entry。本轮动两份进化文档（pr-evolution + loop-orchestration §4）+ 修 loop 元工具脚本（`automation-due.mjs` scanEntries 缺陷 + 单测，见下「催办网解析缺陷」节），**零业务功能代码改动**，符合 §4 wave-2 元教训「loop-meta 改动单 owner 串行」（本会话即单 owner）。
 
 ### 体检结果（基准日 2026-06-27）
 - **自进化催办**（automation-due）：处置前「缺 expires 3 · 健康 28」→ 处置后「缺 expires 0 · 健康 30」（已过期 / 临期恒 0）。

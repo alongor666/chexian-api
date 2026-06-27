@@ -45,7 +45,15 @@ export function scanEntries(content) {
       continue;
     }
     const m = line.match(/^#{2,3}\s+(.+)/);
-    if (m) { entry = m[1].trim(); continue; }
+    if (m) {
+      const title = m[1].trim();
+      // 仅「任务级标题」更新 entry：`## ` 级或**以日期 `YYYY-MM-DD` 开头**的标题（任务标题
+      // 形如「2026-06-27 · …」日期在首）。纯子节标题（### 三问复盘 / ### 做了什么 / ### 处置 /
+      // ### 体检结果（基准日 2026-…）等——括号内含日期的也不算）不更新，否则标题形式
+      // needs_automation 会归到子节名而非任务名、可定位性差（codex 闸-2 P2·2026-06-27 修正）。
+      if (/^##\s/.test(line) || /^\d{4}-\d{2}-\d{2}/.test(title)) entry = title;
+      continue;
+    }
   }
   return out;
 }
