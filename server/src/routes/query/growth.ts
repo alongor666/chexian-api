@@ -4,7 +4,7 @@ import {
   asyncHandler, AppError, duckdbService,
   commonFilterSchema, buildWhereFromFilterParams,
   isValidDateFormat,
-  QUERY_CACHE, withRouteCache,
+  QUERY_CACHE, withRouteCache, requirePermissionFilter,
 } from './shared.js';
 import {
   generateGrowthQuery,
@@ -140,7 +140,7 @@ router.get(
       const filterParamsNoDates = { ...filterResult.data, startDate: undefined, endDate: undefined };
       const finalWhereClause = buildWhereFromFilterParams(
         filterParamsNoDates,
-        req.permissionFilter || '1=1'
+        requirePermissionFilter(req.permissionFilter)
       );
 
       // 获取视角指标
@@ -188,7 +188,7 @@ router.get(
       const filterParamsNoDates = { ...filterResult.data, startDate: undefined, endDate: undefined };
       const finalWhereClause = buildWhereFromFilterParams(
         filterParamsNoDates,
-        req.permissionFilter || '1=1'
+        requirePermissionFilter(req.permissionFilter)
       );
 
       const config: GrowthConfig = {
@@ -225,7 +225,7 @@ router.get(
 
     const finalWhereClause = buildWhereFromFilterParams(
       filterParamsForWhere,
-      req.permissionFilter || '1=1'
+      requirePermissionFilter(req.permissionFilter)
     );
 
     const config: GrowthConfig = {

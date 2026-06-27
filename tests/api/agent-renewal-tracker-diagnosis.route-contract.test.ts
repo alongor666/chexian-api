@@ -44,10 +44,12 @@ describe('agent renewal tracker diagnosis route contract', () => {
     expect(service).toContain('generateRenewalTrackerMetaQuery(input.branchCode)');
     expect(service).not.toMatch(/generateRenewalTrackerMetaQuery\(\s*\)/);
 
-    // route：两处 runRenewalTrackerDiagnosis 调用都从 permissionFilter 派生并传入 branchCode
+    // route：两处 runRenewalTrackerDiagnosis 调用都从已 fail-closed 收窄的局部 permissionFilter 派生 branchCode
+    // B326：两个 handler 入口先 requirePermissionFilter(req.permissionFilter)，下游不再裸传 req.permissionFilter
     expect(route).toContain('deriveRenewalBranchCode');
-    expect(route).toContain('branchCode: deriveRenewalBranchCode(permissionFilter)');
-    expect(route).toContain('branchCode: deriveRenewalBranchCode(req.permissionFilter)');
+    const branchCodeDerivations = route.match(/branchCode: deriveRenewalBranchCode\(permissionFilter\)/g) ?? [];
+    expect(branchCodeDerivations.length).toBe(2);
+    expect(route).not.toContain('deriveRenewalBranchCode(req.permissionFilter)');
   });
 
   it('keeps this PR scoped to current renewal-tracker only', () => {

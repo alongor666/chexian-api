@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, resolveGroupDim, withRouteCache } from './shared.js';
+import { asyncHandler, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, resolveGroupDim, withRouteCache, requirePermissionFilter } from './shared.js';
 import { generatePremiumTrendQuery, generateQualityBusinessTrendQuery, TimeView } from '../../sql/trend.js';
 import type { ViewPerspective } from '../../types/view-perspective.js';
 import { isTrendCubeServable, generatePremiumTrendCubeQuery } from '../../sql/cube/trend-cube.js';
@@ -141,12 +141,13 @@ router.get(
 router.get(
   '/test',
   asyncHandler(async (req, res) => {
+    const permissionFilter = requirePermissionFilter(req.permissionFilter);
     const sql = `
       SELECT
         COUNT(*) as total_count,
         SUM(premium) as total_premium
       FROM PolicyFact
-      WHERE ${req.permissionFilter || '1=1'}
+      WHERE ${permissionFilter}
     `;
 
     const result = await duckdbService.query(sql);

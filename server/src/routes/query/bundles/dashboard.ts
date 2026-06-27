@@ -14,6 +14,7 @@ import {
   getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
   resolveBranchRlsCode,
+  requirePermissionFilter,
 } from '../shared.js';
 import { buildWhereFromFilterParams } from '../../../utils/filter-params.js';
 import { generateKpiQuery } from '../../../sql/kpi.js';
@@ -150,7 +151,7 @@ router.get(
     }
     const prevYearWhereWithDate = buildWhereFromFilterParams(
       prevYearFilterData,
-      req.permissionFilter || '1=1'
+      requirePermissionFilter(req.permissionFilter)
     );
 
     // 分省 RLS：kpi-detail 内同城/异地名单按省切换（G6 follow-up）

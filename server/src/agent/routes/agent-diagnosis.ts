@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middleware/auth.js';
 import { readonlyMiddleware } from '../../middleware/readonly.js';
-import { permissionMiddleware } from '../../middleware/permission.js';
+import { permissionMiddleware, requirePermissionFilter } from '../../middleware/permission.js';
 import { asyncHandler, AppError } from '../../middleware/error.js';
 import { buildWhereFromFilterParams, buildWhereFromFilterParamsWithoutDate } from '../../utils/filter-params.js';
 import { buildInCondition, isValidDateFormat, validateDateRange } from '../../utils/sql-sanitizer.js';
@@ -165,11 +165,13 @@ function validateBusinessPatrolInput(input: BusinessPatrolDiagnosisRequest): voi
 
 function buildBusinessPatrolTasks(
   input: BusinessPatrolDiagnosisRequest,
-  permissionFilter: string | undefined,
+  // B326 fail-closed：调用方（business-patrol handler）已 requirePermissionFilter 收窄，
+  // 此处恒为 string（branch_admin 取合法的全表放行常量），不再对 undefined 做放行兜底。
+  permissionFilter: string,
   user: AgentDiagnosisUserContext | undefined
 ): BusinessPatrolTask[] {
-  const costWhereClause = buildWhereFromFilterParams(input.diagnostics.costIndicators.filters, permissionFilter || '1=1');
-  const growthWhereClause = buildWhereFromFilterParamsWithoutDate(input.diagnostics.growth.filters, permissionFilter || '1=1');
+  const costWhereClause = buildWhereFromFilterParams(input.diagnostics.costIndicators.filters, permissionFilter);
+  const growthWhereClause = buildWhereFromFilterParamsWithoutDate(input.diagnostics.growth.filters, permissionFilter);
   return [
     {
       capabilityId: 'growth_diagnosis',
@@ -274,7 +276,7 @@ router.post(
       throw new AppError(400, `Invalid cutoffDate format: ${input.cutoffDate}. Expected YYYY-MM-DD`);
     }
 
-    const whereClause = buildWhereFromFilterParams(input.filters, req.permissionFilter || '1=1');
+    const whereClause = buildWhereFromFilterParams(input.filters, requirePermissionFilter(req.permissionFilter));
     const diagnosis = await runCostIndicatorDiagnosis({
       cutoffDate: input.cutoffDate,
       dimension: input.dimension,
@@ -303,7 +305,7 @@ router.post(
       throw new AppError(400, err instanceof Error ? err.message : String(err));
     }
 
-    const whereClause = buildWhereFromFilterParamsWithoutDate(input.filters, req.permissionFilter || '1=1');
+    const whereClause = buildWhereFromFilterParamsWithoutDate(input.filters, requirePermissionFilter(req.permissionFilter));
     const diagnosis = await runGrowthDiagnosis({
       currentPeriod: input.currentPeriod,
       baselinePeriod: input.baselinePeriod,
@@ -368,13 +370,14 @@ router.post(
       throw new AppError(400, `Invalid cutoff format: ${input.cutoff}. Expected YYYY-MM-DD`);
     }
 
+    const permissionFilter = requirePermissionFilter(req.permissionFilter);
     const diagnosis = await runRenewalTrackerDiagnosis({
       start: input.start,
       end: input.end,
       cutoff: input.cutoff,
       filters: input.filters,
-      extraConditions: buildRenewalTrackerExtraConditions(input.filters, req.permissionFilter, req.user),
-      branchCode: deriveRenewalBranchCode(req.permissionFilter),
+      extraConditions: buildRenewalTrackerExtraConditions(input.filters, permissionFilter, req.user),
+      branchCode: deriveRenewalBranchCode(permissionFilter),
       limit: input.limit,
     });
 
@@ -436,8 +439,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const input = BusinessPatrolDiagnosisRequestSchema.parse(req.body);
     validateBusinessPatrolInput(input);
+    const permissionFilter = requirePermissionFilter(req.permissionFilter);
     const diagnosis = await runBusinessPatrolTasks(
-      buildBusinessPatrolTasks(input, req.permissionFilter, req.user),
+      buildBusinessPatrolTasks(input, permissionFilter, req.user),
       { timeoutMs: input.timeoutMs, limit: input.limit }
     );
 

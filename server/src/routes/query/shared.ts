@@ -20,6 +20,7 @@ export { z } from 'zod';
 export { asyncHandler, AppError } from '../../middleware/error.js';
 export { duckdbService } from '../../services/duckdb.js';
 export { permissionService } from '../../services/permission.js';
+export { requirePermissionFilter } from '../../middleware/permission.js';
 export { isValidDateFormat } from '../../utils/sql-sanitizer.js';
 export { commonFilterSchema, buildWhereFromFilterParams, buildWhereFromFilterParamsWithoutDate } from '../../utils/filter-params.js';
 export { parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, resolveGroupDim } from '../../utils/route-helpers.js';
