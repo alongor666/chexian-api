@@ -1,0 +1,220 @@
+{
+  "domain": "前端域 (src/**)",
+  "summary": {
+    "A": 5,
+    "B": 9,
+    "C": 3,
+    "D": 1,
+    "致命": 2,
+    "高": 8,
+    "中": 4,
+    "低": 4
+  },
+  "top": [
+    "1. src/shared/config/organizations.ts:11-24 — ORGANIZATIONS 常量硬编码 12 个四川机构名，新省上线必须改代码（B象限·高）",
+    "2. src/shared/config/organizations.ts:159-252 — DEFAULT_USER_PERMISSIONS 写死 12 个四川机构用户（leshan/tianfu/…），山西用户无法在前端快速切换（B象限·高）",
+    "3. src/shared/hooks/useScopeLabel.ts:57 — 多机构/全部时固定返回「四川分公司」文字，山西用户看到错误省份标题（B象限·致命）",
+    "4. src/features/dashboard/components/GeoSection.tsx:42 — useState<string>('四川') 地图默认下钻固定四川，山西用户首屏显示四川省地图（B象限·致命）",
+    "5. src/shared/config/org-groups.ts:10-12 + src/features/filters/AdvancedFilterPanel.tsx:215-216 — 同城/异地机构列表双重硬编码（org-groups.ts + 组件内局部变量），仅列四川机构，山西无同城/异地快选（B象限·高）"
+  ],
+  "findings": [
+    {
+      "file": "src/shared/config/organizations.ts",
+      "line": 11,
+      "snippet": "export const ORGANIZATIONS = ['乐山','天府','宜宾','德阳','新都','武侯','泸州','自贡','资阳','达州','青羊','高新'] as const;",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "从 /api/filters/options 动态拉取机构列表，前端不静态维护；或改为按 branchCode 从配置表派生"
+    },
+    {
+      "file": "src/shared/config/organizations.ts",
+      "line": 159,
+      "snippet": "export const DEFAULT_USER_PERMISSIONS: UserPermission[] = [ ... { username:'leshan', displayName:'乐山机构'...}, ... { username:'scdianxiao', displayName:'四川电销' }]",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "前端快速切换用户列表应从后端 /api/auth/route-catalog 或权限接口动态获取，禁止前端静态维护省份机构用户列表"
+    },
+    {
+      "file": "src/components/layout/SidebarUserPanel.tsx",
+      "line": 54,
+      "snippet": "const quickUsers = [ ...'leshan','tianfu','yibin','deyang','xindu','wuhou','luzhou','zigong','ziyang','dazhou','qingyang','gaoxin' ]",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "quickUsers 应从登录态/权限接口动态派生，不硬编码四川机构列表"
+    },
+    {
+      "file": "src/features/auth/UserLoginPanel.tsx",
+      "line": 39,
+      "snippet": "const quickUsers = [ ... 与 SidebarUserPanel 完全相同的 12 个四川机构列表 ]  // @deprecated",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "文件已 @deprecated，但仍有相同硬编码；彻底移除该文件"
+    },
+    {
+      "file": "src/shared/hooks/useScopeLabel.ts",
+      "line": 57,
+      "snippet": "return { prefix: '四川分公司', level: 'company' as const };",
+      "quadrant": "B",
+      "category": "省份名",
+      "severity": "致命",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "改为从 BranchContext 取 branchLabel(currentBranch) + '分公司'；无 branch 时取 userPermission.displayName 中的省份"
+    },
+    {
+      "file": "src/features/filters/PageHeaderBar.tsx",
+      "line": 33,
+      "snippet": "// 4. 多个/全部机构 → \"四川分公司{baseTitle}\"",
+      "quadrant": "B",
+      "category": "省份名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "PageHeaderBar 消费 useScopeLabel，修源头 useScopeLabel:57 即可连带修复"
+    },
+    {
+      "file": "src/shared/config/drilldown-dimensions.ts",
+      "line": 116,
+      "snippet": "RENEWAL_LEVEL_LABELS = { company: '四川分公司', ... }",
+      "quadrant": "B",
+      "category": "省份名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "company 标签改为动态计算，从 BranchContext 取省份显示名"
+    },
+    {
+      "file": "src/shared/ui/DrilldownBreadcrumb.tsx",
+      "line": 52,
+      "snippet": "topLabel = '四川分公司',  // props default",
+      "quadrant": "A",
+      "category": "省份名",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "默认值从 '四川分公司' 改为无（required prop 或从 BranchContext 计算）；调用方按当前省传入"
+    },
+    {
+      "file": "src/features/dashboard/components/GeoSection.tsx",
+      "line": 42,
+      "snippet": "const [currentProvince, setCurrentProvince] = useState<string>('四川');",
+      "quadrant": "B",
+      "category": "省份名",
+      "severity": "致命",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "初始省份从 BranchContext.currentBranch → branchLabel() 派生；'SC'→'四川' 映射已在 BranchContext 中"
+    },
+    {
+      "file": "src/shared/utils/geo-map-loader.ts",
+      "line": 45,
+      "snippet": "if (provinceName === '四川') { const sichuanModule = await import('@/shared/assets/sichuan.json'); ... }",
+      "quadrant": "B",
+      "category": "省份schema",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "sichuan.json 本地 bundle 合理（性能优化）；但山西 GeoJSON 同样应本地 bundle 或提前 CDN 预热；preloadDefaultMaps() 中固定预加载'四川'须随当前省动态化"
+    },
+    {
+      "file": "src/shared/utils/geo-map-loader.ts",
+      "line": 113,
+      "snippet": "ensureMapRegistered('四川'),  // 预加载全国 + 四川（首屏默认需要）",
+      "quadrant": "A",
+      "category": "省份名",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "preloadDefaultMaps() 改为接受省份参数，按当前用户 branchCode 决定预加载哪个省"
+    },
+    {
+      "file": "src/shared/config/org-groups.ts",
+      "line": 10,
+      "snippet": "ORG_GROUPS = { SAME_CITY: ['天府','高新','新都','青羊','武侯','重客','本部'], REMOTE: ['宜宾','德阳','资阳','泸州','自贡','乐山','达州'] }",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "同城/异地分组应从后端接口按 branchCode 获取，或在 /api/filters/options 中加 org_groups 维度"
+    },
+    {
+      "file": "src/features/filters/AdvancedFilterPanel.tsx",
+      "line": 215,
+      "snippet": "const LOCAL_ORGS = ['天府','高新','新都','青羊','武侯','重客','本部']; const REMOTE_ORGS = ['宜宾','德阳','资阳','泸州','自贡','乐山','达州'];",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "与 org-groups.ts 重复，统一用 ORG_GROUPS 常量；长期改为从后端动态获取"
+    },
+    {
+      "file": "src/features/cost/components/EarnedPremiumTable.tsx",
+      "line": 131,
+      "snippet": "['四川','同城','异地','合计'].includes(row.org_level_3)",
+      "quadrant": "D",
+      "category": "省份名",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": true,
+      "fix": "「四川」是后端成本报告的汇总行 org_level_3 字面值，来自服务端数据。若山西报告汇总行改为「山西」则前端此处需适配；需业务确认成本汇总行 org_level_3 值是否统一为省份名"
+    },
+    {
+      "file": "src/shared/contexts/BranchContext.tsx",
+      "line": 18,
+      "snippet": "const BRANCH_LABELS: Record<string, string> = { SC: '四川', SX: '山西' };",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "fix": "新省上线在此表追加一行，合理；已有注释「未登记的码回落为码本身，禁臆造」；D象限边界，当前可接受"
+    },
+    {
+      "file": "src/features/dashboard/hooks/useTrendData.ts",
+      "line": 284,
+      "snippet": "const orgLabel = hasOrgFilter ? (filters.org_level_3?.[0] ?? '机构') : '四川';",
+      "quadrant": "A",
+      "category": "省份名",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": true,
+      "fix": "orgLabel 的省份默认值应用 branchLabel(currentBranch ?? 'SC')，而非硬编码 '四川'"
+    },
+    {
+      "file": "src/features/dashboard/PremiumDashboard.tsx",
+      "line": 81,
+      "snippet": "org_level_3: String(item.org_level_3 ?? '四川'),",
+      "quadrant": "A",
+      "category": "省份名",
+      "severity": "低",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "空值 fallback '四川' 用于图例标签显示，低危；可改为 branchLabel 派生"
+    },
+    {
+      "file": "src/features/filters/PageHeaderBar.tsx",
+      "line": 40,
+      "snippet": "allOrgCount = 12,  // props default",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "低",
+      "isVariable": true,
+      "sxBroken": false,
+      "fix": "实际调用处已改为动态 filterOptions.org_level_3?.length，此默认值仅为兜底，但暗示四川机构数；无大碍"
+    }
+  ]
+}
