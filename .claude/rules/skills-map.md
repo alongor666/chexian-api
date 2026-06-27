@@ -55,7 +55,7 @@
 
 | Skill | 触发场景 |
 |-------|---------|
-| **codex** | 第二意见 / 对抗式 review（"ask codex" / "codex review"） |
+| ~~**codex**~~（非 skill 触发） | ⚠️ codex 评审一律走 **codex CLI**（`codex exec --sandbox read-only`，prompt 自包含喂 stdin），**不经本 skill**；本行仅登记 codex 工具存在、**非评审入口**，勿按 skill 触发 — 详见 memory `codex-review-is-cli-adversarial` + `loop-orchestration.md §2` |
 | **qa** / **qa-only** | 系统性 QA 并修 bug（生产前最后一道闸） |
 | **review** | Pre-landing PR review（SQL 安全 / LLM 信任边界 / 条件副作用） |
 | **security-review** | 处理用户输入 / 鉴权 / 敏感数据时强制触发 |
