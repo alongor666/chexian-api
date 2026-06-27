@@ -1557,3 +1557,25 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 - **三问复盘**：① 重来更好？改任何 loop 元资产或引用其数据前，先 `git fetch origin main && git log origin/main --oneline -6 | grep -iE 'loop|元复盘'` 查同主题合并再动手。② 复用价值？「引用自产指标必跑脚本取值、禁口算」对所有 quality/账本类诊断通用。③ 自动化？可加：审视/规划类会话开工 checklist 前置「fetch + 查同主题合并」，先纪律后评估是否值得机制化。
 - needs_automation: true
 - expires: 2026-09-27
+---
+
+## 2026-06-27 · worktree 防泄漏 PreToolUse hook 落地（PR #476/#644/#792 三次 TODO 的代码兜底）
+
+> 承接本文件三处「应加 PreToolUse hook 拦截 worktree 写主仓」TODO（PR #476 line 56 / heuristic-stonebraker line 160 / PR #792「pre-commit 硬闸可选非必需」）。用户本次明确要求落地并判路线。
+> **格式说明（诚实 surface）**：任务交办时设想的「本文件顶部失败模式登记表 / P2 行 /『当前拦截层』『升级触发线·当前债』两列」**在本文件实际不存在**（全文 grep `失败模式登记表|当前拦截层|升级触发线|当前债` 零命中——本文件是 append-only entry 流，非优先级登记表）。故按真实格式 append 本 entry，并在其内显式承载那两列语义（见下「当前拦截层」「升级触发线·当前债」两条）。
+
+- **触发（失败模式）**：worktree 会话中 Write/Edit 用【主仓绝对路径】→ 改动落进主仓 main 工作区（只读基线区），worktree 副本与全量回归测的都是旧版本。三次发作：PR #476（2026-06-03）/ heuristic-stonebraker-3ceb6c（任务记作 #644）/ PR #792（2026-06-25）。
+- **路线判定（① hook vs ② 确认重锚已根治 → 选 ①，证据锁定 ② 不充分）**：EnterWorktree 重锚改的是会话 cwd，治【相对路径】漂移；但【绝对路径】不受 cwd / 锚点影响——PR #476 根因原文「**cwd 切换对 Write/Edit 无效**」、PR #783 复盘「**session 锚 worktree 但用主目录绝对路径 Write 仍泄漏**」，两条铁证证明重锚救不了绝对路径逃逸。二者**互补非互斥**：重锚治相对路径漂移，hook 兜绝对路径逃逸。契合本文件既有「机制已在执行缺位类教训…正确动作=升级为自动拦截 hook/governance」+ memory `feedback_prompt_needs_code_backup`/`feedback_rules_need_automation`。
+- **当前拦截层**（= 任务要回写的第一列语义）：🔴 仅文档（worktree-setup.md §A 纪律 + 三处 TODO）→ ✅ **PreToolUse hook（`scripts/hooks/claude-worktree-guard.sh`，write-time 硬拦截 exit 2）**。比 PR #792 设想的「pre-commit 检测主仓改动」更早一层（编辑时即拦，不等到 commit）。
+- **升级触发线·当前债**（= 任务要回写的第二列语义）：触发线「同类再发作 1 次」在 **PR #792（第 3 次）已越线**；**当前债 = 落地 hook，本 entry 已清偿**（三处 TODO 关闭，无遗留）。
+- **做了什么**：① 新增 `scripts/hooks/claude-worktree-guard.sh`——复用 user-only guard 的 `$CLAUDE_TOOL_INPUT`/stdin 双路解析 file_path，基于 git worktree 拓扑判定（非 linked worktree 放行 / 当前 wt 内放行 / 逃逸主仓根 exit 2 / 别处放行），fail-open（git 不可用即放行，不破坏正常 Write/Edit）；② `.claude/settings.json` 的 `Write|Edit` matcher **增挂**该脚本（保留 user-only guard，二者独立串联，修补不拆除）；③ `scripts/hooks/__tests__/claude-worktree-guard.test.mjs` 10 vitest 用例（TDD RED→GREEN）。
+- **判定健全性（胜过三次复盘写的「路径不含 .claude/worktrees/ 子串」判据）**：那个子串判据对**兄弟目录落点**（如真实存在的 `chexian-api-sx-g8`）会**全量误杀**（兄弟 wt 内合法路径也不含该子串）。本 hook 改用 git 拓扑（worktree 根 vs 主仓根前缀），对「.claude/worktrees/ 嵌套」与「兄弟目录」两落点都正确，且 `case "$main_root"/*` 带斜杠锚定避开「`chexian-api` 是 `chexian-api-sx-g8` 字符串前缀」的陷阱。
+- **oracle（验证不声称）**：① vitest **10/10**（全量并发 ×3 稳定 · 含前缀陷阱 / `../` 逃逸 / stdin+env 双输入 case）；② 真实 worktree 端到端 7 场景手验——worktree 内 / 本任务文件 / 真实兄弟 wt(chexian-api-sx-g8) / 仓库外(~/.claude) / 无 file_path → exit 0；主仓代码 / 主仓 CLAUDE.md（逃逸）→ exit 2 + 中文拦截理由；③ `jq` 校验 settings.json 合法、两 hook 均挂载。
+
+### 三问复盘
+1. **重来怎样更好**：① 三次复盘都写「应加 hook」却停在 TODO 半个月——根因明确即应同 PR 修，勿只登记 TODO（本文件既有「机制已在执行缺位」教训的又一实证）。② 测试 fixture 首版漏隔离 git env，隔离跑全过、pre-push 全量并发偶发 1 failed——复刻 PR #803「隔离过≠满载过」：凡 spawn git 子进程的测试必清 `GIT_DIR` + `GIT_CONFIG_GLOBAL/SYSTEM=/dev/null`，否则继承 worker 上下文污染落错 repo。本次是「升级 hook」分支的兑现。
+2. **复用价值**：「git worktree 拓扑判定 + 带斜杠前缀锚定避兄弟目录陷阱」对任何「会话隔离 / 路径归属」类 hook 通用；测试「真临时 git repo + 隔离 git env + spawnSync 断言退出码」范式可复用于其它 PreToolUse hook（呼应既有 PR-2「可注入参数做确定性测试」）。
+3. **如何更高质量自动化**：本 hook 即「把 worktree-setup.md §A 纪律变机制」。残留边界 = hook 仅在【cwd 已在 worktree】时有效；cwd 在主仓的未重锚会话本 hook 不介入（那是 EnterWorktree 重锚的职责）——两机制叠加才完整（重锚治相对路径漂移、hook 兜绝对路径逃逸），非缺口。
+
+### needs_automation: false
+（worktree 绝对路径逃逸已由本 PreToolUse hook 硬拦截 + 10 vitest 回归锁定，纪律已机制化，无新增待自动化项。「未重锚会话不介入」是设计取舍而非缺口——属 EnterWorktree 重锚域，见 worktree-setup.md §A「cwd 漂移根治」。）

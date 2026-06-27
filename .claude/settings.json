@@ -34,6 +34,10 @@
           {
             "type": "command",
             "command": "root=$(git rev-parse --show-toplevel 2>/dev/null || echo .); bash \"$root/scripts/hooks/claude-user-only-guard.sh\""
+          },
+          {
+            "type": "command",
+            "command": "root=$(git rev-parse --show-toplevel 2>/dev/null || echo .); bash \"$root/scripts/hooks/claude-worktree-guard.sh\""
           }
         ]
       },
