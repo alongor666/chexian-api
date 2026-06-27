@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate, latestClaims, failureLedgerRows, isInspectMode } from '../dispatch.mjs';
-import { parseLedger, aggregate, normalizeVerdict } from '../quality-report.mjs';
+import { parseLedger, aggregate, normalizeVerdict, parseRevertedPrs, buildRevertGitArgs, collectRevertedPrs, effectiveVerdict, parseUserReworkLog } from '../quality-report.mjs';
 import { scanEntries, classify, isoAddDays } from '../automation-due.mjs';
 import { scanNotes, classifyStale, scanStale, uidToken, branchMatchesUid } from '../stale-scan.mjs';
 
@@ -718,5 +718,204 @@ describe('stale-scan.scanStale · 注入 mergedPrsByUid（47c2a5）', () => {
     const r = scanStale(tasks, new Map(), new Map([['lowc', 7]]), new Map([['prdone', [721]]]));
     expect(r.map((x) => x.uid)).toEqual(['prdone', 'lowc']);
     expect(r[0].confidence).toBe('high');
+  });
+});
+
+// ============ E2 注入外部真相（治茧房3 自指闭环·2026-06-27）============
+
+describe('quality-report.parseRevertedPrs（git revert 反查·被回滚原 PR 解析）', () => {
+  it('GitHub squash revert：取引号内被回滚 PR，排除引号外 revert 自身号', () => {
+    expect([...parseRevertedPrs(['Revert "feat(loop): E1 (#815)" (#820)'])]).toEqual([815]);
+  });
+  it('git revert 默认格式：引号内 PR', () => {
+    expect([...parseRevertedPrs(['Revert "fix(x): y (#700)"'])]).toEqual([700]);
+  });
+  it('无引号手写 revert/回滚 动词窗口：取号（含中文 + 带空格 PR #N）', () => {
+    expect([...parseRevertedPrs(['revert: 回滚 E1 误改 (#704)'])]).toEqual([704]);
+    expect([...parseRevertedPrs(['回滚 PR #710'])]).toEqual([710]);
+  });
+  it('lookbehind 排除紧贴 PR#N/pr#N 来源标注（codex 闸-1 P1-4 真实 #391 误报根因）；带空格 PR #N 保留为真 revert 引用（codex 闸-2 P2-2 边界）', () => {
+    expect([...parseRevertedPrs(['fix(deploy): 修正 PM2 回滚命令语法（codex P1 PR#391）'])]).toEqual([]); // 紧贴 PR# 排除
+    expect([...parseRevertedPrs(['回滚 pr#392 的改动'])]).toEqual([]);                                    // 小写 pr# 也排除
+    expect([...parseRevertedPrs(['回滚 PR #393 的改动'])]).toEqual([393]);                                // 带空格 = 真 revert 引用格式 → 命中（残留局限：带空格来源标注会误命中，本仓实测来源为紧贴）
+  });
+  it('纯 hotfix / 非 revert 提交 → 空（不污染回滚率·codex P1-5）', () => {
+    expect([...parseRevertedPrs(['hotfix: fix prod (#123)'])]).toEqual([]);
+    expect([...parseRevertedPrs(['feat: 增加导出 (#999)'])]).toEqual([]);
+  });
+  it('多引号段 → 并集（codex 闸-1 P2-2）', () => {
+    expect([...parseRevertedPrs(['Revert "A (#11)" and revert "B (#22)"'])].sort((a, b) => a - b)).toEqual([11, 22]);
+  });
+  it('多行 subject → 并集去重；空/缺失安全；#0 不计（仅正整数）', () => {
+    expect([...parseRevertedPrs(['Revert "a (#1)"', 'Revert "b (#2)"', 'Revert "a again (#1)"'])].sort((a, b) => a - b)).toEqual([1, 2]);
+    expect([...parseRevertedPrs([])]).toEqual([]);
+    expect([...parseRevertedPrs(null)]).toEqual([]);
+    expect([...parseRevertedPrs([''])]).toEqual([]);
+    expect([...parseRevertedPrs(['Revert "x (#0)"'])]).toEqual([]);
+  });
+});
+
+describe('quality-report.buildRevertGitArgs（-E alternation + -i 大小写·oracle 必需）', () => {
+  it('参数含 -E（让 | 作 ERE alternation）+ -i（匹配大写 Revert）+ grep + format', () => {
+    const args = buildRevertGitArgs('/some/dir');
+    expect(args).toContain('-E');     // 无 -E git grep 不解析 | → 命中 0（codex #812 P1）
+    expect(args).toContain('-i');     // GitHub 大写 Revert 需 -i 才命中（否则 oracle 失败）
+    expect(args).toContain('--grep=(revert|回滚|hotfix)');
+    expect(args).toContain('--pretty=format:%s');
+    expect(args.slice(0, 4)).toEqual(['-C', '/some/dir', 'log', '-E']);
+  });
+});
+
+describe('quality-report.collectRevertedPrs（runGit 可注入·CI 不 spawn git）', () => {
+  it('mock runGit 喂三类 alternation 分支（revert/回滚/hotfix）→ 正确解析被回滚 PR', () => {
+    const fakeLog = [
+      'Revert "feat: a (#101)" (#201)',  // revert 分支 → 101（排除自身 201）
+      'revert: 回滚 b (#102)',            // 回滚 分支 → 102
+      'hotfix: fix prod (#999)',          // hotfix 分支命中 grep 但无 revert 语境 → 不计
+    ].join('\n');
+    const got = collectRevertedPrs('/x', () => fakeLog);
+    expect([...got].sort((a, b) => a - b)).toEqual([101, 102]);
+  });
+  it('runGit 抛错（git 不可用/非 git 目录）→ 空集，不阻断报告', () => {
+    expect(collectRevertedPrs('/x', () => { throw new Error('not a git repo'); }).size).toBe(0);
+  });
+  it('反查参数确实经 buildRevertGitArgs 传入（含 -E -i -C gitDir）', () => {
+    let captured = null;
+    collectRevertedPrs('/probe', (args) => { captured = args; return ''; });
+    expect(captured).toContain('-E');
+    expect(captured).toContain('-i');
+    expect(captured).toContain('-C');
+    expect(captured).toContain('/probe');
+  });
+});
+
+describe('quality-report.effectiveVerdict（事后回滚读时归一·不改历史行）', () => {
+  const reverted = new Set([704]);
+  it('pass/partial 行 pr 命中反查集合 → reverted（外部真相覆盖）', () => {
+    expect(effectiveVerdict({ verdict: 'pass', pr: 704 }, reverted)).toBe('reverted');
+    expect(effectiveVerdict({ verdict: 'partial', pr: 704 }, reverted)).toBe('reverted');
+  });
+  it('pass-* 变体命中 → reverted（先归一 pass 再覆盖）', () => {
+    expect(effectiveVerdict({ verdict: 'pass-after-fix', pr: 704 }, reverted)).toBe('reverted');
+  });
+  it('pr 不命中 → 原 verdict', () => {
+    expect(effectiveVerdict({ verdict: 'pass', pr: 999 }, reverted)).toBe('pass');
+  });
+  it('无 pr / 脏 pr 即便集合非空 → 不误标（oracle 关键·codex P2-1）', () => {
+    expect(effectiveVerdict({ verdict: 'pass' }, reverted)).toBe('pass');
+    expect(effectiveVerdict({ verdict: 'pass', pr: null }, reverted)).toBe('pass');
+    expect(effectiveVerdict({ verdict: 'pass', pr: '' }, reverted)).toBe('pass'); // Number('')=0 非正整数
+  });
+  it('失败终态 orphaned/blocked/abandoned 即便 pr 命中 → 不覆盖（谈不上事后回滚）', () => {
+    expect(effectiveVerdict({ verdict: 'orphaned', pr: 704 }, reverted)).toBe('orphaned');
+    expect(effectiveVerdict({ verdict: 'blocked', pr: 704 }, reverted)).toBe('blocked');
+  });
+  it('空集 → 退化为 normalizeVerdict（向后兼容）', () => {
+    expect(effectiveVerdict({ verdict: 'pass', pr: 704 }, new Set())).toBe('pass');
+    expect(effectiveVerdict({ verdict: 'pass-scoped', pr: 704 }, new Set())).toBe('pass');
+  });
+});
+
+describe('quality-report.aggregate · E2① 事后回滚（opts.revertedPrs 读时标记）', () => {
+  const rows = [
+    { uid: 'a', pr: 704, rounds_to_green: 1, rework_count: 0, verdict: 'pass' },
+    { uid: 'b', pr: 705, rounds_to_green: 1, rework_count: 0, verdict: 'pass' },
+    { uid: 'c', rounds_to_green: 1, rework_count: 0, verdict: 'pass' }, // 无 pr
+  ];
+  it('被回滚 PR 对应行读时标 reverted + 事后回滚率；不改其它行；被回滚不再算一次过', () => {
+    const a = aggregate(rows, { revertedPrs: new Set([704]) });
+    expect(a.verdict_breakdown.reverted).toBe(1);
+    expect(a.verdict_breakdown.pass).toBe(2);            // b/c 仍 pass
+    expect(a.post_revert_rate).toBe(+(1 / 3).toFixed(3));
+    expect(a.reverted_count).toBe(1);                    // 有效回滚（字面0+反查1）
+    expect(a.ledger_reverted_count).toBe(0);             // 字面无 reverted
+    expect(a.post_revert_count).toBe(1);                 // git 反查新增
+    expect(a.first_pass_rate).toBe(+(2 / 3).toFixed(3)); // a 被回滚 → 不再算一次过
+  });
+  it('无 pr 行不被误标（即便集合含某号·oracle 关键）', () => {
+    const a = aggregate(rows, { revertedPrs: new Set([704, 999]) });
+    expect(a.verdict_breakdown.reverted).toBe(1); // 仅 a(704)；c 无 pr 不误标
+  });
+  it('字面 reverted + 反查 reverted 分清来源（codex 闸-1 P1-1）', () => {
+    const mixed = [
+      { uid: 'x', pr: 800, verdict: 'reverted', rounds_to_green: 1 },                    // 字面
+      { uid: 'y', pr: 801, verdict: 'pass', rounds_to_green: 1, rework_count: 0 },       // 反查命中
+    ];
+    const a = aggregate(mixed, { revertedPrs: new Set([801]) });
+    expect(a.reverted_count).toBe(2);          // 有效总数
+    expect(a.ledger_reverted_count).toBe(1);   // 字面 x
+    expect(a.post_revert_count).toBe(1);       // 反查 y
+  });
+  it('无 opts（向后兼容）→ 反查不生效、双率字段安全为 0', () => {
+    const a = aggregate(rows);
+    expect(a.verdict_breakdown.reverted).toBe(0);
+    expect(a.post_revert_rate).toBe(0);
+    expect(a.post_rework_rate).toBe(0);
+    expect(a.first_pass_rate).toBe(1); // 三行皆 pass+rtg1+rework0
+  });
+});
+
+describe('quality-report.aggregate · E2② owner 返工（opts.reworkRows 任务维度）', () => {
+  const ledger = [
+    { uid: 'u1', pr: 704, verdict: 'pass', rounds_to_green: 1, rework_count: 0 },
+    { uid: 'u2', pr: 705, verdict: 'pass', rounds_to_green: 1, rework_count: 0 },
+    { uid: 'u3', verdict: 'pass', rounds_to_green: 1, rework_count: 0 },
+  ];
+  it('有返工任务数 / 总任务数 + 返工总次数（owner 口径·整数次数 N）', () => {
+    const a = aggregate(ledger, { reworkRows: [{ uid: 'u1', count: 2 }, { uid: 'u2', count: 1 }] });
+    expect(a.user_rework_total).toBe(3);                  // 2 + 1
+    expect(a.user_rework_tasks).toBe(2);                  // u1, u2
+    expect(a.task_count).toBe(3);                         // u1/u2/u3 去重
+    expect(a.post_rework_rate).toBe(+(2 / 3).toFixed(3));
+  });
+  it('同任务多行返工 → 次数累加、任务只计 1（codex P1-2 去重）', () => {
+    const a = aggregate(ledger, { reworkRows: [{ uid: 'u1', count: 1 }, { uid: 'u1', count: 2 }] });
+    expect(a.user_rework_total).toBe(3);
+    expect(a.user_rework_tasks).toBe(1);
+  });
+  it('rework 行只有 pr → 经 pr→uid 索引归一到同任务，不重复计（codex P1-2）', () => {
+    const a = aggregate(ledger, { reworkRows: [{ uid: 'u1', count: 1 }, { pr: 704, count: 1 }] });
+    expect(a.user_rework_tasks).toBe(1);   // pr:704 映射到 u1，与 uid:u1 同任务
+    expect(a.user_rework_total).toBe(2);
+  });
+  it('count 严格正整数：负/0/小数(含 1.9 不向下取整)/NaN/字符串忽略（codex 闸-1 P2-5 + 闸-2 P2-3）', () => {
+    const a = aggregate(ledger, { reworkRows: [
+      { uid: 'u1', count: 0 }, { uid: 'u2', count: -3 }, { uid: 'u3', count: 'x' }, { uid: 'u1', count: NaN },
+      { uid: 'u2', count: 1.9 }, { uid: 'u3', count: 1.5 }, // 小数(含 >1)严格忽略，不向下取整（避免脏数据静默当整数·owner 口径=整数次数 N）
+    ] });
+    expect(a.user_rework_total).toBe(0);
+    expect(a.user_rework_tasks).toBe(0);
+    expect(a.post_rework_rate).toBe(0);
+  });
+  it('count 整数值（含 2.0 这类整数小数）正常计入', () => {
+    const a = aggregate(ledger, { reworkRows: [{ uid: 'u1', count: 2 }, { uid: 'u2', count: 2.0 }] });
+    expect(a.user_rework_total).toBe(4);   // 2 + 2.0(=== 2 整数)
+    expect(a.user_rework_tasks).toBe(2);
+  });
+  it('无 uid 无 pr 的 rework 行 → 无法归属，跳过', () => {
+    const a = aggregate(ledger, { reworkRows: [{ count: 5, reason: '孤儿返工' }] });
+    expect(a.user_rework_total).toBe(0);
+    expect(a.user_rework_tasks).toBe(0);
+  });
+  it('task_count 任务维度去重（同 uid 多尝试行算 1 任务，区别于 n 尝试维度·codex P1-3）', () => {
+    const multi = [
+      { uid: 'u1', pr: 704, verdict: 'pass', rounds_to_green: 1, rework_count: 0 },
+      { uid: 'u1', verdict: 'orphaned', claim_at: 't1' }, // 同 uid 第二次尝试
+    ];
+    const a = aggregate(multi);
+    expect(a.n).toBe(2);          // 尝试维度（行数）
+    expect(a.task_count).toBe(1); // 任务维度（uid 去重）
+  });
+});
+
+describe('quality-report.parseUserReworkLog（owner 返工 sink 解析·跳坏行）', () => {
+  it('跳过坏 JSON 行 / 空行', () => {
+    const rows = parseUserReworkLog([J({ uid: 'a', count: 1 }), '', 'bad json', J({ pr: 704, count: 2 })]);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ pr: 704, count: 2 });
+  });
+  it('空/缺失输入安全', () => {
+    expect(parseUserReworkLog([])).toEqual([]);
+    expect(parseUserReworkLog(null)).toEqual([]);
   });
 });

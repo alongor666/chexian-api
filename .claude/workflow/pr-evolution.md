@@ -1602,3 +1602,27 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 ### needs_automation: true
 - 闸：E6 把「质量账本失败记账维度（放弃率/孤儿率可算）」入 `bun run governance` 强制——回退（删失败记账 / dispatch 不再记 orphaned）即 governance fail，防进化成果回退。依赖 E1（本项）+ E4 先落地，随 E6 一并实现。
 - expires: 2026-09-27（与 loop-orchestration §4 同日 meta 同窗；属 loop-meta，单 owner 串行落地）。
+
+---
+
+## 2026-06-27 · Loop V2 进化 E2「注入外部真相」治茧房3 自指闭环（evidence-loop scorecard）
+
+> 承接 `开发文档/loop-v2-进化规划.md` §4 E2（依赖 E1·PR #815 已合并 main e44b1554）。给自产自评闭环接两条外部真相线。协议演进见 `loop-orchestration.md §3/§4` 同日 E2 bullet/meta，本条是 evidence-loop scorecard（基线/候选/oracle/双闸/决策）。
+
+- **业务目标**：quality-report 能从 git 史自动检出被 revert/回滚的 loop PR 并读时标 reverted、北极星加「事后回滚率」；接入 owner「重做/不是我要的」返工信号 + 「事后返工率」。做成判据：构造 revert commit → `loop:quality` 自动标该 PR reverted 且回滚率 >0；owner 返工可聚合。
+- **基线（实测·禁口算）**：`bun run loop:quality` = 一次过率 29.9%（67 样本）· reverted 0 · 无外部真相线。诊断：账本三条外部真相（生产后果/owner满意/事后回滚）断在闭环外，meta-review 看不到「合了之后被推翻」。
+- **owner 拍板口径（AskUserQuestion）**：采集位置=专门 sink `.claude/workflow/user-rework-log.jsonl`；计数语义=整数次数 N；事后返工率=有返工任务数/总任务数。
+- **候选（改动·仅 2 文件 415+/13-）**：`quality-report.mjs` 加 `parseRevertedPrs`/`buildRevertGitArgs`(`-E -i`)/`collectRevertedPrs`(runGit 可注入)/`effectiveVerdict`/`parseUserReworkLog` 纯函数 + `aggregate(opts={revertedPrs,reworkRows})` 读时归一（不改历史行）+ reverted 三指标分源 + owner 返工任务维度聚合 + render 双率 + 3 个 env 覆盖；`loop.test.mjs` +30 单测。**不碰 dispatch 调度逻辑**（风险低）。
+- **oracle 实证**：真 git 仓造 GitHub 大写 `Revert "...(#704)"` + 中文 `回滚...(#705)` → `LOOP_GIT_DIR/LEDGER/REWORK` 隔离跑真实 `loop:quality` → 704/705 标 reverted、事后回滚率 66.7%、owner 返工率 33.3%（o1×2）、706 未回滚仍 pass 不误标 ✓；`-E` 必要性（无则命中 0·BRE 下 `(a|b)` 当字面括号）+ `-i` 必要性（GitHub squash revert 纯大写 Revert 无 -i 命中 0）双 flag 实证 ✓；真实仓库反查命中 #337/#339（GitHub revert），`#391`（「回滚命令…PR#391」来源标注）经 lookbehind 排除不误标 ✓。
+- **回归门禁**：loop 单测 86→**116**（30 新）· 全量 **4288/4288**（bcrypt 原生模块代理腐蚀已 build-from-source 修复，非回归）· verify:full 绿。
+- **双闸（codex CLI·read-only·自包含 prompt·scratchpad 隔离 cwd）**：闸-1 计划对抗 0 P0/5 P1/5 P2 **全采纳**（reverted 三指标分源防语义漂移 / pr→uid 索引消除返工拆分 / task_count 任务维度分母 / 无引号兜底动词窗口+lookbehind 排除 PR#N / count 正整数）；闸-2 完成对抗 0 P0/0 P1/4 P2 **可合并**（采纳严格整数 count + 文档化带空格 `PR #N` 残留局限；认可引号配对/空账本现状）。
+- **决策**：promote。两条外部真相线落地 = 自指闭环首次有外部校准点（事后回滚 + owner 返工可见）。
+
+### 三问复盘
+1. **重来怎样更好**：`#391` 误报本可设计时预见——无引号中文兜底「全量取 #N」必然把来源标注卷入；幸而阶段 B 用**真实仓库历史数据**自查（非只造 oracle 样本）当场暴露，驱动 lookbehind 收紧。教训＝反查类机制必须先跑真实历史看误报面，别只验构造样本。
+2. **复用价值**：① **「事后外部真相·读时关联到任务·不改 append-only 历史行」** 范式（reverted/owner 返工对称）对任何「给自产自评闭环装外部校准点」通用；② **「git 反查 runGit 可注入 + 纯函数解析 + env 隔离端到端 oracle」** 让需 spawn 子进程的逻辑也能 CI 纯函数测 + 真环境 oracle 双覆盖；③ **「`-E`/`-i` 双 flag 用对比实证（无则命中 0）固化为 oracle」** 防未来误删 flag。
+3. **如何更高质量自动化**：本项把「合了之后被推翻 / owner 不满意」从不可见变机制化可见。残留人工点＝owner 返工依赖会话如实 append sink（提示遵从非 100%·`feedback_prompt_needs_code_backup`），E6 拟加 governance 闸（见下）。
+
+### needs_automation: true
+- 闸：E6 把「质量账本失败记账 + 外部真相维度（事后回滚率/返工率可算），缺则告警」入 `bun run governance` 强制——回退（删 git 反查 / 删 owner sink 聚合 / 删双率）即 governance fail，防进化成果回退。依赖 E1 + E2（本项）+ E4 先落地，随 E6 一并实现。
+- expires: 2026-09-27（与 E1 / loop-orchestration §4 E2 meta 同窗；属 loop-meta，单 owner 串行落地）。

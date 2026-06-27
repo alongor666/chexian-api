@@ -104,6 +104,11 @@ policy: append-only
   - **孤儿/阻塞幂等记账**：`bun run loop:dispatch`（**仅默认交互模式**，非 `--json/--board/--merge-gate`；`--no-orphan-ledger` 退出）把 `computeFrontier` 的 `released`（陈旧认领→`orphaned`）与 `blocked`（→`blocked`）补记账本。三层防重复：① **accounted 守卫**（uid 已有完成态行 pass/partial/reverted → 跳过，排除「完成未流转」假阳性，属 `stale-scan` 域非 E1 域）② **orphaned (uid,claim_at) 写时去重**（claim_at=认领时刻，跨 dispatch 稳定，**非**刷新的 lastAt；重新认领=新尝试记新行）③ **blocked uid 去重**（任务级状态）。并发/`union` 重复由 `aggregate` **读时去重**兜底（orphaned 按 (uid,claim_at)、blocked 按 uid）——单 owner 串行非幂等证明，读时去重才是并发下的真保证。
   - **会话异常退出**经「认领先于实现」步留下 IN_PROGRESS 认领 → 超 TTL 无活动 → `released` → `orphaned`，故异常退出由孤儿路径覆盖（前提=已认领）。
   - **指标口径**：放弃率=（abandoned+orphaned）/n（blocked 单列阻塞率，BLOCKED 多为等待非放弃）；孤儿率=orphaned/n；阻塞率=blocked/n；governance 通过率分母=全部尝试（失败行计未过，诚实）。**残留诚实边界**：静默活跃长任务（>TTL 无事件但实际在做）会被记 orphaned，靠 accounted 守卫自愈（完成后不再记）+ reason 带陈旧时长，不做两阶段确认（既有 `released` 机制已判 TTL-stale=死，加状态复杂度过工程）。`env LOOP_LEDGER_PATH/LOOP_BACKLOG_LOG` 可覆盖路径（默认真实文件，供 e2e 隔离）。
+- **E2 注入外部真相（治茧房3 自指闭环·2026-06-27）**：账本原只读自产自评，外部真相断在闭环外。E2 接两条外部真相线（均「事后外部真相·读时关联到任务·**不改 append-only 历史行**」，结构对称）：
+  - **① git 史反查事后回滚**（`quality-report.{parseRevertedPrs,collectRevertedPrs,effectiveVerdict}`，纯函数可单测、`runGit` 可注入免 CI spawn git）：`git log -E -i --grep='(revert|回滚|hotfix)' --pretty=format:%s` 扫 revert 类提交解析「被回滚原 PR 号」——**`-E` 必须**（无则 `|` alternation 失效、命中 0·codex #812 P1）、**`-i` 必须**（GitHub squash revert 是大写 `Revert "...(#N)"`，无 -i 漏命中）。引号段内 #N = 被回滚原 PR（排除引号外 revert 自身号 #M）；无引号兜底仅 revert/回滚 动词 ≤80 窗口内取号 + lookbehind 排除紧贴 `PR#N` 来源标注。`aggregate({revertedPrs})` 读时把命中 ledger `pr` 的 pass/partial 行视为 reverted（仅完成态、`pr` 正整数、无 pr 不误标），**不改历史行**。新增 `post_revert_rate`（=有效回滚/n）+ reverted 三指标分源（`ledger_reverted_count` 字面 / `post_revert_count` 反查 / `reverted_count` 有效总数·codex 闸-1 P1-1 防语义漂移）。
+  - **② owner「重做/不是我要的」返工 sink**（owner 2026-06-27 拍板）：专门 sink `.claude/workflow/user-rework-log.jsonl`（append-only，owner 反馈后由会话追加一行 `{uid?|pr?, count(严格正整数), reason, ts}`）。`aggregate({reworkRows})` 经 `pr→uid` 索引归一任务键（消除 uid/pr 拆分重复·codex 闸-1 P1-2），`post_rework_rate` = 有返工(count>0)任务数 / `task_count`（**任务维度**去重，区别于 n=尝试维度·codex 闸-1 P1-3）。`parseUserReworkLog` 跳坏行。
+  - **env**：`LOOP_GIT_DIR`（反查目录，默认 ROOT）+ `LOOP_REWORK_PATH`（sink 路径）可覆盖，供端到端 oracle 隔离（与 E1 `LOOP_LEDGER_PATH` 同款）。
+  - **诚实边界**：无引号兜底对**带空格** `PR #N` 来源标注有残留误命中（中文语境 `PR #N` 真 revert 引用 vs 来源标注无法正则区分；本仓来源标注实测均紧贴 `PR#N` 已排除，GitHub revert 走引号主路径精确不依赖兜底）；owner 返工依赖会话如实 append（提示遵从非 100%·`feedback_prompt_needs_code_backup`），E6 可加 governance 闸。
 
 ---
 
@@ -185,6 +190,11 @@ policy: append-only
   - **codex 闸-1 价值**：7 P1/6 P2，关键修正进设计——并发幂等（读时去重兜底，非靠单 owner 串行）、blocked 拆独立阻塞率（非混入放弃）、avg 只算完成行、schema 漂移 uid/backlog_uid、默认模式才写。**最关键**：阶段 A 自查 + codex 共同发现「accounted 守卫」必要性——朴素记 orphaned 会把「完成但状态未流转」的 b244/b255/b320 误记孤儿（属 stale-scan 域）。
   - **oracle 实证**：构造孤儿→`loop:dispatch`→账本 +1 orphaned；连跑 3 次仍 1 条（幂等）；`loop:quality` 放弃率 100%（temp）。真实首次对账记 2 orphaned + 6 blocked（守卫排除 3 已完成者），北极星 **36.2%→30.3%**（含失败 + partial 口径修正）、放弃率 **0%→3.0%**、阻塞率 9.1%——幸存者偏差消除、放弃代价首次可见。22 新单测，loop 全量 82 passed。
   - **三问复盘**：① 重来更好？「accounted 守卫」本可更早识别——`released` 同时含「真孤儿」与「完成未流转」两类，设计时要先分清 E1 域 vs stale-scan 域，否则假阳性。② 复用价值？「失败记账纯函数 + 读时去重兜并发 + accounted 守卫分域」对任何「自产自评闭环装失败可见性」通用；「读时归一不迁移 append-only 历史」是 union 文件演进的标准手法。③ 自动化？本项即「把放弃率从不可见变机制化可见」。`needs_automation: true`（E6 拟把「账本必含失败记账维度，缺则告警」入 `bun run governance`，与 E4 死规则审计同窗）`expires: 2026-09-27`。
+- **meta（2026-06-27 · 本 PR · Loop V2 进化 E2「注入外部真相」治茧房3 自指闭环）**：承接 `开发文档/loop-v2-进化规划.md` §4 E2（依赖 E1）。落地「真相输入」阶段第二项——给自产自评闭环接两条外部真相线。详细 schema 见 §3「E2 注入外部真相」bullet，evidence-loop scorecard（基线/oracle/双闸/决策）见 `pr-evolution.md` 同日 entry。
+  - **落地**：① `quality-report` 加 git 事后回滚反查（`-E -i` 双 flag 实证必需）+ 读时把命中 ledger pr 的 pass/partial 行标 reverted（不改历史行）+ `post_revert_rate` + reverted 三指标分源；② owner 返工 sink `.claude/workflow/user-rework-log.jsonl`（owner 拍板：专门 sink + 整数次数 N）+ `post_rework_rate`（任务维度分母）；③ 北极星双率 render。**不碰 dispatch 调度逻辑**（风险低）。
+  - **双闸价值**：闸-1 计划对抗 5 P1 全采纳（reverted 三指标分源、pr→uid 索引、task_count 任务维度分母、动词窗口+lookbehind 排除 PR#N、count 正整数）——**最关键**：阶段 B 端到端跑真实仓库数据当场暴露 `#391` 误报（「回滚命令…PR#391」来源标注），驱动 lookbehind 收紧（证据驱动迭代）；闸-2 完成对抗 0 P0/0 P1 + 4 P2（采纳严格整数 count + 文档化带空格 `PR #N` 残留局限）。
+  - **oracle 实证**：真 git 仓造 GitHub 大写 Revert + 中文回滚 → `loop:quality` 自动标 reverted、事后回滚率 66.7%、owner 返工率 33.3%、706 未回滚不误标；`-E`/`-i` 双 flag 必要性实证（无则命中 0 / 漏 GitHub squash revert）。loop 单测 86→**116**、全量 **4288/4288**、verify:full 绿。
+  - **三问复盘**：详见 `pr-evolution.md` 同日 entry。`needs_automation: true`（E6 拟把「账本失败记账 + 外部真相维度，缺则告警」入 `bun run governance`，与 E4 同窗）`expires: 2026-09-27`。
 
 ---
 
