@@ -103,14 +103,38 @@ class PermissionService {
   }
 
   /**
-   * 获取用户可见的机构列表
+   * 获取用户可见的机构列表。
+   *
+   * @param effectiveBranch 全国超管解析后的有效省（'SC'/'SX'/'ALL'）。
+   *   - 缺省 → 按 user.branchCode 取（普通用户/未切省，行为不变）。
+   *   - 单省码 → 取该省机构（超管切省）。
+   *   - 'ALL' → 合并该超管 visibleBranches 各省机构（去重、按省顺序）。
+   *   防全国超管切省后机构下拉仍显示默认省（codex 闸-1 P2-2 / 设计 §8）。
    */
-  getVisibleOrganizations(user: JwtPayload): string[] {
+  getVisibleOrganizations(user: JwtPayload, effectiveBranch?: string): string[] {
     if (user.role === UserRole.BRANCH_ADMIN || user.role === UserRole.TELEMARKETING_USER) {
-      // 分公司管理员/电销用户：可见本分公司（branchCode）的所有机构。
-      // 多省 RLS-on 后必须按 branchCode 取；未登记的 branchCode 回落到 SC（保守默认，避免泄漏）。
-      const branchOrgs =
-        (user.branchCode && BRANCH_ORGANIZATIONS[user.branchCode]) || ORGANIZATIONS;
+      // 全国超管「全国」合并视图：合并 visibleBranches 各省机构（数据驱动，禁硬编码省份）。
+      if (effectiveBranch === 'ALL') {
+        const branches =
+          user.visibleBranches && user.visibleBranches.length > 0
+            ? user.visibleBranches
+            : Object.keys(BRANCH_ORGANIZATIONS);
+        const merged: string[] = [];
+        const seen = new Set<string>();
+        for (const b of branches) {
+          for (const org of BRANCH_ORGANIZATIONS[b] ?? []) {
+            if (!seen.has(org)) {
+              seen.add(org);
+              merged.push(org);
+            }
+          }
+        }
+        return ['全部', ...merged];
+      }
+      // 单省：优先用有效省（超管切省后的 effectiveBranch），否则用本人 branchCode。
+      // 多省 RLS-on 后必须按省取；未登记的省回落到 SC（保守默认，避免泄漏）。
+      const branchKey = effectiveBranch ?? user.branchCode;
+      const branchOrgs = (branchKey && BRANCH_ORGANIZATIONS[branchKey]) || ORGANIZATIONS;
       return ['全部', ...branchOrgs];
     }
 

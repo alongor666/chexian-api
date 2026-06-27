@@ -37,6 +37,13 @@ declare global {
     interface Request {
       /** 权限过滤SQL WHERE子句（后端强制执行） */
       permissionFilter?: string;
+      /**
+       * 全国超管解析后的「有效省」：单省码（'SC'/'SX'）或 'ALL'（合并视图）。
+       * 普通用户恒等于本人 branchCode（targetBranch 被忽略）。
+       * 供 cache key（buildRouteCacheKey）与机构下拉（getVisibleOrganizations）按有效省取值，
+       * 避免全国超管切省后仍用静态 branchCode 造成串读 / 下拉错省。
+       */
+      effectiveBranch?: string;
     }
   }
 }
@@ -56,7 +63,7 @@ export function permissionMiddleware(
       throw new AppError(401, 'Authentication required');
     }
 
-    const { role, organization, branchCode } = req.user;
+    const { role, organization, branchCode, visibleBranches } = req.user;
 
     // 2. 根据角色生成基础权限过滤条件
     let baseFilter: string;
@@ -86,6 +93,8 @@ export function permissionMiddleware(
     //   旧 JWT（升级前签发）/旧 user_store.json 用户没有 branchCode 字段，必须重新登录刷新 token；
     //   admin（系统超管）由 preset-users 已显式标 'SC'，落在上方有 branchCode 分支。
     if (isBranchRlsEnabled()) {
+      // ── fail-closed 校验：对所有 RLS-on 用户无条件前置（codex 闸-1 P1-2）──
+      // 必须在「全国超管 / 普通用户」分支之前，否则超管路径回落 branchCode 时会绕过校验。
       if (!branchCode) {
         throw new AppError(
           401,
@@ -97,14 +106,58 @@ export function permissionMiddleware(
       // resolveBranchRlsCode 的 gate-a 正则 `branch_code = '[A-Z]{2}'` 匹配不上 → 返回 undefined →
       // 不注入 → branch_admin（无 org_level_3 段）退成 1=1 → 跨省/全省串读（fail-open）。
       // 在此源头拒绝（403），保证 permissionFilter 只含合法 branch_code 字面量，下游必命中。
-      if (!/^[A-Z]{2}$/.test(branchCode)) {
+      if (!isValidBranchCode(branchCode)) {
         throw new AppError(
           403,
           `Invalid branchCode '${branchCode}' (multi-branch RLS requires uppercase CHAR(2), e.g. SC/SX). 请联系管理员修正账号 branchCode。`
         );
       }
-      const branchClause = `branch_code = '${escapeSqlString(branchCode)}'`;
-      req.permissionFilter = baseFilter === '1=1' ? branchClause : `(${baseFilter}) AND ${branchClause}`;
+
+      // ── 全国超管路径（设计 §5；codex 闸-1 P1-2：仅 branch_admin 生效，防 org_user 脏配置越权）──
+      // visibleBranches = 该用户可切换/可合并的省集合（服务端 token 白名单，绝不信任请求原值）。
+      const canSwitchBranch =
+        role === UserRole.BRANCH_ADMIN &&
+        Array.isArray(visibleBranches) &&
+        visibleBranches.length > 0;
+
+      let effectiveBranch: string;
+      let branchClause: string; // 单省 `branch_code = 'XX'` 或 ALL `branch_code IN ('SC','SX')`
+
+      if (canSwitchBranch) {
+        // 仅保留形态合法的可见省（每个值过 ^[A-Z]{2}$ 再可能进 SQL）
+        const allowedBranches = (visibleBranches as string[]).filter(isValidBranchCode);
+        const requested =
+          typeof req.query?.targetBranch === 'string' ? req.query.targetBranch : undefined;
+
+        if (allowedBranches.length === 0) {
+          // 防御：visibleBranches 全是脏值（被 filter 清空）→ fail-closed 回落本人默认省，绝不放行。
+          effectiveBranch = branchCode;
+          branchClause = `branch_code = '${escapeSqlString(branchCode)}'`;
+        } else if (requested === 'ALL') {
+          // 合并视图：**显式 IN 白名单**（codex 闸-2 P1-1 defense-in-depth）——绝不用 1=1。
+          // 即便运行时存在未授权省（如未上线的 GD）数据，主路径与所有「下推完整 permissionFilter」
+          // 的消费方也只返回 visibleBranches 集合内的省，杜绝「ALL=1=1」直接泄漏未授权省。
+          // 每个 b 已过 ^[A-Z]{2}$（allowedBranches），无注入面。
+          effectiveBranch = 'ALL';
+          branchClause = `branch_code IN (${allowedBranches.map((b) => `'${b}'`).join(', ')})`;
+        } else if (requested && allowedBranches.includes(requested)) {
+          // 切单省：requested 已经 allowedBranches（含正则）双重校验，可安全内插。
+          effectiveBranch = requested;
+          branchClause = `branch_code = '${escapeSqlString(requested)}'`;
+        } else {
+          // 无参 / 非法参 / 未授权省（如未上线的 'GD'）→ 回落本人默认省（保守，绝不默认 ALL）。
+          effectiveBranch = branchCode;
+          branchClause = `branch_code = '${escapeSqlString(branchCode)}'`;
+        }
+      } else {
+        // ── 普通用户路径：忽略用户可控的 targetBranch（防越权看他省）──
+        effectiveBranch = branchCode;
+        branchClause = `branch_code = '${escapeSqlString(branchCode)}'`;
+      }
+
+      req.effectiveBranch = effectiveBranch;
+      req.permissionFilter =
+        baseFilter === '1=1' ? branchClause : `(${baseFilter}) AND ${branchClause}`;
     } else {
       req.permissionFilter = baseFilter;
     }
@@ -121,6 +174,14 @@ export function permissionMiddleware(
  */
 function escapeSqlString(str: string): string {
   return str.replace(/'/g, "''");
+}
+
+/**
+ * 分公司编码形态校验：必须大写 CHAR(2)（'SC' / 'SX' …）。
+ * 与下游 resolveBranchRlsCode 的 gate-a 正则同源约束，保证拼入 SQL 的 branch_code 字面量合法。
+ */
+function isValidBranchCode(code: string): boolean {
+  return /^[A-Z]{2}$/.test(code);
 }
 
 /**

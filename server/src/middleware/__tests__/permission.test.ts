@@ -183,7 +183,135 @@ describe('permissionMiddleware: preset 用户标签验证', () => {
     const users = Object.values(PRESET_USERS);
     const scUsers = users.filter((u) => u.branchCode === 'SC');
     const noBranchCode = users.filter((u) => !u.branchCode);
-    expect(scUsers.length).toBe(20); // 全部 20 个用户都标 SC
+    expect(scUsers.length).toBe(20); // 全部 20 个 SC 用户都标 SC
     expect(noBranchCode.length).toBe(0); // 无人缺 branchCode（fail-closed 前提）
+  });
+});
+
+// ========================================================================
+// 全国超管 visibleBranches 切省 + 全国合并视图（设计 §5；codex 闸-1 P1-1/P1-2）
+//   - targetBranch 是用户可控 query 参数 → 必用服务端 token 的 visibleBranches 白名单校验
+//   - 安全核心：普通用户（无 visibleBranches / 非 branch_admin）传 targetBranch 一律被忽略，不越权
+//   - ALL → 不拼 branch_code（baseFilter）；安全前提由 preset-users.test.ts 不变量锁定
+//     （全国超管 visibleBranches == getAllBranchCodes()，故"不限制" ≡ "合并所有省"）
+// ========================================================================
+describe('permissionMiddleware: 全国超管 visibleBranches 切省（flag on）', () => {
+  beforeEach(() => {
+    envMock.BRANCH_RLS_ENABLED = 'true';
+  });
+
+  // 带 query 的 req 构造（现有 makeReq 不含 query）
+  const makeReqQ = (user: any, targetBranch?: string) =>
+    ({ user, query: targetBranch === undefined ? {} : { targetBranch } } as any);
+
+  const superAdmin = (overrides: any = {}) => ({
+    role: UserRole.BRANCH_ADMIN,
+    branchCode: 'SC',
+    visibleBranches: ['SC', 'SX'],
+    ...overrides,
+  });
+
+  it('全国超管 targetBranch=SX → branch_code = \'SX\' + effectiveBranch=SX', async () => {
+    const req = makeReqQ(superAdmin(), 'SX');
+    const err = await runMiddleware(req);
+    expect(err).toBeUndefined();
+    expect(req.permissionFilter).toBe(`branch_code = 'SX'`);
+    expect(req.effectiveBranch).toBe('SX');
+  });
+
+  it('全国超管 targetBranch=ALL → 显式 branch_code IN (visibleBranches) 白名单 + effectiveBranch=ALL（codex 闸-2 P1-1：绝不 1=1）', async () => {
+    const req = makeReqQ(superAdmin(), 'ALL');
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`branch_code IN ('SC', 'SX')`);
+    expect(req.permissionFilter).not.toBe('1=1'); // 防回归到 1=1（会泄漏未授权省）
+    expect(req.effectiveBranch).toBe('ALL');
+  });
+
+  it('全国超管 ALL：visibleBranches 含脏值时仅 IN 合法省（脏值被滤除，不进 SQL）', async () => {
+    const req = makeReqQ(superAdmin({ visibleBranches: ['SC', 'SX', "x'; DROP", 'gd'] }), 'ALL');
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`branch_code IN ('SC', 'SX')`);
+    expect(req.permissionFilter).not.toContain('DROP');
+  });
+
+  it('全国超管 ALL：visibleBranches 全脏值 → fail-closed 回落本人默认省（不放行空 IN）', async () => {
+    const req = makeReqQ(superAdmin({ visibleBranches: ['sc', 'sx'] }), 'ALL');
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`branch_code = 'SC'`);
+    expect(req.permissionFilter).not.toContain('IN (');
+  });
+
+  it('全国超管 targetBranch=SC（本人默认省）→ branch_code = \'SC\' + effectiveBranch=SC', async () => {
+    const req = makeReqQ(superAdmin(), 'SC');
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`branch_code = 'SC'`);
+    expect(req.effectiveBranch).toBe('SC');
+  });
+
+  it('全国超管 无 targetBranch → 回落本人默认省 branch_code = \'SC\'（保守，不默认 ALL）', async () => {
+    const req = makeReqQ(superAdmin());
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`branch_code = 'SC'`);
+    expect(req.effectiveBranch).toBe('SC');
+  });
+
+  it('全国超管 targetBranch=GD（未上线/不在 visibleBranches）→ 回落 branch_code = \'SC\'', async () => {
+    const req = makeReqQ(superAdmin(), 'GD');
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`branch_code = 'SC'`);
+    expect(req.effectiveBranch).toBe('SC');
+  });
+
+  it('注入防护：targetBranch 含注入串（不符 ^[A-Z]{2}$ 且不在白名单）→ 回落 SC，不进 SQL', async () => {
+    const req = makeReqQ(superAdmin(), `SX'; DROP TABLE x; --`);
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`branch_code = 'SC'`);
+    expect(req.permissionFilter).not.toContain('DROP');
+  });
+
+  // ───── 安全关键：越权防护（普通用户传 targetBranch 一律忽略）─────
+  it('【越权】普通 SC org_user 传 targetBranch=SX → 仍 (org_level_3=\'乐山\') AND branch_code=\'SC\'（不越权）', async () => {
+    const req = makeReqQ(
+      { role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' }, // 无 visibleBranches
+      'SX'
+    );
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`(org_level_3 = '乐山') AND branch_code = 'SC'`);
+    expect(req.permissionFilter).not.toContain(`'SX'`);
+    expect(req.effectiveBranch).toBe('SC');
+  });
+
+  it('【越权】普通 SC branch_admin（无 visibleBranches）传 targetBranch=SX → 仍 branch_code=\'SC\'', async () => {
+    const req = makeReqQ({ role: UserRole.BRANCH_ADMIN, branchCode: 'SC' }, 'SX');
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`branch_code = 'SC'`);
+    expect(req.permissionFilter).not.toContain(`'SX'`);
+  });
+
+  it('【越权】org_user 即使脏配置带 visibleBranches，传 targetBranch=SX 仍不越权（visibleBranches 仅 branch_admin 生效）', async () => {
+    const req = makeReqQ(
+      { role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC', visibleBranches: ['SC', 'SX'] },
+      'SX'
+    );
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`(org_level_3 = '乐山') AND branch_code = 'SC'`);
+    expect(req.permissionFilter).not.toContain(`'SX'`);
+  });
+
+  it('【越权】电销用户带 visibleBranches 传 targetBranch=SX 仍不越权', async () => {
+    const req = makeReqQ(
+      { role: UserRole.TELEMARKETING_USER, branchCode: 'SC', visibleBranches: ['SC', 'SX'] },
+      'SX'
+    );
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe(`(is_telemarketing = true) AND branch_code = 'SC'`);
+    expect(req.permissionFilter).not.toContain(`'SX'`);
+  });
+
+  it('全国超管 flag off → 不注入（兼容期），不受 visibleBranches 影响', async () => {
+    envMock.BRANCH_RLS_ENABLED = 'false';
+    const req = makeReqQ(superAdmin(), 'SX');
+    await runMiddleware(req);
+    expect(req.permissionFilter).toBe('1=1');
   });
 });

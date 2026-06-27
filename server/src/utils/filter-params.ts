@@ -81,6 +81,13 @@ export const commonFilterSchema = z.object({
   fuelCategory: z.enum(['oil', 'gas', 'electric']).optional(),
   // 险类（交强/商业）
   insuranceType: z.string().optional(),
+
+  // 全国超管「切省 / 全国合并」权限选择器（非数据筛选）。
+  //   值 = 省份码（^[A-Z]{2}$，如 SC/SX）或 'ALL'（合并）。省份枚举数据驱动，禁硬编码 → 用 regex 不用 enum。
+  //   授权在 permissionMiddleware 按服务端 token 的 visibleBranches 白名单校验（普通用户传参一律忽略），
+  //   本处仅作输入形态校验 + 让 route-catalog 参数契约识别为合法全局参数（codex 闸-1 P1-4）。
+  //   buildWhereFromFilterParams 不消费本字段（它不是 WHERE 维度），故不影响任何 SQL 筛选口径。
+  targetBranch: z.string().regex(/^(ALL|[A-Z]{2})$/).optional(),
 });
 
 export type CommonFilterParams = z.infer<typeof commonFilterSchema>;

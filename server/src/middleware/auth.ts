@@ -13,6 +13,18 @@ import jwt from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
 import { AppError } from './error.js';
 import { verifyPat } from '../services/personal-access-token.js';
+import { getPresetVisibleBranches } from '../config/preset-users.js';
+
+/**
+ * 统一注入全国超管「可见省集合」到 req.user（codex 闸-1 P1-3 单点收口）。
+ *
+ * 在 JWT / PAT / cookie 全部身份出口之后调用：按已验证 token 的 username 从 PRESET_USERS 派生
+ * visibleBranches，覆盖所有授权请求路径。visibleBranches 不进签名 token（单一事实源在 preset），
+ * 故存量旧会话**免重登**即获能力，且不依赖 access-control store 是否落该字段。
+ */
+function decorateVisibleBranches(user: JwtPayload): void {
+  user.visibleBranches = getPresetVisibleBranches(user.username);
+}
 
 /**
  * JWT Payload 类型
@@ -24,6 +36,13 @@ export interface JwtPayload {
   organization?: string;
   /** 分公司编码（'SC' / 'SX'）。undefined → 系统级超管看全国 */
   branchCode?: string;
+  /**
+   * 全国超管可切换/可合并的省集合（如 `['SC','SX']`）。
+   * undefined / [] → 普通用户（仅 branchCode 单省，行为不变）。
+   * 由 auth 中间件按 username 从 PRESET_USERS 派生注入（见 decorateVisibleBranches），
+   * 不进签名 token —— 免重登即对存量会话生效，且单一事实源在 preset 配置（codex 闸-1 P1-3）。
+   */
+  visibleBranches?: string[];
 }
 
 /**
@@ -68,6 +87,7 @@ export async function authMiddleware(
         organization: verified.user.organization,
         branchCode: verified.user.branchCode,
       };
+      decorateVisibleBranches(req.user); // 全国超管能力按 username 派生（PAT 出口）
       req.pat = { tokenId: verified.tokenId, name: verified.name };
       return next();
     }
@@ -93,6 +113,7 @@ export async function authMiddleware(
     // 3) JWT 校验
     const decoded = jwt.verify(token, authConfig.jwtSecret) as JwtPayload;
     req.user = decoded;
+    decorateVisibleBranches(req.user); // 全国超管能力按 username 派生（JWT/cookie 出口）；旧 token 免重登生效
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {

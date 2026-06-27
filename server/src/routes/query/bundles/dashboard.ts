@@ -110,7 +110,11 @@ router.get(
         // - flag off + admin SC.branchCode='SC' → key='dashboard-bundle|default|1=1|b=SC'
         // - flag off + 系统级超管 branchCode undefined → key='...|b=_'
         // - flag on + admin SC → key='...|branch_code=\'SC\'|b=SC'
-        const branchSegment = `b=${req.user?.branchCode ?? '_'}`;
+        // 全国超管切省（codex 闸-1 P2-1）：用 effectiveBranch 区分 SC/SX/ALL。
+        //   切单省（SC/SX）→ effectiveBranch==该省码、permissionFilter 同 → 命中 cache-warmer 该省预热；
+        //   切 ALL → b=ALL（预热侧无此变体）→ miss → 走实时查询（正确合并，冷启动可接受，预热侧 ALL 变体后续再补）。
+        //   普通用户 effectiveBranch==branchCode → 读 key 字节不变。
+        const branchSegment = `b=${req.effectiveBranch ?? req.user?.branchCode ?? '_'}`;
         const tier1CacheKey = `dashboard-bundle|default|${req.permissionFilter || '1=1'}|${branchSegment}`;
         const escapedKey = tier1CacheKey.replace(/'/g, "''");
         const defaultCacheRows = await duckdbService.query<{ json_data: string }>(

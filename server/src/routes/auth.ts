@@ -501,7 +501,7 @@ router.get(
   authMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw new AppError(401, 'No token provided');
-    const { username, role, organization } = req.user;
+    const { username, role, organization, visibleBranches } = req.user;
     const tokenType = req.pat ? 'pat' : 'session';
 
     let user = await getUserByUsername(username);
@@ -510,9 +510,11 @@ router.get(
     }
     if (user) {
       const { passwordHash: _pw, ...rest } = user;
+      // visibleBranches 由 auth 中间件按 username 从 PRESET_USERS 派生（store 不持久化该字段），
+      // 随 /me 回前端，保证刷新/恢复会话后切省下拉仍可见（codex 闸-1 P1-3）。
       res.json({
         success: true,
-        data: { ...rest, tokenType },
+        data: { ...rest, visibleBranches, tokenType },
       });
       return;
     }
@@ -523,6 +525,7 @@ router.get(
         displayName: username === 'admin' ? '系统管理员' : username,
         role,
         organization,
+        visibleBranches,
         tokenType,
       },
     });

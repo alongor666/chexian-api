@@ -67,10 +67,12 @@ function makeReq(
   query: Record<string, unknown>,
   permissionFilter = 'org_level_3 IN (\'乐山\')',
   branchCode?: string,
+  effectiveBranch?: string,
 ): Request {
   return {
     query,
     permissionFilter,
+    effectiveBranch,
     user: branchCode !== undefined ? { branchCode } : undefined,
   } as unknown as Request;
 }
@@ -229,6 +231,53 @@ describe('buildRouteCacheKey', () => {
       const a = buildRouteCacheKey(makeReq(baseQuery, '1=1', 'SC'), 'cross-sell');
       const b = buildRouteCacheKey(makeReq(baseQuery, '1=1', 'SC'), 'cross-sell');
       expect(a).toBe(b);
+    });
+  });
+
+  // 全国超管切省（effectiveBranch）：SC / SX / ALL 三态 cache key 必须互异，防跨省串读（CRITICAL）。
+  // branchCode 恒为 'SC'（默认省），仅靠 b=SC 段无法区分 → 必须含 effectiveBranch。
+  describe('全国超管 effectiveBranch 隔离 cache key（切省防串读）', () => {
+    beforeEach(() => {
+      dataVersion = 'v-superadmin';
+    });
+    const baseQuery = {
+      dateField: 'policy_date',
+      startDate: '2026-01-01',
+      endDate: '2026-05-11',
+    };
+
+    it('超管 SC / SX / ALL 三态 → 三个互不相同的 cache key', () => {
+      // SC: targetBranch=SC, permissionFilter=branch_code='SC', effectiveBranch='SC'
+      const sc = buildRouteCacheKey(
+        makeReq({ ...baseQuery, targetBranch: 'SC' }, `branch_code = 'SC'`, 'SC', 'SC'), 'kpi');
+      // SX: targetBranch=SX, permissionFilter=branch_code='SX', effectiveBranch='SX'
+      const sx = buildRouteCacheKey(
+        makeReq({ ...baseQuery, targetBranch: 'SX' }, `branch_code = 'SX'`, 'SC', 'SX'), 'kpi');
+      // ALL: targetBranch=ALL, permissionFilter=branch_code IN ('SC','SX'), effectiveBranch='ALL'
+      const all = buildRouteCacheKey(
+        makeReq({ ...baseQuery, targetBranch: 'ALL' }, `branch_code IN ('SC', 'SX')`, 'SC', 'ALL'), 'kpi');
+      expect(new Set([sc, sx, all]).size).toBe(3);
+      expect(sc).toContain('b=SC');
+      expect(sx).toContain('b=SX');
+      expect(all).toContain('b=ALL');
+    });
+
+    it('超管 SX 与「普通 SX admin」(同 permissionFilter)→ 不串读（b 段一致是同省同数据，正确共享）', () => {
+      // 超管切 SX：effectiveBranch=SX → b=SX；普通 SX admin：branchCode=SX，effectiveBranch=SX → b=SX
+      const superSx = buildRouteCacheKey(
+        makeReq({ ...baseQuery, targetBranch: 'SX' }, `branch_code = 'SX'`, 'SC', 'SX'), 'kpi');
+      const plainSx = buildRouteCacheKey(
+        makeReq(baseQuery, `branch_code = 'SX'`, 'SX', 'SX'), 'kpi');
+      // permissionFilter 同（branch_code='SX'）、b 段同（SX）→ 但 query 段不同（超管带 targetBranch=SX）
+      // 二者数据同省同口径，cache key 是否相同不影响安全（都看 SX）。此处仅验 effectiveBranch 段为 SX。
+      expect(superSx).toContain('b=SX');
+      expect(plainSx).toContain('b=SX');
+    });
+
+    it('普通用户无 effectiveBranch（旧路径）→ 回落 branchCode 段，字节不变（cache-warmer 对齐）', () => {
+      const withEff = buildRouteCacheKey(makeReq(baseQuery, `branch_code = 'SC'`, 'SC', 'SC'), 'kpi');
+      const noEff = buildRouteCacheKey(makeReq(baseQuery, `branch_code = 'SC'`, 'SC'), 'kpi');
+      expect(withEff).toBe(noEff); // effectiveBranch='SC' == branchCode='SC' → 同 key
     });
   });
 });

@@ -21,9 +21,11 @@ import {
   Check,
   Car,
   Menu,
+  MapPin,
 } from 'lucide-react';
 import { useSidebar } from './SidebarLayout';
 import { useTheme } from '../../shared/theme';
+import { useBranch, branchLabel } from '../../shared/contexts/BranchContext';
 import { DataImportModal, ExportModal, ReportTemplatesModal } from '../../features/file';
 
 interface DropdownItem {
@@ -124,6 +126,21 @@ export const TopNavigation: React.FC = () => {
     { icon: ClipboardList, label: '报表模板', onClick: () => setIsTemplatesOpen(true), divider: true },
   ];
 
+  // 全国超管「切省 + 全国合并」下拉（仅 visibleBranches.length > 1 时显示）。
+  // 选项 = [全国, ...各可见省]；省份枚举数据驱动来自 visibleBranches（禁硬编码省份）。
+  const { branches, isMultiBranch, currentBranch, setBranch } = useBranch();
+  const branchMenuItems: DropdownItem[] = isMultiBranch
+    ? [
+        { icon: MapPin, label: '全国', onClick: () => setBranch('ALL'), active: currentBranch === 'ALL', divider: true },
+        ...branches.map((code) => ({
+          icon: MapPin,
+          label: branchLabel(code),
+          onClick: () => setBranch(code),
+          active: currentBranch === code,
+        })),
+      ]
+    : [];
+
   return (
     <>
       <header className="h-14 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between px-4 fixed top-0 left-0 right-0 z-50 opacity-30 hover:opacity-100 transition-opacity duration-300">
@@ -147,8 +164,15 @@ export const TopNavigation: React.FC = () => {
           </span>
         </div>
 
-        {/* 右侧：主题切换 + 文件菜单 */}
+        {/* 右侧：省份切换（仅全国超管）+ 主题切换 + 文件菜单 */}
         <nav className="flex items-center space-x-1" aria-label="主菜单">
+          {isMultiBranch && (
+            <DropdownMenu
+              icon={MapPin}
+              label={branchLabel(currentBranch ?? branches[0])}
+              items={branchMenuItems}
+            />
+          )}
           <button
             onClick={toggleTheme}
             className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors"
