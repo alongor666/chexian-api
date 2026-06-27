@@ -1,19 +1,42 @@
 # PR 工作流进化日志
 
-> 每次 PR 失败（CI 不过、merge 冲突、governance 拦截），在此记录根因和修复措施。
-> `/chexian-commit-push-pr` 执行前必读此文件，将已记录的失败模式纳入前置检查。
+> **本文件 = 项目的「免疫记忆」**：每条 entry 记录一次 PR 失败（CI 不过 / merge 冲突 / governance 拦截）与对应的修复 + 预防。但逾千行流水账不可能"每次必读"——**真正必读的是下面的【失败模式登记表】**：它把反复发作的 pattern 聚成台账，让"已发作 ≥2 次却仍停在文档层的债"一眼可见。
+> **消费协议**：`/chexian-commit-push-pr` · `/chexian-evidence-loop` 执行前读【失败模式登记表】+ `tail -100`（最近 entry），**不读全文**（取代旧 header 物理失实的"必读此文件"——逾千行不可能每次全读）。
 
 ---
 
-## 格式
+## 失败模式登记表（Pattern Registry · 必读）
 
-```markdown
-### YYYY-MM-DD — PR #N: 一句话描述
-- **症状**: CI/merge 具体报错
-- **根因**: 为什么现有检查没拦住
-- **修复**: 本次怎么修的
-- **预防**: 加入了什么新检查（写到 /chexian-commit-push-pr 的哪一步）
-```
+> 把散落在各 entry 尾注里"同类失败再发生 N 次 → 升级"的承诺，聚合成机器 / 人都可追踪的台账。
+> **拦截层四档（由弱到强）**：🔴 仅文档（靠纪律）< 🟡 文档 + 部分机制 < 🔵 自审 + 对抗闸(codex) < ✅ 自动拦截(hook / governance / pre-push)。
+> **维护约定**：新 entry 命中已有 pattern → 发作次数 +1、更新该行；新 pattern 起一行。**发作 ≥2 次仍 🔴 = 技术债，meta-review 必处置。**
+
+| # | 失败模式 | 发作 | 各次（PR / 日期） | 当前拦截层（源码 / `ls` 核实） | 升级触发线 · 当前债 |
+|---|---------|:---:|-----------------|------------------------------|---------------------|
+| P1 | 工具链严格度漂移：`build`/vitest 过但 `tsc --noEmit` 挂 | 2 | #459(05-31)、#644(06-15「重蹈覆辙」) | ✅ pre-push 跑 `typecheck` + `server tsc`（`scripts/hooks/pre-push:10,13`） | 主会话已硬拦；**残留**：sub-agent 自验只跑 vitest → 模板须强制 `typecheck` |
+| P2 | worktree 下 Write/Edit 绝对路径落主目录 main | **3** | #476(06-03)、#644(06-15)、#792(06-25) | 🔴 仅文档（worktree-setup + Pre-flight + memory）；settings `Write\|Edit` hook 只挂 user-only-guard，**未拦 worktree 路径**（`settings.json:32-38` 核实） | 🔴 **头号债**：3 次发作、3 次写"加 hook 拦路径不含 `.claude/worktrees/`"，至今未落。应升级 hook 或 `EnterWorktree` 重锚根治 |
+| P3 | codex review 同 pattern 多轮（盘点不全 · grep 漏 N 处） | 4 | #669 v1→v2→v3→hotfix(06-17~18) | 🔵 codex 闸-2 兜底（贵）+ 自审"已 grep 全仓 N 处"（文档） | 兜底有效但成本高；再发生 1 次 → "已 grep 全仓 N 处？"列为提交硬证据 |
+| P4 | perf baseline 写盘未 warmup + CI/本地阈值未分层 | 1 | #647(06-15) | ✅ benchmark `--warmup` 默认 3 + 回归/目标双校验（已进工具） | 已机制化；高离散度拒写为后续硬化点 |
+| P5 | 字典/文档指标公式 vs registry SQL 漂移 | 1 | #408(05-18) | 🟡 自审"逐 id grep registry SQL 对照"（文档） | 触发线 = 再 2 次 → governance"公式 token 重叠率"检查 |
+| P6 | 并发 sub-agent 写入打断 stash → push（race） | 1 | #644/#645(06-15) | 🟡 等完成通知 + 隔离 worktree（文档 + memory） | 异步 sub-agent 无暂停接口 → 结构性靠"隔离 + 完成再 push"纪律 |
+| P7 | 跨会话重复劳动（已合任务被重复派单） | 多 | #640/b299/b261(06-22)、wave-2 b331 | ✅ stale-scan PR-合并信号(#747) + event-log 认领锁(#748) | 上游机制根治；锁 TTL 据"最后活动"已修(#748) |
+| P8 | Loop v2 偏离：跳认领锁 / 跳对抗闸 | 1 | 2026-06-23 偏离复盘 | 🟡 文档纪律 + post-checkout warn-only 提示 | needs_automation=true；warn-only ≠ 强制，残留靠会话遵从 |
+
+> **本表暴露的最高优先债 = P2**（worktree 路径泄漏，发作 3 次仍 🔴）。其余 🟡 项（P5/P6/P8）按触发线在 meta-review 评估升级；✅ 项（P1 主路径 / P4 / P7）只需守住不回退。
+> **登记表与「待自动化」闭环的关系**：单条 entry 的 `needs_automation` 字段（值 `true` 时由 `loop:automation-due` + governance #703 追期）是"这次该自动化"信号；本表是**跨 entry 的 pattern 聚合视图**，专门捕捉"单条看着已处置、合起来才暴露的反复发作债"（如 P2 每次都写了预防，但跨 3 次才看出预防从未兑现）。
+
+---
+
+## 格式与维护约定
+
+本文件历经两代 entry 格式，**都有效、不强制迁移**（历史 entry 原地保留，外部文档按日期 / PR 锚点引用，勿打乱顺序）：
+
+- **早期 · 四要素**：`### YYYY-MM-DD — PR #N: 描述` + **症状 / 根因 / 修复 / 预防**。
+- **当前 · loop 三问**：`## YYYY-MM-DD · 描述` + **三问复盘**（① 重来更好？② 复用价值？③ 能否自动化？）+ `needs_automation`（`true`/`false`）。值为 `true` 时必紧跟 `expires: YYYY-MM-DD`——governance #703 `checkPrEvolutionExpired` 硬拦"本次新增缺 expires"，`bun run loop:automation-due` 催办已过期项。
+
+**新增 entry 一律用「当前格式」**，并在同一收尾步做两件事：
+1. **回填登记表**：命中已有 pattern → 发作 +1、更新拦截层 / 债；新 pattern 起一行（这是把本文件「机制已在、执行缺位」洞察落到自身结构的动作；系统性校准在 meta-review）。
+2. **配套 ledger**：`loop-quality-ledger.jsonl` 追加一行量化指标（schema 见 `loop-orchestration.md §3`）。本文件 = **定性教训**，ledger = **量化指标**，二者同步写。
 
 ---
 
@@ -1525,3 +1548,12 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 - **处置**：① P1→按 §8.4「Claude Code 判 policy 等级」判定为 **append-only 纯追加**（`git show --stat` = +6/-0 未改既有），不回滚、PR comment 注明 `policy: append-only`。② P2-a→entry 归任务级标题（`## ` 级或以日期开头）；**自验发现「体检结果（基准日 …）」括号日期子节会被误判的边界**，收紧为「日期开头」锚定 + 补归属断言与边界测试。③ P2-b→标题+引言校正为「含 loop 元工具修复」。
 - **复审（无 P0/P1/P2 · 可合并）**：codex 撤回第一轮 P1（实测确认纯追加，认同 append-only 判定）；P2-a 经合成探针验证三情形（早期 `### 日期` / `## RN` / 含括号日期子节）归属均正确；P2-b 无残留矛盾。顶部 JSDoc 过时（非阻塞）一并校正。
 - **价值印证**：codex 闸-2 又抓到实施者自查盲点——P2-a 的 entry 归属落子节名是我没注意的可维护性缺陷，其追问还触发我发现「含日期子节」边界。与 §4 多条「codex 比单一 verifier 更全」meta 再次互证：即便文档+小修类 PR，一次窄范围对抗也划算。
+
+## 2026-06-27 · 进化 Loop V2 规划撞车 main #809 + 一次过率口算错（84%→36.2%）
+
+- **现象**：本会话审视 Loop V2 信息茧房、产出 E1-E6 规划并 commit 后，rebase origin/main 才发现 main PR #809（2026-06-27 19:53）已做过 Loop v2 元复盘（修 `scanEntries` 漂移 + 处置 3 缺 expires + 实测 codex 281∶verifier 2 / 一次过率 36.2%）。我的规划与之主题重叠；且我口算「84% 一次过率」**错误**——只看 `rounds_to_green=1`（49 个）漏了 `first_pass_rate` 的 `rework=0` 联合条件，真实 36.2%（21/58）。
+- **根因**：① 改 loop 元资产（pr-evolution / 规划）前未先 `git fetch origin main` 查近期同主题合并——基于过时本地 ledger + 未察觉 main 已有元复盘（**茧房 2 / 跨会话重复的活体印证**，亦是登记表 P7 在「非-loop 编排会话」上的变体）；② 引用 `quality-report` 指标时凭记忆口算而非跑 `loop:quality` 取真实算法值——讽刺地违反我**同 PR 刚写进登记表**的精神。
+- **修复**：规划文档承接 main #809（订正 36.2% + 茧房4 据 281∶2 降级为低优先级残留假设 + E4 承接 #809 automation「疑似已机制化」、聚焦未做的 rule-hit-rate）；指标一律以 `loop:quality` 实跑为准。
+- **三问复盘**：① 重来更好？改任何 loop 元资产或引用其数据前，先 `git fetch origin main && git log origin/main --oneline -6 | grep -iE 'loop|元复盘'` 查同主题合并再动手。② 复用价值？「引用自产指标必跑脚本取值、禁口算」对所有 quality/账本类诊断通用。③ 自动化？可加：审视/规划类会话开工 checklist 前置「fetch + 查同主题合并」，先纪律后评估是否值得机制化。
+- needs_automation: true
+- expires: 2026-09-27
