@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（85 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（86 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -79,9 +79,9 @@
 - 2026-06-24-claude-2a7e17 — 计划维度省份化
 - 2026-06-24-claude-f7590d — sx-promote.mjs 批量 staging→final rename 非跨进程崩
 - 2026-06-25-claude-8e6e8a — cutover能力PR-4(可选·碰部署链)
-- 2026-06-27-claude-701830 — 全国超管 xuechenglong 切省+全国合并视图（方案B 前端省份切换器）
+- 2026-06-27-claude-901f0d — 派生域 ALL IN-scope 升级（codex 闸-2 P2·第3省上线前必修）
 
-**P3（30 项）**
+**P3（31 项）**
 
 - B246 `BLOCKED` — VPS 分层查询改造（KPI variable_cost_ratio）
 - B247 — 图表 hex 色值审计
@@ -113,6 +113,7 @@
 - 2026-06-25-claude-1b7736 — claims-detail/geo-comparison 的 cross_region_
 - 2026-06-25-claude-6a5aad — GeoRiskPanel 完整空态守卫（PR-5 follow-up·codex 闸-2
 - 2026-06-25-claude-6b021a — repair diversion-list org 粒度泄漏(codex闸-2 PR-7
+- 2026-06-27-claude-ddd89e — 切省 in-flight 回填回归测试（codex 闸-2 P2-2）
 
 ---
 
@@ -204,4 +205,5 @@
 | 2026-06-25-claude-8e6e8a | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-4(可选·碰部署链): deploy/vps-wrapper/deploy-chexian-api.sh 补 edit-env 子命令(sed 改 ecosystem env+reload),修 day1-sop 假设的 edit-env 与 wrapper 实现偏差。优先级低于 PR-1/2/3 | P2 | PROPOSED | N/A | deploy/vps-wrapper/deploy-chexian-api.sh |  |
 | 2026-06-25-claude-a80133 | 2026-06-25 | Auth · 多省(山西) RLS-on 硬前置 | @claude | RLS-on 硬前置(永久修复): 存量用户 user_store.json 缺 branchCode 致开 RLS 全员 401 fail-closed。2026-06-25 生产 dry-run 已数据层回填(20 用户全 branchCode='SC')但属运行时修复,user_store.json 重 seed/import 即复发。永久修复: (1) admin-import-users-from-json 导入时带 branch_code; (2) ensurePresetUser/seed 对存量用户 reconcile branchCode(现仅对不存在用户生效)。是 PR-3(fe871b) RLS-on 硬前置。详见 开发文档/multi-branch/山西cutover接力_v2.md 实证追加(2026-06-25 RLS-on dry-run)。 | P1 | PROPOSED | 开发文档/multi-branch/山西cutover接力_v2.md | server/src/services/access-control.ts,server/src/scripts/admin-import-users-from-json.ts |  |
 | 2026-06-25-claude-fe871b | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链): ecosystem.config.cjs env 加 BRANCH_RLS_ENABLED true。不可逆生产 RLS 开启,人工监控窗口 merge+盯CI。开前必跑 multi-branch-stress-test --simulate-sx + SC golden-baseline 零差异(需 owner 给 E2E_PASSWORD/JWT_SECRET) | P1 | PROPOSED | N/A | server/ecosystem.config.cjs | RLS-on 硬前置升级（2026-06-25）：除 stress-test --simulate-sx + SC golden-baseline 零差异外，新增依赖 PR-6(2bb22d) repair shadow 网点 ClaimsDetail branch 隔离——PR-1(5f1545) 让 ClaimsDetail 多源后，repair 4 端点 RLS-on 会跨省串读。开 RLS 前 PR-6 必须先合并。 <br>RLS-on 硬前置再升级（2026-06-25 codex 对抗审计）：新增依赖 PR-7(e6fac1) RepairDim 省份化。PR-6(2bb22d) 只闭 ClaimsDetail/PolicyFact 行泄漏；RepairDim-only 端点(overview/detail等)对 branch_admin 未省份隔离 + 影子 CTE bare RepairDim 子查询跨省全读仍未闭。开 RLS 前 PR-6 + PR-7 都必须先合并。 <br>步骤B(validation/SX派生域sync)经owner决策(2026-06-25)并入RLS-on同窗口:先BRANCH_RLS_ENABLED=true+reload,再SYNC_VALIDATION_BRANCHES=1 sync派生域(claims_detail/quotes/renewal)。禁RLS-off前推——duckdb oracle证:RLS-off推validation/SX/claims_detail(236653山西赔案)上VPS→loader无条件UNION→repair影子端点(coop-tier/scatter/orphan)零过滤→SC repair影子网点7225→13130(+5905山西网点污染四川视图),直到RLS-on才闭合。校正接力文档§PR-2/§PR-5「RLS-on前必做」表述(作废)。本次SSH仍fail2ban BLOCKED(IP151.244.134.80未变),真同步无法执行。步骤A(RepairDim纯SC)无此风险,顺延日常发布携带。 <br>2026-06-25 生产 RLS-on dry-run(可逆,已回滚): 证 RLS-on 对四川安全(基线72/72 + 头部KPI/total_cases零差异);但挖出致命隐雷=存量 user_store.json 用户缺 branchCode→开RLS全员401,已数据层回填修复(详见接力文档实证追加)。新增 RLS-on 硬前置=user_store.json branchCode 永久修复(见新登记 P1)。完整cutover仍卡SSH(SX同步)。 |
-| 2026-06-27-claude-701830 | 2026-06-27 | 多省/权限 | @claude | 全国超管 xuechenglong 切省+全国合并视图（方案B 前端省份切换器）：PresetUser/JwtPayload 加 visibleBranches 字段 + targetBranch 全局查询参数 + permission.ts 白名单注入（普通用户传参忽略防越权）+ 前端 BranchContext + 顶栏省份下拉 + cache key 区分 + 测试矩阵。设计见 开发文档/multi-branch/全国超管切省设计_2026-06-26.md | P2 | PROPOSED | 开发文档/multi-branch/全国超管切省设计_2026-06-26.md | server/src/middleware/permission.ts,server/src/config/preset-users.ts,src/components/layout/TopNavigation.tsx |  |
+| 2026-06-27-claude-901f0d | 2026-06-27 | 多省/权限 | @claude | 派生域 ALL IN-scope 升级（codex 闸-2 P2·第3省上线前必修）：全国超管 targetBranch=ALL 时 permissionFilter=branch_code IN(visibleBranches)，但 resolveBranchRlsCode 只反解单码 branch_code='XX'、不识别 IN(...)→派生域(RepairDim/ClaimsDetail/RenewalTrackerFact/achievement_cache/SalesmanTeamMapping)在 ALL 下不分省下推(unfiltered)。当前靠省份注册表三者耦合不变量(visibleBranches==getAllBranchCodes==BRANCH_ORGANIZATIONS keys)保证 unfiltered==所有已注册省 安全。第3省上线前把 resolveBranchRlsCode 升级成可返回 branch set/IN clause，或逐路由显式处理 ALL。注意 kpi-detail SAME_CITY_ORGS_BY_BRANCH 等单省专属语义需同步泛化 | P2 | PROPOSED | 开发文档/multi-branch/全国超管切省设计_2026-06-26.md | server/src/routes/query/shared.ts |  |
+| 2026-06-27-claude-ddd89e | 2026-06-27 | 多省/权限·测试 | @claude | 切省 in-flight 回填回归测试（codex 闸-2 P2-2）：BranchContext.setBranch 已用 apiClient.cancelAllRequests()(同步 abort 在飞 GET) + queryClient.cancelQueries() + clear() 关闭跨省串读窗口；但缺显式回归测试证明 SC 请求在飞时切 SX、旧 SC 响应不会按同 query key 回填。补 RTL 测试：mock apiClient(cancelAllRequests/setTargetBranch)+queryClient，渲染 BranchProvider 触发 setBranch，断言清理调用链顺序(setTargetBranch→cancelAllRequests→cancelQueries→clear→FORCE_REFRESH)。可选把 clear 链路改成 await cancelQueries 后再 clear(主窗口已由同步 abort 关闭，此为加固) | P3 | PROPOSED | N/A | src/shared/contexts/BranchContext.tsx |  |

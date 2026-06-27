@@ -69,6 +69,11 @@ export class ApiClientCore {
   private refreshPromise: Promise<boolean> | null = null;
   /** 默认请求超时（毫秒） */
   private requestTimeoutMs = 30_000;
+  /**
+   * 全国超管选中的目标省（'SC'/'SX'/'ALL'）。null → 不注入（普通用户/未切省，零行为变化）。
+   * 由 BranchContext 切省时 setTargetBranch 设置；request() 对 /query/* 与 /filters/* 自动注入。
+   */
+  private targetBranch: string | null = null;
 
   /**
    * 透传给命名空间子客户端的 this-bound 传输句柄（Phase 2）。
@@ -188,6 +193,28 @@ export class ApiClientCore {
   }
 
   /**
+   * 设置全国超管目标省（切省）。null = 清除（普通用户/恢复默认）。
+   * 之后所有 /query/* 与 /filters/* GET 请求自动带 targetBranch；后端按 token 白名单校验（普通用户传参被忽略）。
+   */
+  setTargetBranch(branch: string | null): void {
+    this.targetBranch = branch;
+  }
+
+  /**
+   * 对 /query/* 与 /filters/* 端点注入 targetBranch（权限选择器作用域）。
+   * 其他端点（/auth、/data 等）不注入。targetBranch=null 时原样返回（零行为变化）。
+   * 在 request() 起始调用 → url / dedupeKey / 归一化键均含 targetBranch，切省请求不会与默认省合并。
+   */
+  private injectTargetBranch(endpoint: string): string {
+    if (this.targetBranch === null) return endpoint;
+    const pathPart = endpoint.split('?')[0];
+    if (!pathPart.startsWith('/query/') && !pathPart.startsWith('/filters/')) return endpoint;
+    if (/[?&]targetBranch=/.test(endpoint)) return endpoint; // 已显式带则不覆盖
+    const sep = endpoint.includes('?') ? '&' : '?';
+    return `${endpoint}${sep}targetBranch=${encodeURIComponent(this.targetBranch)}`;
+  }
+
+  /**
    * 是否已认证
    */
   isAuthenticated(): boolean {
@@ -235,6 +262,8 @@ export class ApiClientCore {
     options: RequestInit = {},
     hasRetriedAfterRefresh = false
   ): Promise<T> {
+    // 全国超管切省：对 /query/* 与 /filters/* 注入 targetBranch（在 url/dedupeKey 计算前，保证切省请求独立合并键）。
+    endpoint = this.injectTargetBranch(endpoint);
     const url = `${API_BASE}${endpoint}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

@@ -10,6 +10,17 @@ export interface PresetUser {
    * BRANCH_RLS_ENABLED=true 时，permission.ts 据此 AND `branch_code='${branchCode}'`。
    */
   branchCode?: string;
+  /**
+   * 全国超管可切换/可合并的省集合（如 `['SC','SX']`）。
+   * undefined / [] → 普通用户（仅 branchCode 单省，行为不变）。
+   * 非空 → 该 branch_admin 可在前端切 SC/SX 单省、或看「全国」= 该集合合并视图。
+   * **加省时只改这里**：第 3 省上线后把 'GD' 等加进，permission 逻辑数据驱动无需改。
+   * 不变量（preset-users.test.ts + services/permission.test.ts 锁）：任一非空 visibleBranches
+   * 必 == getAllBranchCodes() == BRANCH_ORGANIZATIONS keys（省份注册表三者耦合，全国超管恒见系统所有省）。
+   * ALL 视图用 `branch_code IN (visibleBranches)` 白名单实现；该不变量保证 IN 集合覆盖所有已注册省
+   * （加省必须同步改三处，否则测试红），杜绝「半注册」省被 ALL 漏掉或泄漏。
+   */
+  visibleBranches?: string[];
   allowedRoutes?: string[];
   defaultRoute?: string;
   allowedIps?: string[];
@@ -201,7 +212,10 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     passwordHash: '$2b$10$NHIOCyjuqXWLXyq5UaP8Y.5p/NNsDMXBrsnk/eHsmq.tVSd0swcwu',
     displayName: '薛成龙',
     role: 'branch_admin',
+    // 全国超管：默认省四川（保留 branchCode='SC' 满足 fail-closed 不变量 permission.test.ts:181），
+    // visibleBranches 表达「可切 SC/SX 单省、可看全国合并」。加省时把新省加进此数组即可。
     branchCode: 'SC',
+    visibleBranches: ['SC', 'SX'],
     specialFeatures: ['cost', 'moto_cost'],
   },
   linxia: {
@@ -437,4 +451,19 @@ export function getAllBranchCodes(): string[] {
     }
   }
   return Array.from(codes).sort();
+}
+
+/**
+ * 按 username 取该用户的「全国超管可见省集合」（visibleBranches）。
+ *
+ * 单一事实源：PRESET_USERS（visibleBranches 是静态超管能力配置，非运行时可编辑数据）。
+ * 由 auth 中间件按已验证 token 的 username 调用，注入 req.user.visibleBranches（codex 闸-1 P1-3）——
+ * 故覆盖 JWT / PAT / cookie 全部身份出口，且**免重登**对存量会话立即生效，
+ * 不依赖 access-control store 是否持久化该字段（store 已存在且 re-seed 破坏性，见多分公司 Day-1 SOP Step 4.0）。
+ *
+ * @returns 该用户的可见省数组；普通用户返回 undefined。
+ */
+export function getPresetVisibleBranches(username: string): string[] | undefined {
+  const vb = PRESET_USERS[username]?.visibleBranches;
+  return vb && vb.length > 0 ? [...vb] : undefined;
 }

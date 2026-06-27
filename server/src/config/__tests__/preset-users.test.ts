@@ -8,6 +8,7 @@ import {
   PRESET_USERS,
   getAllBranchCodes,
   getAllPermissionScopes,
+  getPresetVisibleBranches,
   ORG_ROLE_ALLOWED_ROUTES,
   ORG_ROLE_DEFAULT_ROUTE,
 } from '../preset-users.js';
@@ -142,5 +143,55 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
     for (const u of sxUsers) {
       expect(u.active).toBe(true);
     }
+  });
+});
+
+describe('全国超管 visibleBranches（切省 + 全国合并视图）', () => {
+  it('xuechenglong 是全国超管：branchCode=SC（默认省，保 fail-closed 不变量）+ visibleBranches=[SC,SX]', () => {
+    const u = PRESET_USERS.xuechenglong;
+    expect(u).toBeDefined();
+    expect(u.role).toBe('branch_admin');
+    expect(u.branchCode).toBe('SC'); // 保留默认省 → 不破 permission.test.ts:181「无人缺 branchCode」
+    expect(u.visibleBranches).toEqual(['SC', 'SX']);
+  });
+
+  it('普通用户 visibleBranches 为 undefined（行为不变）', () => {
+    // 抽样若干普通用户（SC org_user / SX 超管 / 系统 admin）
+    expect(PRESET_USERS.leshan.visibleBranches).toBeUndefined();
+    expect(PRESET_USERS.sxAdmin.visibleBranches).toBeUndefined();
+    expect(PRESET_USERS.admin.visibleBranches).toBeUndefined();
+    expect(PRESET_USERS.tianfu.visibleBranches).toBeUndefined();
+  });
+
+  // ★ 安全不变量（codex 闸-1 P1-1 的核心前提）：
+  //   permission.ts 对 targetBranch=ALL 用「不拼 branch_code（baseFilter）」实现合并视图，
+  //   这只有在「全国超管的 visibleBranches == 系统所有省」时才与「合并 visibleBranches 全集」等价，
+  //   否则会泄漏不在 visibleBranches 内的省。本测试把该等价关系锁死：加第 3 省时若忘了同步加进
+  //   超管的 visibleBranches，此处即红，强制开发者补齐（数据驱动扩展，禁硬编码省份）。
+  it('【安全不变量】任一带 visibleBranches 的用户，其 visibleBranches == getAllBranchCodes()（全国超管恒见所有省）', () => {
+    const allBranches = getAllBranchCodes(); // ['SC','SX']
+    const superAdmins = Object.values(PRESET_USERS).filter(
+      (u) => u.visibleBranches && u.visibleBranches.length > 0
+    );
+    expect(superAdmins.length).toBeGreaterThan(0); // 至少 xuechenglong
+    for (const u of superAdmins) {
+      // 角色必须是 branch_admin（permission.ts 仅 branch_admin 认 visibleBranches，防 org_user 越权）
+      expect(u.role).toBe('branch_admin');
+      // 集合相等（顺序无关）
+      expect([...u.visibleBranches!].sort()).toEqual([...allBranches].sort());
+    }
+  });
+
+  it('getPresetVisibleBranches: 超管返回省集合，普通用户返回 undefined', () => {
+    expect(getPresetVisibleBranches('xuechenglong')).toEqual(['SC', 'SX']);
+    expect(getPresetVisibleBranches('leshan')).toBeUndefined();
+    expect(getPresetVisibleBranches('sxAdmin')).toBeUndefined();
+    expect(getPresetVisibleBranches('不存在的用户')).toBeUndefined();
+  });
+
+  it('getPresetVisibleBranches 返回副本（不可变，外部 mutate 不影响 PRESET_USERS）', () => {
+    const vb = getPresetVisibleBranches('xuechenglong')!;
+    vb.push('ZZ');
+    expect(PRESET_USERS.xuechenglong.visibleBranches).toEqual(['SC', 'SX']);
   });
 });

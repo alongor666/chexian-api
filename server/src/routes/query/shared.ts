@@ -172,7 +172,9 @@ export function buildRouteCacheKey(req: Request, routeName: string): string {
   //   - flag off + admin SX.branchCode='SX' → 'b=SX'
   //   - 系统级超管（branchCode undefined）→ 'b=_'
   // flag on 时 permissionFilter 已含 branch_code='SC'，本段是冗余防御（不是必要）。
-  const branchSegment = `b=${req.user?.branchCode ?? '_'}`;
+  // 全国超管切省：effectiveBranch（'SC'/'SX'/'ALL'）区分三态——普通用户 effectiveBranch 恒等于
+  // branchCode，故对存量流量字节不变（cache-warmer synthetic key 仍对齐）；超管 SC/SX/ALL 三 key 互异。
+  const branchSegment = `b=${req.effectiveBranch ?? req.user?.branchCode ?? '_'}`;
   // 版本后缀：ETL 完成后版本变更，旧 key 自然不再被命中，由 LRU 淘汰
   return `${routeName}|${req.permissionFilter || '1=1'}|${branchSegment}|${normalizedQuery}|v=${getDataVersion()}`;
 }

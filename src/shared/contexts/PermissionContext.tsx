@@ -78,6 +78,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     displayName: string;
     role: string;
     organization?: string;
+    branchCode?: string;
+    visibleBranches?: string[];
     allowedRoutes?: string[];
     defaultRoute?: string;
     specialFeatures?: string[];
@@ -92,6 +94,9 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
           ? UserRole.TELEMARKETING_USER
           : UserRole.ORG_USER,
       organization: (user.organization as UserPermission['organization']) || localPermission?.organization,
+      // 全国超管切省：branchCode=默认省、visibleBranches=可见省集合（后端 /login + /me 派生回传）。
+      branchCode: user.branchCode,
+      visibleBranches: user.visibleBranches,
       allowedRoutes: user.allowedRoutes || localPermission?.allowedRoutes,
       defaultRoute: user.defaultRoute || localPermission?.defaultRoute,
       specialFeatures: user.specialFeatures,

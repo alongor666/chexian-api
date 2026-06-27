@@ -7,6 +7,7 @@ import { DataProvider } from '../shared/contexts/DataContext';
 import { FilterProvider } from '../shared/contexts/FilterContext';
 import { StableProvider } from '../shared/contexts/StableContext';
 import { PermissionProvider, usePermission } from '../shared/contexts/PermissionContext';
+import { BranchProvider } from '../shared/contexts/BranchContext';
 import { ThemeProvider } from '../shared/theme';
 import { ExportProvider } from '../shared/export/ExportContext';
 import { DataImportPage } from '../features/home/DataImportPage';
@@ -146,6 +147,7 @@ function App() {
         <HashRouter>
           <DataProvider>
             <PermissionProvider>
+              <BranchProvider>
               <ExportProvider>
               <StableProvider>
               <FilterProvider>
@@ -352,6 +354,7 @@ function App() {
               </FilterProvider>
               </StableProvider>
               </ExportProvider>
+              </BranchProvider>
             </PermissionProvider>
           </DataProvider>
         </HashRouter>

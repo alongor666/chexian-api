@@ -30,6 +30,10 @@ export interface AuthData {
     displayName: string;
     role: string;
     organization?: string;
+    /** 分公司编码（'SC' / 'SX'）；全国超管为默认省 */
+    branchCode?: string;
+    /** 全国超管可切换/合并的省集合（如 ['SC','SX']）。普通用户 undefined → 不显示切省下拉 */
+    visibleBranches?: string[];
     allowedRoutes?: string[];
     defaultRoute?: string;
   };

@@ -73,8 +73,9 @@ router.use(permissionMiddleware);
 router.get(
   '/options',
   asyncHandler(async (req: Request, res: Response) => {
-    // 1. 获取用户可见的机构列表（根据权限）
-    const visibleOrganizations = permissionService.getVisibleOrganizations(req.user!);
+    // 1. 获取用户可见的机构列表（根据权限 + 全国超管有效省）。
+    //    effectiveBranch 由 permissionMiddleware 解析（普通用户=本人省；超管=切省/ALL）。
+    const visibleOrganizations = permissionService.getVisibleOrganizations(req.user!, req.effectiveBranch);
 
     // 2. 构建权限WHERE子句（fail-closed：permissionFilter 未生成时拒绝放行任何行）
     const permissionWhere = req.permissionFilter || '1=0';

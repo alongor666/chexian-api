@@ -9,7 +9,7 @@ import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
 import { authEnv } from '../config/env.js';
-import { PRESET_USERS } from '../config/preset-users.js';
+import { PRESET_USERS, getPresetVisibleBranches } from '../config/preset-users.js';
 import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
 import { ensurePresetUser, getUserByUsername } from './access-control.js';
@@ -25,6 +25,8 @@ export interface UserCredential {
   organization?: string;
   /** 分公司编码（'SC' / 'SX'）。undefined → 系统级超管 */
   branchCode?: string;
+  /** 全国超管可见省集合（按 username 从 PRESET_USERS 派生，供前端显示切省下拉）。普通用户 undefined */
+  visibleBranches?: string[];
   allowedIps?: string[];
   allowedRoutes?: string[];
   defaultRoute?: string;
@@ -127,6 +129,8 @@ class AuthService {
       ...user,
       passwordHash: passwordOverride ?? user.passwordHash,
       allowedIps: allowedIpsOverride ?? user.allowedIps,
+      // 全国超管可见省集合按 username 从 PRESET_USERS 派生（单一事实源），随登录响应回前端显示切省下拉。
+      visibleBranches: getPresetVisibleBranches(normalizedUsername),
     };
 
     if (!this.isIpAllowed(clientIp, userCredential.allowedIps)) {
