@@ -1,0 +1,210 @@
+{
+  "domain": "鉴权/路由/配置域",
+  "audit_scope": "server/src/{middleware,services,routes,config}/**",
+  "summary": {
+    "A": 5,
+    "B": 4,
+    "C": 8,
+    "D": 1,
+    "致命": 1,
+    "高": 4,
+    "中": 4,
+    "低": 2
+  },
+  "top": [
+    "1. [致命] sql-federation-policy.ts:162 getDeploymentBranchCode() 缺省返回 'SC' — BRANCH_CODE env 未设则视图层补 branch_code='SC' 常量，第三省部署时若忘配 env，所有 Parquet 视图都补四川码，RLS 隔离完全失效",
+    "2. [高] branch-names.ts:22 BRANCH_NAMES 只含 SC，SX 被注释 — getBranchCompanyName('SX') 回落 branchCode 原值 'SX' 而非 '山西分公司'，已经上线的山西管理员在 cross-sell 汇总行看到的是 '四川分公司' 标签",
+    "3. [高] sql/cross-sell.ts:175,276 generateCrossSellQuery/generateSummaryOnly 默认参数 summaryGroupName='四川分公司' — 调用方若漏传该参数，山西用户看到四川标签（已有路由传参修复，但参数默认值本身是陷阱）",
+    "4. [高] services/permission.ts:137 getVisibleOrganizations fallback: (branchKey && BRANCH_ORGANIZATIONS[branchKey]) || ORGANIZATIONS — 第三省 branchCode 如 'GD' 未在 BRANCH_ORGANIZATIONS 注册时，silently 回落 SC 的 ORGANIZATIONS 列表（显示四川12机构）",
+    "5. [高] sql/kpi-detail.ts:53 branchCode ?? 'SC' — branchCode 未传时 sameCityOrgs 静默用 SC 同城名单；SX branchCode='SX' 时已正确取 SX 名单，但第三省未注册时同样 fallback SC"
+  ],
+  "findings": [
+    {
+      "file": "server/src/config/sql-federation-policy.ts",
+      "line": 162,
+      "snippet": "return raw && /^[A-Z]{2}$/.test(raw) ? raw : 'SC';",
+      "quadrant": "A",
+      "category": "默认fallback",
+      "severity": "致命",
+      "isVariable": true,
+      "sxBroken": false,
+      "context": "getDeploymentBranchCode() 读 process.env.BRANCH_CODE，缺省/非法一律返回 'SC'。此值用于视图层补 branch_code 常量列（selectUnionWithBranchCode），漏配 BRANCH_CODE env 则所有 Parquet 行都被打上 'SC' 标签，branch_code RLS 过滤完全失效。注释说'仅用于受控视图 DDL 内插'，但实际是多租户 Parquet 行级安全的根基。",
+      "fix": "缺省时 throw Error('BRANCH_CODE env required') — fail-closed；或要求调用方显式传入、不提供默认"
+    },
+    {
+      "file": "server/src/config/branch-names.ts",
+      "line": 22,
+      "snippet": "// SX: '山西',  // 山西上线时启用",
+      "quadrant": "B",
+      "category": "省份schema",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "context": "BRANCH_NAMES 只有 SC:'四川'，SX 被注释。SX 已于 2026-06-26 完成 cutover。getBranchCompanyName('SX') 走 fallback 返回 'SX分公司' 而非 '山西分公司'；跨省 cross-sell 汇总行标签错误。测试文件 branch-names.test.ts 注释'等待山西上线时启用'但 cutover 已做。",
+      "fix": "取消注释 SX: '山西'，同步更新 branch-names.test.ts 断言"
+    },
+    {
+      "file": "server/src/sql/cross-sell.ts",
+      "line": 175,
+      "snippet": "summaryGroupName: string = '四川分公司'",
+      "quadrant": "A",
+      "category": "省份schema",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "context": "generateCrossSellQuery 默认参数 '四川分公司'。路由层 cross-sell.ts:138 已传 getBranchCompanyName(req.user?.branchCode)，但 branch-names.ts SX 被注释 → getBranchCompanyName('SX') 仍返回 'SX分公司' 而非 '山西分公司'。双重问题叠加。同时第 276 行 generateSummaryOnly 也有相同默认值。",
+      "fix": "与 branch-names.ts 修复联动：取消注释 SX 条目后自动修复；另评估是否去掉默认参数值强制调用方显式传入"
+    },
+    {
+      "file": "server/src/sql/cross-sell.ts",
+      "line": 276,
+      "snippet": "summaryGroupName: string = '四川分公司'",
+      "quadrant": "A",
+      "category": "省份schema",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": true,
+      "context": "generateSummaryOnly 内部私有函数，同 generateCrossSellQuery 默认参数。generateCrossSellQuery 调用时传入了 summaryGroupName，但此处默认值若调用链中间漏传，结果错误。",
+      "fix": "同上，与 branch-names.ts SX 条目取消注释联动修复"
+    },
+    {
+      "file": "server/src/services/permission.ts",
+      "line": 137,
+      "snippet": "const branchOrgs = (branchKey && BRANCH_ORGANIZATIONS[branchKey]) || ORGANIZATIONS;",
+      "quadrant": "A",
+      "category": "机构名",
+      "severity": "高",
+      "isVariable": true,
+      "sxBroken": false,
+      "context": "getVisibleOrganizations 单省路径：未知 branchCode 回落 ORGANIZATIONS（SC 四川12机构）。当前 BRANCH_ORGANIZATIONS = {SC, SX}，SC/SX 正常。第三省 'GD' 上线但未注册时 silently 显示四川机构下拉 — 管理员无感知。注释已写'未登记的省回落到 SC（保守默认，避免泄漏）'但文档化的 fallback 本身是危险的，应改为 fail-closed 或显示'配置缺失'提示。",
+      "fix": "BRANCH_ORGANIZATIONS 未命中时 return ['全部']（拒绝透出任何机构）+ 服务端 warn 日志，而非 silently 回落 SC"
+    },
+    {
+      "file": "server/src/sql/kpi-detail.ts",
+      "line": 53,
+      "snippet": "const sameCityOrgs = SAME_CITY_ORGS_BY_BRANCH[branchCode ?? 'SC'] ?? SAME_CITY_ORGS_BY_BRANCH.SC;",
+      "quadrant": "A",
+      "category": "机构名",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "context": "branchCode 未传时 fallback SC 同城名单。SAME_CITY_ORGS_BY_BRANCH 已含 SC/SX 两个名单，SX 路径实际可用。问题是：第三省未注册时双重 fallback 到 SC，同城/异地分组错误。另 SAME_CITY_ORGS 别名（line 33）硬指 SC 仅用于向后兼容，语义可能被误用。",
+      "fix": "branchCode 缺省时 warn + 返回 []（不生成 IN 过滤而非用 SC 数据），或在调用点强制传入 branchCode（route 层已有 resolveBranchRlsCode）"
+    },
+    {
+      "file": "server/src/config/preset-users.ts",
+      "line": 218,
+      "snippet": "visibleBranches: ['SC', 'SX'],",
+      "quadrant": "B",
+      "category": "省份代码",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "context": "全国超管 xuechenglong 的 visibleBranches 硬编码 ['SC','SX']。文件注释'加省时把新省加进此数组即可'——但这是手工操作，需要改源码。不变量测试 preset-users.test.ts:172 也硬编码 expect(codes).toEqual(['SC','SX'])，第三省上线时两处都要改。",
+      "fix": "属于设计内硬编码（有意为之，文档说明清楚），可接受；但加省时需要同步改 preset-users.ts visibleBranches + 测试断言，属于多省扩展的核心手工成本（见新增省份影响评估）"
+    },
+    {
+      "file": "server/src/services/permission.ts",
+      "line": 34,
+      "snippet": "export const SX_ORGANIZATIONS = ['太原一部', '太原二部', '经代、车商、重客', ...]",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "中",
+      "isVariable": true,
+      "sxBroken": false,
+      "context": "SX 11 个经营单元硬编码在源码中（注释说 SSOT=SX.json，但实际两份都有，需保持同步）。preset-users.ts 的 11 个 SX org_user.organization 字段也是来源，漂移由 permission.test.ts 对账锁定。第三省加入时需要在此文件新增 GD_ORGANIZATIONS 常量 + 加 BRANCH_ORGANIZATIONS['GD'] 条目。",
+      "fix": "从 branch-org-mapping/<province>.json 动态加载，而非静态 const——降低人工维护成本，SSOT 单一化"
+    },
+    {
+      "file": "server/src/config/organizations.ts",
+      "line": 13,
+      "snippet": "export const ORGANIZATIONS = ['乐山','天府','宜宾',...]（12 机构 SC 静态列表）",
+      "quadrant": "B",
+      "category": "机构名",
+      "severity": "低",
+      "isVariable": true,
+      "sxBroken": false,
+      "context": "config/organizations.ts 是旧文件（仍含 DEFAULT_USER_PERMISSIONS / USER_CREDENTIALS 等历史认证代码，但注释说'此表认证已废弃，不在登录链路'）。前端 src/ 多处 import 此文件（RouteAccessGuard/LoginPage 等），但仅用 canAccessRoute/UserRole 等通用函数；ORGANIZATIONS 常量前端也有使用。服务端 permission.ts 已有独立的 ORGANIZATIONS 副本。两处同名常量漂移风险。",
+      "fix": "评估是否可合并或将 SC 机构列表移入 branch-org-mapping/SC.json；前端已用独立 src/shared/config/organizations.ts，该文件的清洁程度需前端域审计"
+    },
+    {
+      "file": "server/src/middleware/permission.ts",
+      "line": 124,
+      "snippet": "let branchClause: string; // 单省 `branch_code = 'XX'` 或 ALL `branch_code IN ('SC','SX')`",
+      "quadrant": "C",
+      "category": "业务参数",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "context": "注释示例 IN ('SC','SX') 仅是示意说明，实际代码从 visibleBranches 动态生成 IN 子句（line 142），不是硬编码。permissionFilter 生成逻辑完全数据驱动，通过校验。",
+      "fix": "无需改动，逻辑正确"
+    },
+    {
+      "file": "server/src/config/preset-users.ts",
+      "line": 68,
+      "snippet": "branchCode: 'SC',（admin 用户及全部 SC org_user 用户）",
+      "quadrant": "C",
+      "category": "省份代码",
+      "severity": "低",
+      "isVariable": false,
+      "sxBroken": false,
+      "context": "SC 用户的 branchCode='SC' 是正确的省份标识，不是 fallback。这是正常的多租户用户配置。SX 用户都是 branchCode='SX'。不构成硬编码问题。新增省份时需要在此文件新增用户条目。",
+      "fix": "无需改动，属于用户配置的正确省份标识"
+    },
+    {
+      "file": "server/src/config/sql-federation-policy.ts",
+      "line": 91,
+      "snippet": "// renewal_tracker ETL 已派生 branch_code 列 ... 仍兜部署省常量",
+      "quadrant": "D",
+      "category": "数据路径",
+      "severity": "低",
+      "isVariable": true,
+      "sxBroken": false,
+      "context": "selectUnionWithBranchCode 的 DESCRIBE 自适应逻辑：Parquet 有 branch_code 列直接用，没有则兜 getDeploymentBranchCode() 常量（'SC'默认）。这是双路径过渡机制（ETL 改造 vs 旧 Parquet），技术上正确但依赖 BRANCH_CODE env 配置——与 F1 致命项同源。",
+      "fix": "待 ETL 全量补列完成后移除兜底路径；在此之前 BRANCH_CODE env 必须正确配置"
+    }
+  ],
+  "new_province_impact_assessment": {
+    "title": "新增第三省（如 GD 广东）最少需改动的文件和位置",
+    "mandatory_changes": [
+      {
+        "file": "server/src/services/permission.ts",
+        "changes": 2,
+        "detail": "新增 GD_ORGANIZATIONS = [...] 常量 + BRANCH_ORGANIZATIONS['GD'] = GD_ORGANIZATIONS 条目"
+      },
+      {
+        "file": "server/src/config/preset-users.ts",
+        "changes": 2,
+        "detail": "全国超管 xuechenglong.visibleBranches 加 'GD' + 新增 GD 用户账号若干条（含 gdAdmin + 各机构 org_user）"
+      },
+      {
+        "file": "server/src/config/branch-names.ts",
+        "changes": 1,
+        "detail": "BRANCH_NAMES 加 GD: '广东'"
+      },
+      {
+        "file": "server/src/sql/kpi-detail.ts",
+        "changes": 1,
+        "detail": "SAME_CITY_ORGS_BY_BRANCH 加 GD: [...同城机构] 否则 kpi-detail 同城/异地分组 fallback SC"
+      },
+      {
+        "file": "server/.env（VPS部署配置）",
+        "changes": 1,
+        "detail": "BRANCH_CODE=GD（否则 getDeploymentBranchCode 返回 SC，视图层补错省码 — 致命）"
+      },
+      {
+        "file": "server/src/config/__tests__/preset-users.test.ts",
+        "changes": 2,
+        "detail": "getAllBranchCodes 断言从 ['SC','SX'] 改为 ['GD','SC','SX']；xuechenglong.visibleBranches 断言同步"
+      }
+    ],
+    "total_files": 6,
+    "total_touch_points": 9,
+    "critical_omission_risk": "最危险的遗漏：VPS 未设 BRANCH_CODE=GD — getDeploymentBranchCode() 静默返回 'SC'，Parquet 视图层补错省码，RLS 隔离完全失效且无报错",
+    "conditional_changes": [
+      "数据管理/config/branch-org-mapping/GD.json — 新增 GD 机构映射（ETL 使用，若 ETL 从此文件读取）",
+      "scripts/sync-vps.mjs — 若有省份路径过滤需更新（运维脚本域审计范围）",
+      "deploy.yml — BRANCH_CODE 环境变量（CI/CD 部署配置）"
+    ]
+  }
+}
