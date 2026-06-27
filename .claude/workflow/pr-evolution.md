@@ -1518,3 +1518,10 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 - 闸①：`automation-due.mjs` 增「疑似已机制化」启发式——某 needs_automation 文字含明确文件路径（`scripts/**.mjs` / `.github/workflows/*.yml`）且该路径已存在时，单列「⚠️ 疑似已机制化，复核可否撤项」（仅覆盖含显式路径项，避免误报）。本轮项1 正是「闸建好挂 9 天没撤」，该启发式可机器提示。
 - 闸②（P4·可选）：meta-review 自动触发（每 ~N 任务或每周，挂 Stop hook 或 cron），免「等用户触发才跑」。质量账本「返工归因」（区分缺陷返工 vs 闸拦截返工）需改 ledger schema、另立不并入。
 - expires: 2026-09-27（与 R41 同窗；属 loop-meta 代码改动，单 owner 串行落地，本轮仅登记闸①②不并发硬化。届时未落地则复审或降级为纪律。）
+
+### 附：codex CLI 闸-2 对抗评审轮（PR #809）
+按 §2 闸-2（代码评审单源 = codex CLI）对本 PR 完成 diff 做对抗审查，两轮收敛：
+- **第一轮（无 P0）**：1 P1 + 2 P2。① P1：疑 `.claude/rules/loop-orchestration.md` 改动触 §8.2 frozen、需 `[policy-override]`。② P2-a：scanEntries 标题形式自进化项归到子节名（「三问复盘」「处置」）而非任务标题，注释与实际不符、单测未断言 entry。③ P2-b：entry 自述「零功能代码改动」与实际 diff（改了 `automation-due.mjs`）矛盾。
+- **处置**：① P1→按 §8.4「Claude Code 判 policy 等级」判定为 **append-only 纯追加**（`git show --stat` = +6/-0 未改既有），不回滚、PR comment 注明 `policy: append-only`。② P2-a→entry 归任务级标题（`## ` 级或以日期开头）；**自验发现「体检结果（基准日 …）」括号日期子节会被误判的边界**，收紧为「日期开头」锚定 + 补归属断言与边界测试。③ P2-b→标题+引言校正为「含 loop 元工具修复」。
+- **复审（无 P0/P1/P2 · 可合并）**：codex 撤回第一轮 P1（实测确认纯追加，认同 append-only 判定）；P2-a 经合成探针验证三情形（早期 `### 日期` / `## RN` / 含括号日期子节）归属均正确；P2-b 无残留矛盾。顶部 JSDoc 过时（非阻塞）一并校正。
+- **价值印证**：codex 闸-2 又抓到实施者自查盲点——P2-a 的 entry 归属落子节名是我没注意的可维护性缺陷，其追问还触发我发现「含日期子节」边界。与 §4 多条「codex 比单一 verifier 更全」meta 再次互证：即便文档+小修类 PR，一次窄范围对抗也划算。
