@@ -229,4 +229,4 @@ bun run verify:full                # verify:quick + 单元测试
 
 ## 12. 扩展机制前缀规范
 
-`chexian-*` / `diagnose-*` 簇命名规则、`xcl-*` 遗留治理、frontmatter 必填项、单一事实源策略、审计脚本 — 详见 [.claude/rules/skill-prefix.md](./.claude/rules/skill-prefix.md)。本项目相关全局 skill 的"项目用法"见 [.claude/rules/skills-map.md](./.claude/rules/skills-map.md)。
+`chexian-*` / `diagnose-*` 簇命名规则、`xcl-*` 遗留治理、frontmatter 必填项、单一事实源策略、审计脚本 — 详见 [.claude/rules/skill-prefix.md](./.claude/rules/skill-prefix.md)。本项目相关全局 skill 的"项目用法"见 [.claude/rules/skills-map.md](./.claude/rules/skills-map.md)。技能口径禁内联、必挂 SSOT：见 [.claude/rules/skill-caliber-ssot.md](./.claude/rules/skill-caliber-ssot.md)。

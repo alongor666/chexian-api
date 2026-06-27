@@ -1649,3 +1649,25 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 ### needs_automation: true
 - 闸：K3（`2026-06-27-claude-6f3275`）把"技能内 Parquet 字段名比对实际落列、注册表外/未落列字段即 error"入 `bun run governance`，把 K1/K5 的"技能挂靠 SSOT"从自觉变强制。关键设计修正（K1 实证）：K3 不能只比对 `fields.json` 字段集（`endorsement_type` 在 fields.json 却 Parquet 未落，比对字段集抓不到），须比对 Parquet 实际 schema。依赖 K1（本项）落地。
 - expires: 2026-09-27（与治理链 K2-K5 同窗；属技能口径治理，单 owner 串行落地）。
+
+---
+
+## 2026-06-27 · K2 技能口径挂靠 SSOT 元规则（技能口径治理·evidence-loop scorecard）
+
+> 承接 `开发文档/plans/2026-06-27-技能口径挂靠SSOT治理.md` §4 K2（治理链第二波，依赖 K1 已合并 PR#819）。把 K1 单例（kpi 命令挂靠省份隔离）上升为元规则。
+
+- **业务目标**：建元规则禁所有技能内联口径/字段/枚举/阈值/输入契约，必挂靠注册表/rules SSOT，根治"影子事实源"。
+- **基线**：CLAUDE.md §2 注册表 RED LINE 只覆盖 server/ 代码，未覆盖 .claude/commands/skills——技能能游离在外的根。
+- **候选（2 文件 +46/-1）**：新增 `.claude/rules/skill-caliber-ssot.md`（5 类禁内联 + 挂靠方式 + §2 延伸 + K2规范/K3闸边界 + 全局技能盲区诚实声明 + K3 字段层兜底）；CLAUDE.md §12 加指针。
+- **oracle**：纯文档元规则；先搜再写确认无重复元规则 + getMetricSql/fields.json/customer-categories 路径真实。
+- **回归门禁**：bun run governance 45/45（含新 rules 文件）；CLAUDE.md 15660 字符（<20KB）。
+- **双闸（codex CLI）**：闸-1 GO-with-P0-fixes（2P0：全局技能盲区虚假安全感→诚实声明项目内自动注入vs全局靠crystallize/K3兜底 + fields.json完整路径；5P1：K2规范/K3强制闸边界明写 + paths扩展含治理文件 + 加第五类输入契约禁项 + 示例SQL限定验证样例 + §12压短）全采纳；**拒绝2P2**（policy:append-only + AGENTS§8.2 经 grep 确认是9个现有rules文件项目惯例，codex因prompt未给惯例而误判）；闸-2 GO（2P1：客户类别路径标前端 + §5明确K3仅字段层；1P2：兜底措辞）采纳。
+- **决策**：promote。元规则落地 = 治理链从单例上升通则，K3（强制闸）+ K5（全面挂靠）依赖它。
+
+### 三问复盘
+1. **重来怎样更好**：codex 闸-1 两次质疑（全局技能盲区"虚假安全感" + K2/K3 边界）都指向同一根：别让规范文档制造"已强制"错觉（呼应 memory `feedback_prompt_needs_code_backup`：自觉规则≠强制闸）。元规则首版把"RED LINE/必须"写得像强制，闸-1 逼出诚实声明"K2 是审查期规范，K3 才是强制闸"。
+2. **复用价值**：① 「自觉规范 + 自动闸职责边界明写，不混淆」对任何"政策文档 + governance 闸"配对通用；② 「codex 信息不足误判 → grep 验证项目惯例后拒绝」（policy:append-only/AGENTS§8.2）是 receiving-code-review 正例：验证后拒绝技术不成立建议，不盲从；③ 「元规则 paths 含自身 + 治理文件」让编辑技能治理文件时规则自注入。
+3. **如何更高质量自动化**：K2 是规范层，自动化由 K3 承接（字段层）。残留：公式/枚举/阈值/输入契约四类目前无自动闸，§5 已诚实标注"后续若需自动化须另建闸"——有意范围控制，非缺口。
+
+### needs_automation: false
+（K2 是审查期规范，自动化兜底明确委托 K3 字段闸；公式/枚举/阈值/输入契约四类的自动闸属未来独立 backlog，§5 已诚实标注边界。强行给四类建闸属过度工程——先让 K3 字段闸落地验证模式。）
