@@ -32,6 +32,7 @@
 import { execSync, spawnSync } from 'child_process';
 import { existsSync, readdirSync, statSync, renameSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, rmdirSync, copyFileSync, rmSync, openSync, closeSync } from 'fs';
 import { basename, dirname, extname, join, resolve, isAbsolute } from 'path';
+import { recordEvent } from '../scripts/etl-ledger/record.mjs';
 import { platform, homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
@@ -273,8 +274,19 @@ print(json.dumps(dict(zip(cols, row)), ensure_ascii=False, default=str))
     }
   }
   if (failures.length > 0) {
+    // ③validate 埋点（失败）：断点定位的核心——记下域 + 失败原因
+    recordEvent({
+      stage: 'validate', step: `${domainId}_validate`, domain: domainId, status: 'failure',
+      row_count: Number(stats.row_count), error: failures.join('; '),
+    });
     throw new Error(`${domainId} 候选 parquet 未通过替换前校验: ${failures.join('; ')}`);
   }
+  // ③validate 埋点（成功）
+  recordEvent({
+    stage: 'validate', step: `${domainId}_validate`, domain: domainId, status: 'success',
+    row_count: Number(stats.row_count),
+    date_range: stats.min_date && stats.max_date ? `${stats.min_date}~${stats.max_date}` : undefined,
+  });
   log('green', `  ✅ ${domainId} 候选 parquet 校验通过: rows=${Number(stats.row_count).toLocaleString()}`);
 }
 
@@ -360,6 +372,12 @@ function updateDataSources(domainId, { rowCount, fieldCount, dataRange } = {}) {
 
     writeFileSync(DATA_SOURCES_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
     log('green', `  📋 data-sources.json 已更新: ${domainId} (rows=${rowCount?.toLocaleString() ?? '-'})`);
+    // ②etl 埋点：每域成功更新 metadata = 一次转换成功（统一锚点，覆盖所有域）
+    recordEvent({
+      stage: 'etl', step: `${domainId}_transform`, domain: domainId, status: 'success',
+      row_count: rowCount ?? domain.row_count, field_count: fieldCount ?? domain.field_count,
+      date_range: domain.data_range,
+    });
   } catch (e) {
     log('yellow', `  ⚠️ data-sources.json 更新失败: ${e.message}`);
   }

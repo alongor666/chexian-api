@@ -125,7 +125,7 @@
 
 | 环节 | `stage` | 宿主脚本 | 记录时机 | 关键字段 |
 |---|---|---|---|---|
-| ① 源文件 | `source` | `数据管理/daily.mjs` | 源文件发现后 | 文件名 / bytes / mtime / source_fp |
+| ① 源文件 | `source` | `数据管理/daily.mjs` | 源文件发现后 | ⏸ **推迟（见 §13）**——源发现分散在 8 个 run/strategy 函数、无单一锚点 |
 | ② ETL 转换 | `etl` | `数据管理/daily.mjs` | 每域 Parquet 产出后 | row_count / row_delta / date_range / output_fp / duration |
 | ③ 数据校验 | `validate` | `数据管理/daily.mjs` | 域校验后 | status（通过/失败）/ error（失败项） |
 | ④ VPS 同步 | `vps_sync` | `scripts/sync-vps.mjs` | rsync + 完整性闸门后 | status / bytes / 闸门结果 |
@@ -213,6 +213,7 @@
 ---
 
 ## 13. 后续（follow-up，本次不做）
+- **①source 源文件埋点**：`daily.mjs` 源发现分散在 `runStandardDomain` / `runStrategy*`（5 个）/ `runClaimsDetail` / `runRenewalTracker` 共 8 处、无单一统一锚点，全覆盖需侵入 8 处（违反"修补不拆除"）；且当前 worktree 无源数据无法集成验证。已交付的 ②etl（`updateDataSources` 统一锚点）+ ③validate（`validateDomainCandidate` 统一锚点）覆盖断点定位核心；source 纯审计埋点待有数据环境定位最小侵入点后单独迭代。`render.mjs` 的 `STAGES` 仍保留 `source`（合法环节，回填/未来可用），真实运行当前覆盖 6/7。
 - JSONL 季度归档轮转。
 - 断点事件推送飞书/企微（复用 `chexian-im-push`）。
 - 台账接入前端只读页（`/api/data/*`）。
