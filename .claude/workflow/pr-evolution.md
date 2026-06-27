@@ -1692,3 +1692,26 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （K4 注册指标走既有 §2 codegen 流程 + governance 守护，无新增待自动化项。指标字典.md drift 的自动化排查已 spawn_task 独立登记，不属 K4 范围。）
+## 2026-06-27 · Loop V2 进化 E5「样本多样性意识」治茧房2 单一工程过拟合（evidence-loop scorecard）
+
+承接 `开发文档/loop-v2-进化规划.md` §4 E5（无依赖·增强阶段·P2）。schema / 落地见 `loop-orchestration.md` §3「E5 样本主题集中度」bullet + §4 同日 meta。
+
+**基线**：账本 68 样本，`loop:quality` 北极星一次过率 29.4%；按 `domain` 字段（技术域桶）HHI=0.0607（仅 1.8×均匀 1/30），最大域 etl 11.4%——技术域分散，看不出"单一工程过拟合"。手工核对 task 文本：~36/68=53% 属同一工程（山西多省接入）。**这正是茧房2 的隐身机制：技术分桶口径把一个工程显示成"分散在 30 域的多样工作"。**
+
+**合同 / oracle**：`loop:quality` 输出样本主题集中度，显示业务主题高集中（省份接入 >50%·HHI 明显 > 1/n）+ 规则可打标；单测覆盖 HHI 计算 + 单一主题占比 + 空账本/单样本边界 + 打标 4 分支 + 误命中反例。
+
+**双闸（codex CLI read-only·自包含喂 diff·禁 codex 自跑 git/grep）**：
+- 闸-1（计划）PARTIAL → 全采纳 4 P0+4 P1+3 P2。关键裁定：**D1-C 双维度**（domain 字面要求 vs oracle 主题诉求张力——domain HHI 证明不了茧房2，topic 业务主题才是主结论 + 打标依据）；overfitFlag 纯函数化可测；topic 省份接入证据族首位判定（防技术词截胡）；命名去 n 过载（bucket_count/sample_count/label_total）。
+- 闸-2（完成 diff）三轮：轮1 PARTIAL 4 P1（topName guard / hhiOf 负数·Infinity·NaN 防护 / 省份变体补漏 / 泛词过宽）+ 3 P2 → 修；轮2 PARTIAL（P1-1 残留：裸"派生/回填/backfill/地域"跨项目通用会污染）→ 收窄移除泛词 + "派生"限定派生映射上下文 + 3 反例测试；轮3 **PASS**（P1-1 已清·无 P0）。
+
+**oracle 实证（禁口算·跑 `loop:quality` 取真值）**：业务主题 top「省份接入」**51.5%**（HHI 0.3287 vs 均匀基线 0.1667=1/6·**1.97×**）→ 🏷 打标"待跨域验证"；技术域 top etl 14%（任务加权 HHI 0.0744 < 主题 0.3287 → 诊断"技术分桶掩盖主题集中=茧房2 隐身机制"触发）。loop 单测 116→**141**、`bun run governance` 45/45。（注：51.5% 为实现验证时点 68 样本；rebase 合入 origin 最新（#819/#820）后当前账本 **71 样本**、省份接入 **50.7%**·1.93× 仍打标——结论可复现、不依赖瞬时样本数。）
+
+**决策**：promote。茧房2「单一工程过拟合」从不可见 → `loop:quality` 一行可量化 + 可打标。
+
+**残留诚实边界**：① TOPIC_RULES 是关键词启发式非完整语义分类器，文本无强省份信号的边界行（行13 org_level_3 回填 / 行44 Phase backfill）诚实漏判归其他（不污染 oracle 主结论）；② `\bSX\b` 在 `/i` 下亦匹配小写 `sx`（如未来前端 MUI `sx` prop），当前账本零命中、codex 评估不阻断、后续观察。
+
+### needs_automation: true
+- E6 拟把「账本必含样本集中度维度（缺则告警）+ 单一主题超阈时强制 meta-review 打标」固化进 `bun run governance`，回退即 fail。本项属 loop-meta 代码改动，单 owner 串行落地，本轮仅落地探针 + 打标，governance 强制留 E6（依赖 E1/E4 同窗）。
+- expires: 2026-09-27（与 E1/E2/loop-orchestration §4 同日 meta 同窗；属 loop-meta）。
+
+**三问复盘**：① 重来更好？domain 字面要求 vs oracle 主题诉求的张力本应在闸-1 前自查更彻底——阶段 A 已用证据揭示 domain HHI 仅 1.8×均匀，但靠 codex 闸-1 才定死双维度方案；早识别"任务描述内部张力（按 domain 字段 vs ~59% 主题）"应直接在合同里列为待裁决项交闸-1。② 复用价值？`hhiOf` / `overfitFlag` / `classifyTopic` 对任何"自产自评闭环装样本多样性意识"通用；**"关键词启发式 + 诚实漏判边界 + 反例测试锁误命中"是脆弱分类器的标准工程化折中**（codex 闸-2 两轮收窄实证 P1-1）。③ 自动化？本项即"把过拟合从不可见变机制化可见 + 打标"；残留人工点 = meta-review 须真的据 `overfit.flagged` 打标（E6 拟硬化为 governance）。
