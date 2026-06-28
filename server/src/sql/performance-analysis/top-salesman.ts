@@ -56,9 +56,10 @@ export function generatePerformanceTopSalesmanQuery(
     ${ytdProgress},
     all_rows AS (
       SELECT
-        REGEXP_REPLACE(COALESCE(p.salesman_name, '未知'), '^[0-9]+', '') AS dimension_name,
+        COALESCE(p.salesman_name, '未知') AS dimension_name, -- 聚合键带工号（=人唯一键），禁去工号防同名真人合并
         CAST(p.${dateField} AS DATE) AS pd,
         p.salesman_name,
+        COALESCE(p.org_level_3, '未知机构') AS org_level_3, -- 供 display_name 同名冲突时加机构后缀
         COALESCE(
           NULLIF(TRIM(CAST(p.policy_no AS VARCHAR)), ''),
           NULLIF(TRIM(CAST(p.vehicle_frame_no AS VARCHAR)), '')
@@ -99,16 +100,17 @@ export function generatePerformanceTopSalesmanQuery(
       FROM ytd_rows
       GROUP BY dimension_name
     ),
-    -- 年计划（业务员粒度）：achievement_cache 按去工号短名聚合，与行分组键对齐
+    -- 年计划（业务员粒度）：achievement_cache 按带工号 full_name 聚合，与行分组键 dimension_name(=salesman_name 带工号) 对齐
     plan_group AS (
-      SELECT salesman_name_short AS dimension_name, SUM(plan_vehicle) AS annual_plan
+      SELECT full_name AS dimension_name, SUM(plan_vehicle) AS annual_plan -- 带工号，对齐 dimension_name=salesman_name（带工号）
       FROM achievement_cache
       ${planWhere}
-      GROUP BY salesman_name_short
+      GROUP BY full_name
     ),
     current_group AS (
       SELECT
         dimension_name,
+        MAX(org_level_3) AS org_level_3,
         SUM(premium_wan) AS premium,
         COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count,
         COUNT(DISTINCT CASE WHEN (NOT is_endorsement) AND is_nev THEN policy_key END) AS nev_count,
@@ -129,6 +131,7 @@ export function generatePerformanceTopSalesmanQuery(
     metrics AS (
       SELECT
         c.dimension_name,
+        c.org_level_3,
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         ROUND(COALESCE(y.ytd_premium, 0), 4) AS ytd_premium,
@@ -160,6 +163,15 @@ export function generatePerformanceTopSalesmanQuery(
     )
     SELECT
       m.*,
+      -- 两级判重：短名唯一→短名；同短名跨机构→短名·机构；同机构同名→短名·机构#工号（绝对区分，实测张雷·长治等 5 组同机构同名）
+      CASE
+        WHEN m.dimension_name ILIKE 'admin%' THEN '直接个代'
+        WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(m.dimension_name, '^[0-9]+', '')) = 1
+          THEN REGEXP_REPLACE(m.dimension_name, '^[0-9]+', '')
+        WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(m.dimension_name, '^[0-9]+', ''), m.org_level_3) = 1
+          THEN REGEXP_REPLACE(m.dimension_name, '^[0-9]+', '') || '·' || COALESCE(m.org_level_3, '未知机构')
+        ELSE REGEXP_REPLACE(m.dimension_name, '^[0-9]+', '') || '·' || COALESCE(m.org_level_3, '未知机构') || '#' || REGEXP_EXTRACT(m.dimension_name, '^[0-9]+')
+      END AS display_name,
       CASE
         WHEN m.achievement_rate IS NULL OR m.growth_rate IS NULL THEN 'unknown'
         WHEN m.growth_rate >= ${QUADRANT_GROWTH_THRESHOLD} AND m.achievement_rate >= ${QUADRANT_ACHIEVEMENT_THRESHOLD} THEN 'high_growth_high_achievement'

@@ -751,7 +751,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                   </tr>
                 )}
                 {sortedGroupRows.map((row) => {
-                  const displayName = drilldownQuery.currentGroupBy === 'team' ? formatTeamName(row.group_name) : drilldownQuery.currentGroupBy === 'salesman' ? formatSalesmanName(row.group_name) : row.group_name;
+                  // salesman 维度优先用后端 display_name（短名+同名冲突机构后缀）；group_name 始终为带工号 key，仅用于下钻传参
+                  const displayName = drilldownQuery.currentGroupBy === 'team' ? formatTeamName(row.group_name) : drilldownQuery.currentGroupBy === 'salesman' ? (row.display_name || formatSalesmanName(row.group_name)) : row.group_name;
                   return (
                   <tr
                     key={row.group_name}
@@ -842,7 +843,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                 )}
                 {!topSalesmanQuery.loading && sortedTopRows.map((row: PerformanceTopSalesmanRow, index: number) => (
                   <tr key={`${row.dimension_name}-${index}`} className="border-b border-neutral-100 last:border-b-0">
-                    <td className={cn('px-3 py-2 font-medium', colorClasses.text.neutralDark)}>{row.dimension_name}</td>
+                    <td className={cn('px-3 py-2 font-medium', colorClasses.text.neutralDark)}>{row.display_name || row.dimension_name}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.plan_premium)}</td>
                     <td className={cn('px-3 py-2 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>

@@ -11,7 +11,8 @@ import type {
 } from './usePerformanceSummary';
 
 export interface PerformanceTopSalesmanRow {
-  dimension_name: string;
+  dimension_name: string;    // 带工号 key（业务员=人唯一键）
+  display_name: string;      // 短名+同名冲突机构后缀，UI 显示用
   premium: number;
   auto_count: number;
   plan_premium: number | null;
@@ -42,7 +43,8 @@ interface UsePerformanceTopSalesmanReturn {
 
 function mapTopSalesmanRow(row: Record<string, unknown>): PerformanceTopSalesmanRow {
   return {
-    dimension_name: formatSalesmanName(String(row.dimension_name ?? '')),
+    dimension_name: String(row.dimension_name ?? ''),  // 保留带工号原值（人唯一键），勿前端去工号
+    display_name: String(row.display_name ?? formatSalesmanName(String(row.dimension_name ?? ''))),  // 后端短名+冲突后缀，fallback 去工号
     premium: Number(row.premium ?? 0),
     auto_count: Number(row.auto_count ?? 0),
     plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),

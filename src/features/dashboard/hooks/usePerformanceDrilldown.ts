@@ -35,7 +35,8 @@ export interface PerformanceDrilldownStep {
 }
 
 export interface PerformanceRow {
-  group_name: string;
+  group_name: string;        // 带工号 key（业务员=人唯一键），下钻传参用
+  display_name?: string;     // 短名+同名冲突机构后缀，UI 显示用（salesman 维度；其他维度即 group_name）
   premium: number;
   auto_count: number;
   plan_premium: number | null;
@@ -127,6 +128,7 @@ interface UsePerformanceDrilldownReturn {
 function mapRow(raw: Record<string, unknown>): PerformanceRow {
   return {
     group_name: String(raw.group_name ?? ''),
+    display_name: raw.display_name == null ? undefined : String(raw.display_name),
     premium: Number(raw.premium ?? 0),
     auto_count: Number(raw.auto_count ?? 0),
     plan_premium: raw.plan_premium == null ? null : Number(raw.plan_premium),

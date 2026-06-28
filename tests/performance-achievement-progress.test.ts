@@ -42,7 +42,33 @@ describe('performance achievement standard caliber sql', () => {
 
     expect(sql).toContain("EXTRACT('doy' FROM pb.current_end)");
     expect(sql).toContain('pl.annual_plan * yb.time_progress');
-    expect(sql).toContain('salesman_name_short');
+    // plan join 按带工号 full_name 对齐 PolicyFact.salesman_name（人唯一键），防同名真人合并（2026-06-27 口径修复）
+    expect(sql).toContain('full_name');
+    expect(sql).not.toContain('salesman_name_short');
     expect(sql).not.toContain('allocated_plan');
+  });
+
+  // 2026-06-27 口径修复：业务员聚合键必带工号（人唯一键），防同名不同工号真人合并
+  it('业务员聚合键带工号防同名合并 + display 短名两级判重（同机构同名加工号兜底）', () => {
+    const top = generatePerformanceTopSalesmanQuery('1=1', '1=1', 'all', 'day', 'mom', 20);
+    // 聚合键用带工号 salesman_name（人唯一键），非去工号短名
+    expect(top).toContain("COALESCE(p.salesman_name, '未知') AS dimension_name");
+    expect(top).toContain('GROUP BY dimension_name');
+    expect(top).not.toContain("REGEXP_REPLACE(COALESCE(p.salesman_name, '未知'), '^[0-9]+', '') AS dimension_name");
+    // 计划侧 join 带工号 full_name
+    expect(top).toContain('GROUP BY full_name');
+    // display_name：短名 + 冲突两级判重（同机构同名加工号兜底 REGEXP_EXTRACT）
+    expect(top).toContain('display_name');
+    expect(top).toContain("REGEXP_EXTRACT(m.dimension_name, '^[0-9]+')");
+
+    // 下钻 salesman 维度聚合键同样带工号
+    const drillSalesman = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'day', 'mom', [], 'salesman');
+    expect(drillSalesman).toContain("COALESCE(p.salesman_name, '未知') AS group_name");
+    expect(drillSalesman).toContain('display_name');
+
+    // 下钻筛选业务员用带工号精确匹配（防命中同名多人）
+    const drillStep = generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'day', 'mom', [{ dimension: 'salesman', value: '118069129张丽' }], 'org_level_3');
+    expect(drillStep).toContain("COALESCE(p.salesman_name, '未知') = '118069129张丽'");
+    expect(drillStep).not.toContain("REGEXP_REPLACE(p.salesman_name, '^[0-9]+', '') = '118069129张丽'");
   });
 });
