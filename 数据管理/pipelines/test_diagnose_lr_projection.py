@@ -180,6 +180,9 @@ def _build_dedup_fixture(tmp_path: Path) -> Path:
          "is_new_car": False, "is_transfer": False, "is_renewal": True,
          "coverage_combination": "主全", "vehicle_frame_no": "VIN003"},
     ])
+    # 省份隔离键：真实 ETL 给每行注入 branch_code；v_policy_base_dedup 现按
+    # branch_code 过滤（多省防稀释，见 diagnose_lr_projection），fixture 须镜像。
+    df["branch_code"] = "SC"
     df.to_parquet(fixture_path, index=False)
     return fixture_path
 
@@ -200,7 +203,10 @@ def test_dedup_reduces_row_count(tmp_path, monkeypatch):
         "claim_no": pd.Series([], dtype="object"),
         "report_time": pd.Series([], dtype="datetime64[ns]"),
         "settled_amount": pd.Series([], dtype="float64"),
-        "pending_amount": pd.Series([], dtype="float64"),
+        # 项目标准未决口径列名为 reserve_amount（非 pending_amount）：build_views 的
+        # v_claims_agg 取 COALESCE(reserve_amount, 0)，fixture 必须提供同名列，否则
+        # BinderException。详见 memory feedback_pending_vs_reserve_amount。
+        "reserve_amount": pd.Series([], dtype="float64"),
         "settlement_time": pd.Series([], dtype="datetime64[ns]"),
         "payment_time": pd.Series([], dtype="datetime64[ns]"),
     }).to_parquet(claims_fixture, index=False)

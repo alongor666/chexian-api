@@ -36,7 +36,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from diagnose_common import (  # type: ignore
-    GLOB, CLAIMS_GLOB, fw, fp, light, TH_LR, escape_sql
+    GLOB, CLAIMS_GLOB, BRANCH_CODE, fw, fp, light, TH_LR, escape_sql
 )
 
 # ============================================================================
@@ -191,6 +191,11 @@ def build_views(
             ANY_VALUE(vehicle_frame_no) AS vehicle_frame_no
         FROM read_parquet('{GLOB}', union_by_name=true)
         WHERE insurance_start_date IS NOT NULL
+          -- 省份隔离（data-pipeline.md 红线）：policy/current/ 混放 SC+SX 文件，
+          -- 裸 glob 会把外省保单计入分母，但 claims 仅含本省（SX 赔案在 validation/SX/），
+          -- 不过滤将系统性稀释满期赔付率。branch_code 由 ETL 注入、BRANCH_CODE 已在
+          -- diagnose_common.branch_paths 做 fail-closed 校验（SC/SX）。对齐 #840 多省路由收口。
+          AND branch_code = '{BRANCH_CODE}'
           AND {COVERAGE_FILTER}
         GROUP BY policy_no, CAST(insurance_start_date AS DATE)
         HAVING SUM(premium) > 0
