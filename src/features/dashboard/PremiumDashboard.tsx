@@ -15,6 +15,8 @@ import { GeoSection } from './components/GeoSection';
 import { DashboardCustomizerPanel } from './components/DashboardCustomizerPanel';
 import type { DashboardSectionId, KpiCardId, KpiGroup } from './dashboardLayoutConfig';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
+import { useBranch } from '../../shared/contexts/BranchContext';
+import { branchLabel } from '../../shared/utils/branchDisplay';
 import { cardStyles, cn, colorClasses } from '../../shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '../../shared/api/client';
 
@@ -56,6 +58,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
   } = useDashboardLayout();
 
   const { filters } = useGlobalFilters();
+  const { effectiveBranch } = useBranch();
   const fallbackToLegacy = !ENABLE_BUNDLE_ROUTES;
 
   const dashboardBundle = useDashboardBundle({
@@ -78,7 +81,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
     return {
       trendData: dashboardBundle.bundle.trend.map((item) => ({
         time_period: String(item.time_period ?? ''),
-        org_level_3: String(item.org_level_3 ?? '四川'),
+        org_level_3: String(item.org_level_3 ?? branchLabel(effectiveBranch)),
         premium: Number(item.premium ?? 0),
         next_month_ratio: Number(item.next_month_ratio ?? 0),
       })),
@@ -89,7 +92,7 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({
         quality_ratio: Number(item.quality_ratio ?? 0),
       })),
     };
-  }, [dashboardBundle.bundle]);
+  }, [dashboardBundle.bundle, effectiveBranch]);
 
   const rankingPrefetched = useMemo(() => {
     if (!dashboardBundle.bundle) return undefined;

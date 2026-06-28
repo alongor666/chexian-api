@@ -15,6 +15,7 @@ import { formatCount, formatPercent, formatTeamName, formatSalesmanName } from '
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { useScopeLabel } from '../../shared/hooks/useScopeLabel';
+import { useBranch, branchCompanyName } from '../../shared/contexts/BranchContext';
 import { StickyTableFrame } from '../../shared/ui';
 import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
@@ -376,6 +377,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   const { isDataLoaded } = useDataStatus();
   const { salesmanTeamMap } = useGlobalFilters();
   const { prefix: scopePrefix } = useScopeLabel(filters, salesmanTeamMap);
+  const { effectiveBranch } = useBranch();
   const [sortKey, setSortKey] = useState<SortKey>('total_auto_count');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [showDetailedColumns, setShowDetailedColumns] = useState(false);
@@ -674,6 +676,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
       <SectionBlock id="cross-sell-drilldown" title="下钻分析">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white dark:bg-neutral-800 p-3 shadow-sm">
           <DrilldownBreadcrumb
+            topLabel={branchCompanyName(effectiveBranch)}
             path={drillPath.map((s): DrilldownBreadcrumbStep => ({
               label: s.label,
               dimension: s.dimension,

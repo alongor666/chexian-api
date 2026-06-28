@@ -4,6 +4,7 @@ import { RateCell } from '../../../shared/ui';
 import { formatCount } from '../../../shared/utils/formatters';
 import { useQuoteDrilldown } from '../hooks/useQuoteConversion';
 import type { QuoteFilters, DrillLevel } from '../types';
+import { isBranchSummaryRow } from '../../../shared/utils/branchDisplay';
 
 interface Props {
   filters: QuoteFilters;
@@ -111,7 +112,7 @@ export function DrilldownTable({ filters }: Props) {
             <tbody>
               {(data ?? []).slice().sort((a, b) => {
                 // 汇总行（"全部"/"合计"等）置顶
-                const isAgg = (name: string) => /合计|汇总|全部|四川分公司/.test(name ?? '');
+                const isAgg = (name: string) => isBranchSummaryRow(name);
                 if (isAgg(a.group_name)) return -1;
                 if (isAgg(b.group_name)) return 1;
                 return (a.underwriting_rate ?? 0) - (b.underwriting_rate ?? 0);

@@ -12,6 +12,7 @@ import { SectionTitle, SectionBlock } from '@/shared/ui/SectionTitle';
 import { useDataStatus } from '@/shared/contexts/DataContext';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { useScopeLabel } from '@/shared/hooks/useScopeLabel';
+import { useBranch, branchCompanyName } from '@/shared/contexts/BranchContext';
 import { formatCount, formatPercent, formatTeamName, formatSalesmanName } from '@/shared/utils/formatters';
 import { cardStyles, cn, colorClasses, stickyTableStyles, textStyles, toggleButtonStyles } from '@/shared/styles';
 import { ENABLE_BUNDLE_ROUTES } from '@/shared/api/client';
@@ -95,6 +96,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const { isDataLoaded } = useDataStatus();
   const { salesmanTeamMap } = useGlobalFilters();
   const { prefix: scopePrefix } = useScopeLabel(filters, salesmanTeamMap);
+  const { effectiveBranch } = useBranch();
 
   const [expandDims, setExpandDims] = useState<PerformanceSummaryExpandDims>('none');
   const [expandedCoverage, setExpandedCoverage] = useState<Record<string, boolean>>({});
@@ -644,6 +646,7 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
         </p>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <DrilldownBreadcrumb
+            topLabel={branchCompanyName(effectiveBranch)}
             path={drilldownQuery.drillPath.map((s): DrilldownBreadcrumbStep => ({
               label: s.label,
               dimension: s.dimension,

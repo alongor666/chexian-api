@@ -19,7 +19,7 @@
 /** 分公司编码 → 省份中文名 */
 export const BRANCH_NAMES: Record<string, string> = {
   SC: '四川',
-  // SX: '山西',  // 山西上线时启用
+  SX: '山西', // 山西 2026-06-26 cutover 上线
 };
 
 /**

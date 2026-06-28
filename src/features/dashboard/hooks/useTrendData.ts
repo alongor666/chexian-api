@@ -6,6 +6,8 @@ import { buildFilterParams } from '../../../shared/utils/filterParams';
 import type { AdvancedFilterState } from '../../../shared/types/data';
 import type { ViewPerspective } from '../../../shared/types/view-perspective';
 import { useRBAC } from '../../../shared/hooks/useRBAC';
+import { useBranch } from '../../../shared/contexts/BranchContext';
+import { branchLabel } from '../../../shared/utils/branchDisplay';
 
 const logger = createLogger('useTrendData');
 
@@ -270,8 +272,11 @@ export const useTrendData = ({
     perspective,
   };
 
+  // 当前有效省（趋势图省级标签兜底；随切省刷新）
+  const { effectiveBranch } = useBranch();
+
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['trend-bundle', granularity, currentParams, prevParams, hasOrgFilter],
+    queryKey: ['trend-bundle', granularity, currentParams, prevParams, hasOrgFilter, effectiveBranch],
     queryFn: async () => {
       logger.info('趋势 API 查询执行 (含同比)', { timeView, granularity });
 
@@ -281,7 +286,7 @@ export const useTrendData = ({
         apiClient.getQualityBusinessTrend(granularity, currentParams),
       ]);
 
-      const orgLabel = hasOrgFilter ? (filters.org_level_3?.[0] ?? '机构') : '四川';
+      const orgLabel = hasOrgFilter ? (filters.org_level_3?.[0] ?? '机构') : branchLabel(effectiveBranch);
 
       const combineTrendData = (response: any[]): TrendDataPoint[] =>
         response.map((item) => ({
