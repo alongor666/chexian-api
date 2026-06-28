@@ -1,24 +1,37 @@
 #!/usr/bin/env python3
 """
-维度表 Parquet 生成脚本 v1.0
+维度表 Parquet 生成脚本 v1.1
 
-从三个 Excel 源文件提取、合并、输出标准化的维度表：
+支持两种模式（通过 --branch-code 参数切换）：
+
+**SC 模式（默认 / 无参数）**：从四川 Excel 源文件提取、合并、输出标准化的维度表：
   1. salesman/latest.parquet — 业务员主数据（编号、姓名、团队、机构、入职、离职、状态）
   2. plan/latest.parquet     — 计划数据（2025 + 2026，业务员级 + 机构级）
 
-源文件：
-  - 2025年分产品保费计划达成情况（0105）.xlsx  → 2025 业务员计划 + 实际 + 入职时间
-  - 2026年销售人员分产品保费计划.xlsx           → 2026 业务员计划（已由 generate_salesman_mapping.py 处理）
-  - 川分销售人员名单__3月12日更新.xlsx          → 业务员基础信息（岗位、状态、入职、离职）
-  - 四川分公司机构业务日报（截止2026年3月23日）.xlsx → 2026 机构级计划
+  源文件：
+    - 2025年分产品保费计划达成情况（0105）.xlsx  → 2025 业务员计划 + 实际 + 入职时间
+    - 2026年销售人员分产品保费计划.xlsx           → 2026 业务员计划（已由 generate_salesman_mapping.py 处理）
+    - 川分销售人员名单__3月12日更新.xlsx          → 业务员基础信息（岗位、状态、入职、离职）
+    - 四川分公司机构业务日报（截止2026年3月23日）.xlsx → 2026 机构级计划
+
+**SX 模式（--branch-code SX）**：从山西 policy parquet 派生维度表（无 xlsx 源时的应急方案）：
+  输出至 warehouse/validation/SX/dim/salesman/latest.parquet
+         warehouse/validation/SX/dim/plan/latest.parquet
+
+  - salesman 派生：从 SX policy parquet 的 salesman_name(工号+姓名) + org_level_3 提取唯一业务员列表
+    （无岗位/入职/离职等字段，plan=0·SalesmanTeamMapping 不 join，achievement_cache Part B 兜底出现）
+  - plan 派生：最小可用空表（plan_vehicle=0），使 PlanFact 不报 Binder Error
+  - branch_code 落列触发运行时 multiProvince（ADR G3 信号）
 
 用法：
   cd 数据管理
-  python3 warehouse/dim/generate_dim_tables.py
+  python3 warehouse/dim/generate_dim_tables.py                  # SC 模式（需四川 xlsx）
+  python3 warehouse/dim/generate_dim_tables.py --branch-code SX # SX 模式（从 policy parquet 派生）
 
-依赖：pandas, openpyxl, pyarrow
+依赖：pandas, openpyxl, pyarrow, duckdb（SX 模式额外需要）
 """
 
+import argparse
 import json
 import re
 import sys
@@ -28,6 +41,17 @@ from pathlib import Path
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+# ── 参数解析（模块级，方便 main() 调用）────────────────────────
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="维度表 Parquet 生成脚本")
+    parser.add_argument(
+        "--branch-code",
+        default="SC",
+        choices=["SC", "SX"],
+        help="目标省份码（SC=四川 xlsx 模式；SX=山西 parquet 派生模式）",
+    )
+    return parser.parse_args()
 
 # ── 路径配置 ──────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -534,5 +558,188 @@ def main():
     print("=" * 60)
 
 
+# ═══════════════════════════════════════════════════════════════
+# SX 模式：从 policy parquet 派生 validation/SX/dim/salesman + plan
+# ═══════════════════════════════════════════════════════════════
+
+def build_sx_salesman_from_parquet(branch_code: str = "SX") -> pd.DataFrame:
+    """
+    从山西 policy parquet 提取唯一业务员列表，生成最小可用维度表。
+
+    策略：从 salesman_name（工号+姓名）+ org_level_3 提取，取签单量最多的机构作为
+    该业务员的归属机构（防同名/跨机构）。无岗位/入职/离职等字段（来源 xlsx 缺失）。
+    plan_vehicle=0（无计划数据），SalesmanTeamMapping 中 car_insurance_plan_2026=0；
+    achievement_cache Part B（有保单无 mapping）将其归入 "未归属机构" 兜底显示。
+    """
+    import duckdb
+
+    # 收集 SX policy parquet（validation/SX/ 目录下的签单清单文件）
+    sx_validation = DATA_ROOT / "warehouse" / "validation" / branch_code
+    parquet_files = sorted(sx_validation.glob("*_签单清单_*.parquet"))
+    if not parquet_files:
+        print(f"❌ 未找到 {branch_code} policy parquet：{sx_validation}")
+        print("   请确保 数据管理/warehouse/validation/SX/ 目录下存在签单清单 parquet 文件")
+        sys.exit(1)
+
+    print(f"\n{'='*60}")
+    print(f"从 {branch_code} policy parquet 派生业务员维度（{len(parquet_files)} 个文件）")
+    for f in parquet_files:
+        print(f"  - {f.name}")
+
+    # 构建 parquet 路径列表（DuckDB read_parquet 格式）
+    safe_paths = [str(f).replace("\\", "/").replace("'", "''") for f in parquet_files]
+    paths_sql = "['" + "', '".join(safe_paths) + "']"
+
+    con = duckdb.connect()
+    # 取每个业务员签单量最多的机构（解决跨机构问题）
+    sql = f"""
+    WITH ranked AS (
+        SELECT
+            salesman_name AS full_name,
+            org_level_3,
+            COUNT(*) AS cnt,
+            ROW_NUMBER() OVER (PARTITION BY salesman_name ORDER BY COUNT(*) DESC) AS rn
+        FROM read_parquet({paths_sql}, union_by_name=true)
+        WHERE salesman_name IS NOT NULL AND TRIM(salesman_name) != ''
+          AND org_level_3 IS NOT NULL AND TRIM(org_level_3) != ''
+        GROUP BY salesman_name, org_level_3
+    )
+    SELECT
+        full_name,
+        org_level_3 AS organization,
+        cnt AS policy_count
+    FROM ranked
+    WHERE rn = 1
+    ORDER BY organization, full_name
+    """
+    rows = con.execute(sql).fetchdf()
+    con.close()
+
+    import re as _re
+
+    def _extract_no(fn: str) -> str:
+        m = _re.match(r"(\d+)", str(fn).strip())
+        return m.group(1) if m else ""
+
+    def _extract_name(fn: str) -> str:
+        return _re.sub(r"^\d+", "", str(fn).strip())
+
+    records = []
+    for _, row in rows.iterrows():
+        fn = row["full_name"]
+        records.append({
+            "business_no": _extract_no(fn),
+            "salesman_name": _extract_name(fn),
+            "full_name": fn,
+            "position": None,
+            "team": None,           # 无团队信息
+            "organization": row["organization"],
+            "hire_date": None,      # 无入职日期
+            "status": "未知",       # 无在职状态
+            "leave_date": None,
+            "tenure_months": 0,
+            "branch_code": branch_code,
+        })
+
+    result = pd.DataFrame(records)
+    print(f"  有效业务员: {len(result)}")
+    print(f"  机构分布: {result['organization'].value_counts().to_dict()}")
+    return result
+
+
+def build_sx_plan_stub(branch_code: str = "SX", plan_year: int = 2026) -> pd.DataFrame:
+    """
+    生成 SX 最小可用计划表（plan_vehicle=0 的空桩）。
+
+    目的：避免 PlanFact 表不存在时 loadDimParquet 报 Binder Error。
+    SX 无计划数据（xlsx 缺失），plan=0 使 achievement_rate=NULL（正确：无计划则无达成率）。
+    """
+    return pd.DataFrame({
+        "plan_year": pd.array([], dtype="int64"),
+        "level": pd.array([], dtype="object"),
+        "business_no": pd.array([], dtype="object"),
+        "salesman_name": pd.array([], dtype="object"),
+        "full_name": pd.array([], dtype="object"),
+        "team": pd.array([], dtype="object"),
+        "organization": pd.array([], dtype="object"),
+        "hire_date": pd.array([], dtype="object"),
+        "plan_vehicle": pd.array([], dtype="float64"),
+        "plan_property": pd.array([], dtype="float64"),
+        "plan_personal": pd.array([], dtype="float64"),
+        "plan_total": pd.array([], dtype="float64"),
+        "actual_vehicle": pd.array([], dtype="float64"),
+        "actual_property": pd.array([], dtype="float64"),
+        "actual_personal": pd.array([], dtype="float64"),
+        "actual_total": pd.array([], dtype="float64"),
+    })
+
+
+def main_sx(branch_code: str = "SX") -> None:
+    """SX 模式主流程：从 policy parquet 派生维度表到 validation/<branch_code>/dim/"""
+    print("=" * 60)
+    print(f"维度表 Parquet 生成脚本 v1.1 — {branch_code} 模式（parquet 派生）")
+    print(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
+
+    # 输出路径：validation/<branch_code>/dim/salesman/ 和 dim/plan/
+    out_dir = DATA_ROOT / "warehouse" / "validation" / branch_code / "dim"
+    out_salesman = out_dir / "salesman" / "latest.parquet"
+    out_plan = out_dir / "plan" / "latest.parquet"
+    out_salesman.parent.mkdir(parents=True, exist_ok=True)
+    out_plan.parent.mkdir(parents=True, exist_ok=True)
+
+    # 派生业务员维度
+    salesman_df = build_sx_salesman_from_parquet(branch_code)
+
+    # 生成最小可用计划桩
+    plan_df = build_sx_plan_stub(branch_code)
+    print(f"\n{'='*60}")
+    print(f"计划数据：最小可用空桩（SX 无 xlsx 计划源）")
+    print(f"  行数: {len(plan_df)}（plan=0 → achievement_rate=NULL，业务上正确）")
+
+    # 写出 Parquet
+    write_parquet(salesman_df, out_salesman, f"{branch_code} 业务员主数据（parquet 派生）")
+    write_parquet(plan_df, out_plan, f"{branch_code} 计划数据（最小可用空桩）")
+
+    # 输出摘要 JSON（与 SC 模式对齐）
+    summary_path = out_dir.parent / f"dim_summary_{branch_code}.json"
+    summary = {
+        "generated_at": datetime.now().isoformat(),
+        "branch_code": branch_code,
+        "source": "policy_parquet",
+        "salesman": {
+            "total": len(salesman_df),
+            "active": 0,   # 无状态字段
+            "resigned": 0,
+            "unknown": len(salesman_df),
+            "path": str(out_salesman),
+        },
+        "plan": {
+            "total_rows": len(plan_df),
+            "years": [],
+            "levels": [],
+            "note": "SX 无计划源 xlsx，plan=0 空桩",
+            "path": str(out_plan),
+        },
+    }
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    print(f"\n  ✅ 摘要: {summary_path.name}")
+
+    print(f"\n{'='*60}")
+    print(f"✅ {branch_code} 维度表生成完成")
+    print(f"  salesman → {out_salesman}")
+    print(f"  plan     → {out_plan}")
+    print("=" * 60)
+    print(f"\n注意：SX 维度表落在 validation/ 隔离区，不影响 SC 生产数据。")
+    print(f"      data-bootstrapper.resolveBranchDimExtras 会自动探测并 UNION ALL BY NAME。")
+    print(f"      SX GATED 上线前请先修复 achievement_cache 跨省复合键（backlog 43e39b）。")
+
+
 if __name__ == "__main__":
-    main()
+    args = _parse_args()
+    if args.branch_code == "SX":
+        main_sx("SX")
+    else:
+        main()

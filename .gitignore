@@ -103,6 +103,9 @@ PASSWORDS.local.txt
 # sync-vps 同步清单（本地状态，不提交）
 .last-sync-manifest.json
 
+# validation 隔离区生成摘要（含绝对路径 + 时间戳，本地产物）
+数据管理/warehouse/validation/**/dim_summary_*.json
+
 # 服务端运行时数据（Parquet 大文件 + 用户配置，禁止提交）
 server/data/
 
