@@ -2254,6 +2254,10 @@ function checkEmptyCatchBlocks() {
  *
  * 逃生阀：确有正当的纯展示去工号需求（无独立 display 列可挂），在命中行或其上一行写
  *   `governance-allow: salesman-aggkey <一句理由>`
+ *
+ * 局限（与 checkSkillFieldGate 同风格的诚实标注）：逐行正则匹配，若把
+ * `REGEXP_REPLACE(` 与 `salesman_name` 拆成跨两行书写可绕过。本仓 SQL 生成器惯例是
+ * 单行模板字面量表达式（实测全部单行），故风险低；新增多行 SQL 表达式时需人工留意。
  */
 function checkSalesmanAggKeyCaliber() {
   info('检查业务员聚合键口径（server/src/sql 禁去工号短名做聚合/JOIN/下钻键）...');

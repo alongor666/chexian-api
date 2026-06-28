@@ -775,9 +775,11 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedRows.map((row) => (
+                        {sortedRows.map((row, idx) => (
                           <tr
-                            key={row.group_name}
+                            // group_name(业务员=带工号)在 hierarchy 分组(org/team)下跨机构可能多行重名，
+                            // 附 idx 兜底保证 React key 唯一（display_name 同机构同名#工号回退亦可能重复）
+                            key={`${row.group_name}-${idx}`}
                             className="border-b border-neutral-50 dark:border-subtle transition-colors hover:bg-neutral-50/60 dark:hover:bg-white/8"
                           >
                             {tableColumns.map((col) => {
