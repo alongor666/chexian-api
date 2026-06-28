@@ -2,7 +2,7 @@
 name: chexian-data-kpi
 description: 业绩分析与排名（Top30业务员、机构对比、四象限分层）。当用户说"排名"/"业绩"/"四象限"/"哪个业务员最强"时触发。
 category: data-analysis
-version: 1.3.0
+version: 1.3.1
 author: "@claude"
 tags: ["kpi","ranking","performance"]
 scope: project
@@ -16,6 +16,7 @@ dependencies:
   - server/src/sql/performance-analysis.ts
   - server/src/config/field-registry/fields.json
   - server/src/config/metric-registry/categories/cost.ts
+  - server/src/config/metric-registry/categories/foundation.ts
   - server/src/sql/claims-heatmap.ts
   - .claude/rules/skill-caliber-ssot.md
   - .claude/rules/data-pipeline.md
@@ -40,11 +41,11 @@ last_updated: "2026-06-27"
 - 人均产能分析
 
 ### 3. 四象限分层（核心业务定义）
-四象限以**件数中位数**和**人均保费中位数**为轴（人均保费＝保费÷业务员）。注：件均保费另有注册表口径 `avg_premium_per_policy`[K4]（＝保费÷件数，区别于人均÷业务员、车均÷车架号）；四象限轴**是否回填为件均**属后续（见计划 §8）。当前轴维持人均，列举如下：
-- Q1 明星业务员：件数高 + 人均保费高
-- Q2 大单专家：件数低 + 人均保费高（大客户型）
-- Q3 新手待培养：件数低 + 人均保费低
-- Q4 效率待提升：件数高 + 人均保费低
+四象限以**件数中位数**和**件均保费中位数**为轴。件均保费挂靠注册表口径 `avg_premium_per_policy`[K4]（公式以注册表为准、勿内联；"件均/人均/车均"是三种不同口径，其区分见指标注册表与业务规则字典 §业务员）。按计划 §8，纵轴已由「人均保费」回填为「件均保费」（件均更贴合业务员单均产能分层：件数低 + 件均高 = 大单/大客户型，语义自洽）。列举如下：
+- Q1 明星业务员：件数高 + 件均保费高
+- Q2 大单专家：件数低 + 件均保费高（大客户型）
+- Q3 新手待培养：件数低 + 件均保费低
+- Q4 效率待提升：件数高 + 件均保费低
 
 ## 使用示例
 
