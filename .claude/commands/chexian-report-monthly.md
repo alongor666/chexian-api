@@ -61,6 +61,7 @@ last_updated: "2026-06-09"
 
 当月保费（Parquet 直查）：
 
+<!-- governance-field-gate: allow 存量影子口径 endorsement_type，推广审计 task_ea580007 待修（照 K1 改净额+省份隔离后删本注释） -->
 ```bash
 duckdb -c "
 SELECT

@@ -3399,7 +3399,104 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '分层依赖边界', fn: checkArchLayerBoundaries },
   { name: 'spawn参数引号安全', fn: checkSpawnArgQuoteSafety },
   { name: 'ETL台账新鲜度', fn: checkEtlLedgerFreshness },
+  { name: '技能字段闸', fn: checkSkillFieldGate },
 ];
+
+// ============================================================
+// 技能字段闸（K3）：扫技能 SQL 引用「幽灵字段」（fields.json 注册但 Parquet 未落）
+// ============================================================
+/**
+ * K1 实证：chexian-data-kpi SQL 用 endorsement_type（fields.json 有但 ETL 未落）→ duckdb Binder Error。
+ * K2 元规则（技能挂靠 SSOT）靠自觉，本闸强制化（治理链 K3，uid 2026-06-27-claude-6f3275）。
+ *
+ * CI 无 Parquet → 幽灵字段从 scripts/governance/parquet-columns.snapshot.json 推导：
+ *   幽灵 = fields.json id − snapshot 各域(policy/claims/quotes)实际列并集。
+ *   snapshot 由本地 duckdb DESCRIBE 生成，Parquet schema 变更须同步（见其 _refresh）。
+ *
+ * 只扫 SQL fence（```sql / 含 duckdb|read_parquet / SELECT..FROM），排除 getMetricSql(...)（合法 SSOT 取数）、
+ * AS alias（输出别名非输入列）、-- 注释；避免误报 K1 字段表里 "endorsement_type 不可用" 警示（markdown 表格非代码块）。
+ * 豁免：代码块前 120 字符内写 `<!-- governance-field-gate: allow <理由> -->`。
+ * 局限：fence 提取用基础 ```...``` 正则（技能 .md 惯例），不支持 ~~~/嵌套 fence。
+ */
+function checkSkillFieldGate() {
+  info('检查技能 SQL 引用幽灵字段（fields.json 注册但 Parquet 未落）...');
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const walkMd = (dirPath) => {
+    const out = [];
+    if (!fs.existsSync(dirPath)) return out;
+    for (const ent of fs.readdirSync(dirPath, { withFileTypes: true })) {
+      const full = path.join(dirPath, ent.name);
+      if (ent.isDirectory()) out.push(...walkMd(full));
+      else if (ent.isFile() && ent.name.endsWith('.md')) out.push(full);
+    }
+    return out;
+  };
+  let phantoms;
+  try {
+    const snap = JSON.parse(
+      fs.readFileSync(path.join(ROOT_DIR, 'scripts/governance/parquet-columns.snapshot.json'), 'utf-8'),
+    );
+    const fj = JSON.parse(
+      fs.readFileSync(path.join(ROOT_DIR, 'server/src/config/field-registry/fields.json'), 'utf-8'),
+    );
+    const flist = Array.isArray(fj) ? fj : fj.fields || [];
+    const ids = flist.filter((f) => f && f.id).map((f) => f.id);
+    const landed = new Set(Object.values(snap.domains || {}).flat());
+    phantoms = ids.filter((id) => !landed.has(id));
+  } catch (e) {
+    error(`技能字段闸：无法加载 snapshot/fields.json：${e.message}`);
+    return false;
+  }
+  if (phantoms.length === 0) {
+    success('技能字段闸：fields.json 全字段已落列，无幽灵');
+    return true;
+  }
+  const phantomRes = phantoms.map((p) => ({ field: p, re: new RegExp(`\\b${escapeRe(p)}\\b`) }));
+  const violations = [];
+  for (const dir of ['.claude/commands', '.claude/skills']) {
+    for (const file of walkMd(path.join(ROOT_DIR, dir))) {
+      const content = fs.readFileSync(file, 'utf-8');
+      const rel = path.relative(ROOT_DIR, file);
+      // matchAll 拿 fence + index（重复 fence 也正确定位 allow 豁免窗口，防 indexOf 拿第一个）
+      for (const m of content.matchAll(/```[\s\S]*?```/g)) {
+        const fence = m[0];
+        const idx = m.index ?? 0;
+        const lang = ((fence.match(/^```(\w+)/) || [])[1] || '').toLowerCase();
+        // 只扫 SQL fence：含 duckdb/read_parquet，或 sql 语言，或裸 SELECT..FROM；
+        // 显式非 SQL 语言（text/markdown/json/yaml）不因 SELECT..FROM 文字误纳（除非含 duckdb/read_parquet）
+        const hasParquetHint = /\b(duckdb|read_parquet)\b/i.test(fence);
+        const isNonSqlLang = ['text', 'markdown', 'md', 'json', 'yaml', 'yml'].includes(lang);
+        const isSql =
+          hasParquetHint ||
+          (!isNonSqlLang && (lang === 'sql' || /\bSELECT\b[\s\S]*\bFROM\b/i.test(fence)));
+        if (!isSql) continue;
+        // 豁免：fence 前 120 字符内 `governance-field-gate: allow`（细粒度·每个违规 fence 显式标记，无整文件后门）
+        if (/governance-field-gate:\s*allow/.test(content.slice(Math.max(0, idx - 120), idx))) continue;
+        // 清理避免误报：去单引号字符串字面量（同名字段的字符串值，如 '...'；不去双引号以免误删 duckdb -c "整个SQL"）
+        // + -- 注释 + getMetricSql(简单 id，合法 SSOT 取数) + AS 输出别名
+        const cleaned = fence
+          .replace(/'[^']*'/g, '')
+          .replace(/--[^\n]*/g, '')
+          .replace(/getMetricSql\s*\([^)]*\)/gi, '')
+          .replace(/\bAS\s+\w+/gi, '');
+        for (const { field, re } of phantomRes) {
+          if (re.test(cleaned)) violations.push(`${rel}: SQL 代码块引用幽灵字段 '${field}'`);
+        }
+      }
+    }
+  }
+  const uniq = [...new Set(violations)];
+  if (uniq.length === 0) {
+    success(`技能字段闸：无幽灵字段引用（推导 ${phantoms.length} 幽灵，扫 commands/skills SQL 代码块）`);
+    return true;
+  }
+  error('技能 SQL 引用幽灵字段（fields.json 注册但 Parquet 未落，直查会 Binder Error）：');
+  uniq.forEach((v) => console.log(`    - ${v}`));
+  error(
+    '  修复：改用 getMetricSql(id) 或正确落列字段；确属存量待修可在 SQL fence 前加 `<!-- governance-field-gate: allow <reason> -->`。幽灵清单见 scripts/governance/parquet-columns.snapshot.json（schema 变更须 duckdb 重算同步）',
+  );
+  return false;
+}
 
 // ============================================================
 // evidence-loop 三处 SSOT 漂移检测（防 PR #662 复发）
