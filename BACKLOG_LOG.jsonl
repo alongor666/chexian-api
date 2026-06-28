@@ -864,3 +864,4 @@
 {"uid":"2026-06-27-claude-62e84c","kind":"status","ts":"2026-06-28","actor":"@claude","status":"DONE","evidence":"permissionMiddleware 增加 org_user 路由白名单校验（API_ROUTE_TO_PAGE_MAP + resolvePageRoute）；新增 20 个测试用例（53/53 通过）；verify:full 4367/4367；governance 48/48","at":"2026-06-28T09:20:27.946Z","eid":"1d4ff687"}
 {"uid":"2026-06-27-claude-d9318c","kind":"status","ts":"2026-06-28","actor":"claude/loop-d9318c","status":"IN_PROGRESS","evidence":"","at":"2026-06-28T09:05:46.623Z","eid":"d201c8da"}
 {"uid":"2026-06-27-claude-d9318c","kind":"status","ts":"2026-06-28","actor":"@claude","status":"DONE","evidence":"verify:full 4351/4351 全绿，governance 49/49 全过（新增第49项：省份静默默认反模式检查），data路径7处?? 'SC'全替换为fail-closed，PR待建","at":"2026-06-28T09:21:37.534Z","eid":"1d8bbf28"}
+{"uid":"2026-06-27-claude-96e597","kind":"status","ts":"2026-06-28","actor":"claude/loop-96e597","status":"IN_PROGRESS","evidence":"","at":"2026-06-28T09:06:23.709Z","eid":"46c10722"}
