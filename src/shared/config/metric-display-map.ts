@@ -2,8 +2,8 @@
  * 指标展示映射 — 从注册表自动生成
  *
  * 生成命令：bun scripts/metric-registry/generate-frontend-map.ts
- * 生成时间：2026-06-19T23:10:32.760Z
- * 指标数量：55
+ * 生成时间：2026-06-27T23:49:33.776Z
+ * 指标数量：56
  *
  * ⚠ 不要手动编辑此文件，修改注册表后重新生成
  */
@@ -16,6 +16,7 @@ export const METRIC_LABEL_MAP: Record<string, string> = {
   "salesman_count": "业务员数",
   "per_capita_premium": "人均保费",
   "per_vehicle_premium": "车均保费",
+  "avg_premium_per_policy": "件均保费",
   "transfer_rate": "过户占比",
   "telesales_rate": "电销占比",
   "renewal_rate": "续保占比",
@@ -79,6 +80,7 @@ export const METRIC_FORMATTER_MAP: Record<string, {
   "salesman_count": { formatter: "count", unit: "人" },
   "per_capita_premium": { formatter: "premiumWan", unit: "万元" },
   "per_vehicle_premium": { formatter: "average", unit: "元", decimals: 0 },
+  "avg_premium_per_policy": { formatter: "average", unit: "元", decimals: 0 },
   "transfer_rate": { formatter: "percent", unit: "%" },
   "telesales_rate": { formatter: "percent", unit: "%" },
   "renewal_rate": { formatter: "percent", unit: "%" },
@@ -138,6 +140,7 @@ export const METRIC_FORMULA_MAP: Record<string, string> = {
   "salesman_count": "去重业务员计数",
   "per_capita_premium": "保费总额 / 业务员数",
   "per_vehicle_premium": "保费总额 / 去重车架号数（含商业险+交强险）",
+  "avg_premium_per_policy": "保费总额 / 保单件数（按保单号去重）",
   "transfer_rate": "过户保单数 / 总保单数",
   "telesales_rate": "电销保单数 / 总保单数",
   "renewal_rate": "续保保单数 / 总保单数",
