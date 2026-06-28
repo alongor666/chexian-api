@@ -45,11 +45,16 @@ from pathlib import Path
 
 import duckdb
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from diagnose_common import branch_paths
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 CODE_ROOT = SCRIPT_DIR.parent.parent
 DATA_ROOT = Path(os.environ.get("CHEXIAN_DATA_ROOT") or CODE_ROOT)
-POLICY = str(DATA_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
-CLAIMS = str(DATA_ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
+_BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+_PATHS = branch_paths(_BRANCH_CODE)
+POLICY = _PATHS["policy_glob"]
+CLAIMS = _PATHS["claims_glob"]
 DEFAULT_OUT_DIR = CODE_ROOT / "数据分析报告"
 
 VALID_CLAIMS_FIELDS = ("accident_time", "report_time")

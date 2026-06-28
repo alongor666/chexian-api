@@ -30,6 +30,7 @@ from diagnose_common import (
     fw, fp, fi, fc, light,
     TH_VC, TH_MR, TH_LR, TH_IR, TH_AC_CARGO,
     POLICY_TERM, EARNED_DAYS, EARNED,
+    branch_paths,
 )
 from diagnose_report import Report
 
@@ -37,7 +38,10 @@ from diagnose_report import Report
 # ============================================================================
 # 路径常量（使用 current 目录）
 # ============================================================================
-GLOB_CURRENT = str(Path(__file__).resolve().parent.parent / "warehouse/fact/policy/current/*.parquet")
+import os as _os
+_BRANCH_CODE = (_os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+_PATHS = branch_paths(_BRANCH_CODE)
+GLOB_CURRENT = _PATHS["policy_glob"]
 BRAND_DIM = str(Path(__file__).resolve().parent.parent / "warehouse/dim/brand/latest.parquet")
 BRAND_KEY_EXPR = (
     "COALESCE(NULLIF(TRIM(b.brand), ''), '未知品牌') || '_' || "

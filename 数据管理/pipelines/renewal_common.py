@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 
 from diagnose_common import fc, fi, fp, light  # noqa: F401  对外统一从本模块再导出渲染原语
+from diagnose_common import KNOWN_BRANCHES, branch_paths  # 多省数据源路由 SSOT（全诊断族共用，杜绝双写）
 
 HERE = Path(__file__).resolve().parent
 # 数据根：默认脚本所在 数据管理/；环境变量 CHEXIAN_DATA_ROOT 可覆盖
@@ -21,49 +22,19 @@ DATA_ROOT = Path(os.environ.get("CHEXIAN_DATA_ROOT") or HERE.parent)
 
 # ---- 多省路由（ADR D5）：BRANCH_CODE=SC 读生产 fact/；非 SC 省读隔离区 validation/<省>/ ----
 # SC 行为完全不变（向后兼容，默认即 SC）；非 SC 省（如 SX 山西）续保试算产物全部隔离在
-# validation/<省>/，绝不碰 fact/current/。renewal_tracker / quotes 放子目录，避免与
-# POL 的顶层 *.parquet 通配冲突（签单清单在 validation/<省>/ 顶层，schema 不同不能混 glob）。
+# validation/<省>/，绝不碰 fact/current/。
+# branch_paths / KNOWN_BRANCHES 已下沉至 diagnose_common（全诊断族数据源 SSOT），本模块复用，
+# 杜绝「续保 vs 诊断脚本各自维护路由」的双写漂移（2026-06-28 技能层省份隔离收口）。
 BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
-# 已注册省份白名单（公开 · 多省单一事实源）。新增省份须先在此注册 + 补齐下方每个按省字典，
-# 否则 fail-closed：branch_paths() 对未知省份立即 RuntimeError，禁止静默继承四川参数（data-pipeline.md 红线）。
-KNOWN_BRANCHES = frozenset({"SC", "SX"})
 
-
-def branch_paths(branch, data_root=DATA_ROOT):
-    """省份 → 续保数据源/落地路径（多省路由纯函数 · 不依赖模块级 BRANCH_CODE）。
-
-    本模块的模块级常量（RT/POL/Q/OUT_DIR）与 convert_renewal_tracker.py 的 ETL 入口共用本函数，
-    杜绝「诊断读 validation/SX/ 但 ETL 写 fact/」的路由漂移（adversarial review HIGH-3）。
-    fail-closed：未知省份立即 RuntimeError，禁止静默回落四川 fact/ 路径。
-    """
-    if branch not in KNOWN_BRANCHES:
-        raise RuntimeError(
-            f"未知省份代码 '{branch}'，已注册省份：{sorted(KNOWN_BRANCHES)}。"
-            "新省份须先在 renewal_common.KNOWN_BRANCHES 注册并补齐每个按省字典。"
-        )
-    if branch == "SC":
-        fact = data_root / "warehouse" / "fact"
-        return {
-            "renewal_tracker": str(fact / "renewal_tracker" / "latest.parquet"),
-            "policy_glob": str(fact / "policy" / "current" / "*.parquet"),
-            "quotes": str(fact / "quotes_conversion" / "latest.parquet"),
-            "out_dir": data_root / "数据分析报告",  # SC 沿用原路径，向后兼容
-        }
-    val = data_root / "warehouse" / "validation" / branch
-    return {
-        "renewal_tracker": str(val / "renewal_tracker" / "latest.parquet"),
-        "policy_glob": str(val / "*.parquet"),  # 签单清单（隔离区顶层，已按省机构规范化）
-        "quotes": str(val / "quotes_conversion" / "latest.parquet"),
-        "out_dir": data_root / "数据分析报告" / branch,  # 报告按省份隔离落地，各省产物独立
-    }
-
-
-# ---- 数据源（全部只读 Parquet）+ 报告落地目录：经 branch_paths() 路由（含未知省 fail-closed）----
+# ---- 数据源（全部只读 Parquet）：经 diagnose_common.branch_paths() 路由（含未知省 fail-closed）----
 _PATHS = branch_paths(BRANCH_CODE)
 RT = _PATHS["renewal_tracker"]
 POL = _PATHS["policy_glob"]
 Q = _PATHS["quotes"]
-OUT_DIR = _PATHS["out_dir"]
+# 报告落地：DATA_ROOT 基准（续保历史输出位置，与 diagnose 的 PROJECT_ROOT 基准不同，故各自处理）；
+# SC 无后缀向后兼容、非 SC 省加 /<省>/ 隔离
+OUT_DIR = DATA_ROOT / "数据分析报告" if BRANCH_CODE == "SC" else DATA_ROOT / "数据分析报告" / BRANCH_CODE
 
 # 责任模式默认清单路径（各省独立；未配置省份返回 None，运行时须显式传 --renewal-list）
 DEFAULT_LIST = {

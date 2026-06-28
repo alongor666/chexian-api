@@ -24,15 +24,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 
 import duckdb
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from diagnose_common import branch_paths
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-POLICY_GLOB = str(REPO_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
-CLAIMS_PATH = str(REPO_ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
+_BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+_PATHS = branch_paths(_BRANCH_CODE)
+POLICY_GLOB = _PATHS["policy_glob"]
+CLAIMS_PATH = _PATHS["claims_glob"]
 REPORT_DIR = REPO_ROOT / "数据管理/数据分析报告"
 
 
