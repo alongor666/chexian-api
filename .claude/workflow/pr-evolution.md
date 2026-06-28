@@ -1778,3 +1778,18 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （K5 是技能文档收口，挂靠 SSOT 闭环已由 K3 governance 技能字段闸强制 + K5 口径挂靠总表可视化。残留 follow-up（四象限件均回填/推广审计修 4 技能/指标字典 regen）均已 spawn_task 或计划 §8 登记，非 K5 缺口。治理链 K1-K5 主体闭环完成。）
+
+---
+
+## 2026-06-28 task=2026-06-27-claude-62e84c · org_user 路由白名单后端强制校验（纵深防御）
+
+### 三问复盘
+
+1. **重来怎样更好**：`allowedRoutes`（前端页面路径）和后端 API 路由是两套命名空间，需要映射表桥接。初步实现时 `makeReq` 不含 `path` 字段导致 7 个既有测试失败（`req.path = undefined` 触发 `resolvePageRoute` 无法安全返回），修复只需让函数对 undefined 安全返回 `undefined`（不受限）。事后看来应该**在函数设计时就标注 `string | undefined`**，而不是等测试失败才发现。
+
+2. **复用价值**：① `API_ROUTE_TO_PAGE_MAP` 是后端路由 → 前端页面路径的**唯一事实源**，新增受限路由只改此表；② `resolvePageRoute` 的"精确匹配 + 最长前缀匹配"模式可复用于其他需要前缀路由归组的场景；③ `getAllowedRoutesForRole` 从 `PRESET_ROLES` 读白名单（不依赖 JWT token）的设计比进 token 更安全（不暴露白名单到 token，服务端 SSOT）。
+
+3. **如何更高质量自动化**：`API_ROUTE_TO_PAGE_MAP` 目前是手工维护。后续可考虑在 governance 加一条校验：新增路由时若对应前端页面在 `ORG_ROLE_ALLOWED_ROUTES` 之外（即 org_user 不可访问的页面），要求该路由出现在 `API_ROUTE_TO_PAGE_MAP` 中（防漏登记）。
+
+### needs_automation: false
+（本次 `API_ROUTE_TO_PAGE_MAP` 手工维护可接受；governance 闸扩展作为 follow-up，非本次阻断项。）

@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（98 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（97 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -24,7 +24,7 @@
 
 - 2026-06-27-claude-d9318c — 治理工程一·省份解析fail-closed(消灭?? 'SC'反模式)
 
-**P1（16 项）**
+**P1（15 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
@@ -36,7 +36,6 @@
 - 2026-06-25-claude-a80133 — RLS-on 硬前置(永久修复)
 - 2026-06-25-claude-fe871b — cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链)
 - 2026-06-27-claude-294022 — 生产reload冷启动期全站502数分钟
-- 2026-06-27-claude-62e84c `IN_PROGRESS` — 后端未强制 org_user 页面白名单（纵深防御缺失）
 - 2026-06-27-claude-8f71c0 — 报价转化页(/quote-conversion/*)+客户来源页(/customer-f
 - 2026-06-27-claude-96e597 — 治理工程三·SX数据域补全(修SX当前故障)
 - 2026-06-27-claude-a41779 — 治理工程四·多省可扩展性收口+防回归
@@ -224,7 +223,6 @@
 | 2026-06-27-claude-45faef | 2026-06-27 | 配置一致性 | @claude | org_user allowedRoutes 生产缺 /home：生产登录返回[/performance-analysis,/growth,/specialty]，源码 ORG_ROLE_ALLOWED_ROUTES 含/home。生产配置(user_store)与源码不一致，可能影响首页导航。需核对生产store并对齐。来源：山西13账号VPS验证(2026-06-27) | P2 | PROPOSED | N/A | server/src/config/preset-users.ts |  |
 | 2026-06-27-claude-4b1de1 | 2026-06-27 | 限流/中间件 | @claude | 主查询限流回落per-IP：限流中间件在authMiddleware之前执行(rateLimiter.ts:21注释)，req.user未注入→keyByPatOrUser回落到IP。NAT后同机构多用户共享100/60s桶,高频操作互相挤占。本次13账号同出口IP并发即触发。真人频率远低于脚本,实际影响待业务观察。修补方向：评估auth后二次限流/或提高已认证用户配额。来源：山西13账号VPS验证(2026-06-27) | P2 | PROPOSED | N/A | server/src/middleware/rateLimiter.ts |  |
 | 2026-06-27-claude-62ca94 | 2026-06-27 | Loop v2 进化 | @claude | E3 高风险双源对抗（治茧房4·单一化）⚠须 owner 拍板：高风险任务（碰 RLS/安全/部署链/跨模块）的闸-2 例外升级保留第二正交对抗源。张力：与 owner 2026-06-25『code review 收敛 codex 单源、去 evidence-verifier』指令直接冲突，须 owner 确认是否要『高风险例外升级双源』，否则不动。落点 loop-orchestration §2 + dispatch sessionPrompt。 | P2 | PROPOSED | 开发文档/loop-v2-进化规划.md | .claude/rules/loop-orchestration.md |  |
-| 2026-06-27-claude-62e84c | 2026-06-27 | 权限/鉴权 | @claude | 后端未强制 org_user 页面白名单（纵深防御缺失）：allowedRoutes 仅前端守卫，org_user 可直接调 /cost /premium-report /plan-achievement /salesman-ranking 等非白名单路由拿数据。数据经RLS限本机构(13账号scLeak=false无串读)，故P1非P0。修补方向：permissionMiddleware 增加路由级 allowedRoutes 校验（org_user 命中非白名单 query 路由→403）。来源：山西13账号VPS验证(2026-06-27) | P1 | IN_PROGRESS | N/A | server/src/config/preset-users.ts | codex#816审查:若发现任一非白名单路由未消费RLS permissionFilter(返回数据未限本机构)→立即从P1升P0(权限绕过→数据越权串读)。当前P1成立前提=所有越权路由数据仍受RLS限本机构(实测scLeak=false) |
 | 2026-06-27-claude-794df9 | 2026-06-27 | Loop v2 进化 | @claude | E4 砍死规则 + 真升级校验（治茧房5+6·只增不减）：新脚本 scripts/loop/rule-hit-rate.mjs 扫 loop-orchestration 各 meta 规则/dispatch 各闸，统计每条在 ledger/pr-evolution 的触发次数，输出命中率0=死规则/过度设计清单；automation-due 增『是否真升级为机制』校验（识别处置=又写一条文档的假处置）。借 extract-backlog-governance 方法。验收：跑一次输出死规则清单。依赖 E1。 | P2 | PROPOSED | 开发文档/loop-v2-进化规划.md | scripts/loop/automation-due.mjs |  |
 | 2026-06-27-claude-8f71c0 | 2026-06-27 | 数据/ETL-schema | @claude | 报价转化页(/quote-conversion/*)+客户来源页(/customer-flow/*)对SX数据域schema不匹配：报「列不存在：policy_date」。SX Parquet缺policy_date列或SQL用了四川专有列名，整页系不可用。修补方向：核对SX数据域schema与SQL列名，对齐字段注册表。来源：山西13账号VPS验证(2026-06-27) | P1 | PROPOSED | N/A | 数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md | 根因修正(硬编码审计): SQL生成器静态不引用policy_date(用quote_time/insurance_start_date)。真根因待最终定位(VIEW/JOIN/cache层+BRANCH_RLS_ENABLED=false时permissionFilter=1=1)。归入治理工程三,需先定位再修。 |
 | 2026-06-27-claude-901f0d | 2026-06-27 | 多省/权限 | @claude | 派生域 ALL IN-scope 升级（codex 闸-2 P2·第3省上线前必修）：全国超管 targetBranch=ALL 时 permissionFilter=branch_code IN(visibleBranches)，但 resolveBranchRlsCode 只反解单码 branch_code='XX'、不识别 IN(...)→派生域(RepairDim/ClaimsDetail/RenewalTrackerFact/achievement_cache/SalesmanTeamMapping)在 ALL 下不分省下推(unfiltered)。当前靠省份注册表三者耦合不变量(visibleBranches==getAllBranchCodes==BRANCH_ORGANIZATIONS keys)保证 unfiltered==所有已注册省 安全。第3省上线前把 resolveBranchRlsCode 升级成可返回 branch set/IN clause，或逐路由显式处理 ALL。注意 kpi-detail SAME_CITY_ORGS_BY_BRANCH 等单省专属语义需同步泛化 | P2 | PROPOSED | 开发文档/multi-branch/全国超管切省设计_2026-06-26.md | server/src/routes/query/shared.ts |  |

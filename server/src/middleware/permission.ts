@@ -8,6 +8,79 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from './error.js';
 import { dbEnv } from '../config/env.js';
+import { PRESET_ROLES } from '../config/preset-users.js';
+
+/**
+ * 后端 API 路由前缀 → 前端页面路径映射表（唯一事实源）
+ *
+ * org_user 的 allowedRoutes 是前端页面路径（如 '/home'、'/performance-analysis'），
+ * 而后端路由路径（如 '/cost'、'/salesman-ranking'）需通过此映射表转换后才能与白名单比对。
+ *
+ * 规则：
+ *  - key = 后端 /api/query/ 之后的路径前缀（精确或前缀匹配，最长优先）
+ *  - value = 对应的前端页面路径（即 allowedRoutes 中的值）
+ *  - 未出现在此表的路由视为"无前端页面对应"，不受白名单限制
+ *    （如 /kpi、/trend 是多页面共用基础路由，对 org_user 开放）
+ *
+ * 新增受限路由时在此表追加，不改其他地方。
+ */
+export const API_ROUTE_TO_PAGE_MAP: Record<string, string> = {
+  // /cost 页面（成本分析）—— org_user 不可见
+  '/cost': '/cost',
+  '/comprehensive-bundle': '/cost',
+  '/comprehensive-analysis-bundle': '/cost',
+
+  // /reports 页面（报表）—— org_user 不可见
+  '/premium-report': '/reports',
+  '/marketing-report': '/reports',
+  '/holiday-drilldown': '/reports',
+
+  // /premium-plan 对应 /reports 下的计划达成版块 —— org_user 不可见
+  '/premium-plan': '/reports',
+  '/plan-achievement': '/reports',
+
+  // /salesman-ranking 对应 branch_admin 专属报表 —— org_user 不可见
+  '/salesman-ranking': '/reports',
+};
+
+/**
+ * 将后端请求路径（req.path）解析为对应的前端页面路径。
+ * 采用精确匹配优先、前缀匹配兜底（最长前缀优先，防止 /cost 误匹配 /cost-detail）。
+ *
+ * 对非字符串（如 undefined）安全返回 undefined（不受白名单限制），
+ * 避免测试环境或异常请求 path 缺失时触发错误。
+ *
+ * @returns 对应的前端页面路径，或 undefined（此路由无页面映射，不受白名单限制）
+ */
+function resolvePageRoute(apiPath: string | undefined): string | undefined {
+  if (typeof apiPath !== 'string') return undefined;
+  // 精确匹配优先
+  if (apiPath in API_ROUTE_TO_PAGE_MAP) {
+    return API_ROUTE_TO_PAGE_MAP[apiPath];
+  }
+  // 前缀匹配（最长前缀优先），用于 /sub/path 形式
+  const keys = Object.keys(API_ROUTE_TO_PAGE_MAP).sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    if (apiPath.startsWith(key + '/')) {
+      return API_ROUTE_TO_PAGE_MAP[key];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 获取角色的 allowedRoutes（从 PRESET_ROLES 按角色名取，不依赖 JWT token）。
+ * org_user 角色的 allowedRoutes 均为 ORG_ROLE_ALLOWED_ROUTES（SSOT 在 PRESET_ROLES）。
+ * 返回 null 表示该角色不受路由白名单限制（branch_admin / 系统超管）。
+ */
+function getAllowedRoutesForRole(role: string): string[] | null {
+  // branch_admin 和 admin 不受路由白名单限制
+  if (role === UserRole.BRANCH_ADMIN) return null;
+
+  const presetRole = PRESET_ROLES.find((r) => r.role === role);
+  if (!presetRole?.allowedRoutes || presetRole.allowedRoutes.length === 0) return null;
+  return presetRole.allowedRoutes;
+}
 
 /**
  * 用户角色枚举
@@ -65,7 +138,22 @@ export function permissionMiddleware(
 
     const { role, organization, branchCode, visibleBranches } = req.user;
 
-    // 2. 根据角色生成基础权限过滤条件
+    // 2. 路由级白名单校验（纵深防御 —— 第二层，数据已有 RLS 为第一层）
+    // 仅对 org_user 生效；admin / branch_admin 不受限。
+    // 原理：将 req.path（后端路径，如 '/cost'）映射到前端页面路径（如 '/cost'），
+    // 再对比用户 allowedRoutes 白名单（值为前端页面路径，如 '/performance-analysis'）。
+    const routeAllowList = getAllowedRoutesForRole(role);
+    if (routeAllowList !== null) {
+      const pageRoute = resolvePageRoute(req.path as string | undefined);
+      if (pageRoute !== undefined && !routeAllowList.includes(pageRoute)) {
+        throw new AppError(
+          403,
+          `无访问权限：该路由（${req.path}）不在您的访问白名单内`
+        );
+      }
+    }
+
+    // 3. 根据角色生成基础权限过滤条件
     let baseFilter: string;
     if (role === UserRole.BRANCH_ADMIN) {
       // 分公司管理员：可查看所有数据
@@ -84,7 +172,7 @@ export function permissionMiddleware(
       throw new AppError(403, 'Invalid user role');
     }
 
-    // 3. 多分公司 RLS（0F feature flag，含 codex PR #492 P1 fail-closed 修复）
+    // 4. 多分公司 RLS（0F feature flag，含 codex PR #492 P1 fail-closed 修复）
     // - flag 关闭：保留 0C 之前的单租户行为（兼容期）
     // - flag 开启 + 用户有 branchCode：注入 branch_code 等值过滤
     //   - baseFilter='1=1' 时直接 `branch_code='${branchCode}'`（避免冗余括号让 SQL 直通白名单失败）
