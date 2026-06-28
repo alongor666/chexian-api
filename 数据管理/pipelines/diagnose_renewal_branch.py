@@ -9,8 +9,8 @@
   三、当月未到期续保表   到期日 > 数据截止日（续保率反映进度，不亮灯）
   四、当月续保表         当月全部（= 一 + 二未涵盖部分，按到期窗口）
   五、当年已到期续保表   年初 ~ 数据截止日已到期（截至最新日期成熟口径，续保率亮灯，不被未来未到期件稀释）
-  六、当月首日续保情况   可续期首日 = 到期前 30 天当天（四川规则，例 6/1）累计报价/续回响应
-  七、当月首周续保情况   可续期首周 = 到期前 30~24 天（含首日，例 6/1~6/7）累计报价/续回响应
+  六、当月首日续保情况   可续期首日 = 到期前 pool_lead 天当天累计报价/续回响应（可续期规则因省而异，见 --pool-lead-days）
+  七、当月首周续保情况   可续期首周 = 到期前 pool_lead~(pool_lead-6) 天（含首日）累计报价/续回响应
 
 口径单一事实源：数据源（RT）、应续=去重车架号、可续期锚点、亮灯阈值、率值聚合（rate）、
 渲染（Report/fp/light_q/light_r）全部从 renewal_common 复用，本模块不重复定义，避免口径漂移。
@@ -19,9 +19,9 @@
 renewed_date 是续保单保险起期（=原保单到期次日，ETL line 114），非签单时点，不参与「已续回」判断 ——
 未到期保单已签单但起保日在未来仍属已续回。前后端口径一致（renewal-tracker.ts 已续回 C 指标同样直接用 is_renewed）。
 
-首日/首周续保率口径 A（用户 2026-06-06 确认 + 2026-06-07 四川规则细化）：续回数 = 首日/首周窗口内
-「已报价 且 已续回（is_renewed）」的件数 ÷ 应续件数。首日 = 可续期首日（到期前 30 天当天，例 6/1）截至该日累计已报价；
-首周 = 可续期首周（到期前 30~24 天，例 6/1~6/7，含首日）截至首周末累计已报价。因续保成交日恒为到期前后（无提前成交信号），
+首日/首周续保率口径 A（用户 2026-06-06 确认 + 2026-06-07 细化）：续回数 = 首日/首周窗口内
+「已报价 且 已续回（is_renewed）」的件数 ÷ 应续件数。首日 = 可续期首日（到期前 pool_lead 天当天）截至该日累计已报价；
+首周 = 可续期首周（到期前 pool_lead~(pool_lead-6) 天，含首日）截至首周末累计已报价。因续保成交日恒为到期前后（无提前成交信号），
 不以续保日切片，而衡量「响应速度的成交转化」。
 
 每张表在自己窗口内按车架号去重（与主报告单窗口口径一致），跨月重复车架号（年内约 1099 个）
@@ -34,6 +34,7 @@ from datetime import date
 
 # 共享口径/渲染原语单一来源：从 renewal_common（依赖叶子）导入，避免反向依赖主文件与 __main__ 双导入
 from renewal_common import (
+    BRANCH_CODE,
     MATURED_GLOSSARY,
     RT,
     TARGET_MATURED_RENEWAL_RATE,
@@ -49,6 +50,10 @@ from renewal_common import (
     rate,
     salesman_display_sql,
 )
+
+# 可续期规则标签（动态，随 BRANCH_CODE 切换；报告文本中替代硬编码的"四川规则"）
+# 无需 fallback：renewal_common 已 fail-closed，未知省份在模块加载时就抛 RuntimeError
+_RULE_LABEL = {"SC": "四川规则", "SX": "山西规则"}[BRANCH_CODE]
 
 
 def _month_bounds(d: date):
@@ -340,7 +345,7 @@ def run_branch_report(con, args, out_dir, ts):
     rpt.add(f"# 续保诊断 · 分公司视角 · {today.year}年{today.month}月{scope}")
     rpt.add()
     rpt.add(f"> **数据截止日** {today} · **当月** [{m_start} ~ {m_end}] · **当年** [{y_start} ~ {y_end}] · **口径** 商业险 · 应续 = 去重车架号")
-    rpt.add(f"> **可续期锚点（四川规则）** 可续期窗口 = 到期前 {pool_lead} 天起；首日 = 到期前 {pool_lead} 天当天（例 6/30 到期 → 6/1）、首周 = 到期前 {pool_lead}~{pool_lead - 6} 天即首日起 7 天（含首日，例 6/1 ~ 6/7）。其他省按实际可续期规则调整 `--pool-lead-days`。")
+    rpt.add(f"> **可续期锚点（{_RULE_LABEL}）** 可续期窗口 = 到期前 {pool_lead} 天起；首日 = 到期前 {pool_lead} 天当天（例 6/30 到期 → 6/1）、首周 = 到期前 {pool_lead}~{pool_lead - 6} 天即首日起 7 天（含首日，例 6/1 ~ 6/7）。可续期规则因省而异，如需调整请用 `--pool-lead-days`。")
     rpt.add(f"> **生成** `diagnose_renewal.py --branch-report` · {ts}")
     rpt.add()
     rpt.add("> 7 张三级机构窗口表：①当月已到期 ②临期 7 天 ③当月未到期 ④当月 ⑤当年已到期 续保漏斗；⑥首日 ⑦首周 可续期响应速度。"
@@ -372,10 +377,10 @@ def run_branch_report(con, args, out_dir, ts):
                            note=f"当年已到期（年初 ~ 数据截止日 {today}）保单 —— 只取截至最新日期已成熟部分，续保率即最终留存，不被未来未到期件稀释（与已到期口径一致）。")
     _branch_speed_section(con, rpt, "六", "当月首日续保情况", "首日", "d1q", "d1r",
                           f"expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{m_end}'", pool_lead,
-                          note=f"当月应续盘**首日**（四川规则：到期前 {pool_lead} 天当天，例 6/30 到期 → 6/1）响应：首日报价数 = 截至首日已报价；首日续回数 = 其中最终续回（口径 A）。")
+                          note=f"当月应续盘**首日**（{_RULE_LABEL}：到期前 {pool_lead} 天当天，例 6/30 到期 → 6/1）响应：首日报价数 = 截至首日已报价；首日续回数 = 其中最终续回（口径 A）。")
     _branch_speed_section(con, rpt, "七", "当月首周续保情况", "首周", "w1q", "w1r",
                           f"expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{m_end}'", pool_lead,
-                          note=f"当月应续盘**首周**（四川规则：到期前 {pool_lead}~{pool_lead - 6} 天，即可续期首日起 7 天、含首日，例 6/1 ~ 6/7）响应：首周报价数 = 截至首周末累计已报价；首周续回数 = 其中最终续回（口径 A）。")
+                          note=f"当月应续盘**首周**（{_RULE_LABEL}：到期前 {pool_lead}~{pool_lead - 6} 天，即可续期首日起 7 天、含首日，例 6/1 ~ 6/7）响应：首周报价数 = 截至首周末累计已报价；首周续回数 = 其中最终续回（口径 A）。")
 
     # 附录：表一派生指标口径定义统一沉到报告末尾（正文不夹带口径解释，只讲业务结论）。
     # 单一事实源 = renewal_common.MATURED_GLOSSARY，防同名异算漂移。
@@ -471,7 +476,7 @@ def run_org_report(con, args, out_dir, ts):
     rpt.add(f"# 续保诊断 · 三级机构视角 · {org_label} · {today.year}年{today.month}月{cc_suffix}")
     rpt.add()
     rpt.add(f"> **数据截止日** {today} · **当月** [{m_start} ~ {m_end}] · **当年** [{y_start} ~ {y_end}] · **口径** 商业险 · 应续件数 = 去重车架号")
-    rpt.add(f"> **可续期锚点（四川规则）** 可续期窗口 = 到期前 {pool_lead} 天起；首日 = 到期前 {pool_lead} 天当天（例 6/30 到期 → 6/1）、首周 = 到期前 {pool_lead}~{pool_lead - 6} 天即首日起 7 天（含首日，例 6/1 ~ 6/7）。其他省按实际可续期规则调整 `--pool-lead-days`。")
+    rpt.add(f"> **可续期锚点（{_RULE_LABEL}）** 可续期窗口 = 到期前 {pool_lead} 天起；首日 = 到期前 {pool_lead} 天当天（例 6/30 到期 → 6/1）、首周 = 到期前 {pool_lead}~{pool_lead - 6} 天即首日起 7 天（含首日，例 6/1 ~ 6/7）。可续期规则因省而异，如需调整请用 `--pool-lead-days`。")
     rpt.add(f"> **业务员口径** 7 张表统一展示「当月应续 top{requested_n}」固定同一批业务员（按当月 [{m_start}~{m_end}] 应续去重车架号降序选定，**以有续保业务员数为上限**：本机构当月有续保业务员 {n_renew} 名，故实际展示 {top_n} 名），便于横向追踪同一业务员在各窗口的表现。")
     rpt.add(f"> **合计行 = {org_label}全部 {sm_total} 名业务员的真实整体**，故所列 top{top_n} 各项之和 < 合计（其余 {sm_total - len(keep)} 名业务员计入合计、未单列）。续保影响度分母亦为该真实整体合计应续。")
     rpt.add(f"> **生成** `diagnose_renewal.py --org-report --org {args.org}` · {ts}")
@@ -507,10 +512,10 @@ def run_org_report(con, args, out_dir, ts):
                            note=f"当年已到期（年初 ~ 数据截止日 {today}）保单 —— 只取截至最新日期已成熟部分，续保率即最终留存，不被未来未到期件稀释（与已到期口径一致）。", **dim_kw)
     _branch_speed_section(con, rpt, "六", "当月首日续保情况", "首日", "d1q", "d1r",
                           f"expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{m_end}'", pool_lead,
-                          note=f"当月应续盘**首日**（四川规则：到期前 {pool_lead} 天当天，例 6/30 到期 → 6/1）响应：首日报价数 = 截至首日已报价；首日续回数 = 其中最终续回（口径 A）。", **dim_kw)
+                          note=f"当月应续盘**首日**（{_RULE_LABEL}：到期前 {pool_lead} 天当天，例 6/30 到期 → 6/1）响应：首日报价数 = 截至首日已报价；首日续回数 = 其中最终续回（口径 A）。", **dim_kw)
     _branch_speed_section(con, rpt, "七", "当月首周续保情况", "首周", "w1q", "w1r",
                           f"expiry_date >= DATE '{m_start}' AND expiry_date <= DATE '{m_end}'", pool_lead,
-                          note=f"当月应续盘**首周**（四川规则：到期前 {pool_lead}~{pool_lead - 6} 天，即可续期首日起 7 天、含首日，例 6/1 ~ 6/7）响应：首周报价数 = 截至首周末累计已报价；首周续回数 = 其中最终续回（口径 A）。", **dim_kw)
+                          note=f"当月应续盘**首周**（{_RULE_LABEL}：到期前 {pool_lead}~{pool_lead - 6} 天，即可续期首日起 7 天、含首日，例 6/1 ~ 6/7）响应：首周报价数 = 截至首周末累计已报价；首周续回数 = 其中最终续回（口径 A）。", **dim_kw)
 
     # 附录：表一派生指标口径定义统一沉到报告末尾（与分公司视角共用，单一事实源 = MATURED_GLOSSARY）
     rpt.add("## 附录 · 表一指标口径")

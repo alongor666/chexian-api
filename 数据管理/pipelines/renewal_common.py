@@ -24,37 +24,54 @@ DATA_ROOT = Path(os.environ.get("CHEXIAN_DATA_ROOT") or HERE.parent)
 # validation/<省>/，绝不碰 fact/current/。renewal_tracker / quotes 放子目录，避免与
 # POL 的顶层 *.parquet 通配冲突（签单清单在 validation/<省>/ 顶层，schema 不同不能混 glob）。
 BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+# fail-closed：未知省份立即报错，禁止静默继承四川参数（data-pipeline.md 红线）
+_KNOWN_BRANCHES = {"SC", "SX"}
+if BRANCH_CODE not in _KNOWN_BRANCHES:
+    raise RuntimeError(
+        f"未知省份代码 BRANCH_CODE='{BRANCH_CODE}'，已注册省份：{sorted(_KNOWN_BRANCHES)}。"
+        "请检查 BRANCH_CODE 环境变量。新省份须先在 renewal_common._KNOWN_BRANCHES 注册。"
+    )
 
 if BRANCH_CODE == "SC":
     # ---- 数据源（全部只读 Parquet）----
     RT = str(DATA_ROOT / "warehouse" / "fact" / "renewal_tracker" / "latest.parquet")
     POL = str(DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet")
     Q = str(DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet")
-    OUT_DIR = DATA_ROOT / "数据分析报告"
+    OUT_DIR = DATA_ROOT / "数据分析报告"  # SC 沿用原路径，向后兼容（非 SC 省均加 /<BRANCH_CODE>/ 后缀）
 else:
     _VAL = DATA_ROOT / "warehouse" / "validation" / BRANCH_CODE
     RT = str(_VAL / "renewal_tracker" / "latest.parquet")
     POL = str(_VAL / "*.parquet")  # 签单清单（隔离区顶层，已按省机构规范化）
     Q = str(_VAL / "quotes_conversion" / "latest.parquet")
-    OUT_DIR = DATA_ROOT / "数据分析报告" / BRANCH_CODE  # P2-1：报告产物按省隔离，不覆盖四川版
-DEFAULT_LIST = (
-    Path.home()
-    / "Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/四川5-7月 - 智能表.xlsx"
-)
+    OUT_DIR = DATA_ROOT / "数据分析报告" / BRANCH_CODE  # 报告按省份隔离落地，各省产物独立
+# 责任模式默认清单路径（各省独立；未配置省份返回 None，运行时须显式传 --renewal-list）
+DEFAULT_LIST = {
+    "SC": Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/四川5-7月 - 智能表.xlsx",
+    # SX 山西：无默认清单路径，必须显式传 --renewal-list
+}.get(BRANCH_CODE)
 
 # ---- 业务口径常量 ----
-QUOTE_WINDOW_START = "2025-12-03"   # 与 convert_renewal_tracker.py 报价窗口对齐
+# 报价窗口起点：与 convert_renewal_tracker.DEFAULT_QUOTE_WINDOW_START 必须手动同步（两处独立定义）。
+# 修改任一方须同步另一方；SX 值确认后须同步重跑 convert_renewal_tracker.py 重建 latest.parquet。
+QUOTE_WINDOW_START = {
+    "SC": "2025-12-03",
+    "SX": "2025-12-01",  # 山西实际报价数据起点（duckdb MIN(quote_time) 验证，2026-06-28）
+}[BRANCH_CODE]
 TELESALES_TERMINAL = "0110融合销售"  # 项目设定：终端来源=融合销售即电销
-POOL_LEAD_DEFAULT = 30              # 进盘锚点默认提前期（天）；数据显示行动窗口约到期前 30 天
+POOL_LEAD_DEFAULT = 30              # 可续期窗口默认提前期（天）；四川当前规则 30 天，其他省按实际调 --pool-lead-days
 SMALL_ORG_SALESMEN = 10            # <10 业务员 = 小机构（直列业务员）
 
-# 亮灯阈值 (关注, 预警, 危险)；报价率/续回率越高越好 → light(higher_worse=False)
+# 亮灯阈值 (关注, 预警, 危险)；报价率/续保率越高越好 → light(higher_worse=False)
+# 当前全省统一阈值；各省业务考核标准确认后可按省分化
 TH_QUOTE = (90, 80, 70)
 TH_RENEW = (75, 65, 55)
 
-# 已到期最终续保率目标（业务给定的对标基准，单位 %）。结论以此为锚给出「差多少个百分点」，
-# 单一事实源，禁止散落硬编码；目标调整只改此处。
-TARGET_MATURED_RENEWAL_RATE = 58
+# 已到期最终续保率目标（业务给定的对标基准，单位 %）。结论以此为锚给出「差多少个百分点」。
+# 各省可独立配置；目标调整只改此处。
+TARGET_MATURED_RENEWAL_RATE = {
+    "SC": 58,
+    "SX": 58,  # 暂定与四川一致（2026-06-28 用户确认）；山西正式考核基准确定后更新
+}[BRANCH_CODE]
 
 
 def _parse_categories(arg):

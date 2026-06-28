@@ -40,6 +40,7 @@ DEFAULT_POLICY_GLOB = str(DATA_ROOT / "warehouse" / "fact" / "policy" / "current
 DEFAULT_QUOTES_PATH = str(DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet")
 DEFAULT_SALESMAN_PATH = str(DATA_ROOT / "warehouse" / "dim" / "salesman" / "latest.parquet")
 
+# ⚠️ 与 renewal_common.QUOTE_WINDOW_START 字典必须手动保持一致！修改任一方须同步另一方。
 DEFAULT_QUOTE_WINDOW_START = "2025-12-03"
 DEFAULT_SOURCE_YEAR = 2025
 DEFAULT_RENEWAL_YEAR = 2026
