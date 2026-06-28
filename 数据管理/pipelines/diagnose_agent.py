@@ -18,6 +18,7 @@
 """
 
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +30,9 @@ except ImportError:
     print("错误: 需要 duckdb 包。运行: pip3 install duckdb")
     sys.exit(1)
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from diagnose_common import branch_paths
+
 
 # ============================================================================
 # 路径常量
@@ -36,8 +40,10 @@ except ImportError:
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-POLICY_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
-CLAIMS_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
+_BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+_PATHS = branch_paths(_BRANCH_CODE)
+POLICY_GLOB = _PATHS["policy_glob"]
+CLAIMS_GLOB = _PATHS["claims_glob"]
 DEFAULT_OUTPUT_DIR = str(PROJECT_ROOT / "数据分析报告")
 
 # 阈值（来自 开发文档/01_指标体系.md）

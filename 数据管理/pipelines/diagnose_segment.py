@@ -32,12 +32,17 @@ from pathlib import Path
 
 import duckdb
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from diagnose_common import branch_paths  # noqa: E402
+
 # 区分代码根（含脚本/词典）与数据根（含 parquet）。便于 worktree / 跨环境执行。
 CODE_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_ROOT = Path(os.environ.get("CHEXIAN_DATA_ROOT") or CODE_ROOT)
 REPO = DATA_ROOT  # 向后兼容
-POLICY = f"{DATA_ROOT}/数据管理/warehouse/fact/policy/current/*.parquet"
-CLAIMS = f"{DATA_ROOT}/数据管理/warehouse/fact/claims_detail/claims_*.parquet"
+_BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+_PATHS = branch_paths(_BRANCH_CODE)
+POLICY = _PATHS["policy_glob"]
+CLAIMS = _PATHS["claims_glob"]
 OUTDIR = CODE_ROOT / "数据管理/数据分析报告"
 DICTIONARY = CODE_ROOT / "数据管理/knowledge/rules/segment-dictionary.json"
 QUESTIONNAIRE = CODE_ROOT / "数据管理/knowledge/rules/segment-questionnaire.json"

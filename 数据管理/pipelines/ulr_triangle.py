@@ -11,16 +11,23 @@ ULR 三角形构建层 — Paid / Closure / Current Incurred Snapshot
 v1 Snapshot-Constrained ULR。
 """
 
+import os
+import sys
 from pathlib import Path
 
 import duckdb
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from diagnose_common import branch_paths
+
 # ── 路径 ──
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-POLICY_GLOB = str(REPO_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
-CLAIMS_PATH = str(REPO_ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
+_BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+_PATHS = branch_paths(_BRANCH_CODE)
+POLICY_GLOB = _PATHS["policy_glob"]
+CLAIMS_PATH = _PATHS["claims_glob"]
 
 
 # ============================================================================

@@ -30,6 +30,7 @@
 """
 
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -39,11 +40,16 @@ try:
 except ImportError:
     print("错误: pip3 install duckdb"); sys.exit(1)
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from diagnose_common import branch_paths
+
 
 # ── 路径 ──────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).resolve().parent
-POLICY_GLOB = str(SCRIPT_DIR.parent / "warehouse/fact/policy/current/*.parquet")
-CLAIMS_PATH = str(SCRIPT_DIR.parent / "warehouse/fact/claims_detail/claims_*.parquet")
+_BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+_PATHS = branch_paths(_BRANCH_CODE)
+POLICY_GLOB = _PATHS["policy_glob"]
+CLAIMS_PATH = _PATHS["claims_glob"]
 PLATE_DIM   = str(SCRIPT_DIR.parent / "warehouse/dim/plate_region/latest.parquet")
 OUT_DIR     = str(SCRIPT_DIR.parent / "数据分析报告")
 
@@ -56,6 +62,7 @@ CLAIM_AMT     = (
 IS_LOCAL      = "plate_city = accident_city_name"
 
 # 0E：分支省份参数化（默认 '四川' 保持兼容；main() 按 --branch 覆盖）
+# TODO(多省): 车牌省份映射待 branch→省名映射 follow-up（本轮只改数据路径）
 BRANCH_PROVINCE = '四川'
 IS_INPROV     = f"plate_province = '{BRANCH_PROVINCE}'"
 IS_INPROV_RMT = f"plate_province = '{BRANCH_PROVINCE}' AND plate_city != accident_city_name"

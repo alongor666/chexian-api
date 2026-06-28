@@ -33,6 +33,7 @@ diagnose_forecast_claim.py — 满期赔付率推演与赔款空间反推（v1.0
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
@@ -42,6 +43,9 @@ try:
 except ImportError:
     print("错误: pip3 install duckdb", file=sys.stderr)
     sys.exit(1)
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from diagnose_common import branch_paths
 
 
 # ─── Path Resolution ─────────────────────────────────────────────
@@ -57,14 +61,15 @@ def find_project_root() -> Path:
 
 
 ROOT = find_project_root()
+_BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
 
 POLICY_CANDIDATES = [
-    ROOT / '数据管理/warehouse/fact/policy/current',
+    Path(branch_paths(_BRANCH_CODE)["policy_glob"]).parent,
     ROOT / 'server/data/fact/policy/current',
     ROOT / 'server/data/current',
 ]
 CLAIMS_CANDIDATES = [
-    ROOT / '数据管理/warehouse/fact/claims_detail',
+    Path(branch_paths(_BRANCH_CODE)["claims_glob"]).parent,
     ROOT / 'server/data/fact/claims_detail',
 ]
 

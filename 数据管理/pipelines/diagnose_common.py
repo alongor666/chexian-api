@@ -7,6 +7,7 @@
 指标注册表对照：server/src/config/metric-registry/categories/cost.ts
 """
 
+import os
 from pathlib import Path
 
 # ============================================================================
@@ -15,9 +16,56 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
-CLAIMS_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
-OUT_DIR = str(PROJECT_ROOT / "数据分析报告")
+# 数据根：默认 数据管理/；CHEXIAN_DATA_ROOT env 可覆盖（worktree 内跑、数据只在主仓时指向主仓）
+DATA_ROOT = Path(os.environ.get("CHEXIAN_DATA_ROOT") or SCRIPT_DIR.parent)
+
+# ============================================================================
+# 多省省份路由（ADR D5 · 全诊断族数据源单一事实源）
+# ============================================================================
+# 诊断脚本族（diagnose_*/ulr_*/moto_*）与 renewal_common 复用本路由，杜绝每脚本各自硬编码
+# fact/ 路径致 BRANCH_CODE=SX 静默读四川（2026-06-28 技能层审计 ~18 处缺口的统一根因）。
+# SC→生产 fact/；非 SC 省→隔离区 validation/<省>/（SX GATED：生产 current/ 无 SX 数据，验证数据
+# 在 validation/SX/）。fail-closed：未知省份立即 RuntimeError，禁止静默回落四川（data-pipeline.md 红线）。
+BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+KNOWN_BRANCHES = frozenset({"SC", "SX"})
+
+
+def branch_paths(branch, data_root=DATA_ROOT):
+    """省份 → 数据源路径（多省路由纯函数 · 全诊断族 SSOT，不依赖模块级 BRANCH_CODE）。
+
+    返回 policy_glob/claims_glob/quotes/renewal_tracker；诊断脚本取 policy_glob+claims_glob，
+    renewal_common 取 policy_glob+quotes+renewal_tracker。报告落地 out_dir 各模块自处理
+    （diagnose 用 PROJECT_ROOT 基准、renewal 用 DATA_ROOT 基准，历史不同，不并入本函数）。
+    fail-closed：未知省份立即 RuntimeError，禁止静默回落四川 fact/ 路径。
+    """
+    if branch not in KNOWN_BRANCHES:
+        raise RuntimeError(
+            f"未知省份代码 '{branch}'，已注册省份：{sorted(KNOWN_BRANCHES)}。"
+            "新省份须先在 diagnose_common.KNOWN_BRANCHES 注册。"
+        )
+    if branch == "SC":
+        fact = data_root / "warehouse" / "fact"
+        return {
+            "policy_glob": str(fact / "policy" / "current" / "*.parquet"),
+            "claims_glob": str(fact / "claims_detail" / "claims_*.parquet"),
+            "quotes": str(fact / "quotes_conversion" / "latest.parquet"),
+            "renewal_tracker": str(fact / "renewal_tracker" / "latest.parquet"),
+        }
+    val = data_root / "warehouse" / "validation" / branch
+    return {
+        "policy_glob": str(val / "*.parquet"),  # 签单清单（隔离区顶层，已按省机构规范化）
+        "claims_glob": str(val / "claims_detail" / "claims_*.parquet"),
+        "quotes": str(val / "quotes_conversion" / "latest.parquet"),
+        "renewal_tracker": str(val / "renewal_tracker" / "latest.parquet"),
+    }
+
+
+# 模块级常量经 branch_paths 路由（含未知省 fail-closed）：穿透 import 这些常量的诊断脚本（diagnose_vehicle 等）
+_PATHS = branch_paths(BRANCH_CODE)
+GLOB = _PATHS["policy_glob"]
+CLAIMS_GLOB = _PATHS["claims_glob"]
+# 报告落地：PROJECT_ROOT 基准（向后兼容 diagnose 历史输出位置）；SC 无后缀、非 SC 省加 /<省>/ 隔离
+OUT_DIR = str(PROJECT_ROOT / "数据分析报告" / BRANCH_CODE) if BRANCH_CODE != "SC" else str(PROJECT_ROOT / "数据分析报告")
 
 # 闰年感知：保险期限 = 起期+1年-起期（365 或 366 天）
 # 模块级固定成本 SQL 片段（由 set_fixed_cost_sql() 设置，kpi_select 自动使用）
