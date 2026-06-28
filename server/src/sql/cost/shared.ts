@@ -34,6 +34,8 @@ export interface EarnedPremiumConfig {
   policyMonth?: string;
   /** 明细表筛选：三级机构（可选） */
   orgLevel3?: string;
+  /** 省份中文名（如'四川'/'山西'），用于汇总行 ORDER BY 置顶；省略时默认'四川' */
+  branchLabel?: string;
 }
 
 /** 新口径已赚保费配置 */

@@ -105,11 +105,12 @@ export async function ensureMapRegistered(target: string): Promise<string> {
 }
 
 /**
- * 预加载全国 + 四川（首屏默认需要）
+ * 预加载全国 + 指定省份（首屏默认需要）
+ * @param provinceName 省份简名，默认'四川'（SC 用户无感知，SX 用户加载山西地图）
  */
-export async function preloadDefaultMaps(): Promise<void> {
+export async function preloadDefaultMaps(provinceName = '四川'): Promise<void> {
   await Promise.all([
     ensureMapRegistered('china'),
-    ensureMapRegistered('四川'),
+    ensureMapRegistered(provinceName),
   ]);
 }

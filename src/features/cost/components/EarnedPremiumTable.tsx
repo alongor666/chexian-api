@@ -10,6 +10,7 @@
  */
 
 import { memo, useMemo, useState, useCallback } from 'react';
+import { useBranch, branchLabel } from '../../../shared/contexts/BranchContext';
 import { VirtualTable, Column } from '../../../widgets/table/VirtualTable';
 import { EarnedPremiumCharts } from './EarnedPremiumCharts';
 import { EarnedPremiumGuide } from './EarnedPremiumGuide';
@@ -124,15 +125,13 @@ function transformSummaryData(data: EarnedPremiumSummaryData[]): DisplaySummaryD
 function sortSummaryData(
   data: DisplaySummaryData[],
   sortField: SortField,
-  sortDirection: 'asc' | 'desc'
+  sortDirection: 'asc' | 'desc',
+  provinceLabel = '四川'
 ): DisplaySummaryData[] {
+  const fixedKeys = [provinceLabel, '同城', '异地', '合计'];
   // 分离固定行和可排序行
-  const fixedRows = data.filter((row) =>
-    ['四川', '同城', '异地', '合计'].includes(row.org_level_3)
-  );
-  const sortableRows = data.filter((row) =>
-    !['四川', '同城', '异地', '合计'].includes(row.org_level_3)
-  );
+  const fixedRows = data.filter((row) => fixedKeys.includes(row.org_level_3));
+  const sortableRows = data.filter((row) => !fixedKeys.includes(row.org_level_3));
 
   // 排序可排序行
   const sorted = [...sortableRows].sort((a, b) => {
@@ -147,9 +146,9 @@ function sortSummaryData(
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
-  // 固定行保持顺序（四川、同城、异地、合计）+ 排序后的其他机构
+  // 固定行保持顺序（省份汇总、同城、异地、合计）+ 排序后的其他机构
   return [
-    fixedRows.find((row) => row.org_level_3 === '四川'),
+    fixedRows.find((row) => row.org_level_3 === provinceLabel),
     fixedRows.find((row) => row.org_level_3 === '同城'),
     fixedRows.find((row) => row.org_level_3 === '异地'),
     fixedRows.find((row) => row.org_level_3 === '合计'),
@@ -172,6 +171,10 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
   onExportExcel,
   onDetailFilterChange,
 }) {
+  const { effectiveBranch } = useBranch();
+  // 省份中文名（SX='山西', SC='四川', null/ALL 兜底'四川'）
+  const provinceLabel = branchLabel(effectiveBranch) === '全国' ? '四川' : branchLabel(effectiveBranch);
+
   // 明细表筛选状态（默认显示全部月份，覆盖滚动12个月完整窗口）
   const [detailFilter, setDetailFilter] = useState<EarnedPremiumDetailFilter>({
     policyMonth: 'all',
@@ -222,8 +225,8 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
   // 转换并排序数据
   const displaySummaryData = useMemo(() => {
     const transformed = transformSummaryData(summaryData);
-    return sortSummaryData(transformed, sortState.sortField, sortState.sortDirection);
-  }, [summaryData, sortState]);
+    return sortSummaryData(transformed, sortState.sortField, sortState.sortDirection, provinceLabel);
+  }, [summaryData, sortState, provinceLabel]);
 
   const displayDetailData = useMemo(() => transformDetailData(data), [data]);
 

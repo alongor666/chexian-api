@@ -4,6 +4,8 @@ import { TagSelector } from './TagSelector';
 import { CoverageTabSelector } from './CoverageTabSelector';
 import { createLogger } from '../../shared/utils/logger';
 import { DateCriteria, type AdvancedFilterState } from '../../shared/types/data';
+import { useBranch } from '../../shared/contexts/BranchContext';
+import { ORG_GROUPS_BY_BRANCH } from '../../shared/config/org-groups';
 import type { FilterFieldsConfig, FilterSelectionModeConfig, FilterPresetName } from '../../shared/types/filters';
 import { FILTER_PRESETS } from '../../shared/types/filters';
 import { FilterLayoutV2 } from './FilterLayoutV2';
@@ -75,6 +77,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
   visibleFields: visibleFieldsOverride,
   selectionModes: selectionModesOverride,
 }) => {
+  const { effectiveBranch } = useBranch();
   const defaultDateRange = React.useMemo(() => getDefaultDateRange(), []);
 
   // 计算最终的可见字段配置：visibleFieldsOverride > preset > 默认全部显示
@@ -209,11 +212,10 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({
     );
   };
 
-  // 机构分类（根据【功能实施】商车自主定价系数监控板块开发计划.md）
-  // 同城（成都）：天府、高新、新都、青羊、武侯、重客、本部
-  // 异地（中支）：宜宾、德阳、资阳、泸州、自贡、乐山、达州
-  const LOCAL_ORGS = ['天府', '高新', '新都', '青羊', '武侯', '重客', '本部'];
-  const REMOTE_ORGS = ['宜宾', '德阳', '资阳', '泸州', '自贡', '乐山', '达州'];
+  // 机构分类（按用户归属省从注册表取，SC=四川成都/中支，SX=山西太原/省内中支）
+  const _orgGroups = ORG_GROUPS_BY_BRANCH[effectiveBranch ?? 'SC'] ?? ORG_GROUPS_BY_BRANCH.SC;
+  const LOCAL_ORGS = _orgGroups.SAME_CITY;
+  const REMOTE_ORGS = _orgGroups.REMOTE;
 
   const getOrgSelectionByType = (orgs: string[], type: 'remote' | 'local'): string[] => {
     const targetList = type === 'remote' ? REMOTE_ORGS : LOCAL_ORGS;
