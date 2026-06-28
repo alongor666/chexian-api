@@ -905,6 +905,43 @@ function buildValidationBranchSyncTasks(remote, validationRoot = LOCAL_VALIDATIO
 }
 
 /**
+ * 非 SC 省维度隔离副本同步任务（warehouse/validation/<省>/dim/<域> → VPS data/validation/<省>/dim/<域>）。
+ *
+ * 与 buildValidationBranchSyncTasks 的关键区别：
+ * - 目标是维度元数据（salesman/plan/repair），不含保单/理赔个人信息
+ * - 不受 SYNC_VALIDATION_BRANCHES 门控：日常 sync 自动推，无需手动开关
+ *   （门控目的是防止 RLS-off 时 SX 个人数据进生产；元数据无此风险）
+ * - bootstrapper.resolveBranchDimExtras 探测 data/validation/<省>/dim/<域>/latest.parquet
+ *   就位后自动 UNION ALL BY NAME 加入多省维度（ADR G3）
+ *
+ * 前置条件：generate_dim_tables.py --branch-code SX 已生成 validation/SX/dim/ 目录。
+ */
+function buildValidationDimSyncTasks(remote, validationRoot = LOCAL_VALIDATION_DIR) {
+  if (!existsSync(validationRoot)) return [];
+  const DIM_SUBDOMAINS = ['salesman', 'plan', 'repair'];
+  const tasks = [];
+  const provinces = readdirSync(validationRoot)
+    .filter((entry) => entry !== 'SC' && /^[A-Z]{2}$/.test(entry))
+    .sort((a, b) => a.localeCompare(b));
+  for (const province of provinces) {
+    const dimDir = join(validationRoot, province, 'dim');
+    if (!existsSync(dimDir) || !statSync(dimDir).isDirectory()) continue;
+    for (const subdomain of DIM_SUBDOMAINS) {
+      const localSubDir = join(dimDir, subdomain);
+      if (!existsSync(localSubDir) || !statSync(localSubDir).isDirectory()) continue;
+      if (!existsSync(join(localSubDir, 'latest.parquet'))) continue;
+      tasks.push({
+        label: `validation/${province}/dim/${subdomain}`,
+        local: localSubDir,
+        remote: `${remote}/validation/${province}/dim/${subdomain}`,
+        critical: false,
+      });
+    }
+  }
+  return tasks;
+}
+
+/**
  * 构建标准同步任务列表。
  *
  * 多省安全改造（§6.1，codex 闸-1 P1 修正）：
@@ -942,6 +979,9 @@ function buildStandardSyncTasks(remote, frontendDist, opts = {}) {
     { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${remote}/patrol_reports`,        critical: false },
     { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${remote}/reports`,               critical: false, deleteRemote: false },
     { label: 'public_reports',       local: LOCAL_PUBLIC_REPORTS_DIR,     remote: `${frontendDist}/reports`,         critical: false, deleteRemote: false },
+    // 多省维度元数据（salesman/plan/repair）→ VPS data/validation/<省>/dim/<域>
+    // 不受 SYNC_VALIDATION_BRANCHES 门控（dim 是元数据，无 PII 风险，bootstrapper 探测即生效）
+    ...buildValidationDimSyncTasks(remote, LOCAL_VALIDATION_DIR),
     // GATED 多省：validation/<非SC省>/<派生域> → VPS data/validation/<省>/<域>
     // 默认 off（需 SYNC_VALIDATION_BRANCHES=1，cutover 数据发布步显式开）→ 日常 sync 字节安全
     ...buildValidationBranchSyncTasks(remote, LOCAL_VALIDATION_DIR),

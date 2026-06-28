@@ -223,7 +223,7 @@
         "organization",
         "status"
       ],
-      "notes": "一般一年或半年调整一次"
+      "notes": "一般一年或半年调整一次；SX 隔离副本用 --branch-code SX 参数从 validation/SX/ policy parquet 派生（无 xlsx 源），落 warehouse/validation/SX/dim/salesman/"
     },
     {
       "id": "plan",
@@ -245,7 +245,7 @@
         "plan_vehicle",
         "plan_total"
       ],
-      "notes": "分salesman/organization两级，2025含实际值，2026仅计划值"
+      "notes": "分salesman/organization两级，2025含实际值，2026仅计划值；SX 隔离副本落 warehouse/validation/SX/dim/plan/（空桩，plan=0）"
     },
     {
       "id": "cross_sell",
