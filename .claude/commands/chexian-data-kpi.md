@@ -2,7 +2,7 @@
 name: chexian-data-kpi
 description: 业绩分析与排名（Top30业务员、机构对比、四象限分层）。当用户说"排名"/"业绩"/"四象限"/"哪个业务员最强"时触发。
 category: data-analysis
-version: 1.2.0
+version: 1.3.0
 author: "@claude"
 tags: ["kpi","ranking","performance"]
 scope: project
@@ -15,6 +15,11 @@ dependencies:
   - server/src/sql/salesman-ranking.ts
   - server/src/sql/performance-analysis.ts
   - server/src/config/field-registry/fields.json
+  - server/src/config/metric-registry/categories/cost.ts
+  - server/src/sql/claims-heatmap.ts
+  - .claude/rules/skill-caliber-ssot.md
+  - .claude/rules/data-pipeline.md
+  - .claude/rules/time-caliber-disambiguation.md
 parent_command: chexian-data-analysis
 last_updated: "2026-06-27"
 ---
@@ -35,7 +40,7 @@ last_updated: "2026-06-27"
 - 人均产能分析
 
 ### 3. 四象限分层（核心业务定义）
-四象限以**件数中位数**和**人均保费中位数**为轴：
+四象限以**件数中位数**和**人均保费中位数**为轴（人均保费＝保费÷业务员）。注：件均保费另有注册表口径 `avg_premium_per_policy`[K4]（＝保费÷件数，区别于人均÷业务员、车均÷车架号）；四象限轴**是否回填为件均**属后续（见计划 §8）。当前轴维持人均，列举如下：
 - Q1 明星业务员：件数高 + 人均保费高
 - Q2 大单专家：件数低 + 人均保费高（大客户型）
 - Q3 新手待培养：件数低 + 人均保费低
@@ -133,13 +138,43 @@ curl -s localhost:3000/api/query/salesman | jq '.data[0]'
 | `is_nev` | 是否新能源 |
 | `endorsement_no` | 批改单号（varchar）。净额口径已由 `SUM(premium)+HAVING>0` 合并批改，无需按批改类型过滤。⚠️ `endorsement_type` 虽在 `fields.json` 注册但 **ETL 未落 Parquet**，引用即 `Binder Error` |
 
-**率值聚合铁律**：满期赔付率 = SUM(赔款分子) / SUM(满期保费)，禁止对率值做加权平均或二次汇总。满期赔付率补全（注册表 `earned_claim_ratio` + 赔案 JOIN）属 K5 范畴；SX 赔案走 `validation/SX/claims_detail/claims_*.parquet`。
+**率值聚合铁律**：满期赔付率 = SUM(赔款分子) / SUM(满期保费)，禁止对率值做加权平均或二次汇总。
+
+### 满期赔付率（机构对比扩展，挂靠注册表 `earned_claim_ratio`）
+
+满期赔付率口径**挂靠注册表 `earned_claim_ratio`**（`server/src/config/metric-registry/categories/cost.ts`，取数 `getMetricSql('earned_claim_ratio')`），**禁在本命令内联 L4 SQL**（见 [技能口径挂靠 SSOT](../rules/skill-caliber-ssot.md)）：
+
+> 满期赔付率 = SUM(已报告赔款) / SUM(满期保费)（闰年感知）
+> - **已报告赔款**（SX 赔案 `validation/SX/claims_detail/claims_*.parquet`）：仅取 `liability_ratio > 0` 且 `case_type` 非「零结 / 注销 / 拒赔」的案件；**已结案**（`settlement_time ≤ 观察截止`）取 `settled_amount`、**未结案**取 `reserve_amount` —— **二者二选一，不得相加**。
+> - **满期保费** = `premium × earned_days / policy_term`（闰年感知：`policy_term = 起期到起期+1年 = 365/366`，`earned_days = LEAST(已过天数, policy_term)`）。
+
+⚠️ **口径复杂必挂靠、禁手写内联**：实测把 `settled` 与 `reserve` **相加** + 未排无责，机构满期赔付率虚高至最高 **143%**（不合理）；正确口径（二选一 + 排无责无效）为 **56–73%**（SX 2025 保单年度，cutoff 2026-06-23，合理）。L4 实现入口见 `server/src/sql/claims-heatmap.ts`（机构维度 cohort / cutoff）；机构满期赔付率发展报告用 `/diagnose-loss-development`。
+
+### 口径挂靠总表（技能挂靠 SSOT 闭环 · 治理链 K1–K5）
+
+本命令所有口径**禁内联、必挂靠** SSOT（[技能口径挂靠 SSOT](../rules/skill-caliber-ssot.md)）：
+
+| 口径 | SSOT 锚点（可定位文件 / 路径） | 来源 |
+|------|----------|------|
+| 省份隔离 | [`data-pipeline.md`](../rules/data-pipeline.md) 省份数据隔离 RED LINE（`branch_code` + 文件名 glob） | K1 |
+| 净额保费 | `数据管理/knowledge/rules/车险数据业务规则字典.md` + `GROUP BY policy_no HAVING SUM(premium)>0` | K1 |
+| 字段名落列 | `server/src/config/field-registry/fields.json` **且** Parquet 实际落列（K3 闸强制） | K1/K3 |
+| 枚举值 | `数据管理/knowledge/rules/车险数据业务规则字典.md`（`insurance_type` / `coverage_combination` 等） | K1 |
+| 时间口径 | [`time-caliber-disambiguation.md`](../rules/time-caliber-disambiguation.md) 反问协议 | K1 |
+| 技能禁内联元规则 | [`skill-caliber-ssot.md`](../rules/skill-caliber-ssot.md) | K2 |
+| 幽灵字段强制闸 | `scripts/governance/parquet-columns.snapshot.json` + `scripts/check-governance.mjs` 技能字段闸 | K3 |
+| 件均保费 | 注册表 `avg_premium_per_policy`（`server/src/config/metric-registry/categories/foundation.ts`） | K4 |
+| 满期赔付率 | 注册表 `earned_claim_ratio`（`server/src/config/metric-registry/categories/cost.ts`）+ `server/src/sql/claims-heatmap.ts` | K5 |
+| 业务员粒度 | `server/src/config/field-registry/fields.json` 的 `salesman_name`（自带工号前缀＝人唯一键，按人聚合） | K1 |
+| 率值聚合 | 注册表 `additive:false` 标记 + `domain-cross-metric.test.ts`（禁 `AVG(xxx_ratio)`）；`SUM(分子)/SUM(分母)` | 既有 |
 
 ### SQL 模块参考
 
 - `server/src/sql/kpi.ts` — KPI 聚合主逻辑
 - `server/src/sql/salesman-ranking.ts` — 业务员排名 SQL
 - `server/src/sql/performance-analysis.ts` — 机构绩效分析
+- `server/src/config/metric-registry/categories/cost.ts` — 满期赔付率 `earned_claim_ratio` 注册表口径（L3 表达式）
+- `server/src/sql/claims-heatmap.ts` — 满期赔付率 L4 实现入口（满期保费 CTE + claims JOIN 已报告赔款）
 
 ### 验证
 
@@ -152,3 +187,9 @@ duckdb -c "WITH eligible AS (SELECT policy_no, SUM(premium) p FROM read_parquet(
 curl -s localhost:3000/api/query/kpi | jq '.data | length'
 # 期望返回非零数组
 ```
+
+## 产物与边界
+
+- **产物**：业务员 Top N 排名表 / 机构对比表（件数 + 净额保费 + 满期赔付率）/ 四象限分层。纯查询命令，**不落文件**；HTML 报告用 `/diagnose-org-weekly`，满期赔付率发展用 `/diagnose-loss-development`。
+- **场景边界**：本命令聚焦 L1–L3 净额业绩口径（保费 / 件数 / 件均 / 排名 / 四象限）；满期赔付率（L4）**挂靠注册表指向实现、不内联**。续保 / 交叉销售 / 渠道 / 定价等专题用对应 `chexian-*` skill。
+- **worktree 数据回退**：worktree 无 Parquet（gitignored），duckdb 直查须用主仓绝对路径 `/Users/<user>/.../chexian-api/数据管理/warehouse/...`；山西 GATED 一律 duckdb 直查 `SX_*`（生产 API 不返回 SX）。
