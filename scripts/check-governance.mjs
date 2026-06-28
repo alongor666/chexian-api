@@ -1452,6 +1452,28 @@ function checkFieldDefinitionConsistency() {
   }
 }
 
+// 17b. 指标字典同步：metric-registry → 开发文档/指标字典.md codegen 产物一致性
+//      2026-06-27 新增，根治长期 drift 双根因：旧脚本硬编码 5/9 分类漏 14 指标（repair/plan/
+//      structure/renewal），且 regen 不在 package.json / CLAUDE.md §2 流程 / CI 任何一处。
+//      与 #17 字段定义一致同构：靠 --check 逐字节比对，注册表一改忘 regen 即变红。
+function checkMetricDocConsistency() {
+  info('检查指标字典同步（metric-registry → 开发文档/指标字典.md）...');
+  try {
+    const result = execSync('bun scripts/metric-registry/generate-metric-doc.ts --check', {
+      cwd: ROOT_DIR, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe']
+    });
+    const countMatch = result.match(/(\d+) 个指标/);
+    const count = countMatch ? countMatch[1] : '?';
+    success(`指标字典同步（${count} 个指标，开发文档/指标字典.md 与注册表一致）`);
+    return true;
+  } catch (e) {
+    const output = (e.stdout || '') + (e.stderr || '');
+    error('指标字典.md 与注册表不同步 — 运行 bun scripts/metric-registry/generate-metric-doc.ts 重新生成');
+    output.split('\n').filter((l) => l.includes('✗')).forEach((l) => console.log(`    ${l.trim()}`));
+    return false;
+  }
+}
+
 // ============================================================
 // 18. Dark Mode 质量门禁
 // ============================================================
@@ -3370,6 +3392,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'PR体量门禁', fn: checkPrSizeLimit },
   { name: 'gitignore审计', fn: checkGitignoreShadow },
   { name: '字段定义一致', fn: checkFieldDefinitionConsistency },
+  { name: '指标字典一致', fn: checkMetricDocConsistency },
   { name: 'DarkMode质量', fn: checkDarkModeQuality },
   { name: 'ECharts网格线', fn: checkEchartsSplitLine },
   { name: 'sync-vps覆盖', fn: checkSyncVpsCoverage },
