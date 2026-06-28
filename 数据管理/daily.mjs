@@ -100,6 +100,38 @@ function loadEnvLocal(scriptDir) {
   }
 }
 
+// ── 省份编码解析（fail-closed，治理工程一） ──
+/**
+ * 从 process.env.BRANCH_CODE 解析省份编码。
+ *
+ * 行为：
+ *   - 合法 CHAR(2) 大写值（SC/SX/…）→ 原样返回
+ *   - 未设置 → 告警 + 返回 'SC'（四川为合法生产默认，ETL 链路不崩溃）
+ *   - 非法格式 → 告警 + 返回 'SC'
+ *
+ * 意图：消灭静默 `process.env.BRANCH_CODE || 'SC'` 反模式——
+ * 缺省回退 SC 是合法的，但必须在日志中留下可观测的 WARN 痕迹。
+ *
+ * @param {string} context - 调用位置（用于日志定位）
+ * @returns {string} 省份编码
+ */
+function resolveEnvBranchCode(context = 'daily.mjs') {
+  const raw = process.env.BRANCH_CODE;
+  if (raw && /^[A-Z]{2}$/.test(raw)) return raw;
+  if (!raw) {
+    // 四川生产环境不设 BRANCH_CODE 是合法场景；仅首次打印，避免每次调用刷屏。
+    if (!resolveEnvBranchCode._warned) {
+      resolveEnvBranchCode._warned = true;
+      log('yellow', `[WARN][${context}] BRANCH_CODE 未设置，默认使用 'SC'（四川）。` +
+        `若当前部署非四川，请在 ecosystem.config.cjs 或 .env.local 中设置 BRANCH_CODE=<省份码>。`);
+    }
+  } else {
+    log('red', `[ERROR][${context}] BRANCH_CODE='${raw}' 格式非法（须 CHAR(2) 大写字母），回退 'SC'。请检查配置。`);
+  }
+  return 'SC';
+}
+resolveEnvBranchCode._warned = false;
+
 // ── 工具函数 ──
 
 function isWindows() {
@@ -685,7 +717,7 @@ function runStandardDomain(python, scriptDir, manifest, extraArgsOverride = []) 
   // 多省 0a（ADR D5）：BRANCH_CODE 路由 — 非 SC 省源自 staging/<省>、产物隔离到
   // warehouse/validation/<省>/<域>，绝不进 current/；--branch-code 注入 branch_code 常量列。
   // SC（默认）：sourceRoot=scriptDir、outputAbs/archiveRoot=原常量、不传 --branch-code → 四川产物逐字节等价。
-  const BRANCH_CODE = process.env.BRANCH_CODE || 'SC';
+  const BRANCH_CODE = resolveEnvBranchCode('runStandardDomain');
   const isBranch = BRANCH_CODE !== 'SC';
   const sourceRoot = branchSourceDir(scriptDir, BRANCH_CODE);
   const outputAbs = isBranch
@@ -1105,7 +1137,7 @@ async function runPostEtlIntegrations(scriptDir, python) {
  *   - 全空数据默认不覆盖已有报告（脚本内 --allow-empty-output 控制，此处用默认行为）。
  */
 function runFieldCoverageReport(scriptDir, python) {
-  const branch = process.env.BRANCH_CODE || 'SC';
+  const branch = resolveEnvBranchCode('runFieldCoverageReport');
   if (branch !== 'SC') return; // 全局知识库 SC-only，防御性兜底
   const script = join(scriptDir, 'pipelines/field_coverage.py');
   if (!existsSync(script)) return;
@@ -1138,7 +1170,7 @@ function runClaimsDetail(python, scriptDir) {
 
   // 多省 0a（ADR D5）：BRANCH_CODE 路由 — 非 SC 省源自 staging/<省>、产物隔离到 warehouse/validation/<省>/claims_detail，
   // policy-dir 富集指向同省 premium（validation/<省>），绝不进 SC warehouse/fact。SC 默认链路所有路径与原值逐字节一致。
-  const BRANCH_CODE = process.env.BRANCH_CODE || 'SC';
+  const BRANCH_CODE = resolveEnvBranchCode('runClaimsDetail');
   const claimsSourceDir = branchSourceDir(scriptDir, BRANCH_CODE);                  // SC: scriptDir；非 SC: staging/<省>
   const branchPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE); // SC: warehouse/fact/policy/current；非 SC: warehouse/validation/<省>
   const claimsDetailDir = BRANCH_CODE === 'SC' ? CLAIMS_DETAIL_DIR : join(branchPolicyDir, 'claims_detail');
@@ -1379,7 +1411,7 @@ function runRenewalTracker(python, scriptDir) {
   // SC 默认链路（无显式 env）→ 'SC'，确保派生 branch_code 全 SC 零 NULL。
   // 注：非 SC 路由（branchSourceDir/branchOutputRoot）留 Phase B；renewal_tracker
   // 未纳入 __branchReadyDomains 白名单，BRANCH_CODE=SX 单域跑仍被阻断。
-  const BRANCH_CODE = process.env.BRANCH_CODE || 'SC';
+  const BRANCH_CODE = resolveEnvBranchCode('runRenewalTracker');
   runPythonScript(python, scriptPath, ['-o', `"${tmpPath}"`, '--branch-code', BRANCH_CODE]);
 
   // 归档旧文件（成功转换后才归档）
@@ -1429,7 +1461,7 @@ async function main() {
     // 多省 0a（ADR D5）：非 SC 省仅已 branch-aware 的域可运行；其余单域
     // runStandardDomain/runRenewalTracker 尚未省份化，非 SC 运行会写入 SC 路径 → 硬拦截。
     // 每 branch 化一个域，把它加进 __branchReadyDomains（与 ALL_DOMAINS 同名）。
-    const __branchSub = process.env.BRANCH_CODE || 'SC';
+    const __branchSub = resolveEnvBranchCode('subcommand路由');
     const __branchReadyDomains = new Set(['claims_detail', 'quotes', 'repair', 'brand', 'cross_sell', 'customer_flow']);
     if (__branchSub !== 'SC' && !__branchReadyDomains.has(subcommand)) {
       log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail / quotes / repair / brand / cross_sell / customer_flow`);
@@ -1497,7 +1529,7 @@ async function main() {
   }
 
   // 多省 0a：BRANCH_CODE 路由（ADR D5 — 非 SC 省 premium 产物隔离到 warehouse/validation/<省>，绝不进 current/）
-  const BRANCH_CODE = process.env.BRANCH_CODE || 'SC';
+  const BRANCH_CODE = resolveEnvBranchCode('main/premium流程');
   const sourceDir = branchSourceDir(scriptDir, BRANCH_CODE);                       // SC: scriptDir；非 SC: staging/<省>
   const outputRoot = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE);  // SC: warehouse/fact/policy/current；非 SC: warehouse/validation/<省>
 

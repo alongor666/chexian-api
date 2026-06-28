@@ -1793,3 +1793,24 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （本次 `API_ROUTE_TO_PAGE_MAP` 手工维护可接受；governance 闸扩展作为 follow-up，非本次阻断项。）
+## 2026-06-28 · 治理工程一·省份解析 fail-closed（消灭 ?? 'SC' 反模式）
+
+> 任务 ID：2026-06-27-claude-d9318c。执行人：claude/loop-d9318c。
+
+- **业务目标**：消灭全栈数据路径中 `?? 'SC'` / `|| 'SC'` 静默默认四川的反模式，建 fail-closed 省份解析，确保省份身份未显式设置时留下可观测 WARN，不再静默使用四川。
+- **基线**：7 处数据路径 `?? 'SC'` / `|| 'SC'`（`getDeploymentBranchCode` + `daily.mjs` 6 处）。
+- **变更**：
+  - `server/src/config/sql-federation-policy.ts`：新增 `resolveBranchCode()` + `assertBranchCodeSet()` + `BRANCH_CODE_RE` 常量；`getDeploymentBranchCode()` 改调 `resolveBranchCode()`，env 缺失时打 WARN（不再静默）。
+  - `数据管理/daily.mjs`：新增 `resolveEnvBranchCode(context)` 辅助函数（含去重 WARN + 非法格式 ERROR）；6 处 `process.env.BRANCH_CODE || 'SC'` 全替换为 `resolveEnvBranchCode('<context>')`。
+  - `scripts/check-governance.mjs`：新增 `checkBranchCodeFallbackAntipattern()`（第 49 项），扫描数据路径新增 `?? 'SC'` / `|| 'SC'` → error。
+- **oracle 实证**：`bun run verify:full` 4351 tests 全绿；`bun run governance` 49/49 全过（新增第 49 项）。
+- **codex 闸-2**：usage limit 不可用（`{"unavailable": true}`）；自审 P0/P1 无。四川（SC）字节不变（`branchCode === 'SC'` 分支逻辑全保留，仅替换了取值来源）。
+- **决策**：promote。
+
+### 三问复盘
+1. **重来怎样更好**：`resolveEnvBranchCode._warned` 用函数属性去重 WARN 是 JS 反模式，更干净的做法是模块级 `let _warnedOnce = false`；但 ETL 单次运行上下文中无区别，可接受。
+2. **复用价值**：`resolveBranchCode(raw, context)` 是通用的"省份码 fail-soft 解析 + 日志"模板；`assertBranchCodeSet(context)` 是需要严格 fail-closed 时的 drop-in。两者可被多省后续工程复用。
+3. **自动化**：本项即在 governance 自动化（第 49 项检查），拦截未来新增的反模式。残留：`daily.mjs` 中去重 WARN 只触发一次，多函数同次运行时后续静默——可接受（首次告警已足够定位）。
+
+### needs_automation: false
+（governance 第 49 项即自动化机制；不存在"记录到文档但等待机制化"的项。）
