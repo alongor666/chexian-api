@@ -24,10 +24,15 @@
  *      每行 {uid?|pr?, count, reason, ts}；北极星新增「事后返工率」=有返工(count>0)的任务数/总任务数。
  *   两条都是「事后外部真相·读时关联到任务·不改账本历史行」，结构对称。
  *
+ * E5 样本主题集中度（治茧房2 过拟合·2026-06-27）：账本 ~55% 任务属同一工程（"山西多省接入"），从单一
+ *   工程样本提炼的规则自认通用实则专用。aggregate 增 concentration（读时计算不 mutate）：topic 维度（业务
+ *   主题·task 文本分类·oracle 主结论 + 打标依据）+ domain 维度（技术域·双口径辅助，揭示"技术分桶掩盖主题
+ *   集中"）；overfitFlag 给单一样本提炼的规则打"待跨域验证"标签（meta-review 约定见 loop-orchestration §4）。
+ *
  * 用法：bun run loop:quality [--json]
  *
  * 纯函数 aggregate / normalizeVerdict / parseRevertedPrs / effectiveVerdict / collectRevertedPrs /
- * parseUserReworkLog 导出供单测与 dispatch 复用。
+ * parseUserReworkLog / classifyTopic / hhiOf / overfitFlag 导出供单测与 dispatch 复用。
  */
 import fs from 'fs';
 import path from 'path';
@@ -234,6 +239,185 @@ function dedupeFailureRows(rawRows) {
   return out;
 }
 
+// ============ E5 样本主题集中度（治茧房2 过拟合·2026-06-27）============
+// 账本 ~55% 任务属同一工程（"山西多省接入"）：从单一工程样本提炼的规则自认通用实则专用（样本 N≈1 个工程
+// 而非 N 个独立任务）。E5 装"样本主题集中度"探针让过拟合可见 + 给单一样本提炼的规则打"待跨域验证"标签
+// （meta-review 约定见 loop-orchestration §4）。两维度（codex 闸-1 D1-C 全采纳）：① topic（业务主题·task 文本
+// 分类）= oracle 主结论 + 打标依据；② domain（技术域·辅助）= 任务字面"按 domain 字段算"，双口径揭示
+// "技术分桶掩盖主题集中"。读时计算，**不 mutate 账本历史行**（仿 E1/E2）。
+
+/**
+ * 赫芬达尔指数 HHI = Σ(各桶占比)²。1=完全集中（单一桶）/ 1÷桶数=完全均匀。空/全零/非法 → 0（无样本不算集中）。
+ * 纯函数，导出供单测。
+ * @param {number[]} counts 各桶计数
+ * @returns {number}
+ */
+export function hhiOf(counts) {
+  // 只接受有限正数（codex 闸-2 P1-4：负数会污染平方和、Infinity 致 NaN）；非法 → 0。
+  const clean = (Array.isArray(counts) ? counts : []).map((x) => {
+    const n = Number(x);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  });
+  const total = clean.reduce((a, x) => a + x, 0);
+  if (total <= 0) return 0;
+  return clean.reduce((a, x) => a + ((x / total) ** 2), 0);
+}
+
+/**
+ * E5 业务主题分类规则（**单一事实源**，68 样本账本实测提炼·2026-06-27）。
+ * 优先级"业务工程主题 > 技术实现主题 > 其他"（codex 闸-1 P0-3）：多省任务在 task 文本同时含 etl/派生/RLS/claims
+ * 等技术词，"省份接入"必须**首位**判定，否则被技术主题截胡稀释（实测它在 domain 字段已被打散到 etl/
+ * data-architecture/branch-derivation 等桶）。**诚实局限（codex D2 + 闸-2 P1-1）**：基于 task 文本关键词，
+ * 非完美分类器，会随未来新工程过时。RLS/Phase + 裸"派生/回填/backfill/地域"等通用词已按 codex 闸-2 两轮复审
+ * **移除/收窄**（它们跨项目通用，会误命中派生指标/数据回填/地域分析等非省份任务）；"派生"限定到派生映射上下文，
+ * 仅保留 G3-G8 本仓省份专用网格编号。代价：少数文本无强省份信号的边界行（org_level_3 回填 / Phase backfill）诚实
+ * 漏判归其他/数据——不追求 100% 召回、不污染 oracle（省份仍 ~53% 主导）。目的是让"单一工程过拟合"当前可见 + 打标。
+ */
+export const TOPIC_RULES = [
+  // ① 业务工程·省份接入（最高优先·茧房2 主体）：网格 G3-G8（本仓省份上线专用编号·行4/50「G8 前端空态」仅靠此识别，删则漏判真实省份任务）/
+  //   省份词(多省/分省/省份/山西/shanxi/sichuan/SX/SC/切省) / 派生映射(branch_code·prefix_map·"派生"+域/视图/化/映射/branch 上下文) / current<省> / PR#753。
+  //   codex 闸-2 两轮收窄：移除 RLS/Phase（行级安全/阶段通用词）+ 裸"派生/回填/backfill/地域"（跨项目通用，会误命中派生指标/数据回填/地域分析等非省份任务）；
+  //   "派生"限定到派生映射上下文。代价：行13(org_level_3 回填)/行44(Phase backfill 可信域回填) 文本无强省份信号 → 诚实漏判归其他/数据（不污染 oracle，省份仍 ~53% 主导）。
+  { name: '省份接入', test: /G[3-8]\b|多省|分省|按省|省份|省化|跨省|山西|shanxi|sichuan|\bSX\b|SC\/SX|切省|branch[_-]?code|prefix[\s_-]?map|派生(?:域|视图|化|映射|\s*branch)|current\/(?:SX|SC|shanxi|sichuan|[^/\s]*省)|PR\s*#?\s*753/i },
+  // ② 业务工程·loop 治理（账本/调度/认领/茧房本身/E1-E6 进化）
+  { name: 'loop治理', test: /\bloop\b|账本|dispatch|认领|茧房|编排协议|质量账本|codex\s*闸|automation-due|stale-scan|\bE[1-6]\b/i },
+  // ③ 业务工程·外部集成（IM 推送管道；置于"数据分析"前——wecom 推送任务虽含"续保"等分析词，本质是集成工程）
+  { name: '外部集成', test: /wecom|企微|飞书|smartsheet|推送|\bIM\b/i },
+  // ④ 业务分析·数据口径（赔付/出险/报价/口径/立方体/成本）
+  { name: '数据分析口径', test: /赔付|出险|报价|口径|立方体|\bcube\b|\bKPI\b|成本|字段覆盖|ClaimsAgg|冻结源|续保|理赔/i },
+  // ⑤ 技术实现·产品前端（前端模块/纯逻辑提取/测试重构/空态）
+  { name: '产品前端', test: /前端|Panel|纯逻辑提取|薄提取|\bhooks\b|comprehensive|expense-development|规则引擎测试|边界测试|空态/i },
+];
+
+/**
+ * 把单条 task 文本分类到一个业务主题（互斥·首个命中·优先级见 TOPIC_RULES）。无命中 → 其他（兜底，不臆造）。
+ * @param {string} task
+ * @returns {string}
+ */
+export function classifyTopic(task) {
+  const s = String(task == null ? '' : task);
+  if (!s.trim()) return '其他';
+  for (const rule of TOPIC_RULES) if (rule.test.test(s)) return rule.name;
+  return '其他';
+}
+
+/**
+ * 过拟合打标判据（**纯函数可测**·codex 闸-1 P0-4）。基于 topic 维度（茧房2 是业务工程过拟合·codex D5）。
+ * 顺序守卫：① 样本<2 跨域证据不足（单样本 HHI 必=1，不可误判集中）② top=其他 分类器覆盖不足（防伪高集中·P1-2）
+ * ③ 单一主题占比≥0.5 或 HHI≥2×均匀基线（相对判据·codex D4）→ 过拟合 ④ 否则分散。
+ * @param {{sampleCount:number, topName:string, topShare:number, hhiRatio:number}} m
+ * @returns {{flagged:boolean, status:string}}
+ */
+export function overfitFlag({ sampleCount, topName, topShare, hhiRatio }) {
+  if (!(Number(sampleCount) >= 2)) return { flagged: false, status: 'insufficient_cross_domain_evidence' };
+  // topName 空 / 非字符串 / 其他 → 分类器覆盖不足，不判过拟合（codex 闸-2 P1-3：缺字段不应漏到 diverse）。
+  if (!topName || typeof topName !== 'string' || topName === '其他') return { flagged: false, status: 'classifier_coverage_low' };
+  if (Number(topShare) >= 0.5 || Number(hhiRatio) >= 2) return { flagged: true, status: 'overfit' };
+  return { flagged: false, status: 'diverse' };
+}
+
+/** 打标 reason 文案（按 status 生成·中文清晰）。 */
+function concentrationReason(status, topName, topShare, sampleCount) {
+  const pct = (Number(topShare) * 100).toFixed(1);
+  if (status === 'overfit') return `业务主题「${topName}」占 ${pct}%（${sampleCount} 样本）显著主导——本轮单一样本提炼的规则建议打「待跨域验证」标签，验证其在其他工程上是否成立再视作通用。`;
+  if (status === 'insufficient_cross_domain_evidence') return `样本量 ${sampleCount} < 2，跨域证据不足无法判主题集中度；本轮规则一律视作「待跨域验证」。`;
+  if (status === 'classifier_coverage_low') return `主导主题为「其他」（分类器未覆盖），不判过拟合；建议补 TOPIC_RULES 规则或在账本显式标主题。`;
+  return `主题分布相对分散（top「${topName}」${pct}%，未达占比 50% / HHI 2× 阈值），样本多样性健康。`;
+}
+
+/**
+ * 计算样本主题集中度（E5·读时计算不 mutate）。两维度：topic（业务主题·主结论+打标）+ domain（技术域·双口径辅助）。
+ * @param {object[]} rows 已去重的 ledger 行（含完成 + 失败行；每行一次尝试）
+ * @returns {object} concentration
+ */
+function computeConcentration(rows) {
+  const sampleCount = rows.length;
+  // —— topic 维度（业务主题·task 文本分类）——
+  const topicCounts = {};
+  for (const r of rows) { const t = classifyTopic(r.task); topicCounts[t] = (topicCounts[t] || 0) + 1; }
+  const topicEntries = Object.entries(topicCounts).sort((a, b) => b[1] - a[1]);
+  const topicTop = topicEntries[0];
+  const topicBuckets = topicEntries.length;
+  const topicHhi = hhiOf(topicEntries.map(([, v]) => v));
+  const topicUniform = topicBuckets ? 1 / topicBuckets : 0;
+  const topShare = topicTop ? topicTop[1] / sampleCount : 0;
+  const topicHhiRatio = topicUniform ? topicHhi / topicUniform : 0;
+  // distribution = 各桶展示比例（toFixed(4) 四舍五入·和未必精确=1·codex 闸-2 P2-1）；精确量由 hhi / top.share 承载。
+  const topicDist = {};
+  for (const [k, v] of topicEntries) topicDist[k] = +(v / sampleCount).toFixed(4);
+
+  // —— domain 维度（技术域·双口径·codex P1-1）——
+  // label 口径：标签展开计数（兼容现有 byDomain，反映"标签集中度"）；
+  // task-weighted 口径：每任务权重 1，k 个域则每域 1/k（反映"任务集中度"，避免多域任务被重复放大）。
+  const labelCounts = {};
+  const taskWeighted = {};
+  for (const r of rows) {
+    const ds = (Array.isArray(r.domain) && r.domain.length) ? r.domain : ['(无域)'];
+    const w = 1 / ds.length;
+    for (const d of ds) { labelCounts[d] = (labelCounts[d] || 0) + 1; taskWeighted[d] = (taskWeighted[d] || 0) + w; }
+  }
+  const labelTotal = Object.values(labelCounts).reduce((a, x) => a + x, 0);
+  const twEntries = Object.entries(taskWeighted).sort((a, b) => b[1] - a[1]);
+  const twTop = twEntries[0];
+  const domainBuckets = twEntries.length;
+  const twHhi = hhiOf(twEntries.map(([, v]) => v));
+  const domainUniform = domainBuckets ? 1 / domainBuckets : 0;
+  const twDist = {};
+  for (const [k, v] of twEntries) twDist[k] = +(v / sampleCount).toFixed(4);
+
+  // —— 打标（基于 topic·codex D5）——
+  const flag = overfitFlag({ sampleCount, topName: topicTop ? topicTop[0] : '其他', topShare, hhiRatio: topicHhiRatio });
+
+  return {
+    topic: {
+      bucket_count: topicBuckets,
+      sample_count: sampleCount,
+      hhi: +topicHhi.toFixed(4),
+      uniform: +topicUniform.toFixed(4),
+      hhi_ratio: +topicHhiRatio.toFixed(3),
+      top: { name: topicTop ? topicTop[0] : null, share: +topShare.toFixed(4) },
+      distribution: topicDist,
+      unclassified_share: +((topicCounts['其他'] || 0) / sampleCount).toFixed(4),
+    },
+    domain: {
+      bucket_count: domainBuckets,
+      label_total: labelTotal,
+      label_hhi: +hhiOf(Object.values(labelCounts)).toFixed(4),
+      task_weighted_hhi: +twHhi.toFixed(4),
+      uniform: +domainUniform.toFixed(4),
+      task_hhi_ratio: +(domainUniform ? twHhi / domainUniform : 0).toFixed(3),
+      top: { name: twTop ? twTop[0] : null, share: twTop ? +(twTop[1] / sampleCount).toFixed(4) : 0 },
+      distribution: twDist,
+    },
+    overfit: {
+      flagged: flag.flagged,
+      status: flag.status,
+      label: flag.flagged ? '待跨域验证' : null,
+      evidence: { topic: topicTop ? topicTop[0] : null, share: +topShare.toFixed(4), hhi: +topicHhi.toFixed(4), hhi_ratio: +topicHhiRatio.toFixed(3) },
+      reason: concentrationReason(flag.status, topicTop ? topicTop[0] : '其他', topShare, sampleCount),
+    },
+  };
+}
+
+/** 渲染样本主题集中度段（E5）。空账本无 concentration → 返回空数组。 */
+function renderConcentration(c) {
+  if (!c) return [];
+  const t = c.topic, d = c.domain, o = c.overfit;
+  const L = ['', '## 样本主题集中度（E5 治茧房2 过拟合）'];
+  // 主结论：业务主题（codex P0-1 首屏出 oracle 主结论，不让 domain 成主结论）
+  L.push(`- 🎯 **业务主题集中度** top「${t.top.name}」${(t.top.share * 100).toFixed(1)}%（HHI ${t.hhi} vs 均匀基线 ${t.uniform}，${t.hhi_ratio}×）· ${t.bucket_count} 主题 / ${t.sample_count} 样本`);
+  const td = Object.entries(t.distribution).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${(v * 100).toFixed(0)}%`).join(' · ');
+  L.push(`  - 主题分布：${td}`);
+  L.push(o.flagged ? `  - 🏷 **${o.label}**：${o.reason}` : `  - ✅ 未打标（${o.status}）：${o.reason}`);
+  // 技术域（辅助·双口径）
+  L.push(`- 🔧 技术域集中度（辅助·字面"按 domain 字段"）top「${d.top.name}」${(d.top.share * 100).toFixed(1)}%（任务加权 HHI ${d.task_weighted_hhi} · 标签 HHI ${d.label_hhi}）· ${d.bucket_count} 域 / ${d.label_total} 标签`);
+  // 诊断洞察（条件生成·codex P2-2，不写死历史）：技术域分散却业务主题集中 = 茧房2 隐身机制
+  if (d.task_weighted_hhi < t.hhi && t.top.share >= 0.5 && t.top.name !== '其他') {
+    L.push(`  - 🔍 **诊断**：技术域分散（HHI ${d.task_weighted_hhi}）却业务主题集中（HHI ${t.hhi}）——单一工程被打散到多技术域桶，技术分桶口径掩盖了"单一工程过拟合"（茧房2 隐身机制）。`);
+  }
+  return L;
+}
+
 /**
  * 聚合质量指标。返回北极星 + 失败记账（放弃率/孤儿率/阻塞率）+ E2 外部真相（事后回滚率/返工率）+ 按域 + 按 round 趋势。
  * @param {object[]} rawRows ledger 行
@@ -371,6 +555,8 @@ export function aggregate(rawRows, opts = {}) {
     tests_added_total: sum(rows, (r) => Number(r.tests_added) || 0),
     byDomain,
     byRound,
+    // E5 样本主题集中度（读时计算·不 mutate 历史行）：topic 业务主题（主结论+打标）+ domain 技术域（辅助双口径）。
+    concentration: computeConcentration(rows),
   };
 }
 
@@ -391,6 +577,7 @@ function render(agg) {
   L.push(`- governance 通过率 ${(agg.governance_pass_rate * 100).toFixed(1)}%（占全部尝试，失败行计未过）`);
   L.push(`- 对抗命中：codex 计划 ${agg.codex_plan_findings} + 完成 ${agg.codex_done_findings} = ${agg.codex_findings_total}；verifier 证伪 ${agg.verifier_refuted_total}`);
   L.push(`- 新增测试合计 ${agg.tests_added_total}`);
+  for (const line of renderConcentration(agg.concentration)) L.push(line);
   L.push('');
   L.push('## 按域');
   for (const [d, v] of Object.entries(agg.byDomain).sort((a, b) => b[1].n - a[1].n)) {
