@@ -862,3 +862,4 @@
 {"uid":"2026-06-27-claude-2c800b","kind":"status","ts":"2026-06-28","actor":"claude/loop-2c800b","status":"DONE","evidence":"governance 46/46技能字段闸不误报K5;满期赔付率挂靠earned_claim_ratio实测56-73%正确vs143%错误相加;口径挂靠总表11条K1-K5闭环;codex双闸GO;治理链收官","at":"2026-06-28T01:19:08.660Z","eid":"67d9eac5"}
 {"uid":"2026-06-27-claude-62e84c","kind":"status","ts":"2026-06-28","actor":"claude/loop-62e84c","status":"IN_PROGRESS","evidence":"","at":"2026-06-28T09:07:14.675Z","eid":"32ae9659"}
 {"uid":"2026-06-27-claude-62e84c","kind":"status","ts":"2026-06-28","actor":"@claude","status":"DONE","evidence":"permissionMiddleware 增加 org_user 路由白名单校验（API_ROUTE_TO_PAGE_MAP + resolvePageRoute）；新增 20 个测试用例（53/53 通过）；verify:full 4367/4367；governance 48/48","at":"2026-06-28T09:20:27.946Z","eid":"1d4ff687"}
+{"uid":"2026-06-27-claude-d9318c","kind":"status","ts":"2026-06-28","actor":"claude/loop-d9318c","status":"IN_PROGRESS","evidence":"","at":"2026-06-28T09:05:46.623Z","eid":"d201c8da"}
