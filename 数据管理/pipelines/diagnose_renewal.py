@@ -21,7 +21,7 @@ project_telesales_terminal_source / domain_renewal_timeliness_anchor）：
 用法：
   python3 数据管理/pipelines/diagnose_renewal.py --year 2026                                  # 全年应续（按月切片）
   python3 数据管理/pipelines/diagnose_renewal.py --time-view custom --start 2026-06-01 --end 2026-06-30
-  python3 数据管理/pipelines/diagnose_renewal.py --time-view custom --start 2026-06-01 --end 2026-06-30 --org 天府
+  python3 数据管理/pipelines/diagnose_renewal.py --time-view custom --start 2026-06-01 --end 2026-06-30 --org <机构名>
   python3 数据管理/pipelines/diagnose_renewal.py --resp-mode-list 责任模式清单.xlsx --time-view mtd_today
   python3 数据管理/pipelines/diagnose_renewal.py --branch-report                              # 分公司视角 6 表
   python3 数据管理/pipelines/diagnose_renewal.py ... --pool-lead-days 60                      # 调整进盘锚点提前期
@@ -96,7 +96,8 @@ def main():
                          "对主报告/分公司视角(--branch-report)/三级机构视角(--org-report)均生效")
     ap.add_argument("--pool-lead-days", type=int, default=POOL_LEAD_DEFAULT,
                     help=f"进盘锚点提前期（天），进盘日=到期日-该值，默认 {POOL_LEAD_DEFAULT}")
-    ap.add_argument("--renewal-list", default=str(DEFAULT_LIST), help="wecom 电销续保清单（名单类型映射），默认 iCloud 路径")
+    ap.add_argument("--renewal-list", default=str(DEFAULT_LIST) if DEFAULT_LIST else None,
+                    help="wecom 电销续保清单（名单类型映射），默认 iCloud 路径；SX 等未配默认省份须显式传")
     ap.add_argument("--resp-mode-list", help="专项责任模式清单（含「责任模式」列，优先于 --renewal-list，支持 .xlsx/.csv）")
     ap.add_argument("--branch-report", action="store_true",
                     help="分公司视角模式：输出 7 张三级机构窗口表（当月已到期/临期7天/未到期/当月/当年已到期 + 首日/首周可续期响应），"

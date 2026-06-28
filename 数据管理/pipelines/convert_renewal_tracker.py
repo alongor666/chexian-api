@@ -32,15 +32,17 @@ import duckdb
 import numpy as np
 
 from derived_fields import apply_registry_derivations, resolve_declared_branch
+from renewal_common import branch_paths, quote_window_start_for
 
 HERE = Path(__file__).resolve().parent
 DATA_ROOT = HERE.parent
 
-DEFAULT_POLICY_GLOB = str(DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet")
-DEFAULT_QUOTES_PATH = str(DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet")
+# 保单/报价路径 + 报价窗口起点按省份路由：argparse default=None，main() 据 --branch-code 经
+# renewal_common.branch_paths / quote_window_start_for 填充（多省 SSOT），杜绝省份盲默认值在 SX
+# 模式静默读四川 fact/ 或用四川报价窗口截断数据（adversarial review HIGH-2/HIGH-3）。
+# salesman 维度暂跨省共享单一 dim（dim 多省策略待 Phase B 确认），故仍保留固定默认路径。
 DEFAULT_SALESMAN_PATH = str(DATA_ROOT / "warehouse" / "dim" / "salesman" / "latest.parquet")
 
-DEFAULT_QUOTE_WINDOW_START = "2025-12-03"
 DEFAULT_SOURCE_YEAR = 2025
 DEFAULT_RENEWAL_YEAR = 2026
 
@@ -115,11 +117,13 @@ def derive_renewal_tracker_branch_code(df, declared_branch):
 def main():
     ap = argparse.ArgumentParser(description="续保追踪派生域 ETL")
     ap.add_argument("-o", "--output", required=True, help="输出 parquet 路径")
-    ap.add_argument("--policy-glob", default=DEFAULT_POLICY_GLOB, help="保单 parquet glob")
-    ap.add_argument("--quotes-path", default=DEFAULT_QUOTES_PATH, help="报价转化 parquet 路径")
+    ap.add_argument("--policy-glob", default=None,
+                    help="保单 parquet glob（默认按 --branch-code 路由 fact/ 或 validation/<省>/）")
+    ap.add_argument("--quotes-path", default=None,
+                    help="报价转化 parquet 路径（默认按 --branch-code 路由）")
     ap.add_argument("--salesman-path", default=DEFAULT_SALESMAN_PATH, help="业务员维度表 parquet 路径")
-    ap.add_argument("--quote-window-start", default=DEFAULT_QUOTE_WINDOW_START,
-                    help=f"报价窗口起点（YYYY-MM-DD），默认 {DEFAULT_QUOTE_WINDOW_START}")
+    ap.add_argument("--quote-window-start", default=None,
+                    help="报价窗口起点（YYYY-MM-DD），默认按 --branch-code 取 renewal_common.quote_window_start_for")
     ap.add_argument("--source-year", type=int, default=DEFAULT_SOURCE_YEAR,
                     help=f"源保单起保年度，默认 {DEFAULT_SOURCE_YEAR}")
     ap.add_argument("--renewal-year", type=int, default=DEFAULT_RENEWAL_YEAR,
@@ -128,6 +132,18 @@ def main():
                     help="部署省份代码（CHAR(2)，'SC'/'SX'），未指定时读 BRANCH_CODE env，"
                          "全空时默认 'SC'（codex 闸-1 P0：避免漏 assertDeclaredBranch 核对）")
     args = ap.parse_args()
+
+    # 省份路由（review HIGH-2/HIGH-3）：--branch-code（CLI 优先 → BRANCH_CODE env → 'SC'）统一驱动
+    # 「数据源路径 + 报价窗口 + Step 6 的 branch_code 列派生」，三者同省，杜绝路由漂移。
+    # 仅在未显式传 --policy-glob/--quotes-path/--quote-window-start 时按 renewal_common SSOT 填充。
+    declared_branch = resolve_declared_branch(args) or "SC"
+    _paths = branch_paths(declared_branch, DATA_ROOT)  # fail-closed：未知省份立即 RuntimeError
+    if args.policy_glob is None:
+        args.policy_glob = _paths["policy_glob"]
+    if args.quotes_path is None:
+        args.quotes_path = _paths["quotes"]
+    if args.quote_window_start is None:
+        args.quote_window_start = quote_window_start_for(declared_branch)
 
     out_path = Path(args.output).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -286,8 +302,8 @@ def main():
     """)
 
     # Step 6: 读回 df → 派生 branch_code → register → COPY 写 parquet
-    # codex 闸-1 P0：declared_branch 默认 'SC'，避免直跑入口漏 assertDeclaredBranch 核对
-    declared_branch = resolve_declared_branch(args) or 'SC'
+    # declared_branch 已在参数路由处统一解析（驱动数据源路径路由 + 本列派生，二者恒同省）；
+    # codex 闸-1 P0：默认 'SC' 兜底，避免直跑入口漏 assertDeclaredBranch 核对。
     print(f"\n📊 Step 6: 派生 branch_code (declared='{declared_branch}') → {out_path.name}...")
     df = con.execute("SELECT * FROM renewal_tracker_result").fetchdf()
     df = derive_renewal_tracker_branch_code(df, declared_branch)

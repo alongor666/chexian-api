@@ -348,27 +348,31 @@ def section_supplementary(con, rpt, ctx):
     # 5.1 责任模式
     rpt.add("### 5.1 责任模式")
     rm_path = ctx.args.resp_mode_list or ctx.args.renewal_list
-    lst, src_label = load_resp_mode_source(Path(rm_path), ctx.start, ctx.end)
-    if lst is None:
-        rpt.add(f"⛔ 跳过：{src_label}（专项清单用 `--resp-mode-list`）")
+    if not rm_path:
+        rpt.add("⛔ 跳过：未配置责任模式清单（`--renewal-list` 或 `--resp-mode-list`）")
         rpt.add()
     else:
-        rpt.add(f"> 来源：{src_label} · `{Path(rm_path).name}`")
-        con.register("rlist", lst)
-        rows = con.execute("""
-            SELECT COALESCE(l.resp_mode,'业务员自留') rm, COUNT(*) yc, SUM(b.quoted) q, SUM(b.renewed) r
-            FROM base b LEFT JOIN rlist l USING(vehicle_frame_no) GROUP BY 1 ORDER BY yc DESC
-        """).fetchall()
-        trows, mode_rr = [], []
-        for rm, yc, q, r in rows:
-            rr = rate(r, yc)
-            mode_rr.append((rm, rr))
-            trows.append([rm, f"{yc:,}", f"{fp(rate(q, yc))}{light_q(rate(q, yc))}", f"{fp(rr)}{light_r(rr)}"])
-        rpt.table(["责任模式", "应续", "报价率", "续回率"], trows, ["---", "--:", "--:", "--:"])
-        v = [(m, x) for m, x in mode_rr if x is not None]
-        if v:
-            hi, lo = max(v, key=lambda x: x[1]), min(v, key=lambda x: x[1])
-            rpt.concl(f"续回率最高 {hi[0]}（{fp(hi[1])}）、最低 {lo[0]}（{fp(lo[1])}）。责任模式=清单指派口径，与电销实际成交渠道（5.5）不同。")
+        lst, src_label = load_resp_mode_source(Path(rm_path), ctx.start, ctx.end)
+        if lst is None:
+            rpt.add(f"⛔ 跳过：{src_label}（专项清单用 `--resp-mode-list`）")
+            rpt.add()
+        else:
+            rpt.add(f"> 来源：{src_label} · `{Path(rm_path).name}`")
+            con.register("rlist", lst)
+            rows = con.execute("""
+                SELECT COALESCE(l.resp_mode,'业务员自留') rm, COUNT(*) yc, SUM(b.quoted) q, SUM(b.renewed) r
+                FROM base b LEFT JOIN rlist l USING(vehicle_frame_no) GROUP BY 1 ORDER BY yc DESC
+            """).fetchall()
+            trows, mode_rr = [], []
+            for rm, yc, q, r in rows:
+                rr = rate(r, yc)
+                mode_rr.append((rm, rr))
+                trows.append([rm, f"{yc:,}", f"{fp(rate(q, yc))}{light_q(rate(q, yc))}", f"{fp(rr)}{light_r(rr)}"])
+            rpt.table(["责任模式", "应续", "报价率", "续回率"], trows, ["---", "--:", "--:", "--:"])
+            v = [(m, x) for m, x in mode_rr if x is not None]
+            if v:
+                hi, lo = max(v, key=lambda x: x[1]), min(v, key=lambda x: x[1])
+                rpt.concl(f"续回率最高 {hi[0]}（{fp(hi[1])}）、最低 {lo[0]}（{fp(lo[1])}）。责任模式=清单指派口径，与电销实际成交渠道（5.5）不同。")
 
     # 5.2 报价提前天数
     rpt.add("### 5.2 报价提前天数 × 续回率")

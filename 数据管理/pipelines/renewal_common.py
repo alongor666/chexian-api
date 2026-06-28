@@ -24,37 +24,106 @@ DATA_ROOT = Path(os.environ.get("CHEXIAN_DATA_ROOT") or HERE.parent)
 # validation/<省>/，绝不碰 fact/current/。renewal_tracker / quotes 放子目录，避免与
 # POL 的顶层 *.parquet 通配冲突（签单清单在 validation/<省>/ 顶层，schema 不同不能混 glob）。
 BRANCH_CODE = (os.environ.get("BRANCH_CODE") or "SC").strip() or "SC"
+# 已注册省份白名单（公开 · 多省单一事实源）。新增省份须先在此注册 + 补齐下方每个按省字典，
+# 否则 fail-closed：branch_paths() 对未知省份立即 RuntimeError，禁止静默继承四川参数（data-pipeline.md 红线）。
+KNOWN_BRANCHES = frozenset({"SC", "SX"})
 
-if BRANCH_CODE == "SC":
-    # ---- 数据源（全部只读 Parquet）----
-    RT = str(DATA_ROOT / "warehouse" / "fact" / "renewal_tracker" / "latest.parquet")
-    POL = str(DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet")
-    Q = str(DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet")
-    OUT_DIR = DATA_ROOT / "数据分析报告"
-else:
-    _VAL = DATA_ROOT / "warehouse" / "validation" / BRANCH_CODE
-    RT = str(_VAL / "renewal_tracker" / "latest.parquet")
-    POL = str(_VAL / "*.parquet")  # 签单清单（隔离区顶层，已按省机构规范化）
-    Q = str(_VAL / "quotes_conversion" / "latest.parquet")
-    OUT_DIR = DATA_ROOT / "数据分析报告" / BRANCH_CODE  # P2-1：报告产物按省隔离，不覆盖四川版
-DEFAULT_LIST = (
-    Path.home()
-    / "Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/四川5-7月 - 智能表.xlsx"
-)
 
-# ---- 业务口径常量 ----
-QUOTE_WINDOW_START = "2025-12-03"   # 与 convert_renewal_tracker.py 报价窗口对齐
-TELESALES_TERMINAL = "0110融合销售"  # 项目设定：终端来源=融合销售即电销
-POOL_LEAD_DEFAULT = 30              # 进盘锚点默认提前期（天）；数据显示行动窗口约到期前 30 天
-SMALL_ORG_SALESMEN = 10            # <10 业务员 = 小机构（直列业务员）
+def branch_paths(branch, data_root=DATA_ROOT):
+    """省份 → 续保数据源/落地路径（多省路由纯函数 · 不依赖模块级 BRANCH_CODE）。
 
-# 亮灯阈值 (关注, 预警, 危险)；报价率/续回率越高越好 → light(higher_worse=False)
+    本模块的模块级常量（RT/POL/Q/OUT_DIR）与 convert_renewal_tracker.py 的 ETL 入口共用本函数，
+    杜绝「诊断读 validation/SX/ 但 ETL 写 fact/」的路由漂移（adversarial review HIGH-3）。
+    fail-closed：未知省份立即 RuntimeError，禁止静默回落四川 fact/ 路径。
+    """
+    if branch not in KNOWN_BRANCHES:
+        raise RuntimeError(
+            f"未知省份代码 '{branch}'，已注册省份：{sorted(KNOWN_BRANCHES)}。"
+            "新省份须先在 renewal_common.KNOWN_BRANCHES 注册并补齐每个按省字典。"
+        )
+    if branch == "SC":
+        fact = data_root / "warehouse" / "fact"
+        return {
+            "renewal_tracker": str(fact / "renewal_tracker" / "latest.parquet"),
+            "policy_glob": str(fact / "policy" / "current" / "*.parquet"),
+            "quotes": str(fact / "quotes_conversion" / "latest.parquet"),
+            "out_dir": data_root / "数据分析报告",  # SC 沿用原路径，向后兼容
+        }
+    val = data_root / "warehouse" / "validation" / branch
+    return {
+        "renewal_tracker": str(val / "renewal_tracker" / "latest.parquet"),
+        "policy_glob": str(val / "*.parquet"),  # 签单清单（隔离区顶层，已按省机构规范化）
+        "quotes": str(val / "quotes_conversion" / "latest.parquet"),
+        "out_dir": data_root / "数据分析报告" / branch,  # 报告按省份隔离落地，各省产物独立
+    }
+
+
+# ---- 数据源（全部只读 Parquet）+ 报告落地目录：经 branch_paths() 路由（含未知省 fail-closed）----
+_PATHS = branch_paths(BRANCH_CODE)
+RT = _PATHS["renewal_tracker"]
+POL = _PATHS["policy_glob"]
+Q = _PATHS["quotes"]
+OUT_DIR = _PATHS["out_dir"]
+
+# 责任模式默认清单路径（各省独立；未配置省份返回 None，运行时须显式传 --renewal-list）
+DEFAULT_LIST = {
+    "SC": Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/四川5-7月 - 智能表.xlsx",
+    # SX 山西：无默认清单路径，必须显式传 --renewal-list
+}.get(BRANCH_CODE)
+
+# ---- 业务口径常量（按省字典 + 访问器；新增省份须补齐每个字典，否则模块加载自检报错）----
+# 报价窗口起点：convert_renewal_tracker.py 经 quote_window_start_for() 共用本字典、不再各自定义，
+# 修复 SSOT 双写漂移（曾 SC=12-03 / convert_renewal_tracker 默认值未分省致 SX tracker 截断 2 天 · review HIGH-2）。
+_QUOTE_WINDOW_START_BY_BRANCH = {
+    "SC": "2025-12-03",
+    "SX": "2025-12-01",  # 山西实际报价数据起点（duckdb MIN(quote_time) 验证，2026-06-28）
+}
+
+
+def quote_window_start_for(branch):
+    """省份 → 报价窗口起点（YYYY-MM-DD）。多省 SSOT 访问器，供 convert_renewal_tracker ETL 共用。"""
+    return _QUOTE_WINDOW_START_BY_BRANCH[branch]
+
+
+QUOTE_WINDOW_START = quote_window_start_for(BRANCH_CODE)
+TELESALES_TERMINAL = "0110融合销售"  # 项目设定：终端来源=融合销售即电销（当前全省统一口径）
+POOL_LEAD_DEFAULT = 30              # 可续期窗口默认提前期（天）；四川当前规则 30 天，其他省按实际调 --pool-lead-days
+SMALL_ORG_SALESMEN = 10            # <10 业务员 = 小机构（直列业务员，当前全省统一）
+
+# 亮灯阈值 (关注, 预警, 危险)；报价率/续保率越高越好 → light(higher_worse=False)
+# 当前全省统一阈值；各省业务考核标准确认后可按省分化（届时改为按省字典 + 纳入下方自检）
 TH_QUOTE = (90, 80, 70)
 TH_RENEW = (75, 65, 55)
 
-# 已到期最终续保率目标（业务给定的对标基准，单位 %）。结论以此为锚给出「差多少个百分点」，
-# 单一事实源，禁止散落硬编码；目标调整只改此处。
-TARGET_MATURED_RENEWAL_RATE = 58
+# 已到期最终续保率目标（业务给定的对标基准，单位 %）。结论以此为锚给出「差多少个百分点」。
+_TARGET_MATURED_RENEWAL_RATE_BY_BRANCH = {
+    "SC": 58,
+    "SX": 58,  # 暂定与四川一致（2026-06-28 用户确认）；山西正式考核基准确定后更新
+}
+TARGET_MATURED_RENEWAL_RATE = _TARGET_MATURED_RENEWAL_RATE_BY_BRANCH[BRANCH_CODE]
+
+# 可续期规则标签（报告正文替代硬编码"四川规则"）。与 KNOWN_BRANCHES 同处定义为 SSOT，
+# 杜绝下游模块各自维护致键集漂移（曾在 diagnose_renewal_branch.py 独立定义 · review HIGH-1）。
+_RULE_LABEL_BY_BRANCH = {
+    "SC": "四川规则",
+    "SX": "山西规则",
+}
+RULE_LABEL = _RULE_LABEL_BY_BRANCH[BRANCH_CODE]
+
+# ---- 多省配置一致性自检（fail-closed · review HIGH-1）----
+# 每个「缺键即 KeyError 崩溃」的按省字典必须覆盖全部已注册省份；任意省份启动时即暴露
+# 「某省漏配」，而非等切到该省才运行期崩溃。DEFAULT_LIST 用 .get()（缺省返回 None）故不纳入。
+for _cfg_name, _cfg_keys in (
+    ("_QUOTE_WINDOW_START_BY_BRANCH", _QUOTE_WINDOW_START_BY_BRANCH),
+    ("_TARGET_MATURED_RENEWAL_RATE_BY_BRANCH", _TARGET_MATURED_RENEWAL_RATE_BY_BRANCH),
+    ("_RULE_LABEL_BY_BRANCH", _RULE_LABEL_BY_BRANCH),
+):
+    _missing = KNOWN_BRANCHES - set(_cfg_keys)
+    if _missing:
+        raise RuntimeError(
+            f"多省配置 {_cfg_name} 缺少已注册省份 {sorted(_missing)} 的条目；"
+            "新增省份须同步补齐每个按省字典（renewal_common 多省 SSOT）。"
+        )
 
 
 def _parse_categories(arg):
