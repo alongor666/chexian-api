@@ -17,6 +17,7 @@
 ---
 
 ## 📋 活跃任务速查（101 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（100 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -43,7 +44,7 @@
 - 2026-06-27-claude-c68b54 — 业绩分析页(/performance-analysis,org_user核心页)子板块对
 - 2026-06-27-claude-e96d85 — 治理工程二·机构省份元数据单一事实源(含山西在线bug)
 
-**P2（53 项）**
+**P2（51 项）**
 
 - B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -90,14 +91,12 @@
 - 2026-06-24-claude-2a7e17 — 计划维度省份化
 - 2026-06-24-claude-f7590d — sx-promote.mjs 批量 staging→final rename 非跨进程崩
 - 2026-06-25-claude-8e6e8a — cutover能力PR-4(可选·碰部署链)
-- 2026-06-27-claude-29343a — 指标注册表新增原子指标avg_premium_per_policy(件均保费=保费÷件数
 - 2026-06-27-claude-2c800b — chexian-data-kpi满期赔付率补全(引earned_claim_ratio注
 - 2026-06-27-claude-45faef — org_user allowedRoutes 生产缺 /home
 - 2026-06-27-claude-4b1de1 — 主查询限流回落per-IP
 - 2026-06-27-claude-62ca94 — E3 高风险双源对抗（治茧房4·单一化）⚠须 owner 拍板
 - 2026-06-27-claude-794df9 — E4 砍死规则 + 真升级校验（治茧房5+6·只增不减）
 - 2026-06-27-claude-901f0d — 派生域 ALL IN-scope 升级（codex 闸-2 P2·第3省上线前必修）
-- 2026-06-27-claude-cf6633 — E5 样本多样性意识（治茧房2·过拟合）
 
 **P3（31 项）**
 
@@ -223,7 +222,6 @@
 | 2026-06-25-claude-a80133 | 2026-06-25 | Auth · 多省(山西) RLS-on 硬前置 | @claude | RLS-on 硬前置(永久修复): 存量用户 user_store.json 缺 branchCode 致开 RLS 全员 401 fail-closed。2026-06-25 生产 dry-run 已数据层回填(20 用户全 branchCode='SC')但属运行时修复,user_store.json 重 seed/import 即复发。永久修复: (1) admin-import-users-from-json 导入时带 branch_code; (2) ensurePresetUser/seed 对存量用户 reconcile branchCode(现仅对不存在用户生效)。是 PR-3(fe871b) RLS-on 硬前置。详见 开发文档/multi-branch/山西cutover接力_v2.md 实证追加(2026-06-25 RLS-on dry-run)。 | P1 | PROPOSED | 开发文档/multi-branch/山西cutover接力_v2.md | server/src/services/access-control.ts,server/src/scripts/admin-import-users-from-json.ts |  |
 | 2026-06-25-claude-fe871b | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链): ecosystem.config.cjs env 加 BRANCH_RLS_ENABLED true。不可逆生产 RLS 开启,人工监控窗口 merge+盯CI。开前必跑 multi-branch-stress-test --simulate-sx + SC golden-baseline 零差异(需 owner 给 E2E_PASSWORD/JWT_SECRET) | P1 | PROPOSED | N/A | server/ecosystem.config.cjs | RLS-on 硬前置升级（2026-06-25）：除 stress-test --simulate-sx + SC golden-baseline 零差异外，新增依赖 PR-6(2bb22d) repair shadow 网点 ClaimsDetail branch 隔离——PR-1(5f1545) 让 ClaimsDetail 多源后，repair 4 端点 RLS-on 会跨省串读。开 RLS 前 PR-6 必须先合并。 <br>RLS-on 硬前置再升级（2026-06-25 codex 对抗审计）：新增依赖 PR-7(e6fac1) RepairDim 省份化。PR-6(2bb22d) 只闭 ClaimsDetail/PolicyFact 行泄漏；RepairDim-only 端点(overview/detail等)对 branch_admin 未省份隔离 + 影子 CTE bare RepairDim 子查询跨省全读仍未闭。开 RLS 前 PR-6 + PR-7 都必须先合并。 <br>步骤B(validation/SX派生域sync)经owner决策(2026-06-25)并入RLS-on同窗口:先BRANCH_RLS_ENABLED=true+reload,再SYNC_VALIDATION_BRANCHES=1 sync派生域(claims_detail/quotes/renewal)。禁RLS-off前推——duckdb oracle证:RLS-off推validation/SX/claims_detail(236653山西赔案)上VPS→loader无条件UNION→repair影子端点(coop-tier/scatter/orphan)零过滤→SC repair影子网点7225→13130(+5905山西网点污染四川视图),直到RLS-on才闭合。校正接力文档§PR-2/§PR-5「RLS-on前必做」表述(作废)。本次SSH仍fail2ban BLOCKED(IP151.244.134.80未变),真同步无法执行。步骤A(RepairDim纯SC)无此风险,顺延日常发布携带。 <br>2026-06-25 生产 RLS-on dry-run(可逆,已回滚): 证 RLS-on 对四川安全(基线72/72 + 头部KPI/total_cases零差异);但挖出致命隐雷=存量 user_store.json 用户缺 branchCode→开RLS全员401,已数据层回填修复(详见接力文档实证追加)。新增 RLS-on 硬前置=user_store.json branchCode 永久修复(见新登记 P1)。完整cutover仍卡SSH(SX同步)。 |
 | 2026-06-27-claude-054a3a | 2026-06-27 | Loop v2 进化 | @claude | E6 固化防复发（元闸·治全部回归）：把 E1/E4 能力固化成 governance 强制——ledger 必含失败记账维度（缺则告警）+ 死规则审计入 meta-review 强制项 + automation 真升级校验入 bun run governance。验收 oracle：回退（删失败记账/跳审计）即 governance fail。依赖 E1·E4。 | P3 | PROPOSED | 开发文档/loop-v2-进化规划.md | scripts/check-governance.mjs |  |
-| 2026-06-27-claude-29343a | 2026-06-27 | 技能口径治理 | @claude | 指标注册表新增原子指标avg_premium_per_policy(件均保费=保费÷件数)，走validate.ts+generate-frontend-map.ts，消除四象限'人均/件均/总保费'三义，命令与四象限轴统一引用 | P2 | PROPOSED | 开发文档/plans/2026-06-27-技能口径挂靠SSOT治理.md | server/src/config/metric-registry/categories |  |
 | 2026-06-27-claude-294022 | 2026-06-27 | 部署/可用性 | @claude | 生产reload冷启动期全站502数分钟：app启动串行预热CrossSellDailyAgg 66个月度批次(每批~2.7s,~3分钟)期间nginx上游无响应。原生模块/进程正常(↺=0)非bcrypt地雷。缺readiness网关/优雅切换→每次reload全站(SC+SX)不可用。修补方向：预热移到listen后台异步/或加readiness探针让nginx等就绪/或并行化批次预热。来源：山西验证开场遇502并确诊(2026-06-27) | P1 | PROPOSED | N/A | ecosystem.config.cjs |  |
 | 2026-06-27-claude-2c800b | 2026-06-27 | 技能口径治理 | @claude | chexian-data-kpi满期赔付率补全(引earned_claim_ratio注册表+claims JOIN,SX赔案走validation-SX)+11条口径全面挂靠SSOT归位+补产物规格/场景边界/worktree数据回退 | P2 | PROPOSED | 开发文档/plans/2026-06-27-技能口径挂靠SSOT治理.md | .claude/commands/chexian-data-kpi.md |  |
 | 2026-06-27-claude-45faef | 2026-06-27 | 配置一致性 | @claude | org_user allowedRoutes 生产缺 /home：生产登录返回[/performance-analysis,/growth,/specialty]，源码 ORG_ROLE_ALLOWED_ROUTES 含/home。生产配置(user_store)与源码不一致，可能影响首页导航。需核对生产store并对齐。来源：山西13账号VPS验证(2026-06-27) | P2 | PROPOSED | N/A | server/src/config/preset-users.ts |  |
@@ -236,7 +234,6 @@
 | 2026-06-27-claude-96e597 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程三·SX数据域补全(修SX当前故障): generate_dim_tables.py业务员/计划维度表仅四川xlsx→SX salesman/plan维度表空→performance-drilldown/bundle JOIN Binder Error空body。动作:加--branch-code+SX xlsx生成SX维度表;定位quote-conversion/customer-flow policy_date真根因(VIEW/JOIN/cache);SQL生成器quote/customer-flow补branchCode参数。合并自c68b54+8f71c0。来源:地域硬编码全域审计(2026-06-27) | P1 | PROPOSED | N/A | server/src/sql/quote-conversion.ts |  |
 | 2026-06-27-claude-a41779 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程四·多省可扩展性收口+防回归: 当前新增一省≈改20+处跨4链路含多个静默失效陷阱(鉴权6文件9触点/ETL5类/前端整套机构清单/脚本3必改)。动作:新增省checklist配置驱动或codegen;oracle字节断言参数化(oracle_mpdata/p4_backfill死认['SC']→[declared_branch]);sync-vps SUPPORTED_BRANCH_CODES白名单+sx-promote通用化(--branch);governance加多省一致性校验+哨兵分省。来源:地域硬编码全域审计(2026-06-27) | P1 | PROPOSED | N/A | scripts/release/sx-promote.mjs |  |
 | 2026-06-27-claude-c68b54 | 2026-06-27 | SQL/查询 | @claude | 业绩分析页(/performance-analysis,org_user核心页)子板块对SX故障：/performance-drilldown 与 /performance-bundle 带正确参数(startDate/endDate/organization)仍持续返回 400+零字节响应体，前端无法解析错误。来源：山西13账号VPS验证(2026-06-27)，干净复测确认 | P1 | PROPOSED | N/A | server/src/sql | 根因定位(硬编码审计): 非SQL字面硬编码,真根因疑为SX业务员/计划维度表未生成(generate_dim_tables.py仅四川xlsx)→JOIN触发DuckDB Binder Error被吞成空body。归入治理工程三。 |
-| 2026-06-27-claude-cf6633 | 2026-06-27 | Loop v2 进化 | @claude | E5 样本多样性意识（治茧房2·过拟合）：quality-report 增样本主题集中度指标（域分布 + 单一主题占比/集中度指数）；meta-review 在样本单一时给提炼的规则打『待跨域验证』标签。验收 oracle：loop:quality 输出主题集中度（当前应显示山西多省 ~59% 高集中）。无依赖、工程量小。 | P2 | PROPOSED | 开发文档/loop-v2-进化规划.md | scripts/loop/quality-report.mjs |  |
 | 2026-06-27-claude-d9318c | 2026-06-27 | 架构治理/多省 | @claude | 治理工程一·省份解析fail-closed(消灭?? 'SC'反模式): 全栈23处?? 'SC'/\|\| 'SC'静默默认四川(致命变体getDeploymentBranchCode()缺省返回SC→Parquet打错branch_code码RLS静默失效;daily.mjs 6处env拼错静默查四川)。建单一resolveBranchCode()漏配/未知→抛错告警;替换23处;governance加lint禁新增?? 'SC'。来源:地域硬编码全域审计(2026-06-27) | P0 | PROPOSED | N/A | 数据管理/daily.mjs |  |
 | 2026-06-27-claude-ddd89e | 2026-06-27 | 多省/权限·测试 | @claude | 切省 in-flight 回填回归测试（codex 闸-2 P2-2）：BranchContext.setBranch 已用 apiClient.cancelAllRequests()(同步 abort 在飞 GET) + queryClient.cancelQueries() + clear() 关闭跨省串读窗口；但缺显式回归测试证明 SC 请求在飞时切 SX、旧 SC 响应不会按同 query key 回填。补 RTL 测试：mock apiClient(cancelAllRequests/setTargetBranch)+queryClient，渲染 BranchProvider 触发 setBranch，断言清理调用链顺序(setTargetBranch→cancelAllRequests→cancelQueries→clear→FORCE_REFRESH)。可选把 clear 链路改成 await cancelQueries 后再 clear(主窗口已由同步 abort 关闭，此为加固) | P3 | PROPOSED | N/A | src/shared/contexts/BranchContext.tsx |  |
 | 2026-06-27-claude-e96d85 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程二·机构省份元数据单一事实源(含山西在线bug): 机构清单在4处各写死四川12机构(前端organizations.ts/DEFAULT_USER_PERMISSIONS/wecom ORG_SLUGS/org-groups);省份名'四川分公司'写死前端useScopeLabel/cross-sell/GeoSection地图默认。山西用户当前可见错误:页面标题'四川分公司'、地图渲染四川省、cross-sell显示'SX分公司'(branch-names.ts SX中文名被注释)、晋字头车牌→NULL理赔地理哑火。根治:机构清单唯一源branch-org-mapping/<省>.json前端从接口派生;branch-names补全;标题/地图/车牌按省配置。来源:地域硬编码全域审计(2026-06-27) | P1 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
