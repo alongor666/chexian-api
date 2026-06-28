@@ -30,7 +30,7 @@ interface PageHeaderBarProps {
  * 1. 单个业务员 → "{机构}{业务员}{baseTitle}"（如"天府罗磊交叉销售分析"）
  * 2. 多个业务员（同一机构） → "{机构}{baseTitle}"
  * 3. 单个机构（无业务员筛选） → "{机构}{baseTitle}"（如"天府保费分析"）
- * 4. 多个/全部机构 → "四川分公司{baseTitle}"
+ * 4. 多个/全部机构 → "{当前省分公司}{baseTitle}"（如四川分公司/山西分公司，由 useScopeLabel 按有效省派生）
  */
 const EMPTY_TEAM_MAP = new Map<string, string>();
 
@@ -69,7 +69,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
     }
     // 如果机构数等于全部机构数，显示"全部机构"
     if (selectedOrgs.length === 0 || selectedOrgs.length === allOrgCount) {
-      // 全部机构时不显示（标题已经是四川分公司）
+      // 全部机构时不显示（标题已是当前省分公司名）
     }
 
     // 客户类别

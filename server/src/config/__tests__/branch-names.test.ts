@@ -5,14 +5,16 @@ import { describe, it, expect } from 'vitest';
 import { BRANCH_NAMES, getBranchChineseName, getBranchCompanyName } from '../branch-names.js';
 
 describe('BRANCH_NAMES 映射表', () => {
-  it('当前条目：仅 SC=四川（SX 等待山西上线时启用）', () => {
+  it('含 SC=四川 + SX=山西（山西 2026-06-26 cutover 已上线）', () => {
     expect(BRANCH_NAMES.SC).toBe('四川');
+    expect(BRANCH_NAMES.SX).toBe('山西');
   });
 });
 
 describe('getBranchChineseName', () => {
   it('已注册 code → 对应省份名', () => {
     expect(getBranchChineseName('SC')).toBe('四川');
+    expect(getBranchChineseName('SX')).toBe('山西');
   });
 
   it('null / undefined → 全国（系统级超管视角）', () => {
@@ -32,6 +34,7 @@ describe('getBranchChineseName', () => {
 describe('getBranchCompanyName', () => {
   it('已注册 code → 省份+分公司', () => {
     expect(getBranchCompanyName('SC')).toBe('四川分公司');
+    expect(getBranchCompanyName('SX')).toBe('山西分公司');
   });
 
   it('null / undefined → 全国汇总', () => {

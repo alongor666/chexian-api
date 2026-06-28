@@ -13,26 +13,24 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { usePermission } from './PermissionContext';
+import { branchLabel, branchCompanyName, resolveEffectiveBranch } from '../utils/branchDisplay';
 
-/** 省份码 → 中文显示名（仅用于下拉文案；省份枚举本身数据驱动来自 visibleBranches） */
-const BRANCH_LABELS: Record<string, string> = {
-  SC: '四川',
-  SX: '山西',
-};
-
-/** 省份码显示名（未登记的码回落为码本身，禁臆造） */
-export function branchLabel(code: string): string {
-  if (code === 'ALL') return '全国';
-  return BRANCH_LABELS[code] ?? code;
-}
+// 省份显示派生（省份码→名/分公司名/有效省解析）单一事实源在 utils/branchDisplay.ts。
+// 此处 re-export 保持既有 import 兼容（如 TopNavigation 从本模块取 branchLabel）。
+export { branchLabel, branchCompanyName };
 
 interface BranchContextValue {
   /** 该用户可切换/可合并的省集合（visibleBranches）；普通用户为空数组 */
   branches: string[];
   /** 是否多省（决定是否显示切省下拉） */
   isMultiBranch: boolean;
-  /** 当前有效省（'SC'/'SX'/'ALL'）；普通用户为 null。用于下拉高亮当前项 */
+  /** 当前选中省（'SC'/'SX'/'ALL'）；普通用户为 null。用于切省下拉高亮当前项 */
   currentBranch: string | null;
+  /**
+   * 当前有效省：切省值 > 本省 branchCode > 单可见省兜底；null=无法确定省（系统超管看全部）。
+   * UI 派生省份名/分公司名一律用它（经 branchLabel/branchCompanyName），禁硬编码省份字面。
+   */
+  effectiveBranch: string | null;
   /** 切省（含清 React Query + Service Worker 缓存）。值 ∈ visibleBranches ∪ {'ALL'} */
   setBranch: (branch: string) => void;
 }
@@ -41,6 +39,7 @@ const BranchContext = createContext<BranchContextValue>({
   branches: [],
   isMultiBranch: false,
   currentBranch: null,
+  effectiveBranch: null,
   setBranch: () => {},
 });
 
@@ -92,9 +91,19 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
     }
   }, [queryClient]);
 
+  // 有效省：超管切省值 > 本省 branchCode > 单可见省兜底（覆盖 branchCode 漏配的历史用户）。
+  const effectiveBranch = useMemo(
+    () => resolveEffectiveBranch({
+      selectedBranch,
+      branchCode: userPermission?.branchCode,
+      branches,
+    }),
+    [selectedBranch, userPermission?.branchCode, branches]
+  );
+
   const value = useMemo<BranchContextValue>(
-    () => ({ branches, isMultiBranch, currentBranch: selectedBranch, setBranch }),
-    [branches, isMultiBranch, selectedBranch, setBranch]
+    () => ({ branches, isMultiBranch, currentBranch: selectedBranch, effectiveBranch, setBranch }),
+    [branches, isMultiBranch, selectedBranch, effectiveBranch, setBranch]
   );
 
   return <BranchContext.Provider value={value}>{children}</BranchContext.Provider>;

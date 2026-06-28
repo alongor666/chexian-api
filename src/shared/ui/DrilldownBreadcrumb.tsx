@@ -14,8 +14,8 @@ export interface DrilldownBreadcrumbProps {
   path: DrilldownBreadcrumbStep[];
   /** 点击回退到某层（index=-1 回到顶层） */
   onNavigate: (toIndex: number) => void;
-  /** 顶层标签 */
-  topLabel?: string;
+  /** 顶层标签（必传：调用方按当前省 branchCompanyName(effectiveBranch) 提供，杜绝默认值硬编码省份 — codex 闸-2 P1-1） */
+  topLabel: string;
   /** 是否允许回到顶层（RBAC 约束） */
   canGoToTop?: boolean;
   /** 维度标签映射（用于 tooltip） */
@@ -49,7 +49,7 @@ const TOP_ACTIVE_CLASS = cn(
 export const DrilldownBreadcrumb: React.FC<DrilldownBreadcrumbProps> = ({
   path,
   onNavigate,
-  topLabel = '四川分公司',
+  topLabel,
   canGoToTop = true,
   dimensionLabels,
   currentGroupBy,

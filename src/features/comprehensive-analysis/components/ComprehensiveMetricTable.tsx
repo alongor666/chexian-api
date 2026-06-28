@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn, tableStyles, textStyles, colorClasses } from '@/shared/styles';
+import { isBranchSummaryRow } from '@/shared/utils/branchDisplay';
 
 export interface ComprehensiveColumn<T extends object> {
   key: keyof T;
@@ -18,7 +19,7 @@ interface ComprehensiveMetricTableProps<T extends object> {
   sortKey?: keyof T;
   /** 排序方向，默认 'asc' */
   sortOrder?: 'asc' | 'desc';
-  /** 汇总行名称匹配关键字（含该关键字的行始终置顶） */
+  /** 额外汇总行关键字（默认已识别省分公司名/合计/汇总/全部/整体；此处传调用方专属汇总词） */
   summaryKeywords?: string[];
 }
 
@@ -30,7 +31,7 @@ export function ComprehensiveMetricTable<T extends object>({
   emptyText = '暂无数据',
   sortKey,
   sortOrder = 'asc',
-  summaryKeywords = ['合计', '汇总', '四川分公司', '整体'],
+  summaryKeywords = [],
 }: ComprehensiveMetricTableProps<T>) {
   const sortedRows = React.useMemo(() => {
     if (!sortKey) return rows;
@@ -40,10 +41,12 @@ export function ComprehensiveMetricTable<T extends object>({
       const firstCol = columns[0]?.key;
       const aName = firstCol ? String(a[firstCol] ?? '') : '';
       const bName = firstCol ? String(b[firstCol] ?? '') : '';
-      const isSummaryA = keywords.some((kw) => aName.includes(kw));
-      const isSummaryB = keywords.some((kw) => bName.includes(kw));
-      if (isSummaryA) return -1;
-      if (isSummaryB) return 1;
+      // 汇总行：已知省分公司名（四川/山西分公司）+ 通用关键字（合计/汇总/全部/整体），
+      // 见 branchDisplay.isBranchSummaryRow；keywords 为调用方额外自定义汇总词
+      const isSummaryA = isBranchSummaryRow(aName) || keywords.some((kw) => aName.includes(kw));
+      const isSummaryB = isBranchSummaryRow(bName) || keywords.some((kw) => bName.includes(kw));
+      // 仅一方是汇总行时置顶（对称比较，避免双汇总行时 comparator 违反反对称 — codex 闸-2 P2）
+      if (isSummaryA !== isSummaryB) return isSummaryA ? -1 : 1;
       const aVal = Number(a[sortKey] ?? 0);
       const bVal = Number(b[sortKey] ?? 0);
       return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
