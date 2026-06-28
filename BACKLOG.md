@@ -16,16 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（97 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（96 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P0（1 项）**
-
-- 2026-06-27-claude-d9318c `IN_PROGRESS` — 治理工程一·省份解析fail-closed(消灭?? 'SC'反模式)
-
 **P1（15 项）**
-**P1（16 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
