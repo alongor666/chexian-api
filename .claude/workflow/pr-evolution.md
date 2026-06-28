@@ -1692,3 +1692,26 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （K4 注册指标走既有 §2 codegen 流程 + governance 守护，无新增待自动化项。指标字典.md drift 的自动化排查已 spawn_task 独立登记，不属 K4 范围。）
+
+---
+
+## 2026-06-27 · 省份身份贯穿 UI 阶段1（工程二 e96d85 PARTIAL）· 任务转向 + evidence scorecard
+
+> 用户原派工程一 fail-closed，会话中途打断「四川硬编码的问题核心是什么？是在 UI，山西用户看到应该是山西…不能解决一个问题产生更多问题」→ 转向工程二 UI 省份身份。本条是 evidence-loop scorecard。
+
+- **任务转向根因**：原工程一（消灭 `?? 'SC'` fail-closed）经阶段 A 调研暴露两个改方案前提的致命事实：① 四川生产 ecosystem/deploy/env 均**未显式配 BRANCH_CODE**，纯靠 `getDeploymentBranchCode()` 默认回落 SC，硬 fail-closed 会破坏四川生产；② fail-closed 治隐患（漏配 env→RLS 静默失效）不解决山西用户**可见**错误。用户据此裁决优先治 UI 省份身份，fail-closed 推后（d9318c note）。
+- **业务目标**：山西用户在标题/面包屑/汇总行看「山西分公司」，四川用户逐字节不变。
+- **基线/oracle**：worktree 无 Parquet，golden-baseline 不可跑（用户裁决用构造性证明 + 单测 + 全量回归）。
+- **候选（16 文件）**：新建 branchDisplay.ts 单一派生源 + BranchContext.effectiveBranch；useScopeLabel(抽纯函数 computeScopeLabel)/PageHeaderBar/DrilldownBreadcrumb(topLabel→required)/useTrendData/PremiumDashboard 省份名派生；ClaimRatio/Drilldown/ComprehensiveMetricTable 汇总行去四川硬绑定；branch-names 补 SX。
+- **字节安全（构造性证明）**：坐实 preset-users 全 SC 用户显式 branchCode='SC' → branchCompanyName('SC')='四川分公司' 逐字节一致。
+- **回归门禁**：typecheck OK / governance 45/45 OK / verify:full 单测 4321 OK（merge #819/#820 后）/ 新增 38 单测。
+- **双闸（codex CLI read-only 自包含 prompt）**：闸-1 计划 2P0(四川生产未配 BRANCH_CODE 字节风险 / earned-premium 数据层归阶段2)+5P1+6P2 全处置；闸-2 完成 0P0/3P1(DrilldownBreadcrumb 默认值→改 required 编译期强制 / drilldown-dimensions 死代码→撤回 / isBranchSummaryRow 已知省识别→保留有据)/3P2 → 复审 0P0/0P1，P2(comparator 对称性)已修。
+- **决策**：promote（建 PR，不 auto-merge，用户审）。
+
+### 三问复盘
+1. **重来怎样更好**：阶段 A 应先做 user friction probe（evidence-loop §8 Step 0.5）——直接接「工程一 fail-closed」埋头调研，未先质疑「这是不是用户最痛/最该先做的」，靠用户打断才转向。教训＝接「治理工程」类任务先确认用户**可见痛点 vs 隐患**优先级，别默认按派单顺序做。
+2. **复用价值**：①「省份身份单一派生源（effectiveBranch 解析链 + branchCompanyName + 已知省汇总行识别）」对多租户 SaaS 通用；②「prop 改 required + typecheck 证全调用点覆盖」是字节安全的编译期强证明（胜过默认值 + grep）；③「数据层 vs 显示层切分」（earned-premium org_level_3 是数据值归阶段2）防范围误扩。
+3. **如何更高质量自动化**：前后端 BRANCH_LABELS(前端)/BRANCH_NAMES(后端) 手工镜像（codex P2-1），无同步校验机制——已 backlog e96d85 note 登记为后续。
+
+### needs_automation: false
+（本 PR 是 UI 重构，无新增运行时机制待自动化；前后端省份映射镜像同步、drilldown-dimensions 死代码清理、ClaimRatio/Drilldown comparator 对称性均已 backlog e96d85 note 登记为后续阶段，不在本 PR 范围。）
