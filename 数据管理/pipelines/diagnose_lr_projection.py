@@ -165,6 +165,10 @@ def build_views(
         FROM (SELECT DISTINCT ON (claim_no) *
               FROM read_parquet('{CLAIMS_GLOB}', union_by_name=true)
               WHERE report_time <= TIMESTAMP '{hist_as_of} 23:59:59'
+              -- 省份隔离（data-pipeline.md 红线 + 防御性）：claims 当前按目录隔离
+              -- （SX 在 validation/SX/），但目录约定非保证；显式 branch_code 过滤防未来
+              -- 跨省混存污染分子，与 v_policy_base_dedup 的 SC 分母严格对齐。
+                AND branch_code = '{BRANCH_CODE}'
               ORDER BY claim_no, report_time DESC,
                        settlement_time DESC NULLS LAST,
                        payment_time DESC NULLS LAST)

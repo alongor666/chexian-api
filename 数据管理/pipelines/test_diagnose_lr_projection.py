@@ -207,6 +207,8 @@ def test_dedup_reduces_row_count(tmp_path, monkeypatch):
         # v_claims_agg 取 COALESCE(reserve_amount, 0)，fixture 必须提供同名列，否则
         # BinderException。详见 memory feedback_pending_vs_reserve_amount。
         "reserve_amount": pd.Series([], dtype="float64"),
+        # v_claims_agg 现按 branch_code 过滤（省份隔离），空 claims fixture 须含该列。
+        "branch_code": pd.Series([], dtype="object"),
         "settlement_time": pd.Series([], dtype="datetime64[ns]"),
         "payment_time": pd.Series([], dtype="datetime64[ns]"),
     }).to_parquet(claims_fixture, index=False)
@@ -238,16 +240,20 @@ def test_proj_year_dedup_consistency(tmp_path):
     hist_count = con.execute("SELECT COUNT(*) FROM v_policy_hist").fetchone()[0]
     proj_count = con.execute("SELECT COUNT(*) FROM v_policy_proj").fetchone()[0]
 
+    # raw 对比基准须与 v_policy_base_dedup 同省过滤，否则混入外省行虚增 raw、
+    # 使 dedup <= raw 断言被 SX 行松弛失真，无法验证「去重严格减行」契约。
     raw_hist = con.execute(f"""
         SELECT COUNT(*) FROM read_parquet('{mod.GLOB}', union_by_name=true)
         WHERE YEAR(insurance_start_date) IN (2023, 2024, 2025)
           AND insurance_start_date IS NOT NULL
+          AND branch_code = '{mod.BRANCH_CODE}'
           AND {mod.COVERAGE_FILTER}
     """).fetchone()[0]
     raw_proj = con.execute(f"""
         SELECT COUNT(*) FROM read_parquet('{mod.GLOB}', union_by_name=true)
         WHERE YEAR(insurance_start_date) = 2026
           AND insurance_start_date IS NOT NULL
+          AND branch_code = '{mod.BRANCH_CODE}'
           AND {mod.COVERAGE_FILTER}
     """).fetchone()[0]
 
