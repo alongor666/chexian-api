@@ -131,7 +131,9 @@ export function generatePerformanceTopSalesmanQuery(
     metrics AS (
       SELECT
         c.dimension_name,
-        c.org_level_3,
+        -- 归属机构：优先取 SalesmanDim.organization（维度表归属机构），兜底事实表 org_level_3
+        -- 防跨机构出单人员取到非归属的出单机构作为 display_name 后缀（PR #832 follow-up）
+        COALESCE(sd.organization, c.org_level_3, '未知机构') AS org_level_3,
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         ROUND(COALESCE(y.ytd_premium, 0), 4) AS ytd_premium,
@@ -156,6 +158,7 @@ export function generatePerformanceTopSalesmanQuery(
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.auto_count, 2) END AS new_car_rate,
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.auto_count, 2) END AS transfer_rate
       FROM current_group c
+      LEFT JOIN SalesmanDim sd ON c.dimension_name = sd.full_name
       LEFT JOIN prev_group p ON c.dimension_name = p.dimension_name
       LEFT JOIN ytd_group y ON c.dimension_name = y.dimension_name
       LEFT JOIN plan_group pl ON c.dimension_name = pl.dimension_name

@@ -112,6 +112,13 @@ describe('假日营销自由维度下钻 — SQL 语义不变式', () => {
     expect(sql).toContain('MAX(hp.org_level_3) AS org_level_3');
   });
 
+  // M-11b: groupBy=salesman 时注入 SalesmanDim JOIN 用归属机构
+  it('M-11b: groupBy=salesman 时注入 SalesmanDim JOIN 取归属机构', () => {
+    const sql = gen('salesman');
+    expect(sql).toContain('LEFT JOIN SalesmanDim sd ON h.group_name = sd.full_name');
+    expect(sql).toContain('COALESCE(sd.organization');
+  });
+
   // M-12: 业务员下钻用带工号精确匹配（防同名多人）
   it('M-12: drillPath salesman 步骤用带工号精确匹配，非去工号短名', () => {
     const sql = gen('org_level_3', [

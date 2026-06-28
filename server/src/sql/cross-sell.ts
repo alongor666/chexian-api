@@ -187,6 +187,10 @@ export function generateCrossSellQuery(
   const teamJoin = useJoin
     ? `LEFT JOIN SalesmanTeamMapping tm ON ${colPrefix}salesman_name = tm.full_name`
     : '';
+  // 业务员维度下，JOIN SalesmanDim 取归属机构（防跨机构出单人取到非归属机构，PR #832 follow-up）
+  const salesmanDimJoin = groupBy === 'salesman'
+    ? `LEFT JOIN SalesmanDim sd ON ${colPrefix}salesman_name = sd.full_name`
+    : '';
 
   // 构建 WHERE：基础条件 + 下钻路径的每一步过滤
   const whereParts = [baseWhereClause];
@@ -206,11 +210,11 @@ export function generateCrossSellQuery(
   // Phase 2b: 业务员下钻附带 org_level_3 + team_name 元数据列
   const includeHierarchy = groupBy === 'salesman';
   const hierarchySelect = includeHierarchy
-    ? `${colPrefix}org_level_3 AS org_level_3,
+    ? `COALESCE(sd.organization, ${colPrefix}org_level_3, '未知机构') AS org_level_3,
         COALESCE(tm.team_name, '未归属团队') AS team_name,`
     : '';
   const hierarchyGroupBy = includeHierarchy
-    ? `, ${colPrefix}org_level_3, COALESCE(tm.team_name, '未归属团队')`
+    ? `, COALESCE(sd.organization, ${colPrefix}org_level_3, '未知机构'), COALESCE(tm.team_name, '未归属团队')`
     : '';
   const hierarchyFinal = includeHierarchy
     ? `org_level_3,
@@ -247,6 +251,7 @@ export function generateCrossSellQuery(
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination = '主全' THEN ${colPrefix}driver_count ELSE 0 END), 0) AS zhuquan_driver_count
       FROM ${tableRef}
       ${teamJoin}
+      ${salesmanDimJoin}
       WHERE ${fullWhere}
       GROUP BY ${config.groupByExpr}${hierarchyGroupBy}
       HAVING COALESCE(SUM(${colPrefix}auto_count), 0) > 0

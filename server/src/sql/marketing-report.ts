@@ -300,16 +300,16 @@ export function generateHolidayFreeDrilldownQuery(
 
   // display_name：salesman 维度用短名（去工号）显示，两级判重消歧——短名唯一→短名；
   // 同短名跨机构→短名·机构；同机构同名→短名·机构#工号（绝对区分）；admin→直接个代。
-  // group_name 始终保留带工号原值（人唯一键）供下钻精确传参。机构后缀取 holiday_stats 的
-  // MAX(org_level_3)（跨机构出单人取代表机构，与 top-salesman 样板一致）。对齐 PR #830。
+  // group_name 始终保留带工号原值（人唯一键）供下钻精确传参。机构后缀取 SalesmanDim.organization
+  // （归属机构），兜底 holiday_stats 的 MAX(org_level_3)，防跨机构出单人员取到非归属机构（PR #832 follow-up）。
   const holidayDisplayExpr = groupBy === 'salesman'
     ? `CASE
         WHEN h.group_name ILIKE 'admin%' THEN '直接个代'
         WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(h.group_name, '^[0-9]+', '')) = 1
           THEN REGEXP_REPLACE(h.group_name, '^[0-9]+', '')
-        WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(h.group_name, '^[0-9]+', ''), h.org_level_3) = 1
-          THEN REGEXP_REPLACE(h.group_name, '^[0-9]+', '') || '·' || COALESCE(h.org_level_3, '未知机构')
-        ELSE REGEXP_REPLACE(h.group_name, '^[0-9]+', '') || '·' || COALESCE(h.org_level_3, '未知机构') || '#' || REGEXP_EXTRACT(h.group_name, '^[0-9]+')
+        WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(h.group_name, '^[0-9]+', ''), COALESCE(sd.organization, h.org_level_3, '未知机构')) = 1
+          THEN REGEXP_REPLACE(h.group_name, '^[0-9]+', '') || '·' || COALESCE(sd.organization, h.org_level_3, '未知机构')
+        ELSE REGEXP_REPLACE(h.group_name, '^[0-9]+', '') || '·' || COALESCE(sd.organization, h.org_level_3, '未知机构') || '#' || REGEXP_EXTRACT(h.group_name, '^[0-9]+')
       END`
     : `h.group_name`;
 
@@ -366,6 +366,7 @@ export function generateHolidayFreeDrilldownQuery(
         ELSE h.commercial_active_salesman * 1.0 / t.total_salesman
       END AS commercial_active_rate
     FROM holiday_stats h
+    LEFT JOIN SalesmanDim sd ON h.group_name = sd.full_name
     LEFT JOIN total_by_group t ON h.group_name = t.group_key
     ORDER BY h.premium_wan DESC
   `;
