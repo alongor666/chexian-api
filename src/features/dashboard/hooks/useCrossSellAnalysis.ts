@@ -55,7 +55,8 @@ export interface DrilldownStep {
 
 /** 单行数据结构 */
 export interface CrossSellRow {
-  group_name: string;
+  group_name: string;        // 带工号 key（业务员=工号+姓名=人唯一键），下钻传参用
+  display_name?: string;     // 短名+同名冲突机构后缀，UI 显示用（salesman 维度；其他维度即 group_name）
   total_auto_count: number;
   total_driver_count: number;
   danjiao_auto_count: number;
@@ -109,8 +110,8 @@ export interface UseCrossSellAnalysisReturn {
   };
   /** 首次选择维度（从汇总进入下钻） */
   selectDimension: (dimension: CrossSellDimension) => void;
-  /** 下钻到某个行：将当前行加入过滤，选择新维度分组 */
-  drillDown: (rowValue: string, nextDimension: CrossSellDimension) => void;
+  /** 下钻到某个行：将当前行加入过滤，选择新维度分组（displayLabel 仅用于面包屑短名展示，过滤值仍用 rowValue 带工号 key） */
+  drillDown: (rowValue: string, nextDimension: CrossSellDimension, displayLabel?: string) => void;
   /** 上钻到指定层级（面包屑点击，-1 = 回顶层） */
   drillUp: (toIndex: number) => void;
   /** 重置到顶层 */
@@ -125,6 +126,7 @@ export interface UseCrossSellAnalysisReturn {
 function mapRow(raw: Record<string, unknown>): CrossSellRow {
   return {
     group_name: String(raw.group_name ?? ''),
+    display_name: raw.display_name == null ? undefined : String(raw.display_name),
     total_auto_count: Number(raw.total_auto_count ?? 0),
     total_driver_count: Number(raw.total_driver_count ?? 0),
     danjiao_auto_count: Number(raw.danjiao_auto_count ?? 0),
@@ -355,13 +357,14 @@ export function useCrossSellAnalysis({
   }, [initialDrillPath]);
 
   /** 下钻：点击行 → 添加过滤 → 选择新维度 */
-  const drillDown = useCallback((rowValue: string, nextDimension: CrossSellDimension) => {
+  const drillDown = useCallback((rowValue: string, nextDimension: CrossSellDimension, displayLabel?: string) => {
     if (!currentGroupBy) return;
 
     const newStep: DrilldownStep = {
       dimension: currentGroupBy,
-      value: rowValue,
-      label: `${DIMENSION_LABELS[currentGroupBy]}: ${rowValue}`,
+      value: rowValue,  // 始终带工号原值（人唯一键），精确过滤单个真人
+      // 面包屑显示用短名（displayLabel=display_name）；勿用带工号 rowValue 否则面包屑泄漏工号
+      label: `${DIMENSION_LABELS[currentGroupBy]}: ${displayLabel ?? rowValue}`,
     };
 
     setDrillPath(prev => [...prev, newStep]);

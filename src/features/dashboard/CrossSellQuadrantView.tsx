@@ -197,7 +197,7 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
   const points = useMemo(() => {
     if (rows.length === 0) return [];
     const basePoints = rows.map((row) => ({
-      entity_name: String(row.group_name ?? ''),
+      entity_name: String(row.display_name ?? row.group_name ?? ''), // 散点/tooltip 显示短名+冲突后缀；group_name 带工号仅作 key
       main_full_rate: normalizeRate(Number(row.zhuquan_rate ?? 0)),
       jiaosan_rate: normalizeRate(Number(row.jiaosan_rate ?? 0)),
       weight_value: Math.max(0, Number(row.total_auto_count ?? 0)),

@@ -214,9 +214,12 @@ function getHolidayGroupByConfig(dimension: HolidayDrillDimension): {
         needsTeamJoin: true,
       };
     case 'salesman':
+      // 聚合键必须带工号（salesman_name=工号+姓名=人唯一键），禁去工号——否则同名不同工号
+      // 真人被合并（张丽×3 等）。短名仅用于展示层 display_name（见 generateHolidayFreeDrilldownQuery
+      // 外层 SELECT）。2026-06-27 口径修复，对齐 performance-analysis 样板 PR #830。
       return {
-        selectExpr: "REGEXP_REPLACE(p.salesman_name, '^[0-9]+', '') AS group_name",
-        groupByExpr: "REGEXP_REPLACE(p.salesman_name, '^[0-9]+', '')",
+        selectExpr: "p.salesman_name AS group_name",
+        groupByExpr: "p.salesman_name",
         needsTeamJoin: false,
       };
     default:
@@ -243,7 +246,8 @@ function holidayDrillStepToWhere(step: HolidayDrillStep): string {
     case 'team':
       return `COALESCE(tm.team_name, p.org_level_3 || '未归属团队') = '${esc(step.value)}'`;
     case 'salesman':
-      return `REGEXP_REPLACE(p.salesman_name, '^[0-9]+', '') = '${esc(step.value)}'`;
+      // 下钻传带工号 key（group_name=salesman_name）精确匹配单个真人，勿用去工号短名（命中同名多人）
+      return `p.salesman_name = '${esc(step.value)}'`;
     default:
       return '1=1';
   }
@@ -294,6 +298,21 @@ export function generateHolidayFreeDrilldownQuery(
     ? 'LEFT JOIN team_mapping tm ON p.salesman_name = tm.salesman_name'
     : '';
 
+  // display_name：salesman 维度用短名（去工号）显示，两级判重消歧——短名唯一→短名；
+  // 同短名跨机构→短名·机构；同机构同名→短名·机构#工号（绝对区分）；admin→直接个代。
+  // group_name 始终保留带工号原值（人唯一键）供下钻精确传参。机构后缀取 holiday_stats 的
+  // MAX(org_level_3)（跨机构出单人取代表机构，与 top-salesman 样板一致）。对齐 PR #830。
+  const holidayDisplayExpr = groupBy === 'salesman'
+    ? `CASE
+        WHEN h.group_name ILIKE 'admin%' THEN '直接个代'
+        WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(h.group_name, '^[0-9]+', '')) = 1
+          THEN REGEXP_REPLACE(h.group_name, '^[0-9]+', '')
+        WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(h.group_name, '^[0-9]+', ''), h.org_level_3) = 1
+          THEN REGEXP_REPLACE(h.group_name, '^[0-9]+', '') || '·' || COALESCE(h.org_level_3, '未知机构')
+        ELSE REGEXP_REPLACE(h.group_name, '^[0-9]+', '') || '·' || COALESCE(h.org_level_3, '未知机构') || '#' || REGEXP_EXTRACT(h.group_name, '^[0-9]+')
+      END`
+    : `h.group_name`;
+
   return `
     WITH holiday_dates AS (
       SELECT CAST(col0 AS DATE) AS holiday_date
@@ -324,6 +343,7 @@ export function generateHolidayFreeDrilldownQuery(
     holiday_stats AS (
       SELECT
         ${groupConfig.selectExpr.replaceAll('p.', 'hp.').replaceAll('tm.', 'hp.')},
+        MAX(hp.org_level_3) AS org_level_3,
         COALESCE(SUM(hp.premium), 0) / 10000.0 AS premium_wan,
         COALESCE(SUM(CASE WHEN hp.is_commercial_insure = '套单' OR hp.is_commercial_insure = '是' THEN hp.premium ELSE 0 END), 0) / 10000.0 AS commercial_premium_wan,
         COUNT(DISTINCT hp.salesman_name) AS active_salesman,
@@ -333,6 +353,7 @@ export function generateHolidayFreeDrilldownQuery(
     )
     SELECT
       h.group_name,
+      ${holidayDisplayExpr} AS display_name,
       h.premium_wan,
       h.commercial_premium_wan,
       COALESCE(t.total_salesman, 0) AS total_salesman,

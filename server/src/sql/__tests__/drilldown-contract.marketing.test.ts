@@ -97,4 +97,27 @@ describe('假日营销自由维度下钻 — SQL 语义不变式', () => {
     ]);
     expect(sql).toContain("p.is_nev = 'false'");
   });
+
+  // M-11: 业务员聚合键带工号防同名真人合并（2026-06-27 口径修复，跟进 PR #830）
+  // 口径见业务规则字典 §业务员（聚合键 vs 展示口径 RED LINE）
+  it('M-11: groupBy=salesman 聚合键带工号 + display_name 短名两级判重', () => {
+    const sql = gen('salesman');
+    // 聚合键 group_name 用带工号 salesman_name（selectExpr 内 p. 已被 replaceAll 为 hp.），非去工号短名
+    expect(sql).toContain('hp.salesman_name AS group_name');
+    expect(sql).toContain('GROUP BY hp.salesman_name');
+    expect(sql).not.toContain("REGEXP_REPLACE(hp.salesman_name, '^[0-9]+', '') AS group_name");
+    // display_name：短名 + 冲突两级判重（同机构同名加工号兜底 REGEXP_EXTRACT），机构后缀取 MAX(org_level_3)
+    expect(sql).toContain('AS display_name');
+    expect(sql).toContain("REGEXP_EXTRACT(h.group_name, '^[0-9]+')");
+    expect(sql).toContain('MAX(hp.org_level_3) AS org_level_3');
+  });
+
+  // M-12: 业务员下钻用带工号精确匹配（防同名多人）
+  it('M-12: drillPath salesman 步骤用带工号精确匹配，非去工号短名', () => {
+    const sql = gen('org_level_3', [
+      { dimension: 'salesman', value: '118069129张丽' },
+    ]);
+    expect(sql).toContain("p.salesman_name = '118069129张丽'");
+    expect(sql).not.toContain("REGEXP_REPLACE(p.salesman_name, '^[0-9]+', '') = '118069129张丽'");
+  });
 });
