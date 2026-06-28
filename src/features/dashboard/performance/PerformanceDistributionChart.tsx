@@ -56,7 +56,7 @@ export function PerformanceDistributionChart({
         : PERFORMANCE_QUADRANT_META[quadrant].color;
 
       return {
-        name: row.group_name,
+        name: row.display_name ?? row.group_name, // 散点/tooltip 显示短名+冲突后缀；group_name 带工号仅作 key
         value: [achievement, growth, autoCount],
         quadrant,
         itemStyle: {

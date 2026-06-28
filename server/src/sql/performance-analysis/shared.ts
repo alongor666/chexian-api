@@ -385,7 +385,8 @@ export function buildPlanScopeConds(
     } else if (step.dimension === 'team') {
       conds.push(`team_name = '${esc(step.value)}'`);
     } else if (step.dimension === 'salesman') {
-      conds.push(`salesman_name_short = '${esc(step.value)}'`);
+      // 计划侧 full_name=工号+姓名，与下钻传入的带工号 key 对齐
+      conds.push(`full_name = '${esc(step.value)}'`);
     }
   }
   return conds;
@@ -463,7 +464,9 @@ export function drillStepToWhere(step: PerformanceDrilldownStep, colPrefix: stri
     case 'team':
       return `COALESCE(tm.team_name, '未归属团队') = '${esc(step.value)}'`;
     case 'salesman':
-      return `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') = '${esc(step.value)}'`;
+      // 下钻传带工号 key（group_name=salesman_name），精确匹配单个真人；
+      // 勿用去工号短名（会命中同名多人）
+      return `COALESCE(${colPrefix}salesman_name, '未知') = '${esc(step.value)}'`;
     case 'customer_category':
       return `COALESCE(${colPrefix}customer_category, '未知') = '${esc(step.value)}'`;
     case 'tonnage_segment':
@@ -501,9 +504,11 @@ export function getGroupByConfig(dimension: PerformanceDimension | null, colPref
         groupByExpr: `COALESCE(tm.team_name, '未归属团队')`,
       };
     case 'salesman':
+      // 聚合键必须用带工号全名（salesman_name=工号+姓名=人唯一键），禁去工号——
+      // 否则同名不同工号的真人被合并（张丽×3 等）。短名仅用于展示层 display_name。
       return {
-        selectExpr: `REGEXP_REPLACE(COALESCE(${colPrefix}salesman_name, '未知'), '^[0-9]+', '') AS group_name`,
-        groupByExpr: `REGEXP_REPLACE(COALESCE(${colPrefix}salesman_name, '未知'), '^[0-9]+', '')`,
+        selectExpr: `COALESCE(${colPrefix}salesman_name, '未知') AS group_name`,
+        groupByExpr: `COALESCE(${colPrefix}salesman_name, '未知')`,
       };
     case 'customer_category':
       return {

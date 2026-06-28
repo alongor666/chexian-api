@@ -39,7 +39,6 @@ import {
 import {
   formatPercent,
   formatWanAdaptive,
-  formatSalesmanName,
 } from '@/shared/utils/formatters';
 
 interface PerformanceFocusStripProps {
@@ -243,6 +242,7 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
     );
     const weakestCov = extractWeakestCoverage(bundle.summary?.rows ?? []);
     const worstDrill = extractWorstByAch(bundle.drilldown?.rows ?? [], [
+      'display_name',
       'dimension_name',
       'group_name',
       'org_level_3',
@@ -250,6 +250,7 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
       'customer_category',
     ]);
     const worstSalesman = extractWorstByAch(bundle.topSalesman?.rows ?? [], [
+      'display_name',
       'dimension_name',
       'salesman_name',
     ]);
@@ -333,7 +334,7 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
           : ` · 环比 ${worstDrill.mom > 0 ? '+' : ''}${worstDrill.mom.toFixed(1)}`;
       built.push({
         label: '落后维度',
-        value: formatSalesmanName(worstDrill.name),
+        value: worstDrill.name, // display_name 优先（短名+冲突后缀，后端已算）；勿再 formatSalesmanName 否则拆掉·机构#工号
         sub: `达成 ${formatPercent(worstDrill.ach)}${momLabel}`,
         tone: tone.text,
         dot: tone.dot,
@@ -345,7 +346,7 @@ export const PerformanceFocusStrip: React.FC<PerformanceFocusStripProps> = ({
       const tone = achTone(worstSalesman.ach);
       built.push({
         label: '掉队业务员',
-        value: formatSalesmanName(worstSalesman.name),
+        value: worstSalesman.name, // 同上：display_name 已格式化
         sub: `达成 ${formatPercent(worstSalesman.ach)}`,
         tone: tone.text,
         dot: tone.dot,

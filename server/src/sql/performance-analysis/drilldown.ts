@@ -39,7 +39,7 @@ function planGroupExpr(groupBy: PerformanceDimension | null): string {
   switch (groupBy) {
     case 'org_level_3': return 'org_name';
     case 'team': return 'team_name';
-    case 'salesman': return 'salesman_name_short';
+    case 'salesman': return 'full_name'; // 带工号，对齐 group_name=salesman_name（带工号），勿用去工号短名
     default: return `'分公司整体'`;
   }
 }
@@ -114,6 +114,20 @@ export function generatePerformanceDrilldownQuery(
           )
         END`
     : 'NULL';
+
+  // display_name：salesman 维度用短名（去工号），仅去工号后同名冲突时加机构后缀区分真人；
+  // 其他维度 group_name 本身即显示名。group_name 始终保留带工号原值供下钻精确传参（UI 显示用 display_name）。
+  // 两级判重：短名唯一→短名；同短名跨机构→短名·机构；同机构同名→短名·机构#工号（绝对区分）
+  const displayExpr = groupBy === 'salesman'
+    ? `CASE
+            WHEN m.group_name ILIKE 'admin%' THEN '直接个代'
+            WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(m.group_name, '^[0-9]+', '')) = 1
+              THEN REGEXP_REPLACE(m.group_name, '^[0-9]+', '')
+            WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(m.group_name, '^[0-9]+', ''), m.org_level_3) = 1
+              THEN REGEXP_REPLACE(m.group_name, '^[0-9]+', '') || '·' || COALESCE(m.org_level_3, '未知机构')
+            ELSE REGEXP_REPLACE(m.group_name, '^[0-9]+', '') || '·' || COALESCE(m.org_level_3, '未知机构') || '#' || REGEXP_EXTRACT(m.group_name, '^[0-9]+')
+          END`
+    : `m.group_name`;
 
   const sql = `
     WITH
@@ -214,6 +228,7 @@ export function generatePerformanceDrilldownQuery(
     )
     SELECT
       m.*,
+      ${displayExpr} AS display_name,
       CASE
         WHEN m.achievement_rate IS NULL OR m.growth_rate IS NULL THEN 'unknown'
         WHEN m.growth_rate >= ${QUADRANT_GROWTH_THRESHOLD} AND m.achievement_rate >= ${QUADRANT_ACHIEVEMENT_THRESHOLD} THEN 'high_growth_high_achievement'
