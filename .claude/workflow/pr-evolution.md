@@ -1626,3 +1626,69 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 ### needs_automation: true
 - 闸：E6 把「质量账本失败记账 + 外部真相维度（事后回滚率/返工率可算），缺则告警」入 `bun run governance` 强制——回退（删 git 反查 / 删 owner sink 聚合 / 删双率）即 governance fail，防进化成果回退。依赖 E1 + E2（本项）+ E4 先落地，随 E6 一并实现。
 - expires: 2026-09-27（与 E1 / loop-orchestration §4 E2 meta 同窗；属 loop-meta，单 owner 串行落地）。
+
+---
+
+## 2026-06-27 · K1 省份数据隔离 SSOT + chexian-data-kpi P0 修正（技能口径治理·evidence-loop scorecard）
+
+> 承接 `开发文档/plans/2026-06-27-技能口径挂靠SSOT治理.md` §4 K1（P0 止血首波，解锁 K2/K3/K4）。执行 `/chexian-data-kpi` 山西诊断暴露技能内联影子口径（裸 glob 跨省混查 + `endorsement_type` 跑挂 SQL）。
+
+- **业务目标**：rules 体系建省份隔离 SSOT（消除裸 glob 跨省混查静默错误）+ 修正 kpi 命令跑挂示例 SQL + 加省份/时间参数 + 引 time-caliber 反问，让技能挂靠 SSOT。
+- **基线（实测·禁口算）**：裸 `current/*.parquet` 混查 SC 261.6万 + SX 183.3万行；SX 2026YTD 隔离 113846件/9865万 vs 混查 388675件/32006万（放大 3.4x，零报错）。原示例 `WHERE endorsement_type IS NULL` 实测 `Binder Error`（fields.json 注册但 ETL 未落 Parquet）。
+- **候选（2 文件 96+/23-）**：data-pipeline.md 新增「省份数据隔离 RED LINE」（branch_code 权威键 + SC/SX glob 表 + 赔案路径 + fail-closed + GATED）；chexian-data-kpi.md 加 `--province/--year/--start/--end` + 净额 CTE 双示例 + 删 endorsement_type 改 endorsement_no + 引 time-caliber/省份隔离。
+- **oracle 实证**：duckdb 直查裁决三 P0——brace `{a,b}` 实测 `IO Error`（DuckDB 不支持→列表 glob）；同一 policy_no 13 例跨机构（→消 ANY_VALUE，org 进 group key）；文档两示例 SQL 零 Binder Error，SX 隔离 113846件 与混查 388675件 显著不同（隔离生效）。
+- **回归门禁**：`bun run governance` 45/45 全过；pre-commit typecheck 通过。
+- **双闸（codex CLI·read-only·scratchpad 隔离 cwd·自包含 prompt）**：闸-1 计划对抗 5 P0/7 P1/3 P2——关键 P0 = brace glob 会跑挂（实测坐实）+ 净额 CTE 粒度/ANY_VALUE 影子口径 + 时间参数成对 + worktree 路径，全采纳（含 duckdb 实测裁决）；闸-2 完成对抗 0 P0 GO，采纳 3 P1（赔案路径统一 glob/件数口径拆分全省 vs 维度/premium 说明对齐维度）+ 2 P2，复审通过。
+- **决策**：promote。K1 P0 止血落地 = 治理链首波。
+
+### 三问复盘
+1. **重来怎样更好**：① brace glob 险些自己写出跑挂 SQL——幸 codex 闸-1 质疑"未证明 DuckDB 支持 `{a,b}`" + 我 duckdb 实测坐实 `IO Error`；教训＝凡 glob/SQL 语法必实测不猜（`CLAUDE.md §6`），这正是 K1 要根治的"技能内联未验证口径"反讽。② 首批 Edit 误用主仓绝对路径被 worktree 护栏拦截——worktree 会话写文件必用 worktree 路径（绝对路径不受锚点影响），worktree-setup §A 代码兜底实证。
+2. **复用价值**：① 「duckdb 实测裁决口径设计而非凭假设」对任何 SQL/数据口径文档通用——闸-1 三个 P0 全靠实测定写法（brace/粒度/隔离值）；② 「branch_code 列权威隔离 + 文件名 glob 性能辅助 + fail-closed」三层范式可复制到所有多省 Parquet 查询；③ 「codex 闸-1 审设计（动手前）+ duckdb 实测裁决」比"先写后审"省返工。
+3. **如何更高质量自动化**：K1 文档/规则层"技能挂靠 SSOT"靠自觉——K3（governance 技能字段闸）将机制化兜底。
+
+### needs_automation: true
+- 闸：K3（`2026-06-27-claude-6f3275`）把"技能内 Parquet 字段名比对实际落列、注册表外/未落列字段即 error"入 `bun run governance`，把 K1/K5 的"技能挂靠 SSOT"从自觉变强制。关键设计修正（K1 实证）：K3 不能只比对 `fields.json` 字段集（`endorsement_type` 在 fields.json 却 Parquet 未落，比对字段集抓不到），须比对 Parquet 实际 schema。依赖 K1（本项）落地。
+- expires: 2026-09-27（与治理链 K2-K5 同窗；属技能口径治理，单 owner 串行落地）。
+
+---
+
+## 2026-06-27 · K2 技能口径挂靠 SSOT 元规则（技能口径治理·evidence-loop scorecard）
+
+> 承接 `开发文档/plans/2026-06-27-技能口径挂靠SSOT治理.md` §4 K2（治理链第二波，依赖 K1 已合并 PR#819）。把 K1 单例（kpi 命令挂靠省份隔离）上升为元规则。
+
+- **业务目标**：建元规则禁所有技能内联口径/字段/枚举/阈值/输入契约，必挂靠注册表/rules SSOT，根治"影子事实源"。
+- **基线**：CLAUDE.md §2 注册表 RED LINE 只覆盖 server/ 代码，未覆盖 .claude/commands/skills——技能能游离在外的根。
+- **候选（2 文件 +46/-1）**：新增 `.claude/rules/skill-caliber-ssot.md`（5 类禁内联 + 挂靠方式 + §2 延伸 + K2规范/K3闸边界 + 全局技能盲区诚实声明 + K3 字段层兜底）；CLAUDE.md §12 加指针。
+- **oracle**：纯文档元规则；先搜再写确认无重复元规则 + getMetricSql/fields.json/customer-categories 路径真实。
+- **回归门禁**：bun run governance 45/45（含新 rules 文件）；CLAUDE.md 15660 字符（<20KB）。
+- **双闸（codex CLI）**：闸-1 GO-with-P0-fixes（2P0：全局技能盲区虚假安全感→诚实声明项目内自动注入vs全局靠crystallize/K3兜底 + fields.json完整路径；5P1：K2规范/K3强制闸边界明写 + paths扩展含治理文件 + 加第五类输入契约禁项 + 示例SQL限定验证样例 + §12压短）全采纳；**拒绝2P2**（policy:append-only + AGENTS§8.2 经 grep 确认是9个现有rules文件项目惯例，codex因prompt未给惯例而误判）；闸-2 GO（2P1：客户类别路径标前端 + §5明确K3仅字段层；1P2：兜底措辞）采纳。
+- **决策**：promote。元规则落地 = 治理链从单例上升通则，K3（强制闸）+ K5（全面挂靠）依赖它。
+
+### 三问复盘
+1. **重来怎样更好**：codex 闸-1 两次质疑（全局技能盲区"虚假安全感" + K2/K3 边界）都指向同一根：别让规范文档制造"已强制"错觉（呼应 memory `feedback_prompt_needs_code_backup`：自觉规则≠强制闸）。元规则首版把"RED LINE/必须"写得像强制，闸-1 逼出诚实声明"K2 是审查期规范，K3 才是强制闸"。
+2. **复用价值**：① 「自觉规范 + 自动闸职责边界明写，不混淆」对任何"政策文档 + governance 闸"配对通用；② 「codex 信息不足误判 → grep 验证项目惯例后拒绝」（policy:append-only/AGENTS§8.2）是 receiving-code-review 正例：验证后拒绝技术不成立建议，不盲从；③ 「元规则 paths 含自身 + 治理文件」让编辑技能治理文件时规则自注入。
+3. **如何更高质量自动化**：K2 是规范层，自动化由 K3 承接（字段层）。残留：公式/枚举/阈值/输入契约四类目前无自动闸，§5 已诚实标注"后续若需自动化须另建闸"——有意范围控制，非缺口。
+
+### needs_automation: false
+（K2 是审查期规范，自动化兜底明确委托 K3 字段闸；公式/枚举/阈值/输入契约四类的自动闸属未来独立 backlog，§5 已诚实标注边界。强行给四类建闸属过度工程——先让 K3 字段闸落地验证模式。）
+
+---
+
+## 2026-06-27 · K4 指标注册表新增件均保费 avg_premium_per_policy（技能口径治理·evidence-loop scorecard）
+
+> 承接计划 §4 K4（治理链第二波，dep K1 已合并 PR#819）。dispatch 因别批次 62e84c 占 be-config 域推迟 K4，但 62e84c 无人认领（在飞 0），主动推进。
+
+- **业务目标**：注册原子指标 avg_premium_per_policy（件均保费=保费÷保单件数），消除四象限/前端"人均/件均/总保费"三义。
+- **基线**：foundation.ts 已有 per_capita_premium（人均）+ per_vehicle_premium（车均），缺件均保费；前端 GeoSection 用含糊的 d.avg_premium 字段（非注册表 SSOT）。
+- **候选（2 文件 +41/-2）**：foundation.ts 加 avg_premium_per_policy（仿 per_vehicle_premium 范式）+ generate-frontend-map 同步 metric-display-map.ts。
+- **oracle 实证**：duckdb 实测 SX 件均 847.9 元 < 车均 1240 < 人均 56万（三口径数量级各异，消除三义坐实）；expression 跑通；validate 56 指标通过；typecheck + governance 45/45。
+- **双闸（codex CLI）**：闸-1 GO（0P0/0P1，确认 additive:false 比率正确 + NULLIF 防除零 + 原子口径与 total_premium/policy_count 一致 + 不与 per_capita/per_vehicle 重复；采纳 P2 压缩 notes/tooltip）；闸-2 GO（0P0/P1/P2，确认 codegen 三处一致 + 只增不动其他）。
+- **决策**：promote。K4 落地解锁 K5（dep K1+K2+K4 满足）。
+
+### 三问复盘
+1. **重来怎样更好**：① 跑 generate-metric-doc 意外暴露指标字典.md 严重 pre-existing drift（停 52 vs 注册表 56）——果断撤销不混入 K4（§2 流程只要求 generate-frontend-map），spawn_task 登记独立治理债。教训＝codegen 产物 regen 时若 diff 远超本次改动，先判断是否 pre-existing drift，别让历史债污染当前 PR 范围。② dispatch 域调度把 K4 推迟（别批次 62e84c 占 be-config），核实 62e84c 无人认领（在飞 0）后主动推进——dispatch 域互斥是粗粒度保守，PROPOSED≠在做。
+2. **复用价值**：① 「仿最近邻范式注册新指标」（per_vehicle_premium → avg_premium_per_policy）确保字段/formatter/changelog 一致；② 「codegen 产物 diff 远超手改 → 识别 pre-existing drift 撤销 + spawn_task」防范围蔓延通用；③ 「duckdb 实测三口径数量级各异坐实消除歧义必要性」是数据口径类改动的标准证据。
+3. **如何更高质量自动化**：指标字典.md drift 暴露 generate-metric-doc 未纳入常规 codegen/CI（spawn_task 已登记排查 + 拟加 governance「指标字典与注册表一致」检查）。K4 本身的 metric-display-map 由 §2 流程 + governance 守护，无新增自动化缺口。
+
+### needs_automation: false
+（K4 注册指标走既有 §2 codegen 流程 + governance 守护，无新增待自动化项。指标字典.md drift 的自动化排查已 spawn_task 独立登记，不属 K4 范围。）

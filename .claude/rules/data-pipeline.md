@@ -30,6 +30,30 @@ paths: ["数据管理/**", "scripts/sync-vps.mjs", "scripts/**"]
 | 团队映射 | `数据管理/warehouse/dim/salesman_organization_mapping.json` | 业务员-团队-机构映射（回退） |
 | 续保明细 | `数据管理/warehouse/fact/renewal/` | 续保数据 |
 
+## 省份数据隔离（RED LINE - 2026-06-27 起，多省平台强制）
+
+> 背景：平台已多省（四川 SC / 山西 SX）。同一 warehouse 目录混放多省 Parquet，裸 `*.parquet` glob 跨省混查且**静默不报错**。实证（2026-06-27 山西诊断 duckdb 直查）：裸 `current/*.parquet` 按 `branch_code` 聚合 = SC 261.6 万行 + SX 183.3 万行；同口径 2026 年至今净额，裸 glob 约 38.9 万件 / 32006 万元 vs SX 隔离 11.4 万件 / 9865 万元 —— **混查放大约 3.4 倍，且零报错**。
+
+**权威隔离键 = `branch_code` 列**（ETL 按部署省份注入的常量列，值 `SC` / `SX`，由 `server/src/config/sql-federation-policy.ts` 的 `getDeploymentBranchCode()` 写入）。所有 Parquet 直查 / glob **必须** `WHERE branch_code = '<省份码>'`；文件名 glob 仅作缩小扫描范围的性能辅助，**不可单独依赖**（四川存在"无前缀 + `sichuan_`"两种文件名模式，glob 易漏）。
+
+| 省份 | branch_code | 保单 glob（`fact/policy/current/`） | 赔案路径 |
+|------|-------------|-------------------------------------|----------|
+| 四川 SC | `'SC'` | `read_parquet(['[0-9]*.parquet','sichuan_*.parquet'])` | `fact/claims_detail/claims_*.parquet` |
+| 山西 SX | `'SX'` | `read_parquet('SX_*.parquet')` | `validation/SX/claims_detail/claims_*.parquet` |
+
+> ⚠️ DuckDB **不支持 brace 展开** `{a,b}`（实测 `IO Error: No files found`）；四川两类文件名必须用 `read_parquet([...])` **列表形式**，禁写 `{[0-9]*,sichuan_*}`。非数据文件（如 `schema-analysis.json`）天然不被 `*.parquet` glob 匹配。表中保单 glob 相对 `数据管理/warehouse/fact/policy/current/`、赔案相对 `数据管理/warehouse/`；直查须补全前缀（worktree 用主仓绝对路径）。
+
+**禁止**：
+- ❌ 裸 `current/*.parquet` 不带 `WHERE branch_code` 过滤（混查静默错误）
+- ❌ 硬编码单省 / 默认四川 —— 技能、脚本、直查必须按 `--province` 显式解析省份
+- ❌ 仅靠文件名前缀省去 `WHERE branch_code`（前缀是性能辅助，非隔离保证）
+
+**fail-closed（未来新省份）**：`--province` 只接受**已注册**省份（当前 SC / SX）；遇未知省份、缺 glob 映射、缺 `branch_code` 时**必须报错中止**，禁止静默回落 `'SC'`。
+
+**生产代码层省份解析**（区别于本规则覆盖的"查询 / 技能 / 直查层"）：见 `开发文档/reviews/2026-06-27-多省硬编码审计/` 工程一「省份解析 fail-closed」路线图（规划中：建 `resolveBranchCode()` 替换全栈 23 处 `?? 'SC'` 静默默认，当前**尚未落地**；现存 `getDeploymentBranchCode()` 负责写入 `branch_code` 列）。
+
+**山西 GATED**：SX 生产 API 不返回数据，验证一律 duckdb 直查 `SX_*.parquet`。worktree 无 Parquet（gitignored），须用主仓绝对路径 `/Users/<user>/.../chexian-api/数据管理/warehouse/...`。
+
 ## 数据加载流程
 
 ```bash
