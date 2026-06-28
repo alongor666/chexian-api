@@ -119,12 +119,19 @@ describe('generateCrossSellQuery — 补充覆盖', () => {
     expect(sql).toContain("'非续保'");
   });
 
-  // ── 1-G: salesman 维度包含 REGEXP_REPLACE 去工号 ────────────────────────────
-  it('1-G: groupBy=salesman 使用 REGEXP_REPLACE 去工号前缀', () => {
+  // ── 1-G: salesman 聚合键带工号（人唯一键）+ display_name 短名两级判重 ──────────
+  // 2026-06-27 口径修复（跟进 performance-analysis 样板 PR #830）：聚合/分组键改回带工号
+  // salesman_name 防同名不同工号真人合并（张丽×3 等）；短名仅用于展示层 display_name。
+  // 口径见业务规则字典 §业务员（聚合键 vs 展示口径 RED LINE）。
+  it('1-G: groupBy=salesman 聚合键带工号 + display_name 短名两级判重', () => {
     const sql = generateCrossSellQuery(BASE_WHERE, [], 'salesman');
-    expect(sql).toContain('REGEXP_REPLACE');
-    expect(sql).toContain("'^[0-9]+'");
-    expect(sql).toContain('AS group_name');
+    // 聚合键用带工号全名（COALESCE 防空），非去工号短名
+    expect(sql).toContain("COALESCE(c.salesman_name, '未知') AS group_name");
+    expect(sql).toContain("GROUP BY COALESCE(c.salesman_name, '未知')");
+    expect(sql).not.toContain("REGEXP_REPLACE(c.salesman_name, '^[0-9]+', '') AS group_name");
+    // display_name：短名 + 冲突两级判重（同机构同名加工号兜底 REGEXP_EXTRACT）
+    expect(sql).toContain('AS display_name');
+    expect(sql).toContain("REGEXP_EXTRACT(group_name, '^[0-9]+')");
   });
 
   // ── 1-H: drillPath team 步骤触发 JOIN（即便 groupBy 不是 team）──────────────
@@ -187,6 +194,21 @@ describe('generateCrossSellQuery — 补充覆盖', () => {
       expect(typeof DIMENSION_LABELS[dim]).toBe('string');
       expect(DIMENSION_LABELS[dim].length).toBeGreaterThan(0);
     }
+  });
+
+  // ── 1-P: 业务员下钻用带工号精确匹配（防同名多人合并）— 2026-06-27 口径修复 ───────
+  it('1-P: drillPath salesman 步骤用带工号精确匹配，非去工号短名', () => {
+    const steps: DrilldownStep[] = [{ dimension: 'salesman', value: '118069129张丽' }];
+    const sql = generateCrossSellQuery(BASE_WHERE, steps, 'org_level_3');
+    // 带工号精确匹配单个真人（无 team JOIN 时 colPrefix 为空）
+    expect(sql).toContain("COALESCE(salesman_name, '未知') = '118069129张丽'");
+    expect(sql).not.toContain("REGEXP_REPLACE(salesman_name, '^[0-9]+', '') = '118069129张丽'");
+  });
+
+  // ── 1-Q: 汇总模式也输出 display_name 列（前端统一消费）───────────────────────
+  it('1-Q: groupBy=null 汇总模式输出 display_name 列', () => {
+    const sql = generateCrossSellQuery(BASE_WHERE, [], null);
+    expect(sql).toContain('group_name AS display_name');
   });
 });
 

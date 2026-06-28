@@ -2239,6 +2239,65 @@ function checkEmptyCatchBlocks() {
 }
 
 /**
+ * 业务员聚合键口径闸（2026-06-27 口径修复防回归，跟进 performance-analysis 样板 PR #830）
+ *
+ * 病根：cross-sell / marketing / performance 等 SQL 生成器曾按"去工号短名"
+ * （REGEXP_REPLACE(salesman_name,'^[0-9]+','')）做聚合 / JOIN / 下钻筛选键，把同名不同工号的
+ * 真业务员合并（实测 SC+SX 968 真人中 17 人同名：张丽×3、李娜×3、刘志伟×2 等）→ 保费/件数/排名失真。
+ *
+ * 口径（数据管理/knowledge/rules/车险数据业务规则字典.md §业务员 聚合键 vs 展示口径 RED LINE）：
+ * 聚合/分组/JOIN/下钻键必须用带工号 salesman_name（=工号+姓名=人唯一键）；短名仅用于展示层
+ * display_name —— 从带工号 key 的别名（group_name / dimension_name）去工号，**不直接作用于 salesman_name 列**。
+ *
+ * 规则：server/src/sql/**（排除 __tests__）禁止 REGEXP_REPLACE 直接作用于 salesman_name 列。
+ * 正确的 display 从带工号 key 别名去工号，故合法代码对本模式零命中（实测修复后生产 SQL 全零）。
+ *
+ * 逃生阀：确有正当的纯展示去工号需求（无独立 display 列可挂），在命中行或其上一行写
+ *   `governance-allow: salesman-aggkey <一句理由>`
+ */
+function checkSalesmanAggKeyCaliber() {
+  info('检查业务员聚合键口径（server/src/sql 禁去工号短名做聚合/JOIN/下钻键）...');
+  const sqlDir = path.join(ROOT_DIR, 'server/src/sql');
+  // REGEXP_REPLACE( ...（首参内无右括号）... salesman_name → 直接对 salesman_name 列去工号
+  // （含嵌套 COALESCE(salesman_name…) 形态；display CASE 操作的是 group_name/dimension_name 别名，不命中）
+  const forbiddenRe = /REGEXP_REPLACE\([^)]*salesman_name/;
+  const allowRe = /governance-allow:\s*salesman-aggkey/;
+  const violations = [];
+
+  function walk(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === '__tests__' || entry.name === 'node_modules' || entry.name === 'dist') continue;
+        walk(full);
+      } else if (/\.ts$/.test(entry.name)) {
+        const lines = fs.readFileSync(full, 'utf-8').split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (!forbiddenRe.test(lines[i])) continue;
+          if (allowRe.test(lines[i]) || (i > 0 && allowRe.test(lines[i - 1]))) continue;
+          violations.push(`${path.relative(ROOT_DIR, full)}:${i + 1}  ${lines[i].trim().slice(0, 100)}`);
+        }
+      }
+    }
+  }
+  walk(sqlDir);
+
+  if (violations.length > 0) {
+    error(`发现业务员去工号短名做键（同名不同工号真人会被合并）= ${violations.length} 处：`);
+    for (const v of violations) console.log(`    - ${v}`);
+    console.log('    修复：聚合/JOIN/下钻键改回带工号 salesman_name（人唯一键）；');
+    console.log('    UI 短名从 group_name/dimension_name 别名去工号（display_name 列），勿直接对 salesman_name 列去工号。');
+    console.log('    口径：数据管理/knowledge/rules/车险数据业务规则字典.md §业务员（聚合键 vs 展示口径 RED LINE）');
+    console.log('    样板：server/src/sql/performance-analysis/*（PR #830）；逃生阀：governance-allow: salesman-aggkey <理由>');
+    return false;
+  }
+
+  success('业务员聚合键口径检查通过（server/src/sql 无去工号短名做键）');
+  return true;
+}
+
+/**
  * 筛选参数绕过检测（治理计划 2026-06-10 Task 1-D，防复发核心）
  *
  * 病根：各页绕过统一转换函数 src/shared/utils/filterParams.ts:buildFilterParams
@@ -3403,6 +3462,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
   { name: '空catch禁令', fn: checkEmptyCatchBlocks },
+  { name: '业务员聚合键口径', fn: checkSalesmanAggKeyCaliber },
   { name: '筛选参数绕过', fn: checkFilterParamsBypass },
   { name: '能力矩阵镜像', fn: checkFilterCapabilityMirror },
   { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },

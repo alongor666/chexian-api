@@ -90,8 +90,10 @@ function drillStepToWhere(step: DrilldownStep, colPrefix: string): string {
       // team 过滤在 JOIN 后的 WHERE 中处理
       return `tm.team_name = '${esc(step.value)}'`;
     case 'salesman':
-      // salesman 的 group_name 是去掉工号的名字，所以用 LIKE 匹配
-      return `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') = '${esc(step.value)}'`;
+      // 下钻传带工号 key（group_name=salesman_name，工号+姓名=人唯一键），精确匹配单个真人；
+      // 勿用去工号短名（会命中同名多人，把同名不同工号真人合并）。2026-06-27 口径修复，
+      // 对齐 performance-analysis 样板 PR #830；口径见业务规则字典 §业务员（聚合键 vs 展示口径）
+      return `COALESCE(${colPrefix}salesman_name, '未知') = '${esc(step.value)}'`;
     case 'insurance_grade':
       return `COALESCE(${colPrefix}insurance_grade, 'X') = '${esc(step.value)}'`;
     default:
@@ -126,9 +128,12 @@ function getGroupByConfig(dimension: CrossSellDimension, colPrefix: string): {
         groupByExpr: "COALESCE(tm.team_name, '未归属团队')",
       };
     case 'salesman':
+      // 聚合键必须用带工号全名（salesman_name=工号+姓名=人唯一键），禁去工号——
+      // 否则同名不同工号的真人被合并（张丽×3 等）。短名仅用于展示层 display_name
+      //（见 generateCrossSellQuery 外层 SELECT）。COALESCE 防空值，与下钻 WHERE 对齐。
       return {
-        selectExpr: `REGEXP_REPLACE(${colPrefix}salesman_name, '^[0-9]+', '') AS group_name`,
-        groupByExpr: `${colPrefix}salesman_name`,
+        selectExpr: `COALESCE(${colPrefix}salesman_name, '未知') AS group_name`,
+        groupByExpr: `COALESCE(${colPrefix}salesman_name, '未知')`,
       };
     case 'insurance_grade':
       return {
@@ -212,6 +217,21 @@ export function generateCrossSellQuery(
       team_name,`
     : '';
 
+  // display_name：salesman 维度用短名（去工号）做显示，两级判重消歧——
+  // 短名唯一→短名；同短名跨机构→短名·机构；同机构同名→短名·机构#工号（绝对区分）；admin→直接个代。
+  // group_name 始终保留带工号原值（人唯一键）供下钻精确传参，UI 显示用 display_name。
+  // 其他维度 group_name 本身即显示名。对齐 performance-analysis 样板 PR #830。
+  const displaySelect = includeHierarchy
+    ? `CASE
+        WHEN group_name ILIKE 'admin%' THEN '直接个代'
+        WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(group_name, '^[0-9]+', '')) = 1
+          THEN REGEXP_REPLACE(group_name, '^[0-9]+', '')
+        WHEN COUNT(*) OVER (PARTITION BY REGEXP_REPLACE(group_name, '^[0-9]+', ''), org_level_3) = 1
+          THEN REGEXP_REPLACE(group_name, '^[0-9]+', '') || '·' || COALESCE(org_level_3, '未知机构')
+        ELSE REGEXP_REPLACE(group_name, '^[0-9]+', '') || '·' || COALESCE(org_level_3, '未知机构') || '#' || REGEXP_EXTRACT(group_name, '^[0-9]+')
+      END AS display_name`
+    : `group_name AS display_name`;
+
   const sql = `
     WITH cross_sell_base AS (
       SELECT
@@ -233,6 +253,7 @@ export function generateCrossSellQuery(
     )
     SELECT
       group_name,
+      ${displaySelect},
       ${hierarchyFinal}
       total_auto_count,
       total_driver_count,
@@ -294,6 +315,7 @@ function generateSummaryOnly(
     )
     SELECT
       group_name,
+      group_name AS display_name,
       total_auto_count,
       total_driver_count,
       danjiao_auto_count,

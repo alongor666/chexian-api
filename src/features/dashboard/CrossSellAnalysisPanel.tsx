@@ -245,7 +245,9 @@ function formatCell(col: ColumnDef, row: CrossSellRow, currentDimension?: string
   const text = String(row[col.key] ?? '');
   if (col.key === 'group_name') {
     if (currentDimension === 'team') return formatTeamName(text);
-    if (currentDimension === 'salesman') return formatSalesmanName(text);
+    // salesman 维度优先用后端 display_name（短名+同名冲突机构后缀，已两级判重）；
+    // group_name 现为带工号 key（仅下钻传参），fallback 去工号短名
+    if (currentDimension === 'salesman') return String(row.display_name ?? '') || formatSalesmanName(text);
   }
   return text;
 }
@@ -497,9 +499,9 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
     }
   };
 
-  /** DrilldownCell 行内选择维度 → 直接下钻 */
-  const handleCellDrillDown = (rowValue: string, dimension: string) => {
-    drillDown(rowValue, dimension as CrossSellDimension);
+  /** DrilldownCell 行内选择维度 → 直接下钻（rowValue=带工号 key 精确过滤，displayLabel=短名供面包屑） */
+  const handleCellDrillDown = (rowValue: string, dimension: string, displayLabel?: string) => {
+    drillDown(rowValue, dimension as CrossSellDimension, displayLabel);
   };
 
   /** DimensionPicker（仅初始选维度） */
@@ -805,7 +807,7 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
                                         label={displayName}
                                         availableDimensions={availableDimensions}
                                         dimensionLabels={DIMENSION_LABELS}
-                                        onSelect={(dim) => handleCellDrillDown(row.group_name, dim)}
+                                        onSelect={(dim) => handleCellDrillDown(row.group_name, dim, displayName)}
                                         className="font-medium"
                                       />
                                     </span>
