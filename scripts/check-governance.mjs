@@ -1035,6 +1035,89 @@ print(json.dumps({"data_present": True, "scanned": len(files), "violations": vio
 }
 
 // ============================================================
+// SC policy [!S]* glob 前缀隔离检测（2026-06-28 · 四川混查止血的可靠性保证）
+// ============================================================
+/**
+ * diagnose_common.branch_paths('SC').policy_glob = fact/policy/current/[!S]*.parquet，靠文件名
+ * 前缀排除 SX_ 文件（fact/current 物理混放 SC+SX，Phase A 前缀架构；裸 *.parquet 会混入 SX 致
+ * 四川诊断虚高约 70%）。本闸校验该 glob 的隔离前提持续成立：
+ *   - 凡 branch_code='SX' 的文件，文件名必以 'S' 开头（会被 [!S]* 排除）；
+ *   - 凡 branch_code='SC' 的文件，文件名必非 'S' 开头（会被 [!S]* 保留）；
+ *   - 出现第三省（branch_code ∉ {SC,SX}）→ [!S]* 方案不适用，须把 SC 路由改 WHERE branch_code。
+ * 与 checkSingleProvincePerFile 互补：后者查文件「内容」单省一致 + 派生省==列省，本闸查文件
+ * 「名前缀」↔省份映射（防 SX 数据用非 S 前缀文件名致 [!S]* 静默漏入，前者抓不到此情形）。
+ * CI 无数据 → skip（数据相关检查本地/发布链路跑）。
+ */
+function checkPolicyGlobPrefixIsolation() {
+  info('检查 SC policy [!S]* glob 前缀隔离前提（SX 文件名必 S 开头）...');
+  const policyGlob = path.join(ROOT_DIR, '数据管理/warehouse/fact/policy/current/*.parquet');
+  const py = `
+import sys, json, glob, os
+files = sorted(glob.glob(sys.argv[1]))
+if not files:
+    print(json.dumps({"data_present": False})); sys.exit(0)
+import duckdb
+con = duckdb.connect()
+violations = []
+NL = chr(10)
+for fp in files:
+    base = os.path.basename(fp)
+    starts_S = base[:1] == 'S'
+    rp = "read_parquet('" + fp + "')"
+    try:
+        cols = [c[0] for c in con.execute("DESCRIBE SELECT * FROM " + rp).fetchall()]
+    except Exception as e:
+        violations.append({"file": fp, "kind": "read_error", "detail": str(e).split(NL)[0]}); continue
+    if 'branch_code' not in cols:
+        continue
+    distinct = [r[0] for r in con.execute("SELECT DISTINCT branch_code FROM " + rp).fetchall()]
+    nonnull = sorted(set(str(v) for v in distinct if v is not None and str(v).strip() != ''))
+    for bc in nonnull:
+        if bc not in ('SC', 'SX'):
+            violations.append({"file": fp, "kind": "third_province",
+                               "detail": "branch_code=" + bc + " 非 SC/SX，[!S]* 方案不适用，须改 WHERE branch_code"})
+        elif bc == 'SX' and not starts_S:
+            violations.append({"file": fp, "kind": "sx_not_excluded",
+                               "detail": "branch_code=SX 但文件名非 S 开头，SC 的 [!S]* glob 会误读入致四川混查"})
+        elif bc == 'SC' and starts_S:
+            violations.append({"file": fp, "kind": "sc_wrongly_excluded",
+                               "detail": "branch_code=SC 但文件名 S 开头，SC 的 [!S]* glob 会误排除致四川漏读"})
+print(json.dumps({"data_present": True, "scanned": len(files), "violations": violations}))
+`;
+  let out;
+  try {
+    out = execFileSync('python3', ['-c', py, policyGlob], { encoding: 'utf-8', maxBuffer: 16 * 1024 * 1024 });
+  } catch (e) {
+    error(`[!S]* glob 前缀隔离检测无法执行（python3/duckdb 缺失或读失败）：${String(e.message || e).split('\n')[0]}`);
+    return false;
+  }
+  let r;
+  try {
+    r = JSON.parse(out.trim());
+  } catch {
+    error(`[!S]* glob 前缀隔离检测输出解析失败：${out.slice(0, 200)}`);
+    return false;
+  }
+  if (!r.data_present) {
+    success('[!S]* glob 前缀隔离检测：无生产 policy parquet（CI/非数据环境），跳过');
+    return true;
+  }
+  if (!r.violations || r.violations.length === 0) {
+    success(`[!S]* glob 前缀隔离前提成立（扫描 ${r.scanned} 个 policy parquet · SX 文件名皆 S 开头）`);
+    return true;
+  }
+  error(`[!S]* glob 前缀隔离前提被破坏（${r.violations.length} 项 · 四川诊断混查/漏读风险）：`);
+  for (const v of r.violations) {
+    const rel = v.file.replace(ROOT_DIR + '/', '');
+    console.log(`    - [${v.kind}] ${rel}: ${v.detail}`);
+  }
+  console.log('    ▶ sx_not_excluded：SX 文件须用 SX_ 前缀命名（ETL 落盘命名规范）；');
+  console.log('    ▶ third_province：第三省须把 diagnose_common SC 路由改 WHERE branch_code（[!S]* 仅 SC/SX 两省成立）；');
+  console.log('    ▶ 关联：diagnose_common.branch_paths SC policy_glob = current/[!S]*.parquet');
+  return false;
+}
+
+// ============================================================
 // 第14项检查：暂存区凭据/敏感产物扫描
 // ============================================================
 
@@ -3590,6 +3673,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'ETL台账新鲜度', fn: checkEtlLedgerFreshness },
   { name: '技能字段闸', fn: checkSkillFieldGate },
   { name: '省份静默默认反模式', fn: checkBranchCodeFallbackAntipattern },
+  { name: 'SC policy glob前缀隔离', fn: checkPolicyGlobPrefixIsolation },
 ];
 
 // ============================================================
