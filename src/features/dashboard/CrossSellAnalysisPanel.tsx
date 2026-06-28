@@ -96,6 +96,11 @@ type SortOrder = 'asc' | 'desc';
 
 function sortRows(rows: CrossSellRow[], key: SortKey, order: SortOrder): CrossSellRow[] {
   return [...rows].sort((a, b) => {
+    if (key === 'group_name') {
+      // salesman 维度用 display_name（用户可见短名）排序；其他维度 display_name === group_name，fallback 安全
+      const diff = (a.display_name ?? a.group_name).localeCompare(b.display_name ?? b.group_name);
+      return order === 'asc' ? diff : -diff;
+    }
     const aVal = Number(a[key]) || 0;
     const bVal = Number(b[key]) || 0;
     return order === 'asc' ? aVal - bVal : bVal - aVal;
