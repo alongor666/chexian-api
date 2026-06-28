@@ -1734,3 +1734,24 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 - expires: 2026-09-27（与 E1/E2/loop-orchestration §4 同日 meta 同窗；属 loop-meta）。
 
 **三问复盘**：① 重来更好？domain 字面要求 vs oracle 主题诉求的张力本应在闸-1 前自查更彻底——阶段 A 已用证据揭示 domain HHI 仅 1.8×均匀，但靠 codex 闸-1 才定死双维度方案；早识别"任务描述内部张力（按 domain 字段 vs ~59% 主题）"应直接在合同里列为待裁决项交闸-1。② 复用价值？`hhiOf` / `overfitFlag` / `classifyTopic` 对任何"自产自评闭环装样本多样性意识"通用；**"关键词启发式 + 诚实漏判边界 + 反例测试锁误命中"是脆弱分类器的标准工程化折中**（codex 闸-2 两轮收窄实证 P1-1）。③ 自动化？本项即"把过拟合从不可见变机制化可见 + 打标"；残留人工点 = meta-review 须真的据 `overfit.flagged` 打标（E6 拟硬化为 governance）。
+
+---
+
+## 2026-06-27 · K5 收官 chexian-data-kpi 满期赔付率补全 + 口径挂靠总表（技能口径治理·evidence-loop scorecard）
+
+> 承接计划 §4 K5（治理链**收官**，dep K1+K2+K4 已合并）。补满期赔付率（挂靠 earned_claim_ratio 不内联）+ 口径挂靠总表（11 条 K1-K5 闭环）+ 产物/场景边界/worktree 回退。
+
+- **业务目标**：chexian-data-kpi 满期赔付率补全（挂靠注册表指向实现）+ 11 条口径全面挂靠 SSOT 闭环 + 补技能元信息（产物/边界/worktree）。
+- **基线**：K1 修了 kpi 省份/净额/字段/枚举/时间；K2-K4 建元规则/字段闸/件均；K5 补满期赔付率 + 收口总表。
+- **候选（1 文件 +43/-3）**：chexian-data-kpi.md 加满期赔付率节（挂靠 earned_claim_ratio）+ 口径挂靠总表（11 条）+ 产物与边界节 + frontmatter（version 1.3.0 + dependencies 补治理依赖）+ 四象限件均注 + SQL 模块参考补。
+- **oracle 实证**：满期赔付率口径实测铁证——错误（settled+reserve **相加** + 未排无责）机构满期赔付率虚高至 143%；正确（已结/未结**二选一** + 排无责无效 + 闰年感知）56-73%（SX 2025 保单年度）。**手写极易错 → 必挂靠 earned_claim_ratio 不内联**。governance 46/46，技能字段闸不误报 K5（满期赔付率节 blockquote 用落列字段，无 reported_claims/无 SQL fence）。
+- **双闸（codex CLI）**：闸-1 GO-with-fixes（加口径挂靠总表 11 条闭环 + blockquote 明确二选一不得相加 + dependencies 补治理依赖）全采纳；闸-2 GO（P1：四象限轴区分人均÷业务员/件均÷件数[K4] + 错误口径 100-143%→143% 单值 + 总表锚点补具体可定位路径；P2：dependencies 补 time-caliber）。
+- **决策**：promote。**治理链 K1-K5 收官闭环**：K1 修单例（kpi 省份/净额）→ K2 元规则（技能禁内联必挂靠）→ K3 强制闸（幽灵字段 governance error）→ K4/K5 补口径（件均/满期）→ K5 口径挂靠总表收口（11 条逐项 SSOT）。
+
+### 三问复盘
+1. **重来怎样更好**：满期赔付率实测一遍踩中"settled+reserve 相加"陷阱（143% 不合理），改 CASE 二选一 + 排无责无效才合理（56-73%）——这次踩坑**反而成了 K5"必挂靠不内联"的最强论据**（手写满期赔付率口径错一处就翻倍）。教训＝复杂 L4 口径（已结/未结分类 + 无责排除 + 闰年感知）禁手写内联到技能，必挂靠注册表 + 指向 claims-heatmap.ts 实现。
+2. **复用价值**：① **「口径挂靠总表」**（逐项 口径→SSOT 锚点→治理链来源）是任何"技能/模块挂靠 SSOT"收官的可视化闭环模板，让"是否真挂靠"一眼可审计；② **「复杂口径挂靠注册表 + blockquote 说明口径要点 + 指向实现入口，不内联完整 SQL」** 是 K2 元规则在 L4 口径上的标准落法（满期赔付率＝范例）；③ **「踩坑实测做反证」**（143% vs 56-73%）比抽象说"口径复杂"更有说服力。
+3. **如何更高质量自动化**：K5 是文档收口。残留 follow-up：① 四象限轴件均回填（计划 §8）；② 推广审计修 4 技能 endorsement_type（task_ea580007，K3 grandfather 的）；③ 指标字典.md drift regen（task_8ec3b2d2）。治理链 K1-K5 主体闭环，这 3 项是登记的延伸治理。
+
+### needs_automation: false
+（K5 是技能文档收口，挂靠 SSOT 闭环已由 K3 governance 技能字段闸强制 + K5 口径挂靠总表可视化。残留 follow-up（四象限件均回填/推广审计修 4 技能/指标字典 regen）均已 spawn_task 或计划 §8 登记，非 K5 缺口。治理链 K1-K5 主体闭环完成。）
