@@ -16,11 +16,11 @@
 
 ---
 
-## 📋 活跃任务速查（96 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（95 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（15 项）**
+**P1（14 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
@@ -33,7 +33,6 @@
 - 2026-06-25-claude-fe871b — cutover能力PR-3(GATED终点·deps PR-1/2+山西账号·碰部署链)
 - 2026-06-27-claude-294022 — 生产reload冷启动期全站502数分钟
 - 2026-06-27-claude-8f71c0 — 报价转化页(/quote-conversion/*)+客户来源页(/customer-f
-- 2026-06-27-claude-96e597 `IN_PROGRESS` — 治理工程三·SX数据域补全(修SX当前故障)
 - 2026-06-27-claude-a41779 — 治理工程四·多省可扩展性收口+防回归
 - 2026-06-27-claude-c68b54 — 业绩分析页(/performance-analysis,org_user核心页)子板块对
 - 2026-06-27-claude-e96d85 `PARTIAL` — 治理工程二·机构省份元数据单一事实源(含山西在线bug)
@@ -222,7 +221,6 @@
 | 2026-06-27-claude-794df9 | 2026-06-27 | Loop v2 进化 | @claude | E4 砍死规则 + 真升级校验（治茧房5+6·只增不减）：新脚本 scripts/loop/rule-hit-rate.mjs 扫 loop-orchestration 各 meta 规则/dispatch 各闸，统计每条在 ledger/pr-evolution 的触发次数，输出命中率0=死规则/过度设计清单；automation-due 增『是否真升级为机制』校验（识别处置=又写一条文档的假处置）。借 extract-backlog-governance 方法。验收：跑一次输出死规则清单。依赖 E1。 | P2 | PROPOSED | 开发文档/loop-v2-进化规划.md | scripts/loop/automation-due.mjs |  |
 | 2026-06-27-claude-8f71c0 | 2026-06-27 | 数据/ETL-schema | @claude | 报价转化页(/quote-conversion/*)+客户来源页(/customer-flow/*)对SX数据域schema不匹配：报「列不存在：policy_date」。SX Parquet缺policy_date列或SQL用了四川专有列名，整页系不可用。修补方向：核对SX数据域schema与SQL列名，对齐字段注册表。来源：山西13账号VPS验证(2026-06-27) | P1 | PROPOSED | N/A | 数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md | 根因修正(硬编码审计): SQL生成器静态不引用policy_date(用quote_time/insurance_start_date)。真根因待最终定位(VIEW/JOIN/cache层+BRANCH_RLS_ENABLED=false时permissionFilter=1=1)。归入治理工程三,需先定位再修。 |
 | 2026-06-27-claude-901f0d | 2026-06-27 | 多省/权限 | @claude | 派生域 ALL IN-scope 升级（codex 闸-2 P2·第3省上线前必修）：全国超管 targetBranch=ALL 时 permissionFilter=branch_code IN(visibleBranches)，但 resolveBranchRlsCode 只反解单码 branch_code='XX'、不识别 IN(...)→派生域(RepairDim/ClaimsDetail/RenewalTrackerFact/achievement_cache/SalesmanTeamMapping)在 ALL 下不分省下推(unfiltered)。当前靠省份注册表三者耦合不变量(visibleBranches==getAllBranchCodes==BRANCH_ORGANIZATIONS keys)保证 unfiltered==所有已注册省 安全。第3省上线前把 resolveBranchRlsCode 升级成可返回 branch set/IN clause，或逐路由显式处理 ALL。注意 kpi-detail SAME_CITY_ORGS_BY_BRANCH 等单省专属语义需同步泛化 | P2 | PROPOSED | 开发文档/multi-branch/全国超管切省设计_2026-06-26.md | server/src/routes/query/shared.ts |  |
-| 2026-06-27-claude-96e597 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程三·SX数据域补全(修SX当前故障): generate_dim_tables.py业务员/计划维度表仅四川xlsx→SX salesman/plan维度表空→performance-drilldown/bundle JOIN Binder Error空body。动作:加--branch-code+SX xlsx生成SX维度表;定位quote-conversion/customer-flow policy_date真根因(VIEW/JOIN/cache);SQL生成器quote/customer-flow补branchCode参数。合并自c68b54+8f71c0。来源:地域硬编码全域审计(2026-06-27) | P1 | IN_PROGRESS | N/A | server/src/sql/quote-conversion.ts |  |
 | 2026-06-27-claude-a41779 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程四·多省可扩展性收口+防回归: 当前新增一省≈改20+处跨4链路含多个静默失效陷阱(鉴权6文件9触点/ETL5类/前端整套机构清单/脚本3必改)。动作:新增省checklist配置驱动或codegen;oracle字节断言参数化(oracle_mpdata/p4_backfill死认['SC']→[declared_branch]);sync-vps SUPPORTED_BRANCH_CODES白名单+sx-promote通用化(--branch);governance加多省一致性校验+哨兵分省。来源:地域硬编码全域审计(2026-06-27) | P1 | PROPOSED | N/A | scripts/release/sx-promote.mjs |  |
 | 2026-06-27-claude-c68b54 | 2026-06-27 | SQL/查询 | @claude | 业绩分析页(/performance-analysis,org_user核心页)子板块对SX故障：/performance-drilldown 与 /performance-bundle 带正确参数(startDate/endDate/organization)仍持续返回 400+零字节响应体，前端无法解析错误。来源：山西13账号VPS验证(2026-06-27)，干净复测确认 | P1 | PROPOSED | N/A | server/src/sql | 根因定位(硬编码审计): 非SQL字面硬编码,真根因疑为SX业务员/计划维度表未生成(generate_dim_tables.py仅四川xlsx)→JOIN触发DuckDB Binder Error被吞成空body。归入治理工程三。 |
 | 2026-06-27-claude-ddd89e | 2026-06-27 | 多省/权限·测试 | @claude | 切省 in-flight 回填回归测试（codex 闸-2 P2-2）：BranchContext.setBranch 已用 apiClient.cancelAllRequests()(同步 abort 在飞 GET) + queryClient.cancelQueries() + clear() 关闭跨省串读窗口；但缺显式回归测试证明 SC 请求在飞时切 SX、旧 SC 响应不会按同 query key 回填。补 RTL 测试：mock apiClient(cancelAllRequests/setTargetBranch)+queryClient，渲染 BranchProvider 触发 setBranch，断言清理调用链顺序(setTargetBranch→cancelAllRequests→cancelQueries→clear→FORCE_REFRESH)。可选把 clear 链路改成 await cancelQueries 后再 clear(主窗口已由同步 abort 关闭，此为加固) | P3 | PROPOSED | N/A | src/shared/contexts/BranchContext.tsx |  |
