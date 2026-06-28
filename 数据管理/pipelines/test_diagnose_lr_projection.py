@@ -180,6 +180,9 @@ def _build_dedup_fixture(tmp_path: Path) -> Path:
          "is_new_car": False, "is_transfer": False, "is_renewal": True,
          "coverage_combination": "主全", "vehicle_frame_no": "VIN003"},
     ])
+    # 省份隔离键：真实 ETL 给每行注入 branch_code；v_policy_base_dedup 现按
+    # branch_code 过滤（多省防稀释，见 diagnose_lr_projection），fixture 须镜像。
+    df["branch_code"] = "SC"
     df.to_parquet(fixture_path, index=False)
     return fixture_path
 
@@ -200,7 +203,12 @@ def test_dedup_reduces_row_count(tmp_path, monkeypatch):
         "claim_no": pd.Series([], dtype="object"),
         "report_time": pd.Series([], dtype="datetime64[ns]"),
         "settled_amount": pd.Series([], dtype="float64"),
-        "pending_amount": pd.Series([], dtype="float64"),
+        # 项目标准未决口径列名为 reserve_amount（非 pending_amount）：build_views 的
+        # v_claims_agg 取 COALESCE(reserve_amount, 0)，fixture 必须提供同名列，否则
+        # BinderException。详见 memory feedback_pending_vs_reserve_amount。
+        "reserve_amount": pd.Series([], dtype="float64"),
+        # v_claims_agg 现按 branch_code 过滤（省份隔离），空 claims fixture 须含该列。
+        "branch_code": pd.Series([], dtype="object"),
         "settlement_time": pd.Series([], dtype="datetime64[ns]"),
         "payment_time": pd.Series([], dtype="datetime64[ns]"),
     }).to_parquet(claims_fixture, index=False)
@@ -232,16 +240,20 @@ def test_proj_year_dedup_consistency(tmp_path):
     hist_count = con.execute("SELECT COUNT(*) FROM v_policy_hist").fetchone()[0]
     proj_count = con.execute("SELECT COUNT(*) FROM v_policy_proj").fetchone()[0]
 
+    # raw 对比基准须与 v_policy_base_dedup 同省过滤，否则混入外省行虚增 raw、
+    # 使 dedup <= raw 断言被 SX 行松弛失真，无法验证「去重严格减行」契约。
     raw_hist = con.execute(f"""
         SELECT COUNT(*) FROM read_parquet('{mod.GLOB}', union_by_name=true)
         WHERE YEAR(insurance_start_date) IN (2023, 2024, 2025)
           AND insurance_start_date IS NOT NULL
+          AND branch_code = '{mod.BRANCH_CODE}'
           AND {mod.COVERAGE_FILTER}
     """).fetchone()[0]
     raw_proj = con.execute(f"""
         SELECT COUNT(*) FROM read_parquet('{mod.GLOB}', union_by_name=true)
         WHERE YEAR(insurance_start_date) = 2026
           AND insurance_start_date IS NOT NULL
+          AND branch_code = '{mod.BRANCH_CODE}'
           AND {mod.COVERAGE_FILTER}
     """).fetchone()[0]
 
