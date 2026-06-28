@@ -149,17 +149,75 @@ export function isFederationEnabled(): boolean {
 }
 
 /**
+ * 省份编码白名单正则（CHAR(2) 大写字母，如 SC/SX）。
+ * 作为「单一事实源」被 resolveBranchCode / getDeploymentBranchCode / permission.ts 共享。
+ */
+const BRANCH_CODE_RE = /^[A-Z]{2}$/;
+
+/**
+ * fail-closed 省份编码解析器（数据路径专用）。
+ *
+ * 行为语义：
+ *   - 合法 CHAR(2) 大写值（SC/SX/…）→ 原样返回
+ *   - null / undefined / 空字符串 → 告警 + 返回 'SC'（四川为合法生产默认）
+ *   - 非法格式（非 CHAR(2) 大写）→ console.warn 打印异常值 + 返回 'SC'（告警，可观测）
+ *
+ * 设计约束：
+ *   - 不抛错——调用方（服务加载 / ETL 主流程）不允许因省份未配置而崩溃；
+ *     但必须在日志里留下 WARN 痕迹，让 PM2/监控能感知到非预期的 SC 默认。
+ *   - 调用方在「env 已显式设置」的场景（如非 SC 省联邦视图补列）
+ *     应在上层做 `process.env.BRANCH_CODE` 存在性断言，或使用 `assertBranchCodeSet()`。
+ *
+ * @param raw - 来自 process.env.BRANCH_CODE 的原始字符串（或 undefined）
+ * @param context - 调用位置描述（用于 WARN 消息定位），如 'getDeploymentBranchCode'
+ */
+export function resolveBranchCode(raw: string | undefined, context = 'resolveBranchCode'): string {
+  if (raw && BRANCH_CODE_RE.test(raw)) return raw;
+  if (!raw) {
+    console.warn(
+      `[WARN][${context}] BRANCH_CODE 未设置，默认回退 'SC'（四川）。` +
+      `若当前部署非四川，请在 PM2 ecosystem.config.cjs 或 .env.local 中显式设置 BRANCH_CODE=<省份码>。`
+    );
+  } else {
+    console.warn(
+      `[WARN][${context}] BRANCH_CODE='${raw}' 格式非法（须 CHAR(2) 大写字母），回退 'SC'。` +
+      `请检查环境变量配置。`
+    );
+  }
+  return 'SC';
+}
+
+/**
+ * 断言 BRANCH_CODE 已显式设置（数据路径保护用）。
+ *
+ * 在确信「当前部署必须有明确省份身份」的场景调用（如多省 ETL 分支校验）。
+ * 未设置时抛 Error，阻断错误路径静默使用 SC 默认。
+ *
+ * @throws Error - 当 BRANCH_CODE 未设置或格式非法时
+ */
+export function assertBranchCodeSet(context = 'assertBranchCodeSet'): string {
+  const raw = process.env.BRANCH_CODE;
+  if (raw && BRANCH_CODE_RE.test(raw)) return raw;
+  throw new Error(
+    `[${context}] BRANCH_CODE 未设置或格式非法（当前值: ${JSON.stringify(raw)}）。` +
+    `此调用路径要求明确省份身份，禁止静默默认 SC。请在部署环境设置 BRANCH_CODE=<省份码>。`
+  );
+}
+
+/**
  * 部署级分公司编码（CHAR(2)：'SC'=四川 / 'SX'=山西），派生视图视图层补 branch_code 常量列时使用。
  *
  * 注：此为「部署级运行时」分公司编码（联邦视图补 branch_code 常量列用），与 fields.json 的 ETL 派生
  * 是两个口径——P1 起 fields.json branch_code 改为 policy_no 前 3 位 prefix_map 派生（非 envVar 常量）。
  * 直读 `process.env`（仿 isFederationEnabled，避开 env.ts 加载期快照，PM2 reload 即时生效）。
- * 严格白名单校验 `^[A-Z]{2}$`：非法 / 缺省一律回退 'SC'。返回值仅用于受控视图 DDL 内插，
- * 已被该正则约束为两位大写字母，无 SQL 注入面。
+ * 严格白名单校验 `^[A-Z]{2}$`：非法 / 缺省告警并回退 'SC'（fail-soft，服务启动不崩溃）。
+ * 返回值仅用于受控视图 DDL 内插，已被该正则约束为两位大写字母，无 SQL 注入面。
+ *
+ * ⚠️  fail-closed 改造（治理工程一）：env 缺失时打 WARN，不再静默返回 'SC'。
+ * 若需断言省份必须显式设置，使用 assertBranchCodeSet()。
  */
 export function getDeploymentBranchCode(): string {
-  const raw = process.env.BRANCH_CODE;
-  return raw && /^[A-Z]{2}$/.test(raw) ? raw : 'SC';
+  return resolveBranchCode(process.env.BRANCH_CODE, 'getDeploymentBranchCode');
 }
 
 /**

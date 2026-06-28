@@ -3437,6 +3437,108 @@ function checkSpawnArgQuoteSafety() {
   return true;
 }
 
+// ============================================================
+// 省份编码反模式检查（治理工程一）
+// ============================================================
+/**
+ * 禁止在数据路径中新增 `?? 'SC'` / `|| 'SC'` 静默默认四川的反模式。
+ *
+ * 背景：`process.env.BRANCH_CODE ?? 'SC'` / `|| 'SC'` 在数据路径（ETL/服务端 SQL 生成/
+ * Parquet 加载）中使用会导致：
+ *   1. Parquet 被打上错误的 branch_code（SC），RLS 静默失效
+ *   2. SX（山西）用户可能读到 SC（四川）数据
+ *
+ * 白名单（豁免）：
+ *   - 注释行（含 // 前缀的行）
+ *   - branch-naming.mjs（设计上处理 SC/空 等价）
+ *   - kpi-detail.ts（UI 显示回退，已有注释说明）
+ *   - check-governance.mjs 自身（本说明文本）
+ *   - *.test.ts / *.test.mjs（测试文件）
+ *   - 含 resolveEnvBranchCode / resolveBranchCode 的行（已合规替换后的形态）
+ *
+ * 修复：用 resolveEnvBranchCode(context) 替换（daily.mjs）
+ *       或 resolveBranchCode(raw, context) 替换（server TS 文件）
+ */
+function checkBranchCodeFallbackAntipattern() {
+  info("检查 ?? 'SC' / || 'SC' 省份静默默认反模式（数据路径）...");
+
+  // 扫描范围：数据路径关键文件/目录
+  const DATA_PATH_GLOBS = [
+    path.join(ROOT_DIR, '数据管理/daily.mjs'),
+    path.join(ROOT_DIR, '数据管理/pipelines'),
+    path.join(ROOT_DIR, 'server/src/config'),
+    path.join(ROOT_DIR, 'server/src/services'),
+    path.join(ROOT_DIR, 'scripts'),
+  ];
+
+  // 豁免文件（允许保留 SC 相关字面量的合理场景）
+  const EXEMPT_FILES = new Set([
+    path.join(ROOT_DIR, '数据管理/lib/branch-naming.mjs'),   // 设计上处理 SC/空 等价
+    path.join(ROOT_DIR, 'server/src/sql/kpi-detail.ts'),     // UI 显示回退，已文档化
+    path.join(ROOT_DIR, 'scripts/check-governance.mjs'),     // 本检查自身
+  ]);
+
+  // 豁免行模式：注释、已合规替换
+  const EXEMPT_LINE_PATTERNS = [
+    /^\s*\/\//,               // 单行注释（// 前缀）
+    /^\s*\*/,                 // JSDoc / 块注释行（* 前缀）
+    /resolveEnvBranchCode/,   // 已用 fail-closed 函数替换
+    /resolveBranchCode/,      // 已用 fail-closed 函数替换
+    /assertBranchCodeSet/,    // 已用断言替换
+    /governance-branch-fallback:\s*allow/, // 显式豁免注释
+  ];
+
+  const antiPatternRe = /\?\?\s*['"]SC['"]\s*|[|][|]\s*['"]SC['"]/;
+
+  const violations = [];
+
+  function scanFile(filePath) {
+    if (EXEMPT_FILES.has(filePath)) return;
+    if (!fs.existsSync(filePath)) return;
+    // 只扫 .ts .mjs .js
+    if (!/\.(ts|mjs|js)$/.test(filePath)) return;
+    // 跳过测试文件
+    if (/\.(test|spec)\.(ts|mjs|js)$/.test(filePath)) return;
+
+    const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
+    lines.forEach((line, idx) => {
+      if (!antiPatternRe.test(line)) return;
+      if (EXEMPT_LINE_PATTERNS.some((re) => re.test(line))) return;
+      violations.push(`${path.relative(ROOT_DIR, filePath)}:${idx + 1}: ${line.trim().slice(0, 100)}`);
+    });
+  }
+
+  function scanDir(dirPath) {
+    if (!fs.existsSync(dirPath)) return;
+    const stat = fs.statSync(dirPath);
+    if (stat.isFile()) { scanFile(dirPath); return; }
+    for (const ent of fs.readdirSync(dirPath, { withFileTypes: true })) {
+      const full = path.join(dirPath, ent.name);
+      if (ent.isDirectory()) {
+        if (['node_modules', '.git', 'dist', '.archive'].includes(ent.name)) continue;
+        scanDir(full);
+      } else {
+        scanFile(full);
+      }
+    }
+  }
+
+  for (const g of DATA_PATH_GLOBS) scanDir(g);
+
+  if (violations.length > 0) {
+    error(`发现 ${violations.length} 处省份静默默认反模式（数据路径中 ?? 'SC' / || 'SC'）：`);
+    for (const v of violations) console.log(`    - ${v}`);
+    console.log("    修复：");
+    console.log("      daily.mjs：用 resolveEnvBranchCode('<context>') 替换 process.env.BRANCH_CODE || 'SC'");
+    console.log("      server TS：用 resolveBranchCode(process.env.BRANCH_CODE, '<context>') 替换 ?? 'SC'");
+    console.log("      或加豁免注释 // governance-branch-fallback: allow <理由>");
+    return false;
+  }
+
+  success("省份静默默认反模式检查通过（数据路径无 ?? 'SC' / || 'SC'）");
+  return true;
+}
+
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件', fn: checkRequiredFiles },
@@ -3487,6 +3589,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'spawn参数引号安全', fn: checkSpawnArgQuoteSafety },
   { name: 'ETL台账新鲜度', fn: checkEtlLedgerFreshness },
   { name: '技能字段闸', fn: checkSkillFieldGate },
+  { name: '省份静默默认反模式', fn: checkBranchCodeFallbackAntipattern },
 ];
 
 // ============================================================

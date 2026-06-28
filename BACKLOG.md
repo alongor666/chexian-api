@@ -16,13 +16,9 @@
 
 ---
 
-## 📋 活跃任务速查（97 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（96 项 · 数据截至 2026-06-27 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
-
-**P0（1 项）**
-
-- 2026-06-27-claude-d9318c — 治理工程一·省份解析fail-closed(消灭?? 'SC'反模式)
 
 **P1（15 项）**
 
@@ -229,6 +225,5 @@
 | 2026-06-27-claude-96e597 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程三·SX数据域补全(修SX当前故障): generate_dim_tables.py业务员/计划维度表仅四川xlsx→SX salesman/plan维度表空→performance-drilldown/bundle JOIN Binder Error空body。动作:加--branch-code+SX xlsx生成SX维度表;定位quote-conversion/customer-flow policy_date真根因(VIEW/JOIN/cache);SQL生成器quote/customer-flow补branchCode参数。合并自c68b54+8f71c0。来源:地域硬编码全域审计(2026-06-27) | P1 | PROPOSED | N/A | server/src/sql/quote-conversion.ts |  |
 | 2026-06-27-claude-a41779 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程四·多省可扩展性收口+防回归: 当前新增一省≈改20+处跨4链路含多个静默失效陷阱(鉴权6文件9触点/ETL5类/前端整套机构清单/脚本3必改)。动作:新增省checklist配置驱动或codegen;oracle字节断言参数化(oracle_mpdata/p4_backfill死认['SC']→[declared_branch]);sync-vps SUPPORTED_BRANCH_CODES白名单+sx-promote通用化(--branch);governance加多省一致性校验+哨兵分省。来源:地域硬编码全域审计(2026-06-27) | P1 | PROPOSED | N/A | scripts/release/sx-promote.mjs |  |
 | 2026-06-27-claude-c68b54 | 2026-06-27 | SQL/查询 | @claude | 业绩分析页(/performance-analysis,org_user核心页)子板块对SX故障：/performance-drilldown 与 /performance-bundle 带正确参数(startDate/endDate/organization)仍持续返回 400+零字节响应体，前端无法解析错误。来源：山西13账号VPS验证(2026-06-27)，干净复测确认 | P1 | PROPOSED | N/A | server/src/sql | 根因定位(硬编码审计): 非SQL字面硬编码,真根因疑为SX业务员/计划维度表未生成(generate_dim_tables.py仅四川xlsx)→JOIN触发DuckDB Binder Error被吞成空body。归入治理工程三。 |
-| 2026-06-27-claude-d9318c | 2026-06-27 | 架构治理/多省 | @claude | 治理工程一·省份解析fail-closed(消灭?? 'SC'反模式): 全栈23处?? 'SC'/\|\| 'SC'静默默认四川(致命变体getDeploymentBranchCode()缺省返回SC→Parquet打错branch_code码RLS静默失效;daily.mjs 6处env拼错静默查四川)。建单一resolveBranchCode()漏配/未知→抛错告警;替换23处;governance加lint禁新增?? 'SC'。来源:地域硬编码全域审计(2026-06-27) | P0 | PROPOSED | N/A | 数据管理/daily.mjs | 本次会话(2026-06-27)评估后推后,优先治UI省份身份(工程二e96d85阶段1已PARTIAL)。理由:(1)四川生产ecosystem/deploy/env均未显式配BRANCH_CODE,纯靠getDeploymentBranchCode()默认回落SC,硬fail-closed会破坏四川生产;(2)fail-closed治隐患(漏配env→RLS静默失效)不解决山西可见错误;(3)安全落地需配套生产BRANCH_CODE显式化,独立防御加固单独评估。详见data-pipeline.md K1 |
 | 2026-06-27-claude-ddd89e | 2026-06-27 | 多省/权限·测试 | @claude | 切省 in-flight 回填回归测试（codex 闸-2 P2-2）：BranchContext.setBranch 已用 apiClient.cancelAllRequests()(同步 abort 在飞 GET) + queryClient.cancelQueries() + clear() 关闭跨省串读窗口；但缺显式回归测试证明 SC 请求在飞时切 SX、旧 SC 响应不会按同 query key 回填。补 RTL 测试：mock apiClient(cancelAllRequests/setTargetBranch)+queryClient，渲染 BranchProvider 触发 setBranch，断言清理调用链顺序(setTargetBranch→cancelAllRequests→cancelQueries→clear→FORCE_REFRESH)。可选把 clear 链路改成 await cancelQueries 后再 clear(主窗口已由同步 abort 关闭，此为加固) | P3 | PROPOSED | N/A | src/shared/contexts/BranchContext.tsx |  |
 | 2026-06-27-claude-e96d85 | 2026-06-27 | 架构治理/多省 | @claude | 治理工程二·机构省份元数据单一事实源(含山西在线bug): 机构清单在4处各写死四川12机构(前端organizations.ts/DEFAULT_USER_PERMISSIONS/wecom ORG_SLUGS/org-groups);省份名'四川分公司'写死前端useScopeLabel/cross-sell/GeoSection地图默认。山西用户当前可见错误:页面标题'四川分公司'、地图渲染四川省、cross-sell显示'SX分公司'(branch-names.ts SX中文名被注释)、晋字头车牌→NULL理赔地理哑火。根治:机构清单唯一源branch-org-mapping/<省>.json前端从接口派生;branch-names补全;标题/地图/车牌按省配置。来源:地域硬编码全域审计(2026-06-27) | P1 | PARTIAL | N/A | server/src/sql/claims-detail.ts | 省份身份UI阶段1完成(PR待建):branch-names补SX+新建branchDisplay单一派生源+BranchContext暴露effectiveBranch;useScopeLabel/PageHeaderBar/DrilldownBreadcrumb(topLabel改required)/useTrendData/PremiumDashboard省份名从有效省派生;ClaimRatio/Drilldown/ComprehensiveMetricTable汇总行去四川硬绑定。四川字节不变(构造性+38单测),双codex闸过,verify:full 4319绿 <br>后续阶段(本PR外):阶段2地图首屏省+同城异地分组(GeoSection/geo-map-loader/org-groups/AdvancedFilterPanel/earned-premium+EarnedPremiumTable的org_level_3数据层四川聚合行);阶段3快速切换用户(SidebarUserPanel/UserLoginPanel quickUsers);阶段4理赔车牌地理按省(claims-detail川牌CASE,数据在主仓dim/plate_region)。codex P2残留:前后端BRANCH映射镜像同步、drilldown-dimensions死代码清理、ClaimRatio/Drilldown comparator对称性 |
