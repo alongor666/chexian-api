@@ -23,6 +23,8 @@ import {
 import { usePolicyGeo } from '../hooks/usePolicyGeo';
 import type { PolicyGeoRow } from '../hooks/usePolicyGeo';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
+import { useBranch } from '@/shared/contexts/BranchContext';
+import { BRANCH_LABELS } from '@/shared/utils/branchDisplay';
 
 type MapLevel = 'china' | 'province';
 
@@ -37,9 +39,13 @@ function escapeHtml(s: string): string {
 export const GeoSection: React.FC = () => {
   const { filters } = useGlobalFilters();
   const { provinceData, cityData, fetchProvinceData, fetchCityData } = usePolicyGeo();
+  const { effectiveBranch } = useBranch();
+
+  // 当前用户归属省（SX='山西', SC='四川', null/ALL 兜底'四川'）
+  const defaultProvince = (effectiveBranch ? BRANCH_LABELS[effectiveBranch] : null) ?? '四川';
 
   const [mapLevel, setMapLevel] = useState<MapLevel>('province');
-  const [currentProvince, setCurrentProvince] = useState<string>('四川');
+  const [currentProvince, setCurrentProvince] = useState<string>(defaultProvince);
   const [mapKey, setMapKey] = useState<string>(''); // ECharts registered map name
   const [mapsReady, setMapsReady] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
@@ -48,12 +54,19 @@ export const GeoSection: React.FC = () => {
   // 构建筛选参数（复用共享函数，与页面筛选状态完整联动）
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
 
-  // 预加载默认地图
+  // effectiveBranch 变化（如超管切省）时同步重置地图首屏省
   useEffect(() => {
-    preloadDefaultMaps()
+    setCurrentProvince(defaultProvince);
+    setMapLevel('province');
+    setMapsReady(false);
+  }, [defaultProvince]);
+
+  // 预加载默认地图（省份随用户归属省变化，SX 用户预加载山西地图）
+  useEffect(() => {
+    preloadDefaultMaps(defaultProvince)
       .then(() => setMapsReady(true))
       .catch(() => setMapError('地图资源加载失败，请刷新页面重试'));
-  }, []);
+  }, [defaultProvince]);
 
   // 数据获取
   useEffect(() => {
@@ -64,9 +77,9 @@ export const GeoSection: React.FC = () => {
   // 初始化默认地图
   useEffect(() => {
     if (mapsReady) {
-      ensureMapRegistered('四川').then(key => setMapKey(key)).catch(() => {});
+      ensureMapRegistered(defaultProvince).then(key => setMapKey(key)).catch(() => {});
     }
-  }, [mapsReady]);
+  }, [mapsReady, defaultProvince]);
 
   // 下钻到某省
   const drillToProvince = useCallback(async (provinceName: string) => {

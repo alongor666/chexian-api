@@ -13,7 +13,8 @@ import { echarts } from '../../shared/utils/echarts';
 import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import { buttonStyles, cardStyles, colors, cn, tableStyles, textStyles } from '../../shared/styles';
 import { useTheme } from '../../shared/theme';
-import { ORG_GROUPS } from '../../shared/config/org-groups';
+import { ORG_GROUPS_BY_BRANCH } from '../../shared/config/org-groups';
+import { useBranch } from '../../shared/contexts/BranchContext';
 import { useCrossSellOrgTrend, type CoverageCombinationFilter, type OrgTrendPoint } from './hooks/useCrossSellOrgTrend';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import type { AdvancedFilterState } from '../../shared/types/data';
@@ -32,13 +33,7 @@ const COVERAGE_TABS: CoverageCombinationFilter[] = ['交三', '主全', '单交'
 /** 机构区域定义 */
 type RegionType = 'local' | 'remote' | 'province';
 
-const ALL_ORGS = Array.from(new Set([...ORG_GROUPS.SAME_CITY, ...ORG_GROUPS.REMOTE]));
 const REGION_LABELS: Record<RegionType, string> = { local: '同城', remote: '异地', province: '全省' };
-const REGION_ORGS: Record<RegionType, readonly string[]> = {
-  local: ORG_GROUPS.SAME_CITY,
-  remote: ORG_GROUPS.REMOTE,
-  province: ALL_ORGS,
-};
 
 // ── 颜色 ──────────────────────────────────────────────────────────────────────
 const BAR_AUTO_COLOR = colors.neutral[300];
@@ -198,6 +193,21 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
 }: CrossSellOrgTrendChartProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
+  const { effectiveBranch } = useBranch();
+
+  // 各省机构分组（SC=四川同城/中支，SX=山西太原/省内中支）
+  const orgGroups = useMemo(
+    () => ORG_GROUPS_BY_BRANCH[effectiveBranch ?? 'SC'] ?? ORG_GROUPS_BY_BRANCH.SC,
+    [effectiveBranch]
+  );
+  const allOrgs = useMemo(
+    () => Array.from(new Set([...orgGroups.SAME_CITY, ...orgGroups.REMOTE])),
+    [orgGroups]
+  );
+  const regionOrgs = useMemo<Record<RegionType, readonly string[]>>(
+    () => ({ local: orgGroups.SAME_CITY, remote: orgGroups.REMOTE, province: allOrgs }),
+    [orgGroups, allOrgs]
+  );
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
@@ -210,8 +220,17 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   const regionOrgNames = useMemo<string[] | null | undefined>(() => {
     if (selectedOrg) return undefined;
     if (region === 'province') return null;
-    return [...REGION_ORGS[region]];
-  }, [region, selectedOrg]);
+    return [...regionOrgs[region]];
+  }, [region, selectedOrg, regionOrgs]);
+
+  // 切省时清除机构选择（防旧省机构带入新省查询）
+  const prevOrgGroupsRef = useRef(orgGroups);
+  useEffect(() => {
+    if (prevOrgGroupsRef.current !== orgGroups) {
+      prevOrgGroupsRef.current = orgGroups;
+      setSelectedOrg(null);
+    }
+  }, [orgGroups]);
 
   // 切换区域时清除机构选择
   const handleRegionChange = (r: RegionType) => {
@@ -478,7 +497,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
   }, []);
 
   // ── 当前区域的机构列表 ────────────────────────────────────────────────────
-  const orgList = REGION_ORGS[region];
+  const orgList = regionOrgs[region];
   const displayTitle = selectedOrg
     ? `机构驾意险推介率走势图（${coverage}）— ${selectedOrg}`
     : `机构驾意险推介率走势图（${coverage}）— ${REGION_LABELS[region]}汇总`;

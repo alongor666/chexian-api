@@ -157,7 +157,7 @@ ORDER BY org_level_3, insurance_type, policy_month
  * 生成已赚保费汇总查询SQL（滚动12个月口径，按三级机构分组）
  */
 export function generateEarnedPremiumSummaryQuery(config: EarnedPremiumConfig): string {
-  const { cutoffDate, whereClause = '1=1' } = config;
+  const { cutoffDate, whereClause = '1=1', branchLabel: provinceName = '四川' } = config;
   const windowStart = getRolling12MonthWindowStart(cutoffDate);
 
   return `
@@ -246,7 +246,7 @@ SELECT
 FROM with_totals
 ORDER BY
   CASE org_level_3
-    WHEN '四川' THEN 1
+    WHEN '${provinceName}' THEN 1
     WHEN '同城' THEN 2
     WHEN '异地' THEN 3
     WHEN '合计' THEN 4
