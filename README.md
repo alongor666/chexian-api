@@ -108,7 +108,7 @@ chexian-api/
 │   │   ├── sql/                     #   35 个 SQL 生成器
 │   │   ├── middleware/              #   认证、权限、限流、审计、异常
 │   │   ├── config/                  #   配置中心
-│   │   │   ├── metric-registry/     #     指标注册表（49 个指标）
+│   │   │   ├── metric-registry/     #     指标注册表（数量见 validate.ts）
 │   │   │   ├── field-registry/      #     字段注册表（56 个字段）
 │   │   │   ├── env.ts               #     环境变量（20+ 变量）
 │   │   │   └── api-routes.ts        #     路由常量
