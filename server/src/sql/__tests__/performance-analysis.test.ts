@@ -212,6 +212,14 @@ describe('generatePerformanceTopSalesmanQuery', () => {
     expect(sql).not.toContain('c.row_count');
     expect(sql).not.toContain('CASE WHEN p.premium > 0 THEN p.premium / 10000.0 ELSE 0 END');
   });
+
+  it('SalesmanDim JOIN 归属机构（防跨机构出单取到非归属机构）', () => {
+    const sql = generatePerformanceTopSalesmanQuery(
+      WHERE_WITH_DATE, WHERE_WITHOUT_DATE, SEGMENT, TIME_PERIOD, GROWTH_MODE
+    );
+    expect(sql).toContain('LEFT JOIN SalesmanDim sd ON c.dimension_name = sd.full_name');
+    expect(sql).toContain('COALESCE(sd.organization');
+  });
 });
 
 // ═══════════════════════════════════════════════════

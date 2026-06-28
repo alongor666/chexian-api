@@ -134,6 +134,18 @@ describe('generateCrossSellQuery — 补充覆盖', () => {
     expect(sql).toContain("REGEXP_EXTRACT(group_name, '^[0-9]+')");
   });
 
+  // ── 1-G2: groupBy=salesman 时注入 SalesmanDim JOIN 用归属机构 ──────────────
+  it('1-G2: groupBy=salesman 时注入 SalesmanDim JOIN 取归属机构', () => {
+    const sql = generateCrossSellQuery(BASE_WHERE, [], 'salesman');
+    expect(sql).toContain('LEFT JOIN SalesmanDim sd ON c.salesman_name = sd.full_name');
+    expect(sql).toContain('COALESCE(sd.organization');
+  });
+
+  it('1-G3: groupBy≠salesman 时不注入 SalesmanDim JOIN', () => {
+    const sql = generateCrossSellQuery(BASE_WHERE, [], 'org_level_3');
+    expect(sql).not.toContain('SalesmanDim');
+  });
+
   // ── 1-H: drillPath team 步骤触发 JOIN（即便 groupBy 不是 team）──────────────
   it('1-H: drillPath 含 team 步骤时即使 groupBy≠team 也触发 SalesmanTeamMapping JOIN', () => {
     const steps: DrilldownStep[] = [{ dimension: 'team', value: '天府一队' }];
