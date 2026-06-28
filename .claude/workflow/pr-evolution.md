@@ -1674,6 +1674,25 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ---
 
+## 2026-06-27 · K3 governance 技能字段闸（技能口径治理·evidence-loop scorecard）
+
+> 承接计划 §4 K3（治理链第二波，dep K1 已合并 PR#819）。把 K2 元规则（技能挂靠 SSOT）从自觉变 governance 强制。dispatch 因别批次占 scripts 域推迟 K3，核实无人认领后主动推进。
+
+- **业务目标**：governance 加技能字段闸，扫技能 SQL 引用幽灵字段（fields.json 注册但 Parquet 未落，如 endorsement_type 直查 Binder Error）即 error。
+- **基线/约束**：CI 无 Parquet，无运行时 DESCRIBE；候选事实源（schema-analysis.json 中文+过时 / etl_fields.json 源自 fields.json 含未落列）均不可用。
+- **候选（6 文件 +206）**：新增 scripts/governance/parquet-columns.snapshot.json（各域 Parquet 列快照，CI 可读落列事实源）；check-governance.mjs 加 checkSkillFieldGate（snapshot 推导幽灵 + SQL-aware 扫描）；4 技能加 allow 注释（存量豁免）。
+- **oracle 实证**：duckdb 三域交叉确定 11 幽灵字段（fields.json 58 − policy 47，claims/quotes 验证均无）；闸抓到 4 技能存量 endorsement_type 影子口径扩散（K1 同款，未被 K1 修）；负向 governance 46/46（4 allow 豁免）+ 正向新文件 phantom 无 allow → error（抓 endorsement_type+reported_claims）双向实测。
+- **双闸（codex CLI）**：闸-1 GO-with-fixes（2P0：误报合法用法 + 扫所有代码块；关键 P1：硬编码黑名单维护风险 → snapshot 推导方案）全采纳；闸-2 P0（整文件 grandfather 后门——4 技能内未来新增违规被放过）→ 改细粒度 allow 注释删 GRANDFATHERED + P1（去单引号不去双引号防漏报 duckdb -c "SQL"）+ isSql 排除 text/json + matchAll + lang 小写，复审 GO（无后门残留）。
+- **决策**：promote。K3 落地 = 技能挂靠 SSOT 从自觉变强制（新增幽灵引用硬拦），治理链强制闸到位。
+
+### 三问复盘
+1. **重来怎样更好**：① 闸-1 一句"硬编码黑名单维护风险"逼出 snapshot 方案——根治"CI 无 Parquet 落列事实源"死结（snapshot 是 git 跟踪的 CI 可读落列快照，幽灵从 fields.json−snapshot 推导，非手维护黑名单）。教训＝CI 闸缺运行时事实源时，提交确定性快照比硬编码常量稳健。② 闸-2 抓 grandfather 整文件后门——存量豁免必须细粒度（fence 级 allow 注释），整文件给未来新增留后门。③ 去字符串字面量差点系统性漏报：duckdb -c "整个SQL" 的 SQL 在双引号内，去双引号会吞全部 SQL——只去单引号（字段值）保双引号（SQL 体）。
+2. **复用价值**：① 「CI 无运行时数据 → 提交确定性快照 + 读时推导」对任何"CI 校验依赖运行时事实"通用；② 「存量违规细粒度 allow 注释豁免，非整文件 grandfather」是 governance 渐进迁移标准手法（无后门 + 显式 reason + 修复后删注释自动恢复硬拦）；③ 「闸抓到存量扩散 → spawn_task 推广审计，不混入建闸 PR」防范围蔓延。
+3. **如何更高质量自动化**：K3 本身是自动化（建闸）。残留：① snapshot 手动 duckdb 重算（schema 变更须同步，_refresh 已注明，未自动）；② 4 技能存量违规已 spawn_task（task_ea580007）登记推广审计完整修复（净额+省份隔离），修复后从 allow 注释移除。
+
+### needs_automation: true
+- 闸：snapshot 自动刷新——Parquet schema 变更后应同步重算 parquet-columns.snapshot.json（当前手动 duckdb，_refresh 注明）。可加 governance 检查"snapshot generated 日期 vs Parquet/etl 台账 mtime 滞后"告警，防快照过时致漏报/误报。依赖本 K3 落地。
+- expires: 2026-09-27（与治理链同窗；属技能口径治理，单 owner 串行落地）。
 ## 2026-06-27 · K4 指标注册表新增件均保费 avg_premium_per_policy（技能口径治理·evidence-loop scorecard）
 
 > 承接计划 §4 K4（治理链第二波，dep K1 已合并 PR#819）。dispatch 因别批次 62e84c 占 be-config 域推迟 K4，但 62e84c 无人认领（在飞 0），主动推进。
