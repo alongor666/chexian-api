@@ -21,7 +21,10 @@ if str(_HERE) not in sys.path:
 
 
 def _build_policy_fixture(tmp_path: Path) -> Path:
-    """两个吨位分组的 policy fixture（不含 reported_claims/claim_cases —— 镜像真实 policy parquet）。"""
+    """三个吨位分组的 policy fixture（不含 reported_claims/claim_cases —— 镜像真实 policy parquet）。
+
+    A/B 有对应赔案；C 无赔案 —— 用于验证 LEFT JOIN 保留无赔案保单（INNER JOIN 会静默丢掉 C）。
+    """
     fixture = tmp_path / "policy_be.parquet"
     df = pd.DataFrame([
         {"policy_no": "P001", "premium": 10000.0, "fee_amount": 1500.0,
@@ -32,6 +35,11 @@ def _build_policy_fixture(tmp_path: Path) -> Path:
          "insurance_start_date": pd.Timestamp("2023-01-01"),
          "insurance_type": "商业保险", "commercial_pricing_factor": 1.0,
          "tonnage_segment": "B", "vehicle_frame_no": "VIN002", "branch_code": "SC"},
+        # C 组无赔案：LEFT JOIN 下 claim_cases/reported_claims COALESCE 为 0，仍须出现
+        {"policy_no": "P003", "premium": 5000.0, "fee_amount": 750.0,
+         "insurance_start_date": pd.Timestamp("2023-01-01"),
+         "insurance_type": "商业保险", "commercial_pricing_factor": 0.9,
+         "tonnage_segment": "C", "vehicle_frame_no": "VIN003", "branch_code": "SC"},
     ])
     df.to_parquet(fixture, index=False)
     return fixture
@@ -84,7 +92,7 @@ def test_query_dim_joins_claims(tmp_path, monkeypatch):
     rows = be.query_dim(con, "1=1", "1=1", "tonnage_segment")
 
     by_dim = {r["dim_label"]: r for r in rows}
-    assert set(by_dim) == {"A", "B"}, f"应按 tonnage_segment 分两组，实际 {set(by_dim)}"
+    assert set(by_dim) == {"A", "B", "C"}, f"应按 tonnage_segment 分三组，实际 {set(by_dim)}"
     # EARNED = premium（2023 起保早已满期），loss_ratio = reported_claims / EARNED * 100
     assert by_dim["A"]["loss_ratio"] == pytest.approx(50.0), by_dim["A"]["loss_ratio"]
     assert by_dim["B"]["loss_ratio"] == pytest.approx(10.0), by_dim["B"]["loss_ratio"]
@@ -94,6 +102,12 @@ def test_query_dim_joins_claims(tmp_path, monkeypatch):
     assert by_dim["A"]["claim_cases"] == 1
     # expense_ratio = fee_amount / premium * 100（policy 列，不依赖 claims）
     assert by_dim["A"]["expense_ratio"] == pytest.approx(15.0)
+    # C 组无赔案：LEFT JOIN 须保留该保单（INNER JOIN 会丢掉 → set 缺 C 即报错），
+    # claim 指标 COALESCE 为 0，policy_count/保费照常统计。
+    assert by_dim["C"]["policy_count"] == 1, "无赔案维度被 INNER JOIN 静默丢弃"
+    assert by_dim["C"]["reported_claims"] == pytest.approx(0.0)
+    assert by_dim["C"]["claim_cases"] == 0
+    assert by_dim["C"]["loss_ratio"] == pytest.approx(0.0)
 
 
 def test_query_dim_case_when_dim_expr(tmp_path, monkeypatch):
