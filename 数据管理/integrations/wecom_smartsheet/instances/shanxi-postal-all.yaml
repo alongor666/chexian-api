@@ -1,0 +1,93 @@
+# 山西邮政 / 邮储经代签单明细 → 企业微信智能表「车险业务员保单明细（山西邮政）」
+#
+# 业务规则：branch_code = 'SX' AND agent_name LIKE '%邮政%'
+#   山西恰好两个邮政系经代（duckdb 直查 2026-06-29 实证）：
+#     - 0118101838 中国邮政集团有限公司山西省分公司         → 简称「邮政」
+#     - 0118101837 中国邮政储蓄银行股份有限公司山西省分行   → 简称「邮储」
+#   两者全名都含「邮政」，故 agent_name LIKE '%邮政%' 一并命中，无需 OR。
+#   经代名简称由引擎 SQL 派生列 agent_short_name 给出（先判「储蓄」再判「邮政」）。
+#
+# 省份隔离（RED LINE data-pipeline.md）：policy_glob 仅取 SX_*.parquet + extra_where
+#   branch_code='SX' 双保险，杜绝裸 glob 混入四川行。
+#
+# 去重：复合主键 = 保单号 + 车架号；同组源行聚合为一条，保费组内求和（add-only + state）。
+# 字段：对齐四川邮政表 12 字段 + 新增「经代名(简称)」fi6BsM。
+#   业务员姓名 fDbSsb / 投保人 fttY6I / 上传员工证明 fmTuOx / 上传行驶证 fLYiXn
+#   在 parquet 无数据源，留空（人工维护），本同步不写入。
+
+instance_name: shanxi-postal-all
+script: sync_filtered_policies.py        # daily.mjs 据此路由到非续保引擎
+
+webhook_env: WECOM_SMARTSHEET_WEBHOOK_SX_POSTAL
+
+# 仅扫描山西分片（性能辅助），branch_code 过滤才是隔离保证
+policy_glob: 数据管理/warehouse/fact/policy/current/SX_*.parquet
+
+batch_size: 100
+sheet_records_per_minute_limit: 3000
+
+filters:
+  agent_name_like: "%邮政%"
+  extra_where: "branch_code = 'SX'"
+  # 不设 policy_date_from：全量纳入（用户决策 2026-06-29「防遗漏」，当前 2026-04-15 起）
+
+primary_key: policy_no
+
+# 聚合规则：同一保单号 + 车架号只写一条，保费为组内源行求和。
+# 修改本字段后必须跑 --rebuild-state 重建 state.json。
+aggregate_key:
+  - policy_no
+  - vehicle_frame_no
+
+# 复合主键：按保单号 + 车架号作为幂等键（防重复 RED LINE）。
+composite_key:
+  - policy_no
+  - vehicle_frame_no
+
+# 字段映射：SQL 输出列名（en） → 智能表 field_id
+field_mapping:
+  org_level_3:           fxxKfG      # 机构（TEXT）
+  salesman_name:         fIRILE      # 业务员（SINGLE_SELECT，源已含「代码+姓名」如 218004465崔敏）
+  policy_date:           fK6Njt      # 签单日期（DATE_TIME, 毫秒 ts）
+  plate_no:              fWbeil      # 车牌（TEXT）
+  insurance_grade:       f1RB2K      # 风险等级（SINGLE_SELECT）
+  premium:               fTHxjw      # 保费（NUMBER）
+  commercial_pricing_factor: fMc5sO  # 自主系数（NUMBER）
+  insurance_start_date:  fKXu8z      # 起保日期（DATE_TIME, 毫秒 ts）
+  vehicle_model:         ftlPvj      # 厂牌车型（TEXT）
+  driver_age_group:      fm1Pg9      # 年龄分组（SINGLE_SELECT）
+  vehicle_price_segment: f9W7Xr      # 车价分段（SINGLE_SELECT，SQL 派生）
+  vehicle_age_group:     fkHRFt      # 车龄分段（SINGLE_SELECT，SQL 派生）
+  agent_short_name:      fi6BsM      # 经代名（SINGLE_SELECT，简称：邮政/邮储；SQL 派生）
+
+# 智能表字段类型（用于格式化值）
+field_types:
+  fxxKfG: TEXT
+  fIRILE: SINGLE_SELECT
+  fK6Njt: DATE_TIME
+  fWbeil: TEXT
+  f1RB2K: SINGLE_SELECT
+  fTHxjw: NUMBER
+  fMc5sO: NUMBER
+  fKXu8z: DATE_TIME
+  ftlPvj: TEXT
+  fm1Pg9: SINGLE_SELECT
+  f9W7Xr: SINGLE_SELECT
+  fkHRFt: SINGLE_SELECT
+  fi6BsM: SINGLE_SELECT
+
+# 智能表字段中文 label（供 webhook payload 中 schema 字段使用）
+field_labels:
+  fxxKfG: 机构
+  fIRILE: 业务员
+  fK6Njt: 签单日期
+  fWbeil: 车牌
+  f1RB2K: 风险等级
+  fTHxjw: 保费
+  fMc5sO: 自主系数
+  fKXu8z: 起保日期
+  ftlPvj: 厂牌车型
+  fm1Pg9: 年龄分组
+  f9W7Xr: 车价分段
+  fkHRFt: 车龄分段
+  fi6BsM: 经代名
