@@ -11,7 +11,7 @@
 1. **续保清单（`renewal/latest.parquet`）完全冗余** — 10 个字段逐一验证，全部可从 PolicyFact + 报价清单推导。唯一曾被认为独有的 `quote_time` 也可由报价清单补全。
 2. **应续口径**：2025年起保 + 同一车架号交强险与商业险均在我司投保 + 排除摩托车/挂车/拖拉机 + 排除退保（负保费批改）。PolicyFact 推算 117,214 VINs，与续保清单 117,213 几乎完全吻合。
 3. **PolicyFact `renewal_policy_no` 是反向链接**（"我是从哪个旧保单续来的"），不是前向链接。要查"2025保单是否被续保"，需在 2026 PolicyFact 中反查 `renewal_policy_no = 2025_policy_no`。
-4. **VPS 2核4G 内存红线** — 禁止在 VPS 做多表 JOIN。采用方案 A：本地 ETL 预计算 `renewal_universe/latest.parquet` 扁平表，VPS 只加载。
+4. **VPS 4核4G 内存红线** — 禁止在 VPS 做多表 JOIN。采用方案 A：本地 ETL 预计算 `renewal_universe/latest.parquet` 扁平表，VPS 只加载。
 5. **旧 QuoteConversion 和新 quotes/latest.parquet schema 不兼容**（9 列互不存在）— 不能换路径，不新建 VIEW，报价 JOIN 在 ETL 完成。
 
 ## 分支

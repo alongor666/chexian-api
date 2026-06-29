@@ -30,7 +30,7 @@ export const databaseConfig: DatabaseConfig = {
  * DuckDB 初始化配置
  *
  * 通过环境变量适配不同运行环境：
- * - VPS (2核4G)：设置 DUCKDB_MAX_MEMORY=1.5GB  DUCKDB_THREADS=2
+ * - VPS (4核4G)：设置 DUCKDB_MAX_MEMORY=1.5GB  DUCKDB_THREADS=2
  * - Mac 本地开发：不设置，默认使用高性能配置
  */
 export const DUCKDB_INIT_OPTIONS = {

@@ -50,6 +50,12 @@ import { inspectPolicyCurrentLayout } from '../scripts/lib/policy-current-shards
 import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
 // 多省 ETL 路由纯函数（0a：非 SC 省 premium 源走 staging/<省>、产物隔离到 warehouse/validation/<省>，绝不进 current/；ADR D5）
 import { branchSourceDir, branchOutputRoot, isPolicyCurrentSubdirLayout } from './lib/branch-naming.mjs';
+// 多省 B1 命名路由：源文件拼音前缀↔branch_code 派生 + 按省防混省过滤 + 前缀感知 glob（可单测）
+import {
+  buildBranchAwareGlobs,
+  fileBelongsToBranch,
+  stripProvincePrefix,
+} from './lib/source-file-routing.mjs';
 // argv 最外层双引号剥离抽到 lib/arg-quotes.mjs（可单测；裸 spawn 引号安全闸的不变量源）
 import { stripArgQuotes } from './lib/arg-quotes.mjs';
 // claims 报案截止日新鲜度判定纯函数（同模式抽 lib/ 便于单测）
@@ -1188,14 +1194,23 @@ function runClaimsDetail(python, scriptDir) {
   // 查找赔案明细 xlsx（支持多文件合并，新命名优先）
   // 2026-06-10 上游 BI 清单重构：理赔编号 02 → 05，且基线为日期范围前缀文件
   // （YYYYMMDD-YYYYMMDD_05_理赔明细.xlsx）；旧 02 模式保留向后兼容
+  // 多省 B1：每个核心 glob 扩展为「无前缀 + sichuan_/shanxi_ 前缀」三态，发现带省前缀的新命名（去重防多 glob 命中同文件）
+  const claimsDedup = new Set();
   const newFiles = [
-    ...ls('02_理赔明细_*.xlsx', claimsSourceDir),
-    ...ls('????????_02_理赔明细*.xlsx', claimsSourceDir),
-    ...ls('????????_05_理赔明细*.xlsx', claimsSourceDir),
-    ...ls('????????-????????_0?_理赔明细*.xlsx', claimsSourceDir),
-  ].sort((a, b) => a.name.localeCompare(b.name));
+    '02_理赔明细_*.xlsx',
+    '????????_02_理赔明细*.xlsx',
+    '????????_05_理赔明细*.xlsx',
+    '????????-????????_0?_理赔明细*.xlsx',
+  ]
+    .flatMap(buildBranchAwareGlobs)
+    .flatMap((g) => ls(g, claimsSourceDir))
+    .filter((f) => { if (claimsDedup.has(f.path)) return false; claimsDedup.add(f.path); return true; })
+    .sort((a, b) => a.name.localeCompare(b.name));
   const legacyFiles = ls('车险报立结案清单_*.xlsx', claimsSourceDir).sort((a, b) => a.name.localeCompare(b.name));
-  let sourceFiles = manifestFiles || [...newFiles, ...legacyFiles];
+  // 多省 B1（闸-1 P0-1/P2-2）：按当前 BRANCH_CODE 过滤他省前缀文件防混省（manifest 路径同样过滤）；
+  // 无前缀文件归当前省（向后兼容）。必须在归档 / 转换之前。
+  let sourceFiles = (manifestFiles || [...newFiles, ...legacyFiles])
+    .filter((f) => fileBelongsToBranch(f.name, BRANCH_CODE));
   if (sourceFiles.length === 0) {
     log('yellow', '⚠ 未找到 02/05_理赔明细 xlsx（含 YYYYMMDD-YYYYMMDD_ 范围前缀）或 车险报立结案清单_*.xlsx，跳过');
     return;
@@ -1210,7 +1225,8 @@ function runClaimsDetail(python, scriptDir) {
       /^02_理赔明细.*?(\d{8})_(\d{8})\.xlsx?$/i,
       /^(\d{8})-(\d{8})_\d{2}_理赔明细.*\.xlsx?$/i,
     ];
-    const matchFull = name => {
+    const matchFull = rawName => {
+      const name = stripProvincePrefix(rawName); // 多省 B1：剥离省前缀后匹配全量正则
       for (const re of FULL_RES) {
         const m = name.match(re);
         if (m) return m;
@@ -1236,7 +1252,7 @@ function runClaimsDetail(python, scriptDir) {
         return days.some(d => d >= fullStart && d <= fullEnd);
       });
       if (conflicting.length > 0) {
-        const archiveDir = join(scriptDir, '.xlsx-archive', formatDate());
+        const archiveDir = join(claimsSourceDir, '.xlsx-archive', formatDate()); // 多省 B1（P2-4）：归档落本省 sourceDir，SX 不混入根目录
         ensureDir(archiveDir);
         log('yellow', `📦 自动归档 ${conflicting.length} 个被新全量 ${fullFile.name} 覆盖的旧 xlsx`);
         for (const f of conflicting) {
@@ -1595,20 +1611,28 @@ async function main() {
 
   // 2. 识别所有 xlsx 分片（新格式 + 旧格式 + 剔摩/限摩 + 新前缀 YYYYMMDD_01_* + 范围前缀 YYYYMMDD-YYYYMMDD_01_*）
   const legacyXlsx = ls('每日数据_*.xlsx', sourceDir);
+  // 多省 B1：新格式 glob 扩展为前缀感知（无前缀 + sichuan_/shanxi_），发现带省前缀新命名（去重防多 glob 命中同文件）
+  const premiumDedup = new Set();
   const newFormatXlsx = [
-    ...ls('01_签单清单_*.xlsx', sourceDir),
-    ...ls('????????_01_签单清单*.xlsx', sourceDir),
-    ...ls('????????-????????_01_签单清单*.xlsx', sourceDir),
-  ].filter(f => {
-    // FineBI/Chrome 原始残留（无日期前缀、日期挂尾，如 01_签单清单_定稿_20260608.xlsx）
-    // 与官方范围前缀文件同源但未经导出验收，禁止入 ETL（2026-06-10 上游交接 §4）
-    if (/^01_签单清单_定稿_\d{8}/.test(f.name)) {
-      log('yellow', `⚠ 跳过 FineBI 残留文件（无日期前缀）: ${f.name}`);
-      return false;
-    }
-    return true;
-  });
-  let allXlsx = [...legacyXlsx, ...newFormatXlsx];
+    '01_签单清单_*.xlsx',
+    '????????_01_签单清单*.xlsx',
+    '????????-????????_01_签单清单*.xlsx',
+  ]
+    .flatMap(buildBranchAwareGlobs)
+    .flatMap((g) => ls(g, sourceDir))
+    .filter((f) => { if (premiumDedup.has(f.path)) return false; premiumDedup.add(f.path); return true; })
+    .filter(f => {
+      // FineBI/Chrome 原始残留（无日期范围前缀、日期挂尾，如 01_签单清单_定稿_20260608.xlsx；
+      // 带省前缀者剥离后同样命中）与官方范围前缀文件同源但未经导出验收，禁止入 ETL（2026-06-10 上游交接 §4）
+      if (/^01_签单清单_定稿_\d{8}/.test(stripProvincePrefix(f.name))) {
+        log('yellow', `⚠ 跳过 FineBI 残留文件（无日期前缀）: ${f.name}`);
+        return false;
+      }
+      return true;
+    });
+  // 多省 B1（闸-1 P0-1）：按当前 BRANCH_CODE 过滤他省前缀文件防混省（须在 getShardType / 归档之前）
+  let allXlsx = [...legacyXlsx, ...newFormatXlsx]
+    .filter((f) => fileBelongsToBranch(f.name, BRANCH_CODE));
   if (allXlsx.length === 0) {
     log('red', '❌ 未找到任何签单清单 xlsx 文件（每日数据_*.xlsx / 01_签单清单_*.xlsx / ????????_01_签单清单*.xlsx / ????????-????????_01_签单清单*.xlsx）');
     process.exit(1);
@@ -1621,7 +1645,7 @@ async function main() {
     const RANGE_RE = /^(\d{8})-(\d{8})_01_签单清单.*\.xlsx$/i;
     const byStart = new Map();
     for (const f of allXlsx) {
-      const m = f.name.match(RANGE_RE);
+      const m = stripProvincePrefix(f.name).match(RANGE_RE); // 多省 B1：剥离省前缀后按 start 分组互斥（防新旧全量同 start 双倍）
       if (!m) continue;
       if (!byStart.has(m[1])) byStart.set(m[1], []);
       byStart.get(m[1]).push({ f, end: m[2] });

@@ -11,7 +11,7 @@
 | 云厂商 | 腾讯云 (Tencent Cloud) |
 | 产品 | 轻量应用服务器 (Lighthouse) |
 | 实例 ID | `lhins-3mmzz0py` |
-| 实例名称 | 龙腾云_2核4G |
+| 实例名称 | 龙腾云_4核4G |
 | 地域 | 成都 (ap-chengdu, 成都一区) |
 | 公网 IP | `162.14.113.44` |
 | 内网 IP | `10.6.0.9` (hostname: `VM-0-9-opencloudos`) |
@@ -564,7 +564,7 @@ cat /var/www/chexian/logs/audit.log | jq 'select(.username == "admin")'
 |------|--------|------|------|
 | 内存 | ~204MB (PM2 进程) | 3.6GB | 5.5% |
 | 磁盘 | ~172MB (项目目录) | 70GB | 0.2% |
-| CPU | ~0% (空闲) | 2核 | 充足 |
+| CPU | ~0% (空闲) | 4核 | 充足 |
 | 带宽 | < 0.1GB | 600GB/月 | < 0.02% |
 
 ### 目录结构

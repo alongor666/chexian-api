@@ -12,7 +12,7 @@
 - `RenewalFunnel`（35K 行静态文件）应废弃
 - 应续口径 = **上年起保 + 交商同保 + 排除摩托/挂车/拖拉机 + 排除退保**
 - 客户来源去向可补充竞争维度（流失去向覆盖率 6.7%，转保来源 25.4%）
-- **VPS 2核4G 内存红线**——采用 ETL 预计算（方案 A），VPS 只加载扁平 parquet
+- **VPS 4核4G 内存红线**——采用 ETL 预计算（方案 A），VPS 只加载扁平 parquet
 
 详细推导过程见 memory: `domain_renewal_universe.md`
 

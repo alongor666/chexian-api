@@ -385,7 +385,7 @@ PR-6 只过滤 ClaimsDetail（赔案侧）。**RepairDim（登记表侧）无 br
 - 旧泄漏密码 `CxAdmin@2026!` 早失效（实测 401）；本次 owner 重置为全新强密码（bcrypt 哈希更新进 `user_store.json` 的 admin + reload）。**明文在 owner 密码管理器，不落盘、不入任何文档/对话。** memory `reference_auth_credentials` 已更新。
 
 ### C. 验证结论：RLS-on 对四川安全
-- 抓了 SC 生产黄金基线 `golden-baseline --build` **72/72**（并发=1 避开 2核4G VPS 并发瞬态——并发 4 会让重活查询返回"查询执行失败"假阴）。
+- 抓了 SC 生产黄金基线 `golden-baseline --build` **72/72**（并发=1 避开 4核4G VPS 并发瞬态——并发 4 会让重活查询返回"查询执行失败"假阴）。
 - RLS-on 后 `--compare`：**头部 KPI（保费/件数）、total_cases、所有结构/分类/字符串零差异**；唯二差异 =（1）浮点末位求和噪声；（2）`claims-detail/geo-comparison` 的 `cross_region_cases` 抖 15 例（0.014%）。
 - **(2) 已证与 RLS 无关**：PolicyFact 生产 100% 'SC'（duckdb 核 2,600,421 行）→ `branch_code='SC'` 过滤等于 `1=1` → 去重子查询输入输出相同 → total_cases 一致。15 例来自 `claims-detail.ts:48 ANY_VALUE(plate_no)`（DuckDB 非确定性聚合，对同保单号多车牌个例任意挑行，跨进程重启翻转），与 RLS 正交。**单独 cleanup backlog。**
 
@@ -419,7 +419,7 @@ USER_PASSWORDS（只走生产 env、禁 PR）+ 账号清单确认（sxAdmin + 11
 ### follow-up（非阻断，cutover 后处理）
 1. **sync-vps 推 `validation/<省>` 派生域前未 `mkdir -p` 远端父目录** → 首次必失败（PR-2 缺口，本次手动绕过）。
 2. **golden-baseline --compare 严格 deep-equal 不适合生产快照**（浮点/ANY_VALUE/排序非确定性）→ 需容差或区分两用途。
-3. **stress-test 并发 10 打崩 2核4G**（全 503、串读断言空洞通过）→ 降默认并发或加 `--concurrency`。
+3. **stress-test 并发 10 打崩 4核4G**（全 503、串读断言空洞通过）→ 降默认并发或加 `--concurrency`。
 4. **user_store branchCode 永久修复**（#801 P1 `a80133` 仍 PROPOSED）：当前生产是运行时回填，重 seed 即复发全员 401。
 
 ---
