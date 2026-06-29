@@ -51,7 +51,7 @@ ssh chexian-vps-deploy "echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJWBw54+ZDn8Mx
 ### 方法 B：通过腾讯云控制台
 
 1. 访问 https://console.cloud.tencent.com/lighthouse
-2. 找到实例 `龙腾云_2核4G` → 点击 **登录**
+2. 找到实例 `龙腾云_4核4G` → 点击 **登录**
 3. 选择 **VNC 登录**
 4. 执行命令：
 

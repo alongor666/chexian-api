@@ -6,7 +6,7 @@ paths: ["数据管理/**", "scripts/sync-vps.mjs", "scripts/**"]
 
 ## VPS 分层数据架构（RED LINE - 2026-02-28 起强制执行）
 
-> **背景**：VPS 2核4G，历史上原始 Parquet 在 VPS 聚合导致内存 800MB+、PM2 177次重启。
+> **背景**：VPS 4核4G，历史上原始 Parquet 在 VPS 聚合导致内存 800MB+、PM2 177次重启。
 
 **黄金规则**：**禁止在 VPS 上查询原始 `PolicyFact` 构建新功能**（续保模块除外）
 

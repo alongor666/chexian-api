@@ -7,7 +7,12 @@
  * - formatDate(d)         今天的 YYYYMMDD（可注入日期，便于测试 openEnd 分支）
  * - extractDateRange(name, today)  从文件名提取 { start, end }
  * - getShardType(name, config)     判定 static / weekly / daily
+ *
+ * 多省（B1 命名路由）：源文件可能带 sichuan_/shanxi_ 拼音前缀；extractDateRange /
+ * getShardType 入口先 stripProvincePrefix 剥离前缀，再走原「^日期」解析，避免带前缀文件
+ * 被判 null → ETL 中止（省份前缀知识集中在 source-file-routing.mjs，单一事实源）。
  */
+import { stripProvincePrefix } from './source-file-routing.mjs';
 
 /** 返回 YYYYMMDD（默认今天，可注入 Date 便于测试） */
 export function formatDate(d = new Date()) {
@@ -16,6 +21,7 @@ export function formatDate(d = new Date()) {
 
 /** 从文件名提取日期范围，支持下划线和连字符 */
 export function extractDateRange(filename, today = formatDate()) {
+  filename = stripProvincePrefix(filename); // 多省 B1：剥离 sichuan_/shanxi_ 前缀后走原日期解析
   // 范围前缀格式（2026-06-10 上游 BI 清单重构起）：20240101-20250531_01_签单清单_定稿.xlsx
   const rangePrefix = filename.match(/^(\d{8})-(\d{8})_/);
   if (rangePrefix) {
@@ -54,6 +60,7 @@ export function extractDateRange(filename, today = formatDate()) {
 
 /** 判断分片类型：static / weekly / daily，无法识别返回 null */
 export function getShardType(filename, config) {
+  filename = stripProvincePrefix(filename); // 多省 B1：先剥离省前缀，使下方 ^\d{8} 锚定的分片判定对带前缀文件生效
   const range = extractDateRange(filename);
   if (!range) return null;
   // 增量文件 / 新前缀单日文件 强制归入 weekly（以新格式处理，输出到 current/）

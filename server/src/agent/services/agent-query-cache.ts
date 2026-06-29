@@ -2,7 +2,7 @@
  * Agent 诊断查询的统一缓存策略。
  *
  * 背景：各 Agent 诊断服务此前直接 `duckdbService.query(sql)` 调用，第二参
- * cacheTtlMs 缺省为 0 → 旁路了 duckdb.ts 内置 queryCache，在 2核4G VPS 上
+ * cacheTtlMs 缺省为 0 → 旁路了 duckdb.ts 内置 queryCache，在 4核4G VPS 上
  * 重复诊断（相同筛选参数）会反复重算整套聚合 SQL。
  *
  * 安全性：queryCache 以**完整 SQL 字符串**为 key（不同筛选参数自然产生不同

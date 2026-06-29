@@ -117,7 +117,7 @@ bun run governance                 # 治理校验（push 前必跑）
 
 ## 生产环境
 
-- **VPS**: 腾讯云 2核4G `162.14.113.44`
+- **VPS**: 腾讯云 4核4G `162.14.113.44`
 - **域名**: https://chexian.cretvalu.com
 - **进程管理**: PM2 `chexian-api` 端口 3000
 - **前端**: Nginx 静态文件 `/var/www/chexian/frontend/dist`

@@ -143,7 +143,7 @@ DUCKDB_PATH=./data/chexian.duckdb
 DATA_PATH=./data
 LOG_LEVEL=warn
 AUDIT_LOG_PATH=../logs/audit.log
-# DuckDB 内存与线程（腾讯云轻量 2核4G）
+# DuckDB 内存与线程（腾讯云轻量 4核4G）
 DUCKDB_MAX_MEMORY=1.2GB
 DUCKDB_THREADS=2
 EOF
@@ -374,7 +374,7 @@ crontab -e
 **登录腾讯云控制台**（浏览器操作）：
 
 1. 进入「轻量应用服务器」控制台
-2. 选择实例 `lhins-3mmzz0py`（龙腾云_2核4G）
+2. 选择实例 `lhins-3mmzz0py`（龙腾云_4核4G）
 3. 点击「防火墙」标签页
 4. 确认规则：
 
