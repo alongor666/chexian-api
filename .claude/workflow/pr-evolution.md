@@ -1814,3 +1814,27 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （governance 第 49 项即自动化机制；不存在"记录到文档但等待机制化"的项。）
+
+---
+
+## 2026-06-29 · 路径 B（ETL 四川 SC + 山西 SX 数据混乱根治·运维债根治）代码阶段收尾（B1-B4 · 4 PR 全合并）
+
+> 承接 backlog `2026-06-29-claude-ba7e61`。把 ETL 编排层运维债（命名路由/分省编排/防重复/freshness）根治为 4 个 stacked PR，全程 **Claude 子代理双闸**（architect 闸-1 审设计 + code-reviewer 闸-2 审 diff），符合 2026-06-29「codex 默认关闭→/code-reviewer 兜底」+ 用户本次「禁 codex CLI、用 Claude 子代理」指令。B5 首发实战待低峰授权。
+
+- **业务目标**：根治四川赔案金额停滞（喂窗口增量未刷历史全量）+ 山西从未在发布流程自动跑（编排不遍历省份），ETL 编排层运维债根治。
+- **4 PR**：B1 命名路由（#847，含 Phase0 2核→4核）· B2 分省编排（#852）· B3 防重复区间覆盖归档（#853）· B4 跨省 freshness 巡检（#854）。全 squash 合并、CI 全绿（gh state==MERGED 核实）。
+- **🔴 双闸抓到的 4 个关键盲点（实施者疏漏，闸-1 architect 全 NO-GO→修后才实现）**：
+  1. **B1**：`shard-classify` 的 `extractDateRange`/`getShardType` 不认省前缀 → 带 `sichuan_` 文件 `getShardType→null→unrecognized→ETL process.exit(1)` 崩溃（`node --check`/单测都不报，集成才暴露）
+  2. **B2**：premium 无源 exit 真实在 1641 非 1612（实施者记错行号，改错位置 graceful 失效）；省份枚举 SSOT 第三调用点风险（改 import 单一来源 + governance 静态对比闸）
+  3. **B3**：premium 剔摩/限摩拆分多文件共存（同 `[start,end]` 不同品类），原设计用 start-end 唯一键会误归档 → **数据丢失** → 加 `qualifier` 品类标识仅同品类互斥
+  4. **B4**：`freshness` 子命令不在 `ALL_DOMAINS` → `subcommand=undefined` → 跌落 premium ETL 分片流程
+- **🔑 关键技术教训（vite SSR 动态 import 中文路径）**：B2 在 sync-and-reload.mjs 用 `await import(pathToFileURL(join(ROOT,'数据管理/lib/...')).href)` 动态 import → vitest 跑该文件测试时 rollup `parseAst` 报 `Expected ident`（`node --check`/`bun build` 都宽容放过，**只有 vite SSR transform 触发**）→ 改顶层静态 import 解决。**教训：被 vitest import 的 .mjs 禁用动态 import 中文路径表达式，用顶层静态 import。**
+- **证据**：累计单测（source-file-routing 25 / branch-publish 8 / range-coverage 20 / branch-claims-freshness 9）+ governance 51/51（新增「省份前缀映射一致」闸）+ 真实集成验证（B1 识别 6 全量、B3 归档 3 碎片+保留 2 历史段+山西 `SX_` 不误归、B4 山西 06-23 落后 6 天 stale 红字告警）+ dry-run 完整发布编排串联（SC all + SX 分省 + freshness）。
+
+### 三问复盘
+1. **重来怎样更好**：B1/B2/B3/B4 的 4 个 P0 盲点有共性——**都是"改一处忘了关联面"**（B1 改 glob 忘 shard-classify；B3 抽区间键忘多文件共存；B4 加子命令忘 ALL_DOMAINS 解析）。闸-1 设计对抗在动手前抓到全部 4 个，证明「机械改动也必走设计闸」的价值——这些盲点 `node --check`/单测都不报，靠 architect 读全链路才暴露。**Claude 子代理双闸（architect+code-reviewer）在 codex 默认关闭下完全胜任 loop 对抗闸职责**（4 NO-GO + 全 GO，零漏判 P0）。
+2. **复用价值**：① 区间覆盖 + 同品类互斥（range-coverage）对任何「多文件按区间去重防双倍」通用；② 省份枚举单一来源（`registeredBranchCodesFromPrefixMap`）+ governance 静态对比闸 = 防 SSOT 漂移标准手法；③ vite SSR 动态 import 中文路径教训跨项目通用。
+3. **如何更高质量自动化**：vite SSR 动态 import 坑可加 governance 闸（扫被 vitest include 的 .mjs 出现 `await import(...中文...)` 即告警）；但发作 1 次，先登记失败模式表观察，攒 ≥2 次再机制化。
+
+### needs_automation: true
+（vite SSR 动态 import 中文路径 → rollup parse 失败：可加 governance 闸扫描被 vitest include 的 .mjs 动态 import 中文路径，但发作 1 次，先登记 + 本复盘，攒 ≥2 次再机制化。）expires: 2026-09-29
