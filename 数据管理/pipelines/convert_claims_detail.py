@@ -91,6 +91,34 @@ def derive_subject_shop_code(subject_repair_shop: pd.Series) -> pd.Series:
     return code
 
 
+def assert_claim_no_unique(df: pd.DataFrame, sample_n: int = 10) -> None:
+    """fail-closed：claim_no 必须唯一（有 branch_code 时按省内唯一），否则中止 ETL。
+
+    下游诊断脚本（policy_age_dev / diagnose_segment / ulr_dimensions / ulr_triangle /
+    diagnose_lng_tractor / diagnose_cohort_comparison / diagnose_transfer_location 等）
+    对 claims 做 `LEFT JOIN ... ON policy_no` 后 `SUM(已决/未决金额)` 且**不按 claim_no 去重**——
+    同一 claim_no 多行时赔款会被双计、满期赔付率虚高（2026-05-05 事故根因）。
+
+    本断言是 line 185 `drop_duplicates(subset=['赔案号'])` 这一单点强制位的产出后兜底：
+    与其给每个下游脚本逐个加去重，不如在源头 fail-closed——若未来去重逻辑被破坏，
+    这里中止 ETL，绝不让含重复 claim_no 的 parquet 落盘流向下游。
+    """
+    keys = ['branch_code', 'claim_no'] if 'branch_code' in df.columns else ['claim_no']
+    dup_mask = df.duplicated(subset=keys, keep=False)
+    dup_rows = int(dup_mask.sum())
+    if dup_rows == 0:
+        return
+    dup_groups = df.loc[dup_mask, keys].drop_duplicates()
+    excess = dup_rows - len(dup_groups)
+    print(f"   ❌ claim_no 重复：{len(dup_groups):,} 组重复键，多计 {excess:,} 行"
+          f"（下游 SUM(赔款) 会双计 → 满期赔付率虚高）")
+    for rec in dup_groups.head(sample_n).to_dict('records'):
+        print(f"      重复键样本: {rec}")
+    print("   ▶ 根因排查：line 185 drop_duplicates(subset=['赔案号']) 是否被破坏 / "
+          "CDC 合并是否把同一 claim_no 重复写入分区")
+    sys.exit(1)
+
+
 def _enrich_insurance_start_date(df: pd.DataFrame, policy_dir: str | None) -> pd.DataFrame:
     """从 PolicyFact JOIN 获取 insurance_start_date，未匹配的用 policy_no 位置 12-15 推导年份。"""
     import duckdb
@@ -322,16 +350,14 @@ def main():
     size_mb = output_file.stat().st_size / 1024 / 1024
     print(f"\n   输出: {output_file} ({size_mb:.1f} MB)")
 
-    # ── 验证 ──
+    # ── 验证（claim_no 唯一性 fail-closed，详见 assert_claim_no_unique）──
     verify = pd.read_parquet(output_file)
     assert len(verify) > 0, "输出文件为空"
-    dup_claims = len(verify) - verify['claim_no'].nunique()
-    if dup_claims > 0:
-        print(f"   ⚠ 赔案号重复: {dup_claims:,} 条")
+    assert_claim_no_unique(verify)
     missing_policy = verify['policy_no'].isna().sum()
     if missing_policy > 0:
         print(f"   ⚠ 缺失 policy_no: {missing_policy:,} 条")
-    print(f"   验证: {len(verify):,} 行 × {len(verify.columns)} 列 ✅")
+    print(f"   验证: {len(verify):,} 行 × {len(verify.columns)} 列，claim_no 唯一 ✅")
 
     print(f"{'='*80}")
     print(f"✅ 完成")
