@@ -31,7 +31,7 @@ policy: append-only
 
 - **scorecard 落位**：基座 §8 阶段 C 步骤 4 写入 **`.claude/workflow/pr-evolution.md`**（append 到尾部，性质与 `commit-push-pr-core` 的"自进化日志"一致）。**禁止**写入 `.claude/shared-memory/**` 或 `~/.claude/projects/**/memory/**` —— 这两个路径在 AGENTS.md §8.3 标为 user-only，AI 仅可只读引用。**不新建 `docs/perf/` 等目录**。
 - **verifier 隔离**：correctness / 度量 / 发布风险优先交给**确定性脚本**（影子对账 / bench / `bun run governance` / sentinel），不用 LLM subagent 去做。
-- **loop v2 code review = codex CLI 单源 · 🔴 默认关闭·显式才跑（2026-06-29 用户指令 `[policy-override]`，在 2026-06-25「单源」口径之上加默认关闭）**：codex 对抗审计/证伪**默认不跑**；仅当**用户本次显式要求**时，收尾阶段 C 的 LLM 对抗才**只调 codex CLI**（见 [loop-orchestration §2 + §4 末 meta](./loop-orchestration.md)），**不再起 `evidence-verifier` / `code-reviewer` 子代理**。默认（未显式要求）时 code review 由 Claude `/code-reviewer` 自审兜底（fresh 自审 + 修复 SOP，见 memory `feedback_codex_review_off_by_default`），**不起 evidence-verifier**；correctness 由确定性脚本（`governance` / `verify:full` / golden-baseline / duckdb 直查）正交承担。`.claude/agents/evidence-verifier.md` 保留为可选 ad-hoc 正确性证伪 agent，但**非 loop 闸必需源**。
+- **loop v2 code review = codex CLI 单源 · 🔴 默认关闭·显式才跑（2026-06-29 用户指令 `[policy-override]`，在 2026-06-25「单源」口径之上加默认关闭）**：codex 对抗审计/证伪**默认不跑**；仅当**用户本次显式要求**时，收尾阶段 C 的 LLM 对抗才**只调 codex CLI**（见 [loop-orchestration §2 + §4 末 meta](./loop-orchestration.md)），**跑 codex 时不另叠 `code-reviewer`（codex 单源）、始终不起 `evidence-verifier`**。默认（未显式要求）时 code review 由 Claude `/code-reviewer` 自审兜底（fresh 自审 + 修复 SOP，见 memory `feedback_codex_review_off_by_default`），**不起 evidence-verifier**；correctness 由确定性脚本（`governance` / `verify:full` / golden-baseline / duckdb 直查）正交承担。`.claude/agents/evidence-verifier.md` 保留为可选 ad-hoc 正确性证伪 agent，但**非 loop 闸必需源**。
 - **立方体专项**作为"性能 → 项目特化"实例，其 cube-shadow / cube-promote / cube-rollback 是发布安全机制的具体实现，不是基座要求。
 
 ## 关联
