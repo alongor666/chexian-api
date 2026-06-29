@@ -749,6 +749,12 @@ function runStandardDomain(python, scriptDir, manifest, extraArgsOverride = []) 
     //   运维（以为成功了），改为 exit 1 让调用方拿到失败状态；SC 默认链路保持原"跳过"
     //   语义（增量未到不视为故障）。
     if (isBranch) {
+      // 多省 B2（闸-1 P0-A/P1-C）：分省编排（BRANCH_PUBLISH=1）下某省无该域源正常，graceful skip
+      // 不中断其他省/域；显式单域调用仍 exit(1)（避免假阳性"绿字完成"误导运维）。
+      if (process.env.BRANCH_PUBLISH === '1') {
+        log('yellow', `⚠ [${BRANCH_CODE}] 域 '${id}' 未找到源 ${inputGlobs.join(' / ')}（源根 ${sourceRoot}），分省发布下跳过`);
+        return;
+      }
       log('red', `❌ [${BRANCH_CODE}] 域 '${id}' 未找到源 ${inputGlobs.join(' / ')}（源根 ${sourceRoot}），非 SC 单域路径下视为失败（避免假阳性"绿字完成"）`);
       process.exit(1);
     }
@@ -1212,7 +1218,9 @@ function runClaimsDetail(python, scriptDir) {
   let sourceFiles = (manifestFiles || [...newFiles, ...legacyFiles])
     .filter((f) => fileBelongsToBranch(f.name, BRANCH_CODE));
   if (sourceFiles.length === 0) {
-    log('yellow', '⚠ 未找到 02/05_理赔明细 xlsx（含 YYYYMMDD-YYYYMMDD_ 范围前缀）或 车险报立结案清单_*.xlsx，跳过');
+    // 多省 B2（闸-1 P1-F）：分省发布下明确标注哪个省无源（与 SC 增量未到区分，运维可察觉）
+    const tag = (BRANCH_CODE !== 'SC' && process.env.BRANCH_PUBLISH === '1') ? `[${BRANCH_CODE}] ` : '';
+    log('yellow', `⚠ ${tag}未找到 02/05_理赔明细 xlsx（含 YYYYMMDD-YYYYMMDD_ 范围前缀）或 车险报立结案清单_*.xlsx，跳过`);
     return;
   }
   // 自动归档与最新全量文件覆盖区间冲突的旧文件（与签单清单一致的护栏）
@@ -1634,6 +1642,12 @@ async function main() {
   let allXlsx = [...legacyXlsx, ...newFormatXlsx]
     .filter((f) => fileBelongsToBranch(f.name, BRANCH_CODE));
   if (allXlsx.length === 0) {
+    // 多省 B2（闸-1 P0-A）：分省编排（BRANCH_PUBLISH=1）下某省无 premium 签单源是正常的，
+    // graceful skip 不中断其他省/域；显式单域调用仍 exit(1)（避免假阳性"绿字完成"误导运维）。
+    if (BRANCH_CODE !== 'SC' && process.env.BRANCH_PUBLISH === '1') {
+      log('yellow', `⚠ [${BRANCH_CODE}] 未找到 premium 签单源（${sourceDir}），分省发布下跳过该省 premium`);
+      return;
+    }
     log('red', '❌ 未找到任何签单清单 xlsx 文件（每日数据_*.xlsx / 01_签单清单_*.xlsx / ????????_01_签单清单*.xlsx / ????????-????????_01_签单清单*.xlsx）');
     process.exit(1);
   }
