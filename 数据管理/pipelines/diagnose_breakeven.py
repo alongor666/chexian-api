@@ -19,7 +19,7 @@ import duckdb
 from diagnose_common import (
     GLOB, EARNED, POLICY_TERM, EARNED_DAYS, OUT_DIR,
     fw, fp, fi, fc, light, escape_sql,
-    kpi_select, query_kpi, detect_risk_field,
+    kpi_select, query_kpi, joined_source, detect_risk_field,
 )
 
 # 新转续过户表达式（与 sections/s02_vehicle_type.py 一致）
@@ -106,13 +106,22 @@ def render_table(lines: list, rows: list, dim_name: str):
 
 
 def query_dim(con, base_where: str, year_filter: str, dim_expr: str, dim_alias: str = "dim_label") -> list:
-    """按维度查询 KPI（需要子查询因为 dim_expr 可能是 CASE WHEN）"""
+    """按维度查询 KPI（需要子查询因为 dim_expr 可能是 CASE WHEN）。
+
+    走 joined_source(con)（policy LEFT JOIN claims 聚合），与 query_kpi() 同源：
+    kpi_select 引用的 reported_claims / claim_cases 来自 claims JOIN，裸 read_parquet(GLOB)
+    只含 policy 列会触发 BinderException（未绑定列）。维度表的 loss_ratio（赔付率）依赖
+    reported_claims，故必须保留 claims，不能改用"精简 SELECT 剥离 claims 列"的写法。
+    省份隔离由 GLOB 文件名前缀（SC=current/[!S]*.parquet）保证，不在此叠加
+    WHERE branch_code（见 .claude/rules/data-pipeline.md 省份隔离规则）。
+    """
     sel = kpi_select(dim_alias)
+    source = joined_source(con)
     sql = f"""
     SELECT {sel}
     FROM (
         SELECT *, {dim_expr} AS {dim_alias}
-        FROM read_parquet('{GLOB}', union_by_name=true)
+        FROM {source}
         WHERE {base_where} AND {year_filter}
     ) sub
     GROUP BY {dim_alias}
