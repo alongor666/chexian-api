@@ -55,6 +55,7 @@ import {
   buildBranchAwareGlobs,
   fileBelongsToBranch,
   stripProvincePrefix,
+  registeredBranchCodesFromPrefixMap,
 } from './lib/source-file-routing.mjs';
 // 多省 B3 防重复：区间覆盖归档纯函数（被新全量区间完全覆盖的旧文件归档，仅同品类互斥）
 import {
@@ -63,6 +64,11 @@ import {
   isCoveredBySameQualifier,
   findCoveredKeys,
 } from './lib/range-coverage.mjs';
+// 多省 B4：跨省 claims 报案截止日新鲜度巡检（省份→claims 目录派生 + 巡检分类，可单测）
+import {
+  branchClaimsDetailDir,
+  summarizeFreshnessPatrol,
+} from './lib/branch-claims-freshness.mjs';
 // argv 最外层双引号剥离抽到 lib/arg-quotes.mjs（可单测；裸 spawn 引号安全闸的不变量源）
 import { stripArgQuotes } from './lib/arg-quotes.mjs';
 // claims 报案截止日新鲜度判定纯函数（同模式抽 lib/ 便于单测）
@@ -1466,6 +1472,43 @@ function runRenewalTracker(python, scriptDir) {
 
 // ── 主流程 ──
 
+// 多省 B4：跨省 claims 报案截止日新鲜度巡检（独立命令 `daily.mjs freshness`，不跑 ETL）。
+// 遍历注册省份查各省 claims_detail 报案截止日落后天数，落后≥阈值红字告警。仅 log、return
+// hasStale（**绝不 process.exit**·闸-1 P0-2，即使 stale 也不阻断 release:daily，沿用 Step 5.5 warn）。
+function runClaimsFreshnessPatrol(python, scriptDir) {
+  log('cyan', '\n═══ 跨省赔案新鲜度巡检（report_time 落后告警）═══\n');
+  // branchClaimsDetailDir(warehouseRoot, 'SC') = warehouseRoot/fact/claims_detail；与 CLAIMS_DETAIL_DIR
+  // (WAREHOUSE/claims_detail, WAREHOUSE=warehouse/fact) 同路径（P1-1：SC 路径须与该常量保持一致）。
+  const warehouseRoot = join(scriptDir, 'warehouse');
+  const today = localTodayISO();
+  const branches = registeredBranchCodesFromPrefixMap(); // 省份单一来源（B2），当前 [SC, SX]
+  const probes = branches.map((branch) => {
+    const dir = branchClaimsDetailDir(warehouseRoot, branch);
+    const exists = existsSync(dir);
+    const maxReportDate = exists ? getPartitionedMaxReportDate(python, dir) : null;
+    return { branch, dir, exists, maxReportDate, today };
+  });
+  const { stale, fresh, unreadable } = summarizeFreshnessPatrol(probes);
+  for (const r of fresh) {
+    if (r.lagDays < 0) log('yellow', `  ⚠️ [${r.branch}] 报案截止 ${r.maxReportDate} 晚于当日 ${-r.lagDays} 天（数据超前，请核查）`); // P1-2
+    else log('green', `  ✓ [${r.branch}] 报案截止 ${r.maxReportDate}（落后 ${r.lagDays} 天，新鲜）`);
+  }
+  for (const r of unreadable) {
+    // P1-3：区分「目录不存在（正常 skip）」与「目录存在但读不到日期（异常）」
+    log('yellow', r.exists
+      ? `  ⚠️ [${r.branch}] claims 目录存在但读不到报案截止日（空分区？）: ${r.dir}`
+      : `  ⚠️ [${r.branch}] claims 目录不存在，跳过（该省未初始化 / 正常无数据）: ${r.dir}`);
+  }
+  for (const r of stale) {
+    log('red', `⚠️ [${r.branch}] 赔案报案截止 ${r.maxReportDate} 落后当日 ${r.lagDays} 天（阈值 ${CLAIMS_REPORT_LAG_WARN_DAYS} 天）`);
+    log('red', `   理赔金额动态，喂旧快照致满期赔付率系统性偏低；请用含历史全量源刷新 ${r.branch} claims（见 data-pipeline.md「claims_detail 存量更新铁律」）`);
+  }
+  // TODO（闸-1 审查点6）：SX 完全上线生产后，stale 应升级为发布阻断——旧 claims 快照静默进生产 = 2026-06-08 事故。
+  const hasStale = stale.length > 0;
+  log(hasStale ? 'red' : 'green', hasStale ? `\n巡检完成：${stale.length} 个省份赔案停滞需刷新` : '\n✅ 巡检完成：各注册省赔案新鲜');
+  return hasStale; // 仅返回供调用方观察，不 exit（P0-2）
+}
+
 async function main() {
   const scriptDir = __dirname;
   process.chdir(scriptDir);
@@ -1484,6 +1527,14 @@ async function main() {
   const skipReport = process.argv.includes('--skip-report');
   const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'new_energy_claims', 'new_energy', 'renewal_tracker', 'all'];
   const subcommand = process.argv.find(a => ALL_DOMAINS.includes(a));
+
+  // 多省 B4（闸-1 P0-1）：freshness 跨省巡检子命令——必须在此提前拦截 return，绝不落入下方
+  // premium ETL 分片流程（freshness 不在 ALL_DOMAINS，否则 subcommand=undefined 会跌落 premium）。
+  if (process.argv.includes('freshness')) {
+    // runClaimsFreshnessPatrol 是同步函数（巡检用 spawnSync 取数），有意不 await；若未来改 async 须补 await（闸-2 LOW-1）。
+    runClaimsFreshnessPatrol(findPython(), scriptDir);
+    return;
+  }
 
   // 发布 manifest（可选）：声明本次刷新的域范围 + 期望日期；
   // 存在时所有 data-sources.json 写入延后到流程末尾由 refresh_metadata.py 统一执行，消除双写漂移。

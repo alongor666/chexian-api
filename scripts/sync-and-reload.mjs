@@ -319,6 +319,15 @@ async function main() {
     }
   }
 
+  // Stage 1.2: 多省 B4 跨省 claims 新鲜度巡检（ETL 后数据最新、sync 前可人工干预）。
+  // 仅告警不阻断（闸-1 P0-2/P0-3）：daily.mjs freshness 即使 stale 也 exit 0；外层 try/catch 兜
+  // findPython 等偶发异常，绝不让巡检中断已成功的 ETL 与后续 sync/reload。
+  try {
+    await runCmd('claims 新鲜度巡检', 'node', ['数据管理/daily.mjs', 'freshness'], { dryRun: opts.dryRun });
+  } catch (err) {
+    log('yellow', `\n⚠ claims 新鲜度巡检异常（不阻断发布）：${err.message}`);
+  }
+
   // Stage 1.5: 生成周期趋势诊断报告（V1 驾驶舱）——ETL 完成后数据最新
   const skillCli = join(os.homedir(), '.claude/skills/diagnose-period-trend/lib/cli.py');
   if (existsSync(skillCli)) {
