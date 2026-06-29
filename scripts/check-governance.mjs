@@ -843,44 +843,109 @@ function checkParquetOverlapInCurrent() {
 // ============================================================
 
 /**
- * 检查 claims_detail/ 各分区文件 claim_no 是否存在重复（含跨文件）。
+ * 核心：对一组按省划分的 claims parquet glob 做 (branch_code, claim_no) 去重核验（纯函数，无 console）。
+ *
+ * 设计要点（与 checkSingleProvincePerFile 同源）：
+ * - 省份隔离（data-pipeline.md「省份数据隔离」RED LINE）：逐省 glob，**绝不**跨省裸 glob 混查；
+ *   有 branch_code 列时按 (branch_code, claim_no) 分组，无则退化为 claim_no（同时正确允许 SC/SX 同号）。
+ * - fail-closed + CI 安全：python 先 glob 判定数据是否存在，**无文件则不 import duckdb 直接 skip**
+ *   （CI/worktree 无 parquet → skip，不造假安全）；有数据但 DuckDB 读不了 → 抛错由 JS 转 skip。
+ * @param {{branch:string, glob:string}[]} specs 各省 claims_*.parquet 绝对路径 glob
+ * @returns {{status:'pass'|'fail'|'skip', reason?:string, provinces?:Array}}
+ */
+export function inspectClaimsClaimNoDuplication(specs) {
+  const py = `
+import sys, json, glob
+specs = json.loads(sys.argv[1])
+prepared = []
+any_files = False
+for spec in specs:
+    files = sorted(glob.glob(spec["glob"]))
+    if files:
+        any_files = True
+    prepared.append((spec["branch"], files))
+if not any_files:
+    print(json.dumps({"status": "skip", "reason": "no parquet files"}))
+    sys.exit(0)
+import duckdb
+con = duckdb.connect()
+overall = "pass"
+provinces = []
+for branch, files in prepared:
+    if not files:
+        provinces.append({"branch": branch, "status": "skip", "reason": "no parquet"})
+        continue
+    lit = "[" + ",".join("'" + f.replace("'", "''") + "'" for f in files) + "]"
+    src = "read_parquet(" + lit + ", union_by_name=true)"
+    cols = [d[0] for d in con.execute("SELECT * FROM " + src + " LIMIT 0").description]
+    keys = "branch_code, claim_no" if "branch_code" in cols else "claim_no"
+    key_names = [k.strip() for k in keys.split(",")]
+    total = con.execute("SELECT COUNT(*) FROM " + src).fetchone()[0]
+    rows = con.execute(
+        "SELECT " + keys + ", COUNT(*) AS cnt FROM " + src +
+        " GROUP BY " + keys + " HAVING COUNT(*) > 1 ORDER BY cnt DESC, " + keys
+    ).fetchall()
+    dup_groups = len(rows)
+    excess = sum(int(r[-1]) - 1 for r in rows)
+    samples = [{**{k: r[i] for i, k in enumerate(key_names)}, "count": int(r[-1])} for r in rows[:10]]
+    status = "fail" if dup_groups > 0 else "pass"
+    if status == "fail":
+        overall = "fail"
+    provinces.append({"branch": branch, "status": status, "totalRows": int(total),
+                      "dupGroups": dup_groups, "excessRows": excess, "samples": samples})
+print(json.dumps({"status": overall, "provinces": provinces}))
+`;
+  try {
+    const stdout = execFileSync('python3', ['-c', py, JSON.stringify(specs)], { encoding: 'utf-8' });
+    return JSON.parse(stdout.trim());
+  } catch (e) {
+    return { status: 'skip', reason: (e.message || String(e)).split('\n')[0] };
+  }
+}
+
+/**
+ * 检查 claims_detail/ 各分区文件 claim_no 是否存在重复（按 branch_code 分省 · SC + SX）。
  *
  * 根因：2026-05-05 事故 — daily.mjs 把新全量 + 旧增量 11 个文件一并喂给 ETL，
  * convert_claims_detail.py 裸 concat 无去重，76,844 个 claim_no 各 2 行写入分区，
  * 服务端 SUM(settled+pending) 不去重，赔付率虚高 92% (真实 48%)。
+ *
+ * 本闸是「让下游聚合可证明安全」的发布前断言（PR #845 完整性审查 follow-up）：policy_age_dev /
+ * diagnose_segment / ulr_dimensions / ulr_triangle / diagnose_lng_tractor /
+ * diagnose_cohort_comparison / diagnose_transfer_location 等脚本对 claims 做
+ * `LEFT JOIN ... ON policy_no` 后 `SUM(已决/未决)` 且**不按 claim_no 去重**，重复行即双计赔款。
+ * 与其给每个脚本逐个加去重，不如在「下游真正读取的最终 warehouse 分区 parquet」上断言唯一性。
  */
 function checkClaimsDetailDeduplication() {
-  info('检查 claims_detail/ Parquet claim_no 去重...');
+  info('检查 claims_detail/ Parquet claim_no 去重（按 branch_code 分省 · SC + SX）...');
 
-  const dir = path.join(ROOT_DIR, '数据管理/warehouse/fact/claims_detail');
-  if (!fs.existsSync(dir)) {
-    success('claims_detail/ 目录不存在，跳过');
+  const specs = [
+    { branch: 'SC', glob: path.join(ROOT_DIR, '数据管理/warehouse/fact/claims_detail/claims_*.parquet') },
+    { branch: 'SX', glob: path.join(ROOT_DIR, '数据管理/warehouse/validation/SX/claims_detail/claims_*.parquet') },
+  ];
+  const res = inspectClaimsClaimNoDuplication(specs);
+
+  if (res.status === 'skip') {
+    success(`claims_detail/ 去重检测跳过（无生产 parquet 或 DuckDB 不可用：${res.reason || 'no parquet'}）`);
     return true;
   }
-  const files = fs.readdirSync(dir).filter(f => f.startsWith('claims_') && f.endsWith('.parquet'));
-  if (files.length === 0) {
-    success('claims_detail/ 无分区文件，跳过');
-    return true;
-  }
-  try {
-    const out = execSync(
-      `python3 -c "import duckdb; r = duckdb.sql(\\"SELECT COUNT(*) AS rows, COUNT(DISTINCT claim_no) AS dis FROM read_parquet('${dir}/claims_*.parquet', union_by_name=true)\\").fetchone(); print(r[0], r[1])"`,
-      { encoding: 'utf-8' }
-    ).trim();
-    const [rows, dis] = out.split(/\s+/).map(Number);
-    const dup = rows - dis;
-    if (dup > 0) {
-      error(`claims_detail/ claim_no 重复 ${dup.toLocaleString()} 行（rows=${rows.toLocaleString()} / distinct=${dis.toLocaleString()}）`);
-      console.log(`    ▶ 修复：归档冲突的旧增量 xlsx + 重跑 node 数据管理/daily.mjs claims_detail`);
-      console.log(`    ▶ 影响：服务端 SUM(settled+pending) 会双重计入，赔付率虚高约 ${Math.round(dup * 100 / dis)}%`);
-      return false;
+  if (res.status === 'fail') {
+    for (const p of (res.provinces || []).filter(x => x.status === 'fail')) {
+      error(`claims_detail [${p.branch}] claim_no 重复：${p.dupGroups.toLocaleString()} 组重复键，多计 ${p.excessRows.toLocaleString()} 行（共 ${p.totalRows.toLocaleString()} 行）`);
+      for (const s of p.samples) {
+        console.log(`    重复键样本: branch_code=${s.branch_code ?? p.branch}, claim_no=${s.claim_no}, count=${s.count}`);
+      }
     }
-    success(`claims_detail/ 去重检测通过（${rows.toLocaleString()} 行 = ${dis.toLocaleString()} distinct claim_no）`);
-    return true;
-  } catch (e) {
-    warning(`claims_detail/ 去重检测跳过：${e.message.split('\n')[0]}`);
-    return true;
+    console.log(`    ▶ 影响：下游 LEFT JOIN claims ON policy_no 后 SUM(已决/未决) 双计赔款 → 满期赔付率虚高`);
+    console.log(`    ▶ 修复：归档冲突的旧增量 xlsx + 重跑 node 数据管理/daily.mjs claims_detail`);
+    return false;
   }
+  // pass
+  const checked = (res.provinces || []).filter(p => p.status === 'pass');
+  const skipped = (res.provinces || []).filter(p => p.status === 'skip').map(p => p.branch);
+  const summary = checked.map(p => `${p.branch}=${p.totalRows.toLocaleString()}行/0重复`).join(', ');
+  success(`claims_detail/ 去重检测通过（${summary}${skipped.length ? `；${skipped.join('/')} 无数据跳过` : ''}）`);
+  return true;
 }
 
 // ============================================================
