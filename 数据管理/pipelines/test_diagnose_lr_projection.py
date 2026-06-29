@@ -269,11 +269,20 @@ def test_proj_year_dedup_consistency(tmp_path):
 
 @pytest.mark.skipif(not _HAS_PARQUET, reason="parquet data not available (CI environment)")
 def test_distinct_on_determinism(tmp_path):
-    """反复跑两次,2026 预测 LR 差异必须 < 0.001 个百分点。
+    """反复跑两次,2026 预测整体满期赔付率差异必须 < 1e-4(0.01 个百分点)。
 
-    严格"完全一致"不可达:`v_policy_base_dedup` 用 `ANY_VALUE()` 聚合批改字段时
-    DuckDB 无确定性保证。本测试容忍 1e-5(0.001 个百分点)的浮点扰动,
-    业务上完全无意义。排序 tie-breaker 把扰动控制在此量级。
+    唯一抖动源:`v_policy_base_dedup` 对维度字段用 `ANY_VALUE()`,DuckDB 对同组多行
+    (批改副本)无返回行保证。实证 SC 全量 254万去重组中 14284 组(0.56%)维度字段自相矛盾
+    (主要 is_transfer 13163 / customer_category 2384),ANY_VALUE 随机取值让这些保单在
+    4 维 cell 间漂移,整体满期赔付率在 71.5543%~71.5562% 间抖动(极差 ~1.9e-5,略超旧阈值 1e-5)。
+
+    为何放宽阈值而非把 ANY_VALUE 改成确定性聚合(2026-06-28 实测权衡):
+      确定性聚合(MAX 给 71.40% / ROW_NUMBER 取原单给 71.42%)虽消除抖动,但会把自相矛盾的
+      脏组固定到某 cell,使整体满期赔付率相对 ANY_VALUE baseline 漂移约 -0.13pp —— 违反
+      "零口径漂移",且与生产 server/src/sql/shared/policy-dedup.ts(同样用 ANY_VALUE)口径分叉。
+      脏组数据自相矛盾本无"正确"cell 归属,该 ~1.9e-5 随机性业务完全无意义。故保留 ANY_VALUE
+      口径不动,仅把阈值放宽到 1e-4(容忍实测抖动 + ~5x 余量):既消除 flaky 又零口径漂移;
+      若未来出现大额矛盾保单致漂移 > 1e-4,本测试会失败并提示需治理源数据(而非掩盖)。
     """
     results = []
     for i in range(2):
@@ -289,8 +298,8 @@ def test_distinct_on_determinism(tmp_path):
         results.append(s["overall"]["lr"])
 
     diff = abs(results[0] - results[1])
-    assert diff < 1e-5, (
-        f"反复跑差异 {diff:.2e} 超过 1e-5(0.001 个百分点): "
+    assert diff < 1e-4, (
+        f"反复跑差异 {diff:.2e} 超过 1e-4(0.01 个百分点): "
         f"{results[0]:.10f} vs {results[1]:.10f}"
     )
 
