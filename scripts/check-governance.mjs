@@ -843,15 +843,32 @@ function checkParquetOverlapInCurrent() {
 // ============================================================
 
 /**
+ * 简易 glob 判定：指定 `<dir>/<basename-with-*>` 模式下是否存在匹配文件（无依赖，仅支持 `*` 通配）。
+ * 用于「文件存在但 python/duckdb 跑不起来」时的 fail-closed 兜底判断。
+ */
+function hasMatchingFiles(globPattern) {
+  const dir = path.dirname(globPattern);
+  if (!fs.existsSync(dir)) return false;
+  const base = path.basename(globPattern);
+  const re = new RegExp('^' + base.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+  try {
+    return fs.readdirSync(dir).some((f) => re.test(f));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 核心：对一组按省划分的 claims parquet glob 做 (branch_code, claim_no) 去重核验（纯函数，无 console）。
  *
- * 设计要点（与 checkSingleProvincePerFile 同源）：
+ * 设计要点（与 checkSingleProvincePerFile 同源，遵循 P1.2 fail-closed）：
  * - 省份隔离（data-pipeline.md「省份数据隔离」RED LINE）：逐省 glob，**绝不**跨省裸 glob 混查；
  *   有 branch_code 列时按 (branch_code, claim_no) 分组，无则退化为 claim_no（同时正确允许 SC/SX 同号）。
  * - fail-closed + CI 安全：python 先 glob 判定数据是否存在，**无文件则不 import duckdb 直接 skip**
- *   （CI/worktree 无 parquet → skip，不造假安全）；有数据但 DuckDB 读不了 → 抛错由 JS 转 skip。
+ *   （CI/worktree 无 parquet → skip，不造假安全）；**有数据但 DuckDB 读不了 / 缺 claim_no 列 →
+ *   返回 error（= 失败放行=假安全，故报错）**，绝不降级为 skip。
  * @param {{branch:string, glob:string}[]} specs 各省 claims_*.parquet 绝对路径 glob
- * @returns {{status:'pass'|'fail'|'skip', reason?:string, provinces?:Array}}
+ * @returns {{status:'pass'|'fail'|'skip'|'error', reason?:string, provinces?:Array}}
  */
 export function inspectClaimsClaimNoDuplication(specs) {
   const py = `
@@ -867,39 +884,51 @@ for spec in specs:
 if not any_files:
     print(json.dumps({"status": "skip", "reason": "no parquet files"}))
     sys.exit(0)
-import duckdb
-con = duckdb.connect()
-overall = "pass"
-provinces = []
-for branch, files in prepared:
-    if not files:
-        provinces.append({"branch": branch, "status": "skip", "reason": "no parquet"})
-        continue
-    lit = "[" + ",".join("'" + f.replace("'", "''") + "'" for f in files) + "]"
-    src = "read_parquet(" + lit + ", union_by_name=true)"
-    cols = [d[0] for d in con.execute("SELECT * FROM " + src + " LIMIT 0").description]
-    keys = "branch_code, claim_no" if "branch_code" in cols else "claim_no"
-    key_names = [k.strip() for k in keys.split(",")]
-    total = con.execute("SELECT COUNT(*) FROM " + src).fetchone()[0]
-    rows = con.execute(
-        "SELECT " + keys + ", COUNT(*) AS cnt FROM " + src +
-        " GROUP BY " + keys + " HAVING COUNT(*) > 1 ORDER BY cnt DESC, " + keys
-    ).fetchall()
-    dup_groups = len(rows)
-    excess = sum(int(r[-1]) - 1 for r in rows)
-    samples = [{**{k: r[i] for i, k in enumerate(key_names)}, "count": int(r[-1])} for r in rows[:10]]
-    status = "fail" if dup_groups > 0 else "pass"
-    if status == "fail":
-        overall = "fail"
-    provinces.append({"branch": branch, "status": status, "totalRows": int(total),
-                      "dupGroups": dup_groups, "excessRows": excess, "samples": samples})
-print(json.dumps({"status": overall, "provinces": provinces}))
+# 数据存在 → 任何读取/校验失败都必须 fail-closed（error），不得静默 skip（P1.2 假安全防护）。
+try:
+    import duckdb
+    con = duckdb.connect()
+    overall = "pass"
+    provinces = []
+    for branch, files in prepared:
+        if not files:
+            provinces.append({"branch": branch, "status": "skip", "reason": "no parquet"})
+            continue
+        lit = "[" + ",".join("'" + f.replace("'", "''") + "'" for f in files) + "]"
+        src = "read_parquet(" + lit + ", union_by_name=true)"
+        cols = [d[0] for d in con.execute("SELECT * FROM " + src + " LIMIT 0").description]
+        if "claim_no" not in cols:
+            raise ValueError("claims parquet 缺 claim_no 列（branch=" + branch + "）")
+        keys = "branch_code, claim_no" if "branch_code" in cols else "claim_no"
+        key_names = [k.strip() for k in keys.split(",")]
+        total = con.execute("SELECT COUNT(*) FROM " + src).fetchone()[0]
+        rows = con.execute(
+            "SELECT " + keys + ", COUNT(*) AS cnt FROM " + src +
+            " GROUP BY " + keys + " HAVING COUNT(*) > 1 ORDER BY cnt DESC, " + keys
+        ).fetchall()
+        dup_groups = len(rows)
+        excess = sum(int(r[-1]) - 1 for r in rows)
+        samples = [{**{k: r[i] for i, k in enumerate(key_names)}, "count": int(r[-1])} for r in rows[:10]]
+        status = "fail" if dup_groups > 0 else "pass"
+        if status == "fail":
+            overall = "fail"
+        provinces.append({"branch": branch, "status": status, "totalRows": int(total),
+                          "dupGroups": dup_groups, "excessRows": excess, "samples": samples})
+    print(json.dumps({"status": overall, "provinces": provinces}))
+except Exception as e:
+    print(json.dumps({"status": "error", "reason": str(e).splitlines()[0] if str(e) else type(e).__name__}))
+    sys.exit(0)
 `;
   try {
     const stdout = execFileSync('python3', ['-c', py, JSON.stringify(specs)], { encoding: 'utf-8' });
     return JSON.parse(stdout.trim());
   } catch (e) {
-    return { status: 'skip', reason: (e.message || String(e)).split('\n')[0] };
+    // execFileSync 抛错 = python3 缺失 / 进程被杀 / 无 stdout。区分两种语义：
+    // - 任一 spec 的 parquet 实际存在 → fail-closed（error）：数据在却跑不起来=假安全（P1.2）。
+    // - 全无 parquet（CI/worktree） → skip。
+    const reason = (e.message || String(e)).split('\n')[0];
+    const anyFiles = specs.some((s) => hasMatchingFiles(s.glob));
+    return anyFiles ? { status: 'error', reason } : { status: 'skip', reason };
   }
 }
 
@@ -926,8 +955,14 @@ function checkClaimsDetailDeduplication() {
   const res = inspectClaimsClaimNoDuplication(specs);
 
   if (res.status === 'skip') {
-    success(`claims_detail/ 去重检测跳过（无生产 parquet 或 DuckDB 不可用：${res.reason || 'no parquet'}）`);
+    success(`claims_detail/ 去重检测跳过（无生产 parquet：${res.reason || 'no parquet'}）`);
     return true;
+  }
+  if (res.status === 'error') {
+    // 数据存在却读不了 → fail-closed（失败放行=假安全，对齐 checkSingleProvincePerFile P1.2）
+    error(`claims_detail/ 去重检测失败：parquet 存在但无法校验（${res.reason || 'unknown'}）`);
+    console.log(`    ▶ 排查：确认 python3 + duckdb 可用、claims parquet 含 claim_no 列且未损坏`);
+    return false;
   }
   if (res.status === 'fail') {
     for (const p of (res.provinces || []).filter(x => x.status === 'fail')) {

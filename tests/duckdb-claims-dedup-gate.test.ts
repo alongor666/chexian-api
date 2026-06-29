@@ -117,4 +117,14 @@ describe.skipIf(!HAS_DEPS)('claims_detail claim_no 去重闸', () => {
     const res = inspectClaimsClaimNoDuplication([{ branch: 'SC', glob: path.join(empty, 'claims_*.parquet') }]);
     expect(res.status).toBe('skip');
   });
+
+  it('parquet 存在但缺 claim_no 列（损坏）→ error，fail-closed 不降级 skip', () => {
+    const bad = dir('bad-schema');
+    // 故意写一个没有 claim_no 列的 parquet（只有 branch_code + 金额）
+    const sql = `COPY (SELECT * FROM (VALUES ('SC',100.0),('SC',200.0)) t(branch_code, settled_amount)) TO '${path.join(bad, 'claims_2025.parquet')}' (FORMAT parquet)`;
+    execFileSync('duckdb', ['-c', sql], { stdio: 'ignore' });
+    const res = inspectClaimsClaimNoDuplication([{ branch: 'SC', glob: path.join(bad, 'claims_*.parquet') }]);
+    expect(res.status).toBe('error');
+    expect(res.reason).toMatch(/claim_no/);
+  });
 });
