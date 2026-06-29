@@ -174,6 +174,15 @@ def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
       new_vehicle_price,
       first_registration_date,
       agent_name,
+      /* 经代名简称：从经代全名派生（山西邮政/邮储表用）。
+         ⚠️ 邮储全名是"中国邮政储蓄银行"，含"邮政"但不含子串"邮储"，
+         故必须先判"储蓄"再判"邮政"，否则邮储会被误标成邮政。
+         其他实例（如四川邮政表）不映射 fi6BsM，本列被忽略，向后兼容。 */
+      CASE
+        WHEN agent_name LIKE '%储蓄%' THEN '邮储'
+        WHEN agent_name LIKE '%邮政%' THEN '邮政'
+        ELSE NULL
+      END AS agent_short_name,
       insurance_type,
       policy_no,
       vehicle_frame_no,
@@ -345,6 +354,7 @@ def aggregate_rows(rows: list[dict[str, Any]], instance: InstanceConfig) -> list
             "new_vehicle_price",
             "first_registration_date",
             "agent_name",
+            "agent_short_name",
             "policy_no",
             "vehicle_frame_no",
             "vehicle_price_segment",

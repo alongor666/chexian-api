@@ -541,6 +541,17 @@ async function main() {
     ];
     if (opts.wecomDryRun) postalArgs.push('--dry-run');
 
+    // 山西邮政/邮储经代签单全量表（branch_code='SX' AND agent_name LIKE '%邮政%'）。
+    // 与四川邮政表同引擎、独立 webhook + 独立 state；增量 add-only，防重复防遗漏。
+    const shanxiPostalArgs = [
+      '数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py',
+      '--instance',
+      '数据管理/integrations/wecom_smartsheet/instances/shanxi-postal-all.yaml',
+      '--mode',
+      'sync',
+    ];
+    if (opts.wecomDryRun) shanxiPostalArgs.push('--dry-run');
+
     const wecomTasks = [
       {
         label: opts.wecomDryRun ? 'WeCom renewal dry-run' : 'WeCom renewal sync',
@@ -555,6 +566,11 @@ async function main() {
       {
         label: opts.wecomDryRun ? 'WeCom postal dry-run' : 'WeCom postal sync',
         args: postalArgs,
+        timeoutMs: 30 * 60 * 1000,
+      },
+      {
+        label: opts.wecomDryRun ? 'WeCom 山西邮政 dry-run' : 'WeCom 山西邮政 sync',
+        args: shanxiPostalArgs,
         timeoutMs: 30 * 60 * 1000,
       },
     ];
