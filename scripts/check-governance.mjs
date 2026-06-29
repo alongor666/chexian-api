@@ -1001,6 +1001,37 @@ function checkClaimsDetailDeduplication() {
  * - fail-closed：数据存在但 DuckDB 读不了 → 失败放行=假安全，故报错（P1.2）；
  *   无任何生产 parquet（CI/非数据环境）→ python 先 glob 判定、不 import duckdb → 跳过。
  */
+// B2：source-file-routing 拼音 map 是分省编排省份枚举的实际来源（registeredBranchCodesFromPrefixMap）；
+// 它必须与 fields.json branch_code.derivation.mapping（唯一事实源）的 values 同步，否则分省漏省/错省。
+// 纯代码层静态对比（无 Parquet 数据依赖，CI 也跑），落实闸-1 B2 P0-B「避免 SSOT 分裂」。
+function checkProvincePrefixMapConsistency() {
+  info('检查省份前缀映射一致（source-file-routing 拼音 map ⟷ fields.json branch_code.mapping · B2）...');
+  try {
+    const reg = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'server/src/config/field-registry/fields.json'), 'utf-8'));
+    const bc = (reg.fields || []).find((f) => f.id === 'branch_code') || {};
+    const fieldsCodes = [...new Set(Object.values((bc.derivation || {}).mapping || {}))].sort();
+
+    const sfrSrc = fs.readFileSync(path.join(ROOT_DIR, '数据管理/lib/source-file-routing.mjs'), 'utf-8');
+    const m = sfrSrc.match(/PROVINCE_FILENAME_PREFIX_TO_CODE\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/);
+    if (!m) {
+      error('    无法解析 source-file-routing.mjs 的 PROVINCE_FILENAME_PREFIX_TO_CODE');
+      return false;
+    }
+    const sfrCodes = [...new Set([...m[1].matchAll(/:\s*['"]([A-Z]{2})['"]/g)].map((x) => x[1]))].sort();
+
+    if (JSON.stringify(fieldsCodes) !== JSON.stringify(sfrCodes)) {
+      error(`    省份集不一致：fields.json mapping=[${fieldsCodes.join(',')}] vs source-file-routing 拼音 map=[${sfrCodes.join(',')}]`);
+      error('    B2 分省编排省份枚举取自拼音 map，新增省份须同时加 fields.json mapping + 拼音 map 两处');
+      return false;
+    }
+    success(`省份前缀映射一致（${sfrCodes.join('/')}，两源同步）`);
+    return true;
+  } catch (e) {
+    error(`    省份前缀映射一致性检查异常：${e.message}`);
+    return false;
+  }
+}
+
 function checkSingleProvincePerFile() {
   info('检查 fact parquet 单文件不混省（派生省==列省 · pre-sync）...');
 
@@ -3774,6 +3805,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '技能字段闸', fn: checkSkillFieldGate },
   { name: '省份静默默认反模式', fn: checkBranchCodeFallbackAntipattern },
   { name: 'SC policy glob前缀隔离', fn: checkPolicyGlobPrefixIsolation },
+  { name: '省份前缀映射一致', fn: checkProvincePrefixMapConsistency },
 ];
 
 // ============================================================

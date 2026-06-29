@@ -37,6 +37,8 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import os from 'os';
 import { recordEvent, LEDGER_PATH } from './etl-ledger/record.mjs';
 import { writeReport } from './etl-ledger/render.mjs';
+// 多省 B2 分省编排：遍历注册的非 SC 省逐域生成 daily.mjs 步骤（省份枚举单一来源 source-file-routing）
+import { buildBranchEtlSteps } from '../数据管理/lib/branch-publish.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -132,14 +134,15 @@ function parseArgs(argv) {
   return opts;
 }
 
-function runCmd(label, cmd, args, { dryRun, cwd = ROOT_DIR, timeoutMs = 0 } = {}) {
-  log('cyan', `\n▶ [${label}] ${cmd} ${args.join(' ')}`);
+function runCmd(label, cmd, args, { dryRun, cwd = ROOT_DIR, timeoutMs = 0, env = {} } = {}) {
+  const envPrefix = Object.keys(env).length ? Object.entries(env).map(([k, v]) => `${k}=${v}`).join(' ') + ' ' : '';
+  log('cyan', `\n▶ [${label}] ${envPrefix}${cmd} ${args.join(' ')}`);
   if (dryRun) {
     log('yellow', `  (dry-run，跳过实际执行)`);
     return Promise.resolve(0);
   }
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd, stdio: 'inherit', env: process.env });
+    const child = spawn(cmd, args, { cwd, stdio: 'inherit', env: { ...process.env, ...env } });
     const timer = timeoutMs > 0 ? setTimeout(() => {
       log('red', `  ⏱ 超时 ${timeoutMs}ms，杀进程`);
       child.kill('SIGKILL');
@@ -293,9 +296,27 @@ async function main() {
 
   const fullSnapshotDomains = resolveFullSnapshotDomains(opts.dailyArgs);
 
-  // Stage 1: ETL
+  // Stage 1: ETL（先 SC 默认链路）
   for (const step of buildEtlCommands(opts.dailyArgs, fullSnapshotDomains)) {
     await runCmd(step.label, 'node', step.args, { dryRun: opts.dryRun });
+  }
+  // Stage 1.1: 多省 B2 分省发布——遍历注册的非 SC 省逐域跑（产物落 warehouse/validation/<省>）。
+  // BRANCH_PUBLISH=1 让无源域 graceful skip 不中断；有源但转换失败 → fail-fast + 明确定位
+  // （闸-1 P1-E），不让生产数据处于"部分省成功"混合状态。full_snapshot 单域模式不追加分省。
+  if (fullSnapshotDomains.length === 0) {
+    const branchSteps = buildBranchEtlSteps();
+    if (branchSteps.length > 0) {
+      const provinces = [...new Set(branchSteps.map(s => s.env.BRANCH_CODE))].join(', ');
+      log('cyan', `\n▶ 分省发布：${branchSteps.length} 个非 SC 省·域步骤（${provinces}）`);
+      for (const step of branchSteps) {
+        try {
+          await runCmd(step.label, 'node', step.args, { dryRun: opts.dryRun, env: step.env });
+        } catch (err) {
+          log('red', `\n❌ 分省发布中断于 ${step.label}（有源但转换失败）：${err.message}`);
+          throw err;
+        }
+      }
+    }
   }
 
   // Stage 1.5: 生成周期趋势诊断报告（V1 驾驶舱）——ETL 完成后数据最新
