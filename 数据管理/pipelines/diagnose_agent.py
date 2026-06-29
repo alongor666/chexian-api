@@ -86,7 +86,16 @@ class DataLoader:
                    COUNT(DISTINCT claim_no) AS claim_cases,
                    SUM(CASE WHEN settlement_time IS NOT NULL THEN COALESCE(settled_amount, 0)
                             ELSE COALESCE(reserve_amount, 0) END) AS reported_claims
-            FROM (SELECT DISTINCT ON (claim_no) * FROM read_parquet('{CLAIMS_GLOB}', union_by_name=true) ORDER BY claim_no)
+            FROM (SELECT DISTINCT ON (claim_no) *
+                  FROM read_parquet('{CLAIMS_GLOB}', union_by_name=true)
+                  -- tie-breaker(护栏,与 diagnose_lr_projection v_claims_agg 对齐):同一 claim_no
+                  -- 跨分区多版本时取最新版本赔案(报案→结案→赔付时间倒序),消除 DISTINCT ON 随机选行。
+                  -- 当前 claim_no 唯一不触发,纯防御(防未来 ETL 产生重复)。语义=取最新赔案版本,
+                  -- 与 policy-dedup.ts「禁为消除抖动而确定化」不冲突(此为明确业务取版本规则,非脏组随机归属)。
+                  -- 本子查询无 report_time WHERE 过滤(异于 lr_projection),故 report_time 亦加 NULLS LAST。
+                  ORDER BY claim_no, report_time DESC NULLS LAST,
+                           settlement_time DESC NULLS LAST,
+                           payment_time DESC NULLS LAST)
             GROUP BY policy_no
         """)
 
