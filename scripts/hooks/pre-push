@@ -3,6 +3,54 @@
 # 安装方式：bun run hooks:install
 set -e
 
+# ── 0. server 原生模块前置健康检查 + 分级自愈（RED LINE）────────────────────────────
+# 兜底「harness EnterWorktree 创建的 worktree 不触发 post-checkout → 原生模块缺失 →
+# 下方 bun run test 在*加载阶段*整片失败」（两次复发，见 .claude/rules/worktree-setup.md §B）。
+# 健康时零开销跳过（单次 node 进程检查，~80ms）；仅检出缺失/损坏时才自愈。
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+if [ -f "$HOOK_DIR/lib/heal-server-native.sh" ]; then
+  . "$HOOK_DIR/lib/heal-server-native.sh"
+  ROOT="$(git rev-parse --show-toplevel)"   # 当前 worktree 根（hook 来自主仓，但操作对象是发起 push 的 worktree）
+  SERVER_DIR="$ROOT/server"
+  if [ -d "$SERVER_DIR" ] && command -v node >/dev/null 2>&1; then
+    if ! heal_native_all_ok "$SERVER_DIR"; then
+      echo "🔧 [pre-push] server 原生模块缺失/损坏，前置自愈中（兜 harness EnterWorktree 未触发 post-checkout）..."
+      # L1：bun install --force（prebuilt 全量，~2s，不编译不 OOM）——覆盖「缺失」+ 多数「腐蚀」。
+      #     全量 --force 禁带 build_from_source（会强制 better-sqlite3 源码编译触发 OOM，见库注释）。
+      if command -v bun >/dev/null 2>&1; then
+        ( cd "$SERVER_DIR" && bun install --force ) >/dev/null 2>&1 || true
+      fi
+      # L2：L1 后仍坏的逐个 per-package 重建（针对代理腐蚀的预编译下载；逐包编译不触发 OOM）。
+      if ! heal_native_all_ok "$SERVER_DIR"; then
+        while IFS= read -r _m; do
+          [ -z "$_m" ] && continue
+          echo "🔧 [pre-push] $_m 仍损坏，per-package 重建..."
+          heal_native_rebuild_one "$SERVER_DIR" "$_m" || true
+        done < <(heal_native_unhealthy "$SERVER_DIR")
+      fi
+      # L3：仍坏（多因无网络）→ 从主仓 cp .node 离线兜底（仅修腐蚀型，缺失型 cp 无效）。
+      if ! heal_native_all_ok "$SERVER_DIR"; then
+        while IFS= read -r _m; do
+          [ -z "$_m" ] && continue
+          echo "🔧 [pre-push] $_m 仍损坏，尝试从主仓 cp .node 离线兜底..."
+          heal_native_cp_one "$SERVER_DIR" "$_m" || true
+        done < <(heal_native_unhealthy "$SERVER_DIR")
+      fi
+      # 终检：仍坏 → fail fast（避免后续 bun run test 在加载阶段嘈杂失败、掩盖真实根因）。
+      if ! heal_native_all_ok "$SERVER_DIR"; then
+        echo "❌ [pre-push] server 原生模块自愈失败，仍无法加载："
+        while IFS= read -r _m; do
+          [ -z "$_m" ] && continue
+          echo "   - $_m   手动修复：$(heal_native_manual_hint "$_m")"
+        done < <(heal_native_unhealthy "$SERVER_DIR")
+        echo "   （CN 代理腐蚀预编译下载的背景见 .claude/rules/worktree-setup.md §B）"
+        exit 1
+      fi
+      echo "✅ [pre-push] server 原生模块已自愈，继续推送闸"
+    fi
+  fi
+fi
+
 echo "🔍 [pre-push] 运行单元测试..."
 bun run test --run
 

@@ -90,6 +90,15 @@ bun run governance && node scripts/check-data-readiness.mjs   # 期望分别 23/
 
 **§3 server 原生模块自愈（应对代理腐蚀下载）**：`bun install` 之后，hook 会逐个对 `bcrypt` / `better-sqlite3` / `@duckdb/node-api` 做 `node -e "require()"` 健康检查；对加载失败者用 `npm_config_build_from_source=true bun install` 从源码重编译。仅在"本次发生过安装"（worktree 新建 / 缺依赖）后运行，普通切分支零开销。
 
+**共享库（单一事实源）**：上述健康检查 + per-package 自愈（含 `@duckdb` 删整个 scope 重拉 bindings 的特例、源码型 build-from-source 选择）已下沉到 [`scripts/hooks/lib/heal-server-native.sh`](../../scripts/hooks/lib/heal-server-native.sh)，由 post-checkout 与 pre-push 同源 `source` 复用，避免两处 per-package 逻辑漂移。将来新增 server 原生依赖只改库里的 `HEAL_NATIVE_MODULES` 数组。
+
+**§3b pre-push 前置兜底（覆盖 harness EnterWorktree，2026-06-29 落地）**：`scripts/hooks/post-checkout` **只在 `git worktree add` 触发的 branch checkout 时跑**——而 harness 原生 `EnterWorktree`（落点 `.claude/worktrees/<name>/`）**不触发 post-checkout**，故它建的 worktree 里 `server/node_modules` 原生模块缺失（实测整个 server 依赖大面积缺失，`bun install --force` 需补 257 个包），导致下方 `bun run test` 在*加载阶段*整片失败（典型 25 个 `agent-*.test.ts` 报 `Cannot find module .../bcrypt_lib.node`），与被测代码无关却阻塞 push。`scripts/hooks/pre-push` 开头新增**前置健康检查 + 分级自愈**，无论 worktree 怎么创建都兜底：
+> - 健康时**零开销跳过**（单次 node 进程 require 全部三模块，~80ms）；仅检出缺失/损坏才自愈。
+> - **L1**：`bun install --cwd server --force`（prebuilt 全量，实测 ~2s 装 257 包，不编译不 OOM）——覆盖"缺失"+ 多数"腐蚀"，**最快路径**。
+> - **L2**：L1 后仍坏的逐个 per-package 重建（针对代理腐蚀的预编译下载）。
+> - **L3**：仍坏（多因无网络）→ 从主 git-common-dir 仓库 cp `.node` 离线兜底（仅修腐蚀型，缺失型 cp 无效）。
+> - 终检仍坏 → **fail fast** 打印手动指引（避免后续 test 在加载阶段嘈杂失败掩盖根因）。
+
 > **为什么需要**：CN 代理（如 `127.0.0.1:1082`）会**偶发**腐蚀 node-pre-gyp 从 GitHub 下载的预编译二进制（典型 `bcrypt`）。`bun install` 报"完成"，但 `.node` 被截断 → `dlopen` 崩（`segment '__LINKEDIT' ... extends beyond end of file`）→ 所有走 auth/permission 链路的 server 测试在**加载阶段整套失败**，pre-push 的 `bun run test` 跑不过。曾被误判为"worktree 缺 parquet 数据"——实为原生二进制损坏（CI 无数据照样绿即铁证）。源码重编译绕开被腐蚀的下载（源码已在 node_modules，仅需本机 clang，实测不改 lockfile/package.json）。
 
 ### 验证 hook 已生效
