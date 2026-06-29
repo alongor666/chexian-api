@@ -56,6 +56,13 @@ import {
   fileBelongsToBranch,
   stripProvincePrefix,
 } from './lib/source-file-routing.mjs';
+// 多省 B3 防重复：区间覆盖归档纯函数（被新全量区间完全覆盖的旧文件归档，仅同品类互斥）
+import {
+  parseRangePrefix,
+  isRangeCovered,
+  isCoveredBySameQualifier,
+  findCoveredKeys,
+} from './lib/range-coverage.mjs';
 // argv 最外层双引号剥离抽到 lib/arg-quotes.mjs（可单测；裸 spawn 引号安全闸的不变量源）
 import { stripArgQuotes } from './lib/arg-quotes.mjs';
 // claims 报案截止日新鲜度判定纯函数（同模式抽 lib/ 便于单测）
@@ -1251,13 +1258,16 @@ function runClaimsDetail(python, scriptDir) {
       const fullFile = fullCandidates[0].f;
       const fullStart = fullCandidates[0].m[1];
       const fullEnd = fullCandidates[0].m[2];
+      // 多省 B3（保守·闸-1 B3-02）：claims 走 CDC upsert（按 claim_no）不双倍，故只归档被最新全量
+      // 「严格覆盖」（区间真包含、非同区间）的旧文件——同区间旧全量快照保留（运维可手动清），避免
+      // 归档误判致 claims 源缺失。旧格式（02_理赔明细_报案时间，无范围前缀）仍按「日期落区间」归档增量。
+      const fullRange = { start: fullStart, end: fullEnd };
       const conflicting = sourceFiles.filter(f => {
         if (f.name === fullFile.name) return false;
-        // 不归档其他全量文件本身（保留历史快照/历史分段），仅归档增量/前缀
-        if (matchFull(f.name)) return false;
+        const r = parseRangePrefix(f.name);
+        if (r) return isRangeCovered(r, fullRange) && !(r.start === fullStart && r.end === fullEnd);
         const days = f.name.match(/(\d{8})/g);
-        if (!days) return false;
-        return days.some(d => d >= fullStart && d <= fullEnd);
+        return days ? days.some(d => d >= fullStart && d <= fullEnd) : false;
       });
       if (conflicting.length > 0) {
         const archiveDir = join(claimsSourceDir, '.xlsx-archive', formatDate()); // 多省 B1（P2-4）：归档落本省 sourceDir，SX 不混入根目录
@@ -1656,20 +1666,14 @@ async function main() {
   // 上游每日重导「20260601-<最新>_01_签单清单_定稿.xlsx」时，旧短窗文件与新文件并存
   // 会在 current/ 形成重叠分片、保费双倍计入。
   {
-    const RANGE_RE = /^(\d{8})-(\d{8})_01_签单清单.*\.xlsx$/i;
-    const byStart = new Map();
-    for (const f of allXlsx) {
-      const m = stripProvincePrefix(f.name).match(RANGE_RE); // 多省 B1：剥离省前缀后按 start 分组互斥（防新旧全量同 start 双倍）
-      if (!m) continue;
-      if (!byStart.has(m[1])) byStart.set(m[1], []);
-      byStart.get(m[1]).push({ f, end: m[2] });
-    }
-    const losers = [];
-    for (const list of byStart.values()) {
-      if (list.length < 2) continue;
-      list.sort((a, b) => b.end.localeCompare(a.end));
-      losers.push(...list.slice(1).map(x => x.f));
-    }
+    // 多省 B3：区间覆盖归档——被同品类其他范围文件区间完全包含的旧文件归档（含跨 start 窗口增量
+    // 被全量覆盖；剔摩/限摩等不同品类同区间不互斥·闸-1 B3-01；历史不重叠分段都保留）。
+    // legacy 每日数据_ / 无范围前缀经 parseRangePrefix 返回 null，已过滤、不入互斥（B3-04）。
+    const rangeItems = allXlsx
+      .map(f => { const r = parseRangePrefix(f.name); return r ? { key: f.name, start: r.start, end: r.end, qualifier: r.qualifier, f } : null; })
+      .filter(Boolean);
+    const coveredKeys = findCoveredKeys(rangeItems);
+    const losers = rangeItems.filter(x => coveredKeys.has(x.key)).map(x => x.f);
     if (losers.length > 0) {
       const rangeArchiveDir = join(sourceDir, '.xlsx-archive', formatDate());
       ensureDir(rangeArchiveDir);
@@ -1800,11 +1804,16 @@ async function main() {
 
     // 范围前缀分片：归档 current/ 中同 start 不同 end 的旧范围 parquet（防重叠双倍计入）
     // 放在缓存检测之前，保证即使本文件缓存命中也清掉历史残留分片
-    const rangeM = file.name.match(/^(\d{8})-(\d{8})_01_签单清单.*\.xlsx$/i);
-    if (rangeM && existsSync(currentDir)) {
-      const staleRange = readdirSync(currentDir).filter(f =>
-        f.endsWith('.parquet') && f !== outputName
-        && new RegExp(`^${rangeM[1]}-\\d{8}_01_签单清单`).test(f));
+    // 多省 B3：归档 current/ 里被本 file 区间「同品类完全覆盖」的旧 parquet（parseRangePrefix 内
+    // stripProvincePrefix 认 sichuan_ 新全量·修 B1 遗漏；含跨 start 旧碎片被全量覆盖）。排除 outputName
+    // 自身；不同品类(剔摩/限摩)不误归；SX_ 码前缀 parquet parseRangePrefix 返回 null 不被 SC 误归。
+    const fileRange = parseRangePrefix(file.name);
+    if (fileRange && existsSync(currentDir)) {
+      const staleRange = readdirSync(currentDir).filter(f => {
+        if (!f.endsWith('.parquet') || f === outputName) return false;
+        const r = parseRangePrefix(f);
+        return r && isCoveredBySameQualifier(r, fileRange);
+      });
       for (const old of staleRange) {
         const archivedName = `${old.replace('.parquet', '')}_${formatDateTime()}.parquet`;
         renameSync(join(currentDir, old), join(archiveDir, archivedName));
