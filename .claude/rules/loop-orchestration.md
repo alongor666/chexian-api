@@ -31,10 +31,10 @@ policy: append-only
         ▼
    每个前沿任务 = 一条 evidence-loop 流水线（混合编排：脚本算前沿 + Workflow 跑并行执行）：
         ② 合同/计划（evidence-loop-core 合同六要素 + §4 harness）
-        ③ 🛡 对抗闸-1（codex 审【计划】）→ 修 P0/P1 → 放行
+        ③ 🛡 对抗闸-1（codex 审【计划】）[🔴 默认关闭·仅用户本次显式要求才跑] → 修 P0/P1 → 放行
         ④ TDD 实现（隔离 worktree，off 最新 main）
         ⑤ 确定性闸：bun run verify:full / governance / 字节安全证据
-        ⑥ 🛡 对抗闸-2（codex CLI 审【完成 diff】· code review 单源）→ 修 P0/P1 → 复审
+        ⑥ 🛡 对抗闸-2（codex CLI 审【完成 diff】· code review 单源）[🔴 默认关闭·仅用户本次显式要求才跑] → 修 P0/P1 → 复审
         ⑦ commit（bundle 代码+backlog 流转+复盘+质量账本一行）→ PR → enable --auto
         │
         ▼
@@ -67,18 +67,20 @@ policy: append-only
 
 ---
 
-## 2. 双对抗闸（codex）
+## 2. 双对抗闸（codex）· 🔴 默认关闭·显式才跑（2026-06-29 用户指令）
 
-> codex 平台 auto-review 已失效（memory `feedback_codex_review_auto_off`）。
-> codex 评审**一律走 codex CLI 直接调**（`codex exec --sandbox read-only - < <prompt 文件>`），**不经 `codex` skill**（2026-06-27 用户指令「安排 codex 做评审就是让 codex CLI 做对抗性评审，不要当成技能」，见 §4 末 meta）。本协议把对抗审计固化为**两道强制闸**。
+> **默认状态（2026-06-29 起·`[policy-override]`）**：codex 双闸**默认不跑**——loop / evidence-loop 收尾**不再默认调 codex**。仅当**用户本次显式要求**（如「这次跑 codex 评审」「过一遍 codex 对抗」）时才执行下面闸-1 / 闸-2。**默认的 code review 改由 Claude `/code-reviewer` 自审兜底**（fresh 自审 + 修复 SOP，见 memory `feedback_codex_review_off_by_default`），**不起 evidence-verifier**；正确性由阶段 ⑤ 确定性闸（`verify:full` / `governance` / golden-baseline / duckdb 直查）正交承担。即「默认 LLM 评审从 codex 换成 /code-reviewer」，非「无 LLM 评审」。变更原委见 §4 末 meta（2026-06-29）。
 >
-> **🔴 code review 单源 = codex CLI（2026-06-25 用户指令，见 §4 末 meta）**：闸-1 审【计划】、闸-2 审【完成 diff】**只用 codex CLI**。
+> codex 平台 auto-review 已失效（memory `feedback_codex_review_auto_off`）。
+> codex 评审**一律走 codex CLI 直接调**（`codex exec --sandbox read-only - < <prompt 文件>`），**不经 `codex` skill**（2026-06-27 用户指令「安排 codex 做评审就是让 codex CLI 做对抗性评审，不要当成技能」，见 §4 末 meta）。
+>
+> **🔴 code review 单源 = codex CLI（2026-06-25 用户指令，见 §4 末 meta）**：**当本次显式启用时**，闸-1 审【计划】、闸-2 审【完成 diff】**只用 codex CLI**。
 > **不再起 `code-reviewer` / `evidence-verifier` 等 Claude 子代理做 LLM 对抗，也不把 `claude-code.yml` CI auto-review 计作闸源**（CI job 仍可在 PR 上空跑，但不作为闸-2 的判定源）。
 > correctness oracle 由阶段 ⑤ 确定性闸（`verify:full` / `governance` / golden-baseline / duckdb 直查）承担，与本 code-review 闸正交、不受本收敛影响。
 
-- **闸-1（计划对抗·阶段 ②后）**：合同/计划写好后，**直接调 codex CLI**（`codex exec --sandbox read-only`，不经 skill）对抗审查**设计**（缺陷 / 遗漏 / 更优解 / 边界）。P0/P1 修复后才进实现。结论计入质量账本 `codex_plan`。
-- **闸-2（完成对抗·阶段 ⑤后、enable --auto 前）**：**直接调 codex CLI**（`codex exec --sandbox read-only`，不经 skill）审 **diff 完成质量** —— **code review 单源 = codex CLI**（2026-06-25 + 2026-06-27 用户指令）。**P0/P1 全修 + 复审通过**才合并。结论计入 `codex_done`。**不再起 `code-reviewer` / `evidence-verifier` 子代理，也不把 CI auto-review 计作闸源**；correctness 由阶段 ⑤ 确定性闸承担（正交）。
-- **降级**：code review 已收敛为 codex CLI 单源 → codex 完全不可用时**无 LLM 兜底闸**：标 `codex_*: {"unavailable":true}` 并**向用户报缺口请授权**（`feedback_no_giveup_ask_authorization`），**不得静默跳过、也不得擅自回退 `evidence-verifier` / CI 兜底**；阶段 ⑤ 确定性闸照常跑。
+- **闸-1（计划对抗·阶段 ②后·🔴 默认关闭，仅本次显式要求才跑）**：合同/计划写好后，**直接调 codex CLI**（`codex exec --sandbox read-only`，不经 skill）对抗审查**设计**（缺陷 / 遗漏 / 更优解 / 边界）。P0/P1 修复后才进实现。结论计入质量账本 `codex_plan`（未跑则不产出该字段）。
+- **闸-2（完成对抗·阶段 ⑤后、enable --auto 前·🔴 默认关闭，仅本次显式要求才跑）**：**直接调 codex CLI**（`codex exec --sandbox read-only`，不经 skill）审 **diff 完成质量** —— **code review 单源 = codex CLI**（2026-06-25 + 2026-06-27 用户指令）。**本次显式跑了**才有此闸；跑了则 **P0/P1 全修 + 复审通过**才合并，结论计入 `codex_done`。**默认（未跑 codex）时** code review 由 Claude `/code-reviewer` 自审兜底，合并凭 `/code-reviewer` 通过 + 阶段 ⑤ 确定性闸 + CI 双绿 + 非部署链。**不再起 `code-reviewer` / `evidence-verifier` 子代理，也不把 CI auto-review 计作闸源**；correctness 由阶段 ⑤ 确定性闸承担（正交）。
+- **降级（仅当本次显式要求跑 codex、但 CLI 不可用时相关）**：code review 已收敛为 codex CLI 单源 → 用户要求跑却 codex 完全不可用时**无 LLM 兜底闸**：标 `codex_*: {"unavailable":true}` 并**向用户报缺口请授权**（`feedback_no_giveup_ask_authorization`），**不得静默跳过、也不得擅自回退 `evidence-verifier` / CI 兜底**；阶段 ⑤ 确定性闸照常跑。**未显式要求时 codex 本就默认不跑，不触发本降级。**
 - **调用方式（2026-06-22 · PR #732 引入"逐级取用"；2026-06-27 据"不经 skill"用户指令收敛为 CLI 直调两级）**：**默认直接调 codex CLI，不经 `codex` skill**：① CLI 在（`command -v codex` 命中，如 `/opt/homebrew/bin/codex`）→ `codex exec --sandbox read-only - < <prompt 文件>`（prompt 走 stdin 文件，避开反引号 / `${}` 的 shell 转义事故）；② CLI 不可用 → 标 `unavailable` 并**向用户报缺口请授权**（不回退 `codex` skill / `evidence-verifier` / CI；阶段 ⑤ 确定性闸照跑）。**教训（保留）**：曾因 `codex` skill 报 `Unknown skill` 险误判"对抗源不可用"，而 `/opt/homebrew/bin/codex` 实际可用——故现在**不经 skill、直接认 CLI**。
 - **评审 prompt 编排（2026-06-27 · 防 codex 自主搜索污染输出）**：codex 是 agentic CLI——**prompt 里禁止指示它跑 `git diff`/`grep`/`rg` 去"找"待审内容**，否则它会自主扩大搜索、扫到机器上记录本次对话的 `~/.claude/projects/*.jsonl`（高频含 codex/skill 字样），输出被污染到几十 KB 且把会话内容喂给 codex（`--sandbox read-only` 只挡写不挡读、全盘可读）。**铁律 = 任务自包含**：① 由本会话在 shell 跑好 `git -C <wt> --no-pager diff origin/main`（范围我定）+ 需要的 `sed -n` 文件片段，拼「prompt 头 + diff + 尾」喂 stdin；② prompt 开头硬性禁令兜底「仅据三引号内材料判断，禁跑 git/rg/grep/find/cat/ls、禁读文件——材料已贴全」；③ **消除搜索动机 > 下禁令**（禁令是软约束、遵从非 100%·`feedback_prompt_needs_code_backup`；喂全后 codex 无动机搜）→ 不探索、输出短、`| tail -n 60` 取结论。**兜底**：diff 太大→分块/只贴改动关键文件（**不退回**让 codex 自跑 diff）；确需 codex 自主探索代码库→限范围（"只在 server/src 下搜"）+ cwd 设 `/tmp` 空目录（只放 changes.diff）+ `codex exec --json` 取最终 message 丢中间日志。**实证 2026-06-27**：首轮让 codex 自跑 grep→输出 81KB（扫到会话 JSONL）；改自包含 + 禁令→23KB 干净。
 
@@ -206,6 +208,14 @@ policy: append-only
   - **oracle 实证**：`loop:quality` 业务主题 top「省份接入」51.5%（68 样本验证时·rebase 后账本 71 样本 50.7%·均 >50% 打标·HHI ~0.32·~1.9×）→ 打标"待跨域验证"。loop 单测 116→**141**、governance 45/45。**残留诚实边界**：① 关键词启发式非语义分类器，行13(org_level_3 回填)/行44(Phase backfill) 弱信号边界行漏判归其他（不污染 oracle 主结论）；② `\bSX\b` 在 `/i` 下亦匹配小写 `sx`（如未来前端 MUI `sx` prop），当前账本零命中、codex 评估不阻断、后续观察。
   - **meta 写法约定（本协议落地·治茧房2 核心·task 动作2）**：meta-review 跑 `loop:quality` 时若 `concentration.overfit.flagged`（单一主题超阈），**本轮提炼的规则 / 协议改动须在 pr-evolution / 本 §4 meta 标注「待跨域验证」**——即该规则源于单一工程样本，须在其他工程验证成立后才升格为通用协议，避免把"山西多省这一个工程的经验"过拟合成"通用 loop 协议"。本条 meta 自身即一例：E1-E6 进化史几乎全在多省工程期间产生，其经验亦属「待跨域验证」。
   - **三问复盘**：① 重来更好？domain 字面要求 vs oracle 主题诉求的张力本应在闸-1 前自查更彻底（阶段 A 已用证据识别 domain HHI 仅 1.8× 均匀，但靠 codex 闸-1 才定死双维度方案）。② 复用价值？`hhiOf` / `overfitFlag` / `classifyTopic` 对任何"自产自评闭环装样本多样性意识"通用；"关键词启发式 + 诚实漏判边界 + 反例测试锁误命中"是脆弱分类器的标准工程化折中（codex 闸-2 两轮收窄实证）。③ 自动化？本项即"把过拟合从不可见变机制化可见 + 打标"；残留人工点 = meta-review 须真的据 flagged 打标。`needs_automation: true`（E6 拟把「账本必含集中度维度 + 单一主题超阈强制 meta-review 打标」入 `bun run governance`，与 E1/E4 同窗）`expires: 2026-09-27`。
+
+- **meta（2026-06-29 · 用户指令 · `[policy-override]`）· codex 双闸从「强制」改为「🔴 默认关闭·显式才跑」**：
+  - **用户指令**：用户问「如何切换开启/关闭 codex CLI 评审」。经两轮澄清确认：终态 =「**默认关闭·仅本次显式要求才跑**」+ 范围「单任务 wrapper + 多任务 dispatch + 两个 frozen rules 全改」+ 明确给 `[policy-override]` 授权（AskUserQuestion 选「授权·全部一起改」）。
+  - **改了什么**：① 本文件 §0 流程图 ③⑥、§2 标题/引言/闸-1/闸-2/降级：「两道**强制**闸」→「**默认不跑**，仅用户本次显式要求才跑」；② 同步改 `chexian-evidence-loop.md`（§0 Pre-flight 第 4 项、§2 挂载表 verifier 行、§4 双闸节）、`evidence-loop.md`（「本项目特例」codex 单源 bullet）、`scripts/loop/dispatch.mjs` 的 `sessionPrompt`（第 1/4/6 步多任务会话提示词）。**未动**：显式跑时 code review 单源仍 = codex CLI、不经 skill、prompt 自包含铁律、阶段 ⑤ 确定性闸（correctness oracle·与 code-review 正交，不受影响）。
+  - **连带后果 / 默认 code review 口径（按 memory `feedback_codex_review_off_by_default`，2026-06-29 用户指令「忽略 codex 对抗评审，没明示都关闭」）**：codex 2026-06-25 曾被收敛为唯一 LLM code-review 源；本次默认关闭后，**默认的 code review 回退为 Claude `/code-reviewer` 自审兜底**（fresh 自审 + 修复 SOP，不起 evidence-verifier），codex 仅用户明示时跑。即「默认 LLM 评审从 codex 换成 `/code-reviewer`」，**非「无 LLM 评审」**；正确性仍由确定性闸正交承担。
+  - **governance 不拦**：已查 `check-governance.mjs` / `pr-checklist.md`，无任何检查反向强制「codex 闸必须存在」，关闭默认不触发治理失败。2026-06-25 登记的「扫 loop PR 出现 code-reviewer/evidence-verifier 作闸源即告警」闸（`expires: 2026-09-25`）尚未落地，且其方向是「禁误用其它 LLM 源」，与本次「codex 默认不跑」不冲突。
+  - **append-only 处置（`[policy-override]`）**：本次**修改既有 §0/§2 主体**（非纯追加），按 AGENTS.md §8.2 frozen 处理。授权来源 = 用户 2026-06-29 AskUserQuestion 明确选择「授权·全部一起改」（口头同意的书面形式之一）；`[policy-override]` 标记须落于本 PR 每条 commit message + PR 标题。旧措辞经 git 历史 + 本 meta 留痕，无信息丢失。
+  - **三问复盘**：① 重来更好？codex 双闸的「强制 / 默认 / 关闭」三态本应一开始就设计成可切换项（而非写死「强制」再反转），协议类文件的开关位宜显式留切换钩子。② 复用价值？「LLM 对抗闸默认开/关是产品决策、与确定性 correctness oracle 正交」对其它 review 编排通用。③ 自动化？本次为协议措辞反转、无运行时强制点；残留人工点 = 会话默认不跑 codex、仅在用户显式要求时跑——`sessionPrompt` / wrapper 已固化措辞，但仍依赖会话遵从（`feedback_prompt_needs_code_backup`：提示遵从非 100%）。`needs_automation: false`（关闭本就是「少做一步」，无需新机制保障；将来若要把「显式触发词→自动跑 codex」做成确定性钩子可另立项）。
 
 ---
 
