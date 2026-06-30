@@ -360,6 +360,59 @@ class MergeParquetReapplyTest(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 reapply_registry_derivations(out, "SC")
 
+    def test_reapply_dim_no_policy_no_assigns_declared_constant(self):
+        """Bug 3：dim 表（repair_resource）无 policy_no 列 → 不再 prefix_map 强校验 fail-fast，
+        改为以 declared_branch 赋 branch_code 常量。修复前此路径会因「源列 policy_no 缺失 +
+        strictNonNull」sys.exit(1)，致 SC repair 39 分片合并崩溃。
+        """
+        import tempfile
+
+        from pipelines.merge_parquet import reapply_registry_derivations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "repair_resource_merged.parquet"
+            # 模拟 repair dim 合并产物：有 branch_code 常量列、无 policy_no 主键列
+            pd.DataFrame({
+                "repair_shop_name": ["A 厂", "B 厂"],
+                "report_date": ["2026-01-01", "2026-01-02"],
+                "branch_code": ["SC", "SC"],
+            }).to_parquet(out, index=False)
+            reapply_registry_derivations(out, "SC")  # 修复前会 SystemExit
+            df2 = pd.read_parquet(out)
+            self.assertEqual(df2["branch_code"].tolist(), ["SC", "SC"])
+
+    def test_reapply_dim_overrides_wrong_province_with_declared(self):
+        """Bug 3 顺带收益：dim convert 阶段写入的错省码（如 convert_repair 硬编码 'SC'）
+        在 SX 合并路径下被 declared_branch='SX' 覆盖为 'SX'，保证 dim 产物 branch_code==声明省。
+        """
+        import tempfile
+
+        from pipelines.merge_parquet import reapply_registry_derivations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "repair_resource_sx.parquet"
+            pd.DataFrame({
+                "repair_shop_name": ["晋 A 厂"],
+                "branch_code": ["SC"],  # convert 阶段误写 SC
+            }).to_parquet(out, index=False)
+            reapply_registry_derivations(out, "SX")
+            df2 = pd.read_parquet(out)
+            self.assertEqual(df2["branch_code"].tolist(), ["SX"])
+
+    def test_reapply_dim_missing_branch_col_adds_constant(self):
+        """dim 表合并产物若连 branch_code 列都缺，也应被 declared_branch 补上常量列（不崩）。"""
+        import tempfile
+
+        from pipelines.merge_parquet import reapply_registry_derivations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "dim_no_branch.parquet"
+            pd.DataFrame({"repair_shop_name": ["A 厂", "B 厂"]}).to_parquet(out, index=False)
+            reapply_registry_derivations(out, "SC")
+            df2 = pd.read_parquet(out)
+            self.assertIn("branch_code", df2.columns)
+            self.assertEqual(df2["branch_code"].tolist(), ["SC", "SC"])
+
 
 if __name__ == "__main__":
     unittest.main()

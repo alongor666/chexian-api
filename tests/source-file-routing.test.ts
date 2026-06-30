@@ -7,6 +7,7 @@ import {
   fileBelongsToBranch,
   buildBranchAwareGlobs,
   registeredBranchCodesFromPrefixMap,
+  collectBranchAwareFiles,
 } from '../数据管理/lib/source-file-routing.mjs';
 // @ts-expect-error — 纯 JS 模块
 import { extractDateRange, getShardType } from '../数据管理/lib/shard-classify.mjs';
@@ -123,5 +124,54 @@ describe('shard-classify 前缀感知集成（闸-1 P0-2：带前缀文件不再
   it('无前缀文件行为不变（向后兼容）', () => {
     expect(extractDateRange('20250601-20260531_01_签单清单_定稿.xlsx')).toEqual({ start: '20250601', end: '20260531' });
     expect(getShardType('20250601-20260531_01_签单清单_定稿.xlsx', config)).toBe('weekly');
+  });
+});
+
+describe('collectBranchAwareFiles（Bug 2：标准域省前缀扩展 + 防混省过滤）', () => {
+  // 模拟磁盘：repair 域源根混放无前缀 + sichuan_ + shanxi_ 三态文件。
+  const disk: Record<string, string[]> = {
+    '????????-????????_03_维修资源*.xlsx': ['20250601-20260628_03_维修资源.xlsx'],
+    'sichuan_????????-????????_03_维修资源*.xlsx': ['sichuan_20250601-20260628_03_维修资源.xlsx'],
+    'shanxi_????????-????????_03_维修资源*.xlsx': ['shanxi_20250601-20260628_03_维修资源.xlsx'],
+  };
+  // lsFn 注入：按 glob 精确返回（pattern → 文件名列表 → {name, path}）。
+  const makeLs = (d: Record<string, string[]>) =>
+    (pattern: string, dir: string) =>
+      (d[pattern] || []).map((name) => ({ name, path: `${dir}/${name}` }));
+  const GLOBS = ['????????-????????_03_维修资源*.xlsx'];
+
+  it('🔴 SC：发现无前缀 + sichuan_ 新命名文件，剔除 shanxi_（修复前只匹配无前缀，漏 sichuan_ 新文件）', () => {
+    const { all } = collectBranchAwareFiles(GLOBS, '/src', 'SC', makeLs(disk));
+    const names = all.map((f) => f.name).sort();
+    expect(names).toEqual([
+      '20250601-20260628_03_维修资源.xlsx',
+      'sichuan_20250601-20260628_03_维修资源.xlsx',
+    ]);
+  });
+
+  it('🔴 SX：发现 shanxi_ 文件（修复前 SX repair 报"未找到源"跳过），剔除 sichuan_，无前缀归本省', () => {
+    const { all } = collectBranchAwareFiles(GLOBS, '/src', 'SX', makeLs(disk));
+    const names = all.map((f) => f.name).sort();
+    expect(names).toEqual([
+      '20250601-20260628_03_维修资源.xlsx',
+      'shanxi_20250601-20260628_03_维修资源.xlsx',
+    ]);
+  });
+
+  it('groups[i].glob 保留未扩展的声明 glob（供 full_batch 错误回显声明口径）', () => {
+    const { groups } = collectBranchAwareFiles(GLOBS, '/src', 'SC', makeLs(disk));
+    expect(groups[0].glob).toBe('????????-????????_03_维修资源*.xlsx');
+  });
+
+  it('跨 glob 按 path 去重（同一文件被多个声明 glob 命中只计一次）', () => {
+    const lsFn = (_p: string, dir: string) => [{ name: 'dup.xlsx', path: `${dir}/dup.xlsx` }];
+    const { all } = collectBranchAwareFiles(['07_维修资源*.xlsx', '03_维修资源*.xlsx'], '/src', 'SC', lsFn);
+    expect(all).toHaveLength(1);
+  });
+
+  it('空 branchCode / undefined 归四川（向后兼容，剔除 shanxi_）', () => {
+    const { all } = collectBranchAwareFiles(GLOBS, '/src', '', makeLs(disk));
+    expect(all.map((f) => f.name)).not.toContain('shanxi_20250601-20260628_03_维修资源.xlsx');
+    expect(all.map((f) => f.name)).toContain('sichuan_20250601-20260628_03_维修资源.xlsx');
   });
 });

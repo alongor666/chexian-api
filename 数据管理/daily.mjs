@@ -56,7 +56,10 @@ import {
   fileBelongsToBranch,
   stripProvincePrefix,
   registeredBranchCodesFromPrefixMap,
+  collectBranchAwareFiles,
 } from './lib/source-file-routing.mjs';
+// 多省 Bug 1：merge_parquet.py 参数构造纯函数（branchCode 经 ctx 透传，锁死 --declared-branch）
+import { buildMergeParquetArgs } from './lib/merge-parquet-args.mjs';
 // 多省 B3 防重复：区间覆盖归档纯函数（被新全量区间完全覆盖的旧文件归档，仅同品类互斥）
 import {
   parseRangePrefix,
@@ -498,28 +501,24 @@ function loadReleaseManifest(scriptDir, manifestArg) {
 }
 
 function extractBatchDateFromName(filename) {
-  const match = /^(\d{8})_/.exec(filename);
+  // 多省 Bug 2 配套：先剥省前缀（sichuan_/shanxi_）再取 YYYYMMDD_ 批次日期。
+  // 因 collectSourceFiles 现对所有标准域做省前缀扩展，full_snapshot 域（customer_flow /
+  // new_energy_claims）若出现带前缀文件，原 /^(\d{8})_/ 会失配返回 null → 误判"无批次"。
+  // stripProvincePrefix 对无前缀文件是 no-op（幂等），故 SC 现状零行为变更。
+  const match = /^(\d{8})_/.exec(stripProvincePrefix(filename));
   return match ? match[1] : null;
 }
 
-function collectSourceFiles(inputGlobs, scriptDir) {
-  const seen = new Set();
-  const groups = inputGlobs.map(glob => ({
-    glob,
-    files: ls(glob, scriptDir).filter(f => {
-      if (seen.has(f.path)) return false;
-      seen.add(f.path);
-      return true;
-    }),
-  }));
-  return {
-    groups,
-    all: groups.flatMap(g => g.files),
-  };
+// 多省 Bug 2：标准域源文件发现必须经 buildBranchAwareGlobs 省前缀扩展 + fileBelongsToBranch
+// 防混省过滤（与 runClaimsDetail/premium 一致）。否则带 sichuan_/shanxi_ 前缀的新命名文件
+// （如 sichuan_20250601-20260628_03_维修资源.xlsx）匹配不上无前缀 glob 被静默漏掉。
+// 纯内核抽到 lib/source-file-routing.mjs collectBranchAwareFiles（注入 ls 便于单测）。
+function collectSourceFiles(inputGlobs, scriptDir, branchCode = 'SC') {
+  return collectBranchAwareFiles(inputGlobs, scriptDir, branchCode, ls);
 }
 
-function resolveSourceFilesForTrigger(id, inputGlobs, scriptDir, trigger) {
-  const { groups, all } = collectSourceFiles(inputGlobs, scriptDir);
+function resolveSourceFilesForTrigger(id, inputGlobs, scriptDir, trigger, branchCode = 'SC') {
+  const { groups, all } = collectSourceFiles(inputGlobs, scriptDir, branchCode);
   if (all.length === 0) return { sourceFiles: [], batchDate: null };
 
   if (trigger.snapshot_mode === 'full_batch_replace' || trigger.required_same_batch === true) {
@@ -756,7 +755,7 @@ function runStandardDomain(python, scriptDir, manifest, extraArgsOverride = []) 
   // 调用方额外注入（域专属参数，如 new_energy_claims 的 --policy-dir）
   if (extraArgsOverride.length > 0) extraArgs.push(...extraArgsOverride);
 
-  const { sourceFiles, batchDate } = resolveSourceFilesForTrigger(id, inputGlobs, sourceRoot, trigger);
+  const { sourceFiles, batchDate } = resolveSourceFilesForTrigger(id, inputGlobs, sourceRoot, trigger, BRANCH_CODE);
   if (sourceFiles.length === 0) {
     // 多省 P3-B（codex 闸-2 P2-1）：非 SC 单域 staging 源缺失时假阳性"绿字完成"会误导
     //   运维（以为成功了），改为 exit 1 让调用方拿到失败状态；SC 默认链路保持原"跳过"
@@ -784,6 +783,9 @@ function runStandardDomain(python, scriptDir, manifest, extraArgsOverride = []) 
     outputAbs,
     archiveRoot,
     extraArgs,
+    // 多省 Bug 1：透传当前运行省份码给 runStrategyMultiMerge（原内联引用 BRANCH_CODE
+    // 越作用域 → ReferenceError，多分片合并域在 merge 步骤崩溃）。
+    branchCode: BRANCH_CODE,
   };
   ensureDir(dirname(ctx.outputAbs));
 
@@ -916,7 +918,9 @@ function runStrategyFullSnapshot({ python, id, scriptDir, scriptPath, sourceFile
 }
 
 function runStrategyMultiMerge(ctx) {
-  const { python, id, scriptDir, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [], archiveRoot = join(__dirname, '.archive') } = ctx;
+  // 多省 Bug 1：branchCode 经 ctx 透传（缺省 'SC' 兜底）。原代码在 line ~977 内联引用
+  // 仅存在于 runStandardDomain 作用域的 BRANCH_CODE → ReferenceError，多分片合并域崩溃。
+  const { python, id, scriptDir, scriptPath, sourceFiles, outputAbs, trigger, extraArgs = [], archiveRoot = join(__dirname, '.archive'), branchCode = 'SC' } = ctx;
   const { archive_prefix, merge_dedup_key, merge_order_by } = trigger;
   const hasHistory = trigger.merge_with_history === true && existsSync(outputAbs);
 
@@ -969,13 +973,13 @@ function runStrategyMultiMerge(ctx) {
     //   merge_parquet 在 dedup 完成后对最终 parquet 重新应用 registry 派生（覆盖来自旧
     //   latest 合并产生的 NULL 派生列），防 RLS 漏行。SC 默认链路也传 'SC'，使
     //   strictNonNull+assertDeclaredBranch 在 SC 默认链路也守卫。
-    runPythonScript(python, mergeScript, [
-      '-i', ...mergeInputs.map(f => `"${f}"`),
-      '-o', `"${tmpOutput}"`,
-      '--dedup-key', `"${merge_dedup_key}"`,
-      '--order-by', `"${merge_order_by}"`,
-      '--declared-branch', `"${BRANCH_CODE}"`,
-    ]);
+    runPythonScript(python, mergeScript, buildMergeParquetArgs({
+      mergeInputs,
+      tmpOutput,
+      mergeDedupKey: merge_dedup_key,
+      mergeOrderBy: merge_order_by,
+      branchCode,
+    }));
     validateCandidate(tmpOutput);
     if (existsSync(outputAbs)) {
       ensureDir(archiveDir);

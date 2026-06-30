@@ -96,3 +96,43 @@ export function buildBranchAwareGlobs(coreGlobNoPrefix) {
 export function registeredBranchCodesFromPrefixMap() {
   return [...new Set(Object.values(PROVINCE_FILENAME_PREFIX_TO_CODE))];
 }
+
+/**
+ * 「省前缀感知」的源文件收集 + 防混省过滤（Bug 2 修复，daily.mjs collectSourceFiles 的纯内核）。
+ *
+ * 背景：daily.mjs 标准域（repair_resource / brand 等走 multi_file_merge / single 策略的域）原先
+ * 用原始 `trigger.input_globs` 直接 ls()，未经 buildBranchAwareGlobs 省前缀扩展（不像
+ * runClaimsDetail / premium 那样显式扩展）。结果带 `sichuan_`/`shanxi_` 前缀的新命名文件
+ * （如 `sichuan_20250601-20260628_03_维修资源.xlsx`）匹配不上 `????????-????????_03_维修资源*.xlsx`，
+ * 被静默漏掉 —— repair 域既漏 SC 新文件也漏 SX 新文件（SX repair 直接报"未找到源"跳过）。
+ *
+ * 本函数把每个声明 glob 经 buildBranchAwareGlobs 扩展为「无前缀 + 各省前缀」三态后 ls()，
+ * 再按 fileBelongsToBranch(name, branchCode) 过滤防混省（与 runClaimsDetail / premium 一致）。
+ * lsFn 注入便于单测（daily.mjs 的 ls 触碰文件系统；本函数仅编排，纯逻辑可被 vitest 验证）。
+ *
+ * 返回结构与原 collectSourceFiles 保持一致：`{ groups, all }`，groups[i].glob 保留**未扩展的
+ * 声明 glob**（供 full_batch 错误信息回显声明口径），groups[i].files 为该声明 glob 命中且属本省
+ * 的文件（跨 glob 按 path 去重）。
+ *
+ * @param {string[]} inputGlobs  声明的核心 glob 列表（无前缀，如 ['07_维修资源*.xlsx', ...]）
+ * @param {string}   scriptDir   源文件搜索根目录
+ * @param {string}   branchCode  当前运行省份码；'' / undefined / 'SC' 均归四川
+ * @param {(pattern: string, dir: string) => Array<{name: string, path: string}>} lsFn  目录列举函数
+ * @returns {{ groups: Array<{glob: string, files: Array<{name: string, path: string}>}>, all: Array<{name: string, path: string}> }}
+ */
+export function collectBranchAwareFiles(inputGlobs, scriptDir, branchCode, lsFn) {
+  const seen = new Set();
+  const groups = inputGlobs.map((glob) => ({
+    glob,
+    files: buildBranchAwareGlobs(glob)
+      .flatMap((g) => lsFn(g, scriptDir))
+      .filter((f) => {
+        if (seen.has(f.path)) return false;
+        seen.add(f.path);
+        // 防混省：他省前缀文件若误放本省源根，必须在传入归档 / 转换前剔除，否则会被 ETL
+        // 消化、由 transform.py 按 policy_no 前缀派生出他省 branch_code 行混入本省产物。
+        return fileBelongsToBranch(f.name, branchCode);
+      }),
+  }));
+  return { groups, all: groups.flatMap((g) => g.files) };
+}
