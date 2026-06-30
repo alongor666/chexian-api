@@ -360,6 +360,78 @@ class MergeParquetReapplyTest(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 reapply_registry_derivations(out, "SC")
 
+    def test_reapply_dim_no_policy_no_assigns_declared_constant(self):
+        """Bug 3：dim 表（repair_resource）无 policy_no 列 → 不再 prefix_map 强校验 fail-fast，
+        改为以 declared_branch 赋 branch_code 常量。修复前此路径会因「源列 policy_no 缺失 +
+        strictNonNull」sys.exit(1)，致 SC repair 39 分片合并崩溃。
+        """
+        import tempfile
+
+        from pipelines.merge_parquet import reapply_registry_derivations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "repair_resource_merged.parquet"
+            # 模拟 repair dim 合并产物：有 branch_code 常量列、无 policy_no 主键列
+            pd.DataFrame({
+                "repair_shop_name": ["A 厂", "B 厂"],
+                "report_date": ["2026-01-01", "2026-01-02"],
+                "branch_code": ["SC", "SC"],
+            }).to_parquet(out, index=False)
+            reapply_registry_derivations(out, "SC")  # 修复前会 SystemExit
+            df2 = pd.read_parquet(out)
+            self.assertEqual(df2["branch_code"].tolist(), ["SC", "SC"])
+
+    def test_reapply_dim_overrides_wrong_province_with_declared(self):
+        """Bug 3 顺带收益：dim 表 merge 路径下 reapply 用 declared_branch 权威覆盖 branch_code。
+
+        真实场景（非假设）：convert_repair.py:87 对维修资源 dim 硬编码 `branch_code='SC'`
+        （dim 表无 policy_no → base_converter 的 --branch-code 派生入口被跳过，故 --branch-code SX
+        不生效）。SX repair 多分片合并路径下，本 reapply 以 declared_branch='SX' 纠正为 'SX'，
+        保证 dim 产物 branch_code==声明省。convert_repair 硬编码本身另有独立 follow-up 跟进。
+        """
+        import tempfile
+
+        from pipelines.merge_parquet import reapply_registry_derivations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "repair_resource_sx.parquet"
+            pd.DataFrame({
+                "repair_shop_name": ["晋 A 厂"],
+                "branch_code": ["SC"],  # convert_repair.py:87 硬编码写入的 'SC'
+            }).to_parquet(out, index=False)
+            reapply_registry_derivations(out, "SX")
+            df2 = pd.read_parquet(out)
+            self.assertEqual(df2["branch_code"].tolist(), ["SX"])
+
+    def test_reapply_dim_rejects_unregistered_branch(self):
+        """fail-closed（review MEDIUM）：dim 表赋常量前校验 declared_branch 是已注册省码，
+        外部直调传非法省码（如 'ZZ'）→ sys.exit(1)，防非法省码无声写进 dim 产物。
+        """
+        import tempfile
+
+        from pipelines.merge_parquet import reapply_registry_derivations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "dim_bad_branch.parquet"
+            pd.DataFrame({"repair_shop_name": ["A 厂"]}).to_parquet(out, index=False)
+            with self.assertRaises(SystemExit) as cm:
+                reapply_registry_derivations(out, "ZZ")
+            self.assertEqual(cm.exception.code, 1)
+
+    def test_reapply_dim_missing_branch_col_adds_constant(self):
+        """dim 表合并产物若连 branch_code 列都缺，也应被 declared_branch 补上常量列（不崩）。"""
+        import tempfile
+
+        from pipelines.merge_parquet import reapply_registry_derivations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "dim_no_branch.parquet"
+            pd.DataFrame({"repair_shop_name": ["A 厂", "B 厂"]}).to_parquet(out, index=False)
+            reapply_registry_derivations(out, "SC")
+            df2 = pd.read_parquet(out)
+            self.assertIn("branch_code", df2.columns)
+            self.assertEqual(df2["branch_code"].tolist(), ["SC", "SC"])
+
 
 if __name__ == "__main__":
     unittest.main()

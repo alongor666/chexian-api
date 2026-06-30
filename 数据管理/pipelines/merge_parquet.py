@@ -168,24 +168,57 @@ def run_dedup(input_paths, output_path, dedup_key, order_by):
 def reapply_registry_derivations(output_path, declared_branch):
     """合并去重后对最终 parquet 重新应用 registry 派生（多省 P3-B codex 闸-2 P1）。
 
-    根因：multi_file_merge + merge_with_history 会把旧 latest.parquet（无 branch_code 列）
-    与新 tmp 分片（已派生 branch_code）一起喂给 `read_parquet(..., union_by_name=true)`，
-    导致旧行 branch_code=NULL → strict_non_null 保护被绕过 → RLS 漏行。
+    根因（保单类域）：multi_file_merge + merge_with_history 会把旧 latest.parquet（无
+    branch_code 列）与新 tmp 分片（已派生 branch_code）一起喂给
+    `read_parquet(..., union_by_name=true)`，导致旧行 branch_code=NULL → strict_non_null
+    保护被绕过 → RLS 漏行。本函数读回合并产物 → 重派生 branch_code（基于 policy_no 现有列）→ 写回。
 
-    本函数读回合并产物 → 重派生 branch_code（基于 policy_no 现有列）→ 写回。
-    df 无 policy_no 列时 derived_fields 守卫处理（guarded fail-fast / 非 guarded skip）。
+    dim 表分支（Bug 3 修复，如 repair_resource）：无 policy_no 主键列，branch_code 的
+    prefix_map 派生（源列 policy_no）不适用 —— 原先硬走 apply_registry_derivations 会触发
+    strictNonNull「源列 policy_no 缺失」fail-fast，使 SC repair 39 分片合并崩溃。dim 表的
+    branch_code 是 ETL 按部署省注入的常量列（值由 declared_branch 权威确定），故无 policy_no
+    时改为直接以 declared_branch 赋常量、跳过对 policy_no 的强校验（亦顺带覆盖 convert 阶段
+    可能写入的错省码，保证 dim 产物 branch_code == 声明省）。
     """
     import pandas as pd
     from pipelines.derived_fields import apply_registry_derivations
 
     df = pd.read_parquet(output_path)
     before_cols = list(df.columns)
-    df = apply_registry_derivations(df, declared_branch)
+    if "policy_no" in df.columns:
+        df = apply_registry_derivations(df, declared_branch)
+    else:
+        df = _reassert_dim_branch_constant(df, output_path.name, declared_branch)
     print(
         f"   🔁 合并后 re-derive 完成: {output_path.name}（{len(df):,} 行,"
         f" {len(before_cols)} → {len(df.columns)} 列）"
     )
     df.to_parquet(output_path, index=False)
+
+
+def _reassert_dim_branch_constant(df, label, declared_branch):
+    """无 policy_no 列的 dim 表合并产物：以 declared_branch 赋 branch_code 常量列。
+
+    跳过 prefix_map 强校验（dim 表没有 policy_no 可供前缀派生）。declared_branch 为空时
+    （dedup 模式下 daily.mjs 总会透传，默认 'SC'，故仅理论防御）保持原值不动、不静默赋 None。
+    """
+    if not declared_branch:
+        print(f"   ℹ {label} 无 policy_no 列且未声明省份 → 跳过 branch_code 重赋（保持原值）")
+        return df
+    # fail-closed（PR #861 review MEDIUM）：merge_parquet.py 作为独立可执行脚本可被外部直调，
+    # declared_branch 须是 fields.json 已注册省码，否则会把非法省码无声写进 dim 产物（违反隔离红线）。
+    from pipelines.derived_fields import registered_branch_codes
+    allowed = registered_branch_codes()
+    if allowed and declared_branch not in allowed:
+        print(f"   ❌ {label} declared-branch '{declared_branch}' 不在已注册省份 {sorted(allowed)} — fail-fast")
+        sys.exit(1)
+    df = df.copy()
+    df["branch_code"] = declared_branch
+    print(
+        f"   🔁 {label} 无 policy_no 列（dim 表）→ branch_code 赋常量 "
+        f"'{declared_branch}'（跳过 prefix_map 强校验）"
+    )
+    return df
 
 
 def main():
@@ -205,7 +238,8 @@ def main():
             help="多省 P3-B（codex 闸-2 P1）：dedup 模式合并完成后对最终 parquet 重新应用 "
                  "registry 派生（branch_code 等）。覆盖来自历史 latest 合并产生的 NULL 派生列（"
                  "union_by_name=true 会给旧行补 NULL → strict_non_null 保护被绕过 → RLS 漏行）。"
-                 "df 无 policy_no 时 derived_fields 守卫自动处理。仅作用于 dedup 模式。",
+                 "df 无 policy_no 列（dim 表如 repair_resource）时直接以本值赋 branch_code 常量、"
+                 "跳过 prefix_map 强校验。仅作用于 dedup 模式。",
         )
         args = parser.parse_args()
         input_paths = [Path(p) for p in args.inputs]
