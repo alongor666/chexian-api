@@ -3,7 +3,7 @@
 与 sync_renewal_v2.py 的关系：
 - sync_renewal_v2 深度耦合续保口径（quote_window / 重复投保审计 / 跨批排他）
 - 本脚本面向通用筛选场景：agent_name LIKE / policy_date >= / org_level_3 IN ...
-- 复用 sync_renewal_v2 的 webhook POST + 分批工具（post_webhook / chunked）
+- 复用 sync_renewal_v2 的 webhook POST 工具（post_webhook）；幂等分批推送用 lib.idempotent_smartsheet
 
 YAML 配置示例见 instances/postal-policy-since-20260420.yaml。
 
@@ -33,7 +33,6 @@ del _sys, _Path
 import argparse
 import json
 import os
-import shutil
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone, date as date_cls
@@ -46,8 +45,23 @@ import yaml
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent.parent))  # 数据管理/ 根：供 import pipelines.*
-from sync_renewal_v2 import post_webhook, chunked  # noqa: E402
+from sync_renewal_v2 import post_webhook  # noqa: E402
 from pipelines.branch_assert import assert_single_branch, is_national_view  # noqa: E402
+from lib.idempotent_smartsheet import (  # noqa: E402  幂等共享库（6 道防线，详见库 docstring）
+    KeySpec,
+    stable_value as _stable_value,
+    load_state as _lib_load_state,
+    save_state as _lib_save_state,
+    validate_state_key_strategy as _lib_validate_state_key_strategy,
+    push_add_records_idempotent as _lib_push_add_records_idempotent,
+)
+
+
+def _keyspec(instance: "InstanceConfig") -> KeySpec:
+    """实例 → 共享库唯一键描述（复合键优先，回退单主键）。"""
+    if instance.composite_key:
+        return KeySpec.composite(instance.composite_key)
+    return KeySpec.primary(instance.primary_key)
 
 DEFAULT_POLICY_GLOB = str(
     HERE.parent.parent / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
@@ -489,23 +503,15 @@ def state_path(instance: InstanceConfig) -> Path:
 
 
 def load_state(instance: InstanceConfig) -> dict[str, Any]:
-    p = state_path(instance)
-    if not p.exists():
-        return {"synced_keys": [], "last_sync_at": None}
-    return json.loads(p.read_text(encoding="utf-8"))
+    return _lib_load_state(state_path(instance))
 
 
 def save_state(instance: InstanceConfig, state: dict[str, Any], *, backup_existing: bool = False) -> None:
-    p = state_path(instance)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    if backup_existing and p.exists():
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        shutil.copy2(p, p.with_name(f"{p.name}.bak.{ts}"))
-    p.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    _lib_save_state(state_path(instance), state, backup_existing=backup_existing)
 
 
 def persist_synced_keys(instance: InstanceConfig, state: dict[str, Any], newly_synced_keys: list[str]) -> None:
-    """Persist successful batch keys immediately to avoid duplicate adds after partial failure."""
+    """成功 batch 的键立即落盘，避免部分失败后重复 add（防线4）。state 写入经本模块 save_state seam。"""
     state["synced_keys"] = sorted(set(state.get("synced_keys", [])) | set(newly_synced_keys))
     state["last_sync_at"] = datetime.now(timezone.utc).isoformat()
     state["key_strategy"] = key_strategy(instance)
@@ -536,42 +542,11 @@ def state_fields_compatible(instance: InstanceConfig, state: dict[str, Any]) -> 
 
 
 def validate_state_key_strategy(instance: InstanceConfig, state: dict[str, Any]) -> None:
-    """sync 前校验 state 口径，防止旧 primary_key state 被 composite_key 全量错配。"""
-    keys = state.get("synced_keys", [])
-    if not keys:
-        return
-
-    expected_strategy = key_strategy(instance)
-    expected_fields = composite_fields(instance)
-    actual_strategy = state.get("key_strategy")
-    actual_fields = state.get("composite_fields")
-
-    if actual_strategy is None:
-        raise RuntimeError(
-            "state.json 缺少 key_strategy，疑似旧 primary_key 口径；"
-            "请先执行 --rebuild-state --dry-run 核对，再按提示迁移或使用显式 force"
-        )
-    if not state_fields_compatible(instance, state):
-        raise RuntimeError(
-            "state.json key_strategy/composite_fields 与当前实例配置不一致："
-            f"state=({actual_strategy}, {actual_fields}) current=({expected_strategy}, {expected_fields})；"
-            "拒绝 sync，避免重复写入或漏同步"
-        )
+    """sync 前校验 state 口径，防止旧 primary_key state 被 composite_key 全量错配（委托共享库防线6）。"""
+    _lib_validate_state_key_strategy(state, _keyspec(instance))
 
 
-def _stable_value(v: Any) -> str:
-    """把任意值稳定化为字符串，用于复合主键拼接（避免 float 精度漂移与 NaN）。"""
-    if v is None:
-        return ""
-    if isinstance(v, float):
-        if v != v:  # NaN
-            return ""
-        return f"{v:.4f}"
-    if isinstance(v, datetime):
-        return v.isoformat(timespec="seconds")
-    if isinstance(v, date_cls):
-        return v.isoformat()
-    return str(v).strip()
+# _stable_value 由 lib.idempotent_smartsheet.stable_value 提供（见顶部 import 别名），不再本地实现。
 
 
 def _row_key(row: dict[str, Any], instance: InstanceConfig | None = None) -> str:
@@ -651,44 +626,29 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
         summary["log_path"] = str(log_path)
         return summary
 
+    # 注：空 state 护栏（lib.guard_state_not_empty）为库内可选防线，未在此默认启用——
+    # 本脚本 daily.mjs 周期调用恒为 --mode sync，新实例首跑即 sync+空 state（合法），
+    # 故不做硬拦截；需该防护的新表可在采用库时显式调用 guard_state_not_empty。
     webhook_url = os.environ.get(instance.webhook_env)
     if not webhook_url:
         raise RuntimeError(f"缺少环境变量 {instance.webhook_env}")
 
-    import time as time_mod
+    # 幂等批量推送：成功才记账·按批落盘（防线4）+ 返回条数断言（防线5）。委托共享库。
+    def _post(records: list[dict[str, Any]]) -> dict[str, Any]:
+        # webhook payload 不带内部 _primary_key 标记，外加 schema 信封
+        return post_webhook(webhook_url, {"schema": schema, "add_records": records})
 
-    summary["batches"] = []
-    newly_synced_keys: list[str] = []
-    for chunk in chunked(add_records, instance.batch_size):
-        # webhook payload 不带内部 _primary_key 标记
-        payload_records = [{"values": r["values"]} for r in chunk]
-        resp = post_webhook(webhook_url, {"schema": schema, "add_records": payload_records})
-        errcode = resp.get("errcode")
-        returned_records = resp.get("add_records")
-        summary["batches"].append({
-            "op": "add",
-            "sent": len(chunk),
-            "errcode": errcode,
-            "errmsg": (resp.get("errmsg") or "")[:200],
-            "returned": len(returned_records) if isinstance(returned_records, list) else None,
-        })
-        if errcode != 0:
-            raise RuntimeError(f"{instance.instance_name} webhook add failed: errcode={errcode}, errmsg={resp.get('errmsg')}")
-        # 成功 batch 内的主键追加到已同步集合（errcode == 0 = OK）
-        if errcode == 0:
-            if not isinstance(returned_records, list) or len(returned_records) != len(chunk):
-                raise RuntimeError(
-                    "企业微信新增返回数量不一致，拒绝更新本地 state："
-                    f"sent={len(chunk)} returned="
-                    f"{len(returned_records) if isinstance(returned_records, list) else 'missing'}"
-                )
-            newly_synced_keys.extend(r["_primary_key"] for r in chunk if r["_primary_key"])
-            persist_synced_keys(instance, state, newly_synced_keys)
-        # 速率限制：每条记录占用 60/sheet_rpm 秒
-        time_mod.sleep(60.0 / max(1, instance.sheet_rpm) * len(chunk))
-
-    summary["state_synced_keys_after"] = len(state["synced_keys"])
-    summary["newly_synced_count"] = len(newly_synced_keys)
+    push_summary = _lib_push_add_records_idempotent(
+        add_records,
+        post_fn=_post,
+        persist_fn=lambda keys: persist_synced_keys(instance, state, keys),
+        batch_size=instance.batch_size,
+        key_field="_primary_key",
+        rpm=instance.sheet_rpm,
+    )
+    summary["batches"] = push_summary["batches"]
+    summary["state_synced_keys_after"] = len(state.get("synced_keys") or [])
+    summary["newly_synced_count"] = push_summary["newly_synced_count"]
     summary["completed_at"] = datetime.now(timezone.utc).isoformat()
     log_path = write_log(instance, summary)
     summary["log_path"] = str(log_path)
