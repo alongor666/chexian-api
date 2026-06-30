@@ -1106,6 +1106,13 @@ def save_to_parquet(df, output_path):
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"   ⚠️ 派生字段注册表读取失败，跳过派生: {e}")
 
+    # 防线④ 出口零信任断言：落盘前强制单省体检（无条件兜底）。正常路径 branch_code 已物化、
+    # 用其校验（与 derived_fields.assertDeclaredBranch 互补）；若上方派生因 registry 读取失败被
+    # 跳过、branch_code 未物化，则从 policy_no 派生兜底——这是 assertDeclaredBranch（依赖派生
+    # 成功）覆盖不到的空白。ETL 已分省各跑一遍（天然单省），故不放行 national。
+    from pipelines.branch_assert import assert_single_branch
+    assert_single_branch(df, context=f"ETL 落盘 {Path(output_path).name}")
+
     print(f"   输出文件: {output_path}")
     print(f"   记录数: {len(df):,}")
     print(f"   字段数: {len(df.columns)}")

@@ -45,7 +45,9 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent.parent))  # 数据管理/ 根：供 import pipelines.*
 from sync_renewal_v2 import post_webhook, chunked  # noqa: E402
+from pipelines.branch_assert import assert_single_branch, is_national_view  # noqa: E402
 
 DEFAULT_POLICY_GLOB = str(
     HERE.parent.parent / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
@@ -211,6 +213,16 @@ def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
     """
     con = duckdb.connect(":memory:")
     df = con.execute(sql, params).fetchdf()
+    # 防线④ 出口零信任断言：企微写入前强制单省体检，跨省混入（如山西 SX 邮政保单
+    # 混进四川企微表）即 fail-closed 中止。df 无 branch_code 列（SELECT 是业务投影），
+    # 从 policy_no[:3] 派生省份。allow_national 仅 PROVINCE=ALL 显式声明时放行。
+    assert_single_branch(
+        df,
+        # is_national_view() 默认读运行时 os.environ（等价 is_national_view(os.environ)）：
+        # 仅当显式设 PROVINCE=ALL 才放行跨省；默认 fail-closed，堵 SX 邮政混入四川表。
+        allow_national=is_national_view(),
+        context=f"企微出口 {instance.instance_name}",
+    )
     return df.to_dict("records")
 
 
