@@ -3753,6 +3753,114 @@ function checkBranchCodeFallbackAntipattern() {
   return true;
 }
 
+// ============================================================
+// 企微引擎省份隔离闸（分省隔离四道防线 P3 · uid 2026-06-29-claude-a5aa03）
+// ============================================================
+/**
+ * 纯静态扫描（不依赖 parquet 数据，永远跑）。补 checkPolicyGlobPrefixIsolation 的缺口：
+ * 后者只校验「数据文件名↔省份」前提，不校验「引擎/实例是否真应用了 branch_code 过滤」。
+ *
+ * 检测 A（引擎层）：sync_renewal_v2.py + sync_filtered_policies.py，凡函数体内 read_parquet
+ *   读 policy current/（引用 DEFAULT_POLICY_GLOB / policy_glob），必须同函数体含 branch_code
+ *   过滤或 assert_single_branch 出口兜底。按函数粒度判定（避免「文件别处有 assert 就放行」）。
+ * 检测 B（实例层）：instances/*.yaml（非 .disabled），按 daily.mjs 路由逻辑判定引擎：
+ *   - 缺 script: / script: sync_renewal_v2.py → v2 引擎（load 时 fail-closed 要 branch_code）→
+ *     YAML 必须顶层声明 branch_code（静态前置，先于运行时拦截）。
+ *   - script: sync_filtered_policies.py → 该引擎 fetch_rows 出口有 assert_single_branch 兜底
+ *     （检测 A 已保证）→ 放行（不强制 extra_where，避免与邮政表 extra_where 修复 PR 耦合）。
+ *   - 其他未知引擎 → 无法假设兜底，必须显式声明 branch_code/extra_where，否则失败。
+ * 逃生阀：命中行附近写 `# governance-allow: branch-isolation <backlog-uid 或 PR#> <理由>`
+ *   （仿 architecture.md，须带引用，防裸 marker 后门）。
+ */
+function checkWecomEngineBranchIsolation() {
+  info('检查企微引擎/实例省份隔离（裸读 current/ 必带 branch_code 过滤或出口断言）...');
+  const engineDir = path.join(ROOT_DIR, '数据管理/integrations/wecom_smartsheet');
+  const violations = [];
+  const ALLOW_RE = /governance-allow:\s*branch-isolation\s+(?:B\d+|#\d+|\d{4}-\d{2}-\d{2}[\w-]*)/;
+
+  // ---- 检测 A：引擎层（按 top-level def 切函数块）----
+  const ENGINES = ['sync_renewal_v2.py', 'sync_filtered_policies.py'];
+  for (const eng of ENGINES) {
+    const full = path.join(engineDir, eng);
+    if (!fs.existsSync(full)) { violations.push(`引擎 ${eng} 不存在，无法校验`); continue; }
+    const text = fs.readFileSync(full, 'utf-8');
+    if (ALLOW_RE.test(text)) continue; // 文件级豁免
+    const lines = text.split('\n');
+    // 按 top-level `def ` 边界切块（含块起始行号）
+    const blocks = [];
+    let cur = null;
+    lines.forEach((line, idx) => {
+      if (/^def\s+\w+/.test(line)) {
+        if (cur) blocks.push(cur);
+        cur = { start: idx + 1, body: [] };
+      }
+      if (cur) cur.body.push(line);
+    });
+    if (cur) blocks.push(cur);
+    for (const blk of blocks) {
+      // 剥 Python 行注释（# 到行末）再匹配——否则注释里的「WHERE branch_code」散文会
+      // 把破坏后的函数误判为「有隔离」（漏报）。我方 policy 读函数的 SQL 串无 # 字符，
+      // 故按 # 截断安全。docstring 不含隔离关键字，不单独剥。
+      const body = blk.body.map((l) => l.replace(/#.*$/, '')).join('\n');
+      // 读 policy current/ 的标志：read_parquet + (DEFAULT_POLICY_GLOB | policy_glob)
+      const readsPolicyCurrent = /read_parquet\(/.test(body)
+        && /(DEFAULT_POLICY_GLOB|policy_glob)/.test(body);
+      if (!readsPolicyCurrent) continue;
+      // 真隔离信号（代码态强信号，剥注释后不被散文骗过）：
+      const hasIsolation =
+        /assert_single_branch\(/.test(body) ||      // 出口零信任断言（带括号 = 调用）
+        /branch_code\s*=\s*[?'"]/.test(body) ||     // 参数化/字面量 WHERE 过滤串
+        /extra_where/.test(body);                   // sync_filtered 受信任片段（YAML 注入 branch_code）
+      if (!hasIsolation) {
+        violations.push(`${eng}:${blk.start}: 函数读 policy current/ 但无 branch_code 过滤也无 assert_single_branch 出口断言`);
+      }
+    }
+  }
+
+  // ---- 检测 B：实例层（instances/*.yaml 非 .disabled）----
+  const instDir = path.join(engineDir, 'instances');
+  if (fs.existsSync(instDir)) {
+    for (const f of fs.readdirSync(instDir).sort()) {
+      if (!(f.endsWith('.yaml') || f.endsWith('.yml'))) continue; // .disabled 天然排除
+      const full = path.join(instDir, f);
+      const text = fs.readFileSync(full, 'utf-8');
+      if (ALLOW_RE.test(text)) continue;
+      // 复刻 daily.mjs 路由：script: 行（允许行末注释）；缺省 = sync_renewal_v2.py
+      const sm = text.match(/^script:\s*([\w./-]+)\s*(?:#.*)?$/m);
+      const engine = sm ? sm[1].trim() : 'sync_renewal_v2.py';
+      // 顶层 branch_code: 声明（行首无缩进）
+      const hasBranchCode = /^branch_code:\s*\S+/m.test(text);
+      // sync_filtered 风格 extra_where 含 branch_code
+      const hasExtraWhereBranch = /extra_where:.*branch_code/.test(text);
+      if (engine === 'sync_renewal_v2.py') {
+        if (!hasBranchCode) {
+          violations.push(`instances/${f}: 路由到 sync_renewal_v2.py（读 current/）但未顶层声明 branch_code（fail-closed 前置）`);
+        }
+      } else if (engine === 'sync_filtered_policies.py') {
+        // 该引擎 fetch_rows 出口有 assert_single_branch 兜底（检测 A 已校验）→ 放行
+        continue;
+      } else {
+        // 未知引擎：无法假设有出口兜底，必须显式声明隔离
+        if (!hasBranchCode && !hasExtraWhereBranch) {
+          violations.push(`instances/${f}: 路由到未知引擎 '${engine}'，须显式声明 branch_code 或 filters.extra_where(branch_code)`);
+        }
+      }
+    }
+  }
+
+  if (violations.length > 0) {
+    error(`企微引擎/实例省份隔离缺口 ${violations.length} 处（裸读 current/ 混省 → 他省保单推进本省企微表）：`);
+    for (const v of violations) console.log(`    - ${v}`);
+    console.log('    修复（引擎）：函数读 current/ 须加 WHERE branch_code = ? 或 build_source_rows 出口 assert_single_branch');
+    console.log('    修复（实例）：v2 实例顶层加 branch_code: <SC/SX>；sync_filtered 实例靠出口断言（已覆盖）');
+    console.log('    依据：.claude/rules/data-pipeline.md「省份数据隔离」RED LINE · 数据管理/pipelines/branch_assert.py');
+    console.log('    逃生阀：# governance-allow: branch-isolation <backlog-uid 或 PR#> <理由>');
+    return false;
+  }
+  success('企微引擎/实例省份隔离检查通过（两引擎 policy 读均有 branch_code/断言 · v2 实例均声明省份）');
+  return true;
+}
+
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件', fn: checkRequiredFiles },
@@ -3806,6 +3914,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '省份静默默认反模式', fn: checkBranchCodeFallbackAntipattern },
   { name: 'SC policy glob前缀隔离', fn: checkPolicyGlobPrefixIsolation },
   { name: '省份前缀映射一致', fn: checkProvincePrefixMapConsistency },
+  { name: '企微引擎省份隔离', fn: checkWecomEngineBranchIsolation },
 ];
 
 // ============================================================
