@@ -40,6 +40,13 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 DATA_ROOT = HERE.parents[1]
+sys.path.insert(0, str(DATA_ROOT))  # 供 import pipelines.*（省份隔离断言 SSOT）
+from pipelines.branch_assert import (  # noqa: E402
+    assert_single_branch,
+    get_branch_mapping,
+    is_national_view,
+)
+
 DEFAULT_POLICY_GLOB = DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
 DEFAULT_QUOTES_PATH = DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet"
 DEFAULT_SALESMAN_PATH = DATA_ROOT / "warehouse" / "dim" / "salesman" / "latest.parquet"
@@ -96,7 +103,33 @@ class InstanceConfig:
     exclusive_vin_strategy: str | None
     exclusive_lower_bound: str | None
     fields_enabled: list[str]
+    branch_code: str  # 省份隔离键（SC/SX）；必填，注入所有 policy 读的 WHERE branch_code（RED LINE data-pipeline.md）
     field_registry_path: str | None = None  # 可选：覆盖默认 field_registry.yaml（机构表用 field_registry_orgsheet.yaml）
+
+
+def _resolve_branch_code(raw: dict[str, Any], instance_name: str) -> str:
+    """解析并校验实例省份隔离键（fail-closed）。
+
+    缺省 / 非已注册省份 → 立即 RuntimeError 中止，禁止静默回落 'SC'
+    （data-pipeline.md RED LINE「fail-closed」+ CLAUDE.md 禁硬编码单省）。
+    已注册省份集取自 branch_assert.get_branch_mapping() 的值域（SSOT = fields.json），
+    新省份上线只改 fields.json 一处，本引擎自动跟随。
+    """
+    branch_code = raw.get("branch_code")
+    registered = sorted(set(get_branch_mapping().values()))
+    if not branch_code:
+        raise RuntimeError(
+            f"实例 '{instance_name}' 缺少必填字段 branch_code（省份隔离键）。"
+            f"裸读混省 current/ 会把他省保单推进本省企微表 — fail-closed 中止。"
+            f"请在实例 YAML 顶层声明 branch_code: <{'/'.join(registered)}>"
+        )
+    if branch_code not in registered:
+        raise RuntimeError(
+            f"实例 '{instance_name}' branch_code='{branch_code}' 非已注册省份 {registered}。"
+            f"若为新省份上线，须先同步 server/src/config/field-registry/fields.json "
+            f"branch_code.derivation.mapping — fail-closed 中止。"
+        )
+    return branch_code
 
 
 def load_instance(path: Path) -> InstanceConfig:
@@ -114,6 +147,7 @@ def load_instance(path: Path) -> InstanceConfig:
         exclusive_vin_strategy=raw.get("exclusive_vin_strategy"),
         exclusive_lower_bound=raw.get("exclusive_lower_bound"),
         fields_enabled=raw["fields_enabled"],
+        branch_code=_resolve_branch_code(raw, raw["instance_name"]),
         field_registry_path=raw.get("field_registry_path"),
     )
 
@@ -135,6 +169,16 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
     exclude_endorsement = f.get("exclude_endorsement", True)
     organization_in: list[str] | None = f.get("organization_in")
 
+    # 省份隔离（RED LINE data-pipeline.md）：current/ 物理混放 SC+SX，4 处 policy 读统一
+    # 注入参数化 WHERE branch_code，杜绝山西保单混进四川企微表。branch_code 已在 load_instance
+    # fail-closed 校验过（∈ 已注册省份集）。非 policy 源（quotes/salesman/customer_flow）经实证
+    # 当前纯 SC（有 branch_code 列但暂无 SX 数据），base 单省后按 vehicle_frame_no/full_name
+    # LEFT JOIN 天然收敛行级省份（policy_no 恒 SC，出口断言无感），本阶段不另注入。
+    # follow-up：当三源落入 SX 数据时，VIN 碰撞可致 SX 报价属性匹配到 SC 行（属性级污染，
+    # 行级不泄漏），届时对 q_latest/q_earliest/flow 也加 branch_code（已有列，单行追加）。
+    branch_code = instance.branch_code
+    branch_clause = "AND branch_code = ?"
+
     con = duckdb.connect(":memory:")
     as_of_date = date.today().isoformat()
 
@@ -155,6 +199,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
       SELECT vehicle_frame_no, policy_no, SUM(premium) AS prem
       FROM read_parquet('{DEFAULT_POLICY_GLOB}', union_by_name=true)
       WHERE insurance_type = ?
+        {branch_clause}
         AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
         AND CAST(insurance_start_date AS DATE) BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)
         {endorsement_sql}
@@ -167,7 +212,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
     GROUP BY vehicle_frame_no
     HAVING COUNT(DISTINCT policy_no) > 1
     """
-    audit_params = [insurance_type, start_from, start_to, *org_param, premium_gt]
+    audit_params = [insurance_type, branch_code, start_from, start_to, *org_param, premium_gt]
     duplicate_rows = con.execute(audit_sql, audit_params).fetchall()
     duplicate_vins = [(r[0], r[1]) for r in duplicate_rows]
 
@@ -185,6 +230,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
           SELECT vehicle_frame_no, SUM(premium) AS prem
           FROM read_parquet('{DEFAULT_POLICY_GLOB}', union_by_name=true)
           WHERE insurance_type = ?
+            {branch_clause}
             AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
             AND CAST(insurance_start_date AS DATE) < CAST(? AS DATE)
             AND CAST(insurance_start_date AS DATE) >= CAST(? AS DATE)
@@ -194,7 +240,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
           HAVING SUM(premium) > ?
         )
         """
-        excl_rows = con.execute(excl_sql, [insurance_type, start_from, lower_bound, *org_param, premium_gt]).fetchall()
+        excl_rows = con.execute(excl_sql, [insurance_type, branch_code, start_from, lower_bound, *org_param, premium_gt]).fetchall()
         cross_batch_excluded = [r[0] for r in excl_rows if r[0]]
         if cross_batch_excluded:
             placeholders = ",".join(["?"] * len(cross_batch_excluded))
@@ -216,6 +262,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
         ANY_VALUE(commercial_pricing_factor) AS commercial_pricing_factor
       FROM read_parquet('{DEFAULT_POLICY_GLOB}', union_by_name=true)
       WHERE insurance_type = ?
+        {branch_clause}
         AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
         AND CAST(insurance_start_date AS DATE) BETWEEN CAST(? AS DATE) AND CAST(? AS DATE)
         {endorsement_sql}
@@ -274,6 +321,7 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
           ) AS rn
         FROM read_parquet('{DEFAULT_POLICY_GLOB}', union_by_name=true)
         WHERE insurance_type = ?
+          {branch_clause}
           AND is_renewal = true
           AND renewal_policy_no IS NOT NULL AND renewal_policy_no != ''
           AND vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
@@ -324,15 +372,24 @@ def build_source_rows(instance: InstanceConfig) -> tuple[list[dict[str, Any]], d
     LEFT JOIN flow f ON f.vehicle_frame_no = b.vehicle_frame_no
     """
     main_params = [
-        insurance_type, start_from, start_to,
+        insurance_type, branch_code, start_from, start_to,  # policy_in_window（+branch_code）
         *org_param,
         *cross_params,
         premium_gt,
-        insurance_type, instance.quote_window_start,   # q_latest
-        insurance_type, instance.quote_window_start,   # q_earliest
-        insurance_type,                                 # renewed
+        insurance_type, instance.quote_window_start,   # q_latest（quotes 当前纯 SC，LEFT JOIN 收敛，不注入）
+        insurance_type, instance.quote_window_start,   # q_earliest（同上）
+        insurance_type, branch_code,                    # renewed（+branch_code）
     ]
-    rows = con.execute(main_sql, main_params).fetchdf().to_dict("records")
+    main_df = con.execute(main_sql, main_params).fetchdf()
+    # 防线④ 出口零信任断言（与 sync_filtered_policies 同款）：从 base.policy_no[:3] 派生省份，
+    # DISTINCT branch_code > 1（跨省混入）即 fail-closed 中止。WHERE branch_code 是主防线，
+    # 本断言是「即便漏了也混不出去」的兜底。allow_national 仅显式 PROVINCE=ALL 时放行。
+    assert_single_branch(
+        main_df,
+        allow_national=is_national_view(),
+        context=f"续保引擎企微出口 {instance.instance_name}",
+    )
+    rows = main_df.to_dict("records")
     rows = [r for r in rows if r.get("vehicle_frame_no")]
     as_of = date.fromisoformat(as_of_date)
     for row in rows:

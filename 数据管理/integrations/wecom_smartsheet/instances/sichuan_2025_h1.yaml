@@ -8,6 +8,10 @@ instance_name: sichuan_2025_h1
 
 webhook_env: WECOM_SMARTSHEET_WEBHOOK_SC_2025H1
 
+# 省份隔离键（RED LINE data-pipeline.md）：current/ 物理混放 SC+SX，引擎据此注入所有
+# policy 读的 WHERE branch_code='SC'，杜绝山西保单混进四川企微表。缺省 → fail-closed 中止。
+branch_code: SC
+
 batch_size: 100
 sheet_records_per_minute_limit: 3000
 doc_records_per_minute_limit: 10000
