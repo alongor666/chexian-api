@@ -40,6 +40,11 @@ if _DATA_ROOT not in sys.path:
 class BaseConverter(ABC):
     """模板方法：read → schema → rename → transform → validate → dedup → write → metadata"""
 
+    # 多省：run() 在 transform_rows 之前据 args/env 解析并赋值；无 policy_no 的 dim 子类
+    # 在 transform_rows 读取以落 branch_code 常量列。类级默认 None，使直接调 transform_rows
+    # 的单测无需经 run() 也有定义（回退 'SC'）。
+    _declared_branch = None
+
     # ── 子类必须实现 ──
 
     @abstractmethod
@@ -107,6 +112,13 @@ class BaseConverter(ABC):
         args = self._parse_args()
         input_file = validate_input_path(str(args.input))
         output_file = validate_output_path(str(args.output))
+
+        # 多省：在 transform_rows 之前解析 declared_branch 并存到实例，供 dim 表
+        # （repair/brand 等无 policy_no、不走下方 6c registry 派生入口的域）在自身
+        # transform_rows 直接落 branch_code 常量列时读取。SC 默认链路（无 --branch-code
+        # 且无 BRANCH_CODE env）解析为 None → 子类回退 'SC'，四川产物逐字节等价。
+        from pipelines.derived_fields import resolve_declared_branch
+        self._declared_branch = resolve_declared_branch(args)
 
         cn_to_en = self.get_cn_to_en()
         required = self.get_required_columns()
@@ -182,8 +194,8 @@ class BaseConverter(ABC):
         #     守卫，否则混省行不会 fail-fast）
         #   · 'policy_no' not in df.columns（dim 表 repair / brand）→ 安静跳过派生入口，避免
         #     derived_fields.py 内 strict 守卫对 dim 表误触 fail-fast
-        from pipelines.derived_fields import resolve_declared_branch, apply_registry_derivations
-        declared_branch = resolve_declared_branch(args)
+        from pipelines.derived_fields import apply_registry_derivations
+        declared_branch = self._declared_branch
         if 'policy_no' in df.columns:
             df = apply_registry_derivations(df, declared_branch or 'SC')
         elif declared_branch:

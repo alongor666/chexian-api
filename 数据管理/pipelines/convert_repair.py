@@ -81,10 +81,19 @@ class RepairConverter(BaseConverter):
             uniq_shops = df["repair_shop_name"].nunique()
             uniq_codes = df["shop_code"].nunique()
             print(f"   shop_code 编码: 网点 {uniq_shops:,} → 编码 {uniq_codes:,}（差异 {uniq_shops - uniq_codes} 表示同编码多名称）")
-        # 多省 RLS：维修资源域 SC-only（无 SX 维修源），常量 'SC'（镜像 salesman dim #789；
-        # convert_repair 仅消费四川源 03/07_维修资源.xlsx，非盲常量）。durable 落列使后续 ETL
-        # 重跑自然产 branch_code；存量旧 parquet 由 materialize_branch_code_special.py 一次性回填。
-        df["branch_code"] = "SC"
+        # 多省 RLS：维修资源域无 policy_no 列，不走 base_converter 6c registry 派生入口，
+        # 故在此直接落 branch_code 常量列，取自 declared_branch（base_converter.run() 据
+        # --branch-code / BRANCH_CODE env 解析并存到 self._declared_branch）。
+        #
+        # 修复（省份隔离漏洞）：原硬编码 'SC' 会让山西维修源经 multi_file_merge 的「单文件 +
+        # 无历史」短路路径（daily.mjs runStrategyMultiMerge，tmpFiles==1 && !hasHistory）直接
+        # 落盘——该路径不经 merge_parquet.reapply_registry_derivations 纠正，导致
+        # warehouse/validation/SX/repair_resource/latest.parquet 的 branch_code 错标 'SC'，
+        # 违反省份隔离。改为取声明省后，单文件路径即产出正确省码（merge 路径另由 #861 的
+        # reapply 常量赋值兜底，两处独立且语义一致）。
+        #
+        # SC 默认链路（declared=None）回退 'SC'，四川产物逐字节等价。
+        df["branch_code"] = self._declared_branch or "SC"
         return df
 
     def post_write_hook(self, df: pd.DataFrame, output_file: Path) -> None:
