@@ -153,6 +153,47 @@ node scripts/sync-and-reload.mjs --wecom --wecom-org 新都,资阳
 - 本地状态没有车架号：走 `add_records`，并把返回的 `record_id` 写回状态文件
 - 已在状态文件但不再符合筛选口径的车架号：本次只写入日志 `missing_vins`，不自动删除
 
+## 幂等防重复共享库（`lib/idempotent_smartsheet.py`）
+
+> **凡是「读数据源 → 经 webhook `add_records` 写智能表」的脚本，都应复用本库**，确保
+> 重复执行 / 中途崩溃都不产生重复行（参 2026-06-03 org_renewal 空 state 全量重写
+> 28,899 行重复事故）。已采用：`sync_filtered_policies.py`（邮政表，纯增）。
+
+库提供 6 道防线（与具体表 / InstanceConfig 解耦，调用方只给「state 路径 + 唯一键 `KeySpec` +
+webhook 推送回调」）：
+
+| # | 防线 | 库函数 |
+|---|------|--------|
+| 1 | 确定性稳定键（值先稳定化，杜绝浮点/日期/空格漂移） | `stable_value` / `row_key` |
+| 2 | 源端先聚合去重 | `collapse_by_key` |
+| 3 | 本地「已同步键」快照 + 去重过滤 | `load_state` / `partition_new` |
+| 4 | 成功才记账·按批落盘（崩溃安全幂等核心） | `push_add_records_idempotent`（`persist_fn` 回调） |
+| 5 | 返回条数断言（返回≠发送即拒绝记账） | 同上 |
+| 6 | 键口径一致性校验（防键格式迁移全量重推） | `validate_state_key_strategy` |
+| + | 空 state 护栏（可选；空 state 盲推默认拒绝） | `guard_state_not_empty` |
+
+**最小采用示例**：
+
+```python
+from lib.idempotent_smartsheet import (
+    KeySpec, load_state, validate_state_key_strategy,
+    partition_new, persist_synced_keys, push_add_records_idempotent,
+)
+
+ks = KeySpec.composite(["policy_no", "vehicle_frame_no"])  # 或 KeySpec.primary("policy_no")
+state = load_state(state_path)
+validate_state_key_strategy(state, ks)                      # 防线6
+new, skipped = partition_new(records, state, key_of=lambda r: r["_key"])  # 防线3
+push_add_records_idempotent(                                # 防线 4+5
+    new, post_fn=lambda recs: post_webhook(url, {"schema": schema, "add_records": recs}),
+    persist_fn=lambda keys: persist_synced_keys(state_path, state, keys, keyspec=ks),
+    batch_size=100, key_field="_key", rpm=3000,
+)
+```
+
+验收：连跑两次 → 第二次 `add_records_planned=0`；中途杀进程重跑 → 不漏不重。
+单测见 `tests/test_idempotent_smartsheet.py`。完整 6 道防线说明见库文件 docstring。
+
 ## 频率限制
 
 - 单工作表累计添加/更新 ≤ `3000 条/分钟`
