@@ -44,6 +44,21 @@ def resolve_declared_branch(args):
     return (getattr(args, 'branch_code', None) or os.environ.get('BRANCH_CODE') or '').strip().upper() or None
 
 
+def registered_branch_codes():
+    """从 fields.json 的 branch_code.derivation.mapping 读已注册省份码集合（值域，如 {'SC','SX'}）。
+
+    唯一事实源 = server/src/config/field-registry/fields.json。供需要对 declared_branch 做
+    fail-closed 白名单校验的调用方（如 merge_parquet 的 dim 表常量赋值）复用，避免硬编码省数组。
+    """
+    registry_path = Path(__file__).resolve().parent.parent.parent / 'server/src/config/field-registry/fields.json'
+    with open(registry_path) as f:
+        registry = json.load(f)
+    for fd in registry.get('fields', []):
+        if fd.get('id') == 'branch_code':
+            return set((fd.get('derivation', {}) or {}).get('mapping', {}).values())
+    return set()
+
+
 def apply_registry_derivations(df, declared_branch):
     """从 server/src/config/field-registry/fields.json 读 derived:true 字段并物化到 df。
 

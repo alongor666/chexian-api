@@ -31,6 +31,12 @@ export function buildMergeParquetArgs({ mergeInputs, tmpOutput, mergeDedupKey, m
   if (!Array.isArray(mergeInputs) || mergeInputs.length === 0) {
     throw new Error('buildMergeParquetArgs: mergeInputs 不能为空');
   }
+  // 防御（PR #861 review MEDIUM）：dedup-key / order-by 缺失会生成 `"undefined"` 字面量传给
+  // merge_parquet.py，_validate_sql_identifier 放行（全字母）→ DuckDB 以 undefined 为列名
+  // PARTITION BY，运行期才报错。改为参数构造阶段 fail-fast，定位更早。
+  if (!mergeDedupKey || !mergeOrderBy) {
+    throw new Error('buildMergeParquetArgs: mergeDedupKey / mergeOrderBy 不能为空（multi_file_merge 域须声明 merge_dedup_key + merge_order_by）');
+  }
   const code = branchCode || 'SC';
   return [
     '-i', ...mergeInputs.map(f => `"${f}"`),

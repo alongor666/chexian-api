@@ -82,10 +82,16 @@ export function fileBelongsToBranch(name, branchCode) {
  * 把「无前缀 glob」扩展为「无前缀 + 各已知省前缀」glob 列表，使 daily.mjs 既能发现
  * 旧无前缀文件，也能发现带 sichuan_/shanxi_ 前缀的新文件。省份枚举来自
  * PROVINCE_FILENAME_PREFIX_TO_CODE keys（数据驱动，加省自动扩展，禁硬编码省数组）。
+ *
+ * 幂等守卫（PR #861 review HIGH）：若传入 glob 自身已含已知省前缀（如调用方在
+ * data-sources.json 里显式声明了 `sichuan_*` glob），不再二次扩展 —— 否则会生成
+ * `sichuan_sichuan_*` 这类匹配不到任何文件的无意义 glob，污染发现日志、增加排查难度。
+ * 当前所有声明 glob 均无省前缀，故对现状是 no-op；本守卫是面向未来声明的防御。
  * @param {string} coreGlobNoPrefix 无前缀 glob，如 '????????-????????_01_签单清单*.xlsx'
  * @returns {string[]}
  */
 export function buildBranchAwareGlobs(coreGlobNoPrefix) {
+  if (PREFIX_RE.test(coreGlobNoPrefix)) return [coreGlobNoPrefix];
   return [
     coreGlobNoPrefix,
     ...Object.keys(PROVINCE_FILENAME_PREFIX_TO_CODE).map((p) => `${p}_${coreGlobNoPrefix}`),

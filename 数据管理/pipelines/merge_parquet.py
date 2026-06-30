@@ -205,6 +205,13 @@ def _reassert_dim_branch_constant(df, label, declared_branch):
     if not declared_branch:
         print(f"   ℹ {label} 无 policy_no 列且未声明省份 → 跳过 branch_code 重赋（保持原值）")
         return df
+    # fail-closed（PR #861 review MEDIUM）：merge_parquet.py 作为独立可执行脚本可被外部直调，
+    # declared_branch 须是 fields.json 已注册省码，否则会把非法省码无声写进 dim 产物（违反隔离红线）。
+    from pipelines.derived_fields import registered_branch_codes
+    allowed = registered_branch_codes()
+    if allowed and declared_branch not in allowed:
+        print(f"   ❌ {label} declared-branch '{declared_branch}' 不在已注册省份 {sorted(allowed)} — fail-fast")
+        sys.exit(1)
     df = df.copy()
     df["branch_code"] = declared_branch
     print(

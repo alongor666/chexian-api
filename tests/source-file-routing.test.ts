@@ -94,6 +94,14 @@ describe('buildBranchAwareGlobs（前缀感知 glob 扩展）', () => {
     expect(globs).toContain('shanxi_????????-????????_01_签单清单*.xlsx');
     expect(globs).toHaveLength(1 + registeredBranchCodesFromPrefixMap().length);
   });
+  it('🔴 幂等守卫（PR #861 HIGH）：已含省前缀的 glob 不二次扩展（防 sichuan_sichuan_*）', () => {
+    expect(buildBranchAwareGlobs('sichuan_07_维修资源*.xlsx')).toEqual(['sichuan_07_维修资源*.xlsx']);
+    expect(buildBranchAwareGlobs('shanxi_????????-????????_03_维修资源*.xlsx'))
+      .toEqual(['shanxi_????????-????????_03_维修资源*.xlsx']);
+  });
+  it('大小写不敏感前缀同样不二次扩展（防上游 Sichuan_/SHANXI_ 命名）', () => {
+    expect(buildBranchAwareGlobs('Sichuan_07_维修资源*.xlsx')).toEqual(['Sichuan_07_维修资源*.xlsx']);
+  });
 });
 
 describe('唯一事实源一致性（闸-1 P2-1）', () => {

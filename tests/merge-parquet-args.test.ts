@@ -54,4 +54,11 @@ describe('buildMergeParquetArgs（merge_parquet.py 参数透传契约）', () =>
   it('mergeInputs 为空 → 抛错（防静默合成缺数据产物）', () => {
     expect(() => buildMergeParquetArgs({ ...base, mergeInputs: [] })).toThrow();
   });
+
+  it('mergeDedupKey / mergeOrderBy 缺失 → 抛错（PR #861 MEDIUM：防 "undefined" 字面量传 Python）', () => {
+    expect(() => buildMergeParquetArgs({ ...base, mergeDedupKey: undefined })).toThrow();
+    expect(() => buildMergeParquetArgs({ ...base, mergeDedupKey: '' })).toThrow();
+    expect(() => buildMergeParquetArgs({ ...base, mergeOrderBy: undefined })).toThrow();
+    expect(() => buildMergeParquetArgs({ ...base, mergeOrderBy: '' })).toThrow();
+  });
 });
