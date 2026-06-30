@@ -14,12 +14,21 @@ script: sync_filtered_policies.py        # daily.mjs 据此路由到非续保脚
 # 邮政只同步全量表。保留 all 实例名以复用既有 state，避免后续重复推送。
 webhook_env: WECOM_SMARTSHEET_WEBHOOK_POSTAL_ALL
 
+# 省份隔离（RED LINE data-pipeline.md）：本表是四川邮政表。current/ 物理混放 SC+SX，
+#   山西亦有邮政/邮储经代、agent_name 同含「邮政」，单靠 agent_name LIKE '%邮政%' 会混入山西行
+#   （隐式隔离失效，见 memory fact-current-mixes-sc-sx-bare-glob）。故双保险：
+#     - policy_glob 仅取非 SX 分片（[!S]* 排除 SX_ 大写 S 开头；保留数字+sichuan_ 小写 s）→ 性能辅助
+#     - extra_where branch_code='SC' → 权威隔离保证
+#   与 shanxi-postal-all.yaml（SX_*.parquet + branch_code='SX'）对称。
+policy_glob: 数据管理/warehouse/fact/policy/current/[!S]*.parquet
+
 batch_size: 100
 sheet_records_per_minute_limit: 3000
 
 filters:
   agent_name_like: "%邮政%"
   policy_date_from: "2026-04-20"
+  extra_where: "branch_code = 'SC'"
 
 primary_key: policy_no
 
