@@ -648,30 +648,53 @@ def build_sx_salesman_from_parquet(branch_code: str = "SX") -> pd.DataFrame:
 
 
 def build_sx_plan_stub(branch_code: str = "SX", plan_year: int = 2026) -> pd.DataFrame:
-    """
-    生成 SX 最小可用计划表（plan_vehicle=0 的空桩）。
+    """生成 SX 计划表。优先读分机构年计划源 csv（level=organization，真实 plan_vehicle）；
+    无源回退最小空桩（防 PlanFact Binder Error，plan=0 → achievement_rate=NULL）。
 
-    目的：避免 PlanFact 表不存在时 loadDimParquet 报 Binder Error。
-    SX 无计划数据（xlsx 缺失），plan=0 使 achievement_rate=NULL（正确：无计划则无达成率）。
+    源：数据管理/存量数据/sx_plan_<year>_by_org.csv（organization, plan_vehicle 两列，万元）。
+    来自山西分公司经营快报分机构表。仅 10 个纯三级机构（太原一部/二部 + 大同/阳泉/长治/晋城/
+    晋中/运城/临汾/吕梁）；渠道类（车商/经代/金融同业/重客）+「其他」因与三级机构重复计算
+    暂不统计；salesman 层无源（业务员级计划待补，团队/业务员达成率仍空）。
     """
-    return pd.DataFrame({
-        "plan_year": pd.array([], dtype="int64"),
-        "level": pd.array([], dtype="object"),
-        "business_no": pd.array([], dtype="object"),
-        "salesman_name": pd.array([], dtype="object"),
-        "full_name": pd.array([], dtype="object"),
-        "team": pd.array([], dtype="object"),
-        "organization": pd.array([], dtype="object"),
-        "hire_date": pd.array([], dtype="object"),
-        "plan_vehicle": pd.array([], dtype="float64"),
-        "plan_property": pd.array([], dtype="float64"),
-        "plan_personal": pd.array([], dtype="float64"),
-        "plan_total": pd.array([], dtype="float64"),
-        "actual_vehicle": pd.array([], dtype="float64"),
-        "actual_property": pd.array([], dtype="float64"),
-        "actual_personal": pd.array([], dtype="float64"),
-        "actual_total": pd.array([], dtype="float64"),
-    })
+    sx_plan_src = DATA_ROOT / "存量数据" / f"sx_plan_{plan_year}_by_org.csv"
+    if not sx_plan_src.exists():
+        print(f"  ⚠ 未找到 SX 计划源 {sx_plan_src.name}，回退最小空桩（plan=0）")
+        return pd.DataFrame({
+            "plan_year": pd.array([], dtype="int64"),
+            "level": pd.array([], dtype="object"),
+            "business_no": pd.array([], dtype="object"),
+            "salesman_name": pd.array([], dtype="object"),
+            "full_name": pd.array([], dtype="object"),
+            "team": pd.array([], dtype="object"),
+            "organization": pd.array([], dtype="object"),
+            "hire_date": pd.array([], dtype="object"),
+            "plan_vehicle": pd.array([], dtype="float64"),
+            "plan_property": pd.array([], dtype="float64"),
+            "plan_personal": pd.array([], dtype="float64"),
+            "plan_total": pd.array([], dtype="float64"),
+            "actual_vehicle": pd.array([], dtype="float64"),
+            "actual_property": pd.array([], dtype="float64"),
+            "actual_personal": pd.array([], dtype="float64"),
+            "actual_total": pd.array([], dtype="float64"),
+        })
+
+    df_src = pd.read_csv(sx_plan_src)
+    print(f"  读 SX 分机构计划源: {sx_plan_src.name}（{len(df_src)} 机构）")
+    rows = []
+    for _, r in df_src.iterrows():
+        org = str(r["organization"]).strip()
+        pv = float(r["plan_vehicle"])
+        rows.append({
+            "plan_year": plan_year, "level": "organization",
+            "business_no": None, "salesman_name": None, "full_name": None,
+            "team": None, "organization": org, "hire_date": None,
+            "plan_vehicle": pv, "plan_property": 0.0, "plan_personal": 0.0,
+            "plan_total": pv,
+            "actual_vehicle": None, "actual_property": None,
+            "actual_personal": None, "actual_total": None,
+        })
+    print(f"  车险计划总额: {sum(r['plan_vehicle'] for r in rows):.0f} 万")
+    return pd.DataFrame(rows)
 
 
 def main_sx(branch_code: str = "SX") -> None:
@@ -691,11 +714,11 @@ def main_sx(branch_code: str = "SX") -> None:
     # 派生业务员维度
     salesman_df = build_sx_salesman_from_parquet(branch_code)
 
-    # 生成最小可用计划桩
+    # 生成计划表（有分机构年计划源则填实，否则最小空桩）
     plan_df = build_sx_plan_stub(branch_code)
     print(f"\n{'='*60}")
-    print(f"计划数据：最小可用空桩（SX 无 xlsx 计划源）")
-    print(f"  行数: {len(plan_df)}（plan=0 → achievement_rate=NULL，业务上正确）")
+    print(f"计划数据：{'分机构年计划（level=organization）' if len(plan_df) > 0 else '最小可用空桩（无源）'}")
+    print(f"  行数: {len(plan_df)}")
 
     # 写出 Parquet
     write_parquet(salesman_df, out_salesman, f"{branch_code} 业务员主数据（parquet 派生）")
@@ -716,9 +739,10 @@ def main_sx(branch_code: str = "SX") -> None:
         },
         "plan": {
             "total_rows": len(plan_df),
-            "years": [],
-            "levels": [],
-            "note": "SX 无计划源 xlsx，plan=0 空桩",
+            "years": ([int(plan_df["plan_year"].iloc[0])] if len(plan_df) > 0 else []),
+            "levels": (plan_df["level"].unique().tolist() if len(plan_df) > 0 else []),
+            "note": (f"SX 分机构年计划（level=organization，{len(plan_df)} 机构）；渠道类暂未统计"
+                     if len(plan_df) > 0 else "SX 无计划源，plan=0 空桩"),
             "path": str(out_plan),
         },
     }
