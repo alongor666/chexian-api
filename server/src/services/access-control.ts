@@ -7,6 +7,10 @@ import { PRESET_ROLES, PRESET_USERS, PresetRole, PresetUser } from '../config/pr
 import { getUserStorePath } from '../config/paths.js';
 import { dbEnv } from '../config/env.js';
 import { AppError } from '../middleware/error.js';
+import { createLogger } from '../utils/logger.js';
+import { setActiveUsernames } from './user-activation-cache.js';
+
+const log = createLogger('access-control');
 
 // access-control-store / state-db 是 backend=sqlite 模式下的双写目标。
 // dynamic import 防止默认 backend=json 模式下意外加载 better-sqlite3（codex P1 同款修复）。
@@ -319,6 +323,7 @@ async function ensureUserFromPreset(user: PresetUser): Promise<AccessUser> {
     )
   `);
   await persistToFile();
+  await refreshActiveUsernamesCache();
   const created = await getUserByUsername(user.username);
   if (!created) {
     throw new AppError(500, '创建预置用户失败');
@@ -332,6 +337,20 @@ export async function seedAccessControlData(): Promise<void> {
     await loadFromStore(store);
   } else {
     await seedFromPreset();
+  }
+  await refreshActiveUsernamesCache();
+}
+
+// JWT 实时吊销支持：把「active 且存在」的用户名集合刷进纯缓存模块 user-activation-cache，
+// 供 authMiddleware O(1) 查询（详见该模块头注释：为何与 duckdb 解耦）。
+// 每次用户写操作（create/update/delete/ensurePreset）+ 启动 seed 后调用。
+async function refreshActiveUsernamesCache(): Promise<void> {
+  try {
+    const users = await listUsersInternal();
+    setActiveUsernames(users.filter((u) => u.active).map((u) => u.username));
+  } catch (err) {
+    // fail-safe：刷新失败保留旧缓存（吊销延迟到下次成功刷新），绝不因此让写操作 500。
+    log.error('刷新 active 用户名缓存失败，保留旧缓存', err);
   }
 }
 
@@ -418,6 +437,7 @@ export async function createUser(input: {
     )
   `);
   await persistToFile();
+  await refreshActiveUsernamesCache();
   const created = await getUserByUsername(input.username);
   if (!created) {
     throw new AppError(500, '创建用户失败');
@@ -463,6 +483,7 @@ export async function updateUser(id: string, input: {
     WHERE id = '${escapeSqlValue(id)}'
   `);
   await persistToFile();
+  await refreshActiveUsernamesCache();
   const rows = await duckdbService.query(`
     SELECT * FROM UserAccount
     WHERE id = '${escapeSqlValue(id)}'
@@ -480,6 +501,7 @@ export async function deleteUser(id: string): Promise<void> {
     WHERE id = '${escapeSqlValue(id)}'
   `);
   await persistToFile();
+  await refreshActiveUsernamesCache();
 }
 
 // ============================================
