@@ -102,8 +102,12 @@ async function handleQueryRequest(request) {
       cache.put(cacheKey, responseToCache);
       return addSwHeaders(networkResponse, 'network');
     }
-    // 上游 5xx/429 等暂时性错误：若有过期缓存则回退（避免短暂故障替换可用数据）
-    if (cachedResponse) {
+    // 仅 5xx/429 暂时性错误回退过期缓存（避免短暂故障替换可用数据）。
+    // 其余 4xx（尤其 401/403）必须透传：否则会话过期后 SW 把旧缓存当有效
+    // 响应端给前端，client-core 的 401 刷新/auth-session-expired 链路永远
+    // 触发不了，用户看着旧数据以为会话正常（BACKLOG 2026-07-03-claude-dc9f29）。
+    const isTransientError = networkResponse.status >= 500 || networkResponse.status === 429;
+    if (cachedResponse && isTransientError) {
       return addSwHeaders(cachedResponse.clone(), 'cache-stale-fallback');
     }
     return addSwHeaders(networkResponse, 'network');

@@ -171,17 +171,20 @@ router.get('/runs/:runId/stream', (req, res) => {
   const runId = req.params.runId;
   const channel = RUN_CHANNELS.get(runId);
 
+  // SSE 建流前的拒绝仍是普通 JSON 响应，错误体须走统一信封
+  // { success:false, error:{ message, statusCode } }（error.ts / api-routes.md），
+  // 此前 error 为裸字符串，前端按 error?.message 解析得 undefined。
   if (!req.user) {
-    res.status(401).json({ success: false, error: 'Unauthorized' });
+    res.status(401).json({ success: false, error: { message: 'Unauthorized', statusCode: 401 } });
     return;
   }
 
   if (!channel) {
-    res.status(404).json({ success: false, error: `run ${runId} not found or expired` });
+    res.status(404).json({ success: false, error: { message: `run ${runId} not found or expired`, statusCode: 404 } });
     return;
   }
   if (req.user.role !== 'branch_admin' && channel.username !== req.user.username) {
-    res.status(403).json({ success: false, error: 'cannot subscribe to other user runs' });
+    res.status(403).json({ success: false, error: { message: 'cannot subscribe to other user runs', statusCode: 403 } });
     return;
   }
 

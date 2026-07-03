@@ -51,6 +51,13 @@ describe('registerAuthCacheClearing', () => {
     expect(postMessageSpy).toHaveBeenCalledWith({ type: 'FORCE_REFRESH' });
   });
 
+  it('auth-session-expired（会话完全过期）同样清空缓存并通知 SW —— 过期后旧数据可读窗口防回归', () => {
+    seedCache();
+    window.dispatchEvent(new Event('auth-session-expired'));
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
+    expect(postMessageSpy).toHaveBeenCalledWith({ type: 'FORCE_REFRESH' });
+  });
+
   it('SW controller 不存在时不抛错（首次加载 SW 未接管）', () => {
     Object.defineProperty(navigator, 'serviceWorker', {
       value: { controller: null },

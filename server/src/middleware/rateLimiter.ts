@@ -15,6 +15,22 @@ import { AppError } from './error.js';
 import { testEnv } from '../config/env.js';
 
 /**
+ * 429 响应体：与全局 errorHandler 的统一信封对齐
+ * （{ success:false, error:{ message, statusCode } }，见 error.ts /
+ * .claude/rules/api-routes.md）。此前 error 是裸字符串，前端 client-core
+ * 按 data.error?.message 解析得 undefined，用户只看到兜底文案"请求失败"、
+ * 不知道是限流也不知道等多久（BACKLOG 2026-07-03-claude-77f992）。
+ * retryAfter 保留在顶层：与 Retry-After 响应头语义一致，CLI 走响应头不受影响。
+ */
+export function rateLimitBody(message: string, retryAfterSec = 60) {
+  return {
+    success: false,
+    error: { message, statusCode: 429 },
+    retryAfter: retryAfterSec,
+  };
+}
+
+/**
  * 从 Authorization 头嗅探请求是否为 PAT 调用（不依赖 req.pat）。
  *
  * 关键：限流器挂在 `/api`、`/api/query` 等前缀上（app.ts），执行时机在
@@ -118,11 +134,7 @@ export const apiLimiter = rateLimit({
   windowMs: defaultConfig.windowMs,
   // 三级基线 100/min 保持不变；PAT 调用单独加严到 60/min
   limit: (req) => (isPatRequest(req as any) ? PAT_LIMIT_PER_MIN : 100),
-  message: {
-    success: false,
-    error: '请求过于频繁，请 1 分钟后再试',
-    retryAfter: 60,
-  },
+  message: rateLimitBody('请求过于频繁，请 1 分钟后再试'),
   standardHeaders: true,
   legacyHeaders: false,
   // 跳过健康检查 + C4 组合策略（生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过）
@@ -137,11 +149,7 @@ export const apiLimiter = rateLimit({
 export const loginLimiter = rateLimit({
   windowMs: 60 * 1000,   // 1 分钟
   limit: 5,              // 5 次尝试
-  message: {
-    success: false,
-    error: '登录尝试次数过多，请 1 分钟后再试',
-    retryAfter: 60,
-  },
+  message: rateLimitBody('登录尝试次数过多，请 1 分钟后再试'),
   standardHeaders: true,
   legacyHeaders: false,
   // C4 组合策略：生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过
@@ -150,11 +158,7 @@ export const loginLimiter = rateLimit({
   keyGenerator: (req) => req.ip || req.connection.remoteAddress || 'unknown',
   // 登录成功后重置计数（需要配合登录逻辑）
   handler: (req, res) => {
-    res.status(429).json({
-      success: false,
-      error: '登录尝试次数过多，请 1 分钟后再试',
-      retryAfter: 60,
-    });
+    res.status(429).json(rateLimitBody('登录尝试次数过多，请 1 分钟后再试'));
   },
 });
 
@@ -166,11 +170,7 @@ export const queryLimiter = rateLimit({
   windowMs: 60 * 1000,   // 1 分钟
   // 三级基线 200/min 保持不变；PAT 调用单独加严到 60/min（避免脚本失控）
   limit: (req) => (isPatRequest(req as any) ? PAT_LIMIT_PER_MIN : 200),
-  message: {
-    success: false,
-    error: '查询请求过于频繁，请 1 分钟后再试',
-    retryAfter: 60,
-  },
+  message: rateLimitBody('查询请求过于频繁，请 1 分钟后再试'),
   standardHeaders: true,
   legacyHeaders: false,
   skip: shouldSkipRateLimit,
@@ -184,11 +184,7 @@ export const queryLimiter = rateLimit({
 export const aiLimiter = rateLimit({
   windowMs: 60 * 1000,   // 1 分钟
   max: 10,               // 10 次 AI 调用（最严格）
-  message: {
-    success: false,
-    error: 'AI 调用次数过多，请 1 分钟后再试',
-    retryAfter: 60,
-  },
+  message: rateLimitBody('AI 调用次数过多，请 1 分钟后再试'),
   standardHeaders: true,
   legacyHeaders: false,
   skip: shouldSkipRateLimit,
@@ -216,10 +212,7 @@ export function createDynamicLimiter(
       }
       return defaultMax;
     },
-    message: {
-      success: false,
-      error: '请求过于频繁，请稍后再试',
-    },
+    message: rateLimitBody('请求过于频繁，请稍后再试'),
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => keyByPatOrUser(req as any),

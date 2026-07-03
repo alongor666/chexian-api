@@ -139,14 +139,22 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     restoreAuth();
   }, [restoreSession]);
 
-  // 与 apiClient.logout 事件对齐，防止权限状态残留导致重复跳转
+  // 与 apiClient.logout 事件对齐，防止权限状态残留导致重复跳转。
+  // auth-session-expired（access token 过期且 refresh 失败，client-core 派发）
+  // 同样清空权限状态：否则该事件全局仅 LoginPage 监听，停留在业务页的用户
+  // isAuthenticated 恒为 true、不会被 AuthGuard 送回登录页，只能面对各面板
+  // 静默 401 空白（BACKLOG 2026-07-03-claude-c5fe8f）。
   useEffect(() => {
     const handleLogout = () => {
       setUserPermissionState(null);
       setPermission(null);
     };
     window.addEventListener('auth-logout', handleLogout);
-    return () => window.removeEventListener('auth-logout', handleLogout);
+    window.addEventListener('auth-session-expired', handleLogout);
+    return () => {
+      window.removeEventListener('auth-logout', handleLogout);
+      window.removeEventListener('auth-session-expired', handleLogout);
+    };
   }, []);
 
   /** 快速登录（无密码验证，开发模式使用） */
