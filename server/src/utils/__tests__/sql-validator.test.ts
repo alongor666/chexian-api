@@ -83,6 +83,32 @@ describe('validateSQL — 黑名单 / 访问边界', () => {
     expect(r.valid).toBe(false);
     expect(r.error).toContain('PolicyFact');
   });
+
+  // 文件系统读取逃逸补漏（审查发现）：read_text/read_blob 等以标量形式出现在
+  // SELECT/WHERE 时会绕过只识别 FROM/JOIN 的关系边界校验，靠 FORBIDDEN_FUNCTIONS 子串兜底。
+  it('WHERE 标量位置 read_text 读任意文件 → 黑名单拒绝', () => {
+    const r = validateSQL(
+      "SELECT COUNT(*) FROM PolicyFact WHERE read_text('/etc/passwd') IS NOT NULL"
+    );
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('read_text');
+  });
+
+  it('SELECT 列表位置 read_blob → 黑名单拒绝', () => {
+    const r = validateSQL("SELECT read_blob('/etc/hosts'), SUM(premium) FROM PolicyFact");
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('read_blob');
+  });
+
+  it('FROM 表函数位置 read_ndjson → 拒绝', () => {
+    const r = validateSQL("SELECT SUM(x) FROM read_ndjson('/tmp/x.json')");
+    expect(r.valid).toBe(false);
+  });
+
+  it('合法列名含 "global" 子串 → 不被误伤（未加 glob 到黑名单）', () => {
+    const r = validateSQL('SELECT SUM(global_premium) FROM PolicyFact');
+    expect(r.valid).toBe(true);
+  });
 });
 
 describe('validateSQL — 绕过防御（masking 不误判合法查询）', () => {

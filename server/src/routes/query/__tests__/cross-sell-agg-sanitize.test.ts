@@ -47,9 +47,11 @@ vi.mock('../../../config/env.js', () => ({
   dbEnv: {},
   env: {},
 }));
-vi.mock('../../../utils/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
+vi.mock('../../../utils/logger.js', () => {
+  const stub = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+  // createLogger：filter-params.ts 等模块级日志走 createLogger('模块名')，mock 需一并提供
+  return { logger: stub, createLogger: () => stub };
+});
 vi.mock('../../../services/bootstrapper-registry.js', () => ({
   getBootstrapper: vi.fn(() => null),
   registerBootstrapper: vi.fn(),

@@ -4,6 +4,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { getRequestContext } from '../utils/request-context.js';
 
 /**
  * 自定义错误类
@@ -41,7 +42,9 @@ export function errorHandler(
   }
 
   // 未知错误，仅记录错误名和消息（不暴露完整堆栈到标准输出）
-  console.error(`Unexpected error: [${err.name}] ${err.message}`);
+  // 关联 requestId：与 duckdb.ts 查询错误日志同源，便于把用户报障与 PM2 日志对上号。
+  const requestId = getRequestContext()?.requestId ?? 'no-context';
+  console.error(`Unexpected error: [${err.name}] ${err.message} (requestId=${requestId})`);
 
   // 生产环境隐藏错误详情
   const message =

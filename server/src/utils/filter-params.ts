@@ -16,6 +16,9 @@ import {
   buildInCondition,
 } from './sql-sanitizer.js';
 import { AppError } from '../middleware/error.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('filter-params');
 
 /**
  * 将逗号分隔字符串转为数组（过滤空值）
@@ -30,8 +33,13 @@ function csvToArray(value: string | undefined): string[] | undefined {
  * 将字符串转为三态布尔值
  */
 function toBoolOrUndefined(value: string | undefined): boolean | undefined {
+  if (value === undefined || value === '') return undefined;
   if (value === 'true') return true;
   if (value === 'false') return false;
+  // 非法布尔值（如 '1' / 'True' / 拼写错误）此前静默降级为"不过滤"，会把全量数据
+  // 当作已筛选结果返回，形成难以定位的静默错误。这里不 fail-fast 抛 400（避免历史
+  // 松散传值的前端在线上突然 400），但必须留痕，便于排查"筛选未生效"类问题。
+  log.warn(`布尔筛选参数收到非法值 "${value}"，已按"不过滤"处理（期望 'true' 或 'false'）`);
   return undefined;
 }
 

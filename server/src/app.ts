@@ -31,11 +31,44 @@ import { cacheWarmer } from './services/cache-warmer.js';
 import { onDataVersionChange } from './services/data-version.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { startAuditLogMaintenance } from './skills/audit-log.js';
+import { logger } from './utils/logger.js';
 
 import type { Server } from 'http';
 
 const app: Application = express();
 const PORT = serverEnv.PORT;
+
+/**
+ * 反向代理信任（生产拓扑：客户端 → Nginx → PM2:3000）
+ *
+ * 不设置时 Express 默认 trust proxy=false，`req.ip` 取 socket 对端地址（Nginx 本机 127.0.0.1），
+ * 不解析 `X-Forwarded-For`。后果是所有依赖 `req.ip` 的机制集体失真：
+ *   - rateLimiter 按 IP 分桶退化为全站共享单桶
+ *   - 登录 IP 白名单（USER_ALLOWED_IPS）对所有公网来源等效放行
+ *   - 审计日志 IP 恒为 127.0.0.1，丧失溯源能力
+ * 信任 1 跳（仅最前置 Nginx）；用具体数字而非 `true`，以通过 express-rate-limit 的
+ * permissive-trust-proxy 校验（true 会被判为过度信任）。
+ */
+app.set('trust proxy', 1);
+
+/**
+ * 全局兜底：未捕获异常 / 未处理 Promise 拒绝
+ *
+ * 之前完全缺失 → 崩溃只留裸堆栈、无上下文、无告警钩子。
+ * - uncaughtException：进程状态已不可信，记录后 exit(1) 交 PM2 重启
+ *   （保持"崩溃即重启"语义，同时补上可观测性）。
+ * - unhandledRejection：仅记录、不退出——本服务存在 fire-and-forget 异步
+ *   （如 cube-shadow 影子对账），对单个游离拒绝直接退出会引入新的崩溃/重启环，
+ *   故只提升可观测性、不改变存活性（注册处理器本身即抑制 Node 默认的进程终止）。
+ */
+process.on('uncaughtException', (err: Error) => {
+  logger.error(`[uncaughtException] ${err?.name}: ${err?.message}`, err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason: unknown) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logger.error(`[unhandledRejection] ${err.name}: ${err.message}`, err);
+});
 
 /** 数据加载完成标志 — 健康检查依赖此状态 */
 let dataReady = false;

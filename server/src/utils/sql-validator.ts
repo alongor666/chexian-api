@@ -63,6 +63,18 @@ const FORBIDDEN_FUNCTIONS = [
   'write_parquet',
   'write_csv',
   'copy_to',
+  // 文件系统读取逃逸补漏：这些函数可读取任意本地文件内容/行，且以标量形式出现在
+  // SELECT/WHERE 时会绕过 validateRelationBoundary（只识别 FROM/JOIN 位置的关系名）。
+  // 加入黑名单后无论出现在哪个语法位置都会被子串命中拦截。
+  // 注 1：read_csv_auto / read_json_auto 已被上面 read_csv / read_json 子串覆盖，此处仅补未覆盖者。
+  // 注 2：故意不加 'glob'——子串匹配会误伤含 "GLOBAL" 的合法列名/CTE 别名；glob 仅列目录名
+  //       （非读文件内容），危害低于 read_text/read_blob，且用于 FROM 位置时仍被关系边界校验拦下。
+  'read_text',
+  'read_blob',
+  'read_ndjson',
+  'sniff_csv',
+  'getvariable',
+  'getenv',
 ];
 
 /**
