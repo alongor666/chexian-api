@@ -1838,3 +1838,20 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: true
 （vite SSR 动态 import 中文路径 → rollup parse 失败：可加 governance 闸扫描被 vitest include 的 .mjs 动态 import 中文路径，但发作 1 次，先登记 + 本复盘，攒 ≥2 次再机制化。）expires: 2026-09-29
+
+---
+
+## 2026-07-03 · 前端生产四维审查 → P0/P1/P2 修复闭环（含 1 假阳性证伪）
+
+> 承接 backlog `2026-07-03-claude-20e132`（换号串缓存越权）/ `0f86cb`（部署白屏链）/ `37cb58`（growth orgNames 绕过 + premium-report 假阳性纠偏）/ `07646e`（manualChunks，DONE）/ `0e0e9f`（Nginx 漂移，代码侧完成、生产对齐待运维）/ `05dff4`（中危债打包）。审查方式：4 个并行只读子代理（架构/缓存链路/功能/性能构建）+ 主会话生产实测（curl 响应头/传输字节/接口探测）交叉验证。
+
+- **修复清单**：① auth-login 也清 queryClient+SW（新模块 authCacheLifecycle.ts + 4 单测）② SW 版本轮询页面驱动重写（etlVersionPoller.ts + 5 单测；sw.js 移除恒 401 死路径 + skipWaiting）③ 两份 nginx conf 给 index.html/sw.js 加 no-cache 精确匹配块 ④ growth 两处 orgNames 覆盖点改"强制值已存在则不覆盖"不变式 ⑤ manualChunks 对象式→函数式（对照构建实证 preload 列表变化）⑥ gzip_static 两份 conf 补齐。
+- **oracle 实证**：verify:full 4500 测试全绿（+9 新增）；对照构建（stash 旧配置→build→diff modulepreload）证明 594KB 导出库预载消除；生产探测证据（sw.js 一年缓存头/version 接口 401/传输未压缩）全部入 BACKLOG。
+
+### 三问复盘
+1. **重来怎样更好**：**审查子代理的发现是线索不是结论**——premium-report"绕过 buildFilterParams"发现，代理引用了 `...(filters.additionalParams || {})` 这行 spread 作为证据却仍下"字段被丢弃"结论；主会话动刀前重读调用方（Panel 已传 buildFilterParams 全量产物）才证伪。若直接照单修复会白改并制造噪音 diff。修复前的"每条发现独立复核"应成为多代理审查的固定后置步骤。同理山西机构配置项——动刀前查 BACKLOG 发现 e96d85 已有"前端从接口派生"分阶段方案，硬修 organizations.ts 会与目标架构冲突，改为追加实证 note。
+2. **复用价值**：① 生产实测 × 代码审查交叉验证法：`curl -sI` 看响应头 + `curl -H "Accept-Encoding: gzip" -w size_download` 对比 Content-Length 判压缩、对照仓库 conf 判漂移——纯代码审查看不到运行态（sw.js 一年缓存、version 401 均为此法独得）；② 对象式 manualChunks 强拉动态库进静态图是 Vite 通用陷阱，函数式只命名不改加载关系，验证法=对照构建 diff modulepreload；③ "强制值已存在则不覆盖"是 RBAC 参数注入与手选覆盖共存时的通用不变式（前提：强制注入是该键唯一的先行来源）。
+3. **如何更高质量自动化**：SW 缓存键含用户身份（根治级）已留 BACKLOG follow-up；403/429 全局拦截、staleTime 双态时序等在 05dff4 打包待排期。审查代理假阳性问题暂靠流程纪律（每发现必独立复核），发作 ≥2 次再考虑机制化（如强制 verify 子代理二审）。
+
+### needs_automation: false
+（本次新增的闸性资产即 9 个防回归单测 + nginx conf 注释锚点；假阳性复核先记流程纪律，攒案例再机制化。）
