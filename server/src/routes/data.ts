@@ -26,6 +26,7 @@ import { readonlyMiddleware } from '../middleware/readonly.js';
 import { permissionMiddleware, requireRole, UserRole } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
+import { onDataVersionChange } from '../services/data-version.js';
 import { createPolicyFactView, dropAllDerivedTables } from '../services/duckdb-materialization.js';
 import {
   escapeSqlValue,
@@ -841,6 +842,14 @@ router.put(
 
 let latestEtlDate: string | null = null;
 const serverStartTime = new Date().toISOString();
+
+// 数据版本变化（ETL 重载/上传触发 setDataVersion）时置空缓存，下次请求重查
+// MAX(policy_date)。否则模块级缓存首次请求后永久冻结，etlVersionPoller 轮询
+// 到的 etlDate 恒为旧值，不重启进程的 ETL 永远无法被前端感知
+// （BACKLOG 2026-07-03-claude-5184fa）。
+onDataVersionChange(() => {
+  latestEtlDate = null;
+});
 
 /**
  * GET /api/data/version

@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（103 项 · 数据截至 2026-07-03 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（107 项 · 数据截至 2026-07-03 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -47,7 +47,7 @@
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
 - 2026-07-03-claude-37cb58 — 保费报表usePremiumReport.ts
 
-**P2（51 项）**
+**P2（55 项）**
 
 - B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -100,6 +100,10 @@
 - 2026-06-27-claude-794df9 — E4 砍死规则 + 真升级校验（治茧房5+6·只增不减）
 - 2026-06-27-claude-901f0d — 派生域 ALL IN-scope 升级（codex 闸-2 P2·第3省上线前必修）
 - 2026-07-03-claude-05dff4 — 前端审查中危债打包（2026-07-03四维审查）
+- 2026-07-03-claude-242c07 — 页面级路由白名单 API_ROUTE_TO_PAGE_MAP 不覆盖 repair/cu
+- 2026-07-03-claude-34ac54 — duckdb-type-converter 不识别 DECIMAL（{width,sca
+- 2026-07-03-claude-7982a9 — 契约对账闸 checkQueryCatalogConsistency 扫描目录硬编码 s
+- 2026-07-03-claude-a3ffc0 — 契约漂移两处
 
 **P3（31 项）**
 
@@ -243,4 +247,8 @@
 | 2026-07-03-claude-05dff4 | 2026-07-03 | 前端 | @claude | 前端审查中危债打包（2026-07-03四维审查）：①copilot/forecast手写fetch绕过apiClient(useForecastBaseline.ts:421等4处) ②业务阈值硬编码无SSOT(comprehensive-analysis/rules.ts:3,crossSellRateStatus.ts:20) ③403/429无全局拦截仅401有刷新(client-core.ts:309) ④staleTime双态在模块加载瞬间判定SW必未接管设计落空(App.tsx:17) ⑤9个hook手写状态机与ReactQuery两套并存 ⑥TruckAnalysisPanel/CustomerFlowPage/RepairPage错误态缺失 ⑦4文件超800行(GeoRiskPanel951等) ⑧moto-cost/repair/expense-development零E2E ⑨react-window1.8旧版React19无兼容声明 | P2 | PROPOSED | N/A | src/features/copilot,src/shared/api/client-core.ts,src/app/App.tsx |  |
 | 2026-07-03-claude-0f86cb | 2026-07-03 | 部署 | @claude | 部署白屏风险链：生产index.html无Cache-Control（启发式缓存）+deploy.yml rm -rf dist旧chunk物理消失+sw.js无skipWaiting；且生产sw.js被max-age=31536000 immutable一年强缓存（双重复Cache-Control头）。长开tab遇发布→旧index引用已删chunk→404白屏无法自愈 | P0 | PROPOSED | N/A | deploy/nginx-fullstack.conf,deploy/nginx.conf,.github/workflows/deploy.yml,public/sw.js | 白屏链三环节中两环已上生产：nginx no-cache（见 0e0e9f DONE 证据）+ sw.js skipWaiting（PR #864 已部署）。残留一环=deploy.yml rm -rf 旧 chunk 无保留期（发布瞬间窗口仍在，但 index.html no-cache 后旧 index 不再被缓存，风险已大幅收敛），是否加旧资产保留期为可选 follow-up |
 | 2026-07-03-claude-20e132 | 2026-07-03 | 前端 | @claude | 换号登录不清缓存致SW/ReactQuery跨用户串数据越权：sw.js buildCacheKey仅URL无用户身份，App.tsx只监听auth-logout清缓存，PermissionContext换号只派发auth-login；staleTime=Infinity加剧。共享终端/企微扫码换身份即触发，dataScope不同用户可见越权数据 | P0 | PROPOSED | N/A | public/sw.js,src/app/App.tsx,src/shared/contexts/PermissionContext.tsx |  |
+| 2026-07-03-claude-242c07 | 2026-07-03 | Security/Backend | @claude | 页面级路由白名单 API_ROUTE_TO_PAGE_MAP 不覆盖 repair/customer-flow/claims-detail/quote-conversion/expense-development/renewal-tracker 六域，受限角色可直调接口（行级RLS仍生效，页面级授权靠菜单隐蔽性兜底）——需业务决策各角色是否放行后再补映射 | P2 | PROPOSED | N/A | server/src/middleware/permission.ts:27 |  |
+| 2026-07-03-claude-34ac54 | 2026-07-03 | Enhancement/Backend | @claude | duckdb-type-converter 不识别 DECIMAL（{width,scale,value} 三键对象），当前无触发路径但零防御——未来 CAST AS DECIMAL 会让数字字段变对象且丢小数换算，应补分支 Number(value)/10**scale | P2 | PROPOSED | N/A | server/src/services/duckdb-type-converter.ts:19 |  |
 | 2026-07-03-claude-37cb58 | 2026-07-03 | 前端 | @claude | 保费报表usePremiumReport.ts:93,120完全绕过buildFilterParams，静默丢弃新能源/续保模式/险别组合/客户类别等十余个全局筛选字段，与其他页面口径不一致且无UI提示；同类隐患GrowthAnalysisPanel.tsx:134与useGrowthAnalysis.ts:367手动覆盖orgNames缺isOrgUser强制收敛 | P1 | PROPOSED | N/A | src/features/premium-report/hooks/usePremiumReport.ts,src/features/growth/components/GrowthAnalysisPanel.tsx | 复核纠偏：保费报表半条为假阳性——PremiumReportPanel.tsx:177 已用 buildFilterParams(filters) 全量产物经 additionalParams 传入 hook 并 spread 进请求参数（usePremiumReport.ts:94），全局筛选未丢失；审查代理引用了 spread 行却误判。本条仅剩 GrowthAnalysisPanel/useGrowthAnalysis orgNames 缺 isOrgUser 收敛部分待核实修复 |
+| 2026-07-03-claude-7982a9 | 2026-07-03 | Chore/Governance | @claude | 契约对账闸 checkQueryCatalogConsistency 扫描目录硬编码 server/src/routes/query，auth/data/ai/filters/workflows 等约一半路由零对账（已发现两处漂移落此盲区），建议扩展到全路由目录 | P2 | PROPOSED | N/A | scripts/check-governance.mjs:2735 |  |
+| 2026-07-03-claude-a3ffc0 | 2026-07-03 | Bugfix/Frontend | @claude | 契约漂移两处：apiClient.data.remove() 指向后端不存在的 DELETE /data/:filename（零调用方死代码地雷）；后端 api-routes.ts AUTH_ROUTES 常量组比前端镜像缺 TOKENS/TOKEN_BY_ID 两键且全仓零消费方 | P2 | PROPOSED | N/A | src/shared/api/data-api.ts:70,server/src/config/api-routes.ts:167 |  |

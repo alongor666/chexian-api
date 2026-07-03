@@ -55,7 +55,20 @@ interface AuditLogEntry {
  * 前置条件之一是「生产审计日志能看到 agent 调用记录」，若 explain 不在此列表，则该入口的
  * 大模型调用不会落审计日志，门禁条件与审计覆盖将自相矛盾。
  */
-export const AUDITED_PATHS = ['/api/query', '/api/data', '/api/agent/diagnosis', '/api/agent/forecast', '/api/agent/explain'] as const;
+export const AUDITED_PATHS = [
+  '/api/query',
+  '/api/data',
+  '/api/agent/diagnosis',
+  '/api/agent/forecast',
+  '/api/agent/explain',
+  // 以下四路由执行敏感操作（触发工作流 / 执行技能 / LLM 编排 / schema 元数据发现），
+  // 且均已消费 permissionFilter，但此前不在审计清单——越权或异常调用完全无迹可查
+  // （BACKLOG 2026-07-03-claude-fe282e）。auditMiddleware 全局挂载（app.ts），加前缀即生效。
+  '/api/copilot',
+  '/api/workflows',
+  '/api/skills',
+  '/api/discover',
+] as const;
 
 export function getAuditLogPath(): string {
   return AUDIT_LOG_PATH;

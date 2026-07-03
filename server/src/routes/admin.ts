@@ -29,10 +29,15 @@ router.post(
     }
 
     const results = await bootstrapper.reloadDomains(parsed.data.domains);
+    // 统一信封：载荷包进 data（此前 domains/timestamp 摊平在顶层，
+    // 标准 apiClient.request() 按 data.data 解析会取到 undefined）。
+    // 现有消费方 scripts/sync-and-reload.mjs 只判 res.ok + 截断打印 body，不受影响。
     res.json({
       success: true,
-      domains: results,
-      timestamp: new Date().toISOString(),
+      data: {
+        domains: results,
+        timestamp: new Date().toISOString(),
+      },
     });
   })
 );

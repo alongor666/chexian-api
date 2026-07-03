@@ -14,7 +14,15 @@ import type { QueryClient } from '@tanstack/react-query';
  * auth-login 只由三个显式登录动作派发（PermissionContext 的快速登录/密码登录/
  * 企微登录）；页面加载时的会话静默恢复（restoreSession）与 401 token 静默刷新
  * 均不派发该事件。
+ *
+ * 为什么也监听 auth-session-expired：
+ * 会话完全过期（access token 过期且 refresh 失败，client-core.doRefreshSession
+ * 派发）时用户即将被送回登录页，残留缓存与下一个登录者（可能是换号）之间没有
+ * 任何清理时机——auth-login 虽会兜底，但过期瞬间即清可消除"过期后仍能浏览
+ * 旧缓存数据"的窗口。BACKLOG 2026-07-03-claude-c5fe8f。
  */
+const AUTH_CACHE_CLEAR_EVENTS = ['auth-logout', 'auth-login', 'auth-session-expired'] as const;
+
 export function registerAuthCacheClearing(queryClient: QueryClient): () => void {
   const clearAllCacheLayers = () => {
     queryClient.clear();
@@ -22,10 +30,8 @@ export function registerAuthCacheClearing(queryClient: QueryClient): () => void 
       navigator.serviceWorker.controller?.postMessage({ type: 'FORCE_REFRESH' });
     }
   };
-  window.addEventListener('auth-logout', clearAllCacheLayers);
-  window.addEventListener('auth-login', clearAllCacheLayers);
+  AUTH_CACHE_CLEAR_EVENTS.forEach((ev) => window.addEventListener(ev, clearAllCacheLayers));
   return () => {
-    window.removeEventListener('auth-logout', clearAllCacheLayers);
-    window.removeEventListener('auth-login', clearAllCacheLayers);
+    AUTH_CACHE_CLEAR_EVENTS.forEach((ev) => window.removeEventListener(ev, clearAllCacheLayers));
   };
 }
