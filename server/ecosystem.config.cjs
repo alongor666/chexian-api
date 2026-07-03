@@ -80,7 +80,10 @@ module.exports = {
       ignore_watch: ['node_modules', 'logs', 'data'],
 
       // 优雅关闭
-      kill_timeout: 5000, // 5 秒后强制关闭
+      // 必须 > duckdb-infra.ts 的 DRAIN_TIMEOUT_MS(10s) + 缓冲，否则 gracefulShutdown 想排空
+      // 在跑的（含慢）查询时会在 drain 完成前被 PM2 SIGKILL 强杀，精心写的优雅关闭形同虚设。
+      // 无在途查询时 drain 立即返回，正常 reload 不受此上限影响、仍是秒级。
+      kill_timeout: 15000, // 15 秒后强制关闭（覆盖 DuckDB 连接池 10s drain 窗口 + 5s 缓冲）
       wait_ready: true, // 等待 ready 信号（app.ts 数据加载完发 process.send('ready')）
       listen_timeout: 120000, // 120 秒启动超时（Parquet 加载+索引创建约 30-60s）
     },
