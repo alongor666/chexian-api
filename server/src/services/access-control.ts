@@ -350,6 +350,21 @@ export async function getUserByUsername(username: string): Promise<AccessUser | 
   return mapUserRow(rows[0]);
 }
 
+/**
+ * 按主键 id（UUID）取用户。用户管理面按省隔离需先据 id 载入目标账号、核对其 branchCode
+ * 是否在调用者可管理范围内（PUT/DELETE /users/:id 的 :id 即此 UUID，非 username）。
+ */
+export async function getUserById(id: string): Promise<AccessUser | null> {
+  const rows = await duckdbService.query(`
+    SELECT *
+    FROM UserAccount
+    WHERE id = '${escapeSqlValue(id)}'
+    LIMIT 1
+  `);
+  if (!rows || rows.length === 0) return null;
+  return mapUserRow(rows[0]);
+}
+
 /** 内部查询，含 passwordHash，仅供持久化使用 */
 async function listUsersInternal(): Promise<AccessUser[]> {
   const rows = await duckdbService.query('SELECT * FROM UserAccount ORDER BY username ASC');

@@ -98,7 +98,7 @@ export enum UserRole {
  * 多分公司 RLS 启用判定（0F feature flag）
  * 仅当 BRANCH_RLS_ENABLED === 'true' 时返回 true（严格字符串匹配）
  */
-function isBranchRlsEnabled(): boolean {
+export function isBranchRlsEnabled(): boolean {
   return dbEnv.BRANCH_RLS_ENABLED === 'true';
 }
 
@@ -268,8 +268,47 @@ function escapeSqlString(str: string): string {
  * 分公司编码形态校验：必须大写 CHAR(2)（'SC' / 'SX' …）。
  * 与下游 resolveBranchRlsCode 的 gate-a 正则同源约束，保证拼入 SQL 的 branch_code 字面量合法。
  */
-function isValidBranchCode(code: string): boolean {
+export function isValidBranchCode(code: string): boolean {
   return /^[A-Z]{2}$/.test(code);
+}
+
+/**
+ * 计算调用者在「用户管理面」可管理的分公司范围（与数据面 RLS 同源收敛）。
+ *
+ * 数据面已按 branch_code 做行级隔离，但 /api/auth/users|roles 管理面历史上只判角色
+ * （requireRole(BRANCH_ADMIN)），导致单省 branch_admin（如山西 sxAdmin）可跨省列出/改密/
+ * 禁用/提权四川账号——与其数据权限矛盾的管理面越权。本函数把管理面收敛到与数据面一致的省范围。
+ *
+ * 返回：
+ * - `null` → 可管理**全部**（RLS 关，单租户，行为不变）
+ * - `string[]` 非空 → 只能管理这些省的账号（全国超管取 visibleBranches；单省 admin 取本人 branchCode）
+ * - `[]` 空数组 → RLS 开但调用者无合法 branchCode（异常态）→ fail-closed，谁都管不了
+ */
+export function getManageableBranchScope(user: {
+  branchCode?: string;
+  visibleBranches?: string[];
+}): string[] | null {
+  if (!isBranchRlsEnabled()) return null;
+  const vb = Array.isArray(user.visibleBranches)
+    ? user.visibleBranches.filter(isValidBranchCode)
+    : [];
+  if (vb.length > 0) return vb;
+  if (user.branchCode && isValidBranchCode(user.branchCode)) return [user.branchCode];
+  return [];
+}
+
+/**
+ * 判断调用者（由 getManageableBranchScope 得到的 scope）能否管理归属 targetBranch 的账号。
+ *
+ * - `scope === null`（RLS 关）→ 放行全部。
+ * - 目标账号无 branchCode（历史遗留账号）→ **仅** scope===null 放行，否则拒绝（fail-safe，
+ *   避免单省 admin 借「无省账号」这一模糊态跨省操作）。
+ * - 否则要求 targetBranch ∈ scope。
+ */
+export function canManageBranch(scope: string[] | null, targetBranch: string | undefined): boolean {
+  if (scope === null) return true;
+  if (!targetBranch) return false;
+  return scope.includes(targetBranch);
 }
 
 /**
