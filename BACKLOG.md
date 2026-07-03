@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（104 项 · 数据截至 2026-07-03 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（103 项 · 数据截至 2026-07-03 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -25,7 +25,7 @@
 - 2026-07-03-claude-0f86cb — 部署白屏风险链
 - 2026-07-03-claude-20e132 — 换号登录不清缓存致SW/ReactQuery跨用户串数据越权
 
-**P1（20 项）**
+**P1（19 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
@@ -45,7 +45,6 @@
 - 2026-06-28-claude-8dbd97 — 三域审计(诊断脚本/slash命令/软链技能)收敛出~18个真危险缺口(BRANCH_C
 - 2026-06-29-claude-a5aa03 — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
-- 2026-07-03-claude-0e0e9f — 生产Nginx配置与仓库漂移
 - 2026-07-03-claude-37cb58 — 保费报表usePremiumReport.ts
 
 **P2（51 项）**
@@ -242,7 +241,6 @@
 | 2026-06-29-claude-a5aa03 | 2026-06-29 | 架构治理/多省 | @claude | 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物理混放current/+靠记得加WHERE branch_code的fail-open默认混省）：①统一取数入口SSOT(三运行时JS/诊断Python/企微强制province参数,无参即报错,复用resolveBranchCode/assertBranchCodeSet+诊断branch_paths) ②CI防回归闸(裸读current不带省份过滤即CI红,扩checkPolicyGlobPrefixIsolation到企微instance+技能仓镜像) ③物理子目录current/<省>/(路径A,生死点discoverParquetFiles下钻省目录+ETL落盘+sync-vps过滤,[!S]*glob退役) ④出口零信任断言(每次取数结果/企微写入前断言DISTINCT branch_code≤1,跨省即中止;超管全国视图allow_national显式声明放行,复用permission.ts超管标识)。拆5 PR每个独立evidence-loop+Claude子代理双闸(architect+code-reviewer禁codex):P0邮政表止血(已派task_625ba467)→P1出口断言(最先做立即兑现任何情况兜底)→P2 SSOT收口→P3闸固化→P4子目录化(因P2已收口故blast radius缩到SSOT一处) | P1 | PROPOSED | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | 数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py | P1 出口零信任断言完成 PR #858：跨运行时单省断言工具(branch_assert.py/branch-assert.mjs)+接入企微sync_filtered_policies+ETL premium落盘。fail-closed(含NULL/未知前缀/未知省份值/无判定列均抛错,空df放行);mapping&prefixLength唯一事实源fields.json;national仅显式allow_national(PROVINCE=ALL)。architect审设计+code-reviewer审diff双闸(禁codex,2HIGH+2MEDIUM全修)。验证:pytest28+vitest4477+端到端真实parquet5场景+governance51/51+typecheck。follow-up:diagnose(已[!S]*glob覆盖)/API(已RLS)/quotes(B255)/其他域ETL(assertDeclaredBranch)按需扩展。 <br>续保引擎(sync_renewal_v2.py)跨省裸glob暴露修复(P0邮政表同类follow-up,独立PR):build_source_rows 4处read_parquet(current/)裸读混省(duckdb实证H1捞SX 3.99万行/4067万元、H2 4.49万行/5468万元混入四川企微表),自贡靠org='自贡'偶然隔离(脆弱)。修复:(1)4处统一注入参数化AND branch_code=?(非extra_where字符串,保引擎零拼接面) (2)load_instance fail-closed要求YAML声明branch_code(注册集取自branch_assert.get_branch_mapping SSOT,非硬编码{SC,SX}) (3)build_source_rows出口接入防线④assert_single_branch(防线④从sync_filtered单引擎扩到两引擎) (4)P3闸固化:新增governance#52 checkWecomEngineBranchIsolation纯静态扫两引擎+instances/*.yaml(检测A按函数粒度+剥注释防漏报/检测B按daily.mjs路由分流:v2必声明branch_code、sync_filtered靠出口断言兜底不强制extra_where避免与邮政PR耦合)。非policy源(quotes/salesman/customer_flow)duckdb实证纯SC,base单省后LEFT JOIN天然收敛本阶段不隔离。architect设计闸-1(APPROVE WITH CHANGES,7裁决)+code-reviewer审diff双闸(禁codex)。验证:6隔离测试(含负向SX注入抛错)+闸三向(检测A漏报修复/检测B/正向)+真实parquet H1=66611纯SC对账+governance52/52+typecheck。follow-up:多省扩展时quotes/salesman/customer_flow出口断言盲区(只看policy_no派生,兜不住quote字段来自SX)+性能实测后是否glob收窄。 |
 | 2026-06-29-claude-ba7e61 | 2026-06-29 | Data/ETL | @claude | ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另立项）：B1命名路由(daily.mjs premium/claims glob+matchFull 认<省>_前缀,sichuan→SC/shanxi→SX) / B2分省编排(release:daily/daily.mjs 遍历fields.json branch_code.mapping注册省份,SC主表+SX validation/SX各跑) / B3防重复(归档区间被新全量覆盖的旧全量+单文件不混省闸) / B4 freshness跨省巡检(覆盖validation/SX) / B5首发实战(6全量跑通+PM2 reload,搞准赔付) | P1 | PROPOSED | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | 数据管理/lib/claims-freshness.mjs | 路径B代码阶段(B1-B4)全合并:命名路由#847/分省编排#852/防重复#853/freshness#854,CI全绿+Claude子代理双闸(architect+code-reviewer)4 NO-GO全修+全GO。B5首发实战待低峰授权。 |
 | 2026-07-03-claude-05dff4 | 2026-07-03 | 前端 | @claude | 前端审查中危债打包（2026-07-03四维审查）：①copilot/forecast手写fetch绕过apiClient(useForecastBaseline.ts:421等4处) ②业务阈值硬编码无SSOT(comprehensive-analysis/rules.ts:3,crossSellRateStatus.ts:20) ③403/429无全局拦截仅401有刷新(client-core.ts:309) ④staleTime双态在模块加载瞬间判定SW必未接管设计落空(App.tsx:17) ⑤9个hook手写状态机与ReactQuery两套并存 ⑥TruckAnalysisPanel/CustomerFlowPage/RepairPage错误态缺失 ⑦4文件超800行(GeoRiskPanel951等) ⑧moto-cost/repair/expense-development零E2E ⑨react-window1.8旧版React19无兼容声明 | P2 | PROPOSED | N/A | src/features/copilot,src/shared/api/client-core.ts,src/app/App.tsx |  |
-| 2026-07-03-claude-0e0e9f | 2026-07-03 | 部署 | @claude | 生产Nginx配置与仓库漂移：仓库nginx-fullstack.conf:41有gzip on但生产实测594KB/317KB未压缩直传（Accept-Encoding:gzip下size_download=Content-Length）；deploy/nginx.conf无gzip配置。且构建期compression插件产出.gz/.br两份配置均未开gzip_static，预压缩产物死重。需运维核对线上实际conf并对齐仓库SSOT | P1 | PROPOSED | N/A | deploy/nginx-fullstack.conf,deploy/nginx.conf,vite.config.ts |  |
-| 2026-07-03-claude-0f86cb | 2026-07-03 | 部署 | @claude | 部署白屏风险链：生产index.html无Cache-Control（启发式缓存）+deploy.yml rm -rf dist旧chunk物理消失+sw.js无skipWaiting；且生产sw.js被max-age=31536000 immutable一年强缓存（双重复Cache-Control头）。长开tab遇发布→旧index引用已删chunk→404白屏无法自愈 | P0 | PROPOSED | N/A | deploy/nginx-fullstack.conf,deploy/nginx.conf,.github/workflows/deploy.yml,public/sw.js |  |
+| 2026-07-03-claude-0f86cb | 2026-07-03 | 部署 | @claude | 部署白屏风险链：生产index.html无Cache-Control（启发式缓存）+deploy.yml rm -rf dist旧chunk物理消失+sw.js无skipWaiting；且生产sw.js被max-age=31536000 immutable一年强缓存（双重复Cache-Control头）。长开tab遇发布→旧index引用已删chunk→404白屏无法自愈 | P0 | PROPOSED | N/A | deploy/nginx-fullstack.conf,deploy/nginx.conf,.github/workflows/deploy.yml,public/sw.js | 白屏链三环节中两环已上生产：nginx no-cache（见 0e0e9f DONE 证据）+ sw.js skipWaiting（PR #864 已部署）。残留一环=deploy.yml rm -rf 旧 chunk 无保留期（发布瞬间窗口仍在，但 index.html no-cache 后旧 index 不再被缓存，风险已大幅收敛），是否加旧资产保留期为可选 follow-up |
 | 2026-07-03-claude-20e132 | 2026-07-03 | 前端 | @claude | 换号登录不清缓存致SW/ReactQuery跨用户串数据越权：sw.js buildCacheKey仅URL无用户身份，App.tsx只监听auth-logout清缓存，PermissionContext换号只派发auth-login；staleTime=Infinity加剧。共享终端/企微扫码换身份即触发，dataScope不同用户可见越权数据 | P0 | PROPOSED | N/A | public/sw.js,src/app/App.tsx,src/shared/contexts/PermissionContext.tsx |  |
 | 2026-07-03-claude-37cb58 | 2026-07-03 | 前端 | @claude | 保费报表usePremiumReport.ts:93,120完全绕过buildFilterParams，静默丢弃新能源/续保模式/险别组合/客户类别等十余个全局筛选字段，与其他页面口径不一致且无UI提示；同类隐患GrowthAnalysisPanel.tsx:134与useGrowthAnalysis.ts:367手动覆盖orgNames缺isOrgUser强制收敛 | P1 | PROPOSED | N/A | src/features/premium-report/hooks/usePremiumReport.ts,src/features/growth/components/GrowthAnalysisPanel.tsx | 复核纠偏：保费报表半条为假阳性——PremiumReportPanel.tsx:177 已用 buildFilterParams(filters) 全量产物经 additionalParams 传入 hook 并 spread 进请求参数（usePremiumReport.ts:94），全局筛选未丢失；审查代理引用了 spread 行却误判。本条仅剩 GrowthAnalysisPanel/useGrowthAnalysis orgNames 缺 isOrgUser 收敛部分待核实修复 |
