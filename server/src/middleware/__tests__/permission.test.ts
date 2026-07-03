@@ -15,7 +15,13 @@ vi.mock('../../config/env.js', () => ({
   dbEnv: envMock,
 }));
 
-import { permissionMiddleware, requirePermissionFilter, UserRole } from '../permission.js';
+import {
+  permissionMiddleware,
+  requirePermissionFilter,
+  UserRole,
+  getManageableBranchScope,
+  canManageBranch,
+} from '../permission.js';
 import { AppError } from '../error.js';
 
 function makeReq(user?: any) {
@@ -498,5 +504,55 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     expect(API_ROUTE_TO_PAGE_MAP['/premium-report']).toBe('/reports');
     expect(API_ROUTE_TO_PAGE_MAP['/plan-achievement']).toBe('/reports');
     expect(API_ROUTE_TO_PAGE_MAP['/salesman-ranking']).toBe('/reports');
+  });
+});
+
+describe('用户管理面按省隔离：getManageableBranchScope', () => {
+  it('RLS 关 → null（可管理全部，行为不变）', () => {
+    envMock.BRANCH_RLS_ENABLED = 'false';
+    expect(getManageableBranchScope({ branchCode: 'SX' })).toBeNull();
+    expect(getManageableBranchScope({ visibleBranches: ['SC', 'SX'] })).toBeNull();
+  });
+
+  it('RLS 开 + 单省 branch_admin（无 visibleBranches）→ 仅本省', () => {
+    envMock.BRANCH_RLS_ENABLED = 'true';
+    expect(getManageableBranchScope({ branchCode: 'SX' })).toEqual(['SX']);
+    expect(getManageableBranchScope({ branchCode: 'SC' })).toEqual(['SC']);
+  });
+
+  it('RLS 开 + 全国超管（visibleBranches 非空）→ 其可见省集合（优先于 branchCode）', () => {
+    envMock.BRANCH_RLS_ENABLED = 'true';
+    expect(getManageableBranchScope({ branchCode: 'SC', visibleBranches: ['SC', 'SX'] })).toEqual([
+      'SC',
+      'SX',
+    ]);
+  });
+
+  it('RLS 开 + 无合法 branchCode → 空数组（fail-closed，谁都管不了）', () => {
+    envMock.BRANCH_RLS_ENABLED = 'true';
+    expect(getManageableBranchScope({})).toEqual([]);
+    expect(getManageableBranchScope({ branchCode: 'sc' })).toEqual([]); // 小写非法形态
+  });
+});
+
+describe('用户管理面按省隔离：canManageBranch', () => {
+  it('scope=null（RLS 关）→ 放行任何目标（含无省账号）', () => {
+    expect(canManageBranch(null, 'SC')).toBe(true);
+    expect(canManageBranch(null, undefined)).toBe(true);
+  });
+
+  it('单省 scope → 仅放行同省，拒绝跨省（山西 admin 不能碰四川账号）', () => {
+    expect(canManageBranch(['SX'], 'SX')).toBe(true);
+    expect(canManageBranch(['SX'], 'SC')).toBe(false);
+  });
+
+  it('目标账号无 branchCode + 非 null scope → 拒绝（fail-safe，杜绝模糊态跨省）', () => {
+    expect(canManageBranch(['SX'], undefined)).toBe(false);
+    expect(canManageBranch([], 'SC')).toBe(false);
+  });
+
+  it('全国超管 scope → 放行集合内所有省', () => {
+    expect(canManageBranch(['SC', 'SX'], 'SC')).toBe(true);
+    expect(canManageBranch(['SC', 'SX'], 'SX')).toBe(true);
   });
 });

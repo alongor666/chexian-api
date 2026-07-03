@@ -12,7 +12,13 @@ import { authService } from '../services/auth.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { readonlyMiddleware } from '../middleware/readonly.js';
-import { requireRole, UserRole } from '../middleware/permission.js';
+import {
+  requireRole,
+  UserRole,
+  getManageableBranchScope,
+  canManageBranch,
+  isValidBranchCode,
+} from '../middleware/permission.js';
 import { checkAccountLock, recordLoginFailure, resetLoginAttempts } from '../middleware/rateLimiter.js';
 import { auditAuthEvent } from '../middleware/audit.js';
 import { authConfig } from '../config/auth.js';
@@ -26,6 +32,7 @@ import {
   updateRole,
   deleteRole,
   getUserByUsername,
+  getUserById,
   ensurePresetUser,
 } from '../services/access-control.js';
 import {
@@ -103,12 +110,20 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+// branchCode 校验：大写 CHAR(2)（SC/SX…）。可选——多分公司 RLS 下由路由处理器据调用者
+// 可管理范围补默认/强校验（见 POST/PUT /users）；RLS 关时保持历史行为（可缺省）。
+const branchCodeSchema = z
+  .string()
+  .regex(/^[A-Z]{2}$/, 'branchCode 必须为大写 CHAR(2)（如 SC/SX）')
+  .optional();
+
 const userCreateSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   displayName: z.string().min(1, 'Display name is required'),
   password: z.string().min(1, 'Password is required'),
   role: z.string().min(1, 'Role is required'),
   organization: z.string().optional(),
+  branchCode: branchCodeSchema,
   allowedRoutes: z.array(z.string().min(1)).optional().default([]),
   defaultRoute: z.string().optional(),
   allowedIps: z.array(z.string().min(1)).optional().default([]),
@@ -121,6 +136,7 @@ const userUpdateSchema = z.object({
   password: z.string().optional(),
   role: z.string().min(1, 'Role is required'),
   organization: z.string().optional(),
+  branchCode: branchCodeSchema,
   allowedRoutes: z.array(z.string().min(1)).optional().default([]),
   defaultRoute: z.string().optional(),
   allowedIps: z.array(z.string().min(1)).optional().default([]),
@@ -247,11 +263,15 @@ router.get(
   '/users',
   authMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
-  asyncHandler(async (_req: Request, res: Response) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const users = await listUsers();
+    // 管理面按省收敛：单省 branch_admin 只列本省账号，全国超管列全部（RLS 关时 scope=null 列全部）。
+    const scope = getManageableBranchScope(req.user ?? {});
+    const visible =
+      scope === null ? users : users.filter((u) => canManageBranch(scope, u.branchCode));
     res.json({
       success: true,
-      data: users.map(({ passwordHash, ...rest }) => rest),
+      data: visible.map(({ passwordHash, ...rest }) => rest),
     });
   })
 );
@@ -267,6 +287,22 @@ router.post(
       throw new AppError(400, parseResult.error.issues[0].message);
     }
     const data = parseResult.data;
+    // 管理面按省收敛：新账号 branchCode 必须落在调用者可管理范围内。
+    // 单省 admin 未显式指定则默认其本省；多省超管必须显式指定（否则歧义）。
+    // RLS 关（scope=null）保持历史行为：branchCode 原样透传（可缺省）。
+    const scope = getManageableBranchScope(req.user ?? {});
+    let branchCode = data.branchCode;
+    if (scope !== null) {
+      if (branchCode) {
+        if (!canManageBranch(scope, branchCode)) {
+          throw new AppError(403, `无权在分公司 ${branchCode} 下创建账号`);
+        }
+      } else if (scope.length === 1) {
+        branchCode = scope[0];
+      } else {
+        throw new AppError(400, '请显式指定新账号的 branchCode（多分公司超管创建账号需指定 SC/SX）');
+      }
+    }
     const passwordHash = await authService.hashPassword(data.password);
     const created = await createUser({
       username: data.username,
@@ -274,6 +310,7 @@ router.post(
       passwordHash,
       role: data.role,
       organization: data.organization,
+      branchCode,
       allowedRoutes: data.allowedRoutes,
       defaultRoute: data.defaultRoute,
       allowedIps: data.allowedIps,
@@ -296,12 +333,26 @@ router.put(
       throw new AppError(400, parseResult.error.issues[0].message);
     }
     const data = parseResult.data;
+    // 管理面按省收敛：先据 id 载入目标账号，核对其 branchCode 在调用者可管理范围内；
+    // 若本次要迁移 branchCode，新省也必须在范围内（防把账号「搬」出本省再操纵）。
+    const scope = getManageableBranchScope(req.user ?? {});
+    if (scope !== null) {
+      const target = await getUserById(req.params.id);
+      if (!target) throw new AppError(404, '用户不存在');
+      if (!canManageBranch(scope, target.branchCode)) {
+        throw new AppError(403, '无权管理其他分公司的账号');
+      }
+      if (data.branchCode !== undefined && !canManageBranch(scope, data.branchCode)) {
+        throw new AppError(403, `无权将账号迁移到分公司 ${data.branchCode}`);
+      }
+    }
     const passwordHash = data.password ? await authService.hashPassword(data.password) : undefined;
     const updated = await updateUser(req.params.id, {
       displayName: data.displayName,
       passwordHash,
       role: data.role,
       organization: data.organization,
+      branchCode: data.branchCode,
       allowedRoutes: data.allowedRoutes,
       defaultRoute: data.defaultRoute,
       allowedIps: data.allowedIps,
@@ -319,6 +370,15 @@ router.delete(
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
+    // 管理面按省收敛：只能删本可管理范围内的账号（RLS 关时 scope=null 放行）。
+    const scope = getManageableBranchScope(req.user ?? {});
+    if (scope !== null) {
+      const target = await getUserById(req.params.id);
+      if (!target) throw new AppError(404, '用户不存在');
+      if (!canManageBranch(scope, target.branchCode)) {
+        throw new AppError(403, '无权删除其他分公司的账号');
+      }
+    }
     await deleteUser(req.params.id);
     res.json({ success: true, data: { deleted: true } });
   })
