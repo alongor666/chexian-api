@@ -217,6 +217,15 @@ policy: append-only
   - **append-only 处置（`[policy-override]`）**：本次**修改既有 §0/§2 主体**（非纯追加），按 AGENTS.md §8.2 frozen 处理。授权来源 = 用户 2026-06-29 AskUserQuestion 明确选择「授权·全部一起改」（口头同意的书面形式之一）；`[policy-override]` 标记须落于本 PR 每条 commit message + PR 标题。旧措辞经 git 历史 + 本 meta 留痕，无信息丢失。
   - **三问复盘**：① 重来更好？codex 双闸的「强制 / 默认 / 关闭」三态本应一开始就设计成可切换项（而非写死「强制」再反转），协议类文件的开关位宜显式留切换钩子。② 复用价值？「LLM 对抗闸默认开/关是产品决策、与确定性 correctness oracle 正交」对其它 review 编排通用。③ 自动化？本次为协议措辞反转、无运行时强制点；残留人工点 = 会话默认不跑 codex、仅在用户显式要求时跑——`sessionPrompt` / wrapper 已固化措辞，但仍依赖会话遵从（`feedback_prompt_needs_code_backup`：提示遵从非 100%）。`needs_automation: false`（关闭本就是「少做一步」，无需新机制保障；将来若要把「显式触发词→自动跑 codex」做成确定性钩子可另立项）。
 
+- **meta（2026-07-03 · 本 PR · 用户指令「专项审计并优化 loop v2」）· 三路并行审计 + 7 项确认修复 + E4/E6 落地收官（进化规划 E1-E6 全闭环）**：
+  - **审计方式**：三路并行只读子代理（协议一致性 / dispatch 代码 / 报表三脚本代码）+ 主会话逐条独立复核（memory `audit-agent-findings-are-leads-not-conclusions`：代理发现是线索不是结论，每条动刀前均本地复现）。
+  - **协议一致性结论：0 确认漂移**——2026-06-29「codex 默认关闭」在本文件 §0/§2/§4、`chexian-evidence-loop.md`、`evidence-loop.md`、`dispatch.mjs sessionPrompt`、`skills-map.md` 五处全部落实一致。是本协议历史上首次全量一致性审计零漂移（对比 2026-06-25/06-27 两次「声称改了主体没改」事故，说明「meta 必须同步落实主体」教训已生效）。
+  - **7 项确认修复（全部本地复现后修，测试 141→151）**：① dispatch `taskDomains` 分隔符漏全角逗号「，」/顿号——多路径整串误归单一域 → 真实文件重叠的两任务被误判域互斥（「宁粗勿细」的反向最坏情形），复现：`src/a.ts，server/src/sql/x.ts` 整串归 frontend、be-sql 被吞；② dispatch `gatherClaimContext` 的 `git show` 循环缺 timeout（try/catch 接不住挂起，单 ref 阻塞拖死 dispatch）→ 统一默认 15s；③ `--merge-gate` 高频轻量检查此前被迫先跑完整认领扫描（fetch + 最多 200 次 git show）→ main() 提前短路（mergeGate 只读 tasks+config.inflight）；④ 状态板认领「Xh 前」实为 lastAt（最近活动）却文案暗示认领时刻——持续心跳 20h 的长挂任务显示 0.5h 掩盖介入信号 → 文案改「认领于 <at> · 最近活动 Xh 前」；⑤ 状态板补「在飞明细」段（原只有计数，陈旧 inflight 残留无从排查）；⑥ quality-report `pending-pr` 新 verdict 变体未归一 → 落 other 拉低一次过率（31.3%→修后 33.8%）且逃过 dispatch accounted 守卫会被误记孤儿 → 入 `SUCCESS_SYNONYMS`；⑦ **E2 回滚反查自我误报（当前数据已命中）**：`feat(loop): …git 回滚反查… (#818)` 功能名含「回滚」+ squash 末尾自身号 → #818 被标「已回滚」，事后回滚率 1.3% 全是自伤 → 无引号兜底前剥离 subject 末尾 ` (#N)`（squash-merge 约定该号恒为本 PR 自身，非被回滚对象；GitHub revert 走引号主路径不受影响），修后 0%。另修 automation-due 相邻项 expires 借用串扰（修复即暴露真实 1 例：E1 entry 内联 needs_automation 一直借下方标题块的 expires，按 #809 存量补 expires 先例处置）与 stale-scan 两项（`churnFor` execSync 字符串拼接 shell 注入 → execFileSync 数组参数；完成语「已完成」子串双计 +「未完成」否定语误判 → 最长优先剔除 + 否定剥离）。
+  - **E4 落地（`bun run loop:rule-hit-rate`·治茧房5+6「只增不减」）**：① 新 `scripts/loop/rule-hit-rate.mjs`——14 条可审计机制各配 probe（ledger/pr-evolution/config/BACKLOG_LOG/外部真相线），三分类 alive/死规则候选/不可测（诚实边界：prompt 纪律类无持久证据不能据此判死；probe 崩溃计不可测非 0，防数据缺失误判死规则）。首跑实证：10 alive（codex 双闸 ×57/×60 居首——`{"skipped":…}`/`{"unavailable":…}` 未执行占位不计闸命中）· 2 死候选（`e2-rework-sink` owner 返工 sink 零行——机制新建、owner 尚无「重做」反馈，属「太新」非「死」，观察；`domain-override` config 细调零使用——粗粒度桶至今够用，保留作逃生钩子，观察；均不撤）· 2 不可测。② automation-due 增 `mechanism:` 字段真升级校验（`governance:<检查名>` 或仓库相对路径，验证机制真实存在；声明了但不存在 = 假处置 → exit 2 强制处置）——把 #809 登记的「疑似已机制化」启发式升级为结构化验证。
+  - **E6 落地（governance 第 53 项「Loop自进化闭环完整性」·元闸）**：① 账本 verdict 归一后必落规范集（源头拦 pending-pr 类漂移复发，实测存量 80 行零未知可直接 error 级）；② 失败记账维度导出守卫（删 `failureLedgerRows`/`normalizeVerdict` 即 fail——E1 回退 = 幸存者偏差复活）；③ automation 假处置拦截（与 automation-due 同源纯函数）。负向 oracle 实证：临时注入非法 verdict 行 → governance 即红（53 项中 1 违规）→ 恢复后全绿。**至此进化规划 E1-E6 六项全部闭环**（E3 按规划维持「暂缓·须 owner 拍板」不动）。
+  - **遗留登记（到期处置预判，不改历史 meta）**：2026-06-25 登记的「扫 loop PR 出现 code-reviewer/evidence-verifier 作闸源即告警」闸（expires 2026-09-25）——其前提已被 2026-06-29「默认 code review = `/code-reviewer`」反转，若落地会误伤默认流程；到期处置时应**显式撤项**而非落地。
+  - **三问复盘**：① 重来更好？E2 回滚反查上线时就该想到「描述回滚功能的提交自身含『回滚』」这一自指案例——自产工具首个受害者常是自己（茧房3 的微缩版）；写关键词启发式时应先拿「实现该启发式的这条 commit」自测。② 复用价值？「squash 语境末尾 (#N) 恒为自身号」对一切从 commit subject 反查 PR 号的工具通用；「审计代理三路并行 + 主会话独立复现」是大型机制审计的高效编排（本次三代理并行 ~10 分钟出 13 条线索，7 条确认 6 条降级/存疑）。③ 自动化？E6 已把核心防回退入 governance 自动跑；`loop:rule-hit-rate` 作为 meta-review 输入依赖会话遵从（与 `loop:quality`/`loop:automation-due` 并列），若后续实证遗忘再立催办项。`needs_automation: false`（本条主体即机制化落地：governance 闸自动执行、rule-hit-rate/mechanism 校验有命令与单测；无新的纯纪律残留点）。
+
 ---
 
 ## 5. 终局闸（GATED cutover）
@@ -234,6 +243,7 @@ policy: append-only
 | `bun run loop:automation-due` | 到期/临期/缺 expires 的 needs_automation 清单 |
 | `bun run loop:stale-scan [--churn]` | 列疑似陈旧任务（note 完成信号 + git churn 旁路改动） |
 | `bun run loop:dispatch --merge-gate` | 合并门串行化闸：当前 slot holder + 排队（strict=false 下同一时刻只放一个 PR 过门，每个 PR 对累积后的 main 验证过） |
+| `bun run loop:rule-hit-rate [--json] [--no-git]` | E4 死规则审计：14 条机制的实际命中次数 → alive / 死规则候选（人工复核后 §4 撤项，禁自动删）/ 不可测 |
 
 ## 7. 关联
 

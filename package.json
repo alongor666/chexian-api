@@ -43,6 +43,7 @@
     "loop:quality": "node scripts/loop/quality-report.mjs",
     "loop:automation-due": "node scripts/loop/automation-due.mjs",
     "loop:stale-scan": "node scripts/loop/stale-scan.mjs",
+    "loop:rule-hit-rate": "node scripts/loop/rule-hit-rate.mjs",
     "verify:quick": "node scripts/test-preflight.mjs && bun run governance && bun run typecheck",
     "verify:full": "bun run verify:quick && bun run test --run",
     "hooks:install": "bash scripts/install-git-hooks.sh",

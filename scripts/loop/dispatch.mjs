@@ -155,11 +155,15 @@ export function bucketOf(p) {
   return null;
 }
 
-/** 任务触碰的域桶集合（config.tasks.<uid>.domain 可覆盖）。分隔符含中文/英文分号（旧 backlog 用「；」「;」）。 */
+/**
+ * 任务触碰的域桶集合（config.tasks.<uid>.domain 可覆盖）。分隔符含中英文逗号/分号/顿号——
+ * code 常由中文语境手写，漏全角「，」会把多路径整串误判成单一域（如「src/a.ts，server/src/sql/x.ts」
+ * 整串归 frontend、be-sql 被吞），真实文件重叠的两任务被误判域互斥 → 并行撞车（「宁粗勿细」的反向最坏情形）。
+ */
 export function taskDomains(task, override = {}) {
   const o = override[task.uid];
   if (o && Array.isArray(o.domain) && o.domain.length) return new Set(o.domain);
-  const codes = String(task.code || '').split(/[,\s；;]+/).filter(Boolean);
+  const codes = String(task.code || '').split(/[,，\s;；、]+/).filter(Boolean);
   const set = new Set();
   for (const c of codes) { const b = bucketOf(c); if (b) set.add(b); }
   return set;
@@ -451,12 +455,20 @@ export function renderBoard(result, tasks) {
   L.push('');
   if (claimed.length) {
     L.push(`## 🔒 跨会话认领（别的会话在做·已锁出前沿，防重复劳动）`);
-    for (const c of claimed) L.push(`- \`${c.task.uid}\` 认领人 ${c.actor} · ${ageH(c.ageMs)} 前 — ${String(c.task.desc).slice(0, 60)}`);
+    // ageMs 基于 lastAt（最后活动，TTL 判定口径）而非认领时刻——文案如实标「最近活动」，
+    // 否则持续心跳 20h 的长挂任务会显示「0.5h 前认领」，掩盖需人工介入的信号。
+    for (const c of claimed) L.push(`- \`${c.task.uid}\` 认领人 ${c.actor}（认领于 ${c.at || '?'}）· 最近活动 ${ageH(c.ageMs)} 前 — ${String(c.task.desc).slice(0, 60)}`);
     L.push('');
   }
   if (released.length) {
     L.push(`## ♻️ 认领超时释放（≥ TTL 无推进，已释放回前沿——请确认原会话是否仍在做，避免再次撞车）`);
-    for (const c of released) L.push(`- \`${c.task.uid}\` 原认领人 ${c.actor} · 认领于 ${ageH(c.ageMs)} 前 — ${String(c.task.desc).slice(0, 60)}`);
+    for (const c of released) L.push(`- \`${c.task.uid}\` 原认领人 ${c.actor}（认领于 ${c.at || '?'}）· 最近活动 ${ageH(c.ageMs)} 前 — ${String(c.task.desc).slice(0, 60)}`);
+    L.push('');
+  }
+  if (result.inflight.length) {
+    L.push(`## ✈️ 在飞（config.inflight 本地标记·已排除出前沿——若任务早已落地请从 dispatch-config.json 移除）`);
+    const byUid = new Map(tasks.map((t) => [t.uid, t]));
+    for (const uid of result.inflight) L.push(`- \`${uid}\` — ${String(byUid.get(uid)?.desc || '(不在 backlog)').slice(0, 60)}`);
     L.push('');
   }
   L.push(`## 🟡 推迟（域冲突/缺域，待下一波或人工指派）`);
@@ -510,7 +522,9 @@ function gatherClaimContext(localLines, { fetch = true } = {}) {
       events.push(e);
     }
   };
-  const git = (cmd, opts = {}) => execSync(`git -C "${ROOT}" ${cmd}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], ...opts });
+  // 默认 timeout：try/catch 接得住失败退出、接不住挂起——单个 ref 的 `git show` 阻塞（对象缺失/
+  // 磁盘 IO 异常）会拖死整个 dispatch；超时即按「该 ref 不可读」走既有 catch 降级（fetch 单独 30s）。
+  const git = (cmd, opts = {}) => execSync(`git -C "${ROOT}" ${cmd}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000, ...opts });
   if (fetch) { try { git('fetch origin --quiet', { timeout: 30000 }); } catch { /* 离线/限流 → 用现有远程跟踪分支 */ } }
   let refs = [];
   try {
@@ -537,6 +551,14 @@ function main() {
   const localLines = fs.readFileSync(LOG_PATH, 'utf-8').split('\n');
   const tasks = foldBacklog(localLines); // 任务宇宙/状态以本地 main 日志为准（与 BACKLOG.md 视图一致）
   const config = loadConfig();
+
+  // --merge-gate 提前短路：mergeGate 只读 tasks + config.inflight，不依赖认领扫描——
+  // 该模式是 push 前高频轻量检查（sessionPrompt 第 6 步），不应被 `git fetch` + 多 ref
+  // `git show` 拖成数十秒（网络不佳时尤甚），也不触发失败记账（本就属 inspect 模式）。
+  if (args.includes('--merge-gate') && !args.includes('--json')) {
+    console.log(renderMergeGate(mergeGate(tasks, config)));
+    return;
+  }
 
   // 跨会话认领锁：认领信号从多 ref 日志收集（别会话 feature 分支上的认领亦可见），任务宇宙仍用本地。
   const useClaims = !args.includes('--no-claims');
@@ -576,10 +598,6 @@ function main() {
         skipped: gate.skipped,
       },
     }, null, 2) + '\n');
-    return;
-  }
-  if (args.includes('--merge-gate')) {
-    console.log(renderMergeGate(gate));
     return;
   }
   console.log(renderBoard(result, tasks));

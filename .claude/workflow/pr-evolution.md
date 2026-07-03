@@ -1598,6 +1598,7 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 1. **重来怎样更好**：「accounted 守卫」本可更早识别——`released` 同时含「真孤儿」与「完成未流转」两类，设计时先分清 E1 域 vs stale-scan 域才不假阳性；阶段 A 用真实数据自查（5 released 中 3 已有 pass 行）当场暴露了这点，比纯写码后被 codex 抓更省返工。
 2. **复用价值**：① **「失败记账纯函数 + 读时去重兜并发 + accounted 守卫分域」** 对任何「自产自评闭环装失败可见性」通用；② **「读时归一不迁移 append-only 历史行」** 是 `merge=union` 文件演进标准手法（改写历史行会产生新旧重复）；③ **「双闸 framing 互证」**：闸-1 治范围（写码前 7 P1）、闸-2 治完成质量（1 P1 终态守卫），再次实证窄范围多模型对抗的增量价值。
 3. **如何更高质量自动化**：本项即「把放弃率从不可见变机制化可见」。`needs_automation: true`（E6 拟把「账本必含失败记账维度，缺则告警」入 `bun run governance`，与 E4 死规则审计同窗）。
+   - expires: 2026-09-27（2026-07-03 补：与下方标题块同一事项——此前本内联项一直「借用」下方块的 expires 逃过缺失检测，automation-due 窗口截断修复后现形，按 #809 存量补 expires 先例处置）
 
 ### needs_automation: true
 - 闸：E6 把「质量账本失败记账维度（放弃率/孤儿率可算）」入 `bun run governance` 强制——回退（删失败记账 / dispatch 不再记 orphaned）即 governance fail，防进化成果回退。依赖 E1（本项）+ E4 先落地，随 E6 一并实现。
@@ -1855,3 +1856,26 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （本次新增的闸性资产即 9 个防回归单测 + nginx conf 注释锚点；假阳性复核先记流程纪律，攒案例再机制化。）
+
+---
+
+## 2026-07-03 · Loop v2 专项审计 + E4/E6 落地收官（进化规划 E1-E6 全闭环）
+
+> 用户指令「专项审计并优化 loop v2」。三路并行只读审计子代理（协议一致性 / dispatch / 报表三脚本）+ 主会话逐条独立复现（memory `audit-agent-findings-are-leads-not-conclusions`），7 项确认修复 + E4（`loop:rule-hit-rate` 死规则审计 + automation-due `mechanism:` 真升级校验）+ E6（governance 第 53 项「Loop自进化闭环完整性」）。协议演进详见 `loop-orchestration.md §4` 同日 meta，本条是 evidence-loop scorecard。
+
+### 基线 / oracle / 决策
+
+- **基线（审计前实跑）**：一次过率 31.3% · 事后回滚率 1.3%（有效回滚 1）· verdict 分布 other 1 · automation-due 45 健康 0 缺失 · loop 单测 141。
+- **修后 oracle（同命令复跑）**：一次过率 **33.8%**（pending-pr 归一入 pass）· 事后回滚率 **0%**（#818 自我误报消除——「git 回滚反查」功能自身 commit 被自己的启发式误标已回滚，E2 上线首个受害者是它自己）· other 0 · automation-due 暴露 1 例真实 expires 借用串扰（E1 entry，按 #809 先例补）· 单测 **151/151** · governance **53/53**（新增 E6 元闸）。
+- **E6 负向 oracle**：临时注入非法 verdict 行 → governance 即红（1 违规）→ 恢复全绿（回退即 fail 实证）。
+- **E4 首跑**：14 规则 = 10 alive（codex 双闸 ×57/×60 居首，skipped/unavailable 占位不计）· 2 死候选（e2-rework-sink 太新非死、domain-override 逃生钩子，均观察不撤）· 2 不可测（诚实边界）。
+- **协议一致性：0 确认漂移**——2026-06-29「codex 默认关闭」五处全部落实一致，首次全量审计零漂移。
+
+### 三问复盘
+
+1. **重来怎样更好**：E2 回滚反查上线时就该拿「实现它的那条 commit」自测——关键词启发式的首个自指案例往往是工具自身（茧房3 微缩版）；本次 7 项修复中最有价值的一条（#818 自我误报）恰是「自产自评」盲区的实证。
+2. **复用价值**：① 「squash 语境末尾 (#N) 恒为自身 PR 号」对一切从 commit subject 反查 PR 的工具通用；② 「三路并行审计代理 + 主会话逐条独立复现」编排高效（三代理并行出 13 条线索，7 确认 6 降级/存疑，零假阳性动刀）；③ mechanism 字段把「疑似已机制化」启发式升级为可验证结构（governance:<检查名> / 路径存在性）。
+3. **如何更高质量自动化**：E6 已把防回退入 governance 自动跑；rule-hit-rate 作为 meta-review 输入依赖会话遵从，实证遗忘再立催办。
+
+### needs_automation: false
+（本条主体即机制化落地：E6 governance 闸自动执行、E4 有命令 + 单测；无新的纯纪律残留点。2026-09-25 存量登记项「扫 code-reviewer 作闸源告警」前提已被 2026-06-29 反转，到期应显式撤项——预判已记 §4 meta。）

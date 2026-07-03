@@ -56,6 +56,8 @@ import {
   parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow,
 } from './backlog/lib.mjs';
 import { SHADOW_KEYS } from './shared/cube-routes.mjs';
+import { parseLedger as parseLoopLedger, normalizeVerdict as normalizeLoopVerdict } from './loop/quality-report.mjs';
+import { scanEntries as scanAutomationEntries, verifyMechanisms as verifyAutomationMechanisms } from './loop/automation-due.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3915,7 +3917,72 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'SC policy glob前缀隔离', fn: checkPolicyGlobPrefixIsolation },
   { name: '省份前缀映射一致', fn: checkProvincePrefixMapConsistency },
   { name: '企微引擎省份隔离', fn: checkWecomEngineBranchIsolation },
+  { name: 'Loop自进化闭环完整性', fn: checkLoopSelfEvolutionIntegrity },
 ];
+
+// ============================================================
+// Loop v2 自进化闭环完整性（E6 元闸·治全部回归，uid 2026-06-27-claude-054a3a）
+// ============================================================
+/**
+ * 把 E1（失败记账）/ E4（真升级校验）能力固化成 governance 强制——回退即 fail：
+ *   ① 账本 verdict 规范集：loop-quality-ledger.jsonl 每行 verdict 经 normalizeVerdict 归一后
+ *      必须落规范集（pass/partial/reverted/abandoned/orphaned/blocked）。未归一的新变体（如曾
+ *      漏归一的 pending-pr）会拉低一次过率且逃过 dispatch accounted 守卫被误记孤儿 → 源头拦截，
+ *      提示扩 quality-report SUCCESS_SYNONYMS 或改用规范枚举。实测存量 80 行归一后零未知
+ *      （2026-07-03），无 grandfather 负担，可直接 error 级。
+ *   ② 失败记账维度不回退：dispatch.mjs 须保留 failureLedgerRows 导出、quality-report.mjs 须
+ *      保留 normalizeVerdict 导出（删失败记账 = E1 回退 = 幸存者偏差复活）。
+ *   ③ automation 真升级校验：pr-evolution.md 中声明了 mechanism 的 needs_automation 项，其
+ *      机制必须真实存在（仓库相对路径存在，或 governance:<检查名> 在本文件中）——识别
+ *      「处置=又写一条文档」的假处置（E4 动作②，automation-due 同源纯函数复用）。
+ */
+function checkLoopSelfEvolutionIntegrity() {
+  info('检查 Loop v2 账本 verdict 规范集 + 失败记账维度 + automation 真升级（E6 元闸）...');
+  const CANONICAL = new Set(['pass', 'partial', 'reverted', 'abandoned', 'orphaned', 'blocked']);
+  const problems = [];
+
+  // ① 账本 verdict 规范集
+  const ledgerPath = path.join(ROOT_DIR, '.claude/workflow/loop-quality-ledger.jsonl');
+  if (fs.existsSync(ledgerPath)) {
+    const rows = parseLoopLedger(fs.readFileSync(ledgerPath, 'utf-8').split('\n'));
+    rows.forEach((r, idx) => {
+      const v = normalizeLoopVerdict(r.verdict).verdict;
+      if (!CANONICAL.has(v)) problems.push(`账本第 ${idx + 1} 条 verdict「${r.verdict}」归一后为「${v}」不在规范集——扩 quality-report SUCCESS_SYNONYMS 或改用规范枚举`);
+    });
+  }
+
+  // ② 失败记账维度不回退（静态导出存在性）
+  const guards = [
+    ['scripts/loop/dispatch.mjs', 'export function failureLedgerRows'],
+    ['scripts/loop/quality-report.mjs', 'export function normalizeVerdict'],
+  ];
+  for (const [rel, needle] of guards) {
+    const p = path.join(ROOT_DIR, rel);
+    if (!fs.existsSync(p) || !fs.readFileSync(p, 'utf-8').includes(needle)) {
+      problems.push(`${rel} 缺少「${needle}」——E1 失败记账维度回退（幸存者偏差复活），禁止移除`);
+    }
+  }
+
+  // ③ automation 真升级校验（假处置拦截）
+  const prEvoPath = path.join(ROOT_DIR, '.claude/workflow/pr-evolution.md');
+  if (fs.existsSync(prEvoPath)) {
+    const items = verifyAutomationMechanisms(scanAutomationEntries(fs.readFileSync(prEvoPath, 'utf-8')), {
+      fileExists: (p) => fs.existsSync(path.join(ROOT_DIR, p)),
+      governanceSource: fs.readFileSync(__filename, 'utf-8'),
+    });
+    for (const it of items) {
+      if (it.mechanismStatus === 'missing') problems.push(`pr-evolution「${it.entry}」声明 mechanism: ${it.mechanism} 但机制不存在——假处置（处置=又写一条文档），须真落地或撤回声明`);
+    }
+  }
+
+  if (problems.length) {
+    error(`Loop 自进化闭环完整性 ${problems.length} 处违规：`);
+    for (const p of problems) error(`  - ${p}`);
+    return false;
+  }
+  success('Loop 账本 verdict 规范、失败记账维度在位、无 automation 假处置');
+  return true;
+}
 
 // ============================================================
 // 技能字段闸（K3）：扫技能 SQL 引用「幽灵字段」（fields.json 注册但 Parquet 未落）
