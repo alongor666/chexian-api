@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（107 项 · 数据截至 2026-07-03 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（112 项 · 数据截至 2026-07-03 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -25,7 +25,7 @@
 - 2026-07-03-claude-0f86cb — 部署白屏风险链
 - 2026-07-03-claude-20e132 — 换号登录不清缓存致SW/ReactQuery跨用户串数据越权
 
-**P1（19 项）**
+**P1（20 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
@@ -46,8 +46,9 @@
 - 2026-06-29-claude-a5aa03 — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
 - 2026-07-03-claude-37cb58 — 保费报表usePremiumReport.ts
+- 2026-07-03-claude-d23bd0 — 后端审查
 
-**P2（55 项）**
+**P2（59 项）**
 
 - B244 `IN_PROGRESS` — 零赔付专项分析
 - B245 — 零赔付专项分析维度展开
@@ -100,10 +101,14 @@
 - 2026-06-27-claude-794df9 — E4 砍死规则 + 真升级校验（治茧房5+6·只增不减）
 - 2026-06-27-claude-901f0d — 派生域 ALL IN-scope 升级（codex 闸-2 P2·第3省上线前必修）
 - 2026-07-03-claude-05dff4 — 前端审查中危债打包（2026-07-03四维审查）
+- 2026-07-03-claude-131dd8 — 后端审查
 - 2026-07-03-claude-242c07 — 页面级路由白名单 API_ROUTE_TO_PAGE_MAP 不覆盖 repair/cu
 - 2026-07-03-claude-34ac54 — duckdb-type-converter 不识别 DECIMAL（{width,sca
+- 2026-07-03-claude-575d2f — 后端审查
+- 2026-07-03-claude-6c23b3 — 后端审查
 - 2026-07-03-claude-7982a9 — 契约对账闸 checkQueryCatalogConsistency 扫描目录硬编码 s
 - 2026-07-03-claude-a3ffc0 — 契约漂移两处
+- 2026-07-03-claude-dea47b — 后端审查
 
 **P3（31 项）**
 
@@ -246,9 +251,14 @@
 | 2026-06-29-claude-ba7e61 | 2026-06-29 | Data/ETL | @claude | ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另立项）：B1命名路由(daily.mjs premium/claims glob+matchFull 认<省>_前缀,sichuan→SC/shanxi→SX) / B2分省编排(release:daily/daily.mjs 遍历fields.json branch_code.mapping注册省份,SC主表+SX validation/SX各跑) / B3防重复(归档区间被新全量覆盖的旧全量+单文件不混省闸) / B4 freshness跨省巡检(覆盖validation/SX) / B5首发实战(6全量跑通+PM2 reload,搞准赔付) | P1 | PROPOSED | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | 数据管理/lib/claims-freshness.mjs | 路径B代码阶段(B1-B4)全合并:命名路由#847/分省编排#852/防重复#853/freshness#854,CI全绿+Claude子代理双闸(architect+code-reviewer)4 NO-GO全修+全GO。B5首发实战待低峰授权。 |
 | 2026-07-03-claude-05dff4 | 2026-07-03 | 前端 | @claude | 前端审查中危债打包（2026-07-03四维审查）：①copilot/forecast手写fetch绕过apiClient(useForecastBaseline.ts:421等4处) ②业务阈值硬编码无SSOT(comprehensive-analysis/rules.ts:3,crossSellRateStatus.ts:20) ③403/429无全局拦截仅401有刷新(client-core.ts:309) ④staleTime双态在模块加载瞬间判定SW必未接管设计落空(App.tsx:17) ⑤9个hook手写状态机与ReactQuery两套并存 ⑥TruckAnalysisPanel/CustomerFlowPage/RepairPage错误态缺失 ⑦4文件超800行(GeoRiskPanel951等) ⑧moto-cost/repair/expense-development零E2E ⑨react-window1.8旧版React19无兼容声明 | P2 | PROPOSED | N/A | src/features/copilot,src/shared/api/client-core.ts,src/app/App.tsx |  |
 | 2026-07-03-claude-0f86cb | 2026-07-03 | 部署 | @claude | 部署白屏风险链：生产index.html无Cache-Control（启发式缓存）+deploy.yml rm -rf dist旧chunk物理消失+sw.js无skipWaiting；且生产sw.js被max-age=31536000 immutable一年强缓存（双重复Cache-Control头）。长开tab遇发布→旧index引用已删chunk→404白屏无法自愈 | P0 | PROPOSED | N/A | deploy/nginx-fullstack.conf,deploy/nginx.conf,.github/workflows/deploy.yml,public/sw.js | 白屏链三环节中两环已上生产：nginx no-cache（见 0e0e9f DONE 证据）+ sw.js skipWaiting（PR #864 已部署）。残留一环=deploy.yml rm -rf 旧 chunk 无保留期（发布瞬间窗口仍在，但 index.html no-cache 后旧 index 不再被缓存，风险已大幅收敛），是否加旧资产保留期为可选 follow-up |
+| 2026-07-03-claude-131dd8 | 2026-07-03 | CI/测试 | @claude | 后端审查：CI 完全不跑 DuckDB 原生绑定集成测试(vite.config.ts exclude 22个 duckdb-*.test.ts + 立方体影子对账7个)，含当前最活跃的多省 RLS 隔离测试(duckdb-branch-rls-resolve/repair-branch-rls等)。相关代码回归唯一安全网只剩人工本地 test:integration。建议 CI runner 装原生二进制或 pre-push/release 关卡强制跑 | P2 | PROPOSED | N/A | vite.config.ts |  |
 | 2026-07-03-claude-20e132 | 2026-07-03 | 前端 | @claude | 换号登录不清缓存致SW/ReactQuery跨用户串数据越权：sw.js buildCacheKey仅URL无用户身份，App.tsx只监听auth-logout清缓存，PermissionContext换号只派发auth-login；staleTime=Infinity加剧。共享终端/企微扫码换身份即触发，dataScope不同用户可见越权数据 | P0 | PROPOSED | N/A | public/sw.js,src/app/App.tsx,src/shared/contexts/PermissionContext.tsx |  |
 | 2026-07-03-claude-242c07 | 2026-07-03 | Security/Backend | @claude | 页面级路由白名单 API_ROUTE_TO_PAGE_MAP 不覆盖 repair/customer-flow/claims-detail/quote-conversion/expense-development/renewal-tracker 六域，受限角色可直调接口（行级RLS仍生效，页面级授权靠菜单隐蔽性兜底）——需业务决策各角色是否放行后再补映射 | P2 | PROPOSED | N/A | server/src/middleware/permission.ts:27 |  |
 | 2026-07-03-claude-34ac54 | 2026-07-03 | Enhancement/Backend | @claude | duckdb-type-converter 不识别 DECIMAL（{width,scale,value} 三键对象），当前无触发路径但零防御——未来 CAST AS DECIMAL 会让数字字段变对象且丢小数换算，应补分支 Number(value)/10**scale | P2 | PROPOSED | N/A | server/src/services/duckdb-type-converter.ts:19 |  |
 | 2026-07-03-claude-37cb58 | 2026-07-03 | 前端 | @claude | 保费报表usePremiumReport.ts:93,120完全绕过buildFilterParams，静默丢弃新能源/续保模式/险别组合/客户类别等十余个全局筛选字段，与其他页面口径不一致且无UI提示；同类隐患GrowthAnalysisPanel.tsx:134与useGrowthAnalysis.ts:367手动覆盖orgNames缺isOrgUser强制收敛 | P1 | PROPOSED | N/A | src/features/premium-report/hooks/usePremiumReport.ts,src/features/growth/components/GrowthAnalysisPanel.tsx | 复核纠偏：保费报表半条为假阳性——PremiumReportPanel.tsx:177 已用 buildFilterParams(filters) 全量产物经 additionalParams 传入 hook 并 spread 进请求参数（usePremiumReport.ts:94），全局筛选未丢失；审查代理引用了 spread 行却误判。本条仅剩 GrowthAnalysisPanel/useGrowthAnalysis orgNames 缺 isOrgUser 收敛部分待核实修复 |
+| 2026-07-03-claude-575d2f | 2026-07-03 | 生产可靠性 | @claude | 后端审查：state.db(PAT/用户/角色权威数据)有 backup() API 但仅 CI smoke 调过一次，生产无定时备份，也不在异地备份链路。磁盘故障/误删/migration 写坏即永久丢失。建议纳入每日 ETL+VPS 同步流水线定时 backup 到独立/异地存储 | P2 | PROPOSED | N/A | server/src/services/state-db.ts |  |
+| 2026-07-03-claude-6c23b3 | 2026-07-03 | 生产可靠性 | @claude | 后端审查：核心数据目录 policy/current(critical) 走普通 rsync --delete 非原子，覆盖期间与意外重启/reload 重叠会 glob 到半份数据(仅 customer_flow/new_energy_claims 走 rsyncLatestAtomically)。建议 critical 目录改影子目录+rename 原子切换。属部署链改动需 VPS 测试 | P2 | PROPOSED | N/A | scripts/sync-vps.mjs |  |
 | 2026-07-03-claude-7982a9 | 2026-07-03 | Chore/Governance | @claude | 契约对账闸 checkQueryCatalogConsistency 扫描目录硬编码 server/src/routes/query，auth/data/ai/filters/workflows 等约一半路由零对账（已发现两处漂移落此盲区），建议扩展到全路由目录 | P2 | PROPOSED | N/A | scripts/check-governance.mjs:2735 |  |
 | 2026-07-03-claude-a3ffc0 | 2026-07-03 | Bugfix/Frontend | @claude | 契约漂移两处：apiClient.data.remove() 指向后端不存在的 DELETE /data/:filename（零调用方死代码地雷）；后端 api-routes.ts AUTH_ROUTES 常量组比前端镜像缺 TOKENS/TOKEN_BY_ID 两键且全仓零消费方 | P2 | PROPOSED | N/A | src/shared/api/data-api.ts:70,server/src/config/api-routes.ts:167 |  |
+| 2026-07-03-claude-d23bd0 | 2026-07-03 | 安全/权限模型 | @claude | 后端审查：用户/角色管理面(auth.ts users/roles CRUD)无 branch_code 隔离，任一 branch_admin 可跨省列出/改密/禁用/提权对方分公司账号；patrol 巡检报告路由零 RLS，任何登录用户看同一份全量报告。需 owner 决策：跨省管理是否为单-owner 运营的预期(是→文档标注权限模型；否→补 branchCode 隔离 + patrol 按省拆分产物)。不在硬化 PR #866 擅自改(改错会破坏 owner 自身跨省管理或 org_user 访问) | P1 | PROPOSED | N/A | server/src/routes/query/patrol.ts |  |
+| 2026-07-03-claude-dea47b | 2026-07-03 | 安全/认证 | @claude | 后端审查：JWT 无实时吊销——authMiddleware 只做 jwt.verify(签名/过期)，不查 user.active，被禁用账号的未过期旧 token 仍可访问直至自然过期(PAT 路径每请求查 active，更安全)。修复涉认证热路径需 fail-open-on-db-error，单列 PR 谨慎处理，不进硬化批 PR #866 | P2 | PROPOSED | N/A | server/src/middleware/auth.ts |  |
