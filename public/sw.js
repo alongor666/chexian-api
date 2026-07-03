@@ -1,37 +1,34 @@
 /**
- * Service Worker — Phase C: cache-first + 5min 版本轮询
+ * Service Worker — Phase D: cache-first + 页面驱动版本失效
  *
  * 策略: cache-first（仅 /api/query/* 路由）
  * - 缓存命中且未过期 → 立即返回 (0ms)，不发后台 fetch（消除每页 5-10 次冗余网络往返）
  * - 缓存命中但已过期 → 走网络拉取 + 更新缓存（revalidate-on-expiry）
  * - 缓存未命中 → 网络拉取 + 缓存
  * - 离线 → 即使过期也返回缓存
- * - 每 5 分钟轮询 /api/data/version → 版本变化 → 清空缓存 + 通知客户端
- *   （日级数据 + 服务端 dataVersion 进 cache key + 服务端预热已覆盖 ETL，
- *    SW 5min 轮询作为客户端兜底，让长期开着的 tab 也能感知新版本）
+ *
+ * ETL 版本失效（Phase D 改为页面驱动，见 src/app/etlVersionPoller.ts）：
+ * 页面侧带鉴权定时轮询 /api/data/version，版本变化 → postMessage FORCE_REFRESH
+ * → 本 SW 清空 Cache Storage。
+ * ⚠️ 勿在 SW 内恢复裸 fetch('/api/data/version')：该接口挂 authMiddleware，
+ * SW 上下文不带登录凭证恒 401（BACKLOG 2026-06-11-claude-ed63ec 双重死因之二）；
+ * 且"fetch 事件顺带触发"在 staleTime=Infinity 下永不执行（死因之一）。
  */
 
 const CACHE_NAME = 'chexian-api-v2';
-const VERSION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 分钟
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 小时
 
 // 仅缓存 query 路由（不缓存 auth/data/ai/filters）
 const CACHEABLE_PATTERN = /\/api\/query\//;
 
-// 热点预取列表
-const PREFETCH_PATHS = [
-  '/api/query/dashboard-bundle?timeView=daily&perspective=premium&rankingLimit=10',
-  '/api/query/performance-bundle?timePeriod=day&growthMode=mom&expandDims=none&limit=20',
-];
-
-let lastKnownEtlDate = null;
-let lastVersionCheck = 0;
-
 // ── Install 事件 ─────────────────────────────
 
 self.addEventListener('install', (event) => {
-  // 新 SW 安装后不强制 skipWaiting，避免页面闪烁
-  // 用户下次刷新时自然切换到新版 SW
+  // skipWaiting：新版 SW 立即进入 activate，不等旧 tab 全部关闭。
+  // 本 SW 只缓存 API 响应、不缓存 HTML/JS/CSS，跳版无页面资源不一致风险；
+  // 反之不跳版会让 SW 缓存策略修复延迟到"所有旧 tab 关闭"才生效
+  // （BACKLOG 2026-07-03-claude-0f86cb 部署白屏链的 SW 侧一环）。
+  self.skipWaiting();
   event.waitUntil(caches.open(CACHE_NAME));
 });
 
@@ -90,9 +87,6 @@ async function handleQueryRequest(request) {
       return addSwHeaders(cachedResponse.clone(), 'cache-offline');
     }
 
-    // 触发版本检查（限频）
-    maybeCheckVersion();
-
     if (!isExpired) {
       // cache-first：未过期直接返回，不发后台 fetch
       return addSwHeaders(cachedResponse.clone(), 'cache-hit');
@@ -125,45 +119,19 @@ async function handleQueryRequest(request) {
   }
 }
 
-// ── 版本检查 ─────────────────────────────────
+// ── 缓存清空（页面通过 FORCE_REFRESH 消息驱动）──
 
-async function maybeCheckVersion() {
-  const now = Date.now();
-  if (now - lastVersionCheck < VERSION_CHECK_INTERVAL) return;
-  lastVersionCheck = now;
-
-  try {
-    const res = await fetch('/api/data/version');
-    if (!res.ok) return;
-
-    const body = await res.json();
-    const etlDate = body.data?.etlDate;
-
-    if (lastKnownEtlDate && etlDate && etlDate !== lastKnownEtlDate) {
-      // ETL 数据更新了 → 清空缓存 + 预取
-      await clearAndPrefetch();
-    }
-
-    lastKnownEtlDate = etlDate;
-  } catch {
-    // 版本检查失败不影响服务
-  }
-}
-
-async function clearAndPrefetch() {
+async function clearAndNotify(etlDate = null) {
   const cache = await caches.open(CACHE_NAME);
 
   // 清空所有缓存
   const keys = await cache.keys();
   await Promise.all(keys.map((key) => cache.delete(key)));
 
-  // 预取热点 bundle（使用当前活跃客户端的 token）
+  // 通知所有客户端数据已更新（触发 React Query 失效）
   const clients = await self.clients.matchAll({ type: 'window' });
-  if (clients.length === 0) return;
-
-  // 通知客户端数据已更新
   for (const client of clients) {
-    client.postMessage({ type: 'ETL_UPDATED', etlDate: lastKnownEtlDate });
+    client.postMessage({ type: 'ETL_UPDATED', etlDate });
   }
 }
 
@@ -209,7 +177,7 @@ function addSwHeaders(response, source) {
 
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'FORCE_REFRESH') {
-    clearAndPrefetch();
+    clearAndNotify(event.data.etlDate ?? null);
   }
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();

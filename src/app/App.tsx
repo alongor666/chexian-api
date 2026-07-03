@@ -13,6 +13,8 @@ import { ExportProvider } from '../shared/export/ExportContext';
 import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
 import { canAccessCost, canAccessExpenseDevelopment, canAccessMotoCost } from '../shared/config/organizations';
+import { registerAuthCacheClearing } from './authCacheLifecycle';
+import { startEtlVersionPolling } from './etlVersionPoller';
 
 // SW 活跃时让 SW 管理新鲜度（避免双重缓存），否则保持 5min staleTime
 const swActive = typeof navigator !== 'undefined'
@@ -36,15 +38,13 @@ if (typeof window !== 'undefined') {
     queryClient.invalidateQueries();
   });
 
-  // 登出时清空所有缓存层，防止同浏览器换用户后看到上一用户数据（跨用户/跨分公司残留）。
-  // React Query 查询键不含用户身份 + 生产 SW 活跃时 staleTime=Infinity，
-  // 不主动清理则换号后命中前一用户缓存且永不刷新。
-  window.addEventListener('auth-logout', () => {
-    queryClient.clear();
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.controller?.postMessage({ type: 'FORCE_REFRESH' });
-    }
-  });
+  // 登出/换号登录时清空所有缓存层，防止同浏览器换用户后看到上一用户数据
+  // （跨用户/跨分公司越权残留）。详细原理与安全性论证见 authCacheLifecycle.ts。
+  registerAuthCacheClearing(queryClient);
+
+  // ETL 数据版本轮询（页面侧带鉴权，替代 sw.js 内已废弃的 401 死路径），
+  // 版本变化 → 通知 SW 清 Cache Storage + 失效 React Query。见 etlVersionPoller.ts。
+  startEtlVersionPolling({ queryClient });
 }
 
 export { queryClient };

@@ -56,13 +56,27 @@ export default defineConfig({
 
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-echarts': ['echarts', 'echarts-for-react'],
-
-          'vendor-data': ['date-fns', 'exceljs'],
-          'vendor-export': ['jspdf', 'html2canvas'],
-          'vendor-ui': ['lucide-react'],
+        // 函数形式而非对象形式（BACKLOG 2026-07-03-claude-07646e）：
+        // 对象形式会把列出的模块强行并入静态构建图——生产 index.html 曾对
+        // vendor-export（jspdf+html2canvas，594KB）注入 modulepreload，
+        // 每个用户首屏必下载，代码里的动态 import() 按需加载收益全废。
+        // 函数形式只命名分组、不改变加载关系：jspdf/html2canvas/exceljs
+        // 刻意不归组，跟随各自动态 import() 边界自然分包按需加载。
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router-dom|scheduler)[\\/]/.test(id)) {
+            return 'vendor-react';
+          }
+          if (/[\\/]node_modules[\\/](echarts|echarts-for-react|zrender)[\\/]/.test(id)) {
+            return 'vendor-echarts';
+          }
+          if (/[\\/]node_modules[\\/]date-fns[\\/]/.test(id)) {
+            return 'vendor-data';
+          }
+          if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) {
+            return 'vendor-ui';
+          }
+          return undefined;
         },
       },
     },

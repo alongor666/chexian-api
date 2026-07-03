@@ -370,7 +370,9 @@ export function useGrowthAnalysis() {
       type: 'daily-context',
       growthType: 'custom',
     };
-    if (filters.orgLevel3 && filters.orgLevel3.length > 0) {
+    // additionalFilterParams 中的 orgNames 是 RBAC 强制值（机构用户），手选机构不得覆盖
+    // （后端 filter-params 中 orgNames 优先级最高）。BACKLOG 2026-07-03-claude-37cb58。
+    if (!apiFilters.orgNames && filters.orgLevel3 && filters.orgLevel3.length > 0) {
       apiFilters.orgNames = filters.orgLevel3.join(',');
     }
     if (filters.perspective) {

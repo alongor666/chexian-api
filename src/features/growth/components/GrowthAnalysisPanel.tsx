@@ -134,7 +134,11 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
       const comparisonFilterParams: Record<string, string> = {
         ...additionalFilterParams,
       };
-      if (filters.org_level_3?.length) {
+      // 机构用户的 orgNames 由 buildFilterParams(rbca) 强制注入，手选机构不得覆盖：
+      // 上方 rawFilterParams 已剥离 org_level_3，故 additionalFilterParams 中出现
+      // orgNames ⟺ RBAC 强制值（后端 filter-params 中 orgNames 优先级最高，覆盖即绕过）。
+      // BACKLOG 2026-07-03-claude-37cb58。
+      if (!comparisonFilterParams.orgNames && filters.org_level_3?.length) {
         comparisonFilterParams.orgNames = filters.org_level_3.join(',');
       }
 
