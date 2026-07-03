@@ -20,6 +20,10 @@ vi.mock('../../config/auth.js', () => ({
 import jwt from 'jsonwebtoken';
 import { authMiddleware } from '../auth.js';
 import { AppError } from '../error.js';
+import {
+  setActiveUsernames,
+  __resetActiveUsernamesCacheForTest,
+} from '../../services/user-activation-cache.js';
 
 function makeReq(opts: { authorization?: string; cookie?: string } = {}) {
   const headers: Record<string, string> = {};
@@ -45,6 +49,8 @@ async function runMiddleware(req: any) {
 
 beforeEach(() => {
   verifyPatMock.mockReset();
+  // 缓存复位为未就绪（null）→ isUsernameActive fail-open，既有 JWT 用例不受实时吊销影响。
+  __resetActiveUsernamesCacheForTest();
 });
 
 describe('authMiddleware: Bearer PAT 分支', () => {
@@ -142,5 +148,46 @@ describe('authMiddleware: 无凭证', () => {
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(401);
     expect((err as AppError).message).toBe('No token provided');
+  });
+});
+
+describe('authMiddleware: JWT 实时吊销（isUsernameActive 二次校验）', () => {
+  function jwtFor(username: string): string {
+    return jwt.sign({ userId: 'u', username, role: 'branch_admin' }, 'test-secret', {
+      expiresIn: '1h',
+    });
+  }
+
+  it('缓存就绪 + 账号仍 active → 放行', async () => {
+    setActiveUsernames(['alice', 'bob']);
+    const req = makeReq({ authorization: `Bearer ${jwtFor('alice')}` });
+    const err = await runMiddleware(req);
+    expect(err).toBeUndefined();
+    expect(req.user.username).toBe('alice');
+  });
+
+  it('账号被禁用/删除（不在 active 集合）→ 签名合法的旧 JWT 立即 401', async () => {
+    setActiveUsernames(['alice']); // bob 已被禁用/删除
+    const req = makeReq({ authorization: `Bearer ${jwtFor('bob')}` });
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(401);
+    expect((err as AppError).message).toMatch(/disabled|removed/i);
+  });
+
+  it('Cookie JWT 出口同样受实时吊销约束', async () => {
+    setActiveUsernames(['alice']);
+    const token = jwtFor('bob');
+    const req = makeReq({ cookie: `cx_access_token=${encodeURIComponent(token)}` });
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(401);
+  });
+
+  it('缓存未就绪（null）→ fail-open，不误锁（既有会话行为不变）', async () => {
+    __resetActiveUsernamesCacheForTest();
+    const req = makeReq({ authorization: `Bearer ${jwtFor('whoever')}` });
+    const err = await runMiddleware(req);
+    expect(err).toBeUndefined();
   });
 });

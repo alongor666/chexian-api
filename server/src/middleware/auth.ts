@@ -13,6 +13,7 @@ import jwt from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
 import { AppError } from './error.js';
 import { verifyPat } from '../services/personal-access-token.js';
+import { isUsernameActive } from '../services/user-activation-cache.js';
 import { getPresetVisibleBranches } from '../config/preset-users.js';
 
 /**
@@ -112,6 +113,12 @@ export async function authMiddleware(
 
     // 3) JWT 校验
     const decoded = jwt.verify(token, authConfig.jwtSecret) as JwtPayload;
+    // 实时吊销：jwt.verify 只验签名/过期，无法感知账号已被禁用/删除。查内存态 active 集合
+    // （O(1)，非每请求 DB），令被禁用/删除账号的未过期旧 JWT 立即失效，对齐 PAT 的 active 语义。
+    // 缓存未就绪时 isUsernameActive fail-open（不误锁），正常运行期恒就绪。
+    if (!isUsernameActive(decoded.username)) {
+      throw new AppError(401, 'Account is disabled or removed. Please contact an administrator.');
+    }
     req.user = decoded;
     decorateVisibleBranches(req.user); // 全国超管能力按 username 派生（JWT/cookie 出口）；旧 token 免重登生效
     next();
