@@ -7,8 +7,9 @@
 import { describe, it, expect } from 'vitest';
 import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate, latestClaims, failureLedgerRows, isInspectMode } from '../dispatch.mjs';
 import { parseLedger, aggregate, normalizeVerdict, parseRevertedPrs, buildRevertGitArgs, collectRevertedPrs, effectiveVerdict, parseUserReworkLog, classifyTopic, hhiOf, overfitFlag } from '../quality-report.mjs';
-import { scanEntries, classify, isoAddDays } from '../automation-due.mjs';
+import { scanEntries, classify, isoAddDays, verifyMechanisms } from '../automation-due.mjs';
 import { scanNotes, classifyStale, scanStale, uidToken, branchMatchesUid } from '../stale-scan.mjs';
+import { RULES, ruleHits } from '../rule-hit-rate.mjs';
 
 const J = (o) => JSON.stringify(o);
 
@@ -76,6 +77,16 @@ describe('dispatch.taskDomains 分隔符', () => {
   });
   it('全为非路径 token → 空域集（→ computeFrontier 推迟）', () => {
     expect(taskDomains({ uid: 'z', code: 'N/A' }).size).toBe(0);
+  });
+  it('全角逗号「，」/顿号「、」是合法分隔符（漏判会把多路径整串误归单一域 → 域冲突漏检并行撞车）', () => {
+    expect([...taskDomains({ uid: 'w', code: 'src/a.ts，server/src/sql/shared.ts' })].sort())
+      .toEqual(['be-sql', 'frontend']);
+    expect([...taskDomains({ uid: 'v', code: 'src/a.ts、数据管理/b.py' })].sort())
+      .toEqual(['etl', 'frontend']);
+    // 回归锚：修复前整串被 bucketOf 判为 frontend，be-sql 被吞 → 与纯 be-sql 任务误判互斥
+    const a = taskDomains({ uid: 'a', code: 'src/a.ts，server/src/sql/shared.ts' });
+    const b = taskDomains({ uid: 'b', code: 'server/src/sql/shared.ts' });
+    expect([...a].some((d) => b.has(d))).toBe(true);
   });
 });
 
@@ -379,6 +390,9 @@ describe('quality-report.normalizeVerdict（verdict 归一·单一事实源）',
     expect(normalizeVerdict('all_fixed').verdict).toBe('pass');
     expect(normalizeVerdict('mergeable').verdict).toBe('pass');
   });
+  it('pending-pr（2026-06-28 后新变体·完成待建 PR）→ pass（2026-07-03 审计：不归一会落 other 拉低一次过率 + accounted 守卫漏防误记 orphaned）', () => {
+    expect(normalizeVerdict('pending-pr')).toEqual({ verdict: 'pass', qualifier: 'pending-pr' });
+  });
   it('非 pass 规范终态原样透传', () => {
     for (const v of ['partial', 'reverted', 'abandoned', 'orphaned', 'blocked']) {
       expect(normalizeVerdict(v)).toEqual({ verdict: v, qualifier: null });
@@ -609,6 +623,48 @@ describe('automation-due', () => {
     expect(items[0].expires).toBe('2026-11-30'); // 且正确配对后续 expires
     expect(items[0].entry).toBe('R5 · 标题形式任务'); // 归任务级，不被「体检结果（含日期）」或「三问复盘」夺走（codex P2-a）
   });
+  it('相邻两项窗口截断：前项缺 expires 不得「借用」后项的（2026-07-03 审计发现 3·真实数据 E1 entry 实证）', () => {
+    const items = scanEntries([
+      '## R6 · 前项（自身缺 expires）',
+      '- needs_automation: true',
+      '正文一行',
+      '- needs_automation: true',
+      '- expires: 2026-03-01', // 只属第二项
+    ].join('\n'));
+    expect(items).toHaveLength(2);
+    expect(items[0].expires).toBe(null);       // 修复前会错借到 2026-03-01
+    expect(items[1].expires).toBe('2026-03-01');
+  });
+  it('E4 mechanism 提取 + verifyMechanisms 真升级校验（governance:名 / 路径两种形式）', () => {
+    const items = scanEntries([
+      '## R7 · 已机制化项',
+      '- needs_automation: true',
+      '- mechanism: governance:checkLoopLedgerVerdicts',
+      '- expires: 2026-01-01',
+      '## R8 · 假处置项',
+      '- needs_automation: true',
+      '- mechanism: scripts/loop/no-such-file.mjs',
+      '- expires: 2026-01-01',
+      '## R9 · 无 mechanism 项',
+      '- needs_automation: true',
+      '- expires: 2026-12-31',
+    ].join('\n'));
+    expect(items.map((i) => i.mechanism)).toEqual(['governance:checkLoopLedgerVerdicts', 'scripts/loop/no-such-file.mjs', null]);
+    // 包裹/尾注杂质剥离：反引号包裹与中文括号尾注不得污染值（否则存在性验证恒失败 → 误报假处置）
+    const wrapped = scanEntries([
+      '## W1', '- needs_automation: true', '- mechanism: `scripts/loop/rule-hit-rate.mjs`', '- expires: 2026-12-31',
+      '## W2', '- needs_automation: true', '- mechanism: governance:checkFoo（第53项）', '- expires: 2026-12-31',
+    ].join('\n'));
+    expect(wrapped.map((i) => i.mechanism)).toEqual(['scripts/loop/rule-hit-rate.mjs', 'governance:checkFoo']);
+    const verified = verifyMechanisms(items, {
+      fileExists: () => false,
+      governanceSource: 'function checkLoopLedgerVerdicts() {}',
+    });
+    const c = classify(verified, '2026-06-21', 14);
+    expect(c.mechanized.map((x) => x.entry)).toEqual(['R7 · 已机制化项']); // 已过期但机制已验证 → 摘出催办网
+    expect(c.fake.map((x) => x.entry)).toEqual(['R8 · 假处置项']);          // 声明了但机制不存在 → 假处置
+    expect(c.ok.map((x) => x.entry)).toEqual(['R9 · 无 mechanism 项']);     // 无声明走原日期逻辑
+  });
 });
 
 describe('stale-scan.scanNotes', () => {
@@ -621,6 +677,64 @@ describe('stale-scan.scanNotes', () => {
     const r = scanNotes('待评估报价口径，需用户拍板');
     expect(r.completionHits).toBe(0);
     expect(r.prRefs).toEqual([]);
+  });
+  it('子串重叠不虚增：「已完成」一处出现只计 1 条证据（2026-07-03 审计发现 5）', () => {
+    expect(scanNotes('已完成').completionHits).toBe(1); // 修复前=2（已完成+完成 双计）
+    expect(scanNotes('本任务完成').completionHits).toBe(1); // 裸「完成」真实命中保留
+  });
+  it('否定语境不算完成信号：未完成/尚未完成/没有完成/不算完成', () => {
+    expect(scanNotes('尚未完成，仍需补 E2E').completionHits).toBe(0);
+    expect(scanNotes('该模块未完成').completionHits).toBe(0);
+    expect(scanNotes('没有完成迁移；但已合并前置 PR').markers).toEqual(['已合并']);
+  });
+  it('否定插入语与名词化用法不误判（code review P2 反例回归）', () => {
+    expect(scanNotes('由于时间关系未能完成').completionHits).toBe(0); // 否定词与「完成」隔 1 字
+    expect(scanNotes('完成度不高，仅30%').completionHits).toBe(0);     // 「完成度」名词化非声明
+    expect(scanNotes('已完成，完成度 100%').completionHits).toBe(1);   // 真完成声明不受剥离误伤
+  });
+});
+
+describe('rule-hit-rate.ruleHits（E4 死规则审计·纯函数）', () => {
+  const baseCtx = {
+    ledger: [
+      { uid: 'a', verdict: 'pass', codex_plan: { P0: 0, P1: 1 }, codex_done: { P0: 0 } },
+      { uid: 'b', verdict: 'orphaned' },
+    ],
+    prEvo: 'needs_automation: true\n合并门 slot holder\n待跨域验证',
+    config: { deps: { x: ['y'] }, tasks: { g: { gated: true }, d: { domain: ['etl'] } } },
+    backlogEvents: [{ kind: 'status', status: 'IN_PROGRESS', actor: '@s' }, { kind: 'status', status: 'DONE', actor: '@s' }],
+    reworkCount: 0,
+    revertedCount: null,
+  };
+  const byId = (rs, id) => rs.find((r) => r.id === id);
+  it('alive / dead-candidate / untestable 三分类', () => {
+    const rs = ruleHits(baseCtx);
+    expect(rs).toHaveLength(RULES.length);
+    expect(byId(rs, 'codex-gate1')).toMatchObject({ hits: 1, verdict: 'alive' });
+    expect(byId(rs, 'e1-failure-accounting')).toMatchObject({ hits: 1, verdict: 'alive' });
+    expect(byId(rs, 'claim-lock')).toMatchObject({ hits: 1, verdict: 'alive' }); // DONE 状态事件不算认领
+    expect(byId(rs, 'e2-rework-sink')).toMatchObject({ hits: 0, verdict: 'dead-candidate' });
+    expect(byId(rs, 'e2-revert-lookup').verdict).toBe('untestable'); // revertedCount=null（--no-git）
+    expect(byId(rs, 'session-prompt-discipline').verdict).toBe('untestable');
+  });
+  it('probe 崩溃 → untestable 而非误判 0（数据缺失 ≠ 死规则）', () => {
+    const rs = ruleHits({ ...baseCtx, ledger: null }); // ledger.filter 抛错
+    expect(byId(rs, 'codex-gate1').verdict).toBe('untestable');
+  });
+  it('pending-pr 等 pass 同义词经 normalizeVerdict 不落入失败记账计数', () => {
+    const rs = ruleHits({ ...baseCtx, ledger: [{ uid: 'c', verdict: 'pending-pr' }] });
+    expect(byId(rs, 'e1-failure-accounting').hits).toBe(0);
+  });
+  it('codex 闸 {"skipped":…}/{"unavailable":…} 占位对象不算闸命中（账本实存此类行）', () => {
+    const rs = ruleHits({
+      ...baseCtx,
+      ledger: [
+        { uid: 'a', codex_plan: { skipped: 'default-off' }, codex_done: { unavailable: true } },
+        { uid: 'b', codex_plan: { P0: 0, P1: 2 } },
+      ],
+    });
+    expect(byId(rs, 'codex-gate1').hits).toBe(1);
+    expect(byId(rs, 'codex-gate2').hits).toBe(0);
   });
 });
 
@@ -731,8 +845,16 @@ describe('quality-report.parseRevertedPrs（git revert 反查·被回滚原 PR �
     expect([...parseRevertedPrs(['Revert "fix(x): y (#700)"'])]).toEqual([700]);
   });
   it('无引号手写 revert/回滚 动词窗口：取号（含中文 + 带空格 PR #N）', () => {
-    expect([...parseRevertedPrs(['revert: 回滚 E1 误改 (#704)'])]).toEqual([704]);
+    // squash-merge 语境下末尾 (#N) = 本提交所属 PR 自身号（恒非被回滚对象）→ 剥离后无窗口命中。
+    // 本仓禁直推 main，所有提交经 PR squash 合入，裸「回滚 … (#N)」的 #N 只能是自身号。
+    expect([...parseRevertedPrs(['revert: 回滚 E1 误改 (#704)'])]).toEqual([]);
+    // 被回滚号在正文（非末尾括号）→ 剥自身号 (#830) 后窗口仍命中 #704
+    expect([...parseRevertedPrs(['revert: 回滚 #704 的 E1 误改 (#830)'])]).toEqual([704]);
     expect([...parseRevertedPrs(['回滚 PR #710'])]).toEqual([710]);
+  });
+  it('自描述型提交不误报（2026-07-03 审计实证 #818：功能名含「回滚」+ squash 自身号被误标已回滚）', () => {
+    expect([...parseRevertedPrs(['feat(loop): E2 注入外部真相 — 治茧房3 自指闭环（git 回滚反查 + owner 返工 + 双率） (#818)'])]).toEqual([]);
+    expect([...parseRevertedPrs(['docs(loop): 回滚检测逻辑说明 (#900)'])]).toEqual([]);
   });
   it('lookbehind 排除紧贴 PR#N/pr#N 来源标注（codex 闸-1 P1-4 真实 #391 误报根因）；带空格 PR #N 保留为真 revert 引用（codex 闸-2 P2-2 边界）', () => {
     expect([...parseRevertedPrs(['fix(deploy): 修正 PM2 回滚命令语法（codex P1 PR#391）'])]).toEqual([]); // 紧贴 PR# 排除
@@ -770,7 +892,7 @@ describe('quality-report.collectRevertedPrs（runGit 可注入·CI 不 spawn git
   it('mock runGit 喂三类 alternation 分支（revert/回滚/hotfix）→ 正确解析被回滚 PR', () => {
     const fakeLog = [
       'Revert "feat: a (#101)" (#201)',  // revert 分支 → 101（排除自身 201）
-      'revert: 回滚 b (#102)',            // 回滚 分支 → 102
+      'revert: 回滚 #102 的改动 (#202)',  // 回滚 分支 → 102（剥末尾自身号 202 后窗口命中正文 #102）
       'hotfix: fix prod (#999)',          // hotfix 分支命中 grep 但无 revert 语境 → 不计
     ].join('\n');
     const got = collectRevertedPrs('/x', () => fakeLog);

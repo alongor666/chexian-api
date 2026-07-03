@@ -62,8 +62,13 @@ export function parseLedger(lines) {
 const sum = (arr, f) => arr.reduce((a, x) => a + (f(x) || 0), 0);
 const findings = (o) => (o ? (Number(o.P0) || 0) + (Number(o.P1) || 0) + (Number(o.P2) || 0) : 0);
 
-/** 历史成功同义词（顶层极少；防御性归一为 pass，免未来顶层使用被误判非 pass）。 */
-const SUCCESS_SYNONYMS = new Set(['all_fixed', 'mergeable']);
+/**
+ * 历史成功同义词（顶层极少；防御性归一为 pass，免未来顶层使用被误判非 pass）。
+ * pending-pr（2026-06-28 后新变体，实测账本 d9318c 行）：完成待建 PR——是真实完成
+ * （rounds_to_green/governance_pass 齐全），不归一会落 other 拉低一次过率，且 dispatch
+ * accounted 守卫不认 → 「完成未流转」会被误记 orphaned（E1 明确要防的假阳性）。
+ */
+const SUCCESS_SYNONYMS = new Set(['all_fixed', 'mergeable', 'pending-pr']);
 /** 「到达记账点的完成态」规范 verdict（accounted 守卫 / avg 只算完成行据此）。 */
 export const COMPLETION_VERDICTS = new Set(['pass', 'partial', 'reverted']);
 
@@ -126,7 +131,14 @@ function extractRevertedPrsFromSubject(subject) {
     for (const p of String(seg[1]).matchAll(PR_NUM_RE)) quoted.push(Number(p[1]));
   }
   if (quoted.length) return quoted;
-  return [...s.matchAll(REVERT_VERB_WINDOW_RE)].map((m) => Number(m[1]));
+  // 无引号兜底前剥离 subject 末尾的 ` (#N)`——squash-merge 约定该号 = 本提交所属 PR 自身，
+  // 恒非「被回滚对象」。否则自描述型提交（如 `feat(loop): …git 回滚反查… (#818)`，「回滚」是
+  // 功能名修饰语）会把自身 PR 号误标为已回滚（2026-07-03 审计实证 #818 自我误报污染回滚率）。
+  // 真 revert 不受影响：GitHub revert 走引号主路径；手写 `回滚 #340 的变更 (#345)` 剥 #345 后仍命中 #340。
+  // 诚实边界：非 squash 手写且被回滚号恰以 ` (#N)` 收尾（裸 `回滚 (#340)`）会被误剥——该写法罕见，
+  // 且本仓 squash-merge 惯例下末尾 (#N) 语义即自身号，按约定剥离更正确。
+  const stripped = s.replace(/\s*\(#\d+\)\s*$/, '');
+  return [...stripped.matchAll(REVERT_VERB_WINDOW_RE)].map((m) => Number(m[1]));
 }
 
 /**

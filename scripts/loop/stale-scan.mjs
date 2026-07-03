@@ -26,7 +26,7 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { parseLog, fold } from '../backlog/lib.mjs';
 
@@ -46,7 +46,18 @@ export const CHURN_THRESHOLD = 5;
 /** 从文本提取完成标记命中 + 引用的 PR/issue 号（去重）。纯函数。 */
 export function scanNotes(text) {
   const s = String(text || '');
-  const markers = COMPLETION_MARKERS.filter((m) => s.includes(m));
+  // 否定语境剥离：「未完成/尚未完成/没有完成/不算完成」是未完成声明，不是完成信号。
+  // 否定词与「完成」间允许 0-3 字插入语（「未能完成/没有办法完成」）；「完成度」是名词化用法
+  // （「完成度不高」）先行剥离——两类均为 code review P2 实测误判反例
+  let work = s
+    .replace(/完成度/g, '')
+    .replace(/(?:尚未|未|没有|没|不算)[^，。；、\s]{0,3}完成/g, '');
+  // 最长优先 + 命中即剔除：防子串重叠虚增证据（「已完成」一处出现若同时计入「已完成」「完成」
+  // 两条，会把 PROPOSED 的「≥2 条独立完成语」门槛架空成一处提及即过）
+  const markers = [];
+  for (const m of [...COMPLETION_MARKERS].sort((a, b) => b.length - a.length)) {
+    if (work.includes(m)) { markers.push(m); work = work.split(m).join(''); }
+  }
   const prRefs = [...new Set([...s.matchAll(/#(\d{2,5})\b/g)].map((m) => Number(m[1])))];
   return { completionHits: markers.length, markers, prRefs };
 }
@@ -124,13 +135,15 @@ function churnFor(task) {
   const since = task.at || task.ts;
   if (!since) return 0;
   const files = String(task.code || '')
-    .split(/[,\s；;]+/)
+    .split(/[,，\s;；、]+/)
     .map((c) => c.replace(/[`*]/g, '').replace(/<br\s*\/?>/gi, '').replace(/:\d+(?:[-:]\d+)*$/, '').trim())
     .filter((f) => f && f.includes('/'));
   let count = 0;
   for (const f of files) {
     try {
-      const out = execSync(`git -C "${ROOT}" log origin/main --since="${since}" --oneline -- "${f}"`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      // execFileSync 数组参数（不经 shell）：since/f 来自 backlog 自由文本（task.at/task.code），
+      // 字符串拼接经 /bin/sh 可被 `"$()` 等元字符注入——本仓 spawn 参数引号安全闸同款要求
+      const out = execFileSync('git', ['-C', ROOT, 'log', 'origin/main', `--since=${since}`, '--oneline', '--', f], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000 });
       count += out.split('\n').filter(Boolean).length;
     } catch { /* 文件不存在/路径异常 → 忽略 */ }
   }
