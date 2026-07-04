@@ -303,7 +303,9 @@ function App() {
                   <Route
                     path="quote-conversion"
                     element={
-                      <LazyRoute><QuoteConversionPage /></LazyRoute>
+                      <RouteAccessGuard routePath="/quote-conversion">
+                        <LazyRoute><QuoteConversionPage /></LazyRoute>
+                      </RouteAccessGuard>
                     }
                   />
 
@@ -311,9 +313,11 @@ function App() {
                   <Route
                     path="expense-development"
                     element={
-                      <FeatureGuard check={canAccessExpenseDevelopment}>
-                        <LazyRoute><ExpenseDevelopmentPage /></LazyRoute>
-                      </FeatureGuard>
+                      <RouteAccessGuard routePath="/expense-development">
+                        <FeatureGuard check={canAccessExpenseDevelopment}>
+                          <LazyRoute><ExpenseDevelopmentPage /></LazyRoute>
+                        </FeatureGuard>
+                      </RouteAccessGuard>
                     }
                   />
 
@@ -321,7 +325,9 @@ function App() {
                   <Route
                     path="repair"
                     element={
-                      <LazyRoute><RepairPage /></LazyRoute>
+                      <RouteAccessGuard routePath="/repair">
+                        <LazyRoute><RepairPage /></LazyRoute>
+                      </RouteAccessGuard>
                     }
                   />
 
@@ -329,7 +335,9 @@ function App() {
                   <Route
                     path="customer-flow"
                     element={
-                      <LazyRoute><CustomerFlowPage /></LazyRoute>
+                      <RouteAccessGuard routePath="/customer-flow">
+                        <LazyRoute><CustomerFlowPage /></LazyRoute>
+                      </RouteAccessGuard>
                     }
                   />
 
@@ -337,7 +345,9 @@ function App() {
                   <Route
                     path="claims-detail"
                     element={
-                      <LazyRoute><ClaimsDetailPage /></LazyRoute>
+                      <RouteAccessGuard routePath="/claims-detail">
+                        <LazyRoute><ClaimsDetailPage /></LazyRoute>
+                      </RouteAccessGuard>
                     }
                   />
 
@@ -345,7 +355,9 @@ function App() {
                   <Route
                     path="renewal-tracker"
                     element={
-                      <LazyRoute><RenewalTrackerPage /></LazyRoute>
+                      <RouteAccessGuard routePath="/renewal-tracker">
+                        <LazyRoute><RenewalTrackerPage /></LazyRoute>
+                      </RouteAccessGuard>
                     }
                   />
 

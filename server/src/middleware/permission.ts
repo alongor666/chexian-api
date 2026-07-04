@@ -41,6 +41,28 @@ export const API_ROUTE_TO_PAGE_MAP: Record<string, string> = {
 
   // /salesman-ranking 对应 branch_admin 专属报表 —— org_user 不可见
   '/salesman-ranking': '/reports',
+
+  // /repair 页面（维修分析）—— org_user 不可见
+  '/repair': '/repair',
+
+  // /customer-flow 页面（客户流转）—— org_user 不可见
+  '/customer-flow': '/customer-flow',
+
+  // /claims-detail 页面（赔案明细）—— org_user 不可见
+  // 注意：/chart-ledger 页面依赖此域数据，未来给 org_user 开放 /chart-ledger
+  // 时须同步在其 allowedRoutes 中开放本页面，否则会出现"页面能进、图表 403"的体验断层
+  '/claims-detail': '/claims-detail',
+
+  // /quote-conversion 页面（报价转化）—— org_user 不可见
+  // 注意：/chart-ledger 页面依赖此域数据，未来给 org_user 开放 /chart-ledger
+  // 时须同步在其 allowedRoutes 中开放本页面，否则会出现"页面能进、图表 403"的体验断层
+  '/quote-conversion': '/quote-conversion',
+
+  // /expense-development 页面（费用发展）—— org_user 不可见
+  '/expense-development': '/expense-development',
+
+  // /renewal-tracker 页面（续保跟踪）—— org_user 不可见
+  '/renewal-tracker': '/renewal-tracker',
 };
 
 /**
