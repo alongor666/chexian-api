@@ -74,6 +74,8 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: null, method: 'getFilterOptions', args: NO_ARGS },
   { ns: null, method: 'getExpenseRatioDev', args: NO_ARGS },
   { ns: null, method: 'getRenewalTracker', args: () => [{}] },
+  // 拆分后合法新增（PR #876，图表账本页）：维度×指标 pivot 只读查询
+  { ns: null, method: 'getPivot', args: () => [['insurance_type'], ['total_premium']] },
 
   // ── quoteConversion（7）──
   { ns: 'quoteConversion', method: 'kpi', args: NO_ARGS },
