@@ -2,7 +2,7 @@
 
 > **唯一事实源**：每个 skill 完整定义在 `~/.claude/skills/<name>/SKILL.md`。本文件**只记录"本项目怎么用它"**，不重复 skill 自我描述；发现未登记 skill 当场补登。
 >
-> **上游同步**：B 段 `chexian-*`/A1 `rewrite-conclusion` 源在自有仓 `alongor666/alongor666-skills`（同步走 `crystallize-skill`）；`chexian-commit-push-pr` = `commit-push-pr-core` wrapper。赔款口径治理见 BACKLOG B299。
+> **上游同步**：`chexian-*`/`diagnose-*`/`rewrite-conclusion` 源在 `alongor666/alongor666-skills`（走 `crystallize-skill`）；`chexian-commit-push-pr`=`commit-push-pr-core` wrapper。
 
 ---
 
@@ -15,6 +15,7 @@
 | **diagnose-org-weekly** (v1.19) | 三级机构经营诊断周报（10 板块 + 22 SPA 下钻·单文件） | `python3 ~/.claude/skills/diagnose-org-weekly/cli.py --org "<机构>" --year 2026` → `/tmp/<机构>_周报.html` |
 | **diagnose-period-trend** (v2.0) | 短中长期对照三视图（V1 驾驶舱/V3 叙事周报/V4 超表）。触发"周期趋势/超表/驾驶舱" | `python3 ~/.claude/skills/diagnose-period-trend/lib/cli.py --view all` → `<cutoff>-*.html` |
 | **diagnose-loss-development** (v2.2) | 赔付率发展诊断（cohort + 月份矩阵 + 多维下钻）。触发"赔付率发展/loss-development" | → `server/data/reports/diagnose-loss-development/YYYY-MM-DD/` |
+| **diagnose-lr-triage** (v1.0) | 满期赔付率哨兵报警「先证伪再归因」（复现→成熟度证伪→归因→敏感性带）。触发"赔付率报警/真恶化还是准备金没跑完" | 终端 `duckdb` 出结论 |
 | **rewrite-conclusion** | L2 结论 AI 重写（读 L1 车型子文档+机构诊断卡 → 管理层判断） | `--topic 出险率\|费用率\|保费达成` |
 
 ### A2. 渲染基础设施（被 A1 集成，**不直接调用**）
@@ -63,19 +64,19 @@
 | **cleanup-worktrees** | "清理/回收 worktree" → 安全回收器，默认只删零损失（`--dry-run` 盘点 / `--archive` 备份后清理） |
 | **/chexian-evidence-loop**（基座 `evidence-loop-core`） | "按证据闭环做 / evidence loop / 先建 harness 再动手" → 三阶段（harness 报告 → loop checkpoint → verifier 证伪）。本项目 §4 表见 `.claude/rules/evidence-loop.md`；**跨任务并行调度**先 `bun run loop:dispatch`（Loop v2，见 `.claude/rules/loop-orchestration.md`） |
 
-### E2. 机制沉淀基座（机制对外便携版 · skills 仓 PR #58）
+### E2. 机制沉淀基座（skills 仓 PR #58）
 
-> 本项目内**以 rules/scripts 原文为准**，技能是复用出口、不反向定口径。通用：**backlog-eventlog-core**(backlog-eventlog.md)·**loop-orchestration-core**(loop-orchestration.md)·**worktree-bootstrap**(worktree-setup.md)·**governance-gate-core**(check-governance.mjs)·**registry-codegen-pattern**(CLAUDE.md §2)·**golden-baseline-harness**(golden-baseline.mjs)；车险域：**chexian-business-calibers**(business-domain.md)·**chexian-data-pipeline-patterns**(data-pipeline.md)·**chexian-deploy-ops**(deploy-chain-sop.md·脱敏)
+> 本项目内**以 rules/scripts 原文为准**，技能是复用出口、不反向定口径。通用：**backlog-eventlog-core**·**loop-orchestration-core**·**worktree-bootstrap**·**governance-gate-core**·**registry-codegen-pattern**·**golden-baseline-harness**；车险域：**chexian-business-calibers**·**chexian-data-pipeline-patterns**·**chexian-deploy-ops**
 
 ---
 
 ## 触发对齐规则（路由）
 
 - "X 经营诊断周报/跑一份周报" → A1 `diagnose-org-weekly` 直接套命令，**禁止搜索 skill 位置**
-- "出险率为什么升/为什么赔得多" → B `chexian-ir-diagnosis` · 报告要推 → C `chexian-im-push` · 发 IM → D 查域+平台 · 写代码/debug/PR → E
+- "出险率为何升/赔得多" → B `chexian-ir-diagnosis`；推报告 → C `chexian-im-push`；发 IM → D；写代码/debug/PR → E
 
 ## 维护协议
 
 - **新增 skill**：走 `chexian-crystallize-skill` 流水线（共享 skill 改仓库 + 装软链；项目级放 `.claude/skills/*.md`）。**禁止在 `~/.claude/skills/` 直接建实体目录**；创建后同会话内把"本项目用法"补登到对应小节
-- **skill 弃用**：表格行尾标注 `[DEPRECATED YYYY-MM]`（参 `xcl-pdf2lark` 不在本表的处理）
+- **skill 弃用**：表格行尾标注 `[DEPRECATED YYYY-MM]`
 - **eager-load 体积监控**：本表保持 ≤ 6KB。再涨先压顶部治理 blockquote（已入 memory/BACKLOG 的留一行指针即可），再裁 D 段低频条目；**skill 名指针一律不可删**
