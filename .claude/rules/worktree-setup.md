@@ -1,3 +1,7 @@
+---
+paths: ["scripts/hooks/**", "scripts/install-git-hooks.sh"]
+---
+
 # Worktree 配置规则
 
 > 两部分：**§A 多会话并发纪律**（根治"分支被其他会话切换" + 减少合并冲突）· **§B worktree 依赖安装机制**（原内容）。
