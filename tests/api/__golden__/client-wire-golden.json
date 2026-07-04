@@ -1,16 +1,4 @@
 {
-  "ai.analyzeTrend": {
-    "verb": "POST",
-    "path": "/ai/trend-analysis",
-    "params": [],
-    "bodyKeys": [
-      "coverage",
-      "org",
-      "rows"
-    ],
-    "auth": true,
-    "dedupe": ""
-  },
   "ai.capabilities": {
     "verb": "GET",
     "path": "/ai/capabilities",

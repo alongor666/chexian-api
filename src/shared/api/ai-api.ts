@@ -4,13 +4,17 @@
  * 挂载点：apiClient.ai.*
  * 通过 ApiTransport 句柄复用单实例传输状态（不新建第二个 ApiClient）。
  *
- * POST 端点（2 个）：
- *   analyzeTrend(params)       → POST ai/trend-analysis
+ * POST 端点（1 个）：
  *   detectRequirement(params)  → POST ai/detect-requirement
  *
  * GET 端点（2 个）：
  *   capabilities()             → GET  ai/capabilities
  *   quickSuggestions()         → GET  ai/quick-suggestions
+ *
+ * 注：analyzeTrend（POST ai/trend-analysis）已于 BACKLOG 2026-06-09-claude-44f2ca 移除——
+ * 前端唯一调用方 CrossSellOrgTrendChart 在 commit 5a759d10（2026-03-10）改用客户端「程序解读」，
+ * 之后无任何组件调用该方法（PR #547 评审确认零调用点）。后端 /api/ai/trend-analysis 路由保留
+ * （未发现前端外的消费方，但保守起见不删，避免误伤可能的直接 curl/未来接入）。
  */
 
 import { AI_ROUTES } from './routes';
@@ -19,20 +23,6 @@ import type { DetectRequirementResponse, CapabilityInfo } from './types';
 
 export class AiApi {
   constructor(private readonly t: ApiTransport) {}
-
-  /**
-   * AI 分析机构推介率趋势（后端读取 API Key，无需前端传）
-   */
-  analyzeTrend(params: {
-    rows: Array<{ date: string; auto_count: number; driver_count: number; rate: number; avg_premium: number }>;
-    org: string;
-    coverage: string;
-  }): Promise<{ success: boolean; analysis: string; error?: string }> {
-    return this.t.request(`/${AI_ROUTES.TREND_ANALYSIS}`, {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  }
 
   /**
    * AI 智能需求识别

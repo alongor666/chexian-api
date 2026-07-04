@@ -22,7 +22,14 @@
  *   2. 在 tests/api/__support__/wire-probe.ts 的 REGISTRY 补一条（金 master 才能覆盖它）
  *   3. `UPDATE_GOLDEN=1 bunx vitest run tests/api/client-wire-golden.test.ts` 重生 golden
  *   4. 本脚本 + `bun run governance` 重新通过
- * 删除方法没有快捷通道——那是破坏性 API 变更，需先确认零调用方再走评审。
+ *
+ * 删除方法没有快捷通道——那是破坏性 API 变更，需先确认零调用方（前端 + CLI/MCP/scripts）
+ * 再走评审。确认后走 POST_SPLIT_REMOVALS 登记通道（POST_SPLIT_ADDITIONS 的对称版本）：
+ *   1. 从源码（*-api.ts）与 wire-probe.ts REGISTRY 删除该方法
+ *   2. `UPDATE_GOLDEN=1 bunx vitest run tests/api/client-wire-golden.test.ts` 重生 golden
+ *   3. 在下方 POST_SPLIT_REMOVALS 登记 { name, backlogUid/pr, note, routeToken? }
+ *      （pre-#536 冻结基线本身**不改**——它是历史事实快照）
+ *   4. 若同时保留了对应后端路由常量，routeToken 字段豁免路由集 LOST 检查
  *
  * 用法：
  *   node scripts/api-wire-conservation.mjs            # 校验，失败 exit 1
@@ -62,6 +69,28 @@ const SUB_CLIENT_FILES = [
 const POST_SPLIT_ADDITIONS = [
   // 例：{ name: 'premium.forecast', pr: 'PR #560' },
   { name: 'getPivot', pr: 'PR #876' }, // 图表账本页 /chart-ledger：维度×指标 pivot 只读查询
+];
+
+/**
+ * 拆分后合法删除的业务方法（POST_SPLIT_ADDITIONS 的对称通道，首次使用于 B44f2ca）。
+ *
+ * 与「新增」不同，脚本文件头明确写明"删除方法没有快捷通道——那是破坏性 API 变更，需先确认
+ * 零调用方再走评审"。本清单是那次评审确认后的登记点，不是绕过评审的捷径：
+ *   1. 已完成：grep 全前端/CLI/MCP/scripts 零真实调用点确认（区分测试自证 vs 真实消费）
+ *   2. 在下方登记 { name, backlogUid/pr, note }
+ *   3. 从 wire-probe.ts REGISTRY 删除对应条目 + UPDATE_GOLDEN=1 重生 golden
+ *   4. pre-#536 冻结基线（pre536-business-methods.json）**不改**——它是历史事实快照，删除
+ *      不代表方法在 #536 前不存在；恒等式改为在 pre536Count 上减本清单长度
+ *   5. 若同时保留了对应的路由常量（如仍有后端路由但去掉前端唯一调用方），在 routeToken 里
+ *      标注该常量令牌，豁免路由集 LOST 检查（否则会被误判为"端点被搬丢"）
+ */
+const POST_SPLIT_REMOVALS = [
+  {
+    name: 'ai.analyzeTrend',
+    backlogUid: '2026-06-09-claude-44f2ca',
+    note: 'PR #547 评审发现零前端调用点；commit 5a759d10（2026-03-10）起 CrossSellOrgTrendChart 改用客户端「程序解读」，之后无组件调用。后端 /api/ai/trend-analysis 路由保守保留。',
+    routeToken: 'AI_ROUTES.TREND_ANALYSIS',
+  },
 ];
 
 const args = process.argv.slice(2);
@@ -138,13 +167,13 @@ for (const f of SUB_CLIENT_FILES) {
 const golden = JSON.parse(readFile(GOLDEN_PATH));
 const goldenCount = Object.keys(golden).length;
 
-// ── 守恒恒等式：pre536 + 合法新增 == 保留 + Σ命名空间 ──
+// ── 守恒恒等式：pre536 + 合法新增 - 合法删除 == 保留 + Σ命名空间 ──
 const EVOLUTION_HINT =
   '若是合法新增方法：在本脚本 POST_SPLIT_ADDITIONS 登记（方法名 + PR 号）→ wire-probe.ts REGISTRY 补条目 → UPDATE_GOLDEN=1 重生 golden（详见文件头「演进通道」）；若非有意新增，说明拆分面发生了无意识漂移，须先定位';
-const expectedTotal = pre536Count + POST_SPLIT_ADDITIONS.length;
+const expectedTotal = pre536Count + POST_SPLIT_ADDITIONS.length - POST_SPLIT_REMOVALS.length;
 if (retainedCount + namespaceCount !== expectedTotal) {
   failures.push(
-    `守恒恒等式破坏：保留(${retainedCount}) + Σ命名空间(${namespaceCount}) = ${retainedCount + namespaceCount} != pre-#536(${pre536Count}) + 新增清单(${POST_SPLIT_ADDITIONS.length})。${EVOLUTION_HINT}`
+    `守恒恒等式破坏：保留(${retainedCount}) + Σ命名空间(${namespaceCount}) = ${retainedCount + namespaceCount} != pre-#536(${pre536Count}) + 新增清单(${POST_SPLIT_ADDITIONS.length}) - 删除清单(${POST_SPLIT_REMOVALS.length})。${EVOLUTION_HINT}`
   );
 }
 
@@ -171,6 +200,26 @@ for (const a of POST_SPLIT_ADDITIONS) {
   }
 }
 
+// ── 删除清单自身合法性：登记的方法必须已真实清空（防「登记了但没删干净」）──
+for (const r of POST_SPLIT_REMOVALS) {
+  if (!r.backlogUid && !r.pr) failures.push(`删除清单条目缺 backlogUid/PR 号：${r.name}（登记必须可追溯）`);
+  if (goldenKeys.has(r.name)) {
+    failures.push(`删除清单方法仍在金 master golden 中：${r.name}（先从 wire-probe REGISTRY 删除再 UPDATE_GOLDEN=1 重生）`);
+  }
+  const [ns, bareName] = r.name.includes('.') ? r.name.split('.') : [null, r.name];
+  const stillRetained = ns === null && retainedBase.has(bareName);
+  const stillNamespaced = ns !== null && (() => {
+    try {
+      return extractPublicMethods(readFile(path.join(API_DIR, `${ns}-api.ts`))).has(bareName);
+    } catch {
+      return false;
+    }
+  })();
+  if (stillRetained || stillNamespaced) {
+    failures.push(`删除清单方法仍存在于源码：${r.name}（未真正删除，或命名空间/裸名判断有误）`);
+  }
+}
+
 // ── 路由集 LOST=∅（需 git 历史，CI 浅克隆缺则跳过）──
 let lostTokens = null;
 try {
@@ -183,9 +232,15 @@ try {
   for (const f of SUB_CLIENT_FILES) {
     for (const t of extractRouteTokens(readFile(path.join(API_DIR, `${f}-api.ts`)))) curTokens.add(t);
   }
-  lostTokens = [...preTokens].filter((t) => !curTokens.has(t));
+  const exemptedTokens = new Set(POST_SPLIT_REMOVALS.map((r) => r.routeToken).filter(Boolean));
+  const rawLost = [...preTokens].filter((t) => !curTokens.has(t));
+  lostTokens = rawLost.filter((t) => !exemptedTokens.has(t));
+  const exemptedLost = rawLost.filter((t) => exemptedTokens.has(t));
   if (lostTokens.length > 0) {
     failures.push(`路由集 LOST≠∅（端点被搬丢）：${lostTokens.join(', ')}`);
+  }
+  if (exemptedLost.length > 0) {
+    notes.push(`路由令牌 ${exemptedLost.join(', ')} 因 POST_SPLIT_REMOVALS 登记豁免 LOST 检查（前端调用方已删，后端路由保留）`);
   }
 } catch {
   notes.push(`路由集 LOST 检查跳过：git 历史缺 ${BASELINE_COMMIT}（浅克隆环境，非失败）`);
@@ -202,8 +257,9 @@ if (!QUIET || !ok) {
   for (const f of SUB_CLIENT_FILES) console.log(`      ${f.padEnd(18)}: ${namespacePerFile[f]}`);
   console.log(`  金 master golden 线缆签名条目             : ${goldenCount}`);
   console.log(`  拆分后合法新增（POST_SPLIT_ADDITIONS）    : ${POST_SPLIT_ADDITIONS.length}`);
+  console.log(`  拆分后合法删除（POST_SPLIT_REMOVALS）     : ${POST_SPLIT_REMOVALS.length}`);
   console.log('────────────────────────────────────────');
-  console.log(`  守恒：${retainedCount} + ${namespaceCount} == ${pre536Count} + ${POST_SPLIT_ADDITIONS.length} ? ${retainedCount + namespaceCount === expectedTotal ? '✓' : '✗'}`);
+  console.log(`  守恒：${retainedCount} + ${namespaceCount} == ${pre536Count} + ${POST_SPLIT_ADDITIONS.length} - ${POST_SPLIT_REMOVALS.length} ? ${retainedCount + namespaceCount === expectedTotal ? '✓' : '✗'}`);
   console.log(`  覆盖：golden ${goldenCount} ≥ ${retainedCount + namespaceCount} ? ${goldenCount >= retainedCount + namespaceCount ? '✓' : '✗'}`);
   console.log(`  路由 LOST=∅ : ${lostTokens === null ? '跳过' : lostTokens.length === 0 ? '✓' : '✗'}`);
   for (const n of notes) console.log(`  ℹ️  ${n}`);

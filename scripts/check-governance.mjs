@@ -2866,6 +2866,165 @@ function checkRouteCatalogParamContracts() {
   }
 }
 
+/**
+ * 非 query 路由域对账（BACKLOG 2026-07-03-claude-7982a9）
+ *
+ * 背景：checkQueryCatalogConsistency 只扫描 server/src/routes/query/，对 auth/data/ai/
+ * filters/workflows/copilot/admin/reports/skills/discover/wecom-auth 以及 server/src/agent/
+ * routes/ 下的路由零对账——上一批（PR #874 前后）刚补的 AUTH_ROUTES 缺 '/route-catalog' 键
+ * 就是这个盲区暴露的真实漂移实例。本检查把"挂载 GET 端点 ↔ api-routes.ts 常量表"的对账模型
+ * 扩到这些目录，但不发明 query-catalog 那种三方（挂载/catalog/常量）模型——这些域没有
+ * route-catalog 元数据表，只对账"挂载 vs 常量"两方。
+ *
+ * 扫描范围：server/src/routes/（除 query/ 子目录，那边由 checkQueryCatalogConsistency 覆盖）
+ * + server/src/agent/routes/。
+ *
+ * 对账目标：每个路由文件 → api-routes.ts 里对应的常量表（按 app.ts 的 app.use 前缀关联）。
+ * 部分路由文件（admin/reports/skills/discover/discover-fields-view/wecom-auth）在
+ * api-routes.ts 里没有任何常量表——不是遗漏，是历史上从未建过；这类文件登记进
+ * KNOWN_GAP_FILES，每条注明原因，防止本检查静默漏扫。
+ */
+function checkNonQueryRoutesConsistency() {
+  info('检查非 query 路由域对账（挂载端点 ↔ api-routes.ts 常量表，query/ 域外的另一半盲区）...');
+
+  const routesDir = path.join(ROOT_DIR, 'server/src/routes');
+  const agentRoutesDir = path.join(ROOT_DIR, 'server/src/agent/routes');
+  const apiRoutesFile = path.join(ROOT_DIR, 'server/src/config/api-routes.ts');
+  const apiRoutesSrc = fs.readFileSync(apiRoutesFile, 'utf-8');
+
+  // 路由文件 → api-routes.ts 常量导出名。已知无常量表的文件登记原因（不静默跳过）。
+  const FILE_TO_CONSTANT = {
+    'auth.ts': 'AUTH_ROUTES',
+    'data.ts': 'DATA_ROUTES',
+    'ai.ts': 'AI_ROUTES',
+    'filters.ts': 'FILTER_ROUTES',
+    'workflows.ts': 'WORKFLOWS_ROUTES',
+    'copilot.ts': 'COPILOT_ROUTES',
+  };
+  const AGENT_FILE_TO_CONSTANT = {
+    'agent-audit.ts': 'AGENT_AUDIT_ROUTES',
+    'agent-diagnosis.ts': 'AGENT_DIAGNOSIS_ROUTES',
+    'agent-explain.ts': 'AGENT_EXPLAIN_ROUTES',
+    'agent-forecast.ts': 'AGENT_FORECAST_ROUTES',
+  };
+  // 已知缺口：文件存在路由但 api-routes.ts 无对应常量表。逐项注明原因，
+  // 到"实现常量表"那天从此清单移除即视为治理提升（而非放宽豁免）。
+  const KNOWN_GAP_FILES = {
+    'admin.ts': '仅 1 个内部运维端点（POST /data/reload），无前端/CLI/MCP 消费方，未建常量表',
+    'reports.ts': '路径含 :reportId/:snapshot/* 通配符文件服务路由，非结构化 API，常量表意义有限',
+    'skills.ts': '本地技能编排路由（/api/skills/*），面向内部 skill 运行时而非前端类型安全引用',
+    'discover.ts': 'Agent 自解释发现端点（/fields /metrics /presets /schema /legend），无前端常量消费方',
+    'wecom-auth.ts': '挂载前缀 /api/auth/wecom 与 AUTH_ROUTES.WECOM_CONFIG(/wecom/config) 路径段拼接口径不同，需专项对齐后再纳入对账',
+  };
+
+  function extractMountedRoutes(filePath) {
+    const src = fs
+      .readFileSync(filePath, 'utf-8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    const routes = [];
+    // 覆盖单行 `router.get('/path', ...)` 与跨行 `router.get(\n  '/path'` 两种写法
+    for (const m of src.matchAll(/router\.(get|post|put|delete|patch)\(\s*\n?\s*'(\/[^']*)'/g)) {
+      routes.push(m[2]);
+    }
+    return routes;
+  }
+
+  function extractConstantValues(constName) {
+    const start = apiRoutesSrc.indexOf(`export const ${constName}`);
+    if (start === -1) return null;
+    const braceStart = apiRoutesSrc.indexOf('{', start);
+    let depth = 0;
+    let braceEnd = braceStart;
+    for (let i = braceStart; i < apiRoutesSrc.length; i++) {
+      if (apiRoutesSrc[i] === '{') depth++;
+      else if (apiRoutesSrc[i] === '}') { depth--; if (depth === 0) { braceEnd = i; break; } }
+    }
+    const block = apiRoutesSrc.slice(braceStart, braceEnd);
+    return new Set([...block.matchAll(/'(\/[^']*)'/g)].map((m) => m[1]));
+  }
+
+  // 参数化路由归一：`/users/:id` → `/users`（与 checkQueryCatalogConsistency 的 paramBase 同规则）
+  const paramBase = (p) => (p.includes('/:') ? p.slice(0, p.indexOf('/:')) : p);
+
+  const missingInConstants = []; // { file, route }
+  const staleGapEntries = []; // 文件已在 KNOWN_GAP_FILES 但其实有常量表可对账了（陈旧豁免）
+
+  const scannedFiles = [];
+  if (fs.existsSync(routesDir)) {
+    for (const entry of fs.readdirSync(routesDir, { withFileTypes: true })) {
+      if (entry.isDirectory()) continue; // query/ 子目录由 checkQueryCatalogConsistency 覆盖，__tests__ 跳过
+      if (!entry.name.endsWith('.ts')) continue;
+      scannedFiles.push({ name: entry.name, full: path.join(routesDir, entry.name), map: FILE_TO_CONSTANT });
+    }
+  }
+  if (fs.existsSync(agentRoutesDir)) {
+    for (const entry of fs.readdirSync(agentRoutesDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.ts')) continue;
+      scannedFiles.push({ name: entry.name, full: path.join(agentRoutesDir, entry.name), map: AGENT_FILE_TO_CONSTANT });
+    }
+  }
+
+  const unrecognizedFiles = [];
+  for (const { name, full, map } of scannedFiles) {
+    const mounted = extractMountedRoutes(full);
+    // 零挂载路由的文件（纯聚合器如 query.ts 只 router.use 子路由、或纯视图模块如
+    // discover-fields-view.ts）无对账对象，天然跳过——不算"未登记"，因为没有路由可漂移。
+    if (mounted.length === 0) continue;
+
+    if (name in KNOWN_GAP_FILES) {
+      // 陈旧豁免检测：如果该文件其实已经有常量表了，说明豁免该移除
+      const maybeConst = map[name];
+      if (maybeConst && extractConstantValues(maybeConst)) {
+        staleGapEntries.push(name);
+      }
+      continue;
+    }
+    const constName = map[name];
+    if (!constName) {
+      unrecognizedFiles.push(name);
+      continue;
+    }
+    const constValues = extractConstantValues(constName);
+    if (!constValues) {
+      unrecognizedFiles.push(`${name}（声明对应常量 ${constName} 但 api-routes.ts 未找到该导出）`);
+      continue;
+    }
+    for (const route of mounted) {
+      const base = paramBase(route);
+      if (!constValues.has(route) && !constValues.has(base)) {
+        missingInConstants.push({ file: `server/src/routes/${name}`, route });
+      }
+    }
+  }
+
+  if (unrecognizedFiles.length > 0) {
+    error(`非 query 路由文件既未登记常量映射也未登记 known-gap = ${unrecognizedFiles.length} 个：`);
+    for (const f of unrecognizedFiles) console.log(`    - ${f}`);
+    console.log('    修复：在 checkNonQueryRoutesConsistency 的 FILE_TO_CONSTANT/AGENT_FILE_TO_CONSTANT 补映射，或登记 KNOWN_GAP_FILES 并注明原因');
+    return false;
+  }
+
+  if (staleGapEntries.length > 0) {
+    error(`KNOWN_GAP_FILES 豁免已陈旧（该文件已有对应常量表可对账）= ${staleGapEntries.length} 个：`);
+    for (const f of staleGapEntries) console.log(`    - ${f}`);
+    console.log('    修复：从 checkNonQueryRoutesConsistency 的 KNOWN_GAP_FILES 移除该条目，纳入正式对账');
+    return false;
+  }
+
+  if (missingInConstants.length > 0) {
+    error(`已挂载但未登记 api-routes.ts 常量（前端/CLI 无法类型安全引用）= ${missingInConstants.length} 条：`);
+    for (const { file, route } of missingInConstants) console.log(`    - ${file}: ${route}`);
+    console.log('    修复：在 server/src/config/api-routes.ts 对应常量表补键（前端镜像 src/shared/api/routes.ts 同步）');
+    return false;
+  }
+
+  const totalScanned = scannedFiles.length;
+  const totalGaps = Object.keys(KNOWN_GAP_FILES).length;
+  success(`非 query 路由域对账通过（扫描 ${totalScanned} 个路由文件，${totalGaps} 个登记 known-gap，其余均对账一致）`);
+  return true;
+}
+
 // ============================================================
 // Agent 注册表版本可追溯（harness 对标门槛 3，BACKLOG 2026-06-11-claude-f5646f）
 // ============================================================
@@ -3902,6 +4061,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '能力矩阵镜像', fn: checkFilterCapabilityMirror },
   { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
+  { name: '非query路由域对账', fn: checkNonQueryRoutesConsistency },
   { name: 'RouteCatalog参数契约', fn: checkRouteCatalogParamContracts },
   { name: 'Agent注册表版本', fn: checkAgentRegistryVersionBump },
   { name: '立方体影子对账容差', fn: checkCubeShadowTolerance },

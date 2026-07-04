@@ -137,8 +137,7 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: 'customerFlow', method: 'trend', args: NO_ARGS },
   { ns: 'customerFlow', method: 'metadata', args: NO_ARGS },
 
-  // ── ai（4）──
-  { ns: 'ai', method: 'analyzeTrend', args: () => [{ rows: [], org: 'x', coverage: 'y' }] },
+  // ── ai（3；analyzeTrend 已于 BACKLOG 2026-06-09-claude-44f2ca 确认死代码移除）──
   { ns: 'ai', method: 'detectRequirement', args: () => [{ message: 'm' }] },
   { ns: 'ai', method: 'capabilities', args: NO_ARGS },
   { ns: 'ai', method: 'quickSuggestions', args: NO_ARGS },

@@ -32,7 +32,7 @@ describe('KpiCards 空态保护（多省接入 ADR G8）', () => {
   it('loading 时显示骨架屏，不渲染 KPI 数值', () => {
     const { container } = render(<KpiCards data={undefined} isLoading={true} />);
     expect(container.querySelector('.animate-pulse')).toBeTruthy();
-    expect(screen.queryByText('整体转化率')).toBeNull();
+    expect(screen.queryByText('续转承保率')).toBeNull();
     expect(screen.queryByText('暂无数据')).toBeNull();
   });
 
@@ -40,7 +40,7 @@ describe('KpiCards 空态保护（多省接入 ADR G8）', () => {
     render(<KpiCards data={{} as QuoteKpi} isLoading={false} />);
     expect(screen.getByText('暂无数据')).toBeTruthy();
     expect(screen.getByText(/这不代表真实零报价/)).toBeTruthy();
-    expect(screen.queryByText('整体转化率')).toBeNull();
+    expect(screen.queryByText('续转承保率')).toBeNull();
   });
 
   it('全零规模（聚合无行 / 装载中假象）+ 非 loading 同样触发空态，禁止静默展示零转化率', () => {
@@ -51,12 +51,12 @@ describe('KpiCards 空态保护（多省接入 ADR G8）', () => {
       />
     );
     expect(screen.getByText('暂无数据')).toBeTruthy();
-    expect(screen.queryByText('整体转化率')).toBeNull();
+    expect(screen.queryByText('续转承保率')).toBeNull();
   });
 
   it('有规模数据时正常渲染 KPI（不误触发空态）', () => {
     render(<KpiCards data={fullData} isLoading={false} />);
-    expect(screen.getByText('整体转化率')).toBeTruthy();
+    expect(screen.getByText('续转承保率')).toBeTruthy();
     expect(screen.queryByText('暂无数据')).toBeNull();
   });
 });
