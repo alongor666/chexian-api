@@ -11,7 +11,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
-import type { PivotRow } from '@/shared/api/types';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { formatPremiumWan, formatPercent } from '@/shared/utils/formatters';
