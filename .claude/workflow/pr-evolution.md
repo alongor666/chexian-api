@@ -1879,3 +1879,29 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （本条主体即机制化落地：E6 governance 闸自动执行、E4 有命令 + 单测；无新的纯纪律残留点。2026-09-25 存量登记项「扫 code-reviewer 作闸源告警」前提已被 2026-06-29 反转，到期应显式撤项——预判已记 §4 meta。）
+
+---
+
+## 2026-07-04 · rules eager-load 瘦身第二批：worktree-setup + shared-memory-discipline 加 `paths:` 门控（`[policy-override]`）
+
+> 用户指令「评估并实施腾挪 headroom 的根治方案」。承接 2026-06-18 第一批（6 个低频 SOP 门控，60.3KB→29.9KB）；本条是同一操作的第二批，操作模式一致：prepend frontmatter 不动正文。
+
+- **症状**: eager-load 区（无 `paths:` 门控的 `.claude/rules/*.md`）实测 **40960B = 恰好顶满 40KB 预算，0B headroom**。每次往 `skills-map.md` 登记新 skill 都顶破 governance #41 硬线、被迫临时压缩其他 prose「净零回补」（PR #886 实证一次）——结构性债，下次登记必再撞。
+- **改动（frozen · `[policy-override]`）**: 2 个低频/事件性 rule 加 `paths:` 门控（移出常驻区，碰匹配文件时才注入）：
+  1. `worktree-setup.md`（12662B）→ `paths: ["scripts/hooks/**", "scripts/install-git-hooks.sh"]`
+  2. `shared-memory-discipline.md`（6751B）→ `paths: [".claude/shared-memory/**"]`
+- **授权**: AGENTS.md §8.1「聊天口头同意 + PR 标题或 commit message 含 `[policy-override]`」——授权来源 = 用户 2026-07-04 本任务指令（明确要求实施并预授权 `[policy-override]`）；标记落本 PR 每条 commit message + PR 标题。
+- **低频判定依据（执行层已机制化，文档只剩解释层）**:
+  - worktree-setup：`claude-worktree-guard.sh` PreToolUse 写时硬拦截（exit 2 + 10 vitest 锁定）+ post-checkout 重锚提示 + pre-push 三级原生模块自愈 + MEMORY.md 多条纪律每轮加载；harness 原生 EnterWorktree 已默认建树重锚。全仓引用者均为按需场景（backlog-eventlog/loop-orchestration 均已门控、pr-review-playbook skill、hooks 脚本注释），无闸依赖其无-frontmatter 状态。
+  - shared-memory-discipline：governance #37 `checkSharedMemoryUserOnly` error 级四路扫描硬闸（pre-push+CI 双跑，写了推不出去）；报错信息本身指向该文件（check-governance.mjs:3577，事后发现路径）；`paths` 门控使 AI 一触碰 `.claude/shared-memory/**` 规则即注入（事前）；CLAUDE.md 必读列表有 AGENTS.md §8.3 指针（常驻兜底）。三层承接。
+- **候选取舍（用户给的 4 候选，2 取 2 舍）**:
+  - ❌ `evidence-loop.md`（6.4KB）：两个已够；PR #668 codex 评审曾专门撤回对它的改动（governance `checkEvidenceLoopSsotDrift` 注释），改它不必要地扩大 frozen 面。
+  - ❌ `time-caliber-disambiguation.md`（4.4KB）：**不是低频 SOP 而是高频业务护栏**——反问协议的价值恰在会话 LLM 每轮常驻；门控到协议 TS 文件意味着只有改代码时才加载，数据分析对话反而失去反问提示，会重演 B290「同一问题两个 LLM 两个答案」事故。留在 eager 区。
+- **oracle**: `bun run governance` 全绿（55/55）+ 判据单测 `rules-eager-load-budget.test.mjs` 15/15；eager-load 区实施时点 40960B（9 文件）→ 21547B ≈ 21.0KB（7 文件）；rebase 合入 origin/main 最新（#886 净零回补 -157B）后叠加值 **20.9KB / 40KB**，headroom **~19KB**——后续 skills-map 登记（每条 ~200-400B）不再需要净零回补。
+- **三问复盘**:
+  1. **重来怎样更好**: 第一批（2026-06-18）就该把这两个文件一起门控——当时 29.9KB 离 40KB 尚有余量，未做增量预测（skills-map/business-domain 等 append-only 文件只增不减），债务在 6 次登记后如期撞线。体积闸类治理应在「距硬线 ≥30%」时就做下一轮瘦身，不等顶满。
+  2. **复用价值**: 「低频判定 = 看执行层是否已机制化（hook/governance 闸），文档只剩解释层则可安全门控」——这条判据对所有 path-scoped 化决策通用；反例判据同样有价值：time-caliber 类「会话行为协议」（约束 LLM 每轮怎么回答，而非约束某类文件怎么改）不可门控，paths 语义（碰文件才注入）与其触发条件（用户提问）根本不匹配。
+  3. **如何更高质量自动化**: governance #41 已是防回退硬闸（本次改动即其建议动作的执行）；headroom 预警（如 <2KB 时 warning 提示下一轮瘦身候选）可加但暂缓——本次腾出 19KB 后预计一年内不再撞线，攒需求再机制化。
+
+### needs_automation: false
+（本条即 governance #41 闸建议动作的执行；防回退已由该闸 error 级承担。headroom 预警暂缓——19KB 余量下无近期复发风险，实证再撞线一次再立项。）

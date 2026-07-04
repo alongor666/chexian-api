@@ -1,3 +1,7 @@
+---
+paths: [".claude/shared-memory/**"]
+---
+
 # shared-memory user-only 红线（RED LINE）
 
 policy: append-only
