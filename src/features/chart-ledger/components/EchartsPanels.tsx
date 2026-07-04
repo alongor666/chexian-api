@@ -10,7 +10,7 @@ import { echarts } from '@/shared/utils/echarts';
 import { GRID_CONFIG, getChartTheme } from '@/shared/config/chartStyles';
 import { useTheme } from '@/shared/theme';
 import { colorClasses } from '@/shared/styles';
-import { formatChartValue } from '@/shared/utils/formatters';
+import { formatPercent, formatWanDirect, formatCount } from '@/shared/utils/formatters';
 import { LOSS_RATIO_THRESHOLD } from '../ledgerMeta';
 import type { AsyncState, ChartResult, ParetoBar, PointDatum } from '../types';
 
@@ -81,7 +81,7 @@ export const ChannelMatrixChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({
         ...theme.tooltipConfig,
         trigger: 'item',
         formatter: (p: any) =>
-          `${p.data.name}<br/>保费 ${formatChartValue(p.data.value[0])}万<br/>赔付率 ${formatChartValue(p.data.value[1])}%<br/>件数 ${formatChartValue(p.data.value[2])}`,
+          `${p.data.name}<br/>保费 ${formatWanDirect(p.data.value[0])}万<br/>赔付率 ${formatPercent(p.data.value[1])}<br/>件数 ${formatCount(p.data.value[2])}`,
       },
       xAxis: { ...theme.xAxisConfig, type: 'value', name: '保费规模(万元)', nameLocation: 'middle', nameGap: 28, nameTextStyle: theme.chartTextStyles.axisName, axisLabel: { ...theme.xAxisConfig.axisLabel, interval: 'auto' as const } },
       yAxis: { ...theme.yAxisConfig, type: 'value', name: '满期赔付率(%)', nameTextStyle: theme.chartTextStyles.axisName },
@@ -125,7 +125,7 @@ export const FeeOutlierChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({ r 
       tooltip: {
         ...theme.tooltipConfig,
         trigger: 'item',
-        formatter: (p: any) => `${p.data.name}<br/>费用率 ${formatChartValue(p.data.value[0])}%<br/>保费 ${formatChartValue(p.data.value[1])}万`,
+        formatter: (p: any) => `${p.data.name}<br/>费用率 ${formatPercent(p.data.value[0])}<br/>保费 ${formatWanDirect(p.data.value[1])}万`,
       },
       xAxis: { ...theme.xAxisConfig, type: 'value', name: '费用率(%)', nameLocation: 'middle', nameGap: 28, nameTextStyle: theme.chartTextStyles.axisName, axisLabel: { ...theme.xAxisConfig.axisLabel, interval: 'auto' as const } },
       yAxis: { ...theme.yAxisConfig, type: 'value', name: '保费规模(万元)', nameTextStyle: theme.chartTextStyles.axisName },
@@ -158,7 +158,7 @@ export const FrequencyTrendChart: React.FC<{ r: ChartResult<{ labels: string[]; 
   const option = useMemo(
     () => ({
       grid: GRID_CONFIG,
-      tooltip: { ...theme.tooltipConfig, valueFormatter: (v: number) => `${formatChartValue(v)}%` },
+      tooltip: { ...theme.tooltipConfig, valueFormatter: (v: number) => formatPercent(v) },
       xAxis: { ...theme.xAxisConfig, type: 'category', data: r.data.labels },
       yAxis: { ...theme.yAxisConfig, type: 'value', name: '出险频度(%)', scale: true, nameTextStyle: theme.chartTextStyles.axisName },
       series: [
@@ -220,7 +220,7 @@ export const ProfitWaterfallChart: React.FC<{
         formatter: (ps: any[]) => {
           const idx = ps[0].dataIndex;
           const raw = idx < steps.length ? steps[idx].value : marginWan;
-          return `${labels[idx]}<br/>${raw >= 0 ? '+' : ''}${formatChartValue(raw)} 万元`;
+          return `${labels[idx]}<br/>${raw >= 0 ? '+' : ''}${formatWanDirect(raw)} 万元`;
         },
       },
       xAxis: { ...theme.xAxisConfig, type: 'category', data: labels },
@@ -239,7 +239,7 @@ export const ProfitWaterfallChart: React.FC<{
             formatter: (p: any) => {
               const idx = p.dataIndex;
               const raw = idx < steps.length ? steps[idx].value : marginWan;
-              return `${raw >= 0 ? '+' : ''}${formatChartValue(raw)}`;
+              return `${raw >= 0 ? '+' : ''}${formatWanDirect(raw)}`;
             },
           },
         },
@@ -289,7 +289,7 @@ export const ControlChart: React.FC<{
     const { labels, vals, cl, ucl, lcl } = r.data;
     return {
       grid: GRID_CONFIG,
-      tooltip: { ...theme.tooltipConfig, valueFormatter: (v: number) => `${formatChartValue(v)}%` },
+      tooltip: { ...theme.tooltipConfig, valueFormatter: (v: number) => formatPercent(v) },
       xAxis: { ...theme.xAxisConfig, type: 'category', data: labels },
       yAxis: { ...theme.yAxisConfig, type: 'value', name: '变动成本率(%)', scale: true, nameTextStyle: theme.chartTextStyles.axisName },
       series: [
@@ -339,7 +339,7 @@ export const QuadrantChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({ r })
       tooltip: {
         ...theme.tooltipConfig,
         trigger: 'item',
-        formatter: (p: any) => `${p.data.name}<br/>增速 ${formatChartValue(p.data.value[0])}%<br/>赔付率 ${formatChartValue(p.data.value[1])}%`,
+        formatter: (p: any) => `${p.data.name}<br/>增速 ${formatPercent(p.data.value[0])}<br/>赔付率 ${formatPercent(p.data.value[1])}`,
       },
       xAxis: { ...theme.xAxisConfig, type: 'value', name: '保费增速(%)', nameLocation: 'middle', nameGap: 28, nameTextStyle: theme.chartTextStyles.axisName, axisLabel: { ...theme.xAxisConfig.axisLabel, interval: 'auto' as const } },
       yAxis: { ...theme.yAxisConfig, type: 'value', name: '满期赔付率(%)', scale: true, nameTextStyle: theme.chartTextStyles.axisName },

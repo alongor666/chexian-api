@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { colorClasses, fontStyles } from '@/shared/styles';
-import { formatChartValue } from '@/shared/utils/formatters';
+import { formatPercent } from '@/shared/utils/formatters';
 import { lossRatioColor, LEDGER_COLORS, ChartFrame } from './EchartsPanels';
 import type { BoxDatum, ChartResult, FunnelStep, TreemapCell } from '../types';
 
@@ -40,7 +40,7 @@ export const RiskHeatmapTable: React.FC<{
                   const v = cell.get(`${o}|${l}`);
                   return (
                     <td key={l} className={`p-1.5 text-center ${numCls}`} style={{ background: v === undefined ? 'transparent' : lossRatioColor(v), color: v === undefined ? undefined : '#10161f' }}>
-                      {v === undefined ? '—' : `${formatChartValue(v)}%`}
+                      {v === undefined ? '—' : formatPercent(v)}
                     </td>
                   );
                 })}
@@ -80,7 +80,7 @@ export const LossTriangleTable: React.FC<{
                   const v = cell.get(`${y}|${d}`);
                   return (
                     <td key={d} className={`p-1.5 text-center ${numCls}`} style={{ background: v === undefined ? 'transparent' : lossRatioColor(v), color: v === undefined ? undefined : '#10161f' }}>
-                      {v === undefined ? '—' : `${formatChartValue(v)}%`}
+                      {v === undefined ? '—' : formatPercent(v)}
                     </td>
                   );
                 })}
