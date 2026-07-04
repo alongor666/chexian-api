@@ -11,7 +11,7 @@ export interface DevInsightItem {
   description: string;
 }
 
-export type ExpenseMetricKey = 'expense_ratio_pct' | 'avg_fee_per_policy' | 'dev_fee_wan';
+export type ExpenseMetricKey = 'expense_ratio_pct' | 'avg_fee_per_policy_yuan' | 'dev_fee_wan';
 
 interface CohortData {
   policyCount: number;
@@ -123,8 +123,8 @@ function avgFeeInsights(
 
   if (matureYears.length >= 2) {
     const first = matureYears[0], last = matureYears[matureYears.length - 1];
-    const afF = getLatestVal(cohorts, first, 'avg_fee_per_policy');
-    const afL = getLatestVal(cohorts, last, 'avg_fee_per_policy');
+    const afF = getLatestVal(cohorts, first, 'avg_fee_per_policy_yuan');
+    const afL = getLatestVal(cohorts, last, 'avg_fee_per_policy_yuan');
     if (afF != null && afL != null && afF > 0) {
       const growthPct = ((afL - afF) / afF) * 100;
       if (Math.abs(growthPct) >= TH.avgFeeGrowthPct) {
@@ -144,8 +144,8 @@ function avgFeeInsights(
     if (compareM >= 1) {
       const prev = [...matureYears].reverse().find(yr => (cohorts[yr]?.maxDev ?? 0) >= compareM);
       if (prev != null) {
-        const afNow = getVal(cohorts, latestEarly, compareM, 'avg_fee_per_policy');
-        const afPrev = getVal(cohorts, prev, compareM, 'avg_fee_per_policy');
+        const afNow = getVal(cohorts, latestEarly, compareM, 'avg_fee_per_policy_yuan');
+        const afPrev = getVal(cohorts, prev, compareM, 'avg_fee_per_policy_yuan');
         if (afNow != null && afPrev != null && afPrev > 0) {
           const pct = ((afNow - afPrev) / afPrev) * 100;
           if (Math.abs(pct) >= TH.avgFeeComparePct) {
@@ -239,7 +239,7 @@ export function generateExpenseDevInsights(
     case 'expense_ratio_pct':
       items = expenseRatioInsights(cohorts, matureYears, earlyYears);
       break;
-    case 'avg_fee_per_policy':
+    case 'avg_fee_per_policy_yuan':
       items = avgFeeInsights(cohorts, matureYears, earlyYears);
       break;
     case 'dev_fee_wan':

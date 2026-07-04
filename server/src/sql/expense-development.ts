@@ -81,7 +81,7 @@ export function generateExpenseRatioDevelopmentQuery(
       ROUND(a.total_fee * 100.0 / NULLIF(a.total_premium, 0), 2) AS expense_ratio_pct,
       CASE WHEN a.dev_policies > 0
            THEN ROUND(a.total_fee / a.dev_policies, 0)
-           ELSE NULL END AS avg_fee_per_policy,
+           ELSE NULL END AS avg_fee_per_policy_yuan,
       ROUND(a.dev_policies * 100.0 / pt.total_policies, 1) AS coverage_pct
     FROM aggregated a
     JOIN policy_totals pt ON a.cohort_year = pt.cohort_year

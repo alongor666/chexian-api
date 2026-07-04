@@ -64,7 +64,15 @@ function assertTestCase(value: unknown, assertion: TestAssertion, context: strin
 // 合成数据
 // ═══════════════════════════════════════════════════
 
-/** PolicyFact-like 合成数据 — 覆盖 foundation/ratio/cost 所有 requiredColumns */
+/**
+ * PolicyFact-like 合成数据 — 覆盖 foundation/ratio/cost 所有 requiredColumns。
+ *
+ * endorsement_no：批单号字段（业务面板口径 v2.0.0，2026-06-12 commit e72ee99f 引入，
+ * 见 categories/ratio.ts changelog "计数口径统一为业绩面板口径：剔除批改(endorsement_no 非空)"）。
+ * 原始保单行为 NULL；批改行非 NULL（如 "P003-001"）。P003E 是 P003 的批改行——
+ * 与 P003 共享 policy_no/vehicle_frame_no，验证 COUNT(DISTINCT ... policy_key) 对批改行
+ * 正确剔除（不会被计入分子/分母，也不会被去重逻辑误当作新增一条）。
+ */
 const SEED_POLICY_DATA = `
 CREATE TABLE policy_data (
   premium DOUBLE,
@@ -88,21 +96,32 @@ CREATE TABLE policy_data (
   exposure_days INTEGER,
   earned_days INTEGER,
   policy_term INTEGER,
-  commercial_pricing_factor DOUBLE
+  commercial_pricing_factor DOUBLE,
+  endorsement_no VARCHAR
 );
 
 INSERT INTO policy_data VALUES
-  (5000, 'P001', '成都', '张三', 'VIN001', false, false, true,  false, false, true,  '商业保险', '主全', '非营业个人客车', NULL, 1000, 1, 500, 365, 300, 365, 0.85),
-  (3000, 'P002', '成都', '张三', 'VIN002', true,  true,  false, false, true,  false, '交强险',   '单交', '非营业个人客车', NULL, 0,    0, 300, 365, 365, 365, NULL),
-  (8000, 'P003', '乐山', '李四', 'VIN003', false, false, true,  true,  false, true,  '商业保险', '交三', '非营业企业客车', NULL, 2000, 2, 800, 366, 200, 366, 1.05),
-  (4000, 'P004', '乐山', '李四', 'VIN004', false, false, false, false, false, false, '交强险',   '单交', '非营业货车',     '2-9吨', 500, 1, 400, 365, 365, 365, NULL),
-  (6000, 'P005', '天府', '王五', 'VIN005', false, false, true,  false, false, false, '商业保险', '主全', '非营业机关客车', NULL, 3000, 1, 600, 365, 100, 365, 0.90),
-  (2000, 'P006', '天府', '王五', NULL,     false, false, false, false, true,  false, '交强险',   '单交', '摩托车',         NULL, 0,    0, 200, 365, 365, 365, NULL),
-  (7000, 'P007', '成都', '赵六', 'VIN006', true,  false, false, false, false, true,  '商业保险', '交三', '非营业个人客车', NULL, 1500, 1, 700, 365, 250, 365, 1.20),
-  (1000, 'P008', '乐山', '赵六', 'VIN007', false, true,  true,  false, false, false, '商业保险', '主全', '营业货车',       '1吨以下', 200, 0, 100, 365, 350, 365, NULL);
+  (5000, 'P001', '成都', '张三', 'VIN001', false, false, true,  false, false, true,  '商业保险', '主全', '非营业个人客车', NULL, 1000, 1, 500, 365, 300, 365, 0.85, NULL),
+  (3000, 'P002', '成都', '张三', 'VIN002', true,  true,  false, false, true,  false, '交强险',   '单交', '非营业个人客车', NULL, 0,    0, 300, 365, 365, 365, NULL, NULL),
+  (8000, 'P003', '乐山', '李四', 'VIN003', false, false, true,  true,  false, true,  '商业保险', '交三', '非营业企业客车', NULL, 2000, 2, 800, 366, 200, 366, 1.05, NULL),
+  (4000, 'P004', '乐山', '李四', 'VIN004', false, false, false, false, false, false, '交强险',   '单交', '非营业货车',     '2-9吨', 500, 1, 400, 365, 365, 365, NULL, NULL),
+  (6000, 'P005', '天府', '王五', 'VIN005', false, false, true,  false, false, false, '商业保险', '主全', '非营业机关客车', NULL, 3000, 1, 600, 365, 100, 365, 0.90, NULL),
+  (2000, 'P006', '天府', '王五', NULL,     false, false, false, false, true,  false, '交强险',   '单交', '摩托车',         NULL, 0,    0, 200, 365, 365, 365, NULL, NULL),
+  (7000, 'P007', '成都', '赵六', 'VIN006', true,  false, false, false, false, true,  '商业保险', '交三', '非营业个人客车', NULL, 1500, 1, 700, 365, 250, 365, 1.20, NULL),
+  (1000, 'P008', '乐山', '赵六', 'VIN007', false, true,  true,  false, false, false, '商业保险', '主全', '营业货车',       '1吨以下', 200, 0, 100, 365, 350, 365, NULL, NULL),
+  (-500, 'P003', '乐山', '李四', 'VIN003', false, false, true,  true,  false, true,  '商业保险', '交三', '非营业企业客车', NULL, 0,    0, -50,  366, 200, 366, 1.05, 'P003-001');
 `;
 
-/** CrossSellDailyAgg 合成数据 */
+/**
+ * CrossSellDailyAgg 合成数据。
+ *
+ * coverage_combination：险别组合字段（v2.0.0，2026-06-12 commit 6d6046a6 引入，
+ * 见 categories/cross-sell.ts changelog "分子分母限定 coverage_combination IN (主全,交三)"，
+ * 对齐推介率分母红线——分母为商业险出单件数，不含纯交强/单交）。
+ * 每行按 auto_count/driver_count 与 danjiao/jiaosan/zhuquan 三个预拆分口径的一致性，
+ * 拆成 3 条子行（单交/交三/主全），使 cross_sell_total_rate 的 SUM(...IN ('主全','交三')...)
+ * 与 cross_sell_danjiao_rate/jiaosan_rate/zhuquan_rate 仍读原有预计算列，两组指标互不干扰。
+ */
 const SEED_CROSS_SELL_DATA = `
 CREATE TABLE cross_sell_data (
   auto_count INTEGER,
@@ -112,12 +131,14 @@ CREATE TABLE cross_sell_data (
   jiaosan_auto_count INTEGER,
   jiaosan_driver_count INTEGER,
   zhuquan_auto_count INTEGER,
-  zhuquan_driver_count INTEGER
+  zhuquan_driver_count INTEGER,
+  coverage_combination VARCHAR
 );
 
 INSERT INTO cross_sell_data VALUES
-  (100, 30, 20, 5, 40, 15, 40, 10),
-  (50,  20, 10, 3, 20, 8,  20, 9);
+  (100, 30, 20, 5, 40, 15, 40, 10, '单交'),
+  (50,  20, 10, 3, 20, 8,  20, 9,  '交三'),
+  (50,  20, 10, 3, 20, 8,  20, 9,  '主全');
 `;
 
 /** Growth CTE output 合成数据 */
