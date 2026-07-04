@@ -29,6 +29,7 @@ import {
   fontStyles,
   tableStyles,
 } from '@/shared/styles';
+import { EmptyState } from '@/shared/ui';
 import { useTheme } from '@/shared/theme';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import { ensureMapRegistered, preloadDefaultMaps } from '@/shared/utils/geo-map-loader';
@@ -40,6 +41,7 @@ import {
   getCityAbbrev,
 } from '@/shared/utils/province-abbrev';
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
+import { isGeoRiskEmpty } from './claimsEmptyState';
 
 import { HeroMetric, RiskBar, SectionHeader, StatusPill } from './shared/atoms';
 import type { Severity } from './shared/severity';
@@ -463,8 +465,26 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
   const hasData = !isLoading;
   const error = geoAccident.error || geoPlate.error;
 
+  // 数据缺失守卫（2026-06-25-claude-6a5aad follow-up）：出险地/车牌归属地两端点均无规模行
+  // （geoAccident.data 与 geoPlate.data 均为 GROUP BY 聚合，无匹配数据时恒返回 []）时，视为
+  // 「数据装载中 / 完全无地理归属数据」而非「真实零赔案」——区分于 geoComparison（无 GROUP BY
+  // 单行聚合，恒返回 1 行 total_cases=0，不能单独作为数据缺失锚，否则窄筛选下真实零赔案会被
+  // 误判为「装载中」）。加载中/请求出错时不判空态，避免抢在骨架屏之前误闪空态卡片。
+  const isDataMissing =
+    hasData && !error && isGeoRiskEmpty(accidentSrc, plateSrc);
+
   if (error) {
     return <div className={cn(colorClasses.text.danger, 'p-4')}>{error}</div>;
+  }
+
+  if (isDataMissing) {
+    return (
+      <EmptyState
+        size="lg"
+        title="地理风险数据装载中"
+        description="当前筛选范围或机构暂无出险地/车牌归属地数据，可能正在装载，请稍后刷新。若持续为空，请联系管理员确认数据状态——这不代表真实零赔案。"
+      />
+    );
   }
 
   const headline =
