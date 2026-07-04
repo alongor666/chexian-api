@@ -86,6 +86,10 @@ import {
   buildFullSnapshotCacheKey,
   fullSnapshotOutputName,
 } from './lib/full-snapshot-cache-key.mjs';
+// claims 源文件拼接顺序（BACKLOG 2026-06-11-claude-9ba379）：legacy 遗留清单必须排在
+// 新命名全量文件之前，使 convert_claims_detail.py 的 drop_duplicates(keep='last') 让
+// 「最新全量」覆盖「旧快照」，而非相反（可单测，见 tests/claims-source-order.test.ts）
+import { orderClaimsSourceFiles } from './lib/claims-source-order.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1232,7 +1236,10 @@ function runClaimsDetail(python, scriptDir) {
   const legacyFiles = ls('车险报立结案清单_*.xlsx', claimsSourceDir).sort((a, b) => a.name.localeCompare(b.name));
   // 多省 B1（闸-1 P0-1/P2-2）：按当前 BRANCH_CODE 过滤他省前缀文件防混省（manifest 路径同样过滤）；
   // 无前缀文件归当前省（向后兼容）。必须在归档 / 转换之前。
-  let sourceFiles = (manifestFiles || [...newFiles, ...legacyFiles])
+  // BACKLOG 2026-06-11-claude-9ba379：legacy 遗留清单必须排在新命名文件之前，见
+  // orderClaimsSourceFiles 注释——否则 convert_claims_detail.py 的 keep='last' 去重会让
+  // 旧快照覆盖最新全量。
+  let sourceFiles = (manifestFiles || orderClaimsSourceFiles(newFiles, legacyFiles))
     .filter((f) => fileBelongsToBranch(f.name, BRANCH_CODE));
   if (sourceFiles.length === 0) {
     // 多省 B2（闸-1 P1-F）：分省发布下明确标注哪个省无源（与 SC 增量未到区分，运维可察觉）
@@ -1290,6 +1297,18 @@ function runClaimsDetail(python, scriptDir) {
         }
         sourceFiles = sourceFiles.filter(f => !conflicting.includes(f));
       }
+    }
+    // BACKLOG 2026-06-11-claude-9ba379：legacy 遗留清单（车险报立结案清单_*.xlsx）多数不含
+    // 8 位日期，matchFull/conflicting 判定均无法识别其覆盖关系，永远不会被上面的自动归档
+    // 护栏清理——只要还留在源目录就会一直参与 concat。保守起见不静默吃（也不擅自删除/归档，
+    // 避免误伤仍有效的历史遗留数据），只打 warn 列出文件名，提示运维核实是否该手动归档。
+    const survivingLegacy = sourceFiles.filter(f => legacyFiles.some(l => l.path === f.path));
+    if (survivingLegacy.length > 0) {
+      log('yellow', `⚠ 检测到 ${survivingLegacy.length} 个 legacy 遗留清单文件仍在源目录（文件名无 8 位日期，自动归档护栏无法识别其覆盖关系）：`);
+      for (const f of survivingLegacy) {
+        log('yellow', `   ${f.name}`);
+      }
+      log('yellow', '   请人工核实是否为已被新全量覆盖的过期快照，需要归档请移入 .xlsx-archive/');
     }
   }
   for (const f of sourceFiles) {
@@ -1503,6 +1522,11 @@ function runClaimsFreshnessPatrol(python, scriptDir) {
       ? `  ⚠️ [${r.branch}] claims 目录存在但读不到报案截止日（空分区？）: ${r.dir}`
       : `  ⚠️ [${r.branch}] claims 目录不存在，跳过（该省未初始化 / 正常无数据）: ${r.dir}`);
   }
+  // 注意：new Date('YYYY-MM-DD') 按 UTC 解析，.getDay() 按本机时区读取，西半球时区会错位
+  // 一天（如 Pacific 上 new Date('2026-07-06').getDay() 读出周日而非周一）。today 来自
+  // localTodayISO() 已是本地日期字符串，须拆字段本地构造，不可再走 UTC 解析的 Date 构造器。
+  const [tY, tM, tD] = today.split('-').map(Number);
+  const isMonday = new Date(tY, tM - 1, tD).getDay() === 1;
   for (const r of stale) {
     log('red', `⚠️ [${r.branch}] 赔案报案截止 ${r.maxReportDate} 落后当日 ${r.lagDays} 天（阈值 ${CLAIMS_REPORT_LAG_WARN_DAYS} 天）`);
     log('red', `   理赔金额动态，喂旧快照致满期赔付率系统性偏低；请用含历史全量源刷新 ${r.branch} claims（见 data-pipeline.md「claims_detail 存量更新铁律」）`);
@@ -1510,6 +1534,20 @@ function runClaimsFreshnessPatrol(python, scriptDir) {
   // TODO（闸-1 审查点6）：SX 完全上线生产后，stale 应升级为发布阻断——旧 claims 快照静默进生产 = 2026-06-08 事故。
   const hasStale = stale.length > 0;
   log(hasStale ? 'red' : 'green', hasStale ? `\n巡检完成：${stale.length} 个省份赔案停滞需刷新` : '\n✅ 巡检完成：各注册省赔案新鲜');
+  if (hasStale) {
+    // 周一假阳性提示：周末无人力刷新是预期现象，避免误判为数据管道故障（不改阈值，仅在文案注明）。
+    const weekendNote = isMonday ? '（今日周一，落后天数可能含周末累积，属正常现象）' : '';
+    const staleSummary = stale.map((r) => `${r.branch}落后${r.lagDays}天`).join('；');
+    if (weekendNote) log('yellow', `   ${weekendNote}`);
+    // 健康汇总接入（BACKLOG 2026-06-09-claude-530bf5）：写入 ETL 台账，使 hasStale 在
+    // 数据流转台账.md「断点告警」表可见（🟡 warning），不阻断 release:daily（P0-2 设计不变）。
+    recordEvent({
+      stage: 'validate',
+      step: 'claims_freshness_patrol',
+      status: 'warning',
+      error: `${staleSummary}${weekendNote}`,
+    });
+  }
   return hasStale; // 仅返回供调用方观察，不 exit（P0-2）
 }
 

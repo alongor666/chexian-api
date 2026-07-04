@@ -182,6 +182,22 @@ def load_target_excel(input_file, dtype_map):
         if key_column is None:
             headerless_sheets.append(sheet_name)
             continue
+        # BACKLOG 2026-06-11-claude-fa0f22：仅命中保单号别名不足以判定有效数据 sheet——
+        # FineBI 导出常带汇总/透视 sheet，恰好只含"保单号"这一个通用列，其余业务列全无，
+        # 若只查 key_column 存在就并入，会把这类统计 sheet 当续表 concat 进来，其余列
+        # NaN 对齐、静默污染下游行（与 etl_validation.py:117 修复前的 has_header=any() 同型 bug）。
+        # 第一个有效 sheet 建立 base_columns 基准后，后续候选 sheet 要求列名与基准重合度
+        # ≥50%（而不仅仅是"含保单号列"），过滤掉列稀疏的汇总/透视 sheet。
+        if base_columns is not None:
+            overlap = len(set(base_columns) & set(sheet_df.columns))
+            if overlap <= len(base_columns) * 0.5:
+                # 注意：直接丢弃，不并入 headerless_sheets——该 sheet 自身有表头行（只是列
+                # 与基准重合过少），不是"无表头续表"，若并入 headerless_sheets 会被当续表
+                # 用 header=None 重读、错把表头行当数据行，且列数凑巧 ≤ 基准时仍会被 concat，
+                # 复现同一 bug。
+                print(f"   ⚠ 跳过工作表 {sheet_name}：与基准列重合 {overlap}/{len(base_columns)}"
+                      f"（需 >50%），疑似汇总/透视表，非有效数据表")
+                continue
         if base_columns is None:
             base_columns = list(sheet_df.columns)
         valid_frames.append(sheet_df)
