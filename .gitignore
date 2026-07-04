@@ -115,6 +115,9 @@ server/data/
 # 数据管理大文件（staging中间文件）
 数据管理/staging/*.xlsx
 
+# 上游 BI 导出拉取镜像（VPS auto_loadbi → scripts/pull-bi-exports.mjs，含 manifest/README）
+数据管理/inbox/
+
 # 数据管理生成报告（一次性产出，按需重新生成）
 数据管理/output/
 logs/

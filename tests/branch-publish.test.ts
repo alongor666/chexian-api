@@ -15,8 +15,8 @@ describe('nonScBranchCodes（非 SC 注册省·数据驱动单一来源）', () 
 });
 
 describe('BRANCH_PUBLISH_DOMAINS', () => {
-  it('含 premium / claims_detail / repair（对应上游 01签单/05理赔/03维修）', () => {
-    expect([...BRANCH_PUBLISH_DOMAINS]).toEqual(['premium', 'claims_detail', 'repair']);
+  it('含 premium / claims_detail / quotes / repair（对应上游 01签单/05理赔/02报价/03维修）', () => {
+    expect([...BRANCH_PUBLISH_DOMAINS]).toEqual(['premium', 'claims_detail', 'quotes', 'repair']);
   });
 });
 
