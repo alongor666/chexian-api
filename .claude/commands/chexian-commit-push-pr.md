@@ -52,6 +52,7 @@ $(git diff --stat origin/main 2>/dev/null || git diff --stat main)
 
 - **包管理器固定 bun**（基座会自动探测到 `bun.lock`，本项目无歧义）。
 - **治理用 `bun run governance`**（聚合脚本），不是直接调单个 `.mjs`。
+- **BACKLOG 实现漂移预检（防重复劳动）**：提交/建 PR 前，若本次改动是在推进某个 BACKLOG 任务，先跑 `bun scripts/backlog/check-merged-drift.mjs`。命中「标 PROPOSED 但已有实现提交」→ **停下核实**：已合并 → 直接置 DONE 不重做；开放 PR 未合并 → 勿提交竞品实现，改为复用/评审该 PR（实证：本机制已拦下 992469/28bd9c 两次重复实现）。见 `.claude/rules/backlog-eventlog.md` §7。
 - **Git LFS** 大文件示例：`git lfs track "*.parquet"`。
 - **`{owner}/{repo}`** 在基座 §7 的 actions/runs API 中即 `alongor666/chexian-api`。
 - **部署链 PR**（`deploy.yml` / `vps-wrapper/**` / `sync-vps.mjs` / `ecosystem.config.cjs`）**禁止 auto-merge**，见 `.claude/pr-checklist.md` §4 与 `.claude/rules/deploy-chain-sop.md`。
