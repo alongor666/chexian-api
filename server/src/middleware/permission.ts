@@ -164,9 +164,24 @@ export function permissionMiddleware(
     // 仅对 org_user 生效；admin / branch_admin 不受限。
     // 原理：将 req.path（后端路径，如 '/cost'）映射到前端页面路径（如 '/cost'），
     // 再对比用户 allowedRoutes 白名单（值为前端页面路径，如 '/performance-analysis'）。
+    //
+    // 挂载域限定：API_ROUTE_TO_PAGE_MAP 的键是 /api/query/* 下的相对路径，而本
+    // middleware 也被 /api/agent/* 等其他挂载点复用——那里的 req.path 同样是挂载
+    // 内相对路径（如 /api/agent/diagnosis/quote-conversion 内的 '/quote-conversion'），
+    // 与六域页面映射键同名会被误伤 403（242c07 收口时暴露：agent 诊断路由设计上
+    // 对 org_user 开放并带角色过滤）。故仅当挂载点（req.baseUrl）在 /api/query 域
+    // 时才应用页面白名单；baseUrl 缺失（单测直调 middleware 的 mock req）回退查表，
+    // 保持既有单测语义。
     const routeAllowList = getAllowedRoutesForRole(role);
     if (routeAllowList !== null) {
-      const pageRoute = resolvePageRoute(req.path as string | undefined);
+      const baseUrl = (req as { baseUrl?: unknown }).baseUrl;
+      const mountedOutsideQuery =
+        typeof baseUrl === 'string' &&
+        baseUrl !== '' &&
+        !`${baseUrl}/`.startsWith('/api/query/');
+      const pageRoute = mountedOutsideQuery
+        ? undefined
+        : resolvePageRoute(req.path as string | undefined);
       if (pageRoute !== undefined && !routeAllowList.includes(pageRoute)) {
         throw new AppError(
           403,

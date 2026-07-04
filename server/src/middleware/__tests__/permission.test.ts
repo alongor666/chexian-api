@@ -355,8 +355,8 @@ describe('requirePermissionFilter: B326 fail-closed 收窄', () => {
 // ─────────────────────────────────────────────────────────────────────────
 import { API_ROUTE_TO_PAGE_MAP } from '../permission.js';
 
-function makeReqWithPath(user: any, path: string) {
-  return { user, path, query: {} } as any;
+function makeReqWithPath(user: any, path: string, baseUrl?: string) {
+  return { user, path, query: {}, ...(baseUrl !== undefined ? { baseUrl } : {}) } as any;
 }
 
 async function runMiddlewarePath(req: any): Promise<unknown> {
@@ -507,6 +507,23 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     const req = makeReqWithPath(orgUser, '/repair-xxx');
     const err = await runMiddlewarePath(req);
     expect(err).toBeUndefined();
+  });
+
+  // ─── 挂载域限定：白名单只作用于 /api/query/*（242c07 收口时暴露的误伤面）───
+  it('org_user 经 /api/agent/diagnosis 挂载点访问 /quote-conversion → 通过（agent 诊断路由不受页面白名单约束）', async () => {
+    // agent 诊断路由（app.ts 挂载 /api/agent/diagnosis）设计上对 org_user 开放并
+    // 带角色过滤；其 router 内 req.path='/quote-conversion' 与六域页面映射键同名，
+    // 必须靠 baseUrl 挂载域判定避免误伤 403
+    const req = makeReqWithPath(orgUser, '/quote-conversion', '/api/agent/diagnosis');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  it('org_user 经 /api/query 挂载点访问 /quote-conversion → 403（页面白名单正常生效）', async () => {
+    const req = makeReqWithPath(orgUser, '/quote-conversion', '/api/query');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
   });
 
   // ─── admin / branch_admin 不受白名单限制 ───
