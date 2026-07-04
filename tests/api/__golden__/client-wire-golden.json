@@ -333,14 +333,6 @@
     "auth": true,
     "dedupe": ""
   },
-  "data.remove": {
-    "verb": "DELETE",
-    "path": "/data/f.parquet",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": ""
-  },
   "data.upload": {
     "verb": "POST",
     "path": "/data/upload",
