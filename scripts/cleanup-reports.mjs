@@ -89,6 +89,44 @@ function formatSize(bytes) {
 }
 
 // ============================================
+// 文件名日期解析（保留判据：文件名日期优先于 mtime）
+// ============================================
+// 背景（BACKLOG 2026-06-11-claude-84ea3a）：业务命名文件形如
+// `<YYYYMMDD>-<业务名>-<hash>.html`，文件名自带日期前缀。若按 mtime 排序保留，
+// 一旦旧日期报告被补生成/触碰（mtime 变新但文件名日期仍是旧的），--apply 会删掉
+// 文件名日期更新的那份、错误保留文件名日期更旧的那份。且 sync-vps 每次同步自动
+// 带 --apply、无人工确认，这类误删会静默发生。
+//
+// 解析优先级：BIZ_HTML_RE 捕获组 1（YYYYMMDD）能解析为合法日期 → 用该日期排序；
+// 解析失败（正则未来放宽、文件名畸形等）→ 回退 mtime，且排在"文件名含日期"的
+// 文件之后（避免无日期文件因 mtime 較新而抢占保留位）。
+function parseFilenameDate(name) {
+  const m = name.match(BIZ_HTML_RE);
+  if (!m) return null;
+  const raw = m[1]; // YYYYMMDD
+  const year = Number(raw.slice(0, 4));
+  const month = Number(raw.slice(4, 6));
+  const day = Number(raw.slice(6, 8));
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const ts = Date.UTC(year, month - 1, day);
+  if (Number.isNaN(ts)) return null;
+  return ts;
+}
+
+/**
+ * 保留判据排序比较器：文件名日期优先，解析失败回退 mtime 且排在有日期者之后。
+ * 用于 planFiles 的业务命名分组（每组保留"最新"一份）。
+ */
+function compareByFilenameDateThenMtime(a, b) {
+  const dateA = parseFilenameDate(a.name);
+  const dateB = parseFilenameDate(b.name);
+  if (dateA !== null && dateB !== null) return dateB - dateA; // 日期降序
+  if (dateA !== null && dateB === null) return -1; // 有日期者排前
+  if (dateA === null && dateB !== null) return 1;
+  return b.mtime - a.mtime; // 均解析失败 → 回退 mtime
+}
+
+// ============================================
 // 决策：顶层文件
 // ============================================
 function planFiles(reportsDir) {
@@ -120,7 +158,7 @@ function planFiles(reportsDir) {
     groups.get(bizKey).push(f);
   }
   for (const [bizKey, files] of groups) {
-    files.sort((a, b) => b.mtime - a.mtime);
+    files.sort(compareByFilenameDateThenMtime);
     const [latest, ...older] = files;
     toKeep.push({ path: latest.full, size: latest.size, reason: `业务"${bizKey}"最新一份` });
     for (const f of older) {

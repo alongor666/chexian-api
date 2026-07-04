@@ -152,6 +152,7 @@ export const DATA_ROUTES = {
   LOAD: 'load',
   DOWNLOAD: 'download',
   KPI_PLAN_CONFIG: 'kpi-plan-config',
+  VERSION: 'version',
 } as const;
 
 // ─────────────────────────────────────────────
@@ -171,6 +172,8 @@ export const AUTH_ROUTES = {
 
   TOKENS: 'auth/tokens',
   TOKEN_BY_ID: 'auth/tokens',
+
+  ROUTE_CATALOG: 'auth/route-catalog',
 
   WECOM_CONFIG: 'auth/wecom/config',
 } as const;
