@@ -125,7 +125,9 @@ jobs:
             # 仅 dist 回滚不够：npm ci --omit=dev 会重建 node_modules，
             # 若新版本的 better-sqlite3 等原生依赖编译失败或运行时异常，
             # 必须能还原到部署前的 node_modules + lockfile + package.json 状态。
-            [ -d frontend/dist ] && cp -r frontend/dist frontend/dist.bak
+            # cp -a（保留 mtime）而非 cp -r：下方"旧 hashed 资产保留期"按 mtime 判断 chunk
+            # 年龄，cp -r 会把 mtime 刷成备份时刻 → 每次部署重置时钟，保留期永不到期
+            [ -d frontend/dist ] && cp -a frontend/dist frontend/dist.bak
             [ -d server/dist ] && cp -r server/dist server/dist.bak
             [ -f server/package.json ] && cp server/package.json server/package.json.bak
             [ -f server/package-lock.json ] && cp server/package-lock.json server/package-lock.json.bak
@@ -184,6 +186,19 @@ jobs:
             if [ -d /var/www/chexian/frontend/dist.bak/reports ]; then
               mkdir -p /var/www/chexian/frontend/dist/reports
               cp -a /var/www/chexian/frontend/dist.bak/reports/. /var/www/chexian/frontend/dist/reports/ || true
+            fi
+
+            # ── 旧 hashed 资产保留期（BACKLOG 2026-07-03-claude-0f86cb 白屏链残留环节）──
+            # 长开 tab 的 SPA 在发布后懒加载旧 chunk：上面 rm -rf dist 让旧 chunk 物理消失
+            # → 动态 import 404 白屏。index.html no-cache（PR #865）只救刷新后的新会话，
+            # 救不了发布瞬间已加载的旧 index。修法：旧 assets 并入新 dist（-n 不覆盖新文件，
+            # Vite 产物 content-hash 命名同名即同内容），7 天后按 mtime 出保留窗清理。
+            # 注意 coreutils ≥9.2 的 cp -n 在跳过时以非零退出，|| true 必须保留。
+            # 失败不阻断部署（|| true，避免触发回滚）。
+            if [ -d /var/www/chexian/frontend/dist.bak/assets ]; then
+              mkdir -p /var/www/chexian/frontend/dist/assets
+              cp -an /var/www/chexian/frontend/dist.bak/assets/. /var/www/chexian/frontend/dist/assets/ || true
+              find /var/www/chexian/frontend/dist/assets -type f -mtime +7 -delete || true
             fi
 
             rm -rf /var/www/chexian/server/dist
