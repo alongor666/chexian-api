@@ -5,6 +5,7 @@ import {
   MIN_SIZE_MB_BY_CODE,
   beijingDayOf,
   evaluateManifestReports,
+  evaluateRemoteManifest,
   routeBranchCode,
   derivePolicyProvince,
   planCoverageArchive,
@@ -203,5 +204,38 @@ describe('planCoverageArchive（分发层覆盖归档：同品类才互斥）', 
       'shanxi_20260703_02_报价清单_商业险.xlsx',
     ]);
     expect(plan.archive).toEqual(['shanxi_20250601-20260628_03_维修资源.xlsx']);
+  });
+});
+
+describe('evaluateRemoteManifest（watcher 轻量就绪探测：只看 manifest，不比本地字节）', () => {
+  it('五张齐全且均为北京今天 → ready', () => {
+    const r = evaluateRemoteManifest(manifestOf(fullBatch()), { todayBeijing: TODAY });
+    expect(r.ready).toBe(true);
+    expect(r.reports).toHaveLength(5);
+  });
+
+  it('🔴 02 报价还没出（缺席）→ 未就绪且指明 code', () => {
+    const r = evaluateRemoteManifest(manifestOf(fullBatch().filter((x) => x.code !== '02')), { todayBeijing: TODAY });
+    expect(r.ready).toBe(false);
+    expect(r.issues.find((i: { code: string | null }) => i.code === '02')?.message).toContain('未出表');
+  });
+
+  it('🔴 02 mtime 停在昨天（10:30 批次未出）→ 未就绪，其余四张仍计入已出', () => {
+    const reports = fullBatch();
+    reports[1] = report('02', { mtime: '2026-07-03T02:31:14Z' });
+    const r = evaluateRemoteManifest(manifestOf(reports), { todayBeijing: TODAY });
+    expect(r.ready).toBe(false);
+    expect(r.reports).toHaveLength(4);
+  });
+
+  it('🔴 体积骤降（疑似空表）→ 未就绪', () => {
+    const reports = fullBatch();
+    reports[0] = report('01', { sizeMB: 0.1 });
+    const r = evaluateRemoteManifest(manifestOf(reports), { todayBeijing: TODAY });
+    expect(r.ready).toBe(false);
+  });
+
+  it('manifest 结构非法 → 未就绪不抛异常', () => {
+    expect(evaluateRemoteManifest(null, { todayBeijing: TODAY }).ready).toBe(false);
   });
 });

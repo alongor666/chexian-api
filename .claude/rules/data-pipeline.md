@@ -184,3 +184,30 @@ df = load_excel_all_sheets(input_file, dtype=STR_FORCE_COLS, required_columns=RE
 | 出表时机 | 北京时间约 09:30 出 01/03/04/05、10:30 出 02；五张齐全须 **10:35 后**拉，提前拉会被 02 新鲜度校验拦下（符合断线告警契约） |
 
 BI 导出 xlsx 的 dimension 元数据损坏（openpyxl read_only 读到 max_row=1），任何对这些源文件的抽样/读取必须走 pandas `read_excel`。
+
+## 全自动日常发布 watcher（launchd + auto-release-daily — 2026-07-04）
+
+把「等上游五张表出齐 → 主仓跑 release:daily」交给机器：**launchd 每 15 分钟拉起
+`scripts/auto-release-daily.mjs`**（无常驻进程），在北京时间窗口（默认 10:35~14:00）内
+`ssh` 只读远程 `latest-manifest.json` 判就绪（`evaluateRemoteManifest`：5 code 齐全 +
+mtime=北京今天 + sizeMB 兜空表，**不 rsync**），就绪即 `bun run release:daily`（其
+Stage 0 pull-bi-exports 再做完整 rsync + 字节比对 + 省份内容核验，双层校验）。
+
+| 命令 | 用途 |
+|------|------|
+| `bun run auto-release:install` | 安装 launchd 定时器（**必须主仓跑**，worktree 内 fail-closed 拒绝） |
+| `bun run auto-release:status` | 当天状态 + launchd 安装态 + 最近日志 |
+| `bun run auto-release:once` | 忽略窗口手动探测一次，就绪即发布（`--dry-run` 只判不发） |
+| `node scripts/auto-release-daily.mjs --uninstall-launchd` | 卸载 |
+
+**状态机**（`数据管理/lib/auto-release-decision.mjs` 纯函数，`tests/auto-release-decision.test.ts` 锁定）：
+当天 `released` → 全天幂等跳过；`failed` 窗口内重试至上限（默认 2 次）后停手等人工；
+窗口结束仍未成功 → 标记 `missed` **告警一次**（日志 + macOS 通知 + 可选企微群机器人
+`AUTO_RELEASE_WEBHOOK_URL`），当天不再自动尝试——**宁可不发布也不静默用旧数据**。
+状态/日志落 `数据管理/logs/auto-release-state.json` 与 `auto-release.log`（gitignored）。
+
+环境变量：`AUTO_RELEASE_WINDOW_START/END`（北京时间）· `AUTO_RELEASE_MAX_ATTEMPTS` ·
+`AUTO_RELEASE_INTERVAL_SEC`（安装时生效）· 复用 `PULL_BI_SSH_ALIAS/PULL_BI_REMOTE_DIR`。
+
+⚠️ Mac 睡眠时 launchd 不触发（唤醒后下个周期补上）；白天常合盖可 `sudo pmset repeat
+wakeorpoweron MTWRFSU 10:30:00` 定时唤醒（watcher 不代改电源设置）。
