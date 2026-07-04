@@ -61,6 +61,7 @@ const SUB_CLIENT_FILES = [
  */
 const POST_SPLIT_ADDITIONS = [
   // 例：{ name: 'premium.forecast', pr: 'PR #560' },
+  { name: 'getPivot', pr: 'PR #876' }, // 图表账本页 /chart-ledger：维度×指标 pivot 只读查询
 ];
 
 const args = process.argv.slice(2);

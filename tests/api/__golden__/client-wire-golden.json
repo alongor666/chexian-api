@@ -466,6 +466,17 @@
     "auth": true,
     "dedupe": "GET:/query/marketing-report"
   },
+  "getPivot": {
+    "verb": "GET",
+    "path": "/query/pivot",
+    "params": [
+      "dimensions",
+      "metrics"
+    ],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/pivot?dimensions=insurance_type&metrics=total_premium"
+  },
   "getQualityBusinessTrend": {
     "verb": "GET",
     "path": "/query/quality-business-trend",
