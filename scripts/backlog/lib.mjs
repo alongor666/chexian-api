@@ -29,6 +29,8 @@ export const ARCHIVE_PATH = resolve(ROOT, 'BACKLOG_ARCHIVE.md');
 export const EVENT_KINDS = ['create', 'status', 'note', 'amend'];
 export const AMENDABLE_FIELDS = ['section', 'priority', 'desc', 'docs', 'code', 'owner'];
 export const ACTIVE_STATUSES = ['PROPOSED', 'TRIAGED', 'IN_PROGRESS', 'PARTIAL', 'BLOCKED', 'TODO', 'DOING'];
+/** 终态：任务移出活跃看板、渲染进归档。DONE=完成，CANCELLED/WONTFIX=弃置（同 DONE 一样必须带证据/理由）。 */
+export const TERMINAL_STATUSES = ['DONE', 'CANCELLED', 'WONTFIX'];
 export const PRIORITY_ORDER = ['P0', 'P1', 'P2', 'P3', 'P4'];
 
 export const TABLE_HEADER = '| ID | 提出时间 | 板块 | 归属对象 | 需求描述 | 优先级 | 状态 | 关联文档 | 关联代码 | 验收/证据 |';
@@ -144,7 +146,12 @@ export function displayId(t) {
 }
 
 export function isActive(t) {
-  return t.status !== 'DONE';
+  return !TERMINAL_STATUSES.includes(t.status);
+}
+
+/** 归档内是否为「已弃置」（CANCELLED/WONTFIX），区别于「已完成」（DONE） */
+export function isDiscarded(t) {
+  return t.status === 'CANCELLED' || t.status === 'WONTFIX';
 }
 
 /** legacy_id 的数字部分（B244 → 244；无则 Infinity 排末尾） */
@@ -229,12 +236,13 @@ function backlogHeader(dashboard) {
 **更新规则**（一律走 \`bun scripts/backlog.mjs\`，写入方不挑号）：
 - 新增需求：\`bun scripts/backlog.mjs add --actor @<agent> --priority Px --section "板块" --desc "描述" [--docs ...] [--code ...]\`
 - 状态流转：\`bun scripts/backlog.mjs status <id> IN_PROGRESS\`；完成：\`bun scripts/backlog.mjs status <id> DONE --evidence "PR/commit/测试证据"\`（DONE 必须带证据）
+- 弃置：\`bun scripts/backlog.mjs status <id> CANCELLED|WONTFIX --evidence "弃置理由"\`（终态，移出活跃看板进归档，必须带理由 —— 与 DONE 同一机制）
 - 补充信息：\`bun scripts/backlog.mjs note <id> "..."\`；修订字段：\`bun scripts/backlog.mjs amend <id> --priority P1\`
 - 重新渲染：\`bun scripts/governance-backlog-curate.mjs --apply\`（折叠日志 → 刷新本文件 + 归档 + 看板）
 
 **编号**：历史曾用号（B234…）对迁移任务保留显示以兼容旧引用；新任务用 uid（如 \`2026-06-07-claude-a3f\`，稳定身份，引用以 uid 为准）。
 
-**校验**：\`bun run scripts/check-governance.mjs\` 校验日志完整性（事件字段 / 孤儿事件 / uid·曾用号唯一）+ DONE 证据链 +「视图 == 折叠(日志)」陈旧守卫。
+**校验**：\`bun run scripts/check-governance.mjs\` 校验日志完整性（事件字段 / 孤儿事件 / uid·曾用号唯一）+ 终态（DONE/CANCELLED/WONTFIX）证据链 +「视图 == 折叠(日志)」陈旧守卫。
 
 ---
 
@@ -247,15 +255,18 @@ ${TABLE_HEADER}
 ${TABLE_SEP}`;
 }
 
-function archiveHeader(count) {
+function archiveHeader(doneCount, discardedCount) {
+  const total = doneCount + discardedCount;
   return `# 需求账本归档 (BACKLOG ARCHIVE)
 
-**用途**：存放已完成（DONE）任务，完整保留 ID、描述、证据，供历史追溯。当前 ${count} 项。
+**用途**：存放终态（DONE 已完成 / CANCELLED·WONTFIX 已弃置）任务，完整保留 ID、描述、证据/理由，供历史追溯。当前 ${total} 项（已完成 ${doneCount} · 已弃置 ${discardedCount}）。
 
 **铁律**：
 - 本文件是 [\`BACKLOG_LOG.jsonl\`](./BACKLOG_LOG.jsonl) 的**派生视图**，由 \`bun scripts/governance-backlog-curate.mjs --apply\` 折叠日志渲染，**禁止手工编辑**。
 - 完成任务：\`bun scripts/backlog.mjs status <id> DONE --evidence "..."\`（追加 status 事件，再重新渲染）。
-- 证据链同样受 \`check-governance.mjs\` 校验。
+- 弃置任务：\`bun scripts/backlog.mjs status <id> CANCELLED|WONTFIX --evidence "弃置理由"\`（与 DONE 同机制，弃置理由必填）。
+- 下表按状态排序（DONE 在前，CANCELLED/WONTFIX 在后），「状态」列即弃置标注；同一张表以保持 governance 证据链解析器兼容，**禁止拆分为多张表**。
+- 证据链同样受 \`check-governance.mjs\` 校验（终态任务均须非空「验收/证据」列）。
 
 ---
 
@@ -273,11 +284,27 @@ export function renderBacklog(tasksAll) {
   return `${backlogHeader(dashboard)}\n${body}\n`;
 }
 
+/**
+ * 归档排序：DONE（已完成）在前，CANCELLED/WONTFIX（已弃置）在后；
+ * 组内沿用既有 sortArchive（曾用号数字升序，再 created）。
+ * 单表设计（非拆分多表）是刻意的：check-governance.mjs 的 parseBacklogTable
+ * 遇到表格结束（非 `|` 开头行）即 break，若拆成两张 `| ID |` 表，第二张不会被解析，
+ * 证据链校验会静默漏检——见 governance「BACKLOG证据链」checkBacklogEvidence。
+ */
+function sortArchiveGrouped(list) {
+  const done = sortArchive(list.filter(t => !isDiscarded(t)));
+  const discarded = sortArchive(list.filter(isDiscarded));
+  return [...done, ...discarded];
+}
+
 /** 渲染完整 BACKLOG_ARCHIVE.md（归档视图）—— 纯函数 */
 export function renderArchive(tasksAll) {
-  const done = sortArchive([...tasksAll].filter(t => !isActive(t)));
-  const body = done.map(renderRow).join('\n');
-  return `${archiveHeader(done.length)}\n${body}\n`;
+  const terminal = [...tasksAll].filter(t => !isActive(t));
+  const doneCount = terminal.filter(t => !isDiscarded(t)).length;
+  const discardedCount = terminal.filter(isDiscarded).length;
+  const ordered = sortArchiveGrouped(terminal);
+  const body = ordered.map(renderRow).join('\n');
+  return `${archiveHeader(doneCount, discardedCount)}\n${body}\n`;
 }
 
 /** 校验事件日志结构完整性 → { errors:[], warnings:[], stats:{} } */

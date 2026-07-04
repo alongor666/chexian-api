@@ -6,7 +6,7 @@
  * 校验规则：
  * 1. 必需文件存在性：根目录、索引目录
  * 2. 核心层索引完整性：src/shared、src/features、src/widgets、scripts
- * 3. BACKLOG.md 证据链：DONE任务必须有关联文档、关联代码、验收/证据
+ * 3. BACKLOG.md 证据链：终态任务（DONE 完成 / CANCELLED·WONTFIX 弃置）必须有关联文档、关联代码、验收证据或弃置理由
  * 4. GEMINI.md 引用正确性（已移除 — GEMINI.md 不再维护）
  * 5. CLAUDE.md 关键章节：必须包含验证协议、工作流集成、数据准备章节
  * 6. DC-002 合规性（B106+B107）：
@@ -53,7 +53,7 @@ import {
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 import { evaluateLedgerFreshness } from './etl-ledger/governance-check.mjs';
 import {
-  parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow,
+  parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow, TERMINAL_STATUSES,
 } from './backlog/lib.mjs';
 import { SHADOW_KEYS } from './shared/cube-routes.mjs';
 import { parseLedger as parseLoopLedger, normalizeVerdict as normalizeLoopVerdict } from './loop/quality-report.mjs';
@@ -253,18 +253,21 @@ function checkBacklogEvidence() {
     return true; // 没有任务不算失败
   }
 
-  const doneTasks = tasks.filter(task => task.status === 'DONE');
+  // 终态任务（DONE=完成 / CANCELLED·WONTFIX=弃置）均须证据链完整——同一强制机制
+  const terminalTasks = tasks.filter(task => TERMINAL_STATUSES.includes(task.status));
 
-  if (doneTasks.length === 0) {
-    info(`BACKLOG.md 中有 ${tasks.length} 个任务，其中 0 个已完成，无需检查证据链`);
+  if (terminalTasks.length === 0) {
+    info(`BACKLOG.md 中有 ${tasks.length} 个任务，其中 0 个终态（DONE/CANCELLED/WONTFIX），无需检查证据链`);
     return true;
   }
 
   let hasErrors = false;
   const errors = [];
 
-  for (const task of doneTasks) {
+  for (const task of terminalTasks) {
     const issues = [];
+    const isDiscard = task.status === 'CANCELLED' || task.status === 'WONTFIX';
+    const evidenceLabel = isDiscard ? '弃置理由' : '验收/证据';
 
     // 检查关联文档
     if (!task.relatedDocs || task.relatedDocs === '' || task.relatedDocs === '-') {
@@ -276,9 +279,11 @@ function checkBacklogEvidence() {
       issues.push('关联代码为空（应填写代码路径或 N/A）');
     }
 
-    // 检查验收/证据（必须非空）
+    // 检查验收/证据（DONE=完成证据，CANCELLED/WONTFIX=弃置理由，均须非空）
     if (!task.evidence || task.evidence === '' || task.evidence === '-' || task.evidence === 'N/A') {
-      issues.push('验收/证据为空（必须填写 PR链接/Commit/测试报告等）');
+      issues.push(isDiscard
+        ? `${evidenceLabel}为空（弃置任务必须填写弃置理由）`
+        : `${evidenceLabel}为空（必须填写 PR链接/Commit/测试报告等）`);
     }
 
     if (issues.length > 0) {
@@ -292,14 +297,14 @@ function checkBacklogEvidence() {
   }
 
   if (hasErrors) {
-    error(`BACKLOG.md 证据链检查失败，共 ${doneTasks.length} 个 DONE 任务，${errors.length} 个有问题：`);
+    error(`BACKLOG.md 证据链检查失败，共 ${terminalTasks.length} 个终态任务，${errors.length} 个有问题：`);
     errors.forEach(({ id, lineNumber, issues }) => {
       console.log(`    - ${id} (行 ${lineNumber}):`);
       issues.forEach(issue => console.log(`        • ${issue}`));
     });
     return false;
   } else {
-    success(`BACKLOG.md 证据链检查通过（${doneTasks.length} 个 DONE 任务）`);
+    success(`BACKLOG.md 证据链检查通过（${terminalTasks.length} 个终态任务：DONE/CANCELLED/WONTFIX）`);
     return true;
   }
 }
