@@ -8,6 +8,16 @@ on:
     types: [completed]
   workflow_dispatch:
 
+# 部署序列化锁（BACKLOG 2026-07-04-claude-6a2238）：
+# 2026-07-04 三 PR 连续合并触发 3 个并发 Deploy run，在同一 VPS 上
+# rm -rf dist / npm ci / reload 互相踩踏，三次全部失败回滚、生产 502 窗口拉长。
+# cancel-in-progress 必须为 false：部署脚本不可中途取消（半升级状态），
+# running 的 run 跑完整；同 group 排队中（pending）的 run 由 GitHub 只保留
+# 最新一个，旧 pending 自动作废 → 连续合并最终只部署最新版本且全程串行。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Build & Deploy
