@@ -1,12 +1,8 @@
 # 本项目相关全局 Skills 速查表
 
-> **唯一事实源**：每个 skill 完整定义在 `~/.claude/skills/<name>/SKILL.md`。本文件**只记录"本项目怎么用它"**，不重复 skill 自我描述，避免漂移。
+> **唯一事实源**：每个 skill 完整定义在 `~/.claude/skills/<name>/SKILL.md`。本文件**只记录"本项目怎么用它"**，不重复 skill 自我描述；发现未登记 skill 当场补登。
 >
-> **更新规则**：会话中发现"找一个 skill 又花 5K+ token"或"用户提到我没识别的 skill"——必须当场补登记。
->
-> **上游同步**：B 段 `chexian-*`/A1 `rewrite-conclusion` 源在自有仓 `alongor666/alongor666-skills`（同步走 `crystallize-skill`）；`chexian-commit-push-pr` = `commit-push-pr-core` wrapper。
->
-> **赔款口径治理**：5 个 diagnose/report skill 赔款 CTE 已对齐 SSOT，详见 BACKLOG B299。
+> **上游同步**：B 段 `chexian-*`/A1 `rewrite-conclusion` 源在自有仓 `alongor666/alongor666-skills`（同步走 `crystallize-skill`）；`chexian-commit-push-pr` = `commit-push-pr-core` wrapper。赔款口径治理见 BACKLOG B299。
 
 ---
 
@@ -17,7 +13,7 @@
 | Skill | 本项目用法 | 一键命令 |
 |-------|-----------|---------|
 | **diagnose-org-weekly** (v1.19) | 三级机构经营诊断周报（10 板块 + 22 SPA 下钻·单文件） | `python3 ~/.claude/skills/diagnose-org-weekly/cli.py --org "<机构>" --year 2026` → `/tmp/<机构>_周报.html` |
-| **diagnose-period-trend** (v2.0) | 短中长期对照（YTD/同期/滚动 6-36 月 × 5 指标 × 11 类 × 14 机构），三视图 V1 驾驶舱/V3 叙事周报/V4 超表。触发"周期趋势/短中长期对照/超表/驾驶舱" | `python3 ~/.claude/skills/diagnose-period-trend/lib/cli.py --view all` → `.../diagnose-period-trend/<cutoff>-{dashboard,weekly,table}.html` |
+| **diagnose-period-trend** (v2.0) | 短中长期对照三视图（V1 驾驶舱/V3 叙事周报/V4 超表）。触发"周期趋势/超表/驾驶舱" | `python3 ~/.claude/skills/diagnose-period-trend/lib/cli.py --view all` → `<cutoff>-*.html` |
 | **diagnose-loss-development** (v2.2) | 赔付率发展诊断（cohort + 月份矩阵 + 多维下钻）。触发"赔付率发展/loss-development" | → `server/data/reports/diagnose-loss-development/YYYY-MM-DD/` |
 | **rewrite-conclusion** | L2 结论 AI 重写（读 L1 车型子文档+机构诊断卡 → 管理层判断） | `--topic 出险率\|费用率\|保费达成` |
 
@@ -48,14 +44,14 @@
 
 ## D. 通道集成（按需 · 域=平台 skill 对照）
 
-- **飞书**：`lark-im`(消息) · `lark-doc`(云文档) · `lark-base`(多维表) · `lark-sheets`(电子表格) · `lark-vc`(会议) · `lark-minutes`(妙记) · `lark-calendar`(日程) · `lark-contact`(联系人) · `lark-task`(任务) · 其他 `lark-mail`/`lark-drive`/`lark-wiki`/`lark-event`/`lark-whiteboard`/`lark-openapi-explorer`
-- **企微**：`wecomcli-msg`(消息) · `wecomcli-doc`(文档) · `wecomcli-smartsheet`(智能表格) · `wecomcli-meeting`(会议) · `wecomcli-schedule`(日程) · `wecomcli-contact`(联系人) · `wecomcli-todo`(任务)
+- **飞书**：`lark-im`/`lark-doc`/`lark-base`/`lark-sheets`/`lark-vc`/`lark-minutes`/`lark-calendar`/`lark-contact`/`lark-task`/`lark-mail`/`lark-drive`/`lark-wiki`/`lark-event`/`lark-whiteboard`/`lark-openapi-explorer`
+- **企微**：`wecomcli-msg`/`wecomcli-doc`/`wecomcli-smartsheet`/`wecomcli-meeting`/`wecomcli-schedule`/`wecomcli-contact`/`wecomcli-todo`
 
 ## E. 开发工具（项目工作流）
 
 | Skill | 触发场景 |
 |-------|---------|
-| ~~**codex**~~（非 skill 触发） | ⚠️ codex 评审一律走 **codex CLI**（`codex exec --sandbox read-only`，prompt 自包含喂 stdin），**不经本 skill**；本行仅登记 codex 工具存在、**非评审入口**，勿按 skill 触发 — 详见 memory `codex-review-is-cli-adversarial` + `loop-orchestration.md §2` |
+| ~~**codex**~~（非 skill 触发） | ⚠️ 评审一律走 **codex CLI**（`codex exec --sandbox read-only`，prompt 自包含喂 stdin），勿按 skill 触发 — 详见 memory `codex-review-is-cli-adversarial` + `loop-orchestration.md §2` |
 | **qa** / **qa-only** | 系统性 QA 并修 bug（生产前最后一道闸） |
 | **review** | Pre-landing PR review（SQL 安全 / LLM 信任边界 / 条件副作用） |
 | **security-review** | 处理用户输入 / 鉴权 / 敏感数据时强制触发 |
@@ -66,6 +62,10 @@
 | **chexian-crystallize-skill** | "沉淀成 skill / 固化成技能" → 五步流水线。铁律「改在仓库·装到本地·本地只读」，详见 memory `project_skills_maintenance_model` |
 | **cleanup-worktrees** | "清理/回收 worktree" → 安全回收器，默认只删零损失（`--dry-run` 盘点 / `--archive` 备份后清理） |
 | **/chexian-evidence-loop**（基座 `evidence-loop-core`） | "按证据闭环做 / evidence loop / 先建 harness 再动手" → 三阶段（harness 报告 → loop checkpoint → verifier 证伪）。本项目 §4 表见 `.claude/rules/evidence-loop.md`；**跨任务并行调度**先 `bun run loop:dispatch`（Loop v2，见 `.claude/rules/loop-orchestration.md`） |
+
+### E2. 机制沉淀基座（机制对外便携版 · skills 仓 PR #58）
+
+> 本项目内**以 rules/scripts 原文为准**，技能是复用出口、不反向定口径。通用：**backlog-eventlog-core**(backlog-eventlog.md)·**loop-orchestration-core**(loop-orchestration.md)·**worktree-bootstrap**(worktree-setup.md)·**governance-gate-core**(check-governance.mjs)·**registry-codegen-pattern**(CLAUDE.md §2)·**golden-baseline-harness**(golden-baseline.mjs)；车险域：**chexian-business-calibers**(business-domain.md)·**chexian-data-pipeline-patterns**(data-pipeline.md)·**chexian-deploy-ops**(deploy-chain-sop.md·脱敏)
 
 ---
 
