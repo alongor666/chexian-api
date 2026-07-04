@@ -116,6 +116,9 @@ const ExpenseDevelopmentPage = lazy(() =>
 const RenewalTrackerPage = lazy(() =>
   import('../features/renewal-tracker').then((m) => ({ default: m.RenewalTrackerPage }))
 );
+const ChartLedgerPage = lazy(() =>
+  import('../features/chart-ledger').then((m) => ({ default: m.ChartLedgerPage }))
+);
 
 // Loading fallback — content-aware skeleton screen
 const PageLoader = () => (
@@ -343,6 +346,18 @@ function App() {
                     path="renewal-tracker"
                     element={
                       <LazyRoute><RenewalTrackerPage /></LazyRoute>
+                    }
+                  />
+
+                  {/* 保险经营图表账本 - 12 类经营图表方法论（真实数据，随全局筛选联动） */}
+                  <Route
+                    path="chart-ledger"
+                    element={
+                      <RouteAccessGuard routePath="/chart-ledger">
+                        <DataGuard>
+                          <LazyRoute><ChartLedgerPage /></LazyRoute>
+                        </DataGuard>
+                      </RouteAccessGuard>
                     }
                   />
 

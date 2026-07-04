@@ -16,7 +16,7 @@ export type {
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
   CrossSellBundleResponse, PerformanceBundleResponse, DashboardBundleResponse,
   ComprehensiveTabKey, ComprehensiveFilterParams, ComprehensiveBundleResponse,
-  FileInfo, LoadResult,
+  FileInfo, LoadResult, PivotRow, PivotResult,
 } from './types';
 
 import type {
@@ -24,6 +24,7 @@ import type {
   KpiData, KpiDetailData, TrendData, QualityBusinessTrendData,
   DashboardBundleResponse,
   ComprehensiveFilterParams, ComprehensiveBundleResponse,
+  PivotResult,
 } from './types';
 
 import {
@@ -149,6 +150,27 @@ class ApiClient extends ApiClientCore {
   async getGrowthAnalysis(startDate: string, endDate: string, baselineStart: string, baselineEnd: string, filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.GROWTH, filters, { startDate, endDate, baselineStart, baselineEnd }); }
   async getCostAnalysis(filters?: Record<string, any>): Promise<any> { return this.queryGet(QUERY_ROUTES.COST, filters); }
   async getComprehensiveBundle(params?: ComprehensiveFilterParams): Promise<ComprehensiveBundleResponse> { return this.queryGet<ComprehensiveBundleResponse>(QUERY_ROUTES.COMPREHENSIVE_BUNDLE, params as Record<string, unknown>); }
+
+  /**
+   * 维度 × 指标 交叉聚合（/api/query/pivot）
+   *
+   * dimensions：1-2 项，取自 pivot 维度白名单（org_level_3/insurance_type/customer_category/
+   *   week_number/is_nev 等）；metrics：1-10 项 pivot-safe 原子指标（total_premium/
+   *   earned_claim_ratio/earned_margin_amount/variable_cost_ratio 等）。
+   * 返回原始聚合行，图表消费层自行整形（图表账本页 useChartLedgerData 使用）。
+   */
+  async getPivot(
+    dimensions: string[],
+    metrics: string[],
+    filters?: Record<string, any>,
+    limit?: number
+  ): Promise<PivotResult> {
+    return this.queryGet<PivotResult>(QUERY_ROUTES.PIVOT, filters, {
+      dimensions: dimensions.join(','),
+      metrics: metrics.join(','),
+      ...(limit ? { limit: String(limit) } : {}),
+    });
+  }
 
   // getDataVersion 已迁出至 data 子客户端（见类首字段 + data-api.ts；调用方改用 apiClient.data.version()）
 

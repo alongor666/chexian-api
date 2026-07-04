@@ -19,6 +19,7 @@
 | Marketing Report | `marketing-report/` | 营销战报（假日营销分析：机构战报+业务员明细） | 无独立文档 |
 | Pages | `pages/` | 独立页面组件（筛选器+分析面板） | 无独立文档 |
 | Renewal Tracker | `renewal-tracker/` | 商业险续保追踪（到期日窗口盯盘 + buildRenewalTrackerParams 受限参数集映射层） | 无独立文档 |
+| Chart Ledger | `chart-ledger/` | 保险经营图表账本（12 类经营图表方法论，真实数据驱动，随全局筛选联动） | [README](./chart-ledger/README.md) |
 | Settings | `settings/` | 设置面板（主题设置、系统设置） | 无独立文档 |
 | File | `file/` | 文件菜单弹窗（数据导入、导出、报表模板） | 无独立文档 |
 | Slide Report | `slide-report/` | PPT风格周报查看器（16:9幻灯片+导航+全屏+导出） | [规划文档](../../.claude/plans/【功能实施】PPT风格周报查看器规划.md) |
@@ -395,3 +396,15 @@ widgets/table/VirtualTable.tsx
 - 删除 **`dashboard/performance/PerformanceOrgHeatmap.tsx`**（v1，已标 `@deprecated`；活代码为 `dashboard/components/PerformanceOrgHeatmapSection.tsx` 与 `PerformanceOrgHeatmapV2/`，`hooks/usePerformanceOrgHeatmap.ts` 不受影响）。
 - 删除 **`growth/examples/GrowthDashboardExample.tsx`** 及空目录 `growth/examples/`。
 - **`pages/index.ts`**: 同步移除 `TruckPage` / `ComparisonPage` 导出。
+
+## 2026-07-04 新增图表账本页面（Chart Ledger）
+
+### Chart Ledger 模块（`/chart-ledger`）
+- **`chart-ledger/ChartLedgerPage.tsx`**: 图表账本页面装配（Hero + 三层框架 + 5 阶段 × 12 卡片 + 反方观点）
+- **`chart-ledger/ledgerMeta.ts`**: 静态叙述内容（框架/阶段/卡片「怎么看+动作」，结论句由真实数据动态派生）
+- **`chart-ledger/hooks/useChartLedgerData.ts`**: 12 图数据装配 Hook（~10 个真实查询 pivot+claims-detail+quote-conversion+performance，逐图整形+错误隔离）
+- **`chart-ledger/components/EchartsPanels.tsx`**: ECharts 面板（气泡/散点/折线/瀑布/帕累托/控制图/四象限）
+- **`chart-ledger/components/CustomPanels.tsx`**: HTML/SVG 面板（热力图/发展三角/箱线图/漏斗/树图）
+- **`chart-ledger/components/LedgerCard.tsx`**: 单张图卡片外壳（结论先行+怎么看+真实数据要点+经营动作标签）
+- 路由挂载：`src/app/App.tsx`（`/chart-ledger`，RouteAccessGuard + DataGuard）；侧边栏：`SidebarNavigation.tsx` 工具组；权限：`organizations.ts` ORG_USER_DEFAULT_ALLOWED_ROUTES
+- API 入口：`apiClient.getPivot(dimensions, metrics, filters, limit)`（`src/shared/api/client.ts` 新增，后端 `/api/query/pivot`）

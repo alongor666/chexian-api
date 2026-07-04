@@ -424,3 +424,16 @@ export type PremiumReportRow = Record<string, unknown>;
 
 /** 保费达成下钻数据行 */
 export type PremiumPlanRow = Record<string, unknown>;
+
+// ─── PIVOT 交叉聚合（维度 × 指标） ───────────────────────────
+
+/** PIVOT 聚合单行：维度列 + 指标列（值均由指标别名回填） */
+export type PivotRow = Record<string, string | number | null>;
+
+/** PIVOT /api/query/pivot 响应内层数据 */
+export interface PivotResult {
+  dimensions: string[];
+  metrics: string[];
+  rowCount: number;
+  rows: PivotRow[];
+}

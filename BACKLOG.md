@@ -16,7 +16,7 @@
 
 ---
 
-## 📋 活跃任务速查（114 项 · 数据截至 2026-07-04 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（115 项 · 数据截至 2026-07-04 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -48,7 +48,7 @@
 - 2026-07-03-claude-37cb58 — 保费报表usePremiumReport.ts
 - 2026-07-03-claude-d23bd0 `PARTIAL` — 后端审查
 
-**P2（59 项）**
+**P2（60 项）**
 
 - B245 — 零赔付专项分析维度展开
 - B250 — 幽灵字段治理检查
@@ -109,6 +109,7 @@
 - 2026-07-03-claude-7982a9 — 契约对账闸 checkQueryCatalogConsistency 扫描目录硬编码 s
 - 2026-07-03-claude-a3ffc0 — 契约漂移两处
 - 2026-07-03-claude-dea47b — 后端审查
+- 2026-07-04-claude-4afe8a — 图表账本页面 /chart-ledger
 
 **P3（33 项）**
 
@@ -266,3 +267,4 @@
 | 2026-07-03-claude-d23bd0 | 2026-07-03 | 安全/权限模型 | @claude | 后端审查：用户/角色管理面(auth.ts users/roles CRUD)无 branch_code 隔离，任一 branch_admin 可跨省列出/改密/禁用/提权对方分公司账号；patrol 巡检报告路由零 RLS，任何登录用户看同一份全量报告。需 owner 决策：跨省管理是否为单-owner 运营的预期(是→文档标注权限模型；否→补 branchCode 隔离 + patrol 按省拆分产物)。不在硬化 PR #866 擅自改(改错会破坏 owner 自身跨省管理或 org_user 访问) | P1 | PARTIAL | N/A | server/src/routes/query/patrol.ts | 用户/角色管理面按省隔离已修复并上线生产（PR #869, commit e9a81a7b）：permission.ts getManageableBranchScope/canManageBranch + auth.ts 四端点 branchCode 校验 + access-control.getUserById；顺带修复新建用户无 branchCode 致 RLS 401。剩 patrol 无 RLS 部分拆出下方独立 follow-up |
 | 2026-07-03-claude-dea47b | 2026-07-03 | 安全/认证 | @claude | 后端审查：JWT 无实时吊销——authMiddleware 只做 jwt.verify(签名/过期)，不查 user.active，被禁用账号的未过期旧 token 仍可访问直至自然过期(PAT 路径每请求查 active，更安全)。修复涉认证热路径需 fail-open-on-db-error，单列 PR 谨慎处理，不进硬化批 PR #866 | P2 | PROPOSED | N/A | server/src/middleware/auth.ts |  |
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/health无脚本,故实际无功能影响。收紧到nonce/hash策略是纯纵深加固,需先确认无Express服务的内联脚本依赖。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | server/src/config/csp.ts |  |
+| 2026-07-04-claude-4afe8a | 2026-07-04 | Feature | @claude | 图表账本页面 /chart-ledger：12 类经营图表方法论（渠道→承保→理赔→续保→财务），全部接入真实项目数据（pivot 原子指标 + claims-detail 发展三角 + quote-conversion 漏斗 + performance 机构增速），随全局筛选联动；新增 apiClient.getPivot | P2 | PROPOSED | src/features/chart-ledger/README.md | src/features/chart-ledger/ |  |

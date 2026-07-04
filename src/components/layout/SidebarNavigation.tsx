@@ -21,6 +21,7 @@ import {
   TrendingDown,
   RefreshCw,
   Home,
+  LayoutGrid,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
@@ -57,6 +58,7 @@ const toolNavItems: NavItem[] = [
   { path: '/claims-detail', icon: FileWarning, label: '赔案明细', shortLabel: '赔案' },
   { path: '/repair', icon: Wrench, label: '维修资源', shortLabel: '维修' },
   { path: '/customer-flow', icon: ArrowLeftRight, label: '客户来源', shortLabel: '来源' },
+  { path: '/chart-ledger', icon: LayoutGrid, label: '图表账本', shortLabel: '账本' },
   { path: '/data-import', icon: Database, label: '数据导入', shortLabel: '导入' },
   { path: '/moto-cost', icon: Bike, label: '摩意模型', shortLabel: '摩意' },
 ];
