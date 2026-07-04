@@ -34,6 +34,8 @@ export interface AsyncState {
   loading: boolean;
   error: boolean;
   empty: boolean;
+  /** 错误态"重试"回调（由 hook 用 React Query refetch 装配） */
+  retry?: () => void;
 }
 
 /** 气泡/散点单点 */

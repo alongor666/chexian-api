@@ -1,17 +1,29 @@
 /**
  * 图表账本 · 自定义 HTML/SVG 图表面板
  *
- * 热力图/发展三角（着色表格）、案均赔款箱线图（内联 SVG）、报价漏斗、险种树图——
+ * 热力图/发展三角（着色芯片表格）、案均赔款箱线图（内联 SVG）、报价漏斗、险种树图——
  * 这些形态未进入项目共享 echarts 单例（避免膨胀 bundle），以轻量 DOM/SVG 渲染，
  * 数据同样来自真实查询。着色统一走 lossRatioColor（teal→coral 赔付率梯度）。
+ * 2026-07 Claude Design 稿：单元格圆角芯片（border-spacing 3px）、空格弱底、
+ * 漏斗改 teal 透明度色带 + 层内标签、发展期表头「满 N 月」。
  */
 import React from 'react';
-import { colorClasses, fontStyles } from '@/shared/styles';
-import { formatPercent } from '@/shared/utils/formatters';
+import { cn, colorClasses, fontStyles } from '@/shared/styles';
+import { formatPercent, formatCount } from '@/shared/utils/formatters';
 import { lossRatioColor, LEDGER_COLORS, ChartFrame } from './EchartsPanels';
 import type { BoxDatum, ChartResult, FunnelStep, TreemapCell } from '../types';
 
 const numCls = fontStyles.numeric;
+
+/** 热力芯片单元格（有值 = teal→coral 梯度；无值 = 弱底占位） */
+const HeatCell: React.FC<{ v: number | undefined }> = ({ v }) =>
+  v === undefined ? (
+    <td className={cn('p-1.5 text-center rounded', numCls, 'bg-neutral-50 dark:bg-white/[.03]', colorClasses.text.neutralMuted)}>—</td>
+  ) : (
+    <td className={cn('p-1.5 text-center rounded', numCls)} style={{ background: lossRatioColor(v), color: '#10161f' }}>
+      {formatPercent(v)}
+    </td>
+  );
 
 // ── Chart 03 机构×险种赔付率热力图 ──
 export const RiskHeatmapTable: React.FC<{
@@ -19,14 +31,14 @@ export const RiskHeatmapTable: React.FC<{
 }> = ({ r }) => {
   const { orgs, lines, cell } = r.data;
   return (
-    <ChartFrame s={r} height={260}>
+    <ChartFrame s={r} height={250}>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className={cn('w-full border-separate [border-spacing:3px] text-[13px]', numCls)}>
           <thead>
             <tr>
-              <th className={`p-1.5 text-left ${colorClasses.text.neutralMuted}`}></th>
+              <th className={cn('p-1.5 text-left font-medium', colorClasses.text.neutralMuted)}></th>
               {lines.map((l) => (
-                <th key={l} className={`p-1.5 text-center font-medium ${colorClasses.text.neutralMuted}`}>
+                <th key={l} className={cn('p-1.5 text-center font-medium', colorClasses.text.neutralMuted)}>
                   {l}
                 </th>
               ))}
@@ -35,15 +47,10 @@ export const RiskHeatmapTable: React.FC<{
           <tbody>
             {orgs.map((o) => (
               <tr key={o}>
-                <td className={`py-1.5 pr-2 whitespace-nowrap ${colorClasses.text.neutral}`}>{o}</td>
-                {lines.map((l) => {
-                  const v = cell.get(`${o}|${l}`);
-                  return (
-                    <td key={l} className={`p-1.5 text-center ${numCls}`} style={{ background: v === undefined ? 'transparent' : lossRatioColor(v), color: v === undefined ? undefined : '#10161f' }}>
-                      {v === undefined ? '—' : formatPercent(v)}
-                    </td>
-                  );
-                })}
+                <td className={cn('py-1.5 pr-2 whitespace-nowrap', colorClasses.text.neutralDark)}>{o}</td>
+                {lines.map((l) => (
+                  <HeatCell key={l} v={cell.get(`${o}|${l}`)} />
+                ))}
               </tr>
             ))}
           </tbody>
@@ -61,13 +68,13 @@ export const LossTriangleTable: React.FC<{
   return (
     <ChartFrame s={r} height={220}>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className={cn('w-full border-separate [border-spacing:3px] text-[13px]', numCls)}>
           <thead>
             <tr>
-              <th className={`p-1.5 text-left font-medium ${colorClasses.text.neutralMuted}`}>起保年度</th>
+              <th className={cn('p-1.5 text-left font-medium', colorClasses.text.neutralMuted)}>起保年度</th>
               {devs.map((d) => (
-                <th key={d} className={`p-1.5 text-center font-medium ${colorClasses.text.neutralMuted}`}>
-                  M{d}
+                <th key={d} className={cn('p-1.5 text-center font-medium', colorClasses.text.neutralMuted)}>
+                  满{d}月
                 </th>
               ))}
             </tr>
@@ -75,15 +82,10 @@ export const LossTriangleTable: React.FC<{
           <tbody>
             {years.map((y) => (
               <tr key={y}>
-                <td className={`py-1.5 pr-2 ${colorClasses.text.neutral}`}>{y}</td>
-                {devs.map((d) => {
-                  const v = cell.get(`${y}|${d}`);
-                  return (
-                    <td key={d} className={`p-1.5 text-center ${numCls}`} style={{ background: v === undefined ? 'transparent' : lossRatioColor(v), color: v === undefined ? undefined : '#10161f' }}>
-                      {v === undefined ? '—' : formatPercent(v)}
-                    </td>
-                  );
-                })}
+                <td className={cn('py-1.5 pr-2 whitespace-nowrap', colorClasses.text.neutralDark)}>{y}</td>
+                {devs.map((d) => (
+                  <HeatCell key={d} v={cell.get(`${y}|${d}`)} />
+                ))}
               </tr>
             ))}
           </tbody>
@@ -110,7 +112,7 @@ export const ClaimBoxplot: React.FC<{ r: ChartResult<BoxDatum[]> }> = ({ r }) =>
           const yy = yv(val);
           return (
             <g key={g}>
-              <line x1={padL} y1={yy} x2={W - padR} y2={yy} stroke="rgba(140,140,140,.25)" strokeWidth={1} />
+              <line x1={padL} y1={yy} x2={W - padR} y2={yy} stroke="rgba(140,140,140,.18)" strokeWidth={1} />
               <text x={4} y={yy + 3} fontSize={9} fill="#8C8C8C">{val.toFixed(1)}</text>
             </g>
           );
@@ -129,7 +131,7 @@ export const ClaimBoxplot: React.FC<{ r: ChartResult<BoxDatum[]> }> = ({ r }) =>
               <text x={cx} y={Hh - 8} fontSize={10} fill="currentColor" textAnchor="middle" className={colorClasses.text.neutral}>
                 {c.name.length > 6 ? c.name.slice(0, 5) + '…' : c.name}
               </text>
-              <text x={cx} y={yv(c.med) - 6} fontSize={9} fill={gold} textAnchor="middle">{c.med.toFixed(1)}万</text>
+              <text x={cx + boxW / 2 + 4} y={yv(c.med) + 3} fontSize={9} fill={gold}>{c.med.toFixed(1)}万</text>
             </g>
           );
         })}
@@ -138,28 +140,24 @@ export const ClaimBoxplot: React.FC<{ r: ChartResult<BoxDatum[]> }> = ({ r }) =>
   );
 };
 
-// ── Chart 07 报价转化漏斗 ──
+// ── Chart 07 报价转化漏斗（teal 透明度色带，层内标签） ──
+const FUNNEL_RAMP = ['#13C2C2', 'rgba(19,194,194,.72)', 'rgba(19,194,194,.48)', 'rgba(19,194,194,.28)'];
 export const RenewalFunnel: React.FC<{ r: ChartResult<FunnelStep[]> }> = ({ r }) => {
   const steps = r.data;
   const maxV = steps[0]?.value || 1;
   return (
-    <ChartFrame s={r} height={230}>
-      <div className="flex flex-col items-center gap-1 py-1.5">
+    <ChartFrame s={r} height={250}>
+      <div className="flex flex-col items-center gap-[3px] py-1.5">
         {steps.map((st, i) => {
           const pct = st.value / maxV;
-          const w = 34 + (100 - 34) * pct;
-          const conv = i === 0 ? '' : `（较上一步 ${((st.value / (steps[i - 1].value || 1)) * 100).toFixed(0)}%）`;
+          const w = 32 + (100 - 32) * pct;
           return (
-            <div key={st.name} className="w-full flex flex-col items-center">
-              <div
-                className={`h-8 flex items-center justify-center rounded-sm ${numCls}`}
-                style={{ width: `${w}%`, background: `linear-gradient(90deg, ${LEDGER_COLORS.tealDim}, ${LEDGER_COLORS.teal})`, color: '#10161f', fontWeight: 600 }}
-              >
-                {st.value.toLocaleString()}
-              </div>
-              <div className={`text-[11px] mt-1 mb-1.5 ${colorClasses.text.neutralMuted}`}>
-                {st.name} {conv}
-              </div>
+            <div
+              key={st.name}
+              className={cn('h-[52px] flex items-center justify-center rounded-[3px] text-xs font-semibold', numCls)}
+              style={{ width: `${w}%`, background: FUNNEL_RAMP[i % FUNNEL_RAMP.length], color: '#10161f' }}
+            >
+              {st.name} {formatCount(st.value)}
             </div>
           );
         })}
@@ -178,11 +176,11 @@ export const InsuranceTreemap: React.FC<{ r: ChartResult<TreemapCell[]> }> = ({ 
         {cells.map((c, i) => (
           <div
             key={c.name}
-            className={`flex flex-col items-center justify-center rounded-sm p-1 text-center ${numCls}`}
-            style={{ flex: `${Math.max(3, c.share)} 1 ${c.share > 15 ? '150px' : '72px'}`, background: TREEMAP_PALETTE[i % TREEMAP_PALETTE.length], color: '#10161f', fontWeight: 700 }}
+            className={cn('flex flex-col items-center justify-center rounded-sm p-1 text-center font-semibold', numCls)}
+            style={{ flex: `${Math.max(3, c.share)} 1 ${c.share > 15 ? '150px' : '72px'}`, background: TREEMAP_PALETTE[i % TREEMAP_PALETTE.length], color: '#10161f' }}
           >
-            <span className="text-[12px] leading-tight">{c.name}</span>
-            <span className="text-[10.5px] font-normal opacity-80">{c.share.toFixed(1)}%</span>
+            <span className="text-xs leading-tight">{c.name}</span>
+            <span className="text-[10.5px] font-normal opacity-80">{formatPercent(c.share)}</span>
           </div>
         ))}
       </div>

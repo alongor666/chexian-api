@@ -50,8 +50,15 @@ const quantile = (sortedAsc: number[], p: number): number => {
 /** 非成功态（载入/错/空）时的结论与要点占位；loading/error/empty 由各图真实状态提供 */
 const EMPTY_STATE = { conclusion: '', points: [] as string[] };
 
-function state(q: { isLoading: boolean; isError: boolean }, empty: boolean) {
-  return { loading: q.isLoading, error: q.isError, empty: !q.isLoading && !q.isError && empty };
+function state(q: { isLoading: boolean; isError: boolean; refetch: () => unknown }, empty: boolean) {
+  return {
+    loading: q.isLoading,
+    error: q.isError,
+    empty: !q.isLoading && !q.isError && empty,
+    retry: () => {
+      void q.refetch();
+    },
+  };
 }
 
 // ─── Hook ───────────────────────────────────────────────────
@@ -340,11 +347,11 @@ export function useChartLedgerData() {
       ...s,
       data,
       conclusion: latestVal !== undefined
-        ? `${latestYear} 起保年度 M${firstDev} 累计赔付率 ${formatPercent(latestVal)}，横向对比同期年度判断发展是否提速。`
+        ? `${latestYear} 起保年度满 ${firstDev} 月累计赔付率 ${formatPercent(latestVal)}，横向对比同期年度判断发展是否提速。`
         : `赔款发展三角覆盖 ${years.length} 个起保年度 × ${devs.length} 个发展期。`,
       points: [
         `覆盖起保年度：${years.join(' / ')}`,
-        `发展期：${devs.map((d) => `M${d}`).join(' / ')}`,
+        `发展期：满 ${devs.join(' / ')} 月`,
         `仅对角线以上有数据（未来尚未发生）`,
       ],
     };
@@ -509,10 +516,10 @@ export function useChartLedgerData() {
       ...s,
       data,
       conclusion: breaches
-        ? `${breaches} 个周次突破控制限（UCL ${formatPercent(ucl)}），属异常波动而非正常波动，需定点介入。`
-        : `全部 ${finite.length} 周变动成本率在 CL±2σ 内，波动属正常范围，不必过度反应。`,
+        ? `${breaches} 个周次突破控制限（上限 ${formatPercent(ucl)}），属异常波动而非正常波动，需定点介入。`
+        : `全部 ${finite.length} 周变动成本率在 中心线±2σ 内，波动属正常范围，不必过度反应。`,
       points: [
-        `CL = ${formatPercent(cl)}，UCL = ${formatPercent(ucl)}，LCL = ${formatPercent(Math.max(0, lcl))}`,
+        `中心线 ${formatPercent(cl)}，上限 ${formatPercent(ucl)}，下限 ${formatPercent(Math.max(0, lcl))}`,
         breaches ? `突破点 ${breaches} 个，仅对突破点介入` : `无突破点，均在控制限内`,
         `控制限 = 历史均值 ± 2 倍标准差（规则）`,
       ],
@@ -543,7 +550,15 @@ export function useChartLedgerData() {
     const empty = pts.length === 0;
     const loading = qOrg.isLoading || qGrowth.isLoading;
     const error = qOrg.isError || qGrowth.isError;
-    const s = { loading, error, empty: !loading && !error && empty };
+    const s = {
+      loading,
+      error,
+      empty: !loading && !error && empty,
+      retry: () => {
+        void qOrg.refetch();
+        void qGrowth.refetch();
+      },
+    };
     const xThreshold = pts.length ? mean(pts.map((p) => p.x)) : 0;
     const data = pts;
     if (loading || error || empty) return { ...s, ...EMPTY_STATE, data };
