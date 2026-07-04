@@ -331,7 +331,6 @@ describe('namespaced sub-client URL contracts', () => {
     // ── ai（迁移域）──
     { name: 'ai.capabilities', path: '/ai/capabilities', run: (c) => c.ai.capabilities() },
     { name: 'ai.quickSuggestions', path: '/ai/quick-suggestions', run: (c) => c.ai.quickSuggestions() },
-    { name: 'ai.analyzeTrend POST', path: '/ai/trend-analysis', run: (c) => c.ai.analyzeTrend({ rows: [], org: '总公司', coverage: '商业险' }), expectMethod: 'POST' },
     { name: 'ai.detectRequirement POST', path: '/ai/detect-requirement', run: (c) => c.ai.detectRequirement({ message: '查一下出险率' }), expectMethod: 'POST' },
     // ── data（迁移域）──
     { name: 'data.files', path: '/data/files', run: (c) => c.data.files() },

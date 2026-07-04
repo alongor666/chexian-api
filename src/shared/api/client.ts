@@ -76,7 +76,7 @@ class ApiClient extends ApiClientCore {
   readonly performance = new PerformanceApi(this.transport);
   /** 客户来源去向：apiClient.customerFlow.{summary,inflow,outflow,trend,metadata} */
   readonly customerFlow = new CustomerFlowApi(this.transport);
-  /** AI：apiClient.ai.{analyzeTrend,detectRequirement,capabilities,quickSuggestions} */
+  /** AI：apiClient.ai.{detectRequirement,capabilities,quickSuggestions}（analyzeTrend 已于 B44f2ca 移除死代码） */
   readonly ai = new AiApi(this.transport);
   /** 数据管理：apiClient.data.{files,load,upload,remove,version} */
   readonly data = new DataApi(this.transport);
@@ -237,7 +237,8 @@ class ApiClient extends ApiClientCore {
 
   // 车驾意交叉销售 API（orgTrend/heatmap）已迁出至 crossSell 子客户端（见类首字段 + cross-sell-api.ts）
 
-  // AI API（analyzeTrend/detectRequirement/capabilities/quickSuggestions）已迁出至 ai 子客户端（见类首字段 + ai-api.ts）
+  // AI API（detectRequirement/capabilities/quickSuggestions）已迁出至 ai 子客户端（见类首字段 + ai-api.ts）
+  // analyzeTrend 已于 BACKLOG 2026-06-09-claude-44f2ca 确认为死代码并移除（零调用点，见 ai-api.ts 文件头注释）
 
   // 巡检报告 API（report/narrative）已迁出至 patrol 子客户端（见类首字段 + patrol-api.ts）
 
