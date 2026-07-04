@@ -1381,7 +1381,15 @@ export function containsCredentialValue(content) {
     new RegExp(keyAlt + `["']?\\s*[:=]\\s*["']?[A-Za-z0-9._\\-]{20,}`),
     new RegExp(`"name"\\s*:\\s*"` + keyAlt + `"\\s*,\\s*"value"\\s*:\\s*"[^"]{20,}"`),
   ];
-  return valuePatterns.some(re => re.test(content));
+  if (valuePatterns.some(re => re.test(content))) return true;
+
+  // 规则3：PAT 明文（cx_pat_<id8>.<secret43>，见 server PAT 设计——明文仅生成时返回一次，
+  // 任何落盘即泄漏）。文档占位串（secret 段同字符重复，如 xxxx…）不算泄漏。
+  const patRe = new RegExp('cx_pat' + '_[A-Za-z0-9]{8}\\.([A-Za-z0-9_\\-]{40,})', 'g');
+  for (const m of content.matchAll(patRe)) {
+    if (!/^(.)\1+$/.test(m[1])) return true;
+  }
+  return false;
 }
 
 /**

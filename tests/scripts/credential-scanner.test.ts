@@ -33,4 +33,26 @@ describe('containsCredentialValue', () => {
   it('短值不命中（避免把占位/截断误判为泄漏）', () => {
     expect(containsCredentialValue(`${KEY_ACCESS}=short`)).toBe(false);
   });
+
+  // 规则3：PAT 明文（cx_pat_<id8>.<secret43>）。夹具刻意用无真实结构的假值。
+  const PAT_PREFIX = ['cx', 'pat'].join('_') + '_AB12CD34.';
+  const FAKE_PAT_SECRET = 'FAKE-not-real-0123456789-abcdefghijklmnopqr'; // 43 字符混合串
+
+  it('命中 PAT 明文——赋值形与散文形都算（正向）', () => {
+    expect(containsCredentialValue(`TOKEN='${PAT_PREFIX}${FAKE_PAT_SECRET}'`)).toBe(true);
+    expect(containsCredentialValue(`日志里贴了 ${PAT_PREFIX}${FAKE_PAT_SECRET} 也是泄漏`)).toBe(true);
+  });
+
+  it('PAT 文档占位串不命中（secret 段同字符重复，如 PAT_GUIDE 示例）', () => {
+    expect(containsCredentialValue(`TOKEN='${PAT_PREFIX}${'x'.repeat(42)}'`)).toBe(false);
+  });
+
+  it('PAT secret 段过短不命中', () => {
+    expect(containsCredentialValue(`${PAT_PREFIX}tooshort`)).toBe(false);
+  });
+
+  it('占位与真值并存时仍命中（不被首个占位掩护）', () => {
+    const doc = `示例：${PAT_PREFIX}${'x'.repeat(42)}\n实际：${PAT_PREFIX}${FAKE_PAT_SECRET}`;
+    expect(containsCredentialValue(doc)).toBe(true);
+  });
 });
