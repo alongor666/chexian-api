@@ -355,8 +355,8 @@ describe('requirePermissionFilter: B326 fail-closed 收窄', () => {
 // ─────────────────────────────────────────────────────────────────────────
 import { API_ROUTE_TO_PAGE_MAP } from '../permission.js';
 
-function makeReqWithPath(user: any, path: string) {
-  return { user, path, query: {} } as any;
+function makeReqWithPath(user: any, path: string, baseUrl?: string) {
+  return { user, path, query: {}, ...(baseUrl !== undefined ? { baseUrl } : {}) } as any;
 }
 
 async function runMiddlewarePath(req: any): Promise<unknown> {
@@ -421,6 +421,49 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     expect((err as AppError).statusCode).toBe(403);
   });
 
+  // ─── 六域新增映射 → 403（org_user 不可见）───
+  it('org_user 访问 /repair/overview → 403（维修分析不在白名单）', async () => {
+    const req = makeReqWithPath(orgUser, '/repair/overview');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('org_user 访问 /customer-flow/summary → 403（客户流转不在白名单）', async () => {
+    const req = makeReqWithPath(orgUser, '/customer-flow/summary');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('org_user 访问 /claims-detail/pending-overview → 403（赔案明细不在白名单）', async () => {
+    const req = makeReqWithPath(orgUser, '/claims-detail/pending-overview');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('org_user 访问 /quote-conversion/kpi → 403（报价转化不在白名单）', async () => {
+    const req = makeReqWithPath(orgUser, '/quote-conversion/kpi');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('org_user 访问 /expense-development → 403（费用发展不在白名单）', async () => {
+    const req = makeReqWithPath(orgUser, '/expense-development');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('org_user 访问 /renewal-tracker → 403（续保跟踪不在白名单）', async () => {
+    const req = makeReqWithPath(orgUser, '/renewal-tracker');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
   // ─── 白名单内路由 → 通过 ───
   it('org_user 访问 /kpi → 通过（基础路由不在映射表，不受限）', async () => {
     const req = makeReqWithPath(orgUser, '/kpi');
@@ -458,6 +501,31 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     expect(err).toBeUndefined();
   });
 
+  it('前缀匹配防御：/repair-xxx 路径不应被 /repair 规则误匹配（不在映射表，不受限）', async () => {
+    // /repair-xxx 是假想路径（当前无此真实路由），仅用于验证 resolvePageRoute
+    // 的前缀匹配要求 key + '/' 分隔符，不会把 /repair-xxx 误判为 /repair 的子路径
+    const req = makeReqWithPath(orgUser, '/repair-xxx');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  // ─── 挂载域限定：白名单只作用于 /api/query/*（242c07 收口时暴露的误伤面）───
+  it('org_user 经 /api/agent/diagnosis 挂载点访问 /quote-conversion → 通过（agent 诊断路由不受页面白名单约束）', async () => {
+    // agent 诊断路由（app.ts 挂载 /api/agent/diagnosis）设计上对 org_user 开放并
+    // 带角色过滤；其 router 内 req.path='/quote-conversion' 与六域页面映射键同名，
+    // 必须靠 baseUrl 挂载域判定避免误伤 403
+    const req = makeReqWithPath(orgUser, '/quote-conversion', '/api/agent/diagnosis');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  it('org_user 经 /api/query 挂载点访问 /quote-conversion → 403（页面白名单正常生效）', async () => {
+    const req = makeReqWithPath(orgUser, '/quote-conversion', '/api/query');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
   // ─── admin / branch_admin 不受白名单限制 ───
   it('branch_admin 访问 /cost → 通过（不受路由白名单限制）', async () => {
     const req = makeReqWithPath(
@@ -488,6 +556,61 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     expect(err).toBeUndefined();
   });
 
+  // ─── 六域新增映射：branch_admin 不受路由白名单限制 ───
+  it('branch_admin 访问 /repair/overview → 通过（不受路由白名单限制）', async () => {
+    const req = makeReqWithPath(
+      { role: UserRole.BRANCH_ADMIN, branchCode: 'SC' },
+      '/repair/overview'
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  it('branch_admin 访问 /customer-flow/summary → 通过（不受路由白名单限制）', async () => {
+    const req = makeReqWithPath(
+      { role: UserRole.BRANCH_ADMIN, branchCode: 'SC' },
+      '/customer-flow/summary'
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  it('branch_admin 访问 /claims-detail/pending-overview → 通过（不受路由白名单限制）', async () => {
+    const req = makeReqWithPath(
+      { role: UserRole.BRANCH_ADMIN, branchCode: 'SC' },
+      '/claims-detail/pending-overview'
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  it('branch_admin 访问 /quote-conversion/kpi → 通过（不受路由白名单限制）', async () => {
+    const req = makeReqWithPath(
+      { role: UserRole.BRANCH_ADMIN, branchCode: 'SC' },
+      '/quote-conversion/kpi'
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  it('branch_admin 访问 /expense-development → 通过（不受路由白名单限制）', async () => {
+    const req = makeReqWithPath(
+      { role: UserRole.BRANCH_ADMIN, branchCode: 'SC' },
+      '/expense-development'
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  it('branch_admin 访问 /renewal-tracker → 通过（不受路由白名单限制）', async () => {
+    const req = makeReqWithPath(
+      { role: UserRole.BRANCH_ADMIN, branchCode: 'SC' },
+      '/renewal-tracker'
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
   // ─── telemarketing_user：无 PRESET_ROLES allowedRoutes → 不受白名单限制 ───
   it('telemarketing_user 访问 /cost → 通过（该角色无路由白名单）', async () => {
     const req = makeReqWithPath(
@@ -504,6 +627,13 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     expect(API_ROUTE_TO_PAGE_MAP['/premium-report']).toBe('/reports');
     expect(API_ROUTE_TO_PAGE_MAP['/plan-achievement']).toBe('/reports');
     expect(API_ROUTE_TO_PAGE_MAP['/salesman-ranking']).toBe('/reports');
+    // 六域新增映射
+    expect(API_ROUTE_TO_PAGE_MAP['/repair']).toBe('/repair');
+    expect(API_ROUTE_TO_PAGE_MAP['/customer-flow']).toBe('/customer-flow');
+    expect(API_ROUTE_TO_PAGE_MAP['/claims-detail']).toBe('/claims-detail');
+    expect(API_ROUTE_TO_PAGE_MAP['/quote-conversion']).toBe('/quote-conversion');
+    expect(API_ROUTE_TO_PAGE_MAP['/expense-development']).toBe('/expense-development');
+    expect(API_ROUTE_TO_PAGE_MAP['/renewal-tracker']).toBe('/renewal-tracker');
   });
 });
 
