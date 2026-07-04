@@ -59,8 +59,11 @@ export const PIVOT_DIM_WHITELIST: Record<string, string> = {
   is_nev: "CASE WHEN is_nev THEN '新能源' ELSE '非新能源' END",
   is_telemarketing: "CASE WHEN is_telemarketing THEN '电销' ELSE '非电销' END",
   is_transfer: "CASE WHEN is_transfer THEN '过户' ELSE '非过户' END",
-  week_number: 'week_number',
-  month_number: 'month_number',
+  // week_number/month_number 不是 PolicyFact 原始列（裸引用报 Binder Error: column not found），
+  // 须从 policy_date 现算周/月序号（ISO 周，与 cross-sell-trend.ts 等既有 DATE_TRUNC('week',...)
+  // 用法同源但取序号而非日期，匹配前端按 W{n} 标签展示的诉求）。
+  week_number: "EXTRACT('week' FROM policy_date)",
+  month_number: "EXTRACT('month' FROM policy_date)",
 };
 
 const MAX_DIMENSIONS = 2;

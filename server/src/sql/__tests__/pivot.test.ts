@@ -113,4 +113,70 @@ describe('generatePivotQuery', () => {
       })
     ).toThrow(/Metric not found/);
   });
+
+  describe('满期/赔案路径（requiredColumns 含 earned_days/policy_term/reported_claims/claim_cases）', () => {
+    it('earned_claim_ratio 走 CTE 路径：base → latest_context → base_dedup → earned_base', () => {
+      const sql = generatePivotQuery({
+        dimensions: [dim('org_level_3')],
+        metricIds: ['earned_claim_ratio'],
+        whereClause: '1=1',
+        limit: 100,
+      });
+      expect(sql).toContain('WITH base AS');
+      expect(sql).toContain('latest_context AS');
+      expect(sql).toContain('SELECT MAX(policy_date) AS latest_policy_date FROM base');
+      expect(sql).toContain('base_dedup AS');
+      expect(sql).toContain('earned_base AS');
+      expect(sql).toContain('LEFT JOIN ClaimsAgg ca ON b.policy_no = ca.policy_no');
+      expect(sql).toContain('FROM earned_base');
+      // 简单路径（裸 PolicyFact 单层聚合）不应出现
+      expect(sql).not.toMatch(/^SELECT org_level_3 AS org_level_3, [\s\S]*FROM PolicyFact/);
+    });
+
+    it('维度列正确穿透 base/base_dedup/earned_base（含 CASE 表达式维度）', () => {
+      const sql = generatePivotQuery({
+        dimensions: [dim('is_nev', "CASE WHEN is_nev THEN '新能源' ELSE '非新能源' END")],
+        metricIds: ['earned_margin_amount'],
+        whereClause: '1=1',
+        limit: 100,
+      });
+      expect(sql).toContain("CASE WHEN is_nev THEN '新能源' ELSE '非新能源' END AS is_nev");
+      expect(sql).toContain('GROUP BY policy_no, insurance_start_date, is_nev');
+      expect(sql).toContain('b.is_nev');
+      expect(sql).toMatch(/GROUP BY\s+1\s*$/m);
+    });
+
+    it('混用简单指标 + 满期指标时整体走 CTE 路径（保证同一截止日一致口径）', () => {
+      const sql = generatePivotQuery({
+        dimensions: [dim('org_level_3')],
+        metricIds: ['total_premium', 'policy_count', 'earned_claim_ratio'],
+        whereClause: '1=1',
+        limit: 100,
+      });
+      expect(sql).toContain('WITH base AS');
+      expect(sql).toContain('FROM earned_base');
+    });
+
+    it('avg_claim_amount（reported_claims+claim_cases，非 earned_days）同样走 CTE 路径', () => {
+      const sql = generatePivotQuery({
+        dimensions: [dim('customer_category')],
+        metricIds: ['avg_claim_amount'],
+        whereClause: '1=1',
+        limit: 100,
+      });
+      expect(sql).toContain('WITH base AS');
+      expect(sql).toContain('COALESCE(ca.claim_cases, 0) AS claim_cases');
+    });
+
+    it('纯简单指标（total_premium/policy_count）不触发 CTE 路径', () => {
+      const sql = generatePivotQuery({
+        dimensions: [dim('org_level_3')],
+        metricIds: ['total_premium', 'policy_count'],
+        whereClause: '1=1',
+        limit: 100,
+      });
+      expect(sql).not.toContain('WITH base AS');
+      expect(sql).toContain('FROM PolicyFact');
+    });
+  });
 });

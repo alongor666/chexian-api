@@ -101,7 +101,7 @@ export const CARD_META: Record<string, LedgerCardMeta> = {
       '横轴 = 费用率，纵轴 = 保费规模。正常机构应聚成一团；远离主群（费用率超出 均值+2σ）的点用珊瑚色标出，是核查重点。',
     note: '真实数据 · 三级机构 × 费用率/保费；异常判定 = 均值±2σ 规则',
     action: '整改',
-    actionText: '整改：专项稽核',
+    actionText: '专项稽核',
   },
   'chart-03': {
     id: 'chart-03',
@@ -134,7 +134,7 @@ export const CARD_META: Record<string, LedgerCardMeta> = {
       '横轴 = 周次，纵轴 = 满期出险频度。作为理赔成本的先行指标，比赔付率更早反映风险变化——频度先动，赔付率随后跟涨。',
     note: '真实数据 · 周序号 × 满期出险频度(%)',
     action: '预警',
-    actionText: '预警：提前介入而非等赔付率恶化',
+    actionText: '提前介入而非等赔付率恶化',
   },
   'chart-06': {
     id: 'chart-06',

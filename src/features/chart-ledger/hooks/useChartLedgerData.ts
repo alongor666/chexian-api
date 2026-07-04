@@ -65,6 +65,18 @@ export function useChartLedgerData() {
     if (params.endDate) p.dateEnd = params.endDate;
     return p;
   }, [params]);
+  // quote-conversion 域自治参数集（dateStart/dateEnd + orgName），与 claimsParams 同理：
+  // 若直传全局 params（startDate/endDate/dateField=policy_date），会被路由共享的
+  // parseFiltersAndBuildWhere 识别为「按 policy_date 过滤」注入 WHERE 子句，但
+  // QuoteConversion 表没有 policy_date 列 → Binder Error 500（quote-conversion 自身
+  // 日期过滤走 dateStart/dateEnd，其 parseFilters 不识别 startDate/endDate，不会误注入）。
+  const funnelParams = useMemo(() => {
+    const p: Record<string, string> = {};
+    if (params.orgNames) p.orgName = params.orgNames;
+    if (params.startDate) p.dateStart = params.startDate;
+    if (params.endDate) p.dateEnd = params.endDate;
+    return p;
+  }, [params]);
 
   const keyBase = JSON.stringify(params);
 
@@ -117,7 +129,7 @@ export function useChartLedgerData() {
   });
   const qFunnel = useQuery({
     queryKey: ['ledger', 'funnel', keyBase],
-    queryFn: () => apiClient.quoteConversion.funnel(params),
+    queryFn: () => apiClient.quoteConversion.funnel(funnelParams),
   });
   const qGrowth = useQuery({
     queryKey: ['ledger', 'growth', keyBase],
@@ -157,23 +169,28 @@ export function useChartLedgerData() {
     const base = rows
       .map((r) => ({ name: String(r.org_level_3 ?? '未知'), x: num(r.expense_ratio), y: wan(num(r.total_premium)) }))
       .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    // 机构数过少时均值±2σ 统计量本身不稳定，禁用离群点判定（与 chart04 箱线图 xs.length>=3 门槛一致的保守做法）
+    const MIN_SAMPLE = 5;
+    const enoughSample = base.length >= MIN_SAMPLE;
     const m = mean(base.map((p) => p.x));
     const sd = std(base.map((p) => p.x));
     const hi = m + 2 * sd;
-    const pts: PointDatum[] = base.map((p) => ({ ...p, outlier: p.x > hi }));
+    const pts: PointDatum[] = base.map((p) => ({ ...p, outlier: enoughSample && p.x > hi }));
     const s = state(qOrg, pts.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: pts };
     const outliers = pts.filter((p) => p.outlier).sort((a, b) => b.x - a.x);
     return {
       ...s,
       data: pts,
-      conclusion: outliers.length
-        ? `${outliers.length} 家机构费用率显著偏离（超 均值+2σ = ${formatPercent(hi)}），疑似套费，优先稽核。`
+      conclusion: !enoughSample
+        ? `样本机构仅 ${pts.length} 家，不足 ${MIN_SAMPLE} 家，暂不做统计离群点判定。`
+        : outliers.length
+        ? `${outliers.length} 家机构费用率显著偏离主群（超 均值+2σ = ${formatPercent(hi)}），建议核实费用报销合理性（离群不等于违规，需人工复核）。`
         : `全部 ${pts.length} 家机构费用率聚集在 均值±2σ 内，未见显著异常点。`,
       points: [
         `主群费用率均值 ${formatPercent(m)}，标准差 ${formatPercent(sd)}`,
-        `异常上限（均值+2σ）= ${formatPercent(hi)}`,
-        ...outliers.slice(0, 2).map((o) => `${o.name}：费用率 ${formatPercent(o.x)}，保费 ${formatPremiumWan(o.y * 1e4)}万 —— 核查`),
+        enoughSample ? `离群参考上限（均值+2σ）= ${formatPercent(hi)}` : `机构数不足 ${MIN_SAMPLE} 家，离群上限仅供参考`,
+        ...outliers.slice(0, 2).map((o) => `${o.name}：费用率 ${formatPercent(o.x)}，保费 ${formatPremiumWan(o.y * 1e4)}万 —— 建议核实`),
       ],
     };
   }, [qOrg.data, qOrg.isLoading, qOrg.isError]);
@@ -287,9 +304,17 @@ export function useChartLedgerData() {
     // 容错识别 cohort / dev / 赔付率 字段
     const cohortKey = ['cohort_year', 'accident_year', 'year'].find((k) => rows[0] && k in rows[0]);
     const devKey = ['dev_month', 'development_month', 'maturity', 'month'].find((k) => rows[0] && k in rows[0]);
-    const ratioKey = ['loss_ratio', 'claim_ratio', 'earned_claim_ratio', 'cumulative_loss_ratio', 'ratio'].find(
-      (k) => rows[0] && k in rows[0]
-    );
+    // loss_ratio_pct 是 claims-detail/loss-ratio-development 的真实返回字段名
+    // （server/src/sql/claims-detail.ts 的 generateLossRatioDevelopmentQuery SELECT 别名）；
+    // 其余候选保留作未来口径变更时的兼容兜底。
+    const ratioKey = [
+      'loss_ratio_pct',
+      'loss_ratio',
+      'claim_ratio',
+      'earned_claim_ratio',
+      'cumulative_loss_ratio',
+      'ratio',
+    ].find((k) => rows[0] && k in rows[0]);
     const years: string[] = [];
     const devs: number[] = [];
     const cell = new Map<string, number>();
@@ -328,10 +353,33 @@ export function useChartLedgerData() {
   // ── Chart 07 报价转化漏斗 ──
   const chart07: ChartResult<FunnelStep[]> = useMemo(() => {
     const rows = (qFunnel.data ?? []) as Array<Record<string, unknown>>;
-    const nameKey = ['stage_label', 'stage_name', 'label', 'name', 'stage'].find((k) => rows[0] && k in rows[0]);
-    const valKey = ['count', 'value', 'cnt', 'policy_count', 'quote_count'].find((k) => rows[0] && k in rows[0]);
-    const steps: FunnelStep[] = nameKey && valKey
-      ? rows.map((r) => ({ name: String(r[nameKey]), value: num(r[valKey]) })).filter((x) => Number.isFinite(x.value))
+    // quote-conversion/funnel 真实返回是按 renewal_status 分组的宽表
+    // （l1_total/l2_valid/l3_quality/l4_insured 四个数值列），不是"阶段名+数值"窄表
+    // （见 server/src/sql/quote-conversion.ts generateQuoteFunnelQuery）。
+    // 汇总各 renewal_status 分组得到整体转化漏斗四步。
+    const STAGE_COLS = ['l1_total', 'l2_valid', 'l3_quality', 'l4_insured'] as const;
+    const sums: Record<(typeof STAGE_COLS)[number], number> = {
+      l1_total: 0,
+      l2_valid: 0,
+      l3_quality: 0,
+      l4_insured: 0,
+    };
+    const hasFunnelCols = rows.length > 0 && STAGE_COLS.every((k) => k in rows[0]);
+    if (hasFunnelCols) {
+      rows.forEach((r) => {
+        STAGE_COLS.forEach((k) => {
+          const v = num(r[k]);
+          if (Number.isFinite(v)) sums[k] += v;
+        });
+      });
+    }
+    const steps: FunnelStep[] = hasFunnelCols
+      ? [
+          { name: '全部报价', value: sums.l1_total },
+          { name: '有效报价', value: sums.l2_valid },
+          { name: '优质报价', value: sums.l3_quality },
+          { name: '已承保', value: sums.l4_insured },
+        ]
       : [];
     const s = state(qFunnel, steps.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: steps };
