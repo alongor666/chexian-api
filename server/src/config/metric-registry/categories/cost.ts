@@ -16,7 +16,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'earned_claim_ratio',
     additive: false,
-    version: '2.0.0',
+    version: '2.1.0',
     timeWindow: 'cutoff-based',
     name: '满期赔付率',
     category: 'cost',
@@ -30,11 +30,11 @@ export const costMetrics: readonly MetricDefinition[] = [
     sql: {
       expression: `CASE
     WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
-    THEN ROUND(SUM(reported_claims) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2)
+    THEN SUM(reported_claims) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE))
     ELSE NULL
   END AS earned_claim_ratio`,
       requiredColumns: ['premium', 'reported_claims', 'earned_days', 'policy_term'],
-      notes: '赔案口径：report_time < 观察截止（MAX(report_time)），已结案(settlement_time<观察点)取settled_amount，否则取reserve_amount。保单口径：按policy_no聚合净保费>0。分母闰年感知：policy_term = DATEDIFF(起期, 起期+1年) = 365或366；earned_days = MIN(已过天数, policy_term)，退保保单截止于退保日',
+      notes: '赔案口径：report_time < 观察截止（MAX(report_time)），已结案(settlement_time<观察点)取settled_amount，否则取reserve_amount。保单口径：按policy_no聚合净保费>0。分母闰年感知：policy_term = DATEDIFF(起期, 起期+1年) = 365或366；earned_days = MIN(已过天数, policy_term)，退保保单截止于退保日。不在 SQL 内 ROUND，避免与前端 display.decimals 双重舍入；前端按 decimals=1 单次舍入。',
     },
     display: {
       formatter: 'percent',
@@ -54,6 +54,7 @@ export const costMetrics: readonly MetricDefinition[] = [
       { version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' },
       { version: '1.1.0', date: '2026-04-11', changes: '口径修正：赔案锚点改为 report_time，已决/未决按 settlement_time 分类取值，保单净保费聚合排除完全退保，截止日期改为 MAX(report_time)' },
       { version: '2.0.0', date: '2026-04-17', changes: '铁律对齐：分母从 exposure_days/365 改为 earned_days/policy_term（闰年感知）；展示精度 2→1 位小数' },
+      { version: '2.1.0', date: '2026-07-04', changes: '消除 SQL ROUND(2) 与前端 decimals=1 的双重舍入：移除 SQL 预舍入，前端单次舍入，消除双重舍入偏差' },
     ],
   },
 
@@ -324,7 +325,7 @@ export const costMetrics: readonly MetricDefinition[] = [
   {
     id: 'variable_cost_ratio',
     additive: false,
-    version: '2.0.0',
+    version: '2.1.0',
     timeWindow: 'cutoff-based',
     name: '变动成本率',
     category: 'cost',
@@ -337,15 +338,13 @@ export const costMetrics: readonly MetricDefinition[] = [
     sql: {
       expression: `CASE
     WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0 AND SUM(premium) > 0
-    THEN ROUND(
+    THEN
       SUM(reported_claims) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) +
-      SUM(COALESCE(fee_amount, 0)) * 100.0 / SUM(premium),
-      2
-    )
+      SUM(COALESCE(fee_amount, 0)) * 100.0 / SUM(premium)
     ELSE NULL
   END AS variable_cost_ratio`,
       requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term'],
-      notes: '赔付率分母=满期保费（premium × earned_days / policy_term，闰年感知），费用率分母=签单保费。可超100%（亏损）',
+      notes: '赔付率分母=满期保费（premium × earned_days / policy_term，闰年感知），费用率分母=签单保费。可超100%（亏损）。不在 SQL 内 ROUND，避免与前端 display.decimals 双重舍入；前端按 decimals=1 单次舍入。',
     },
     display: {
       formatter: 'percent',
@@ -364,13 +363,14 @@ export const costMetrics: readonly MetricDefinition[] = [
     changelog: [
       { version: '1.0.0', date: '2026-03-27', changes: '新增，与 cost.ts:generateVariableCostQuery 一致' },
       { version: '2.0.0', date: '2026-04-17', changes: '铁律对齐：赔付分母 exposure_days/365 → earned_days/policy_term；展示精度 2→1 位小数' },
+      { version: '2.1.0', date: '2026-07-04', changes: '消除 SQL ROUND(2) 与前端 decimals=1 的双重舍入：移除 SQL 预舍入，前端单次舍入，消除双重舍入偏差' },
     ],
   },
 
   {
     id: 'earned_loss_frequency',
     additive: false,
-    version: '2.1.0',
+    version: '2.2.0',
     timeWindow: 'cutoff-based',
     name: '满期出险率',
     category: 'cost',
@@ -384,15 +384,12 @@ export const costMetrics: readonly MetricDefinition[] = [
     sql: {
       expression: `CASE
     WHEN COUNT(DISTINCT policy_no) > 0 AND SUM(earned_days) > 0
-    THEN ROUND(
-      SUM(claim_cases * 1.0 * policy_term / NULLIF(earned_days, 0))
-      / COUNT(DISTINCT policy_no) * 100.0,
-      2
-    )
+    THEN SUM(claim_cases * 1.0 * policy_term / NULLIF(earned_days, 0))
+      / COUNT(DISTINCT policy_no) * 100.0
     ELSE NULL
   END AS earned_loss_frequency`,
       requiredColumns: ['claim_cases', 'policy_term', 'earned_days', 'policy_no'],
-      notes: '闰年感知：policy_term = DATEDIFF(起期, 起期+1年) = 365或366天。earned_days = MIN(已过天数, policy_term)。满期后 ratio=1，未满期 ratio>1',
+      notes: '闰年感知：policy_term = DATEDIFF(起期, 起期+1年) = 365或366天。earned_days = MIN(已过天数, policy_term)。满期后 ratio=1，未满期 ratio>1。不在 SQL 内 ROUND，避免与前端 display.decimals 双重舍入；前端按 decimals=1 单次舍入。',
     },
     display: {
       formatter: 'percent',
@@ -412,6 +409,7 @@ export const costMetrics: readonly MetricDefinition[] = [
       { version: '1.0.0', date: '2026-03-27', changes: '从 cost.ts 迁移' },
       { version: '2.0.0', date: '2026-03-31', changes: '口径修正：保单级→年化公式，闰年感知(365/366)' },
       { version: '2.1.0', date: '2026-04-17', changes: '铁律对齐：展示精度 2→1 位小数' },
+      { version: '2.2.0', date: '2026-07-04', changes: '消除 SQL ROUND(2) 与前端 decimals=1 的双重舍入：移除 SQL 预舍入，前端单次舍入，消除双重舍入偏差' },
     ],
   },
 
@@ -513,7 +511,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     id: 'comprehensive_expense_ratio',
     timeWindow: 'any',
     additive: false,
-    version: '1.0.0',
+    version: '1.1.0',
     name: '综合费用率',
     category: 'cost',
     tags: ['core', 'kpi', 'cost'],
@@ -526,15 +524,12 @@ export const costMetrics: readonly MetricDefinition[] = [
     sql: {
       expression: `CASE
     WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
-    THEN ROUND(
-      (SUM(reported_claims) + SUM(COALESCE(fee_amount, 0))) * 100.0
-        / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)),
-      2
-    )
+    THEN (SUM(reported_claims) + SUM(COALESCE(fee_amount, 0))) * 100.0
+        / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE))
     ELSE NULL
   END AS comprehensive_expense_ratio`,
       requiredColumns: ['premium', 'reported_claims', 'fee_amount', 'earned_days', 'policy_term'],
-      notes: '与变动成本率的区别：分子费用金额基于已赚口径统一除满期保费，适合综合费用对标。闰年感知分母',
+      notes: '与变动成本率的区别：分子费用金额基于已赚口径统一除满期保费，适合综合费用对标。闰年感知分母。不在 SQL 内 ROUND，避免与前端 display.decimals 双重舍入；前端按 decimals=1 单次舍入。',
     },
     display: {
       formatter: 'percent',
@@ -552,6 +547,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     ],
     changelog: [
       { version: '1.0.0', date: '2026-04-17', changes: '新增：综合分析补齐，分母闰年感知（earned_days/policy_term）' },
+      { version: '1.1.0', date: '2026-07-04', changes: '消除 SQL ROUND(2) 与前端 decimals=1 的双重舍入：移除 SQL 预舍入，前端单次舍入，消除双重舍入偏差' },
     ],
   },
 

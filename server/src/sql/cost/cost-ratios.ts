@@ -289,16 +289,9 @@ SELECT
   --   fee_amount 经 Parquet 直查 2.59M 行 0 NULL，故 SUM(fee_amount)≡SUM(COALESCE(fee_amount,0))，KPI 中性）
   ${getMetricSql('expense_ratio')},
 
-  -- 变动成本率 = 赔付率 + 费用率（注意：fee_amount 已 COALESCE，保持原样）
-  CASE
-    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0 AND SUM(premium) > 0
-    THEN ROUND(
-      SUM(reported_claims) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) +
-      SUM(fee_amount) * 100.0 / SUM(premium),
-      2
-    )
-    ELSE NULL
-  END AS variable_cost_ratio
+  -- 变动成本率（注册表 variable_cost_ratio 唯一事实源，消除硬编码漂移；
+  --   fee_amount 经 Parquet 直查 2.59M 行 0 NULL，故 SUM(fee_amount)≡SUM(COALESCE(fee_amount,0))，KPI 中性）
+  ${getMetricSql('variable_cost_ratio')}
 
 FROM policy_exposure
 GROUP BY ${groupByClause}
