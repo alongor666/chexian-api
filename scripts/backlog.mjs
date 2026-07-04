@@ -10,22 +10,26 @@
  *   bun scripts/backlog.mjs add --actor @claude --priority P2 --section "Bug/Backend" --desc "描述" [--docs "..."] [--code "..."]
  *   bun scripts/backlog.mjs status <id|uid> IN_PROGRESS [--actor @claude]
  *   bun scripts/backlog.mjs status <id|uid> DONE --evidence "PR/commit/测试证据" [--actor @claude]
+ *   bun scripts/backlog.mjs status <id|uid> CANCELLED|WONTFIX --evidence "弃置理由" [--actor @claude]
  *   bun scripts/backlog.mjs note   <id|uid> "补充信息" [--actor @claude]
  *   bun scripts/backlog.mjs amend  <id|uid> --priority P1 [--actor @claude]   (可改 section/priority/desc/docs/code/owner)
  *   bun scripts/backlog.mjs list   [--all]
  *
  * 选择器 <id|uid>：曾用号(B244) / 完整 uid / uid 唯一后缀，皆可。
+ *
+ * 终态（DONE/CANCELLED/WONTFIX）均移出活跃看板、渲染进 BACKLOG_ARCHIVE.md，且均须带 --evidence
+ * （DONE=完成证据，CANCELLED/WONTFIX=弃置理由）—— 同一强制机制，缺证据/理由一律拒绝写入。
  */
 
 import { appendFileSync, writeFileSync, readFileSync, existsSync } from 'fs';
 import { randomBytes } from 'crypto';
 import {
   loadLog, fold, validateLog, renderBacklog, renderArchive, displayId, isActive,
-  ACTIVE_STATUSES, PRIORITY_ORDER, AMENDABLE_FIELDS,
+  ACTIVE_STATUSES, TERMINAL_STATUSES, PRIORITY_ORDER, AMENDABLE_FIELDS,
   LOG_PATH, BACKLOG_PATH, ARCHIVE_PATH,
 } from './backlog/lib.mjs';
 
-const ALL_STATUSES = [...ACTIVE_STATUSES, 'DONE'];
+const ALL_STATUSES = [...ACTIVE_STATUSES, ...TERMINAL_STATUSES];
 
 // ── 参数解析：位置参数 + --flag value ──
 function parseArgs(argv) {
@@ -130,7 +134,9 @@ function cmdStatus(pos, flags) {
   const uid = resolveUid(sel, tasks);
   const actor = flags.actor || '@claude';
   const evidence = esc(flags.evidence || '');
-  if (status === 'DONE' && !evidence) die('DONE 必须带 --evidence "PR/commit/测试证据"');
+  if (TERMINAL_STATUSES.includes(status) && !evidence) {
+    die(`${status} 是终态，必须带 --evidence "${status === 'DONE' ? 'PR/commit/测试证据' : '弃置理由'}"`);
+  }
   appendAndRerender([{ uid, kind: 'status', ts: today(), actor, status, evidence }]);
   console.log(`✅ ${displayId(tasks.get(uid))} → ${status}（视图已刷新）`);
 }
@@ -186,6 +192,7 @@ switch (cmd) {
     console.log('用法：bun scripts/backlog.mjs <add|status|note|amend|list> ...');
     console.log('  add    --actor @x --priority Px --section "..." --desc "..." [--docs ...] [--code ...]');
     console.log('  status <id|uid> <STATUS> [--evidence "..."] [--actor @x]   STATUS ∈ ' + ALL_STATUSES.join('/'));
+    console.log('         终态 ' + TERMINAL_STATUSES.join('/') + ' 必须带 --evidence（DONE=完成证据，CANCELLED/WONTFIX=弃置理由）');
     console.log('  note   <id|uid> "..." [--actor @x]');
     console.log('  amend  <id|uid> --priority P1|--section ...|--desc ... [--actor @x]');
     console.log('  list   [--all]');

@@ -7,25 +7,25 @@
 **更新规则**（一律走 `bun scripts/backlog.mjs`，写入方不挑号）：
 - 新增需求：`bun scripts/backlog.mjs add --actor @<agent> --priority Px --section "板块" --desc "描述" [--docs ...] [--code ...]`
 - 状态流转：`bun scripts/backlog.mjs status <id> IN_PROGRESS`；完成：`bun scripts/backlog.mjs status <id> DONE --evidence "PR/commit/测试证据"`（DONE 必须带证据）
+- 弃置：`bun scripts/backlog.mjs status <id> CANCELLED|WONTFIX --evidence "弃置理由"`（终态，移出活跃看板进归档，必须带理由 —— 与 DONE 同一机制）
 - 补充信息：`bun scripts/backlog.mjs note <id> "..."`；修订字段：`bun scripts/backlog.mjs amend <id> --priority P1`
 - 重新渲染：`bun scripts/governance-backlog-curate.mjs --apply`（折叠日志 → 刷新本文件 + 归档 + 看板）
 
 **编号**：历史曾用号（B234…）对迁移任务保留显示以兼容旧引用；新任务用 uid（如 `2026-06-07-claude-a3f`，稳定身份，引用以 uid 为准）。
 
-**校验**：`bun run scripts/check-governance.mjs` 校验日志完整性（事件字段 / 孤儿事件 / uid·曾用号唯一）+ DONE 证据链 +「视图 == 折叠(日志)」陈旧守卫。
+**校验**：`bun run scripts/check-governance.mjs` 校验日志完整性（事件字段 / 孤儿事件 / uid·曾用号唯一）+ 终态（DONE/CANCELLED/WONTFIX）证据链 +「视图 == 折叠(日志)」陈旧守卫。
 
 ---
 
-## 📋 活跃任务速查（114 项 · 数据截至 2026-07-04 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（107 项 · 数据截至 2026-07-04 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P0（2 项）**
+**P0（1 项）**
 
-- 2026-07-03-claude-0f86cb — 部署白屏风险链
-- 2026-07-03-claude-20e132 — 换号登录不清缓存致SW/ReactQuery跨用户串数据越权
+- 2026-07-03-claude-0f86cb `IN_PROGRESS` — 部署白屏风险链
 
-**P1（20 项）**
+**P1（19 项）**
 
 - B291 `BLOCKED` — wecom_smartsheet 12 三级机构续保推送 — 剩 11 张表 schem
 - 2026-06-15-claude-b38dcc — PR def68ac3 第四批次（KPI 路由接入 CubeCostDay）后，serv
@@ -45,10 +45,9 @@
 - 2026-06-28-claude-8dbd97 — 三域审计(诊断脚本/slash命令/软链技能)收敛出~18个真危险缺口(BRANCH_C
 - 2026-06-29-claude-a5aa03 — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
-- 2026-07-03-claude-37cb58 — 保费报表usePremiumReport.ts
 - 2026-07-03-claude-d23bd0 `PARTIAL` — 后端审查
 
-**P2（59 项）**
+**P2（54 项）**
 
 - B245 — 零赔付专项分析维度展开
 - B250 — 幽灵字段治理检查
@@ -63,7 +62,6 @@
 - B322 — claude-to-im 飞书 app_secret 明文存储 + 已暴露至本次会话上下
 - B335 — 批量卫生项（21 目录排查 §3 P2 汇总）
 - B340 `TODO` — 生产 claims 域加载器缺 union_by_name（潜伏，B339 闸门镜像时发
-- 2026-06-08-claude-691a87 — BACKLOG 增弃置状态 + 过时项剪枝（治理体检缺口②）
 - 2026-06-10-claude-3a6daf — 深入评估 chexian-patrol 续保巡检命令的设计思路
 - 2026-06-10-claude-b4da70 — 数据管理/cli.py 工具库空壳化处置
 - 2026-06-10-claude-e2240c — 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通
@@ -73,7 +71,6 @@
 - 2026-06-11-claude-9ba379 — claims 源文件拼接顺序使遗留清单覆盖最新全量
 - 2026-06-11-claude-a8d3df — [口径裁决]performance 负基数同比符号反转
 - 2026-06-11-claude-e9a906 — [口径裁决]地理跨区 sentinel 反转
-- 2026-06-11-claude-ed63ec — SW 5 分钟版本轮询实际不存在
 - 2026-06-11-claude-fa0f22 — 多 sheet 加载仅命中一个必须列即并入整 sheet
 - 2026-06-11-claude-fdbba5 — [口径裁决]硬编码阈值违反红线
 - 2026-06-12-claude-27972c — 治理静态检查专项（bug-hunt 沉淀）
@@ -100,15 +97,12 @@
 - 2026-07-03-claude-05dff4 — 前端审查中危债打包（2026-07-03四维审查）
 - 2026-07-03-claude-131dd8 — 后端审查
 - 2026-07-03-claude-242c07 — 页面级路由白名单 API_ROUTE_TO_PAGE_MAP 不覆盖 repair/cu
-- 2026-07-03-claude-34ac54 — duckdb-type-converter 不识别 DECIMAL（{width,sca
 - 2026-07-03-claude-4cc18e — 安全审计M1
 - 2026-07-03-claude-575d2f — 后端审查
 - 2026-07-03-claude-6c23b3 — 后端审查
 - 2026-07-03-claude-6e93c9 — patrol 巡检报告路由(/api/query/patrol/
 - 2026-07-03-claude-6ef9cd `PARTIAL` — 安全审计M2
 - 2026-07-03-claude-7982a9 — 契约对账闸 checkQueryCatalogConsistency 扫描目录硬编码 s
-- 2026-07-03-claude-a3ffc0 — 契约漂移两处
-- 2026-07-03-claude-dea47b — 后端审查
 
 **P3（33 项）**
 
@@ -175,7 +169,6 @@
 | B321 | 2026-06-03 | Refactor/Governance | @claude | **super-powers 精髓 skills 两项后续**（PR #469 审计衍生）：(1) **上提共享仓**——`code-search-routing` / `agent-system-design-principles` 整体，及 `silent-failure-guard` 五律内核、`rule-promotion-gate` judge-not-lawyer、`adr-tiered-response` 分级响应的**通用内核**，均过语义独立测试，待项目级实战验证（≥2 场景命中）后经 `chexian-crystallize-skill` 上提到 `alongor666/alongor666-skills`（本会话 GitHub 工具仅限 chexian-api，无法跨库推送）。(2) **引入 ESLint AST 硬门**——补 `silent-failure-guard` 的"catch 返回空值无日志/无判别"检测（正则 100% 误报，#25 空catch门只覆盖纯空块），用 `no-useless-catch` + 自定义 rule；项目当前无 ESLint，需从零搭配置+CI 接线，属重改动宜独立 PR | P3 | PROPOSED | PR #469 审计；`.claude/skills/silent-failure-guard.md`；`.claude/skills/rule-promotion-gate.md` | `.claude/skills/*.md`（上提候选）<br>`scripts/check-governance.mjs`(#25 空catch门已落地)<br>新增 `eslint.config.*`（待建） | 候选 skill 验证后上提共享仓且通用层无重复；ESLint AST 门在当前库零误报通过 + 拦截真实吞异常 |
 | B335 | 2026-06-05 | Refactor/Quality | @claude | **批量卫生项**（21 目录排查 §3 P2 汇总）：any 收敛（前端 ECharts 回调 ~130+、services 31 用 CallbackDataParams）、escapeSqlValue @deprecated 迁 escapeSqlLiteral（10+ SQL 模块）、目录碎片合并（charts/services 单文件并入 widgets/shared-export、widgets table+tables）、ui↔components 边界、INDEX.md 漂移、@deprecated 别名（conversion_rate/UserLoginPanel）、underwriting-recommendation 死红线策略 | P2 | PROPOSED | 开发文档/目录排查报告_2026-06-05.md §3 | src/widgets；src/shared；server/src/utils/security.ts；server/src/sql | 分批清理；各项 build/governance 绿 |
 | B340 | 2026-06-06 | Bug/Backend | @claude | **生产 claims 域加载器缺 union_by_name（潜伏，B339 闸门镜像时发现）**：`server/src/services/duckdb-domain-loaders.ts` 的 11 处 `read_parquet('${path}')` 均为裸读，无 `union_by_name=true`；而 policy 加载器 `duckdb-parquet-loader.ts` 显式带 `union_by_name`。一旦 claims/域分区出现兼容 schema 漂移（如新增可选字段、字段顺序变动），生产**首次惰性加载** ClaimsDetail/ClaimsAgg 等端点会因按位置 union 失败而崩。当前 8 个 claims 分区（2019–2026）同一 ETL 产出、列集合一致（均 40 列）→ **暂未触发，是定时炸弹非现行故障**。B339 闸门选「忠实镜像生产」（claims 同样裸读）以保留金丝雀探测力，故未在闸门层擅自加 union_by_name 掩盖此问题。修复：评估给 `duckdb-domain-loaders.ts` 各域读法统一加 `union_by_name=true`（与 policy 对齐），同步把 B339 claims 模板改回带 union_by_name；需回归测试惰性加载 8 端点 + 真实分区 schema 漂移场景。 | P2 | TODO | B339 codex PR #513 第3轮 3a；`duckdb-parquet-loader.ts`(对照：policy 已带 union_by_name) | `server/src/services/duckdb-domain-loaders.ts`(11 处裸 read_parquet 待评估加 union_by_name)<br>`scripts/prepublish-gate/lib/fetch-local-metrics.mjs`(claims 模板随生产改) | 待办 <br>[计数校正 2026-06-20] 描述中'duckdb-domain-loaders.ts 的 11 处 read_parquet'为旧计数；2026-06-20 PR #691 架构评审逐文件核验：当前该文件全域共 9 处裸 read_parquet，claims 域专属仅 1 处(loadClaimsDetail, duckdb-domain-loaders.ts:449)。底层结论不变(claims 加载器无 union_by_name=true、与 policy 域 loadMultipleParquet 不一致、schema 漂移会令首次惰性加载崩)，仅数量更正。 |
-| 2026-06-08-claude-691a87 | 2026-06-08 | Chore/Governance | @claude | **BACKLOG 增弃置状态 + 过时项剪枝（治理体检缺口②）**：event-log status 词表缺 CANCELLED/WONTFIX 弃置路径，append-only 下过时/放弃任务只增不剪——2026-06-08 extract-backlog-governance 体检发现 33 项任务终态滞留 PROPOSED（最早 2026-04-11，约 2 个月）。建议：①scripts/backlog/lib.mjs 增 CANCELLED 终态枚举；②backlog.mjs status 支持置 CANCELLED 带 --reason；③定期对账剪枝陈旧 PROPOSED。属待观察软缺口，先建机制不强制。来源：体检报告原则6 同步现实陈旧即剪。 | P2 | PROPOSED | .claude/rules/backlog-eventlog.md | scripts/backlog/lib.mjs<br>scripts/backlog.mjs |  |
 | 2026-06-09-claude-44f2ca | 2026-06-09 | ApiClient 神类拆分 | @claude | 确认 ai.analyzeTrend 是预留接口还是死代码（既有问题·非迁移引入）：PR #547 评审发现全前端无 .analyzeTrend( 调用点（迁移前就无调用者，删旧方法后 tsc 仍绿即证）。需确认是预留接口还是可清理死代码；若死代码，连同后端 ai/trend-analysis 路由一并评估清理。 | P3 | PROPOSED | N/A | src/shared/api/ai-api.ts,server |  |
 | 2026-06-09-claude-530bf5 | 2026-06-09 | 数据管道/ETL | @claude | claims 报案截止日新鲜度告警（B191e0f）目前仅在 daily.mjs Step5.5 打 stdout 红字 advisory 提示；交互式跑能看到，但无人值守批量跑（release:daily / cron）红字易被忽略——而满期赔付率对账事故场景正是「静默喂旧数据、无人盯」。增强：把报案截止日落后天数 lag 信号接入 release:daily 健康检查与企微通知，让无人值守也能拦截；可选给阈值加工作日感知（report_time 周末累积，周一可能 benign 假阳性）。来源 PR #537 review 观察①②。 | P3 | PROPOSED | .claude/rules/data-pipeline.md | 数据管理/daily.mjs runClaimsDetail Step5.5 |  |
 | 2026-06-09-claude-66b2eb | 2026-06-09 | ApiClient 神类拆分 | @claude | 命名空间子客户端富类型提升为命名接口（gold-plating·非阻塞）：cross-sell(#544)迁移时把 timePeriod(26 字段)/heatmap(11 字段)/orgTrend/trend/topSalesman 的富返回类型逐字段保留，但仍是匿名内联。后续可提升为 types.ts 命名接口（CrossSellTimePeriodResponse 等），利于复用与契约测试引用。来源：PR #544 评审观察项。 | P3 | PROPOSED | N/A | src/shared/api/cross-sell-api.ts,src/shared/api/types.ts | PR #545 评审强化：内联富类型提升应批量进行（performance + crossSell 及后续 customer-flow 等一次性提升为 types.ts 命名接口，消除重复内联块），而非逐域零敲碎打。 |
@@ -195,7 +188,6 @@
 | 2026-06-11-claude-9ba379 | 2026-06-11 | 数据质量 | @claude | claims 源文件拼接顺序使遗留清单覆盖最新全量：daily.mjs:1091 [...newFiles,...legacyFiles]+convert_claims_detail.py:181 drop_duplicates(keep='last')，车险报立结案清单_*.xlsx 遗留旧快照排在新格式之后，同赔案号旧快照金额覆盖新全量。文件名无8位日期的遗留文件逃过自动归档守卫。 | P2 | PROPOSED | N/A | 数据管理/daily.mjs,数据管理/pipelines/convert_claims_detail.py |  |
 | 2026-06-11-claude-a8d3df | 2026-06-11 | 指标口径 | @claude | [口径裁决]performance 负基数同比符号反转：drilldown.ts:197、top-salesman.ts:143 WHEN COALESCE(prev,0)=0 THEN NULL ELSE (c-p)/p，批改冲减使上期为负时除以负数 → 增长率符号反转。注册表 growth.ts 统一 WHEN prev>0...ELSE NULL，唯这两处不一致。 | P2 | PROPOSED | N/A | server/src/sql/performance-analysis/drilldown.ts,server/src/sql/performance-analysis/top-salesman.ts |  |
 | 2026-06-11-claude-e9a906 | 2026-06-11 | 指标口径 | @claude | [口径裁决]地理跨区 sentinel 反转：claims-detail.ts:361 is_cross_region=(accident_city != CASE...ELSE 'MATCH' END)，内层只映射川A/B/C/E/F/Q 六前缀，其余（川D/H/J...渝/外省）落 ELSE 'MATCH' 而 accident_city 永不等于字面 'MATCH' → 恒判跨区域，cross_region_pct 系统性虚高。需补全车牌→城市码映射并定义未知前缀归类口径。 | P2 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
-| 2026-06-11-claude-ed63ec | 2026-06-11 | Bugfix/Frontend | @claude | SW 5 分钟版本轮询实际不存在：public/sw.js 注释宣称每 5 分钟轮询 /api/data/version 但无任何定时器，maybeCheckVersion 只在 fetch 命中缓存分支调用；SW 活跃时前端 staleTime=Infinity 初始加载后不再发请求 → 无 fetch 事件 → 版本检查永不跑 → ETL_UPDATED 永不发。长开 tab 最长 24h 看旧数据。lastKnownEtlDate 未持久化，SW 回收后归零。 | P2 | PROPOSED | N/A | public/sw.js,src/app/App.tsx | 生产实证补充第二死因：sw.js:141 maybeCheckVersion 裸fetch('/api/data/version')不带鉴权，而 data.ts:299 router.use(authMiddleware) 强制鉴权，生产实测401被静默吞掉——即使轮询能被fetch事件触发也每次必401。机制双重死亡，修复须页面侧带token轮询+postMessage通知SW |
 | 2026-06-11-claude-ee63ee | 2026-06-11 | Refactor/Frontend | @claude | quote-conversion KpiCards default 分支为死代码：VersionAView/VersionBView 自 PR #150 (3c9e72a4, 2026-04-03) 起均以 variant="oldCar" 调用，default 分支（整体转化率/报价总量/平均折扣率/N 位业务员参与 卡片布局，KpiCards.tsx L116-168）不可达。该死分支曾导致 E2E 09-quote-conversion 断言「整体转化率」长期假绿（已另行修复断言）。处置建议：确认无恢复 default 视图的产品计划后删除该分支并收窄 variant 类型；注意与 OPEN 状态 PR #581（给 oldCar 分支加 title 口径提示）的合并顺序。 | P3 | PROPOSED | N/A | src/features/quote-conversion/components/KpiCards.tsx |  |
 | 2026-06-11-claude-f633c0 | 2026-06-11 | Bugfix/Frontend | @claude | cancelRequest 键不匹配永远取消不了请求：client-core.ts:192 controller 以 GET:${normalizeGetEndpoint(endpoint)}（含排序 query）为键存，cancelRequest(endpoint) 用原始 endpoint 查表必 miss；类注释宣称同端点新请求自动取消前序请求，代码无此 abort 逻辑（仅合并）。 | P3 | PROPOSED | N/A | src/shared/api/client-core.ts |  |
 | 2026-06-11-claude-fa0f22 | 2026-06-11 | 数据质量 | @claude | 多 sheet 加载仅命中一个必须列即并入整 sheet：etl_validation.py:116 has_header=any(c in required_columns)，仅含保单号列的汇总/透视 sheet 被当有效续表 concat，其余列 NaN 对齐 → 静默注入残缺行。transform.py:141 load_target_excel 同样只查保单号别名。FineBI 导出带统计 sheet 时触发。 | P2 | PROPOSED | N/A | 数据管理/pipelines/etl_validation.py |  |
@@ -248,21 +240,16 @@
 | 2026-06-29-claude-a5aa03 | 2026-06-29 | 架构治理/多省 | @claude | 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物理混放current/+靠记得加WHERE branch_code的fail-open默认混省）：①统一取数入口SSOT(三运行时JS/诊断Python/企微强制province参数,无参即报错,复用resolveBranchCode/assertBranchCodeSet+诊断branch_paths) ②CI防回归闸(裸读current不带省份过滤即CI红,扩checkPolicyGlobPrefixIsolation到企微instance+技能仓镜像) ③物理子目录current/<省>/(路径A,生死点discoverParquetFiles下钻省目录+ETL落盘+sync-vps过滤,[!S]*glob退役) ④出口零信任断言(每次取数结果/企微写入前断言DISTINCT branch_code≤1,跨省即中止;超管全国视图allow_national显式声明放行,复用permission.ts超管标识)。拆5 PR每个独立evidence-loop+Claude子代理双闸(architect+code-reviewer禁codex):P0邮政表止血(已派task_625ba467)→P1出口断言(最先做立即兑现任何情况兜底)→P2 SSOT收口→P3闸固化→P4子目录化(因P2已收口故blast radius缩到SSOT一处) | P1 | PROPOSED | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | 数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py | P1 出口零信任断言完成 PR #858：跨运行时单省断言工具(branch_assert.py/branch-assert.mjs)+接入企微sync_filtered_policies+ETL premium落盘。fail-closed(含NULL/未知前缀/未知省份值/无判定列均抛错,空df放行);mapping&prefixLength唯一事实源fields.json;national仅显式allow_national(PROVINCE=ALL)。architect审设计+code-reviewer审diff双闸(禁codex,2HIGH+2MEDIUM全修)。验证:pytest28+vitest4477+端到端真实parquet5场景+governance51/51+typecheck。follow-up:diagnose(已[!S]*glob覆盖)/API(已RLS)/quotes(B255)/其他域ETL(assertDeclaredBranch)按需扩展。 <br>续保引擎(sync_renewal_v2.py)跨省裸glob暴露修复(P0邮政表同类follow-up,独立PR):build_source_rows 4处read_parquet(current/)裸读混省(duckdb实证H1捞SX 3.99万行/4067万元、H2 4.49万行/5468万元混入四川企微表),自贡靠org='自贡'偶然隔离(脆弱)。修复:(1)4处统一注入参数化AND branch_code=?(非extra_where字符串,保引擎零拼接面) (2)load_instance fail-closed要求YAML声明branch_code(注册集取自branch_assert.get_branch_mapping SSOT,非硬编码{SC,SX}) (3)build_source_rows出口接入防线④assert_single_branch(防线④从sync_filtered单引擎扩到两引擎) (4)P3闸固化:新增governance#52 checkWecomEngineBranchIsolation纯静态扫两引擎+instances/*.yaml(检测A按函数粒度+剥注释防漏报/检测B按daily.mjs路由分流:v2必声明branch_code、sync_filtered靠出口断言兜底不强制extra_where避免与邮政PR耦合)。非policy源(quotes/salesman/customer_flow)duckdb实证纯SC,base单省后LEFT JOIN天然收敛本阶段不隔离。architect设计闸-1(APPROVE WITH CHANGES,7裁决)+code-reviewer审diff双闸(禁codex)。验证:6隔离测试(含负向SX注入抛错)+闸三向(检测A漏报修复/检测B/正向)+真实parquet H1=66611纯SC对账+governance52/52+typecheck。follow-up:多省扩展时quotes/salesman/customer_flow出口断言盲区(只看policy_no派生,兜不住quote字段来自SX)+性能实测后是否glob收窄。 |
 | 2026-06-29-claude-ba7e61 | 2026-06-29 | Data/ETL | @claude | ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另立项）：B1命名路由(daily.mjs premium/claims glob+matchFull 认<省>_前缀,sichuan→SC/shanxi→SX) / B2分省编排(release:daily/daily.mjs 遍历fields.json branch_code.mapping注册省份,SC主表+SX validation/SX各跑) / B3防重复(归档区间被新全量覆盖的旧全量+单文件不混省闸) / B4 freshness跨省巡检(覆盖validation/SX) / B5首发实战(6全量跑通+PM2 reload,搞准赔付) | P1 | PROPOSED | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | 数据管理/lib/claims-freshness.mjs | 路径B代码阶段(B1-B4)全合并:命名路由#847/分省编排#852/防重复#853/freshness#854,CI全绿+Claude子代理双闸(architect+code-reviewer)4 NO-GO全修+全GO。B5首发实战待低峰授权。 |
 | 2026-07-03-claude-05dff4 | 2026-07-03 | 前端 | @claude | 前端审查中危债打包（2026-07-03四维审查）：①copilot/forecast手写fetch绕过apiClient(useForecastBaseline.ts:421等4处) ②业务阈值硬编码无SSOT(comprehensive-analysis/rules.ts:3,crossSellRateStatus.ts:20) ③403/429无全局拦截仅401有刷新(client-core.ts:309) ④staleTime双态在模块加载瞬间判定SW必未接管设计落空(App.tsx:17) ⑤9个hook手写状态机与ReactQuery两套并存 ⑥TruckAnalysisPanel/CustomerFlowPage/RepairPage错误态缺失 ⑦4文件超800行(GeoRiskPanel951等) ⑧moto-cost/repair/expense-development零E2E ⑨react-window1.8旧版React19无兼容声明 | P2 | PROPOSED | N/A | src/features/copilot,src/shared/api/client-core.ts,src/app/App.tsx |  |
-| 2026-07-03-claude-0f86cb | 2026-07-03 | 部署 | @claude | 部署白屏风险链：生产index.html无Cache-Control（启发式缓存）+deploy.yml rm -rf dist旧chunk物理消失+sw.js无skipWaiting；且生产sw.js被max-age=31536000 immutable一年强缓存（双重复Cache-Control头）。长开tab遇发布→旧index引用已删chunk→404白屏无法自愈 | P0 | PROPOSED | N/A | deploy/nginx-fullstack.conf,deploy/nginx.conf,.github/workflows/deploy.yml,public/sw.js | 白屏链三环节中两环已上生产：nginx no-cache（见 0e0e9f DONE 证据）+ sw.js skipWaiting（PR #864 已部署）。残留一环=deploy.yml rm -rf 旧 chunk 无保留期（发布瞬间窗口仍在，但 index.html no-cache 后旧 index 不再被缓存，风险已大幅收敛），是否加旧资产保留期为可选 follow-up |
-| 2026-07-03-claude-1200d2 | 2026-07-03 | 安全 | @claude | 安全审计L1：文件上传大小上限三处不一致。multer(routes/data.ts:49)=500MB、nginx模板client_max_body_size=100M、安全清单文档=≤50MB。实际有效上限由nginx=100M决定(先于Express拒绝)。需产品确认真实最大parquet尺寸后统一三处口径(建议以nginx为准或改为env可配)。仅branch_admin可上传,风险低。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | deploy/nginx-fullstack.conf |  |
+| 2026-07-03-claude-0f86cb | 2026-07-03 | 部署 | @claude | 部署白屏风险链：生产index.html无Cache-Control（启发式缓存）+deploy.yml rm -rf dist旧chunk物理消失+sw.js无skipWaiting；且生产sw.js被max-age=31536000 immutable一年强缓存（双重复Cache-Control头）。长开tab遇发布→旧index引用已删chunk→404白屏无法自愈 | P0 | IN_PROGRESS | N/A | deploy/nginx-fullstack.conf,deploy/nginx.conf,.github/workflows/deploy.yml,public/sw.js | 白屏链三环节中两环已上生产：nginx no-cache（见 0e0e9f DONE 证据）+ sw.js skipWaiting（PR #864 已部署）。残留一环=deploy.yml rm -rf 旧 chunk 无保留期（发布瞬间窗口仍在，但 index.html no-cache 后旧 index 不再被缓存，风险已大幅收敛），是否加旧资产保留期为可选 follow-up <br>白屏链三环全部落地：①index.html no-cache(PR #865 生产已对齐) ②sw.js skipWaiting(PR #864) ③旧 hashed 资产 7 天保留期 → PR #881（部署链 PR 禁 auto-merge，待人工监控窗口合并+首次部署验证后置 DONE） |
+| 2026-07-03-claude-1200d2 | 2026-07-03 | 安全 | @claude | 安全审计L1：文件上传大小上限三处不一致。multer(routes/data.ts:49)=500MB、nginx模板client_max_body_size=100M、安全清单文档=≤50MB。实际有效上限由nginx=100M决定(先于Express拒绝)。需产品确认真实最大parquet尺寸后统一三处口径(建议以nginx为准或改为env可配)。仅branch_admin可上传,风险低。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | deploy/nginx-fullstack.conf | check-merged-drift 命中 PR #874 系误报：该 PR 只加 nginx CSP 头未动 client_max_body_size/multer，上传上限三处不一致仍未修，保持 PROPOSED |
 | 2026-07-03-claude-131dd8 | 2026-07-03 | CI/测试 | @claude | 后端审查：CI 完全不跑 DuckDB 原生绑定集成测试(vite.config.ts exclude 22个 duckdb-*.test.ts + 立方体影子对账7个)，含当前最活跃的多省 RLS 隔离测试(duckdb-branch-rls-resolve/repair-branch-rls等)。相关代码回归唯一安全网只剩人工本地 test:integration。建议 CI runner 装原生二进制或 pre-push/release 关卡强制跑 | P2 | PROPOSED | N/A | vite.config.ts |  |
-| 2026-07-03-claude-20e132 | 2026-07-03 | 前端 | @claude | 换号登录不清缓存致SW/ReactQuery跨用户串数据越权：sw.js buildCacheKey仅URL无用户身份，App.tsx只监听auth-logout清缓存，PermissionContext换号只派发auth-login；staleTime=Infinity加剧。共享终端/企微扫码换身份即触发，dataScope不同用户可见越权数据 | P0 | PROPOSED | N/A | public/sw.js,src/app/App.tsx,src/shared/contexts/PermissionContext.tsx |  |
 | 2026-07-03-claude-242c07 | 2026-07-03 | Security/Backend | @claude | 页面级路由白名单 API_ROUTE_TO_PAGE_MAP 不覆盖 repair/customer-flow/claims-detail/quote-conversion/expense-development/renewal-tracker 六域，受限角色可直调接口（行级RLS仍生效，页面级授权靠菜单隐蔽性兜底）——需业务决策各角色是否放行后再补映射 | P2 | PROPOSED | N/A | server/src/middleware/permission.ts:27 |  |
-| 2026-07-03-claude-34ac54 | 2026-07-03 | Enhancement/Backend | @claude | duckdb-type-converter 不识别 DECIMAL（{width,scale,value} 三键对象），当前无触发路径但零防御——未来 CAST AS DECIMAL 会让数字字段变对象且丢小数换算，应补分支 Number(value)/10**scale | P2 | PROPOSED | N/A | server/src/services/duckdb-type-converter.ts:19 |  |
-| 2026-07-03-claude-37cb58 | 2026-07-03 | 前端 | @claude | 保费报表usePremiumReport.ts:93,120完全绕过buildFilterParams，静默丢弃新能源/续保模式/险别组合/客户类别等十余个全局筛选字段，与其他页面口径不一致且无UI提示；同类隐患GrowthAnalysisPanel.tsx:134与useGrowthAnalysis.ts:367手动覆盖orgNames缺isOrgUser强制收敛 | P1 | PROPOSED | N/A | src/features/premium-report/hooks/usePremiumReport.ts,src/features/growth/components/GrowthAnalysisPanel.tsx | 复核纠偏：保费报表半条为假阳性——PremiumReportPanel.tsx:177 已用 buildFilterParams(filters) 全量产物经 additionalParams 传入 hook 并 spread 进请求参数（usePremiumReport.ts:94），全局筛选未丢失；审查代理引用了 spread 行却误判。本条仅剩 GrowthAnalysisPanel/useGrowthAnalysis orgNames 缺 isOrgUser 收敛部分待核实修复 |
 | 2026-07-03-claude-4cc18e | 2026-07-03 | 安全 | @claude | 安全审计M1：依赖漏洞分级升级。bun audit 报 echarts5.6(XSS,需升6.1大版本回归)、multer2.1.1(嵌套字段DoS,仅branch_admin可达)、jspdf›dompurify、qs(MCP SDK传递)、minimatch/node-tar/vite/brace-expansion(dev/构建期)。处置：先跑 bun update 拉安全补丁/次版本+verify:full；echarts/vite 大版本单独评估回归；传递依赖等上游。来源:2026-07-03全量安全审计 | P2 | PROPOSED | N/A | server/package.json |  |
 | 2026-07-03-claude-575d2f | 2026-07-03 | 生产可靠性 | @claude | 后端审查：state.db(PAT/用户/角色权威数据)有 backup() API 但仅 CI smoke 调过一次，生产无定时备份，也不在异地备份链路。磁盘故障/误删/migration 写坏即永久丢失。建议纳入每日 ETL+VPS 同步流水线定时 backup 到独立/异地存储 | P2 | PROPOSED | N/A | server/src/services/state-db.ts |  |
 | 2026-07-03-claude-6c23b3 | 2026-07-03 | 生产可靠性 | @claude | 后端审查：核心数据目录 policy/current(critical) 走普通 rsync --delete 非原子，覆盖期间与意外重启/reload 重叠会 glob 到半份数据(仅 customer_flow/new_energy_claims 走 rsyncLatestAtomically)。建议 critical 目录改影子目录+rename 原子切换。属部署链改动需 VPS 测试 | P2 | PROPOSED | N/A | scripts/sync-vps.mjs |  |
 | 2026-07-03-claude-6e93c9 | 2026-07-03 | 安全/权限模型 | @claude | patrol 巡检报告路由(/api/query/patrol/:domain)无 RLS——读单一全局巡检文件，任何登录用户看同一份全量报告，单省 admin/org_user 可跨省看数据。真正按省隔离需 Python 巡检管道(patrol_engine.py)产 per-province 文件 + 路由按 req.user.effectiveBranch 选文件（管道级改动，非后端单点可闭环）。从 P1 用户管理面隔离(d23bd0,已上线PR#869)拆出 | P2 | PROPOSED | N/A | 数据管理/.../patrol_engine.py |  |
 | 2026-07-03-claude-6ef9cd | 2026-07-03 | 安全 | @claude | 安全审计M2：生产SPA(Nginx托管)缺Content-Security-Policy响应头。Express已配CSP+已移除unsafe-eval(B320)，但前端SPA由Nginx从/var/www/chexian/frontend/dist伺服，当前无CSP(csp.ts:19注释自认follow-up)。前端零dangerouslySetInnerHTML故实际风险低,属纵深防御缺口。本次已给deploy/nginx-fullstack.conf加CSP基线(模板,不自动部署);生产落地需在conf.d/chexian.conf(本地增量)监控窗口应用+对着已构建SPA测试(防script-src过严白屏)。来源:2026-07-03安全审计 | P2 | PARTIAL | N/A | server/src/config/csp.ts | deploy/nginx-fullstack.conf + deploy/nginx.conf 的 location=/index.html 已加 CSP 基线(default-src 'self'+对齐Express connect-src+echarts img blob/data);governance 52/52通过。残留:生产 conf.d/chexian.conf 监控窗口应用+对着已构建SPA验证不白屏 |
 | 2026-07-03-claude-7982a9 | 2026-07-03 | Chore/Governance | @claude | 契约对账闸 checkQueryCatalogConsistency 扫描目录硬编码 server/src/routes/query，auth/data/ai/filters/workflows 等约一半路由零对账（已发现两处漂移落此盲区），建议扩展到全路由目录 | P2 | PROPOSED | N/A | scripts/check-governance.mjs:2735 |  |
-| 2026-07-03-claude-a3ffc0 | 2026-07-03 | Bugfix/Frontend | @claude | 契约漂移两处：apiClient.data.remove() 指向后端不存在的 DELETE /data/:filename（零调用方死代码地雷）；后端 api-routes.ts AUTH_ROUTES 常量组比前端镜像缺 TOKENS/TOKEN_BY_ID 两键且全仓零消费方 | P2 | PROPOSED | N/A | src/shared/api/data-api.ts:70,server/src/config/api-routes.ts:167 |  |
-| 2026-07-03-claude-b714a7 | 2026-07-03 | 安全 | @claude | 安全审计L5：诊断报告(diagnose-*skills)生成HTML时,数据字段(机构名/业务员名)的转义依赖skill层;配合报告CSP的script-src 'unsafe-inline',存在理论性数据驱动XSS(数据来自内部BI字段结构化,可利用性极低)。建议报告生成器对文本字段统一HTML转义。skill在~/.claude/skills/需走crystallize-skill改仓库。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | N/A |  |
+| 2026-07-03-claude-b714a7 | 2026-07-03 | 安全 | @claude | 安全审计L5：诊断报告(diagnose-*skills)生成HTML时,数据字段(机构名/业务员名)的转义依赖skill层;配合报告CSP的script-src 'unsafe-inline',存在理论性数据驱动XSS(数据来自内部BI字段结构化,可利用性极低)。建议报告生成器对文本字段统一HTML转义。skill在~/.claude/skills/需走crystallize-skill改仓库。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | N/A | check-merged-drift 命中 PR #874 系误报：该 PR 未动 diagnose-* skills HTML 转义，保持 PROPOSED |
 | 2026-07-03-claude-d23bd0 | 2026-07-03 | 安全/权限模型 | @claude | 后端审查：用户/角色管理面(auth.ts users/roles CRUD)无 branch_code 隔离，任一 branch_admin 可跨省列出/改密/禁用/提权对方分公司账号；patrol 巡检报告路由零 RLS，任何登录用户看同一份全量报告。需 owner 决策：跨省管理是否为单-owner 运营的预期(是→文档标注权限模型；否→补 branchCode 隔离 + patrol 按省拆分产物)。不在硬化 PR #866 擅自改(改错会破坏 owner 自身跨省管理或 org_user 访问) | P1 | PARTIAL | N/A | server/src/routes/query/patrol.ts | 用户/角色管理面按省隔离已修复并上线生产（PR #869, commit e9a81a7b）：permission.ts getManageableBranchScope/canManageBranch + auth.ts 四端点 branchCode 校验 + access-control.getUserById；顺带修复新建用户无 branchCode 致 RLS 401。剩 patrol 无 RLS 部分拆出下方独立 follow-up |
-| 2026-07-03-claude-dea47b | 2026-07-03 | 安全/认证 | @claude | 后端审查：JWT 无实时吊销——authMiddleware 只做 jwt.verify(签名/过期)，不查 user.active，被禁用账号的未过期旧 token 仍可访问直至自然过期(PAT 路径每请求查 active，更安全)。修复涉认证热路径需 fail-open-on-db-error，单列 PR 谨慎处理，不进硬化批 PR #866 | P2 | PROPOSED | N/A | server/src/middleware/auth.ts |  |
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/health无脚本,故实际无功能影响。收紧到nonce/hash策略是纯纵深加固,需先确认无Express服务的内联脚本依赖。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | server/src/config/csp.ts |  |

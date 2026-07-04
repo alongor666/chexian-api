@@ -15,6 +15,7 @@ export const SLOW_QUERY_THRESHOLD_MS = 3000;
  * - BigInt → Number
  * - DuckDB DATE {days: N} → "YYYY-MM-DD" 字符串
  * - DuckDB TIMESTAMP {micros: N} → ISO 字符串
+ * - DuckDB DECIMAL {width, scale, value} → Number（value / 10**scale）
  */
 export function convertBigIntToNumber(data: any): any {
   if (data === null || data === undefined) {
@@ -42,6 +43,18 @@ export function convertBigIntToNumber(data: any): any {
     if (keys.length === 1 && keys[0] === 'micros' && (typeof data.micros === 'bigint' || typeof data.micros === 'number')) {
       const ms = Number(data.micros) / 1000;
       return new Date(ms).toISOString();
+    }
+
+    // DuckDB DECIMAL type: {width, scale, value} → Number（value / 10**scale）
+    // 三键须同时存在且类型正确才转换，避免误伤其他对象形状（如缺 value 的 {width,scale}，
+    // 或恰好携带同名字段的普通业务对象）。
+    if (
+      keys.length === 3 &&
+      typeof data.width === 'number' &&
+      typeof data.scale === 'number' &&
+      (typeof data.value === 'bigint' || typeof data.value === 'number')
+    ) {
+      return Number(data.value) / 10 ** data.scale;
     }
 
     const converted: any = {};

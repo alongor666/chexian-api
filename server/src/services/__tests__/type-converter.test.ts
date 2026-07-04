@@ -95,4 +95,58 @@ describe('duckdb-type-converter', () => {
     expect(result.days).toBe(100);
     expect(result.extra).toBe(5); // BigInt 被递归转换
   });
+
+  // TC-10: DuckDB DECIMAL {width, scale, value} → Number
+  it('TC-10: DECIMAL 正常值（value 为 number）按 scale 换算', () => {
+    // 123.45，width=10 scale=2 value=12345
+    const result = convertBigIntToNumber({ width: 10, scale: 2, value: 12345 });
+    expect(result).toBe(123.45);
+  });
+
+  it('TC-10b: DECIMAL 负数值正确换算', () => {
+    // -123.45
+    const result = convertBigIntToNumber({ width: 10, scale: 2, value: -12345 });
+    expect(result).toBe(-123.45);
+  });
+
+  it('TC-10c: DECIMAL scale=0 时等于原始整数值', () => {
+    const result = convertBigIntToNumber({ width: 5, scale: 0, value: 42 });
+    expect(result).toBe(42);
+  });
+
+  it('TC-10d: DECIMAL value 为 BigInt 时也能正确换算', () => {
+    const result = convertBigIntToNumber({ width: 18, scale: 4, value: BigInt(1234567) });
+    expect(result).toBeCloseTo(123.4567, 10);
+  });
+
+  it('TC-10e: DECIMAL value 为负数 BigInt 时也能正确换算', () => {
+    const result = convertBigIntToNumber({ width: 18, scale: 2, value: BigInt(-500) });
+    expect(result).toBe(-5);
+  });
+
+  // TC-11: 形状不完整/不匹配的对象不被误转为 DECIMAL
+  it('TC-11: {width, scale} 缺 value 字段，不被识别为 DECIMAL，走普通对象分支', () => {
+    const input = { width: 10, scale: 2 };
+    const result = convertBigIntToNumber(input);
+    expect(result).toEqual({ width: 10, scale: 2 });
+  });
+
+  it('TC-11b: {width, scale, value} 但 value 为字符串，不被识别为 DECIMAL', () => {
+    const input = { width: 10, scale: 2, value: '12345' };
+    const result = convertBigIntToNumber(input);
+    // 不匹配 DECIMAL 形状，走普通对象分支，字段原样保留
+    expect(result).toEqual({ width: 10, scale: 2, value: '12345' });
+  });
+
+  it('TC-11c: {width, scale, value, extra} 四键不被识别为 DECIMAL', () => {
+    const input = { width: 10, scale: 2, value: 12345, extra: 'x' };
+    const result = convertBigIntToNumber(input);
+    expect(result).toEqual({ width: 10, scale: 2, value: 12345, extra: 'x' });
+  });
+
+  it('TC-11d: 普通业务对象恰好含三键但类型不符，不被误转', () => {
+    const input = { width: '宽', scale: '刻度', value: '值' };
+    const result = convertBigIntToNumber(input);
+    expect(result).toEqual({ width: '宽', scale: '刻度', value: '值' });
+  });
 });

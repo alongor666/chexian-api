@@ -9,14 +9,13 @@
     "cancelRequest",
     "cancelAllRequests"
   ],
-  "count": 99,
+  "count": 98,
   "methods": [
     "analyzeTrend",
     "approveWorkflowRun",
     "createMyToken",
     "createRole",
     "createUser",
-    "deleteFile",
     "deleteRole",
     "deleteUser",
     "detectRequirement",

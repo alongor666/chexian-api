@@ -4,12 +4,11 @@
  * 挂载点：apiClient.data.*
  * 通过 ApiTransport 句柄复用单实例传输状态（不新建第二个 ApiClient）。
  *
- * 5 个端点：
+ * 4 个端点：
  *   - files()      GET  /data/files        — 文件列表
  *   - load(fn)     POST /data/load/<fn>    — 加载数据文件
  *   - upload(f)    POST /data/upload       — multipart 上传（⚠️ 不走 JSON request()，
  *                                            直接 fetch + FormData；用 t.getToken() 取 Bearer）
- *   - remove(fn)   DEL  /data/<fn>         — 删除文件
  *   - version()    GET  /data/version      — ETL 数据版本
  *
  * upload 为本域唯一 multipart 方法，行为与原 ApiClient.uploadFile 逐字符等价：
@@ -64,13 +63,6 @@ export class DataApi {
       throw new Error(data.error?.message || '上传失败');
     }
     return data.data as LoadResult;
-  }
-
-  /** 删除文件 */
-  remove(filename: string): Promise<void> {
-    return this.t.request<void>(`/data/${encodeURIComponent(filename)}`, {
-      method: 'DELETE',
-    });
   }
 
   /** 获取 ETL 数据版本（数据截止日 + 构建时间）。HomePage / SW 共用。 */

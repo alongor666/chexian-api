@@ -336,7 +336,6 @@ describe('namespaced sub-client URL contracts', () => {
     // ── data（迁移域）──
     { name: 'data.files', path: '/data/files', run: (c) => c.data.files() },
     { name: 'data.load', path: '/data/load/test.parquet', run: (c) => c.data.load('test.parquet'), expectMethod: 'POST' },
-    { name: 'data.remove', path: '/data/test.parquet', run: (c) => c.data.remove('test.parquet'), expectMethod: 'DELETE' },
     { name: 'data.version', path: '/data/version', run: (c) => c.data.version() },
     // ── workflows（本 PR 迁移域）──
     { name: 'workflows.run', path: '/workflows/runs/r1', run: (c) => c.workflows.run('r1') },
