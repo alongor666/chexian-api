@@ -105,6 +105,50 @@ export function evaluateManifestReports(manifest, { todayBeijing, statByName }) 
 }
 
 /**
+ * 远程就绪探测校验（auto-release watcher 用）：只看 manifest 本身，不比对本地文件。
+ * 用于「ssh 只读 manifest 判五张是否齐全」的轻量轮询——避免每次轮询都 rsync 135MB；
+ * 就绪后真正拉取仍走 evaluateManifestReports（含本地字节比对，兜传输完整性）。
+ *
+ * @param {object} manifest 解析后的 latest-manifest.json
+ * @param {object} opts
+ * @param {string} opts.todayBeijing 北京时区今天（YYYY-MM-DD）
+ * @returns {{ready:boolean, issues:Array<{level:'error', code:string|null, message:string}>, reports:Array<object>}}
+ */
+export function evaluateRemoteManifest(manifest, { todayBeijing }) {
+  const issues = [];
+  const err = (code, message) => issues.push({ level: 'error', code, message });
+
+  if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.reports)) {
+    err(null, 'manifest 结构非法：缺 reports 数组（上游导出可能中断）');
+    return { ready: false, issues, reports: [] };
+  }
+  if (typeof manifest.schema !== 'string' || !manifest.schema.startsWith(MANIFEST_SCHEMA_PREFIX)) {
+    err(null, `manifest schema 非预期：${manifest.schema ?? '(缺失)'}（期望前缀 ${MANIFEST_SCHEMA_PREFIX}）`);
+  }
+
+  const reports = [];
+  for (const code of REQUIRED_REPORT_CODES) {
+    const r = manifest.reports.find((x) => x && x.code === code);
+    if (!r) {
+      err(code, `code ${code} 未出表（manifest 缺席）`);
+      continue;
+    }
+    const day = beijingDayOf(r.mtime);
+    if (day !== todayBeijing) {
+      err(code, `code ${code} mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}），未出今天的表`);
+      continue;
+    }
+    const minMB = MIN_SIZE_MB_BY_CODE[code];
+    if (minMB != null && Number.isFinite(r.sizeMB) && r.sizeMB < minMB) {
+      err(code, `code ${code} 体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）`);
+      continue;
+    }
+    reports.push(r);
+  }
+  return { ready: issues.length === 0, issues, reports };
+}
+
+/**
  * 按文件名前缀路由目标省份：shanxi_→SX、sichuan_→SC、无前缀→SC（含 04 厂牌全国口径）。
  * 目标目录由调用方用 branchSourceDir(数据管理目录, code) 求得（SC=根目录 / 其余=staging/<省>）。
  * @param {string} name

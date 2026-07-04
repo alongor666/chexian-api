@@ -22,6 +22,7 @@ node scripts/pull-bi-exports.mjs --dry-run   # 只看计划
 ```
 
 - `bun run release:daily`（sync-and-reload.mjs）已内置为 Stage 0 自动执行，无需单独跑；`--skip-pull` 可跳过
+- **全自动模式**：`bun run auto-release:install` 装 launchd 定时器后，每天北京 10:35~14:00 窗口内自动等五张齐→自动跑 release:daily，成功/失败/错过均有通知；状态看 `bun run auto-release:status`。详见 [data-pipeline.md「全自动日常发布 watcher」](../rules/data-pipeline.md)
 - 校验四件套：5 code 齐全 / 本地字节=manifest / **mtime=北京时间今天**（本机时钟不在北京时区，禁止本地日期直比）/ sizeMB 兜空表；任一不过 = 上游断线，**告警中止，禁止默默用旧数据**
 - 省份路由：文件名 `shanxi_`/`sichuan_` 前缀只是导出配置标签（不自动跟登录账号），分发前会抽样 01 签单保单号前缀（fields.json `branch_code.derivation.mapping`）做内容核验，错配即中止；`shanxi_*` → `数据管理/staging/SX/`，`sichuan_*`/无前缀（含 04 厂牌全国口径）→ `数据管理/` 根
 - 出表时机：北京时间约 09:30 出 01/03/04/05，10:30 出 02 报价；**五张齐全须 10:35 之后拉**
