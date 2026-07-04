@@ -661,6 +661,41 @@ function checkHotfileContractCoverage() {
 }
 
 // ============================================================
+// 幽灵字段治理检查（BACKLOG 2026-04-21-claude-b250）
+// ============================================================
+/**
+ * 独立脚本 scripts/check-phantom-fields.mjs 的 governance 挂载点（与 checkHotfileContractCoverage
+ * 同种 execFileSync + --quiet-pass 包装风格）。扫描 数据管理/pipelines/*.py 与
+ * server/src/sql/**\/*.ts 引用的 Parquet 列名，与 fields.json + parquet-columns.snapshot.json
+ * 真值来源比对，引用了两者并集之外的字段（幽灵字段）即报错。误报控制策略、别名消解规则、
+ * 域覆盖缺口（quotes/renewal_tracker 暂无机器可读列清单）见独立脚本头部注释。
+ */
+function checkPhantomFields() {
+  info('检查幽灵字段引用（pipelines/*.py + sql/**/*.ts 列引用 vs 注册表）...');
+
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(ROOT_DIR, 'scripts/check-phantom-fields.mjs'), '--quiet-pass'],
+      {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+    success('幽灵字段检查通过');
+    return true;
+  } catch (cause) {
+    error('幽灵字段检查失败');
+    const stdout = cause?.stdout?.toString().trim();
+    const stderr = cause?.stderr?.toString().trim();
+    if (stdout) console.log(stdout);
+    if (stderr) console.log(stderr);
+    return false;
+  }
+}
+
+// ============================================================
 // 第11项检查：TypeScript 检查范围护栏
 // ============================================================
 
@@ -4038,6 +4073,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'Conflict标记', fn: checkMergeConflictMarkers },
   { name: '调试产物', fn: checkStagedDebugArtifacts },
   { name: '热点文件契约', fn: checkHotfileContractCoverage },
+  { name: '幽灵字段治理', fn: checkPhantomFields },
   { name: 'ApiClient守恒', fn: checkApiWireConservation },
   { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
   { name: '锁文件策略', fn: checkPackageManagerLockPolicy },

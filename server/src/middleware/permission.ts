@@ -18,13 +18,17 @@ import { PRESET_ROLES } from '../config/preset-users.js';
  *
  * 规则：
  *  - key = 后端 /api/query/ 之后的路径前缀（精确或前缀匹配，最长优先）
- *  - value = 对应的前端页面路径（即 allowedRoutes 中的值）
+ *  - value = 对应的前端页面路径（即 allowedRoutes 中的值）。
+ *    单页面消费写单值字符串（历史写法，兼容保留）；
+ *    多页面共用同一后端路由写字符串数组（如 /pivot 被图表账本单独消费、
+ *    /performance-org-heatmap 被业绩分析页与图表账本页共同消费）——候选数组中
+ *    任一页面命中 allowedRoutes 即放行。
  *  - 未出现在此表的路由视为"无前端页面对应"，不受白名单限制
  *    （如 /kpi、/trend 是多页面共用基础路由，对 org_user 开放）
  *
  * 新增受限路由时在此表追加，不改其他地方。
  */
-export const API_ROUTE_TO_PAGE_MAP: Record<string, string> = {
+export const API_ROUTE_TO_PAGE_MAP: Record<string, string | string[]> = {
   // /cost 页面（成本分析）—— org_user 不可见
   '/cost': '/cost',
   '/comprehensive-bundle': '/cost',
@@ -63,28 +67,41 @@ export const API_ROUTE_TO_PAGE_MAP: Record<string, string> = {
 
   // /renewal-tracker 页面（续保跟踪）—— org_user 不可见
   '/renewal-tracker': '/renewal-tracker',
+
+  // /pivot（维度×指标交叉聚合）仅被图表账本页 chart-ledger 消费
+  // （src/features/chart-ledger/hooks/useChartLedgerData.ts 内 6 处 apiClient.getPivot 调用，
+  //  grep 实证：src/ 内无其他 feature 调用 getPivot）
+  '/pivot': '/chart-ledger',
+
+  // /performance-org-heatmap 被业绩分析页 performance-analysis（usePerformanceOrgHeatmap.ts）
+  // 与图表账本页 chart-ledger（useChartLedgerData.ts）共同消费（grep 实证：两处调用
+  // apiClient.performance.orgHeatmap），候选数组任一命中 org_user allowedRoutes 即放行。
+  '/performance-org-heatmap': ['/performance-analysis', '/chart-ledger'],
 };
 
 /**
- * 将后端请求路径（req.path）解析为对应的前端页面路径。
+ * 将后端请求路径（req.path）解析为对应的前端页面路径候选集合（一对多）。
  * 采用精确匹配优先、前缀匹配兜底（最长前缀优先，防止 /cost 误匹配 /cost-detail）。
  *
  * 对非字符串（如 undefined）安全返回 undefined（不受白名单限制），
  * 避免测试环境或异常请求 path 缺失时触发错误。
  *
- * @returns 对应的前端页面路径，或 undefined（此路由无页面映射，不受白名单限制）
+ * @returns 对应的前端页面路径候选数组，或 undefined（此路由无页面映射，不受白名单限制）
  */
-function resolvePageRoute(apiPath: string | undefined): string | undefined {
+function resolvePageRoutes(apiPath: string | undefined): string[] | undefined {
   if (typeof apiPath !== 'string') return undefined;
+
+  const normalize = (v: string | string[]): string[] => (Array.isArray(v) ? v : [v]);
+
   // 精确匹配优先
   if (apiPath in API_ROUTE_TO_PAGE_MAP) {
-    return API_ROUTE_TO_PAGE_MAP[apiPath];
+    return normalize(API_ROUTE_TO_PAGE_MAP[apiPath]);
   }
   // 前缀匹配（最长前缀优先），用于 /sub/path 形式
   const keys = Object.keys(API_ROUTE_TO_PAGE_MAP).sort((a, b) => b.length - a.length);
   for (const key of keys) {
     if (apiPath.startsWith(key + '/')) {
-      return API_ROUTE_TO_PAGE_MAP[key];
+      return normalize(API_ROUTE_TO_PAGE_MAP[key]);
     }
   }
   return undefined;
@@ -179,10 +196,13 @@ export function permissionMiddleware(
         typeof baseUrl === 'string' &&
         baseUrl !== '' &&
         !`${baseUrl}/`.startsWith('/api/query/');
-      const pageRoute = mountedOutsideQuery
+      const pageRoutes = mountedOutsideQuery
         ? undefined
-        : resolvePageRoute(req.path as string | undefined);
-      if (pageRoute !== undefined && !routeAllowList.includes(pageRoute)) {
+        : resolvePageRoutes(req.path as string | undefined);
+      // 一对多判定：候选页面中任一在白名单内即放行（例如 /performance-org-heatmap
+      // 候选 ['/performance-analysis', '/chart-ledger']，org_user 白名单含
+      // /performance-analysis 时应放行，即使 /chart-ledger 不在白名单）。
+      if (pageRoutes !== undefined && !pageRoutes.some((p) => routeAllowList.includes(p))) {
         throw new AppError(
           403,
           `无访问权限：该路由（${req.path}）不在您的访问白名单内`

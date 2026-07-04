@@ -190,7 +190,34 @@ function loadStoreFromFile(): UserStoreData | null {
   }
 }
 
+/**
+ * store 与源码 PRESET_ROLES 的角色路由白名单对账（只警告不自动改）。
+ * 背景（BACKLOG 45faef）：loadFromStore 时角色配置以 store 为准（管理面
+ * updateRole 可改，store 是运维权威），但源码 preset 演进（如 ORG_ROLE_
+ * ALLOWED_ROUTES 新增 /home）不会自动落到已 seed 的生产 store —— 两套
+ * 事实静默漂移。此处启动时逐角色 diff 并打 warn，对齐由运维执行
+ * scripts/ops/align-role-routes.mjs（默认 dry-run，确认 diff 后 --apply）。
+ */
+function warnRoleRouteDrift(storeRoles: UserStoreData['roles']): void {
+  for (const preset of PRESET_ROLES) {
+    if (!preset.allowedRoutes) continue;
+    const stored = (storeRoles || []).find((r) => r.role === preset.role);
+    if (!stored) continue;
+    const storedRoutes = stored.allowedRoutes || [];
+    const missing = preset.allowedRoutes.filter((r) => !storedRoutes.includes(r));
+    const extra = storedRoutes.filter((r) => !preset.allowedRoutes!.includes(r));
+    if (missing.length > 0 || extra.length > 0) {
+      console.warn(
+        `[AccessControl] 角色 ${preset.role} 的 allowedRoutes 与源码 preset 漂移 —— ` +
+          `store 缺少: ${JSON.stringify(missing)}，store 多出: ${JSON.stringify(extra)}。` +
+          `若非管理面有意修改，请运维执行 node scripts/ops/align-role-routes.mjs 查看 diff 后对齐`
+      );
+    }
+  }
+}
+
 async function loadFromStore(store: UserStoreData): Promise<void> {
+  warnRoleRouteDrift(store.roles);
   // 清空内存表再插入
   await duckdbService.query('DELETE FROM UserAccount');
   await duckdbService.query('DELETE FROM RoleConfig');

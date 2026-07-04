@@ -115,9 +115,10 @@ SELECT
   d.fee_amount,
   d.claim_cases,
   d.earned_premium,
+  -- earned_claim_ratio 不在 SQL 内 ROUND，避免与前端 display.decimals 双重舍入（与注册表 v2.1.0 一致）
   CASE
     WHEN d.earned_premium > 0
-    THEN ROUND(d.reported_claims * 100.0 / d.earned_premium, 2)
+    THEN d.reported_claims * 100.0 / d.earned_premium
     ELSE NULL
   END AS earned_claim_ratio,
   -- B305: 费用率/变动成本率/综合费用率已在 dim_agg 用注册表表达式算好，直接透传
@@ -182,16 +183,8 @@ SELECT
   ${getMetricSql('earned_premium')},
   CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
   CAST(SUM(claim_cases) AS INTEGER) AS claim_cases,
-  CASE
-    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
-    THEN ROUND(
-      SUM(reported_claims) * 100.0
-      / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)),
-      2
-    )
-    ELSE NULL
-  END AS earned_claim_ratio,
-  -- B305: 费用率/变动成本率/综合费用率引用注册表（自带 COALESCE(fee_amount,0)，修正原硬编码缺失）
+  -- B305: 满期赔付率/费用率/变动成本率/综合费用率引用注册表（自带 COALESCE(fee_amount,0)，修正原硬编码缺失）
+  ${getMetricSql('earned_claim_ratio')},
   ${getMetricSql('expense_ratio')},
   ${getMetricSql('variable_cost_ratio')},
   ${getMetricSql('comprehensive_expense_ratio')},
@@ -257,9 +250,10 @@ SELECT
   p.time_period,
   p.reported_claims,
   p.earned_premium,
+  -- earned_claim_ratio 不在 SQL 内 ROUND，避免与前端 display.decimals 双重舍入（与注册表 v2.1.0 一致）
   CASE
     WHEN p.earned_premium > 0
-    THEN ROUND(p.reported_claims * 100.0 / p.earned_premium, 2)
+    THEN p.reported_claims * 100.0 / p.earned_premium
     ELSE NULL
   END AS earned_claim_ratio,
   CASE

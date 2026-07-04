@@ -634,6 +634,82 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     expect(API_ROUTE_TO_PAGE_MAP['/quote-conversion']).toBe('/quote-conversion');
     expect(API_ROUTE_TO_PAGE_MAP['/expense-development']).toBe('/expense-development');
     expect(API_ROUTE_TO_PAGE_MAP['/renewal-tracker']).toBe('/renewal-tracker');
+    // 一对多映射：/pivot 单值字符串（历史写法兼容）；/performance-org-heatmap 数组（多页共用）
+    expect(API_ROUTE_TO_PAGE_MAP['/pivot']).toBe('/chart-ledger');
+    expect(API_ROUTE_TO_PAGE_MAP['/performance-org-heatmap']).toEqual([
+      '/performance-analysis',
+      '/chart-ledger',
+    ]);
+  });
+});
+
+// ── 一对多页面映射（/pivot、/performance-org-heatmap）────────────────────
+// 背景：单一页面映射（string）在多页面共用同一后端路由时会误伤——例如
+// /performance-org-heatmap 同时被 performance-analysis 与 chart-ledger 消费，
+// 若映射写死单值 '/chart-ledger'，org_user（allowedRoutes 含 /performance-analysis
+// 但不含 /chart-ledger）会被误 403。resolvePageRoutes 改为返回候选数组，
+// 判定逻辑改为"候选中任一在白名单内即放行"。
+describe('permissionMiddleware: 一对多页面映射（/pivot、/performance-org-heatmap）', () => {
+  const orgUser = {
+    role: UserRole.ORG_USER,
+    organization: '乐山',
+    branchCode: 'SC',
+  };
+
+  // ─── /pivot：仅 chart-ledger 消费，org_user 白名单不含 chart-ledger → 403 ───
+  it('org_user 访问 /pivot → 403（仅图表账本页消费，不在 org_user 白名单内）', async () => {
+    const req = makeReqWithPath(orgUser, '/pivot');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+    expect((err as AppError).message).toContain('/pivot');
+  });
+
+  it('branch_admin 访问 /pivot → 通过（不受路由白名单限制）', async () => {
+    const req = makeReqWithPath({ role: UserRole.BRANCH_ADMIN, branchCode: 'SC' }, '/pivot');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  // ─── /performance-org-heatmap：候选 ['/performance-analysis', '/chart-ledger']
+  //     org_user 白名单含 /performance-analysis → 任一命中即放行（非误伤） ───
+  it('org_user 访问 /performance-org-heatmap → 通过（候选含 /performance-analysis，命中白名单）', async () => {
+    const req = makeReqWithPath(orgUser, '/performance-org-heatmap');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  it('branch_admin 访问 /performance-org-heatmap → 通过（不受路由白名单限制）', async () => {
+    const req = makeReqWithPath(
+      { role: UserRole.BRANCH_ADMIN, branchCode: 'SC' },
+      '/performance-org-heatmap'
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  // ─── 回归：既有单值键（string）行为不变 ───
+  it('回归：org_user 访问 /cost（单值键 "/cost"）仍 403，一对多改造未破坏单值语义', async () => {
+    const req = makeReqWithPath(orgUser, '/cost');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('回归：org_user 访问 /performance-summary（不在映射表）仍通过，不受一对多改造影响', async () => {
+    const req = makeReqWithPath(orgUser, '/performance-summary');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  // ─── 假设场景验证：若某路由候选全不在白名单内，仍应 403（未来新增多页共用路由的护栏）───
+  it('假设场景：候选数组全不在白名单 → 403（org_user 访问一个假想的仅 /cost+/reports 共用路由）', async () => {
+    // 借用真实 org_user，验证"候选全不在白名单"分支仍会 403（非 pivot/heatmap 真实路由，
+    // 仅用于锁死 resolvePageRoutes 的 some() 判定不会在候选为空数组时误放行）
+    const req = makeReqWithPath(orgUser, '/premium-report'); // 单值 '/reports'，不在白名单
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
   });
 });
 

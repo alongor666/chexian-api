@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { colorClasses } from '../../../shared/styles';
 import { useGrowthAnalysis, type DualMetricComparisonData } from '../hooks/useGrowthAnalysis';
 import { exportArrayToCSV } from '../../../shared/utils/export';
@@ -123,11 +123,24 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
     setComparisonPeriods(periods);
   };
 
+  /**
+   * 请求序号守卫（BACKLOG 2026-06-11-claude-3ab3e3）
+   *
+   * 快速切换对比预设/分组维度时，effect 连续重跑触发多个并发请求；
+   * useGrowthAnalysis 内部已按其 dualMetricRequestSeqRef 守卫过一层
+   * （result.stale 标记过期响应），本组件再叠一层独立守卫：即使 hook
+   * 层因某种原因判定"非过期"，仍以"effect 本次调用是否为最新一次"为准，
+   * 双保险防止旧的慢响应写入 comparisonData 覆盖新结果。
+   */
+  const comparisonRequestSeqRef = useRef(0);
+
   // 对比分析effect
   useEffect(() => {
     if (analysisType !== 'comparison') return;
     if (!isDataLoaded) return;
     if (!comparisonPeriods) return;
+
+    const requestSeq = ++comparisonRequestSeqRef.current;
 
     const performComparison = async () => {
       // 构建筛选参数：合并机构筛选和附加筛选参数
@@ -148,6 +161,10 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
         [comparisonGroupBy],
         comparisonFilterParams
       );
+
+      // 竞态守卫：本次请求已非最新（更新的请求已发起）→ 丢弃，不覆盖新结果
+      if (requestSeq !== comparisonRequestSeqRef.current) return;
+      if (result.stale) return;
 
       if (result.success) {
         setComparisonData(result.data);
@@ -194,11 +211,11 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
 
       switch (analysisType) {
         case 'org':
-          await analyzeOrgPremiumGrowth(orgLevel3, growthType, timeView, perspective, additionalFilterParams);
+          await analyzeOrgPremiumGrowth(orgLevel3, growthType, timeView, perspective, additionalFilterParams, filters.analysis_year);
           break;
         case 'salesman':
           if (salesmanName) {
-            await analyzeSalesmanGrowth(salesmanName, growthType, perspective, additionalFilterParams);
+            await analyzeSalesmanGrowth(salesmanName, growthType, perspective, additionalFilterParams, filters.analysis_year);
           }
           break;
         case 'kpi':
@@ -207,7 +224,8 @@ export const GrowthAnalysisPanel: React.FC<GrowthAnalysisPanelProps> = ({
             '(COUNT(CASE WHEN is_renewal THEN 1 END) * 1.0 / NULLIF(COUNT(*), 0)) AS renewal_rate',
             growthType,
             orgLevel3 ? ['salesman_name'] : ['org_level_3'],
-            additionalFilterParams
+            additionalFilterParams,
+            filters.analysis_year
           );
           break;
       }

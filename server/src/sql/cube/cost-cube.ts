@@ -268,16 +268,14 @@ SELECT
   CAST(SUM(earned_days * policy_cnt) AS INTEGER) AS total_exposure_days,
   ROUND(SUM(CAST(earned_days AS DOUBLE) * policy_cnt) / NULLIF(SUM(policy_cnt), 0), 1) AS avg_exposure_days,
   ${getMetricSql('earned_claim_ratio')},
-  -- 满期出险率（注册表 earned_loss_frequency v2.1.0 的格子等价形）：
+  -- 满期出险率（注册表 earned_loss_frequency v2.2.0 的格子等价形）：
   -- 格内保单共享 earned_days/policy_term → SUM(claim_cases×term/earned) 对格子行
-  -- 与对保单行同值；保单数分母改用 SUM(policy_cnt)（去重语义由构建期探针保证）
+  -- 与对保单行同值；保单数分母改用 SUM(policy_cnt)（去重语义由构建期探针保证）。
+  -- 不在 SQL 内 ROUND，避免与前端 display.decimals 双重舍入（与注册表一致，legacy 侧同步移除见 cost-ratios.ts）
   CASE
     WHEN SUM(policy_cnt) > 0 AND SUM(earned_days * policy_cnt) > 0
-    THEN ROUND(
-      SUM(claim_cases * 1.0 * policy_term / NULLIF(earned_days, 0))
-      / SUM(policy_cnt) * 100.0,
-      2
-    )
+    THEN SUM(claim_cases * 1.0 * policy_term / NULLIF(earned_days, 0))
+      / SUM(policy_cnt) * 100.0
     ELSE NULL
   END AS earned_loss_frequency
 FROM policy_exposure
@@ -339,16 +337,8 @@ SELECT
   ROUND(SUM(fee_amount), 2) AS total_fee,
   ${getMetricSql('earned_claim_ratio')},
   ${getMetricSql('expense_ratio')},
-  -- 变动成本率 = 赔付率 + 费用率（与 cost-ratios.ts 逐字一致；fee_amount 已 COALESCE）
-  CASE
-    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0 AND SUM(premium) > 0
-    THEN ROUND(
-      SUM(reported_claims) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) +
-      SUM(fee_amount) * 100.0 / SUM(premium),
-      2
-    )
-    ELSE NULL
-  END AS variable_cost_ratio
+  -- 变动成本率（注册表 variable_cost_ratio 唯一事实源，与 cost-ratios.ts 同源，消除硬编码漂移）
+  ${getMetricSql('variable_cost_ratio')}
 FROM policy_exposure
 GROUP BY ${groupByClause}
 ORDER BY SUM(premium) DESC
