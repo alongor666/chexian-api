@@ -150,4 +150,60 @@ describe('client-core 传输内核特征化', () => {
       await expect(core.callGet('/query/kpi')).rejects.toBeInstanceOf(RequestAbortError);
     });
   });
+
+  describe('cancelRequest 键归一化（存键为 GET:${normalizeGetEndpoint}，避免原始 endpoint 查表恒 miss）', () => {
+    /** 模拟真实 fetch 对 AbortSignal 的响应：abort 触发时以 AbortError 拒绝该次 fetch。 */
+    function fetchImplRespectingAbort(capture: (signal: AbortSignal) => void) {
+      return (_url: string, init: RequestInit) => {
+        const signal = init.signal as AbortSignal;
+        capture(signal);
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        });
+      };
+    }
+
+    it('传原始 endpoint（乱序 query）能命中并 abort 进行中的 GET', async () => {
+      const core = new TestCore();
+      let capturedSignal: AbortSignal | undefined;
+      mockFetch.mockImplementationOnce(
+        fetchImplRespectingAbort((signal) => { capturedSignal = signal; }),
+      );
+      const pending = core.callGet('/query/kpi?b=2&a=1');
+      // 用与发起时相同的原始 endpoint（未排序）调用 cancelRequest，验证不再是 no-op
+      core.cancelRequest('/query/kpi?b=2&a=1');
+      expect(capturedSignal?.aborted).toBe(true);
+      await expect(pending).rejects.toBeInstanceOf(RequestAbortError);
+    });
+
+    it('传参数顺序不同但语义相同的 endpoint 也能命中（归一化对齐排序后的存键）', async () => {
+      const core = new TestCore();
+      let capturedSignal: AbortSignal | undefined;
+      mockFetch.mockImplementationOnce(
+        fetchImplRespectingAbort((signal) => { capturedSignal = signal; }),
+      );
+      const pending = core.callGet('/query/kpi?a=1&b=2');
+      // 用乱序参数的等价 endpoint 调用（模拟调用方拼参数顺序不同的场景）
+      core.cancelRequest('/query/kpi?b=2&a=1');
+      expect(capturedSignal?.aborted).toBe(true);
+      await expect(pending).rejects.toBeInstanceOf(RequestAbortError);
+    });
+
+    it('未进行中的端点调用 cancelRequest 是安全的 no-op', () => {
+      const core = new TestCore();
+      expect(() => core.cancelRequest('/query/kpi?x=1')).not.toThrow();
+    });
+
+    it('cancel 后 controller 从 inflightControllers 中移除（不会重复 abort 残留 key）', async () => {
+      const core = new TestCore();
+      mockFetch.mockImplementationOnce(fetchImplRespectingAbort(() => {}));
+      const pending = core.callGet('/query/kpi?a=1');
+      core.cancelRequest('/query/kpi?a=1');
+      // 二次调用不应抛错（controller 已被移除，属于安全 no-op）
+      expect(() => core.cancelRequest('/query/kpi?a=1')).not.toThrow();
+      await expect(pending).rejects.toBeInstanceOf(RequestAbortError);
+    });
+  });
 });

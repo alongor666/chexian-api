@@ -52,9 +52,12 @@ export interface ApiTransport {
  * API 客户端传输核心基类
  *
  * 增强功能：
- * - 请求取消（AbortController）：同一端点的新请求自动取消前序请求
- * - 请求超时：默认 30 秒
- * - GET 同 key 请求合并（in-flight coalescing）
+ * - GET 同 key 请求合并（in-flight coalescing）：并发的相同端点+参数 GET 请求
+ *   复用同一个进行中的请求，不会重复发起新 fetch（**不是**"新请求自动取消旧请求"——
+ *   同端点新请求到来时旧请求继续等待并共享同一结果，取消需显式调用下方 API）
+ * - 显式取消 API（AbortController）：`cancelRequest(endpoint)` 取消指定端点的进行中
+ *   请求，`cancelAllRequests()` 取消全部进行中请求（如 BranchContext 切省时清空 in-flight）
+ * - 请求超时：默认 30 秒（超时通过 AbortController 触发，映射为 RequestAbortError）
  * - 缓存由 React Query 管理（staleTime 5min, gcTime 30min）
  */
 export class ApiClientCore {

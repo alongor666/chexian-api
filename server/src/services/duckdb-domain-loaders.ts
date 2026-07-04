@@ -165,7 +165,7 @@ export async function loadPlateRegionDim(db: DuckDBQueryable, parquetPath: strin
   const pf = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
   await db.query(`
     CREATE OR REPLACE TABLE PlateRegionMap AS
-    SELECT * FROM read_parquet('${pf}')
+    SELECT * FROM read_parquet('${pf}', union_by_name=true)
   `);
   const result = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM PlateRegionMap');
   console.log(`[DuckDB] PlateRegionMap loaded: ${result[0]?.cnt ?? 0} records`);
@@ -499,7 +499,7 @@ export async function selectUnionWithBranchCode(
   for (const s of rawSources) {
     const safePath = escapeSqlValue(s.path.replace(/\\/g, '/'));
     const cols = await db.query<{ column_name: string }>(
-      `DESCRIBE SELECT * FROM read_parquet('${safePath}')`,
+      `DESCRIBE SELECT * FROM read_parquet('${safePath}', union_by_name=true)`,
     );
     const hasBranchCode = cols.some((c) => c.column_name?.toLowerCase() === 'branch_code');
     parts.push(
@@ -508,8 +508,10 @@ export async function selectUnionWithBranchCode(
         // 若某些行 branch_code 为 NULL，federation/typed RLS 注入 `branch_code='<省>'` 会漏掉它们
         // （本省用户少看数据 = 字节回归）。非 NULL 时 COALESCE 为恒等 → 与历史 `SELECT *` 逐字节一致。
         // 与 claims composeClaimsDetailSelect 同款兜底（DRY 口径）。
-        ? `SELECT * REPLACE (COALESCE(branch_code, '${s.branchCode}') AS branch_code) FROM read_parquet('${safePath}')`
-        : `SELECT *, '${s.branchCode}' AS branch_code FROM read_parquet('${safePath}')`,
+        // union_by_name=true（B340）：单文件 latest.parquet 场景无害（无 schema 漂移可容），
+        // 防将来该域改为分区目录时忘记补此参数而按位置 union 崩溃。
+        ? `SELECT * REPLACE (COALESCE(branch_code, '${s.branchCode}') AS branch_code) FROM read_parquet('${safePath}', union_by_name=true)`
+        : `SELECT *, '${s.branchCode}' AS branch_code FROM read_parquet('${safePath}', union_by_name=true)`,
     );
   }
   return parts.join('\n    UNION ALL BY NAME\n    ');
@@ -567,6 +569,11 @@ export interface BranchDimSource {
  * 与派生域 selectWithBranchCode 的策略差异（刻意）：派生域单源也补 branch_code 常量
  * （其为 federation RLS 视图，须恒含该列供 sql-permission-injector 注入）；维度表单源
  * **不补**——字节安全按构造优先，多省 branch RLS 由 GATED 期多源 UNION 自然提供。
+ *
+ * ⚠️ B340（union_by_name）例外说明：本函数**不加** `union_by_name=true`——单源分支的字节安全
+ * 由 `branch-dim-select.test.ts` 锁定精确字符串 `"SELECT * FROM read_parquet('<p>')"`，加参数
+ * 会破坏该测试断言的历史 SQL 逐字节一致契约。维度域（salesman/plan/repair）均为单文件
+ * latest.parquet（无分区 glob），本无 schema 漂移风险，故此例外是刻意、安全的，非遗漏。
  */
 export function buildBranchDimSelect(sources: ReadonlyArray<BranchDimSource>): string {
   if (sources.length === 0) {
@@ -980,7 +987,7 @@ export async function loadBrandDim(db: DuckDBQueryable, parquetPath: string): Pr
   const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
   await db.query(`
     CREATE OR REPLACE TABLE BrandDim AS
-    SELECT * FROM read_parquet('${safePath}')
+    SELECT * FROM read_parquet('${safePath}', union_by_name=true)
   `);
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM BrandDim');
   console.log(`[DuckDB] BrandDim loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
