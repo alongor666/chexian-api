@@ -696,6 +696,75 @@ function checkPhantomFields() {
 }
 
 // ============================================================
+// Context Provider 未挂载治理检查（BACKLOG 2026-06-12-claude-27972c 子项 2b）
+// ============================================================
+/**
+ * 独立脚本 scripts/check-unmounted-providers.mjs 的 governance 挂载点（与 checkPhantomFields/
+ * checkHotfileContractCoverage 同种 execFileSync + --quiet-pass 包装风格）。扫描
+ * src/**\/*.ts(x) 内 createContext + export XxxProvider 定义，与全仓库 JSX <XxxProvider>/
+ * <XxxContext.Provider> 挂载点比对，命中"定义了但从未挂载"即报错。识别规则、误报控制（独立
+ * Provider 组件模式 / 自挂载模式 / 测试专用 Provider 白名单）见独立脚本头部注释。
+ */
+function checkUnmountedProviders() {
+  info('检查 Context Provider 未挂载（createContext + export XxxProvider vs 全仓库 JSX 挂载）...');
+
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(ROOT_DIR, 'scripts/check-unmounted-providers.mjs'), '--quiet-pass'],
+      {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+    success('Context Provider 挂载检查通过');
+    return true;
+  } catch (cause) {
+    error('Context Provider 挂载检查失败');
+    const stdout = cause?.stdout?.toString().trim();
+    const stderr = cause?.stderr?.toString().trim();
+    if (stdout) console.log(stdout);
+    if (stderr) console.log(stderr);
+    return false;
+  }
+}
+
+// ============================================================
+// execSync/exec 模板拼接注入检测（BACKLOG 2026-06-12-claude-27972c 子项 1）
+// ============================================================
+/**
+ * 独立脚本 scripts/check-exec-template-injection.mjs 的 governance 挂载点（同种 execFileSync +
+ * --quiet-pass 包装风格）。扫描 scripts/ + server/src/ 下 execSync/exec 的模板字面量插值调用，
+ * 要求逐一在独立脚本的 KNOWN_SAFE_INTERPOLATIONS 显式登记理由，防止"插值来自文件枚举结果/
+ * 用户输入直接进 shell"的危险模式被静默引入。识别范围、白名单机制见独立脚本头部注释。
+ */
+function checkExecTemplateInjection() {
+  info('检查 execSync/exec 模板插值调用（scripts/ + server/src/ 禁止未登记的 shell 拼接）...');
+
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(ROOT_DIR, 'scripts/check-exec-template-injection.mjs'), '--quiet-pass'],
+      {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+    success('execSync/exec 模板插值检查通过');
+    return true;
+  } catch (cause) {
+    error('execSync/exec 模板插值检查失败');
+    const stdout = cause?.stdout?.toString().trim();
+    const stderr = cause?.stderr?.toString().trim();
+    if (stdout) console.log(stdout);
+    if (stderr) console.log(stderr);
+    return false;
+  }
+}
+
+// ============================================================
 // 第11项检查：TypeScript 检查范围护栏
 // ============================================================
 
@@ -4074,6 +4143,8 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '调试产物', fn: checkStagedDebugArtifacts },
   { name: '热点文件契约', fn: checkHotfileContractCoverage },
   { name: '幽灵字段治理', fn: checkPhantomFields },
+  { name: 'Context Provider未挂载', fn: checkUnmountedProviders },
+  { name: 'execSync模板注入', fn: checkExecTemplateInjection },
   { name: 'ApiClient守恒', fn: checkApiWireConservation },
   { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
   { name: '锁文件策略', fn: checkPackageManagerLockPolicy },

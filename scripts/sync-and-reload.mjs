@@ -38,7 +38,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import os from 'os';
 import { recordEvent, LEDGER_PATH } from './etl-ledger/record.mjs';
-import { writeReport } from './etl-ledger/render.mjs';
+import { writeReport, loadEvents } from './etl-ledger/render.mjs';
 // 多省 B2 分省编排：遍历注册的非 SC 省逐域生成 daily.mjs 步骤（省份枚举单一来源 source-file-routing）
 import { buildBranchEtlSteps } from '../数据管理/lib/branch-publish.mjs';
 
@@ -343,6 +343,19 @@ async function main() {
   } catch (err) {
     log('yellow', `\n⚠ claims 新鲜度巡检异常（不阻断发布）：${err.message}`);
   }
+  // 健康汇总 + 企微文案接入（BACKLOG 2026-06-09-claude-530bf5）：daily.mjs freshness 子进程已把
+  // hasStale 写入共享台账（recordEvent status:'warning'，同 run_id）；此处读回供本进程感知，
+  // 不改变"仅告警不阻断"的设计（P0-2），只让信号在健康汇总与企微文案里可见。
+  let claimsFreshnessWarning = null;
+  if (!opts.dryRun) {
+    try {
+      const runId = process.env.ETL_RUN_ID;
+      const warn = loadEvents(LEDGER_PATH)
+        .filter((e) => e.run_id === runId && e.step === 'claims_freshness_patrol' && e.status === 'warning')
+        .at(-1);
+      if (warn) claimsFreshnessWarning = warn.error || '赔案报案截止日落后阈值';
+    } catch { /* 读回失败不阻断，仅丢失文案增强 */ }
+  }
 
   // Stage 1.5: 生成周期趋势诊断报告（V1 驾驶舱）——ETL 完成后数据最新
   const skillCli = join(os.homedir(), '.claude/skills/diagnose-period-trend/lib/cli.py');
@@ -538,6 +551,9 @@ async function main() {
   // 三个脚本独立 webhook、互不依赖，并行执行；任一失败仍记录但不中断其他（Promise.allSettled）。
   // 失败统一在 Stage 5 末尾抛出，便于人工排查。
   if (opts.wecom) {
+    if (claimsFreshnessWarning) {
+      log('yellow', `\n⚠ claims 报案截止日落后 N 天：${claimsFreshnessWarning}（见 Stage 1.2 新鲜度巡检；不阻断本次企微同步）`);
+    }
     const orgRenewalArgs = ['数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py'];
     if (!opts.wecomDryRun) orgRenewalArgs.push('--execute');
     if (opts.wecomOrg) orgRenewalArgs.push('--org', opts.wecomOrg);
@@ -610,6 +626,9 @@ async function main() {
   }
 
   log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
+  if (claimsFreshnessWarning) {
+    log('yellow', `⚠ 健康汇总：claims 报案截止日新鲜度告警未解除——${claimsFreshnessWarning}`);
+  }
 
   // 全流程结束：从台账 JSONL 重渲染中文报告（数据流转台账.md）
   try {

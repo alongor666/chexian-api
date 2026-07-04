@@ -7,6 +7,7 @@ ETL 脚本共用验证工具
 - 多 sheet Excel 加载（自动合并续表）
 """
 
+import math
 import sys
 import time
 from pathlib import Path
@@ -112,10 +113,23 @@ def load_excel_all_sheets(
             continue
 
         has_header = True
+        hit_count = None  # None = 未做过 required_columns 判定（无 required_columns 场景）
         if required_columns:
-            # 有指定必须列：检查是否包含
+            # 有指定必须列：要求命中比例 ≥ 50%（至少 1 列，向上取整），而非"任意 1 列命中"。
+            # BACKLOG 2026-06-11-claude-fa0f22：FineBI 导出常带汇总/透视 sheet，恰好只含
+            # 保单号这类通用列（如「保单号」在 required_columns 里），旧的 any() 判定会把这类
+            # 统计 sheet 当有效续表 concat 进来，其余必须列全为 NaN，静默污染下游行。
+            # 阈值取"过半"：required_columns 通常 2-3 列（见 convert_claims_detail.py=3、
+            # quote_etl.py=2、convert_new_energy_claims.py=2），过半意味着至少 2/3 或 1/2 命中，
+            # 单列巧合命中不足以通过；required_columns 本身就短（≤2）时过半仍要求 ≥1 列，
+            # 不会把正常单必须列的域锁死。
             stripped = sheet_df.columns.str.strip()
-            has_header = any(c in stripped.tolist() for c in required_columns)
+            hit_count = sum(1 for c in required_columns if c in stripped.tolist())
+            min_hits = math.ceil(len(required_columns) / 2)
+            has_header = hit_count >= min_hits
+            if not has_header:
+                print(f"   ⚠ 跳过工作表 {sheet_name}：命中必须列 {hit_count}/{len(required_columns)}"
+                      f"（需 ≥{min_hits}），疑似汇总/透视表，非有效续表")
         elif base_columns is not None:
             # 无指定必须列：与第一个 sheet 的列名对比
             stripped = sheet_df.columns.str.strip()
@@ -126,6 +140,13 @@ def load_excel_all_sheets(
                 base_columns = list(sheet_df.columns.str.strip())
             valid_frames.append(sheet_df)
             print(f"   读取工作表: {sheet_name}，{len(sheet_df):,} 行")
+        elif hit_count is not None and hit_count > 0:
+            # 修复 fa0f22 的遗留缺口：命中部分必须列（0 < hit_count < min_hits）说明该 sheet
+            # 自身确实有表头行（只是列不够，如汇总/透视表），不是"无表头续表"。若仍并入
+            # headerless_sheets，下面会被当续表用 header=None 重读——把表头行当数据行、
+            # 且列数凑巧 ≤ 基准时依旧会被 concat 回来，原样复现"必须列判定过松"的 bug，
+            # 只是从"检测"绕到了"续表兜底"路径。因此这里直接丢弃，不进入续表兜底。
+            print(f"   ⚠ 工作表 {sheet_name} 判定为非有效数据表（非零命中但不足阈值），直接丢弃，不按无表头续表处理")
         else:
             headerless_sheets.append(sheet_name)
 

@@ -24,7 +24,7 @@ const getCohortColor = (year: number): string => getYearChartColor(year);
 
 const METRIC_OPTIONS: { key: ExpenseMetricKey; label: string; unit: string; decimals: number }[] = [
   { key: 'expense_ratio_pct', label: '费用率(%)', unit: '%', decimals: 1 },
-  { key: 'avg_fee_per_policy', label: '件均费用(元)', unit: '元', decimals: 0 },
+  { key: 'avg_fee_per_policy_yuan', label: '件均费用(元)', unit: '元', decimals: 0 },
   { key: 'dev_fee_wan', label: '费用金额(万元)', unit: '万元', decimals: 1 },
 ];
 

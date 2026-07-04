@@ -94,9 +94,9 @@ describe('费用率趋势（trendDeltaPp=3，|delta|>=3）', () => {
 describe('件均费用趋势（avgFeeGrowthPct=30，按百分比）', () => {
   const trend = (afF: number, afL: number) =>
     gen(
-      { 2023: single(6, 'avg_fee_per_policy', afF), 2024: single(6, 'avg_fee_per_policy', afL) },
+      { 2023: single(6, 'avg_fee_per_policy_yuan', afF), 2024: single(6, 'avg_fee_per_policy_yuan', afL) },
       [2023, 2024],
-      'avg_fee_per_policy'
+      'avg_fee_per_policy_yuan'
     ).find((i) => i.type === 'trend');
 
   it('growth=+30%（恰好线）→ trend 逐年攀升', () => {
@@ -152,19 +152,19 @@ describe('同期对比 appendCompare（compareDeltaPp=5，早期年 vs 成熟年
 describe('件均费用同期对比（avgFeeComparePct=20）', () => {
   it('pct=20%（恰好线，源码 >=20 触发）→ compare', () => {
     const cohorts = {
-      2024: cohort(6, { 3: { avg_fee_per_policy: 100 }, 6: { avg_fee_per_policy: 100 } }),
-      2025: cohort(3, { 3: { avg_fee_per_policy: 120 } }), // (120-100)/100=20%（恰好线）
+      2024: cohort(6, { 3: { avg_fee_per_policy_yuan: 100 }, 6: { avg_fee_per_policy_yuan: 100 } }),
+      2025: cohort(3, { 3: { avg_fee_per_policy_yuan: 120 } }), // (120-100)/100=20%（恰好线）
     };
-    const cmp = gen(cohorts, [2024, 2025], 'avg_fee_per_policy').find((i) => i.type === 'compare');
+    const cmp = gen(cohorts, [2024, 2025], 'avg_fee_per_policy_yuan').find((i) => i.type === 'compare');
     expect(cmp).toBeDefined();
     expect(cmp!.title).toContain('第3月同期对比');
   });
   it('|pct|<20 → 无 compare', () => {
     const cohorts = {
-      2024: cohort(6, { 3: { avg_fee_per_policy: 100 }, 6: { avg_fee_per_policy: 100 } }),
-      2025: cohort(3, { 3: { avg_fee_per_policy: 115 } }), // 15% < 20
+      2024: cohort(6, { 3: { avg_fee_per_policy_yuan: 100 }, 6: { avg_fee_per_policy_yuan: 100 } }),
+      2025: cohort(3, { 3: { avg_fee_per_policy_yuan: 115 } }), // 15% < 20
     };
-    expect(gen(cohorts, [2024, 2025], 'avg_fee_per_policy').find((i) => i.type === 'compare')).toBeUndefined();
+    expect(gen(cohorts, [2024, 2025], 'avg_fee_per_policy_yuan').find((i) => i.type === 'compare')).toBeUndefined();
   });
 });
 

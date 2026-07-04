@@ -13,7 +13,7 @@ interface ExpenseDevRow {
   dev_premium_wan: number;
   dev_fee_wan: number;
   expense_ratio_pct: number;
-  avg_fee_per_policy: number;
+  avg_fee_per_policy_yuan: number;
   coverage_pct: number;
 }
 
