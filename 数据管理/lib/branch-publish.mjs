@@ -17,11 +17,12 @@
  */
 import { registeredBranchCodesFromPrefixMap } from './source-file-routing.mjs';
 
-// 非 SC 省日常发布的核心全量域，对应上游 BI 编号 01签单(premium)/05理赔(claims_detail)/03维修(repair)。
-// 这是「域」列表（固定 ETL 域）非省份硬编码；可扩展（如 quotes，待该省报价源到位后加入）。
-// daily.mjs 在 BRANCH_PUBLISH=1 下对无源域 graceful skip（warn 不中断），故列表含某省暂无的
-// 域也安全（自动跳过，不阻断其他域）。
-export const BRANCH_PUBLISH_DOMAINS = Object.freeze(['premium', 'claims_detail', 'repair']);
+// 非 SC 省日常发布的核心全量域，对应上游 BI 编号 01签单(premium)/05理赔(claims_detail)/
+// 02报价(quotes)/03维修(repair)。quotes 于 2026-07-04 加入：VPS auto_loadbi 上游开始每日导出
+// 02 报价单日文件（scripts/pull-bi-exports.mjs 分发到 staging/<省>，逐日累积多文件输入）。
+// 这是「域」列表（固定 ETL 域）非省份硬编码；daily.mjs 在 BRANCH_PUBLISH=1 下对无源域
+// graceful skip（warn 不中断），故列表含某省暂无的域也安全（自动跳过，不阻断其他域）。
+export const BRANCH_PUBLISH_DOMAINS = Object.freeze(['premium', 'claims_detail', 'quotes', 'repair']);
 
 /** 非 SC 注册省份（从拼音 map 单一来源派生，过滤掉 SC；SC 走 sync-and-reload 原默认链路）。 */
 export function nonScBranchCodes() {

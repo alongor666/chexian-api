@@ -11,9 +11,23 @@ scope: project
 
 用户说"XX 文件已更新，请 ETL 到 VPS"或类似，立即进入此 SOP。
 
-## 0. 源文件识别与拷贝
+## 0. 源文件获取（主链路：VPS auto_loadbi 自动拉取，2026-07-04 起替代 iCloud 手动源）
 
-**iCloud 默认路径**：`/Users/alongor666/Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/`
+**主链路（默认）**：上游五张表由 VPS 定时导出到 `myvps:/root/workspace/auto_loadbi/exports/`，
+唯一契约 = 目录内 `latest-manifest.json`（按 code 取当前份，文件名日期后缀每天变，禁止硬编文件名）。
+
+```bash
+node scripts/pull-bi-exports.mjs        # rsync → 数据管理/inbox/ → manifest 校验 → 分发 ETL 源目录
+node scripts/pull-bi-exports.mjs --dry-run   # 只看计划
+```
+
+- `bun run release:daily`（sync-and-reload.mjs）已内置为 Stage 0 自动执行，无需单独跑；`--skip-pull` 可跳过
+- 校验四件套：5 code 齐全 / 本地字节=manifest / **mtime=北京时间今天**（本机时钟不在北京时区，禁止本地日期直比）/ sizeMB 兜空表；任一不过 = 上游断线，**告警中止，禁止默默用旧数据**
+- 省份路由：文件名 `shanxi_`/`sichuan_` 前缀只是导出配置标签（不自动跟登录账号），分发前会抽样 01 签单保单号前缀（fields.json `branch_code.derivation.mapping`）做内容核验，错配即中止；`shanxi_*` → `数据管理/staging/SX/`，`sichuan_*`/无前缀（含 04 厂牌全国口径）→ `数据管理/` 根
+- 出表时机：北京时间约 09:30 出 01/03/04/05，10:30 出 02 报价；**五张齐全须 10:35 之后拉**
+- 分发时自动做区间覆盖归档（同品类旧短窗 → `.xlsx-archive/<日期>/`），02 报价单日文件逐日累积不归档
+
+**Legacy 兜底（iCloud 手动源，仅上游断线时应急）**：`/Users/alongor666/Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/`，手动拷贝到 `数据管理/`（SC）或 `数据管理/staging/SX/`（SX）后按 §1 跑 ETL。
 
 **文件编号对应数据域**（2026-06-10 上游 BI 清单重构后的**新编号体系**；运行时唯一事实源 = daily.mjs 硬编码 glob（premium/claims_detail）+ `数据管理/data-sources.json` 的 `trigger.input_globs`（其余域），文档对照块 = `数据管理/shard-config.json` 的 `source_patterns`；本表与三者保持同步）：
 
@@ -238,7 +252,7 @@ wait
 ```
 | 环节 | 结果 |
 |------|------|
-| 源文件 iCloud → 数据管理/ | ✅ <N> 个 xlsx |
+| 上游拉取 pull-bi-exports（VPS auto_loadbi） | ✅ 5/5 code · mtime=北京今天 · 省份核验一致 |
 | daily.mjs ETL | ✅ <域列表> |
 | rsync → VPS | ✅ <N> 目录 / 清单 <N> 文件 |
 | PM2 reload | ✅ uptime <s>s |

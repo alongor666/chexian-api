@@ -167,3 +167,20 @@ df = load_excel_all_sheets(input_file, dtype=STR_FORCE_COLS, required_columns=RE
 数据处理任务必读: [.claude/data-knowledge-protocol.md](../.claude/data-knowledge-protocol.md)
 
 数据流字段变换规则: [数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md](../../数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md)
+
+## 上游源头拉取（VPS auto_loadbi manifest 契约 — 2026-07-04 起替代 iCloud 手动源）
+
+上游五张表（01签单/02报价/03维修资源/04厂牌明细/05理赔）由 VPS `myvps:/root/workspace/auto_loadbi/exports/` 每日定时导出；**唯一稳定契约 = 该目录 `latest-manifest.json`**（按 `code` 取当前份的 `path`，文件名日期后缀每天变，禁止硬编文件名）。上游侧完整交接文档随 rsync 落地在 `数据管理/inbox/README-for-etl.md`。
+
+**入口**：`node scripts/pull-bi-exports.mjs`（`bun run release:daily` 已内置为 Stage 0；`--skip-pull` 跳过）。纯函数层 `数据管理/lib/bi-export-pull.mjs`（vitest：`tests/bi-export-pull.test.ts`）。
+
+| 护栏 | 规则 |
+|------|------|
+| 断线兜底 | manifest 缺任一 code / mtime 不是**北京时间**今天 / 本地字节≠manifest / sizeMB 低于下限（疑似空表）→ 告警中止，**禁止默默用旧数据**（`--force` 仅应急） |
+| 时区陷阱 | manifest `mtime` 是真 UTC；本机时钟不一定在北京时区，新鲜度判定必须换算 Asia/Shanghai（`beijingDayOf`），禁止本地 Date 日期直比 |
+| 省份错配 | 文件名 `shanxi_`/`sichuan_` 前缀 = 导出脚本 PROVINCE 配置标签，**不自动跟登录账号**；分发前抽样 01 签单保单号前缀（SSOT = fields.json `branch_code.derivation.mapping`）内容核验，与前缀声明不一致即中止（`--skip-verify-province` 仅应急） |
+| 省份路由 | `shanxi_*` → `staging/SX/`；`sichuan_*`/无前缀（含 04 厂牌全国口径）→ `数据管理/` 根；目标目录由 `branchSourceDir` 派生，不另造路由 |
+| 覆盖归档 | 分发时对同品类被新长窗覆盖的旧范围 xlsx 归档到目标目录 `.xlsx-archive/<日期>/`（防 multi_file_merge 域源堆积）；不同品类不互斥，02 报价单日文件逐日累积 |
+| 出表时机 | 北京时间约 09:30 出 01/03/04/05、10:30 出 02；五张齐全须 **10:35 后**拉，提前拉会被 02 新鲜度校验拦下（符合断线告警契约） |
+
+BI 导出 xlsx 的 dimension 元数据损坏（openpyxl read_only 读到 max_row=1），任何对这些源文件的抽样/读取必须走 pandas `read_excel`。

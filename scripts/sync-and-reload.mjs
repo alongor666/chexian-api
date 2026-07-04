@@ -5,6 +5,8 @@
  * 设计哲学：daily.mjs 单一职责（ETL + rsync），本脚本负责"上线变更"全流程。
  *
  * 流程（严格顺序）：
+ *   0.   node scripts/pull-bi-exports.mjs                    （拉取 VPS auto_loadbi 上游导出 → 校验 → 分发；
+ *                                                              full_snapshot 单域模式自动跳过，--skip-pull 手动跳过）
  *   1.   node 数据管理/daily.mjs <subcommand>                （默认 all；可传 premium/claims_detail 等）
  *   1.5. python3 ~/.claude/skills/diagnose-period-trend/lib/cli.py --view v1  （生成驾驶舱 HTML）
  *   2.   bun run governance                                   （24+ 项校验，失败则中止）
@@ -84,6 +86,7 @@ function loadDotEnvLocal() {
 function parseArgs(argv) {
   const opts = {
     dryRun: false,
+    skipPull: false,
     skipGovernance: false,
     skipReload: false,
     skipGate: false,
@@ -97,6 +100,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') opts.dryRun = true;
+    else if (a === '--skip-pull') opts.skipPull = true;
     else if (a === '--skip-governance') opts.skipGovernance = true;
     else if (a === '--skip-reload') opts.skipReload = true;
     else if (a === '--skip-gate') opts.skipGate = true;
@@ -121,7 +125,7 @@ function parseArgs(argv) {
     }
     else if (a === '--skip-lark-archive') opts.skipLarkArchive = true;
     else if (a === '--help' || a === '-h') {
-      log('cyan', '用法：node scripts/sync-and-reload.mjs [daily.mjs subcommand] [--dry-run] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]');
+      log('cyan', '用法：node scripts/sync-and-reload.mjs [daily.mjs subcommand] [--dry-run] [--skip-pull] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]');
       process.exit(0);
     } else opts.dailyArgs.push(a);
   }
@@ -285,6 +289,7 @@ async function main() {
   log('bold', '  sync-and-reload：ETL → governance → reload → /health');
   log('bold', '════════════════════════════════════════════════');
   log('cyan', `  daily.mjs args:    ${opts.dailyArgs.join(' ')}`);
+  log('cyan', `  skip pull:         ${opts.skipPull}`);
   log('cyan', `  ssh alias:         ${sshAlias}`);
   log('cyan', `  health url:        ${healthUrl}`);
   log('cyan', `  skip governance:   ${opts.skipGovernance}`);
@@ -295,6 +300,17 @@ async function main() {
   log('cyan', `  dry-run:           ${opts.dryRun}`);
 
   const fullSnapshotDomains = resolveFullSnapshotDomains(opts.dailyArgs);
+
+  // Stage 0: 拉取上游 BI 导出（VPS auto_loadbi manifest 契约 → inbox → 校验 → 分发 ETL 源目录）。
+  // 失败即中止（上游断线兜底：宁可发布失败也不默默用旧数据）；full_snapshot 单域模式
+  // （customer_flow / new_energy_claims 源不来自 auto_loadbi）自动跳过，避免无关发布被上游波动阻断。
+  if (opts.skipPull) {
+    log('yellow', '\n⚠ 跳过上游 BI 导出拉取（--skip-pull），使用现有本地源文件');
+  } else if (fullSnapshotDomains.length > 0) {
+    log('yellow', `\n⚠ full_snapshot 单域模式（${fullSnapshotDomains.join(',')}）：源不来自 auto_loadbi，自动跳过上游拉取`);
+  } else {
+    await runCmd('pull:bi-exports', 'node', ['scripts/pull-bi-exports.mjs'], { dryRun: opts.dryRun });
+  }
 
   // Stage 1: ETL（先 SC 默认链路）
   for (const step of buildEtlCommands(opts.dailyArgs, fullSnapshotDomains)) {

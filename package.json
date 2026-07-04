@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "workspaces": ["cli", "mcp"],
+  "workspaces": [
+    "cli",
+    "mcp"
+  ],
   "scripts": {
     "start": "node scripts/start.mjs",
     "start:dev": "node scripts/start.mjs --dev",
@@ -27,6 +30,7 @@
     "reports:manifest": "node scripts/gen-reports-manifest.mjs",
     "release:daily": "node scripts/sync-and-reload.mjs --wecom",
     "release:daily:check": "node scripts/sync-and-reload.mjs --wecom-dry-run",
+    "pull:bi": "node scripts/pull-bi-exports.mjs",
     "release:daily:dry": "node scripts/sync-and-reload.mjs --wecom-dry-run --dry-run",
     "release:vps:heatmap": "node scripts/release-vps-heatmap.mjs",
     "benchmark:key-routes": "node scripts/benchmark-key-routes.mjs",
