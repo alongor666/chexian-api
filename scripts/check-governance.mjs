@@ -3102,7 +3102,7 @@ function walkDir(dir, cb) {
 //     动态 import() / require()，不靠脆弱的 `from '...features...'` 文本正则（漏 export from、
 //     多行 import，且易被别名/相对路径绕过）。
 //   - 别名 @/features、@/、相对路径 ../../features、server/src 归一识别。
-//   - 5 条边界（含 feature→feature 定向 denylist，守 B330 原始 growth→dashboard /
+//   - 7 条边界（含 feature→feature 定向 denylist，守 B330 原始 growth→dashboard /
 //     quote-conversion→filters 两处横向违规）。
 //   - 逃生阀 marker 必须带 backlog/PR 引用，裸 marker 无效（防回归后门）。
 // 规则 SSOT 文档：.claude/rules/architecture.md（path-scoped，引用 ARCHITECTURE.md §2.2）。
@@ -3143,7 +3143,7 @@ export function isValidArchAllowMark(line) {
 
 /**
  * 纯函数：给定「文件相对路径」「归一后的目标层」，判定是否违反某条边界规则。
- * 返回命中的规则描述数组（空 = 不违规）。供单测直接喂字符串验证 5 条规则。
+ * 返回命中的规则描述数组（空 = 不违规）。供单测直接喂字符串验证 7 条规则。
  */
 export function classifyArchViolations(relPosix, normalizedTarget) {
   const hits = [];

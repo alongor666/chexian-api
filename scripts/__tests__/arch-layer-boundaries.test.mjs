@@ -175,7 +175,7 @@ describe('isValidArchAllowMark — 逃生阀须带 backlog/PR 引用', () => {
   });
 });
 
-// 端到端：把违规说明符喂全链路（AST → normalize → classify），证明 5 条规则真能拦。
+// 端到端：把违规说明符喂全链路（AST → normalize → classify），证明 7 条规则真能拦。
 describe('端到端：违规 import 被链路捕获', () => {
   const cases = [
     { file: 'src/widgets/kpi/EnhancedKpiCard/types.ts', spec: '@/features/dashboard/utils/kpiStatus' },
