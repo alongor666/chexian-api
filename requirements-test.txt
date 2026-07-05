@@ -1,0 +1,5 @@
+# Python 测试依赖（CI + 本地 bun run test:py）
+# 运行时依赖复用 ETL 最小集，测试层只追加 pytest 与被测模块的 yaml 依赖
+-r 数据管理/requirements.txt
+pytest>=8.0
+PyYAML>=6.0

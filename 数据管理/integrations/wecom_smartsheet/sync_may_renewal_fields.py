@@ -389,7 +389,7 @@ def fetch_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
                insurance_grade AS quote_insurance_grade,
                commercial_pricing_factor AS quote_pricing_factor,
                quote_time,
-               regexp_replace(salesman_name, '^\d+', '') AS quote_salesman,
+               regexp_replace(salesman_name, '^\\d+', '') AS quote_salesman,
                ROW_NUMBER() OVER (
                  PARTITION BY vehicle_frame_no
                  ORDER BY quote_time DESC NULLS LAST
