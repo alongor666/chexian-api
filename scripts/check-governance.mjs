@@ -57,6 +57,8 @@ import {
 import { SHADOW_KEYS } from './shared/cube-routes.mjs';
 import { parseLedger as parseLoopLedger, normalizeVerdict as normalizeLoopVerdict } from './loop/quality-report.mjs';
 import { scanEntries as scanAutomationEntries, verifyMechanisms as verifyAutomationMechanisms } from './loop/automation-due.mjs';
+import { buildPatternChecks } from './governance/pattern-engine.mjs';
+import { PATTERN_RULES } from './governance/pattern-rules.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -321,111 +323,7 @@ function checkClaudeMdSections() {
   }
 }
 
-// ============================================================
-// 6. DC-002 合规性检查（新增）
-// ============================================================
-
-function checkDC002Compliance() {
-  info('检查 DC-002 合规性（用户筛选优先规则）...');
-
-  const sqlDir = path.join(ROOT_DIR, 'src/shared/sql');
-  const errors = [];
-  const warnings = [];
-
-  // 检查1: 扫描所有 SQL 生成器文件
-  if (!fs.existsSync(sqlDir)) {
-    warning('src/shared/sql 目录不存在，跳过 DC-002 检查');
-    return true;
-  }
-
-  const sqlFiles = fs.readdirSync(sqlDir).filter(file => file.endsWith('.ts'));
-
-  for (const file of sqlFiles) {
-    const filePath = path.join(sqlDir, file);
-    const content = fs.readFileSync(filePath, 'utf-8');
-
-    // 违规模式1: 硬编码 CURRENT_DATE
-    if (/CURRENT_DATE|current_date|CURDATE\(\)|NOW\(\)/i.test(content)) {
-      // 排除注释和字符串中的合法使用
-      const lines = content.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        // 检查前2行是否有 DC-002 Exception 注释
-        const hasExceptionAbove = (i >= 1 && lines[i - 1].includes('DC-002 Exception')) ||
-                                   (i >= 2 && lines[i - 2].includes('DC-002 Exception'));
-
-        if (/CURRENT_DATE|current_date|CURDATE\(\)|NOW\(\)/i.test(line) &&
-            !line.trim().startsWith('//') &&
-            !line.trim().startsWith('*') &&
-            !line.includes('DC-002') &&
-            !line.includes('禁止') &&
-            !hasExceptionAbove) {
-          errors.push(`${file}:${i + 1} 检测到硬编码 CURRENT_DATE（违反 DC-002 §2.3）`);
-          break;
-        }
-      }
-    }
-
-    // 违规模式2: 使用 || 运算符判断 filters 字段（应使用 ??）
-    // B107增强：更严格的检测，模拟ESLint规则
-    if (/\|\|/.test(content)) {
-      const lines = content.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        // 更严格的条件：检测在赋值或函数参数中使用 || 判断 filters 相关字段
-        const isLogicalOrForFilters = /\|\|/.test(line) &&
-            (line.includes('filters.') || line.includes('policy_date')) &&
-            !line.trim().startsWith('//') &&
-            !line.trim().startsWith('*') &&
-            !line.includes('DC-002') &&
-            !line.includes('Exception'); // 排除已知例外
-
-        if (isLogicalOrForFilters) {
-          // 区分警告和错误
-          if (line.includes('startDate') || line.includes('endDate')) {
-            errors.push(`${file}:${i + 1} 使用 || 判断 filters 日期字段（违反 DC-002 §2.1，必须使用 ??）`);
-          } else {
-            warnings.push(`${file}:${i + 1} 使用 || 判断 filters 字段（建议使用 ?? 运算符，DC-002 §2.1）`);
-          }
-        }
-      }
-    }
-
-    // 违规模式3: 可选日期参数（函数签名中包含 startDate?: 或 endDate?:）
-    const optionalDateParamRegex = /(startDate|endDate|start_date|end_date)\s*:\s*string\s*\?/;
-    if (optionalDateParamRegex.test(content)) {
-      const lines = content.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (optionalDateParamRegex.test(line) &&
-            !line.includes('DC-002')) {
-          errors.push(`${file}:${i + 1} 函数签名包含可选日期参数（违反 DC-002 §2.4，应从 filters 读取）`);
-          break;
-        }
-      }
-    }
-  }
-
-  // 输出结果
-  if (errors.length > 0) {
-    error(`DC-002 合规性检查失败（${errors.length} 个错误）：`);
-    errors.forEach(err => console.log(`    - ${err}`));
-    if (warnings.length > 0) {
-      console.log('');
-      warning(`额外发现 ${warnings.length} 个警告：`);
-      warnings.forEach(warn => console.log(`    - ${warn}`));
-    }
-    return false;
-  } else {
-    if (warnings.length > 0) {
-      warning(`DC-002 检查通过，但发现 ${warnings.length} 个警告：`);
-      warnings.forEach(warn => console.log(`    - ${warn}`));
-    } else {
-      success(`DC-002 合规性检查通过（扫描 ${sqlFiles.length} 个 SQL 文件）`);
-    }
-    return true;
-  }
-}
+// （已迁移）checkDC002Compliance → scripts/governance/pattern-rules.mjs 规则 dc002-*（3 条子规则）（奥卡姆批次二，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs）
 
 // ============================================================
 // 第7项检查：任务ID分配合规性（多Agent冲突防护）
@@ -2291,53 +2189,7 @@ function checkClaudeMdNoStaleCounts() {
   return true;
 }
 
-// ============================================================
-// #24 ETL 管道多 sheet 加载规范
-// ============================================================
-
-function checkEtlMultiSheetCompliance() {
-  info('检查 ETL 管道是否使用 load_excel_all_sheets...');
-
-  const pipelineDir = path.join('数据管理', 'pipelines');
-  if (!fs.existsSync(pipelineDir)) {
-    warning('数据管理/pipelines 目录不存在，跳过检查');
-    return true;
-  }
-
-  const pyFiles = fs.readdirSync(pipelineDir)
-    .filter(f => f.startsWith('convert_') || f === 'quote_etl.py')
-    .map(f => path.join(pipelineDir, f));
-
-  const errors = [];
-  const ALLOWED_BARE_READ = new Set([
-    // transform.py 使用自己的 load_target_excel，不在 convert_* 命名范围内
-    // compare_excel.py 是对比工具，不在扫描范围内
-  ]);
-
-  for (const filePath of pyFiles) {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
-    const fileName = path.basename(filePath);
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      // 检测裸 pd.read_excel 调用（排除注释行和 load_excel_all_sheets 内部）
-      if (line.match(/pd\.read_excel\s*\(/) && !line.trim().startsWith('#')) {
-        errors.push(`${fileName}:${i + 1}: 使用了裸 pd.read_excel()，应改用 load_excel_all_sheets()`);
-      }
-    }
-  }
-
-  if (errors.length > 0) {
-    error('ETL 多 sheet 加载规范检查失败：');
-    errors.forEach(e => console.log(`    - ${e}`));
-    console.log('    修复：将 pd.read_excel() 替换为 from pipelines.etl_validation import load_excel_all_sheets');
-    return false;
-  }
-
-  success(`ETL 多 sheet 加载规范通过（扫描 ${pyFiles.length} 个管道文件）`);
-  return true;
-}
+// （已迁移）checkEtlMultiSheetCompliance → scripts/governance/pattern-rules.mjs 规则 etl-multisheet（奥卡姆批次二，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs）
 
 // ============================================================
 // state-db 依赖隔离（B296 Phase 1）
@@ -2461,181 +2313,7 @@ function checkStateDbDependencyIsolation() {
   return true;
 }
 
-// ============================================================
-// 25. 空 catch 块禁令（静默失败 Law 1）
-//    - server/src + src 禁止 `catch (e) {}` / `catch {}` 空块
-//    - 空 catch 吞掉异常且无任何痕迹，是最典型的静默失败
-//    - 仅拦"纯空块"（正则可精确识别、零误报）；"catch 返回空值无日志/无判别"
-//      正则无法无误报地识别，留 silent-failure-guard skill 软自查 + 待 ESLint AST
-//    - 配套 skill: .claude/skills/silent-failure-guard.md
-// ============================================================
-
-function checkEmptyCatchBlocks() {
-  info('检查空 catch 块（静默失败 Law 1）...');
-
-  const scanDirs = ['server/src', 'src'].map(d => path.join(ROOT_DIR, d));
-  // 匹配 catch (...) {  } 或 catch {  }，块内仅空白（含跨行）
-  const emptyCatchRe = /catch\s*(\([^)]*\))?\s*\{\s*\}/g;
-  const violations = [];
-
-  function walk(dir) {
-    if (!fs.existsSync(dir)) return;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === 'dist') continue;
-        walk(full);
-      } else if (/\.(ts|tsx)$/.test(entry.name)) {
-        const content = fs.readFileSync(full, 'utf-8');
-        let m;
-        emptyCatchRe.lastIndex = 0;
-        while ((m = emptyCatchRe.exec(content)) !== null) {
-          const line = content.slice(0, m.index).split('\n').length;
-          violations.push(`${path.relative(ROOT_DIR, full)}:${line}`);
-        }
-      }
-    }
-  }
-
-  for (const d of scanDirs) walk(d);
-
-  if (violations.length > 0) {
-    error(`发现空 catch 块（吞异常无痕迹）= ${violations.length} 处：`);
-    for (const v of violations) console.log(`    - ${v}`);
-    console.log('    修复：catch 内至少记日志（含上下文），并重抛或返回带错误标记的结果');
-    console.log('    依据：.claude/skills/silent-failure-guard.md 五律 Law 1');
-    return false;
-  }
-
-  success('空 catch 块检查通过（server/src + src 无吞异常空块）');
-  return true;
-}
-
-/**
- * 业务员聚合键口径闸（2026-06-27 口径修复防回归，跟进 performance-analysis 样板 PR #830）
- *
- * 病根：cross-sell / marketing / performance 等 SQL 生成器曾按"去工号短名"
- * （REGEXP_REPLACE(salesman_name,'^[0-9]+','')）做聚合 / JOIN / 下钻筛选键，把同名不同工号的
- * 真业务员合并（实测 SC+SX 968 真人中 17 人同名：张丽×3、李娜×3、刘志伟×2 等）→ 保费/件数/排名失真。
- *
- * 口径（数据管理/knowledge/rules/车险数据业务规则字典.md §业务员 聚合键 vs 展示口径 RED LINE）：
- * 聚合/分组/JOIN/下钻键必须用带工号 salesman_name（=工号+姓名=人唯一键）；短名仅用于展示层
- * display_name —— 从带工号 key 的别名（group_name / dimension_name）去工号，**不直接作用于 salesman_name 列**。
- *
- * 规则：server/src/sql/**（排除 __tests__）禁止 REGEXP_REPLACE 直接作用于 salesman_name 列。
- * 正确的 display 从带工号 key 别名去工号，故合法代码对本模式零命中（实测修复后生产 SQL 全零）。
- *
- * 逃生阀：确有正当的纯展示去工号需求（无独立 display 列可挂），在命中行或其上一行写
- *   `governance-allow: salesman-aggkey <一句理由>`
- *
- * 局限（与 checkSkillFieldGate 同风格的诚实标注）：逐行正则匹配，若把
- * `REGEXP_REPLACE(` 与 `salesman_name` 拆成跨两行书写可绕过。本仓 SQL 生成器惯例是
- * 单行模板字面量表达式（实测全部单行），故风险低；新增多行 SQL 表达式时需人工留意。
- */
-function checkSalesmanAggKeyCaliber() {
-  info('检查业务员聚合键口径（server/src/sql 禁去工号短名做聚合/JOIN/下钻键）...');
-  const sqlDir = path.join(ROOT_DIR, 'server/src/sql');
-  // REGEXP_REPLACE( ...（首参内无右括号）... salesman_name → 直接对 salesman_name 列去工号
-  // （含嵌套 COALESCE(salesman_name…) 形态；display CASE 操作的是 group_name/dimension_name 别名，不命中）
-  const forbiddenRe = /REGEXP_REPLACE\([^)]*salesman_name/;
-  const allowRe = /governance-allow:\s*salesman-aggkey/;
-  const violations = [];
-
-  function walk(dir) {
-    if (!fs.existsSync(dir)) return;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === '__tests__' || entry.name === 'node_modules' || entry.name === 'dist') continue;
-        walk(full);
-      } else if (/\.ts$/.test(entry.name)) {
-        const lines = fs.readFileSync(full, 'utf-8').split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          if (!forbiddenRe.test(lines[i])) continue;
-          if (allowRe.test(lines[i]) || (i > 0 && allowRe.test(lines[i - 1]))) continue;
-          violations.push(`${path.relative(ROOT_DIR, full)}:${i + 1}  ${lines[i].trim().slice(0, 100)}`);
-        }
-      }
-    }
-  }
-  walk(sqlDir);
-
-  if (violations.length > 0) {
-    error(`发现业务员去工号短名做键（同名不同工号真人会被合并）= ${violations.length} 处：`);
-    for (const v of violations) console.log(`    - ${v}`);
-    console.log('    修复：聚合/JOIN/下钻键改回带工号 salesman_name（人唯一键）；');
-    console.log('    UI 短名从 group_name/dimension_name 别名去工号（display_name 列），勿直接对 salesman_name 列去工号。');
-    console.log('    口径：数据管理/knowledge/rules/车险数据业务规则字典.md §业务员（聚合键 vs 展示口径 RED LINE）');
-    console.log('    样板：server/src/sql/performance-analysis/*（PR #830）；逃生阀：governance-allow: salesman-aggkey <理由>');
-    return false;
-  }
-
-  success('业务员聚合键口径检查通过（server/src/sql 无去工号短名做键）');
-  return true;
-}
-
-/**
- * 筛选参数绕过检测（治理计划 2026-06-10 Task 1-D，防复发核心）
- *
- * 病根：各页绕过统一转换函数 src/shared/utils/filterParams.ts:buildFilterParams
- * 自写 filters.* → 请求参数映射，漏维度 → queryKey 不变 → chip 点了数据不动
- * （2026-06-10 全站审计：续保/对比/增长/赔案/交叉销售 5 页中招）。
- *
- * 规则：src/features/** 禁止对"快捷筛选维度参数名"手工赋值——这些名字只应由
- * buildFilterParams 产出。命中报错并提示改用统一函数。
- *
- * 范围说明：
- * - 不含 orgNames/salesmanNames——机构/业务员有 RBAC 注入、地区下钻、analyze 单独传参
- *   等大量合法单独处理，且不是漏接事故肇因，纳入会造成大面积误报豁免
- * - 该闸防"无意复发"，不防"故意绕过"（变量改名/间接赋值可绕，兜底是 Phase 5 E2E）
- * - 确需映射层的位置（如续保 hook 按后端能力裁剪、独立域自治参数集的同名巧合）
- *   在命中行或其上一行写 `governance-allow: filter-params-mapping`
- */
-function checkFilterParamsBypass() {
-  info('检查筛选参数绕过（features/ 禁手写 buildFilterParams 产出的参数名赋值）...');
-
-  const PARAM_NAMES = 'customerCategories|coverageCombinations|renewalModes|tonnageSegments|insuranceGrades|isRenewal|isNewCar|isTransfer|isNev|isTelemarketing|insuranceType|isCommercialInsure|isRenewable|isCrossSell|vehicleQuickFilter|enterpriseCar|businessNature|fuelCategory';
-  // 纯赋值两式（=(?!=) 负向断言：排除 ==/=== 比较，且兼容「赋值号在行尾、值断行到下一行」
-  // 的 prettier 风格——旧 =[^=] 要求 = 后必须还有字符，断行赋值会静默漏检；读取无 = 跟随不命中）
-  const FORBIDDEN_DOT = new RegExp(`\\.(${PARAM_NAMES})\\s*=(?!=)`);
-  const FORBIDDEN_BRACKET = new RegExp(`\\[\\s*['"](${PARAM_NAMES})['"]\\s*\\]\\s*=(?!=)`);
-  const ALLOW_MARK = 'governance-allow: filter-params-mapping';
-
-  const scanRoot = path.join(ROOT_DIR, 'src/features');
-  const violations = [];
-
-  function walk(dir) {
-    if (!fs.existsSync(dir)) return;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === '__tests__') continue;
-        walk(full);
-      } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.test\./.test(entry.name)) {
-        const lines = fs.readFileSync(full, 'utf-8').split('\n');
-        lines.forEach((line, i) => {
-          if (!FORBIDDEN_DOT.test(line) && !FORBIDDEN_BRACKET.test(line)) return;
-          const prev = i > 0 ? lines[i - 1] : '';
-          if (line.includes(ALLOW_MARK) || prev.includes(ALLOW_MARK)) return;
-          violations.push(`${path.relative(ROOT_DIR, full)}:${i + 1}`);
-        });
-      }
-    }
-  }
-  walk(scanRoot);
-
-  if (violations.length > 0) {
-    error(`发现手写筛选参数映射（绕过 buildFilterParams）= ${violations.length} 处：`);
-    for (const v of violations) console.log(`    - ${v}`);
-    console.log('    修复：改用 src/shared/utils/filterParams.ts:buildFilterParams（唯一事实源）');
-    console.log('    确需按后端能力裁剪的映射层：命中行或上一行加 // governance-allow: filter-params-mapping');
-    console.log('    依据：开发文档/筛选器联动治理计划_2026-06-10.md Task 1-D');
-    return false;
-  }
-
-  success('筛选参数绕过检查通过（features/ 无未豁免的手写参数映射）');
-  return true;
-}
+// （已迁移）checkFilterParamsBypass → scripts/governance/pattern-rules.mjs 规则 filter-params-bypass（奥卡姆批次二，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs）
 
 /**
  * 能力矩阵两端一致检查（治理计划 Phase 3，✅D5 = TS 常量起步）
@@ -2730,63 +2408,7 @@ function checkFilterCapabilityMirror() {
   return true;
 }
 
-/**
- * Bundle 路由开关合规检查
- *
- * 背景：项目支持 `VITE_ENABLE_BUNDLE_ROUTES=false` 的兼容部署（legacy 模式），
- * 后端会让 `/performance-bundle` 等聚合路由返回 503。任何调用 `usePerformanceBundle`
- * / `usePerformanceBundleApi` 等 bundle hook 的前端组件，必须显式遵守
- * `ENABLE_BUNDLE_ROUTES` 开关（通过 `enabled` 参数短路 + 渲染时 fallback / 隐藏），
- * 否则在 legacy 部署上会一直显示加载失败。
- *
- * 触发：codex review PR #477 line 190（FocusStrip 漏开关导致 legacy 模式 503 红卡）。
- *
- * 规则：任何 `src/` 下 `.ts/.tsx` 文件如果调用 `usePerformanceBundle(`，必须同时
- * 出现 `ENABLE_BUNDLE_ROUTES` 字符串（用于 import + enabled 引用）。
- */
-function checkBundleRoutesGuard() {
-  info('检查 Bundle 路由开关合规（usePerformanceBundle 调用方须遵守 ENABLE_BUNDLE_ROUTES）...');
-
-  const scanDirs = ['src'].map((d) => path.join(ROOT_DIR, d));
-  const violations = [];
-
-  function walk(dir) {
-    if (!fs.existsSync(dir)) return;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === 'dist') continue;
-        walk(full);
-      } else if (/\.(ts|tsx)$/.test(entry.name)) {
-        const content = fs.readFileSync(full, 'utf-8');
-        // 跳过 hook 本身（定义方）和测试文件
-        if (full.endsWith('usePerformanceBundle.ts')) continue;
-        if (full.includes('__tests__') || full.endsWith('.test.ts') || full.endsWith('.test.tsx')) continue;
-        const callsBundle = /\busePerformanceBundle\s*\(/.test(content);
-        if (!callsBundle) continue;
-        const referencesGuard = /\bENABLE_BUNDLE_ROUTES\b/.test(content);
-        if (!referencesGuard) {
-          violations.push(path.relative(ROOT_DIR, full));
-        }
-      }
-    }
-  }
-
-  for (const d of scanDirs) walk(d);
-
-  if (violations.length > 0) {
-    error(`Bundle 路由开关缺失 = ${violations.length} 处：`);
-    for (const v of violations) console.log(`    - ${v}`);
-    console.log('    修复：import { ENABLE_BUNDLE_ROUTES } from "@/shared/api/client";');
-    console.log('    然后 usePerformanceBundle({ ..., enabled: <existing-condition> && ENABLE_BUNDLE_ROUTES })');
-    console.log('    并在 render 阶段 if (!ENABLE_BUNDLE_ROUTES) 走 legacy fallback 或隐藏。');
-    console.log('    依据：PR #477 codex review line 190；现有遵守者：PerformanceAnalysisPanel.tsx / PremiumDashboard.tsx');
-    return false;
-  }
-
-  success('Bundle 路由开关合规检查通过（所有 usePerformanceBundle 调用方均遵守 ENABLE_BUNDLE_ROUTES）');
-  return true;
-}
+// （已迁移）checkBundleRoutesGuard → scripts/governance/pattern-rules.mjs 规则 bundle-routes-guard（奥卡姆批次二，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs）
 
 function checkQueryCatalogConsistency() {
   info('检查 QueryCatalog 对账（实挂载 GET 端点 vs route-catalog 元数据）...');
@@ -3459,50 +3081,7 @@ function checkCubeVersionBinding() {
   return true;
 }
 
-/**
- * 防 5 路由清单 SSOT 漂移（PR #653 漏改 cube-promote-judge.mjs 教训）。
- *
- * scripts/shared/cube-routes.mjs 是 5 路由清单的唯一事实源。其他文件不得 inline
- * 重复定义 5 路由字面量数组（含顺序），
- * 必须从 SSOT import SHADOW_KEYS。
- *
- * 历史：evidence-verifier 在 PR #653 后查到 scripts/release/lib/cube-promote-judge.mjs:28
- * 仍有 inline SHADOW_ROUTES 定义（PR #648 lib 产物，#653 漏改），独立维护同样清单。
- */
-function checkCubeRoutesSSOT() {
-  info('检查 5 路由清单 SSOT 漂移防回归（PR #653 教训）...');
-  const SSOT_FILE = 'scripts/shared/cube-routes.mjs';
-  // 限定数组字面量：必须 `[` 开头才报（防止注释里的提示文字误命中）
-  const FORBIDDEN_RE = /\[\s*['"]trend['"]\s*,\s*['"]growth['"]\s*,\s*['"]cost['"]\s*,\s*['"]kpi['"]\s*,\s*['"]salesman-ranking['"]\s*\]/;
-  const SCAN_DIRS = ['scripts', 'server/src'];
-  const offenders = [];
-
-  for (const dir of SCAN_DIRS) {
-    const fullDir = path.join(ROOT_DIR, dir);
-    if (!fs.existsSync(fullDir)) continue;
-    walkDir(fullDir, (filePath) => {
-      const rel = path.relative(ROOT_DIR, filePath);
-      if (rel === SSOT_FILE) return;
-      if (!/\.(mjs|js|ts)$/.test(rel)) return;
-      if (rel.includes('__tests__') || rel.includes('node_modules')) return;
-      const src = fs.readFileSync(filePath, 'utf-8');
-      if (FORBIDDEN_RE.test(src)) {
-        offenders.push(rel);
-      }
-    });
-  }
-
-  if (offenders.length > 0) {
-    error('5 路由清单 SSOT 漂移失败：以下文件 inline 定义了 5 路由字面量');
-    for (const f of offenders) error(`  - ${f}`);
-    error('  修复路径：');
-    error(`    1) 从 ${SSOT_FILE} import { SHADOW_KEYS } 或 { CUBE_ROUTES }`);
-    error('    2) 不要 inline 重复 5 路由字面量数组');
-    return false;
-  }
-  success(`5 路由清单仅在 SSOT 定义（${SSOT_FILE}），其他文件均 import 派生`);
-  return true;
-}
+// （已迁移）checkCubeRoutesSSOT → scripts/governance/pattern-rules.mjs 规则 cube-routes-ssot（奥卡姆批次二，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs）
 
 /**
  * 检查 .claude/shared-memory/ user-only 红线（AGENTS.md §8.3）
@@ -3872,107 +3451,7 @@ function checkSpawnArgQuoteSafety() {
   return true;
 }
 
-// ============================================================
-// 省份编码反模式检查（治理工程一）
-// ============================================================
-/**
- * 禁止在数据路径中新增 `?? 'SC'` / `|| 'SC'` 静默默认四川的反模式。
- *
- * 背景：`process.env.BRANCH_CODE ?? 'SC'` / `|| 'SC'` 在数据路径（ETL/服务端 SQL 生成/
- * Parquet 加载）中使用会导致：
- *   1. Parquet 被打上错误的 branch_code（SC），RLS 静默失效
- *   2. SX（山西）用户可能读到 SC（四川）数据
- *
- * 白名单（豁免）：
- *   - 注释行（含 // 前缀的行）
- *   - branch-naming.mjs（设计上处理 SC/空 等价）
- *   - kpi-detail.ts（UI 显示回退，已有注释说明）
- *   - check-governance.mjs 自身（本说明文本）
- *   - *.test.ts / *.test.mjs（测试文件）
- *   - 含 resolveEnvBranchCode / resolveBranchCode 的行（已合规替换后的形态）
- *
- * 修复：用 resolveEnvBranchCode(context) 替换（daily.mjs）
- *       或 resolveBranchCode(raw, context) 替换（server TS 文件）
- */
-function checkBranchCodeFallbackAntipattern() {
-  info("检查 ?? 'SC' / || 'SC' 省份静默默认反模式（数据路径）...");
-
-  // 扫描范围：数据路径关键文件/目录
-  const DATA_PATH_GLOBS = [
-    path.join(ROOT_DIR, '数据管理/daily.mjs'),
-    path.join(ROOT_DIR, '数据管理/pipelines'),
-    path.join(ROOT_DIR, 'server/src/config'),
-    path.join(ROOT_DIR, 'server/src/services'),
-    path.join(ROOT_DIR, 'scripts'),
-  ];
-
-  // 豁免文件（允许保留 SC 相关字面量的合理场景）
-  const EXEMPT_FILES = new Set([
-    path.join(ROOT_DIR, '数据管理/lib/branch-naming.mjs'),   // 设计上处理 SC/空 等价
-    path.join(ROOT_DIR, 'server/src/sql/kpi-detail.ts'),     // UI 显示回退，已文档化
-    path.join(ROOT_DIR, 'scripts/check-governance.mjs'),     // 本检查自身
-  ]);
-
-  // 豁免行模式：注释、已合规替换
-  const EXEMPT_LINE_PATTERNS = [
-    /^\s*\/\//,               // 单行注释（// 前缀）
-    /^\s*\*/,                 // JSDoc / 块注释行（* 前缀）
-    /resolveEnvBranchCode/,   // 已用 fail-closed 函数替换
-    /resolveBranchCode/,      // 已用 fail-closed 函数替换
-    /assertBranchCodeSet/,    // 已用断言替换
-    /governance-branch-fallback:\s*allow/, // 显式豁免注释
-  ];
-
-  const antiPatternRe = /\?\?\s*['"]SC['"]\s*|[|][|]\s*['"]SC['"]/;
-
-  const violations = [];
-
-  function scanFile(filePath) {
-    if (EXEMPT_FILES.has(filePath)) return;
-    if (!fs.existsSync(filePath)) return;
-    // 只扫 .ts .mjs .js
-    if (!/\.(ts|mjs|js)$/.test(filePath)) return;
-    // 跳过测试文件
-    if (/\.(test|spec)\.(ts|mjs|js)$/.test(filePath)) return;
-
-    const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
-    lines.forEach((line, idx) => {
-      if (!antiPatternRe.test(line)) return;
-      if (EXEMPT_LINE_PATTERNS.some((re) => re.test(line))) return;
-      violations.push(`${path.relative(ROOT_DIR, filePath)}:${idx + 1}: ${line.trim().slice(0, 100)}`);
-    });
-  }
-
-  function scanDir(dirPath) {
-    if (!fs.existsSync(dirPath)) return;
-    const stat = fs.statSync(dirPath);
-    if (stat.isFile()) { scanFile(dirPath); return; }
-    for (const ent of fs.readdirSync(dirPath, { withFileTypes: true })) {
-      const full = path.join(dirPath, ent.name);
-      if (ent.isDirectory()) {
-        if (['node_modules', '.git', 'dist', '.archive'].includes(ent.name)) continue;
-        scanDir(full);
-      } else {
-        scanFile(full);
-      }
-    }
-  }
-
-  for (const g of DATA_PATH_GLOBS) scanDir(g);
-
-  if (violations.length > 0) {
-    error(`发现 ${violations.length} 处省份静默默认反模式（数据路径中 ?? 'SC' / || 'SC'）：`);
-    for (const v of violations) console.log(`    - ${v}`);
-    console.log("    修复：");
-    console.log("      daily.mjs：用 resolveEnvBranchCode('<context>') 替换 process.env.BRANCH_CODE || 'SC'");
-    console.log("      server TS：用 resolveBranchCode(process.env.BRANCH_CODE, '<context>') 替换 ?? 'SC'");
-    console.log("      或加豁免注释 // governance-branch-fallback: allow <理由>");
-    return false;
-  }
-
-  success("省份静默默认反模式检查通过（数据路径无 ?? 'SC' / || 'SC'）");
-  return true;
-}
+// （已迁移）checkBranchCodeFallbackAntipattern → scripts/governance/pattern-rules.mjs 规则 branch-code-fallback（奥卡姆批次二，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs）
 
 // ============================================================
 // 企微引擎省份隔离闸（分省隔离四道防线 P3 · uid 2026-06-29-claude-a5aa03）
@@ -4082,12 +3561,24 @@ function checkWecomEngineBranchIsolation() {
   return true;
 }
 
+// 禁止模式族：声明式规则表驱动（奥卡姆批次二）。每组一个检查项，组名与旧函数时代一致；
+// 规则定义在 scripts/governance/pattern-rules.mjs，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs。
+const PATTERN_CHECK_MAP = new Map(
+  buildPatternChecks(PATTERN_RULES, { rootDir: ROOT_DIR, io: { info, success, error, warning } })
+    .map((c) => [c.name, c]),
+);
+function patternCheck(name) {
+  const c = PATTERN_CHECK_MAP.get(name);
+  if (!c) throw new Error(`pattern 规则组未定义：${name}（见 scripts/governance/pattern-rules.mjs）`);
+  return c;
+}
+
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件与核心索引', fn: checkRequiredFiles },
   { name: 'BACKLOG证据链', fn: checkBacklogEvidence },
   { name: 'CLAUDE章节', fn: checkClaudeMdSections },
-  { name: 'DC-002合规', fn: checkDC002Compliance },
+  patternCheck('DC-002合规'),
   { name: 'BACKLOG事件日志', fn: checkBacklogLog },
   { name: 'Conflict标记', fn: checkMergeConflictMarkers },
   { name: '调试产物', fn: checkStagedDebugArtifacts },
@@ -4107,20 +3598,20 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
   { name: 'rules eager-load 预算', fn: checkRulesEagerLoadBudget },
   { name: 'CLAUDE.md计数防漂移', fn: checkClaudeMdNoStaleCounts },
-  { name: 'ETL多sheet规范', fn: checkEtlMultiSheetCompliance },
+  patternCheck('ETL多sheet规范'),
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
-  { name: '空catch禁令', fn: checkEmptyCatchBlocks },
-  { name: '业务员聚合键口径', fn: checkSalesmanAggKeyCaliber },
-  { name: '筛选参数绕过', fn: checkFilterParamsBypass },
+  patternCheck('空catch禁令'),
+  patternCheck('业务员聚合键口径'),
+  patternCheck('筛选参数绕过'),
   { name: '能力矩阵镜像', fn: checkFilterCapabilityMirror },
-  { name: 'Bundle路由开关合规', fn: checkBundleRoutesGuard },
+  patternCheck('Bundle路由开关合规'),
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
   { name: '非query路由域对账', fn: checkNonQueryRoutesConsistency },
   { name: 'RouteCatalog参数契约', fn: checkRouteCatalogParamContracts },
   { name: 'Agent注册表版本', fn: checkAgentRegistryVersionBump },
   { name: '立方体影子对账容差', fn: checkCubeShadowTolerance },
   { name: 'RLS路由消费覆盖', fn: checkRlsRouteCoverage },
-  { name: '5路由清单SSOT', fn: checkCubeRoutesSSOT },
+  patternCheck('5路由清单SSOT'),
   { name: '立方体影子路由覆盖', fn: checkCubeShadowRouteCoverage },
   { name: '立方体SQL三件套', fn: checkCubeSqlThreePieceShape },
   { name: '立方体版本绑定', fn: checkCubeVersionBinding },
@@ -4132,7 +3623,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'spawn参数引号安全', fn: checkSpawnArgQuoteSafety },
   { name: 'ETL台账新鲜度', fn: checkEtlLedgerFreshness },
   { name: '技能字段闸', fn: checkSkillFieldGate },
-  { name: '省份静默默认反模式', fn: checkBranchCodeFallbackAntipattern },
+  patternCheck('省份静默默认反模式'),
   { name: '省份前缀映射一致', fn: checkProvincePrefixMapConsistency },
   { name: '企微引擎省份隔离', fn: checkWecomEngineBranchIsolation },
   { name: 'Loop自进化闭环完整性', fn: checkLoopSelfEvolutionIntegrity },

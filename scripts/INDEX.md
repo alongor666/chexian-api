@@ -43,6 +43,8 @@
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
 | `check-governance.mjs` | **主治理校验**（项数以文件内 `CODE_GOVERNANCE_CHECKS` 注册表为准；数据状态校验已解耦至 `check-data-readiness.mjs`）：必需文件与核心索引、BACKLOG证据链、DC-002合规、空catch禁令、筛选参数绕过、能力矩阵镜像等 | `bun run governance` |
+| `governance/pattern-engine.mjs` | **禁止模式族扫描引擎**（奥卡姆批次二）：规则表驱动、组内共享文件缓存、`scanContentWithRule` 纯函数供红绿 fixture 直测 | （被 check-governance 消费） |
+| `governance/pattern-rules.mjs` | **禁止模式族规则表**（DC-002×3 / ETL多sheet / 空catch / 业务员聚合键 / 筛选参数 / Bundle开关 / 5路由SSOT / 省份静默默认）；新增规则必须同步补 `scripts/__tests__/pattern-engine.test.mjs` 红绿 fixture（完备性断言强制） | （被 check-governance 消费） |
 | `lint-ui.mjs` | **UI 风格检查**（DarkMode 质量 + ECharts splitLine；2026-07-04 自 governance 主链移出为独立入口，能力保留） | `bun run lint:ui` |
 | `check-data-readiness.mjs` | **数据就绪校验**（项数以 `DATA_READINESS_CHECKS` 为准）：Parquet 重叠 / Claims 去重 / 知识库规模 / 单文件不混省（派生省==列省 · 多省 Phase 4）/ SC policy glob 前缀隔离（2026-07-04 自代码门禁移入）/ 同步漂移；由 release:daily（`sync-and-reload.mjs` Stage 1.7）在 ETL 后、发布前执行，**不在**代码门禁跑 | `node scripts/check-data-readiness.mjs` |
 | `check-hotfile-contracts.mjs` | **热点契约门禁**：`query.ts` / `client.ts` / `client-core.ts` / 全部命名空间子客户端 `src/shared/api/*-api.ts`（清单文件系统派生）改动时，要求同步修改对应契约测试 | `bun run governance:hotfiles` |
