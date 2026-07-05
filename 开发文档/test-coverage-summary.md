@@ -107,8 +107,7 @@
 
 ### 高优先级
 1. **修复失败的测试**:
-   - `tests/nl2sql-rule-engine.test.ts:278` - 示例查询转换失败
-   - 建议：跳过暂时失败的示例，或修复 NL2SQL 规则引擎
+   - ~~`tests/nl2sql-rule-engine.test.ts:278` - 示例查询转换失败~~（其引用的 `src/features/sql-query/` 已删除，测试文件已随 2026-07-05 测试审计移除）
 
 2. **提高低覆盖率文件**:
    - `src/features/filters/DateRangePicker.tsx` (8.45%) - 添加组件渲染测试

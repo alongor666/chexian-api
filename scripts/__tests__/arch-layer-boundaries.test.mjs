@@ -42,7 +42,7 @@ describe('normalizeArchTarget — 别名/相对路径归一', () => {
   });
 });
 
-describe('classifyArchViolations — 5 条边界规则', () => {
+describe('classifyArchViolations — 7 条边界规则', () => {
   it('(a) widgets → features 命中', () => {
     expect(classifyArchViolations('src/widgets/kpi/x.ts', 'features/dashboard/utils/kpiStatus'))
       .toHaveLength(1);
