@@ -60,7 +60,6 @@
 ### Utils 模块
 - **`utils/logger.ts`**: 统一日志服务（分级日志、上下文管理、生产环境优化）
 - **`utils/export.ts`**: CSV/Excel 导出工具（Table → 文件）
-- **`utils/security.ts`**: 安全限制常量（SQL长度、超时、行数限制）
 - **`utils/formatters.ts`**: 统一格式化工具（保费/占比/数值）
 - **`utils/size-sensor.ts`**: size-sensor 安全兼容层（避免 ResizeObserver 清理异常）
 - **`utils/echarts.ts`**: ECharts 按需导入注册（图表组件与渲染器）

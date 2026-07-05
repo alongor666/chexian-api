@@ -337,7 +337,6 @@ src/features/*                                    # 功能模块 UI 渲染
 | `data-source.test.ts` | 数据源逻辑 | `tests/api/data-source.test.ts` |
 | `sql-parser.test.ts` | SQL 解析 | `tests/api/sql-parser.test.ts` |
 | `formatters.test.ts` | 格式化函数 | `tests/formatters.test.ts` |
-| `security.test.ts` | 安全工具 | `tests/security.test.ts` |
 | `holidayUtils.test.ts` | 假日工具 | `tests/marketing-report/holidayUtils.test.ts` |
 | `critical-path.test.ts` | 关键路径集成测试 | `tests/integration/critical-path.test.ts` |
 

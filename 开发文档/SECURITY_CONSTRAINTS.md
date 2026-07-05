@@ -121,7 +121,7 @@ for (const field of sensitiveFields) {
 
 ### 2.1 防护的攻击模式
 
-**代码位置**: `tests/security.test.ts`
+**防护机制**: React 渲染文本节点时自动转义；全库禁用 `dangerouslySetInnerHTML` / `innerHTML` / `eval()`（见 `/chexian-security-review` 清单第 5 项）
 
 **脚本注入**:
 ```javascript
@@ -142,23 +142,9 @@ for (const field of sensitiveFields) {
 
 ### 2.2 HTML实体编码
 
-**代码位置**: `src/shared/utils/security.ts`
+React 渲染文本节点（业务员名称、机构名称、用户输入文本）时自动做 HTML 实体转义，无需手工调用转义函数。
 
-```typescript
-export function sanitizeHtml(input: string): string {
-  return input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;');
-}
-```
-
-**使用场景**:
-- 业务员名称显示
-- 机构名称显示
-- 用户输入的文本
+> 历史版本此处曾引用 `src/shared/utils/security.ts` 的 `sanitizeHtml()`——该前端安全工具模块为零调用死代码，已于 2026-07-05 清理移除（backlog 2026-07-05-claude-1aed97），当前代码库不存在该函数。
 
 ### 2.3 CSP策略
 
@@ -325,9 +311,10 @@ SELECT policy_no, salesman_name, premium FROM PolicyFact;
 
 - [CLAUDE.md §2 护栏](../CLAUDE.md#2-护栏red-line---以下文件禁止擅自修改) - 架构护栏
 - [开发文档/TECHNICAL_DECISIONS.md](./TECHNICAL_DECISIONS.md) - 技术决策
-- [tests/security.test.ts](../tests/security.test.ts) - 安全测试
+- [server/src/utils/__tests__/security.test.ts](../server/src/utils/__tests__/security.test.ts) - 服务端安全工具测试
 
 ---
 
 **变更历史**:
 - 2026-01-11: 初始版本,定义5大安全约束和防护机制
+- 2026-07-05: 移除前端死模块 `src/shared/utils/security.ts` 相关过时引用（backlog 2026-07-05-claude-1aed97），XSS 防护章节改述为 React 自动转义
