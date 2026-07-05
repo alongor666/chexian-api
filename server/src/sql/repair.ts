@@ -400,8 +400,29 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
   // 约定（虽 ETL 强制、零碰撞，但应代码强制隔离边界）。policyBranchCode 经 resolveBranchRlsCode
   // (req,'PolicyFact') 双门控；undefined → 空串 → 字节安全。PolicyFact 无别名故 branch_code 不带前缀。
   const policyBranch = policyBranchCode ? ` AND branch_code = '${policyBranchCode}'` : '';
+  // BACKLOG 2026-06-25-claude-6b021a（codex 闸-2 PR-7 复审 MEDIUM）：diversion_claims 读 ClaimsDetail 仅按
+  // 分省（claimsBranch）收束，无 org 粒度过滤；final LEFT JOIN policy_dedup 时，凡 dc.policy_no 不在 org
+  // 收束后的 policy_dedup 里的行，p.* 为 null 但 dc.*（claim_no/subject_shop_code/accident_district/
+  // shop_tier）仍输出 → org_user 经 LEFT JOIN 可见同分公司内他机构的赔案行（duckdb 实证：高新 org_user
+  // 从 242,598 行里泄漏 210,450 行天府/青羊/宜宾等他 org 赔案）。owner 2026-07-04 拍板：diversion-list
+  // 对 org_user 收窄到 org_level_3 粒度。ClaimsDetail 无 org_level_3，故把 org 约束经 permitted_policies
+  //（PolicyFact 按同一 org 权限子句 + 分省收束后的保单号集合）传导到 diversion_claims，使 org_user 只见本
+  // org 保单的赔案行。用 permitted_policies 而非直接半连接 policy_dedup：后者带 HAVING SUM(premium)>0，会
+  // 连带过滤掉本 org 自身退保（0 元）保单的展示行（LEFT JOIN 下 premium 显示 null，属既有展示行为）。
+  // 字节安全：whereClause='1=1'（branch_admin / 全国全 org 可见）→ orgScoped=false → 不产 CTE、不加过滤 →
+  // 与历史逐字节一致，故既有单测（均以 '1=1' 调用）不受影响。branch/telemarketing 权限维度不在此收窄。
+  const orgScoped = whereClause !== '1=1';
+  const permittedPoliciesCte = orgScoped
+    ? `permitted_policies AS (
+      SELECT DISTINCT policy_no FROM PolicyFact WHERE 1=1${policyWhereExtra}${policyBranch}
+    ),
+    `
+    : '';
+  const orgScopeAnd = orgScoped
+    ? ' AND c.policy_no IN (SELECT policy_no FROM permitted_policies)'
+    : '';
   return `
-    WITH active_shops AS (
+    WITH ${permittedPoliciesCte}active_shops AS (
       SELECT DISTINCT SUBSTR(repair_shop_name, 1, 8) AS shop_code
       FROM RepairDim
       WHERE cooperation_status = '1生效中' AND ${NON_REPAIR_FILTER}${repairBranch}
@@ -421,7 +442,7 @@ export function generateRepairDiversionListQuery(filters: RepairFiltersV2, limit
           ELSE 'none_shadow'
         END AS shop_tier
       FROM ClaimsDetail c
-      WHERE c.subject_shop_code IS NOT NULL AND ${timeWhere}${claimsBranch}
+      WHERE c.subject_shop_code IS NOT NULL AND ${timeWhere}${claimsBranch}${orgScopeAnd}
     ),
     -- B252：PolicyFact 按 policy_no 去重，防止原单+批改多行让列表行数翻倍且 premium 显示错乱
     policy_dedup AS (
