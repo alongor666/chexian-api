@@ -409,7 +409,6 @@ WHERE 险类 = '商业保险' AND 商车自主定价系数 > 1.0
 │   └── QUICK_REFERENCE.md       # 快速参考
 ├── config/                      # 配置中心
 ├── staging/                     # 暂存区
-├── cli.py                       # 命令行工具
 └── run.sh                       # 快捷脚本
 
 开发文档/

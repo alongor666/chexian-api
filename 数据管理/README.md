@@ -65,7 +65,6 @@
 ├── integrations/                # 🔌 外部系统同步
 │   └── wecom_smartsheet/        # 企业微信智能表格同步
 │
-├── cli.py                       # 命令行工具
 ├── run.mjs                       # 快捷执行脚本
 └── logs/                        # 运行日志
 ```
