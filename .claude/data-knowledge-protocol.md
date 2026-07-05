@@ -315,7 +315,7 @@ SELECT COUNT(*) as total, SUM(premium) as total_premium FROM PolicyFact
 
 **安全测试**:
 - SQL 注入防护: `tests/sql-validator.test.ts`
-- XSS 攻击防护: `tests/security.test.ts`
+- 服务端安全工具: `server/src/utils/__tests__/security.test.ts`
 
 ---
 

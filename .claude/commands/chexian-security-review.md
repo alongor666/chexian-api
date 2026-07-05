@@ -10,7 +10,6 @@ requires:
   - grep
   - bun
 dependencies:
-  - tests/security.test.ts
   - tests/sql-validator.test.ts
   - server/src/utils/security.ts
   - server/src/middleware/rateLimiter.ts
@@ -94,7 +93,7 @@ last_updated: "2026-06-09"
 | `server/src/middleware/rateLimiter.ts` | 三级限流（禁止降低） |
 | `server/src/middleware/audit.ts` | 审计日志 |
 | `server/src/services/auth.ts` | JWT 认证、bcrypt 密码验证 |
-| `tests/security.test.ts` | 安全测试（74 用例） |
+| `server/src/utils/__tests__/security.test.ts` | 服务端安全工具测试 |
 | `tests/sql-validator.test.ts` | SQL 验证器测试（62 用例） |
 
 ---
@@ -103,7 +102,7 @@ last_updated: "2026-06-09"
 
 | # | 检查项 | 严重性 | 要点 |
 |---|--------|--------|------|
-| 1 | **SQL 注入防护** | Critical | 所有用户输入经 `sanitizeInput()` 清理；禁止字符串拼接 SQL；LIKE 用 `buildSafeLikeClause()` |
+| 1 | **SQL 注入防护** | Critical | 所有用户输入经 `escapeSqlValue()`/`escapeSqlLiteral()` 转义；禁止字符串拼接 SQL；LIKE 用 `buildLikeCondition()`（`sql-sanitizer.ts`） |
 | 2 | **SQL 验证器合规** | Critical | 只读限制（仅 SELECT/WITH）；单语句；必须引用 PolicyFact；禁止 SELECT policy_no；必须聚合 |
 | 3 | **文件上传安全** | Critical | 仅 `.parquet`/`.pq`；≤200MB（唯一事实源 `env.ts` `dbEnv.MAX_UPLOAD_SIZE_MB`，与 nginx `client_max_body_size` 对齐，governance「上传上限对齐」闸校验）；路径遍历防护（`../`）；文件名非法字符过滤 |
 | 4 | **CORS 与安全头** | High | COOP: same-origin；COEP: require-corp；建议添加 CSP |
@@ -120,7 +119,6 @@ last_updated: "2026-06-09"
 
 ```bash
 bun run tsc --noEmit                          # TypeScript 类型检查
-bun test tests/security.test.ts               # 安全测试
 bun test tests/sql-validator.test.ts          # SQL 验证器测试
 bun audit                                     # 依赖漏洞扫描
 ```
