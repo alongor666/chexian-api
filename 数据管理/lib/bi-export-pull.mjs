@@ -19,11 +19,24 @@
  * 无副作用、不读文件系统 / env / 网络，可被 vitest 直接 import。
  * 副作用编排（rsync / 抽样 / 分发落盘）在 scripts/pull-bi-exports.mjs。
  */
-import { provinceCodeFromFilename } from './source-file-routing.mjs';
+import { provinceCodeFromFilename, stripProvincePrefix } from './source-file-routing.mjs';
 import { parseRangePrefix, findCoveredKeys } from './range-coverage.mjs';
 
-/** 五张报表 code 全集（manifest 缺任一 = 上游断线，告警不降级）。 */
+/** 五张报表 code 全集（上游契约的完整清单）。 */
 export const REQUIRED_REPORT_CODES = Object.freeze(['01', '02', '03', '04', '05']);
+
+/**
+ * 可选报表 code（2026-07-05 用户拍板）：04 厂牌明细是低频变化的维表（"很少增量"），
+ * 不作为每日发布的硬闸——缺席 / 不新鲜 / 体积异常时：告警 + 跳过分发该文件（本地保留
+ * 旧维表继续服务），**不阻塞**发布与 watcher 就绪判定。实证：2026-07-05 上游 04 骤降
+ * 4.1MB（前日 39MB），若作硬闸会拦住当天所有核心事实表的发布。
+ */
+export const OPTIONAL_REPORT_CODES = Object.freeze(['04']);
+
+/** 硬闸 code（缺任一 = 上游断线，告警不降级）：全集减可选。 */
+export const HARD_REQUIRED_CODES = Object.freeze(
+  REQUIRED_REPORT_CODES.filter((c) => !OPTIONAL_REPORT_CODES.includes(c)),
+);
 
 /**
  * 各 code 体积下限（MB）——「突然变很小 = 疑似空表」兜底。
@@ -60,12 +73,17 @@ export function beijingDayOf(value) {
  * @param {object} opts
  * @param {string} opts.todayBeijing 北京时区今天（YYYY-MM-DD），调用方用 beijingDayOf(new Date()) 求得
  * @param {Record<string, {size:number}|null>} opts.statByName 文件名 → 本地 stat（不存在传 null/缺键）
+ * @param {string[]} [opts.allowStaleCodes=[]] 显式豁免「mtime 非今天」的硬闸 code（应急通道，
+ *   如上游某表当天没导但昨天份数据有效仍要发布）。只豁免新鲜度：字节不一致 / 体积骤降仍是 error。
+ *   watcher 自动路径不透传本参数——断线闸长期不松。
  * @returns {{ok:boolean, issues:Array<{level:'error'|'warn', code:string|null, message:string}>, reports:Array<object>}}
- *   reports 仅含通过「存在性」检查的必需 code 报表（供后续分发）；issues 有 error 即 ok=false。
+ *   reports = 应分发的报表（硬闸 code 通过检查者 + 可选 code 完全健康者）；issues 有 error 即 ok=false。
+ *   可选 code（04 厂牌）任何异常 → warn + 从 reports 剔除（跳过分发保留本地旧维表），不产生 error。
  */
-export function evaluateManifestReports(manifest, { todayBeijing, statByName }) {
+export function evaluateManifestReports(manifest, { todayBeijing, statByName, allowStaleCodes = [] }) {
   const issues = [];
   const err = (code, message) => issues.push({ level: 'error', code, message });
+  const warn = (code, message) => issues.push({ level: 'warn', code, message });
 
   if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.reports)) {
     err(null, 'manifest 结构非法：缺 reports 数组（上游导出可能中断）');
@@ -77,28 +95,45 @@ export function evaluateManifestReports(manifest, { todayBeijing, statByName }) 
 
   const reports = [];
   for (const code of REQUIRED_REPORT_CODES) {
+    const optional = OPTIONAL_REPORT_CODES.includes(code);
+    // 可选 code 的问题一律降 warn（告警 + 跳过分发，不阻塞）；硬闸 code 保持 error
+    const report = optional ? warn : err;
+    const optNote = optional ? '（可选表：跳过分发，保留本地旧维表）' : '';
+
     const r = manifest.reports.find((x) => x && x.code === code);
     if (!r) {
-      err(code, `manifest 缺 code ${code}（上游断线兜底：当天可能缺文件，禁止默默用旧数据）`);
+      report(code, `manifest 缺 code ${code}${optional ? optNote : '（上游断线兜底：当天可能缺文件，禁止默默用旧数据）'}`);
       continue;
     }
     const stat = statByName?.[r.file] ?? null;
     if (!stat) {
-      err(code, `code ${code} 本地文件缺失：${r.file}（rsync 未落地？）`);
+      report(code, `code ${code} 本地文件缺失：${r.file}（rsync 未落地？）${optNote}`);
       continue;
     }
+    let healthy = true;
     if (Number.isFinite(r.sizeBytes) && stat.size !== r.sizeBytes) {
-      err(code, `code ${code} 字节数不一致：本地 ${stat.size} ≠ manifest ${r.sizeBytes}（传输不完整或上游正在重写）`);
+      // 传输完整性问题不属于"新鲜度"，--allow-stale 不豁免
+      report(code, `code ${code} 字节数不一致：本地 ${stat.size} ≠ manifest ${r.sizeBytes}（传输不完整或上游正在重写）${optNote}`);
+      healthy = false;
     }
     const day = beijingDayOf(r.mtime);
     if (day !== todayBeijing) {
-      err(code, `code ${code} mtime 不是北京时间今天：${day ?? '(无效)'} ≠ ${todayBeijing}（上游断线，禁止默默用旧数据）`);
+      if (!optional && allowStaleCodes.includes(code)) {
+        warn(code, `code ${code} mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}）——已被 --allow-stale 显式豁免，按旧份分发`);
+        // 豁免：不影响 healthy，照常分发
+      } else {
+        report(code, `code ${code} mtime 不是北京时间今天：${day ?? '(无效)'} ≠ ${todayBeijing}${optional ? optNote : '（上游断线，禁止默默用旧数据）'}`);
+        healthy = false;
+      }
     }
     const minMB = MIN_SIZE_MB_BY_CODE[code];
     if (minMB != null && Number.isFinite(r.sizeMB) && r.sizeMB < minMB) {
-      err(code, `code ${code} 体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）`);
+      report(code, `code ${code} 体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）${optNote}`);
+      healthy = false;
     }
-    reports.push(r);
+    // 硬闸 code：即使个别检查失败也保留在 reports 之外由 ok=false 整体拦截（原语义）；
+    // 可选 code：只有完全健康才进入分发列表
+    if (!optional || healthy) reports.push(r);
   }
 
   return { ok: !issues.some((i) => i.level === 'error'), issues, reports };
@@ -112,40 +147,71 @@ export function evaluateManifestReports(manifest, { todayBeijing, statByName }) 
  * @param {object} manifest 解析后的 latest-manifest.json
  * @param {object} opts
  * @param {string} opts.todayBeijing 北京时区今天（YYYY-MM-DD）
- * @returns {{ready:boolean, issues:Array<{level:'error', code:string|null, message:string}>, reports:Array<object>}}
+ * @returns {{ready:boolean, issues:Array<{level:'error'|'warn', code:string|null, message:string}>, reports:Array<object>}}
+ *   ready 只由硬闸 code（HARD_REQUIRED_CODES）决定；可选 code（04 厂牌维表）异常 → warn
+ *   不拦就绪（否则上游 04 偶发骤降会一直拦住核心事实表的每日发布）。
  */
 export function evaluateRemoteManifest(manifest, { todayBeijing }) {
   const issues = [];
-  const err = (code, message) => issues.push({ level: 'error', code, message });
 
   if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.reports)) {
-    err(null, 'manifest 结构非法：缺 reports 数组（上游导出可能中断）');
+    issues.push({ level: 'error', code: null, message: 'manifest 结构非法：缺 reports 数组（上游导出可能中断）' });
     return { ready: false, issues, reports: [] };
   }
   if (typeof manifest.schema !== 'string' || !manifest.schema.startsWith(MANIFEST_SCHEMA_PREFIX)) {
-    err(null, `manifest schema 非预期：${manifest.schema ?? '(缺失)'}（期望前缀 ${MANIFEST_SCHEMA_PREFIX}）`);
+    issues.push({ level: 'error', code: null, message: `manifest schema 非预期：${manifest.schema ?? '(缺失)'}（期望前缀 ${MANIFEST_SCHEMA_PREFIX}）` });
   }
 
   const reports = [];
   for (const code of REQUIRED_REPORT_CODES) {
+    const optional = OPTIONAL_REPORT_CODES.includes(code);
+    const level = optional ? 'warn' : 'error';
+    const optNote = optional ? '（可选表不拦就绪）' : '';
+    const push = (message) => issues.push({ level, code, message });
+
     const r = manifest.reports.find((x) => x && x.code === code);
     if (!r) {
-      err(code, `code ${code} 未出表（manifest 缺席）`);
+      push(`code ${code} 未出表（manifest 缺席）${optNote}`);
       continue;
     }
     const day = beijingDayOf(r.mtime);
     if (day !== todayBeijing) {
-      err(code, `code ${code} mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}），未出今天的表`);
+      push(`code ${code} mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}），未出今天的表${optNote}`);
       continue;
     }
     const minMB = MIN_SIZE_MB_BY_CODE[code];
     if (minMB != null && Number.isFinite(r.sizeMB) && r.sizeMB < minMB) {
-      err(code, `code ${code} 体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）`);
+      push(`code ${code} 体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）${optNote}`);
       continue;
     }
     reports.push(r);
   }
-  return { ready: issues.length === 0, issues, reports };
+  return { ready: !issues.some((i) => i.level === 'error'), issues, reports };
+}
+
+/**
+ * 契约外「补导文件」识别（2026-07-05）：上游补导历史窗口时（实证：07-05 上午批量补导
+ * shanxi_20260624~20260703 报价单日文件），manifest 只登记「当前份」，补导文件躺在
+ * exports 目录（随 rsync 进 inbox）但不在 manifest.reports 里。本函数从 inbox 文件清单
+ * 里挑出「符合五张表命名模式、且不是 manifest 当前份」的 xlsx，交给分发层按同规则路由。
+ *
+ * 命名模式（剥省前缀后）：YYYYMMDD_0X_* 或 YYYYMMDD-YYYYMMDD_0X_*（X ∈ 1..5）。
+ * manifest / README 等非 xlsx、FineBI 残留（`xxx (1).xlsx`）天然排除。
+ *
+ * @param {string[]} inboxNames inbox 目录文件名清单
+ * @param {string[]} currentFiles manifest.reports[].file 全集（含可选 code——04 当前份
+ *   即使异常也必须排除，防止被当补导文件从侧门分发）
+ * @returns {string[]} 应补导分发的文件名（排序稳定）
+ */
+export function planBackfillFiles(inboxNames, currentFiles) {
+  const current = new Set(currentFiles || []);
+  const PATTERN = /^\d{8}(-\d{8})?_0[1-5]_.+\.xlsx$/i;
+  return (inboxNames || [])
+    .filter((n) => /\.xlsx$/i.test(n))
+    .filter((n) => !/\s?\(\d+\)\.xlsx$/i.test(n)) // 浏览器重复下载残留不入 ETL（与 daily.mjs ls() 同规则）
+    .filter((n) => !current.has(n))
+    .filter((n) => PATTERN.test(stripProvincePrefix(n)))
+    .sort();
 }
 
 /**

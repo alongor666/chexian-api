@@ -6,6 +6,9 @@ import {
   beijingDayOf,
   evaluateManifestReports,
   evaluateRemoteManifest,
+  OPTIONAL_REPORT_CODES,
+  HARD_REQUIRED_CODES,
+  planBackfillFiles,
   routeBranchCode,
   derivePolicyProvince,
   planCoverageArchive,
@@ -237,5 +240,117 @@ describe('evaluateRemoteManifest（watcher 轻量就绪探测：只看 manifest�
 
   it('manifest 结构非法 → 未就绪不抛异常', () => {
     expect(evaluateRemoteManifest(null, { todayBeijing: TODAY }).ready).toBe(false);
+  });
+});
+
+describe('可选表分层（04 厂牌低频维表：异常不阻塞，跳过分发保留旧维表 — 2026-07-05）', () => {
+  it('常量派生：可选=04，硬闸=01/02/03/05', () => {
+    expect([...OPTIONAL_REPORT_CODES]).toEqual(['04']);
+    expect([...HARD_REQUIRED_CODES]).toEqual(['01', '02', '03', '05']);
+  });
+
+  it('🔴 04 缺席 → 本地校验仍 ok（warn），04 不进分发列表', () => {
+    const reports = fullBatch().filter((r) => r.code !== '04');
+    const r = evaluateManifestReports(manifestOf(reports), { todayBeijing: TODAY, statByName: statsFor(reports) });
+    expect(r.ok).toBe(true);
+    expect(r.issues.find((i: { code: string | null }) => i.code === '04')?.level).toBe('warn');
+    expect(r.reports.map((x: { code: string }) => x.code)).toEqual(['01', '02', '03', '05']);
+  });
+
+  it('🔴 04 体积骤降（2026-07-05 实证 4.1MB）→ ok（warn）+ 跳过分发', () => {
+    const reports = fullBatch();
+    reports[3] = report('04', { sizeMB: 4.1 });
+    const r = evaluateManifestReports(manifestOf(reports), { todayBeijing: TODAY, statByName: statsFor(reports) });
+    expect(r.ok).toBe(true);
+    expect(r.reports.map((x: { code: string }) => x.code)).not.toContain('04');
+  });
+
+  it('04 mtime 停在昨天 → ok（warn）+ 跳过分发', () => {
+    const reports = fullBatch();
+    reports[3] = report('04', { mtime: '2026-07-03T01:33:00Z' });
+    const r = evaluateManifestReports(manifestOf(reports), { todayBeijing: TODAY, statByName: statsFor(reports) });
+    expect(r.ok).toBe(true);
+    expect(r.reports.map((x: { code: string }) => x.code)).not.toContain('04');
+  });
+
+  it('🔴 远程探测：04 异常不拦就绪（否则偶发骤降会拦住核心事实表发布）', () => {
+    const reports = fullBatch();
+    reports[3] = report('04', { sizeMB: 4.1 });
+    const r = evaluateRemoteManifest(manifestOf(reports), { todayBeijing: TODAY });
+    expect(r.ready).toBe(true);
+    expect(r.issues.every((i: { level: string }) => i.level === 'warn')).toBe(true);
+  });
+});
+
+describe('--allow-stale 显式豁免（仅豁免新鲜度，watcher 自动路径不透传）', () => {
+  it('02 停在昨天 + 豁免 02 → ok（warn）且 02 照常分发', () => {
+    const reports = fullBatch();
+    reports[1] = report('02', { mtime: '2026-07-03T02:31:14Z' });
+    const r = evaluateManifestReports(manifestOf(reports), {
+      todayBeijing: TODAY, statByName: statsFor(reports), allowStaleCodes: ['02'],
+    });
+    expect(r.ok).toBe(true);
+    expect(r.reports.map((x: { code: string }) => x.code)).toContain('02');
+    expect(r.issues.find((i: { code: string | null }) => i.code === '02')?.message).toContain('豁免');
+  });
+
+  it('🔴 豁免不覆盖字节不一致（传输完整性闸不松）', () => {
+    const reports = fullBatch();
+    reports[1] = report('02', { mtime: '2026-07-03T02:31:14Z' });
+    const stats = statsFor(reports);
+    stats[reports[1].file] = { size: 1 };
+    const r = evaluateManifestReports(manifestOf(reports), {
+      todayBeijing: TODAY, statByName: stats, allowStaleCodes: ['02'],
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it('豁免 02 不影响其他硬闸 code 的新鲜度拦截', () => {
+    const reports = fullBatch();
+    reports[1] = report('02', { mtime: '2026-07-03T02:31:14Z' });
+    reports[4] = report('05', { mtime: '2026-07-03T02:31:14Z' });
+    const r = evaluateManifestReports(manifestOf(reports), {
+      todayBeijing: TODAY, statByName: statsFor(reports), allowStaleCodes: ['02'],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.issues.find((i: { code: string | null }) => i.code === '05')?.level).toBe('error');
+  });
+});
+
+describe('planBackfillFiles（契约外补导文件识别 — 2026-07-05 上游补导 02 报价 0624-0703 实证）', () => {
+  const CURRENT = [
+    'shanxi_20250601-20260703_01_签单清单_定稿.xlsx',
+    'shanxi_20260703_02_报价清单_商业险.xlsx',
+    'shanxi_20250601-20260703_03_维修资源.xlsx',
+    '20260705_04_厂牌明细.xlsx',
+    'shanxi_20250601-20260703_05_理赔明细_报案时间.xlsx',
+  ];
+
+  it('识别补导的 02 历史单日文件，排除当前份与非报表文件', () => {
+    const inbox = [
+      ...CURRENT,
+      'shanxi_20260624_02_报价清单_商业险.xlsx',
+      'shanxi_20260625_02_报价清单_商业险.xlsx',
+      'latest-manifest.json',
+      'README-for-etl.md',
+    ];
+    expect(planBackfillFiles(inbox, CURRENT)).toEqual([
+      'shanxi_20260624_02_报价清单_商业险.xlsx',
+      'shanxi_20260625_02_报价清单_商业险.xlsx',
+    ]);
+  });
+
+  it('🔴 04 当前份即使被校验剔除也不从补导侧门混入（排除集=manifest 全部当前份）', () => {
+    expect(planBackfillFiles(['20260705_04_厂牌明细.xlsx'], CURRENT)).toEqual([]);
+  });
+
+  it('范围前缀补导文件（如重导历史签单段）同样识别', () => {
+    expect(planBackfillFiles(['shanxi_20240101-20250531_01_签单清单_定稿.xlsx'], CURRENT))
+      .toEqual(['shanxi_20240101-20250531_01_签单清单_定稿.xlsx']);
+  });
+
+  it('浏览器重复下载残留（`xxx (1).xlsx`）与非 01-05 编号不入 ETL', () => {
+    const inbox = ['shanxi_20260624_02_报价清单_商业险 (1).xlsx', '20260705_08_商业险续保流失公司.xlsx'];
+    expect(planBackfillFiles(inbox, CURRENT)).toEqual([]);
   });
 });
