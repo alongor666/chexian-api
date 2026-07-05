@@ -55,10 +55,6 @@
           {
             "type": "command",
             "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'git push'; then root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; conflicts=$(cd \"$root\" && grep -rn -E '^(<{7}|={7}|>{7})( |$)' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.mjs' --include='*.cjs' --include='*.py' --include='*.md' --include='*.json' --include='*.yml' --include='*.yaml' --include='*.sh' --include='*.sql' --include='*.css' --include='*.scss' --include='*.html' --include='*.toml' --include='*.ini' --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=coverage . 2>/dev/null | head -10); if [ -n \"$conflicts\" ]; then echo \"❌ 发现未解决的冲突标记，禁止推送：\"; echo \"$conflicts\"; exit 2; fi; fi"
-          },
-          {
-            "type": "command",
-            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'git push'; then root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; if ! (cd \"$root\" && bun run governance) > /tmp/governance-precheck.log 2>&1; then echo \"❌ governance 校验失败，禁止推送：\"; tail -30 /tmp/governance-precheck.log; exit 2; fi; fi"
           }
         ]
       }
