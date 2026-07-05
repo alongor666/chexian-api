@@ -61,6 +61,18 @@ function state(q: { isLoading: boolean; isError: boolean; refetch: () => unknown
   };
 }
 
+/**
+ * 在 state 基础上叠加视口门控：gated（图尚未进视口、查询暂缓）时对外恒 loading，
+ * 避免「查询 disabled → rows 为空 → 误判空态」的闪烁，滚动进视口后转真实 loading→data。
+ */
+function gatedState(
+  q: { isLoading: boolean; isError: boolean; refetch: () => unknown },
+  gated: boolean,
+  empty: boolean,
+) {
+  return state({ isLoading: q.isLoading || gated, isError: q.isError, refetch: q.refetch }, empty);
+}
+
 // ─── 维度切换 ────────────────────────────────────────────────
 /** 实体类图（01/02/03/04/09/10）可切换的分组维度；默认客户类别。 */
 export type LedgerDim = 'customer_category' | 'org_level_3' | 'coverage_combination';
@@ -73,7 +85,12 @@ export const dimLabel = (d: LedgerDim): string =>
   LEDGER_DIM_OPTIONS.find((o) => o.key === d)?.label ?? '维度';
 
 // ─── Hook ───────────────────────────────────────────────────
-export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
+/**
+ * @param revealed 视口懒触发门控集合（图 id 如 'chart-01'）。传入时，某查询仅在其驱动的
+ *   任一图已进入视口后才触发（enabled）；未触发的图对外呈 loading 骨架而非空态。
+ *   省略 / 传 null 时不设门控，全部查询挂载即触发（向后兼容原全量并发行为）。
+ */
+export function useChartLedgerData(dimension: LedgerDim = 'customer_category', revealed?: ReadonlySet<string> | null) {
   const { filters } = useGlobalFilters();
   const params = useMemo(() => buildFilterParams(filters), [filters]);
   const dLabel = dimLabel(dimension);
@@ -104,6 +121,21 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
   // 维度切换的实体图查询键含 dimension，切维度即独立取数、不与其它维度缓存串读。
   const dimKey = `${dimension}|${keyBase}`;
 
+  // ── 视口懒触发门控 ──
+  // isGated(charts)=true 表示「该查询驱动的图都还没进视口」→ 查询暂缓触发、图呈 loading。
+  // revealed 省略时恒 false（全量并发，向后兼容）。每个门控布尔随 revealed 变化，进 useMemo deps。
+  const isGated = (charts: readonly string[]): boolean =>
+    revealed != null && !charts.some((c) => revealed.has(c));
+  const gDim = isGated(['chart-01', 'chart-02', 'chart-09', 'chart-10']);
+  const gDimHeat = isGated(['chart-03']);
+  const gDimBox = isGated(['chart-04']);
+  const gOrg = isGated(['chart-12']);
+  const gWeek = isGated(['chart-05', 'chart-11']);
+  const gWaterfall = isGated(['chart-08']);
+  const gTriangle = isGated(['chart-06']);
+  const gFunnel = isGated(['chart-07']);
+  const gGrowth = isGated(['chart-12']);
+
   // ── 真实查询（每查询独立错误隔离，单图失败不拖垮整页） ──
   // qDim：实体图主查询，按所选维度（客户类别/机构/险别组合）聚合全部实体级指标，
   //       驱动 chart01/02/09/10。qDimHeat / qDimBox 为需二级维度的图单独取数。
@@ -116,15 +148,18 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         params,
         500
       ),
+    enabled: !gDim,
   });
   const qDimHeat = useQuery({
     queryKey: ['ledger', 'dimHeat', dimKey],
     queryFn: () => apiClient.getPivot([dimension, 'insurance_type'], ['earned_claim_ratio'], params, 500),
+    enabled: !gDimHeat,
   });
   const qDimBox = useQuery({
     queryKey: ['ledger', 'dimBox', dimKey],
     queryFn: () =>
       apiClient.getPivot([dimension, boxSecondary], ['avg_claim_amount', 'policy_count'], params, 500),
+    enabled: !gDimBox,
   });
   // qOrg：仅 chart12（机构 赔付率×增速四象限）用——增速数据只有机构级口径，故此图恒按机构，不随维度切换。
   const qOrg = useQuery({
@@ -136,10 +171,12 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         params,
         500
       ),
+    enabled: !gOrg,
   });
   const qWeek = useQuery({
     queryKey: ['ledger', 'week', keyBase],
     queryFn: () => apiClient.getPivot(['week_number'], ['earned_loss_frequency', 'variable_cost_ratio'], params, 100),
+    enabled: !gWeek,
   });
   const qWaterfall = useQuery({
     queryKey: ['ledger', 'waterfall', keyBase],
@@ -150,18 +187,22 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         params,
         10
       ),
+    enabled: !gWaterfall,
   });
   const qTriangle = useQuery({
     queryKey: ['ledger', 'triangle', keyBase],
     queryFn: () => apiClient.claimsDetail.lossRatioDev(claimsParams),
+    enabled: !gTriangle,
   });
   const qFunnel = useQuery({
     queryKey: ['ledger', 'funnel', keyBase],
     queryFn: () => apiClient.quoteConversion.funnel(funnelParams),
+    enabled: !gFunnel,
   });
   const qGrowth = useQuery({
     queryKey: ['ledger', 'growth', keyBase],
     queryFn: () => apiClient.performance.orgHeatmap(params),
+    enabled: !gGrowth,
   });
 
   // ── Chart 01 产能-质量矩阵（气泡）·按所选维度 ──
@@ -175,7 +216,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         r: num(r.policy_count),
       }))
       .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
-    const s = state(qDim, pts.length === 0);
+    const s = gatedState(qDim, gDim, pts.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: pts };
     const worst = [...pts].sort((a, b) => b.y - a.y)[0];
     const biggest = [...pts].sort((a, b) => b.x - a.x)[0];
@@ -189,7 +230,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         `共 ${pts.length} 个${dLabel}纳入产能-质量对照`,
       ],
     };
-  }, [qDim.data, qDim.isLoading, qDim.isError, dimension, dLabel]);
+  }, [qDim.data, qDim.isLoading, qDim.isError, gDim, dimension, dLabel]);
 
   // ── Chart 02 费用率异常散点（均值±2σ 规则）·按所选维度 ──
   const chart02: ChartResult<PointDatum[]> = useMemo(() => {
@@ -204,7 +245,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
     const sd = std(base.map((p) => p.x));
     const hi = m + 2 * sd;
     const pts: PointDatum[] = base.map((p) => ({ ...p, outlier: enoughSample && p.x > hi }));
-    const s = state(qDim, pts.length === 0);
+    const s = gatedState(qDim, gDim, pts.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: pts };
     const outliers = pts.filter((p) => p.outlier).sort((a, b) => b.x - a.x);
     return {
@@ -221,7 +262,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         ...outliers.slice(0, 2).map((o) => `${o.name}：费用率 ${formatPercent(o.x)}，保费 ${formatPremiumWan(o.y * 1e4)}万 —— 建议核实`),
       ],
     };
-  }, [qDim.data, qDim.isLoading, qDim.isError, dimension, dLabel]);
+  }, [qDim.data, qDim.isLoading, qDim.isError, gDim, dimension, dLabel]);
 
   // ── Chart 03 风险热力图（所选维度 × 险种） ──
   const chart03 = useMemo(() => {
@@ -240,7 +281,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
     // 仅取赔付率最高的前 8 个维度项，避免超表
     const orgMax = orgs.map((o) => ({ o, max: Math.max(...lines.map((l) => cell.get(`${o}|${l}`) ?? -Infinity)) }));
     const topOrgs = orgMax.filter((x) => Number.isFinite(x.max)).sort((a, b) => b.max - a.max).slice(0, 8).map((x) => x.o);
-    const s = state(qDimHeat, topOrgs.length === 0 || lines.length === 0);
+    const s = gatedState(qDimHeat, gDimHeat, topOrgs.length === 0 || lines.length === 0);
     const data = { orgs: topOrgs, lines, cell };
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data };
     // 找全表最高格
@@ -259,7 +300,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         `颜色越偏珊瑚色代表赔付率越高`,
       ],
     };
-  }, [qDimHeat.data, qDimHeat.isLoading, qDimHeat.isError, dimension, dLabel]);
+  }, [qDimHeat.data, qDimHeat.isLoading, qDimHeat.isError, gDimHeat, dimension, dLabel]);
 
   // ── Chart 04 案均赔款箱线图（所选维度内、跨二级实体分布的五数概括） ──
   const boxSecondaryLabel = boxSecondary === 'org_level_3' ? '机构' : '客户类别';
@@ -289,7 +330,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
       })
       .sort((a, b) => b.max - a.max)
       .slice(0, 5);
-    const s = state(qDimBox, boxes.length === 0);
+    const s = gatedState(qDimBox, gDimBox, boxes.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: boxes };
     const widest = [...boxes].sort((a, b) => b.max - b.min - (a.max - a.min))[0];
     return {
@@ -302,14 +343,14 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         `共 ${boxes.length} 个${dLabel}参与分布对照（${boxSecondaryLabel}数≥3）`,
       ],
     };
-  }, [qDimBox.data, qDimBox.isLoading, qDimBox.isError, dimension, dLabel, boxSecondaryLabel]);
+  }, [qDimBox.data, qDimBox.isLoading, qDimBox.isError, gDimBox, dimension, dLabel, boxSecondaryLabel]);
 
   // ── Chart 05 出险频度趋势 ──
   const chart05 = useMemo(() => {
     const rows = [...(qWeek.data?.rows ?? [])].sort((a, b) => num(a.week_number) - num(b.week_number));
     const labels = rows.map((r) => `W${num(r.week_number)}`);
     const freq = rows.map((r) => num(r.earned_loss_frequency));
-    const s = state(qWeek, freq.filter(Number.isFinite).length === 0);
+    const s = gatedState(qWeek, gWeek, freq.filter(Number.isFinite).length === 0);
     const data = { labels, freq };
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data };
     const first = freq.find(Number.isFinite) ?? 0;
@@ -325,7 +366,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         `频度拐点通常领先赔付率变化 2–3 周`,
       ],
     };
-  }, [qWeek.data, qWeek.isLoading, qWeek.isError]);
+  }, [qWeek.data, qWeek.isLoading, qWeek.isError, gWeek]);
 
   // ── Chart 06 赔款发展三角 ──
   const chart06 = useMemo(() => {
@@ -359,7 +400,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
     }
     years.sort();
     devs.sort((a, b) => a - b);
-    const s = state(qTriangle, !cohortKey || years.length === 0 || devs.length === 0);
+    const s = gatedState(qTriangle, gTriangle, !cohortKey || years.length === 0 || devs.length === 0);
     const data = { years, devs, cell };
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data };
     const latestYear = years[years.length - 1];
@@ -377,7 +418,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         `仅对角线以上有数据（未来尚未发生）`,
       ],
     };
-  }, [qTriangle.data, qTriangle.isLoading, qTriangle.isError]);
+  }, [qTriangle.data, qTriangle.isLoading, qTriangle.isError, gTriangle]);
 
   // ── Chart 07 报价转化漏斗 ──
   const chart07: ChartResult<FunnelStep[]> = useMemo(() => {
@@ -410,7 +451,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
           { name: '已承保', value: sums.l4_insured },
         ]
       : [];
-    const s = state(qFunnel, steps.length === 0);
+    const s = gatedState(qFunnel, gFunnel, steps.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: steps };
     // 找收窄最陡的一层
     let worstIdx = 1, worstDrop = 1;
@@ -431,7 +472,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
           : `${st.name}：${st.value.toLocaleString()}（较上一步 ${formatPercent((st.value / (steps[i - 1].value || 1)) * 100)}）`
       ),
     };
-  }, [qFunnel.data, qFunnel.isLoading, qFunnel.isError]);
+  }, [qFunnel.data, qFunnel.isLoading, qFunnel.isError, gFunnel]);
 
   // ── Chart 08 承保利润瀑布 ──
   const chart08 = useMemo(() => {
@@ -453,7 +494,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
       { label: '费用及其他', value: -wan(expenseOther) },
     ];
     const marginWan = wan(M);
-    const s = state(qWaterfall, P === 0);
+    const s = gatedState(qWaterfall, gWaterfall, P === 0);
     const data = { steps, marginWan };
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data };
     const marginRate = P ? (M / P) * 100 : 0;
@@ -467,7 +508,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         `承保边际 ${formatPremiumWan(M)}万，边际率 ${formatPercent(marginRate)}`,
       ],
     };
-  }, [qWaterfall.data, qWaterfall.isLoading, qWaterfall.isError]);
+  }, [qWaterfall.data, qWaterfall.isLoading, qWaterfall.isError, gWaterfall]);
 
   // ── Chart 09 亏损帕累托（按所选维度） ──
   const chart09: ChartResult<ParetoBar[]> = useMemo(() => {
@@ -484,7 +525,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
       acc += b.value;
       return { ...b, cumPct: total ? (acc / total) * 100 : 0 };
     });
-    const s = state(qDim, bars.length === 0);
+    const s = gatedState(qDim, gDim, bars.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: bars };
     const idx80 = bars.findIndex((b) => b.cumPct >= 80);
     const top3 = bars.slice(0, 3).reduce((a, b) => a + b.value, 0);
@@ -498,7 +539,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         `头部亏损：${bars.slice(0, 3).map((b) => b.name).join(' / ')}`,
       ],
     };
-  }, [qDim.data, qDim.isLoading, qDim.isError, dimension, dLabel]);
+  }, [qDim.data, qDim.isLoading, qDim.isError, gDim, dimension, dLabel]);
 
   // ── Chart 10 结构树图（按所选维度） ──
   const chart10: ChartResult<TreemapCell[]> = useMemo(() => {
@@ -509,7 +550,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
       .sort((a, b) => b.value - a.value);
     const total = items.reduce((a, b) => a + b.value, 0);
     const cells: TreemapCell[] = items.map((it) => ({ ...it, share: total ? (it.value / total) * 100 : 0 }));
-    const s = state(qDim, cells.length === 0);
+    const s = gatedState(qDim, gDim, cells.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: cells };
     const top = cells[0];
     return {
@@ -518,7 +559,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
       conclusion: `${top.name}贡献 ${formatPercent(top.share)} 保费，是绝对压舱石；业务组合共 ${cells.length} 个${dLabel}。`,
       points: cells.slice(0, 3).map((c) => `${c.name}：${formatPercent(c.share)}（${formatPremiumWan(c.value * 1e4)}万）`),
     };
-  }, [qDim.data, qDim.isLoading, qDim.isError, dimension, dLabel]);
+  }, [qDim.data, qDim.isLoading, qDim.isError, gDim, dimension, dLabel]);
 
   // ── Chart 11 变动成本率控制图（CL±2σ 规则） ──
   const chart11 = useMemo(() => {
@@ -530,7 +571,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
     const sd = std(finite);
     const ucl = cl + 2 * sd;
     const lcl = cl - 2 * sd;
-    const s = state(qWeek, finite.length === 0);
+    const s = gatedState(qWeek, gWeek, finite.length === 0);
     const data = { labels, vals, cl, ucl, lcl };
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data };
     const breaches = vals.filter((v) => Number.isFinite(v) && (v > ucl || v < lcl)).length;
@@ -546,7 +587,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         `控制限 = 历史均值 ± 2 倍标准差（规则）`,
       ],
     };
-  }, [qWeek.data, qWeek.isLoading, qWeek.isError]);
+  }, [qWeek.data, qWeek.isLoading, qWeek.isError, gWeek]);
 
   // ── Chart 12 赔付率-保费增速四象限 ──
   const chart12: ChartResult<PointDatum[]> = useMemo(() => {
@@ -570,7 +611,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
       if (org && gr && Number.isFinite(y)) pts.push({ name: org, x: gr.g, y });
     });
     const empty = pts.length === 0;
-    const loading = qOrg.isLoading || qGrowth.isLoading;
+    const loading = qOrg.isLoading || qGrowth.isLoading || gOrg || gGrowth;
     const error = qOrg.isError || qGrowth.isError;
     const s = {
       loading,
@@ -596,7 +637,7 @@ export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
         `风险扩张（右上）${risk} 家 —— 控制增速、优化结构`,
       ],
     };
-  }, [qOrg.data, qOrg.isLoading, qOrg.isError, qGrowth.data, qGrowth.isLoading, qGrowth.isError]);
+  }, [qOrg.data, qOrg.isLoading, qOrg.isError, qGrowth.data, qGrowth.isLoading, qGrowth.isError, gOrg, gGrowth]);
 
   return {
     chart01, chart02, chart03, chart04, chart05, chart06,

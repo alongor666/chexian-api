@@ -13,6 +13,7 @@ import React, { useEffect, useState } from 'react';
 import { cn, colorClasses, fontStyles, cardStyles } from '@/shared/styles';
 import { CARD_META, FRAMEWORK, STAGES } from './ledgerMeta';
 import { useChartLedgerData, LEDGER_DIM_OPTIONS, type LedgerDim } from './hooks/useChartLedgerData';
+import { useRevealedCharts } from './hooks/useRevealedCharts';
 import { LedgerCard, ActionShapeIcon } from './components/LedgerCard';
 import {
   ChannelMatrixChart,
@@ -30,6 +31,9 @@ import {
   RenewalFunnel,
   InsuranceTreemap,
 } from './components/CustomPanels';
+
+/** 12 图卡 DOM id（与 CARD_META / LedgerCard 的 id 一致），供视口懒触发门控观察。 */
+const CHART_IDS = Array.from({ length: 12 }, (_, i) => `chart-${String(i + 1).padStart(2, '0')}`);
 
 const NAV = [
   { id: 'framework', num: '§0', label: '框架' },
@@ -116,7 +120,9 @@ const DimSwitcher: React.FC<{ value: LedgerDim; onChange: (d: LedgerDim) => void
 
 export const ChartLedgerPage: React.FC = () => {
   const [dim, setDim] = useState<LedgerDim>('customer_category');
-  const d = useChartLedgerData(dim);
+  // 视口懒触发：图进视口（含 600px 预取余量）才触发其查询，首屏不再一次性并发 9 路查询。
+  const revealed = useRevealedCharts(CHART_IDS);
+  const d = useChartLedgerData(dim, revealed);
   const active = useActiveSection();
 
   // 图 id → 渲染节点

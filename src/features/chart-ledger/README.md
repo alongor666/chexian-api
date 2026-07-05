@@ -34,7 +34,8 @@
 
 - `ChartLedgerPage.tsx` — 页面装配（Hero + 三层框架 + 5 阶段 × 12 卡片 + 反方观点）
 - `ledgerMeta.ts` — 静态叙述（框架/阶段/卡片「怎么看+动作」；结论句由数据动态派生）
-- `hooks/useChartLedgerData.ts` — 10 个真实查询 + 逐图整形 + 结论派生（每查询错误隔离）
+- `hooks/useChartLedgerData.ts` — 9 路真实查询 + 逐图整形 + 结论派生（每查询错误隔离）；接受视口门控集合，未进视口的图查询暂缓触发、对外呈 loading
+- `hooks/useRevealedCharts.ts` — 视口懒触发门控：图进视口（含 600px 预取余量）才点亮其查询，首屏不再一次性并发 9 路查询；无 IntersectionObserver 时降级为全量并发
 - `components/EchartsPanels.tsx` — ECharts 面板（气泡/散点/折线/瀑布/帕累托/控制图/四象限）
 - `components/CustomPanels.tsx` — HTML/SVG 面板（热力图/发展三角/箱线图/漏斗/树图，避免膨胀共享 echarts bundle）
 - `components/LedgerCard.tsx` — 单卡外壳
