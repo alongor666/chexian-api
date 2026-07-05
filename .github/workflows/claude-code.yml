@@ -101,7 +101,7 @@ jobs:
           unzip -o /tmp/duckdb_cli.zip -d "$HOME/.duckdb/bin"
           echo "$HOME/.duckdb/bin" >> "$GITHUB_PATH"
           "$HOME/.duckdb/bin/duckdb" --version
-          python3 -m pip install --quiet "duckdb==${DUCKDB_MINOR}.*" "pandas<3"
+          python3 -m pip install --quiet "duckdb==${DUCKDB_MINOR}.*" pandas
 
       - name: Run tests after changes
         if: success()

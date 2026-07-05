@@ -249,7 +249,9 @@ describe('assertNoPolicyCurrentOverlap', () => {
 // 派生轴（数据权威）测试 — Phase 4 codex 闸-1 P1.4 / P2 #3b（真 parquet fixture，需 duckdb）
 // ════════════════════════════════════════════════════════════════════════════
 
-describe.skipIf(!HAS_DUCKDB)('resolveBranchFromParquet（派生轴权威·真 parquet）', () => {
+// timeout 30s：writeParquetFixture 每次 spawn python（pandas 冷启动 1-2s），全量并发争用下
+// 单用例可超 vitest 默认 5s（本地实测 7.5s 一次；单跑 <1s）——显式放宽而非靠重试掩盖
+describe.skipIf(!HAS_DUCKDB)('resolveBranchFromParquet（派生轴权威·真 parquet）', { timeout: 30_000 }, () => {
   let dir;
   afterEach(() => {
     if (dir) rmSync(dir, { recursive: true, force: true });
@@ -291,7 +293,7 @@ describe.skipIf(!HAS_DUCKDB)('resolveBranchFromParquet（派生轴权威·真 pa
   });
 });
 
-describe.skipIf(!HAS_DUCKDB)('detectPolicyCurrentOverlap（派生轴·真 parquet）', () => {
+describe.skipIf(!HAS_DUCKDB)('detectPolicyCurrentOverlap（派生轴·真 parquet）', { timeout: 30_000 }, () => {
   let dir;
   afterEach(() => {
     if (dir) rmSync(dir, { recursive: true, force: true });

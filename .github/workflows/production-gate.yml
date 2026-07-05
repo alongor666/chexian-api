@@ -113,8 +113,11 @@ jobs:
           unzip -o /tmp/duckdb_cli.zip -d "$HOME/.duckdb/bin"
           echo "$HOME/.duckdb/bin" >> "$GITHUB_PATH"
           "$HOME/.duckdb/bin/duckdb" --version
-          # pandas 锁 2.x：duckdb 1.4 LTS 对 pandas 3 的兼容未验证；测试仅用 DataFrame 写 parquet fixture
-          python3 -m pip install --quiet "duckdb==${DUCKDB_MINOR}.*" "pandas<3"
+          # pandas 不设上界：与 requirements-test.txt（pandas>=2.0.0，实际解析 3.x）同源。
+          # 本步 pip 落 user-site，在 sys.path 中优先于后续 Setup Python 的 site-packages——
+          # 若在此锁 pandas<3 会遮蔽 pytest 步骤的 pandas 3，致 customer_flow '<NA>' 断言失败
+          # （2026-07-05 #928×#929 集成冲突实证，main 红过一轮）。
+          python3 -m pip install --quiet "duckdb==${DUCKDB_MINOR}.*" pandas
           python3 -c "import duckdb, pandas; print('python duckdb', duckdb.__version__, '/ pandas', pandas.__version__)"
 
       - name: Unit Tests
