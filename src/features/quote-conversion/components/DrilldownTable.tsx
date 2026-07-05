@@ -5,10 +5,18 @@ import { formatCount } from '../../../shared/utils/formatters';
 import { useQuoteDrilldown } from '../hooks/useQuoteConversion';
 import type { QuoteFilters, DrillLevel } from '../types';
 import { isBranchSummaryRow } from '../../../shared/utils/branchDisplay';
+import { DIMENSION_LABELS } from '../../../shared/config/drilldown-dimensions';
 
 interface Props {
   filters: QuoteFilters;
 }
+
+/** 下钻层级 → SSOT 维度键；列头标签从 DIMENSION_LABELS 派生，杜绝 机构/团队 文案漂移 */
+const LEVEL_DIMENSION_KEY: Record<DrillLevel, 'org_level_3' | 'team' | 'salesman'> = {
+  org: 'org_level_3',
+  team: 'team',
+  salesman: 'salesman',
+};
 
 interface BreadcrumbItem {
   level: DrillLevel;
@@ -99,7 +107,7 @@ export function DrilldownTable({ filters }: Props) {
             <thead>
               <tr>
                 <th className={tableStyles.headerCell}>
-                  {currentLevel.level === 'org' ? '机构' : currentLevel.level === 'team' ? '团队' : '业务员'}
+                  {DIMENSION_LABELS[LEVEL_DIMENSION_KEY[currentLevel.level]]}
                 </th>
                 <th className={`${tableStyles.headerCell} text-right`}>报价量</th>
                 <th className={`${tableStyles.headerCell} text-right`}>承保量</th>

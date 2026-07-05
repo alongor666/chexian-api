@@ -395,14 +395,14 @@ export const CrossSellAnalysisPanel: React.FC<CrossSellAnalysisPanelProps> = ({
   const [showHeatmapPicker, setShowHeatmapPicker] = useState(false);
   const [pendingHeatmapRow, setPendingHeatmapRow] = useState<string | null>(null);
 
-  const HEATMAP_DRILL_DIMENSIONS: { key: CrossSellHeatmapDimension; label: string }[] = [
-    { key: 'org_level_3', label: '三级机构' },
-    { key: 'team', label: '团队' },
-    { key: 'salesman', label: '业务员' },
-    { key: 'coverage_combination', label: '险别组合' },
-    { key: 'energy_type', label: '能源类型' },
-    { key: 'business_nature', label: '新转续' },
-  ];
+  // 标签派生自 CROSS_SELL_HEATMAP_DIMENSION_LABELS（← SSOT drilldown-dimensions），杜绝 team 文案页内漂移
+  const HEATMAP_DRILL_DIMENSIONS = useMemo<{ key: CrossSellHeatmapDimension; label: string }[]>(
+    () =>
+      (Object.entries(CROSS_SELL_HEATMAP_DIMENSION_LABELS) as [CrossSellHeatmapDimension, string][]).map(
+        ([key, label]) => ({ key, label }),
+      ),
+    [],
+  );
 
   const handleHeatmapRowClick = (rowLabel: string) => {
     setPendingHeatmapRow(rowLabel);

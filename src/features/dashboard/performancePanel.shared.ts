@@ -16,7 +16,7 @@ import type {
   PerformanceTimePeriod,
   PerformanceSegmentTag,
 } from './hooks/usePerformanceSummary';
-import type { HeatmapDimension } from './hooks/usePerformanceOrgHeatmap';
+import { HEATMAP_DIMENSION_LABELS, type HeatmapDimension } from './hooks/usePerformanceOrgHeatmap';
 import type { HeatmapMetric } from './performance/PerformanceOrgHeatmapV2';
 import type { PerformanceHeatmapSelection } from './utils/performanceHeatmapSelection';
 
@@ -44,17 +44,16 @@ export function resolvePerformanceDrilldownPrefetched(
 
 export const PERFORMANCE_HEATMAP_PERIOD_COUNT = 15;
 
-/** 热力图下钻可选维度，静态常量（模块级，避免组件每次渲染重建数组） */
-export const PERF_HEATMAP_DRILL_DIMENSIONS: { key: HeatmapDimension; label: string }[] = [
-  { key: 'org_level_3', label: '三级机构' },
-  { key: 'team', label: '团队' },
-  { key: 'salesman', label: '业务员' },
-  { key: 'customer_category', label: '客户类别' },
-  { key: 'coverage_combination', label: '险别组合' },
-  { key: 'energy_type', label: '能源类型' },
-  { key: 'business_nature', label: '新转续' },
-  { key: 'insurance_grade', label: '风险评分' },
-];
+/**
+ * 热力图下钻可选维度，静态常量（模块级，避免组件每次渲染重建数组）。
+ * 标签派生自 HEATMAP_DIMENSION_LABELS（← SSOT drilldown-dimensions），
+ * 与同页维度标签同源，杜绝 team/insurance_grade 文案页内漂移。
+ */
+export const PERF_HEATMAP_DRILL_DIMENSIONS: { key: HeatmapDimension; label: string }[] =
+  (Object.keys(HEATMAP_DIMENSION_LABELS) as HeatmapDimension[]).map((key) => ({
+    key,
+    label: HEATMAP_DIMENSION_LABELS[key],
+  }));
 
 function getPerformanceHeatmapPeriodUnit(timePeriod: PerformanceTimePeriod): string {
   switch (timePeriod) {

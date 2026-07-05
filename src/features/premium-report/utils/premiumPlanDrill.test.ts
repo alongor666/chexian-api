@@ -121,7 +121,7 @@ describe('computeDrillUpDisplayLevel · 上钻展示层级（parentIdx+1，末�
 describe('makeDrillStepLabel · 面包屑标签', () => {
   it('非业务员层级直接用原值', () => {
     expect(makeDrillStepLabel('org', '机构A')).toBe('三级机构: 机构A');
-    expect(makeDrillStepLabel('team', '团队B')).toBe('团队: 团队B');
+    expect(makeDrillStepLabel('team', '团队B')).toBe('销售团队: 团队B');
     expect(makeDrillStepLabel('customer_category', '非营客车')).toBe('客户类别: 非营客车');
   });
 
