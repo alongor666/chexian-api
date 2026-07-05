@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（58 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（57 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -69,7 +69,7 @@
 - 2026-07-03-claude-6e93c9 — patrol 巡检报告路由(/api/query/patrol/
 - 2026-07-03-claude-6ef9cd `PARTIAL` — 安全审计M2
 
-**P3（16 项）**
+**P3（15 项）**
 
 - B247 — 图表 hex 色值审计
 - B254 — wecom_smartsheet state 生命周期管理（missing_vins T
@@ -85,7 +85,6 @@
 - 2026-07-03-claude-1200d2 — 安全审计L1
 - 2026-07-03-claude-b714a7 — 安全审计L5
 - 2026-07-03-claude-fdaa10 — 安全审计L2
-- 2026-07-04-claude-d16230 — pre-commit 大文件闸误拦 BACKLOG_LOG.jsonl
 - 2026-07-05-claude-fed2b1 — 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，
 
 ---
@@ -150,5 +149,4 @@
 | 2026-07-03-claude-6ef9cd | 2026-07-03 | 安全 | @claude | 安全审计M2：生产SPA(Nginx托管)缺Content-Security-Policy响应头。Express已配CSP+已移除unsafe-eval(B320)，但前端SPA由Nginx从/var/www/chexian/frontend/dist伺服，当前无CSP(csp.ts:19注释自认follow-up)。前端零dangerouslySetInnerHTML故实际风险低,属纵深防御缺口。本次已给deploy/nginx-fullstack.conf加CSP基线(模板,不自动部署);生产落地需在conf.d/chexian.conf(本地增量)监控窗口应用+对着已构建SPA测试(防script-src过严白屏)。来源:2026-07-03安全审计 | P2 | PARTIAL | N/A | server/src/config/csp.ts | deploy/nginx-fullstack.conf + deploy/nginx.conf 的 location=/index.html 已加 CSP 基线(default-src 'self'+对齐Express connect-src+echarts img blob/data);governance 52/52通过。残留:生产 conf.d/chexian.conf 监控窗口应用+对着已构建SPA验证不白屏 |
 | 2026-07-03-claude-b714a7 | 2026-07-03 | 安全 | @claude | 安全审计L5：诊断报告(diagnose-*skills)生成HTML时,数据字段(机构名/业务员名)的转义依赖skill层;配合报告CSP的script-src 'unsafe-inline',存在理论性数据驱动XSS(数据来自内部BI字段结构化,可利用性极低)。建议报告生成器对文本字段统一HTML转义。skill在~/.claude/skills/需走crystallize-skill改仓库。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | N/A | check-merged-drift 命中 PR #874 系误报：该 PR 未动 diagnose-* skills HTML 转义，保持 PROPOSED <br>架构价值审计（2026-07-04）：技术修复=一个 escape 工具函数（5 分钟），但须走 crystallize-skill 改仓库流程（开销远大于修复）；处置=不单独走流程，等下次因其他需求改 chexian-report-shell 时夹带；数据源为内部 BI 字段，可利用性极低 |
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/health无脚本,故实际无功能影响。收紧到nonce/hash策略是纯纵深加固,需先确认无Express服务的内联脚本依赖。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | server/src/config/csp.ts | 架构价值审计冻结（2026-07-04）：Express csp.ts 的 unsafe-inline 实测无功能影响（唯一 HTML 响应 reports.ts 有独立 REPORT_HTML_CSP；SPA 的 CSP 基线已由 PR #874 下发 nginx 模板，生产应用由 6ef9cd 追踪）；unsafe-inline→nonce 需重构全部内联脚本，成本高当前收益零。触发条件=SPA CSP 生产落地后仍有内联脚本注入实证 |
-| 2026-07-04-claude-d16230 | 2026-07-04 | 工程/DevEx | @claude | pre-commit 大文件闸误拦 BACKLOG_LOG.jsonl：账本 531KB 越过 500KB 阈值（append-only 只增不减，今后每次记账提交都会撞闸被迫 --no-verify）。修法=scripts/hooks/pre-commit 大文件段加 SIZE_ALLOWLIST 白名单（含 BACKLOG_LOG.jsonl，git 跟踪的事件账本非生成产物）；注意 hook 源文件禁止在 worktree 改（worktree-setup.md §B），须独立 PR 从主仓路径评审合入 | P3 | PROPOSED | N/A | scripts/hooks/pre-commit |  |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功能对等覆盖 v1 场景，再切 daily.mjs 调度并删 v1。承接 B253 弃置结论。【账】做完删 v1 脚本+DEFAULT_SCHEMA 硬编码/加 0 新机制/触发条件=确认 v2 功能对等 | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ |  |
