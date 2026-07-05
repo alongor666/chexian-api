@@ -37,6 +37,15 @@ export function getKpiPlanConfigPath(): string {
   return path.resolve(SERVER_ROOT, '../数据管理/warehouse/dim/业务员归属与规划/kpi_plan_config.json');
 }
 
+/**
+ * 固定成本参数 SSOT 文件路径（数据管理/config/fixed-cost-params.json）。
+ * ⚠️ 该文件仅在开发/CI 全仓 checkout 下存在，不部署到 VPS（sync-vps 只推 parquet）。
+ * 故仅供离线脚本 / 单测读取（如附加税费率漂移测试），生产运行时禁止依赖它。
+ */
+export function getFixedCostParamsPath(): string {
+  return path.resolve(SERVER_ROOT, '../数据管理/config/fixed-cost-params.json');
+}
+
 // ── 赔案明细 Parquet 路径（分区目录 glob，本地优先，VPS 回退）──
 
 export function getClaimsDetailDirs(): string[] {

@@ -559,7 +559,7 @@ export const costMetrics: readonly MetricDefinition[] = [
     id: 'fixed_cost_amount',
     timeWindow: 'any',
     additive: false,
-    version: '1.0.0',
+    version: '1.0.1',
     name: '固定成本额',
     category: 'cost',
     tags: ['cost', 'fixed-cost'],
@@ -586,7 +586,10 @@ export const costMetrics: readonly MetricDefinition[] = [
         assertions: { fixed_cost_amount: { op: 'gte', value: 0 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-04-02', changes: '新增：固定成本三分项绝对值，参数来自 fixed-cost-params.json' }],
+    changelog: [
+      { version: '1.0.0', date: '2026-04-02', changes: '新增：固定成本三分项绝对值，参数来自 fixed-cost-params.json' },
+      { version: '1.0.1', date: '2026-07-05', changes: 'B274：附加税费率(1.5%)统一由 fixed-cost-params.json SSOT 派生（server/src/config/fixed-cost-params.ts 常量，earned-premium-detail.ts 修正离群硬编码 1.6%→1.5%）。税率动态，暂定值待精算口径' },
+    ],
   },
 
   {

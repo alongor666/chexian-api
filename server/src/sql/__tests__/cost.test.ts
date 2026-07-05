@@ -441,9 +441,10 @@ describe('generateMonthlyExpenseQuery', () => {
     expect(sql).toContain('total_expense');
   });
 
-  it('税率 1.6%', () => {
+  it('附加税费率 1.5%（B274：引用 fixed-cost-params.json SSOT，修正离群硬编码 0.016）', () => {
     const sql = generateMonthlyExpenseQuery();
-    expect(sql).toContain('SUM(premium) * 0.016');
+    expect(sql).toContain('SUM(premium) * 0.015');
+    expect(sql).not.toContain('0.016');
   });
 
   it('覆盖 2025 + 2026 两年', () => {
