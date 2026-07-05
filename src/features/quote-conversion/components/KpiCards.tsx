@@ -8,7 +8,7 @@ interface Props {
   data: QuoteKpi | undefined;
   isLoading: boolean;
   /**
-   * 自 PR #150（2026-04-03）起，VersionAView / VersionBView 均以 'oldCar' 调用，
+   * 自 PR #150（2026-04-03）起，报价转化 VersionBView 以 'oldCar' 调用，
    * 无消费者传入其他取值，原 'default' 分支已不可达并删除（BACKLOG 2026-06-11-claude-ee63ee）。
    * 类型收窄为唯一实际使用的字面量。
    */

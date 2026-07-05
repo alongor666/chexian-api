@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { colorClasses, inputStyles, cn } from '../../../shared/styles';
 import { CollapsibleFilterSection } from '@/shared/components/filters/CollapsibleFilterSection';
-import type { QuoteConversionVersion, QuoteFilters } from '../types';
+import type { QuoteFilters } from '../types';
 import {
   CAT_NON_COMMERCIAL_PERSONAL,
   CAT_NON_COMMERCIAL_TRUCK,
@@ -12,7 +12,6 @@ import {
 } from '../../../shared/config/customer-categories';
 
 interface Props {
-  version: QuoteConversionVersion;
   filters: QuoteFilters;
   onChange: (filters: QuoteFilters) => void;
 }
@@ -79,7 +78,7 @@ function SelectField<T extends string>({ label, value, placeholder, options, onC
   );
 }
 
-export function GlobalFilters({ version, filters, onChange }: Props) {
+export function GlobalFilters({ filters, onChange }: Props) {
   const [quickKey, setQuickKey] = useState<string | null>(null);
   const update = (patch: Partial<QuoteFilters>) => {
     setQuickKey(null);
@@ -92,32 +91,10 @@ export function GlobalFilters({ version, filters, onChange }: Props) {
   };
 
   const hasFilters = Object.values(filters).some((value) => value !== undefined && value !== '');
-  const topicFilterSummaries = [
-    filters.isTelemarketing ? `电销: ${filters.isTelemarketing}` : null,
-    filters.isNewEnergy ? `新能源: ${filters.isNewEnergy}` : null,
-    filters.isTransferred ? `过户车: ${filters.isTransferred}` : null,
-    filters.riskGrade ? `车险分等级: ${filters.riskGrade}` : null,
-    filters.ncdMin ? `NCD 最小值: ${filters.ncdMin}` : null,
-    filters.ncdMax ? `NCD 最大值: ${filters.ncdMax}` : null,
-  ].filter((value): value is string => Boolean(value));
 
   return (
     <CollapsibleFilterSection id="quote-conversion-filters" title="筛选条件" defaultExpanded={true}>
       <div className="space-y-3">
-        {version === 'A' && topicFilterSummaries.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`text-xs font-medium ${colorClasses.text.neutralMuted}`}>专题筛选已生效</span>
-            {topicFilterSummaries.map((summary) => (
-              <span
-                key={summary}
-                className={`inline-flex items-center rounded-full bg-warning-bg px-2 py-1 text-[11px] font-medium ${colorClasses.text.warning}`}
-              >
-                {summary}
-              </span>
-            ))}
-          </div>
-        )}
-
         <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-1">
           <span className={`text-xs ${colorClasses.text.neutralMuted}`}>起始</span>
@@ -188,65 +165,61 @@ export function GlobalFilters({ version, filters, onChange }: Props) {
           onChange={(insuranceCombo) => update({ insuranceCombo })}
         />
 
-        {version === 'B' && (
-          <>
-            <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-700 hidden sm:block" />
-            <SelectField
-              label="电销"
-              value={filters.isTelemarketing ?? ''}
-              placeholder="全部电销"
-              options={FILTER_OPTIONS.telemarketingOptions}
-              onChange={(isTelemarketing) => update({ isTelemarketing })}
-            />
-            <SelectField
-              label="新能源"
-              value={filters.isNewEnergy ?? ''}
-              placeholder="全部新能源"
-              options={FILTER_OPTIONS.yesNo}
-              onChange={(isNewEnergy) => update({ isNewEnergy })}
-            />
-            <SelectField
-              label="过户车"
-              value={filters.isTransferred ?? ''}
-              placeholder="全部过户车"
-              options={FILTER_OPTIONS.yesNo}
-              onChange={(isTransferred) => update({ isTransferred })}
-            />
-            <SelectField
-              label="车险分等级"
-              value={filters.riskGrade ?? ''}
-              placeholder="全部等级"
-              options={FILTER_OPTIONS.riskGrades}
-              onChange={(riskGrade) => update({ riskGrade })}
-            />
-            <label className="flex items-center gap-1">
-              <span className={`text-xs whitespace-nowrap ${colorClasses.text.neutralMuted}`}>NCD 最小值</span>
-              <input
-                aria-label="NCD 最小值"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                value={filters.ncdMin ?? ''}
-                onChange={(e) => update({ ncdMin: e.target.value || undefined })}
-                className={selectCls}
-              />
-            </label>
-            <label className="flex items-center gap-1">
-              <span className={`text-xs whitespace-nowrap ${colorClasses.text.neutralMuted}`}>NCD 最大值</span>
-              <input
-                aria-label="NCD 最大值"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                value={filters.ncdMax ?? ''}
-                onChange={(e) => update({ ncdMax: e.target.value || undefined })}
-                className={selectCls}
-              />
-            </label>
-          </>
-        )}
+        <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-700 hidden sm:block" />
+        <SelectField
+          label="电销"
+          value={filters.isTelemarketing ?? ''}
+          placeholder="全部电销"
+          options={FILTER_OPTIONS.telemarketingOptions}
+          onChange={(isTelemarketing) => update({ isTelemarketing })}
+        />
+        <SelectField
+          label="新能源"
+          value={filters.isNewEnergy ?? ''}
+          placeholder="全部新能源"
+          options={FILTER_OPTIONS.yesNo}
+          onChange={(isNewEnergy) => update({ isNewEnergy })}
+        />
+        <SelectField
+          label="过户车"
+          value={filters.isTransferred ?? ''}
+          placeholder="全部过户车"
+          options={FILTER_OPTIONS.yesNo}
+          onChange={(isTransferred) => update({ isTransferred })}
+        />
+        <SelectField
+          label="车险分等级"
+          value={filters.riskGrade ?? ''}
+          placeholder="全部等级"
+          options={FILTER_OPTIONS.riskGrades}
+          onChange={(riskGrade) => update({ riskGrade })}
+        />
+        <label className="flex items-center gap-1">
+          <span className={`text-xs whitespace-nowrap ${colorClasses.text.neutralMuted}`}>NCD 最小值</span>
+          <input
+            aria-label="NCD 最小值"
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            value={filters.ncdMin ?? ''}
+            onChange={(e) => update({ ncdMin: e.target.value || undefined })}
+            className={selectCls}
+          />
+        </label>
+        <label className="flex items-center gap-1">
+          <span className={`text-xs whitespace-nowrap ${colorClasses.text.neutralMuted}`}>NCD 最大值</span>
+          <input
+            aria-label="NCD 最大值"
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            value={filters.ncdMax ?? ''}
+            onChange={(e) => update({ ncdMax: e.target.value || undefined })}
+            className={selectCls}
+          />
+        </label>
 
         {hasFilters && (
           <button
