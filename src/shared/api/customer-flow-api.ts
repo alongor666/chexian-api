@@ -3,8 +3,10 @@
  *
  * 挂载点：apiClient.customerFlow.*
  * 通过 ApiTransport 句柄复用单实例传输状态（不新建第二个 ApiClient）。
- * 5 个端点均为纯 /query/ GET，统一经 queryGet 收口（替代原 client.ts 里
+ * 4 个端点均为纯 /query/ GET，统一经 queryGet 收口（替代原 client.ts 里
  * 「buildQueryString + request」模板；metadata 无参亦经 queryGet，URL 等价）。
+ * 注：后端 /customer-flow/inflow（转入来源）当前源已移除转入字段、前端页面未消费，
+ * 故此处不再暴露 inflow() 死封装；后端路由保留服务 agent 诊断链。
  */
 
 import { QUERY_ROUTES } from './routes';
@@ -16,11 +18,6 @@ export class CustomerFlowApi {
   /** 客户来源去向 - 汇总 */
   summary(params?: Record<string, string>): Promise<any> {
     return this.t.queryGet<any>(QUERY_ROUTES.CUSTOMER_FLOW.SUMMARY, params);
-  }
-
-  /** 客户来源去向 - 转入来源 */
-  inflow(params?: Record<string, string>): Promise<any[]> {
-    return this.t.queryGet<any[]>(QUERY_ROUTES.CUSTOMER_FLOW.INFLOW, params);
   }
 
   /** 客户来源去向 - 流出去向 */

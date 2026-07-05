@@ -99,7 +99,6 @@ export const QUERY_ROUTES = {
   // 客户来源去向
   CUSTOMER_FLOW: {
     SUMMARY: 'customer-flow/summary',
-    INFLOW: 'customer-flow/inflow',
     OUTFLOW: 'customer-flow/outflow',
     TREND: 'customer-flow/trend',
     METADATA: 'customer-flow/metadata',

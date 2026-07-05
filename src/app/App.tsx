@@ -89,9 +89,6 @@ const ReportsPage = lazy(() =>
 const SpecialtyPage = lazy(() =>
   import('../features/pages/SpecialtyPage').then((m) => ({ default: m.SpecialtyPage }))
 );
-const ReportTemplatesPanel = lazy(() =>
-  import('../features/report/components/ReportTemplatesPanel').then((m) => ({ default: m.ReportTemplatesPanel }))
-);
 const MotoCostPage = lazy(() =>
   import('../features/moto-cost').then((m) => ({ default: m.MotoCostPage }))
 );
@@ -275,18 +272,6 @@ function App() {
                   <Route path="cross-sell" element={<Navigate to="/specialty?tab=cross-sell" replace />} />
                   <Route path="comparison" element={<Navigate to="/growth" replace />} />
                   <Route path="comprehensive-analysis" element={<Navigate to="/cost?view=comprehensive" replace />} />
-
-                  {/* 报表模板 - 不需要数据守卫 */}
-                  <Route
-                    path="templates"
-                    element={
-                      <RouteAccessGuard routePath="/templates">
-                        <LazyRoute>
-                          <ReportTemplatesPanel onSelectTemplate={() => { }} />
-                        </LazyRoute>
-                      </RouteAccessGuard>
-                    }
-                  />
 
                   {/* 摩意模型 - 特性路由（按 moto_cost 特性授权，非 allowedRoutes 白名单），
                       与 /expense-development 一致使用 FeatureGuard；外部 iframe 嵌入，不需要数据守卫 */}

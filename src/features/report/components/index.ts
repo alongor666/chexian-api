@@ -1,1 +1,0 @@
-export { ReportTemplatesPanel } from './ReportTemplatesPanel';
