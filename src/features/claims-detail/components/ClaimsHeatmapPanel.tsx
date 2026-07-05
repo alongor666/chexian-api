@@ -2,7 +2,7 @@
  * 理赔热力图面板（累计发展口径，2026-04-19 重构）
  *
  * 维度（行）× 累计截止日（列）交叉矩阵。
- * - 行维度：三级机构/团队/业务员/客户类别/险别组合/能源类型/新转续/风险评分
+ * - 行维度：三级机构/销售团队/业务员/客户类别/险别组合/能源类型/新转续/车险风险等级
  * - 列维度：所选保单年度内的累计截止日（早段按月末，近 2 月按周六 + 最新日）
  * - 每格：所选年度起保的保单截至该列 cutoff 的累计数据（单调递增）
  * - 指标：满期赔付率/案均赔款/已报告赔款/已报告件数/满期出险率
@@ -11,6 +11,7 @@
  */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { cardStyles, colorClasses, cn, fontStyles, getTrendColorClass } from '@/shared/styles';
+import { pickDimensionLabels } from '@/shared/config/drilldown-dimensions';
 import { EmptyState } from '@/shared/ui';
 import { isClaimsHeatmapEmpty } from './claimsEmptyState';
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
@@ -26,16 +27,16 @@ type DimensionKey =
   | 'org_level_3' | 'team' | 'salesman' | 'customer_category'
   | 'coverage_combination' | 'energy_type' | 'business_nature' | 'insurance_grade';
 
-const DIMENSION_OPTIONS: { key: DimensionKey; label: string }[] = [
-  { key: 'org_level_3', label: '三级机构' },
-  { key: 'team', label: '团队' },
-  { key: 'salesman', label: '业务员' },
-  { key: 'customer_category', label: '客户类别' },
-  { key: 'coverage_combination', label: '险别组合' },
-  { key: 'energy_type', label: '能源类型' },
-  { key: 'business_nature', label: '新转续' },
-  { key: 'insurance_grade', label: '风险评分' },
+// 标签派生自 SSOT drilldown-dimensions（DIMENSION_LABELS），杜绝 team/insurance_grade 文案漂移
+const DIMENSION_KEYS: DimensionKey[] = [
+  'org_level_3', 'team', 'salesman', 'customer_category',
+  'coverage_combination', 'energy_type', 'business_nature', 'insurance_grade',
 ];
+const DIMENSION_LABEL_MAP = pickDimensionLabels(DIMENSION_KEYS);
+const DIMENSION_OPTIONS: { key: DimensionKey; label: string }[] = DIMENSION_KEYS.map((key) => ({
+  key,
+  label: DIMENSION_LABEL_MAP[key],
+}));
 
 type MetricKey = 'loss_ratio_pct' | 'avg_claim' | 'total_claims_wan' | 'claim_count' | 'incident_rate_pct';
 type YoyMetricKey = 'yoy_loss_ratio_pct' | 'yoy_avg_claim' | 'yoy_total_claims_wan' | 'yoy_claim_count' | 'yoy_incident_rate_pct';

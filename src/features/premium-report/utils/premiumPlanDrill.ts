@@ -12,6 +12,7 @@
  */
 
 import { formatSalesmanName } from '../../../shared/utils/formatters';
+import { DIMENSION_LABELS } from '../../../shared/config/drilldown-dimensions';
 import type { PlanDrilldownLevel, DrillPathStep } from '../types/premiumReport';
 
 /** 下钻层级顺序 */
@@ -19,13 +20,17 @@ export const LEVEL_ORDER: PlanDrilldownLevel[] = [
   'company', 'org', 'team', 'salesman', 'customer_category', 'coverage',
 ];
 
-/** 层级中文标签 */
+/**
+ * 层级中文标签。
+ * org/team/salesman/customer_category 派生自 SSOT drilldown-dimensions（DIMENSION_LABELS），
+ * 杜绝 team 文案漂移；company（分公司整体）与 coverage（险别）为本下钻链专属层级，SSOT 无对应键，保留字面量。
+ */
 export const LEVEL_LABELS: Record<PlanDrilldownLevel, string> = {
   company: '分公司整体',
-  org: '三级机构',
-  team: '团队',
-  salesman: '业务员',
-  customer_category: '客户类别',
+  org: DIMENSION_LABELS.org_level_3,
+  team: DIMENSION_LABELS.team,
+  salesman: DIMENSION_LABELS.salesman,
+  customer_category: DIMENSION_LABELS.customer_category,
   coverage: '险别',
 };
 
