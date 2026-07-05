@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（56 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（55 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -65,7 +65,7 @@
 - 2026-07-03-claude-6e93c9 — patrol 巡检报告路由(/api/query/patrol/
 - 2026-07-03-claude-6ef9cd `PARTIAL` — 安全审计M2
 
-**P3（18 项）**
+**P3（17 项）**
 
 - B247 — 图表 hex 色值审计
 - B254 — wecom_smartsheet state 生命周期管理（missing_vins T
@@ -76,7 +76,6 @@
 - 2026-06-22-claude-03f6f0 — PerformanceAnalysisPanel 主组件(~900行)抽 usePerf
 - 2026-06-22-claude-21c578 — 两个 distribution chart 去重
 - 2026-06-25-claude-1b7736 — claims-detail/geo-comparison 的 cross_region_
-- 2026-06-25-claude-6b021a — repair diversion-list org 粒度泄漏(codex闸-2 PR-7
 - 2026-07-03-claude-1200d2 — 安全审计L1
 - 2026-07-03-claude-b714a7 — 安全审计L5
 - 2026-07-03-claude-fdaa10 — 安全审计L2
@@ -121,7 +120,6 @@
 | 2026-06-24-claude-43e39b | 2026-06-24 | 多省·山西 cutover | @claude | achievement_cache/dim 兼容层跨省复合键（codex 闸-2 P1·SX salesman维度 GATED 上线前必修）：multiProvince 时 dedupedSalesmanDimSql PARTITION BY full_name / ytd_actual GROUP BY salesman_name / JOIN full_name=salesman_name 仍单键，SC/SX 同名会串数。修法：branchAware 时全升 (branch_code,full_name)/(branch_code,salesman_name) + SC/SX 同名集成测试。Task A SC-only 不触发（无 SX salesman），故非 Task A 阻断，是 SX salesman维度落地硬前置 | P1 | PROPOSED | N/A | server/src/services/duckdb-domain-loaders.ts |  |
 | 2026-06-24-claude-f7590d | 2026-06-24 | Chore | @claude | sx-promote.mjs 批量 staging→final rename 非跨进程崩溃原子（Option A 扁平固有）。已三层缓解（leftover preflight+幂等+ready-marker+SOP串行）。彻底闭合需 Option B 子目录单次目录 swap，或 sync-vps/data-bootstrapper 共守 promote lock。cutover 真用前须 VPS 真实 SX parquet dry-run。 | P2 | PROPOSED | N/A | scripts/release/sx-promote.mjs 数据管理/lib/branch-naming.mjs scripts/sync-vps.mjs | 架构价值审计冻结（2026-07-04）：三层缓解（EXDEV 预检+事务化 backup+ready-marker）已覆盖主要风险面；触发条件=VPS 真实 SX parquet dry-run 实测暴露并发/崩溃问题，届时优先 flock 文件锁（轻）而非子目录 swap 重构（重） |
 | 2026-06-25-claude-1b7736 | 2026-06-25 | 数据口径 · claims-detail geo | @claude | claims-detail/geo-comparison 的 cross_region_cases 跨进程重启抖动(实测 106305↔106320,0.014%)。根因 buildDedupedPolicySubquery 用 ANY_VALUE(plate_no)(claims-detail.ts:48) 对同 policy_no 多车牌个例任意挑行,is_cross_region 依赖 p.plate_no 故跨重启翻转。与 RLS 正交(已证 PolicyFact 全 SC)。修法: 改确定性聚合(MAX/按稳定键 ORDER BY first)。低优 cleanup。 | P3 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
-| 2026-06-25-claude-6b021a | 2026-06-25 | 多省·山西 cutover | @claude | repair diversion-list org 粒度泄漏(codex闸-2 PR-7复审MEDIUM·非分省隔离·非PR-6/7引入·低优): generateRepairDiversionListQuery 的 diversion_claims(ClaimsDetail)+shop_tier 分类未按 org_level_3 过滤,只 policy_dedup(PolicyFact) 按 org。org_user 经 LEFT JOIN 可见同分公司内其他机构的 claim_no/subject_shop_code/accident_district/shop_tier 行(policy 字段 null)。分省隔离(SC/SX)正确(claimsBranch/repairBranch),仅 org 粒度细分缺口。cutover(分省)不关心,RLS-on 不阻断。修法待定:diversion_claims 是否该按 org 收窄(需业务确认 diversion 是本机构视角还是分公司视角) | P3 | PROPOSED | N/A | server/src/sql/repair.ts | owner 2026-07-04 拍板机构层级口径：机构分全国/二级(分公司)/三级(机构)，权限可见性随层级——diversion-list 对 org_user 收窄到 org_level_3（三级）粒度；山西的机构列表以车险计划（sx_plan dim）为源已体现。执行=diversion_claims CTE 加 org 过滤 |
 | 2026-06-25-claude-8e6e8a | 2026-06-25 | 多省·山西 cutover | @claude | cutover能力PR-4(可选·碰部署链): deploy/vps-wrapper/deploy-chexian-api.sh 补 edit-env 子命令(sed 改 ecosystem env+reload),修 day1-sop 假设的 edit-env 与 wrapper 实现偏差。优先级低于 PR-1/2/3 | P2 | PROPOSED | N/A | deploy/vps-wrapper/deploy-chexian-api.sh | 架构价值审计冻结（2026-07-04）：触发条件=「手动 ssh 改 env + reload」在山西实操中重复出现 ≥2-3 次才值得固化为 wrapper 子命令；当前判断低频，手动操作更省 |
 | 2026-06-25-claude-a80133 | 2026-06-25 | Auth · 多省(山西) RLS-on 硬前置 | @claude | RLS-on 硬前置(永久修复): 存量用户 user_store.json 缺 branchCode 致开 RLS 全员 401 fail-closed。2026-06-25 生产 dry-run 已数据层回填(20 用户全 branchCode='SC')但属运行时修复,user_store.json 重 seed/import 即复发。永久修复: (1) admin-import-users-from-json 导入时带 branch_code; (2) ensurePresetUser/seed 对存量用户 reconcile branchCode(现仅对不存在用户生效)。是 PR-3(fe871b) RLS-on 硬前置。详见 开发文档/multi-branch/山西cutover接力_v2.md 实证追加(2026-06-25 RLS-on dry-run)。 | P1 | PROPOSED | 开发文档/multi-branch/山西cutover接力_v2.md | server/src/services/access-control.ts,server/src/scripts/admin-import-users-from-json.ts |  |
 | 2026-06-27-claude-294022 | 2026-06-27 | 部署/可用性 | @claude | 生产reload冷启动期全站502数分钟：app启动串行预热CrossSellDailyAgg 66个月度批次(每批~2.7s,~3分钟)期间nginx上游无响应。原生模块/进程正常(↺=0)非bcrypt地雷。缺readiness网关/优雅切换→每次reload全站(SC+SX)不可用。修补方向：预热移到listen后台异步/或加readiness探针让nginx等就绪/或并行化批次预热。来源：山西验证开场遇502并确诊(2026-06-27) | P1 | PROPOSED | N/A | ecosystem.config.cjs | 2026-07-04 再实证：三并发部署期间生产 /health 502；单 run 健康检查 18×10s=3min 窗口在冷启动预热（CrossSellDailyAgg ~3min）叠加并发踩踏时不够用。与新登记的 deploy concurrency 锁任务关联 <br>架构价值审计（2026-07-04）：优先走 80/20 修法——CrossSellDailyAgg 66 批次预热改并行（Promise.all 分批）或移到 listen() 后异步，不新增 readiness 探针网关这类新基础设施；仅当并行撑爆内存时才考虑探针方案 |

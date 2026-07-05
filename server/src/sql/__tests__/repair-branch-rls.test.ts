@@ -129,3 +129,42 @@ describe('repair RepairDim 登记表 bare 子查询分省过滤（PR-7）', () =
     expect(generateRepairOrphanShopsQuery(filters)).not.toContain(NO_BRANCH);
   });
 });
+
+// ── 6b021a：diversion-list org 粒度收窄（codex 闸-2 PR-7 复审 MEDIUM）──
+// diversion_claims 读 ClaimsDetail 原本只按分省收束，无 org 过滤；final LEFT JOIN policy_dedup 时
+// 他 org 保单的赔案行经 dc.* 泄漏给 org_user（p.* 为 null）。owner 拍板：对 org_user 收窄到
+// org_level_3 粒度——ClaimsDetail 无 org_level_3，故经 permitted_policies（PolicyFact 同一 org 权限
+// 子句收束的保单号集合）传导 org 约束到 diversion_claims。字节安全：whereClause='1=1' 时不注入。
+const ORG_WHERE = "org_level_3 = '高新'";
+const PERMITTED_CTE = 'permitted_policies AS (';
+const ORG_SEMI_JOIN = 'AND c.policy_no IN (SELECT policy_no FROM permitted_policies)';
+
+describe('repair diversion-list org 粒度收窄（6b021a）', () => {
+  it('传 org whereClause → diversion_claims 半连接 permitted_policies（org 收窄传导）', () => {
+    const sql = generateRepairDiversionListQuery(filters, 500, 0, ORG_WHERE);
+    expect(sql).toContain(PERMITTED_CTE);
+    expect(sql).toContain(ORG_SEMI_JOIN);
+  });
+
+  it('permitted_policies 按 org 权限子句收束 PolicyFact 保单号集合', () => {
+    const sql = generateRepairDiversionListQuery(filters, 500, 0, ORG_WHERE);
+    expect(sql).toContain(`SELECT DISTINCT policy_no FROM PolicyFact WHERE 1=1 AND ${ORG_WHERE}`);
+  });
+
+  it('org whereClause + policyBranchCode → permitted_policies 同时含 org 与分省过滤（纵深）', () => {
+    const sql = generateRepairDiversionListQuery(filters, 500, 0, ORG_WHERE, undefined, 'SX');
+    expect(sql).toContain(`SELECT DISTINCT policy_no FROM PolicyFact WHERE 1=1 AND ${ORG_WHERE} AND branch_code = 'SX'`);
+  });
+
+  it("whereClause='1=1'（branch_admin/全国）→ 不产 permitted_policies、不半连接（字节安全·历史行为不变）", () => {
+    const sql = generateRepairDiversionListQuery(filters, 500, 0, '1=1', 'SX', 'SX', 'SX');
+    expect(sql).not.toContain(PERMITTED_CTE);
+    expect(sql).not.toContain(ORG_SEMI_JOIN);
+  });
+
+  it('默认参数（whereClause 缺省为 1=1）→ 无 org 收窄（字节安全）', () => {
+    const sql = generateRepairDiversionListQuery(filters);
+    expect(sql).not.toContain(PERMITTED_CTE);
+    expect(sql).not.toContain(ORG_SEMI_JOIN);
+  });
+});

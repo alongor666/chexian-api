@@ -48,7 +48,9 @@ describe('repair 影子网点分省 RLS 隔离（PR-6）', () => {
         ('610川A', 'C-SC-1', 'SCORPH01', '四川影子店', '四川区', CAST(5000 AS DOUBLE), TIMESTAMP '2026-01-10', 'SC'),
         ('618晋B', 'C-SX-1', 'SXORPH01', '山西影子店', '山西区', CAST(3000 AS DOUBLE), TIMESTAMP '2026-01-10', 'SX'),
         ('610川C', 'C-SC-2', 'REGSHOP1', 'REGSHOP1登记店', '本区', CAST(2000 AS DOUBLE), TIMESTAMP '2026-01-11', 'SC'),
-        ('618晋D', 'C-SX-2', 'REGSHOP1', 'REGSHOP1登记店', '本区', CAST(1000 AS DOUBLE), TIMESTAMP '2026-01-11', 'SX')
+        ('618晋D', 'C-SX-2', 'REGSHOP1', 'REGSHOP1登记店', '本区', CAST(1000 AS DOUBLE), TIMESTAMP '2026-01-11', 'SX'),
+        -- 6b021a：本 org(零元机构) 0 元退保保单的送修赔案（复用 SCORPH01 影子厂，不新增 shop→既有 none_shadow 计数不变）
+        ('610零E', 'C-SC-3', 'SCORPH01', '四川影子店', '四川区', CAST(0 AS DOUBLE), TIMESTAMP '2026-01-12', 'SC')
       ) AS t(policy_no, claim_no, subject_shop_code, subject_repair_shop, accident_district,
              settled_vehicle_amount, accident_time, branch_code)
     `);
@@ -60,7 +62,10 @@ describe('repair 影子网点分省 RLS 隔离（PR-6）', () => {
       SELECT * FROM (VALUES
         ('610川A', CAST(10000 AS DOUBLE), '测试机构', '张三', '私家车', 'SC'),
         ('618晋B', CAST(8000 AS DOUBLE), '测试机构', '李四', '私家车', 'SX'),
-        ('618晋B', CAST(99999 AS DOUBLE), '四川机构', '王五', '私家车', 'SC')
+        ('618晋B', CAST(99999 AS DOUBLE), '四川机构', '王五', '私家车', 'SC'),
+        -- 6b021a：零元机构自持一张 0 元退保保单（premium=0）。permitted_policies 不带 HAVING>0
+        -- 故其 policy_no 仍在收窄集合内→赔案行保留；policy_dedup 带 HAVING>0 会剔除→premium 显示 null。
+        ('610零E', CAST(0 AS DOUBLE), '零元机构', '赵六', '私家车', 'SC')
       ) AS t(policy_no, premium, org_level_3, salesman_name, customer_category, branch_code)
     `);
   });
@@ -129,6 +134,40 @@ describe('repair 影子网点分省 RLS 隔离（PR-6）', () => {
       generateRepairDiversionListQuery(F, 500, 0, '1=1', 'SX'),
     );
     expect(Number(unfiltered.find((r) => r.subject_shop_code === 'SXORPH01')?.premium ?? 0)).toBe(107999);
+  });
+
+  it('🔴 diversion-list org 收窄（6b021a）：org_user=四川机构 不见他 org(测试机构) 赔案行', async () => {
+    // permitted_policies(org=四川机构)={618晋B}；610川A(SCORPH01) 属测试机构 → org 半连接应排除。
+    // 无收窄时 LEFT JOIN 让 610川A 经 dc.*（claim_no/subject_shop_code/…）泄漏给 org_user（p.* 为 null）。
+    const scoped = await duckdbService.query<{ subject_shop_code: string }>(
+      generateRepairDiversionListQuery(F, 500, 0, "org_level_3 = '四川机构'"),
+    );
+    const codes = scoped.map((r) => r.subject_shop_code);
+    expect(codes).toContain('SXORPH01'); // 618晋B（四川机构保单）在
+    expect(codes).not.toContain('SCORPH01'); // 610川A（他 org 测试机构）已收窄排除
+  });
+
+  it('diversion-list org 收窄不误伤本 org：org_user=测试机构 仍见本 org 全部赔案（避免过度收窄）', async () => {
+    // permitted_policies(org=测试机构)={610川A,618晋B} → 两条 none_shadow 赔案均保留。
+    const scoped = await duckdbService.query<{ subject_shop_code: string }>(
+      generateRepairDiversionListQuery(F, 500, 0, "org_level_3 = '测试机构'"),
+    );
+    const codes = scoped.map((r) => r.subject_shop_code);
+    expect(codes).toContain('SCORPH01');
+    expect(codes).toContain('SXORPH01');
+  });
+
+  it('diversion-list org 收窄保留本 org 0 元退保保单展示行（premium=null，非误删）', async () => {
+    // permitted_policies 不带 HAVING SUM(premium)>0 → 零元机构的 0 元保单 610零E 仍在收窄集合，
+    // 其赔案行（SCORPH01）保留；policy_dedup 带 HAVING>0 剔除该保单 → LEFT JOIN 后 premium 显示 null。
+    // 这是选 permitted_policies 而非直接 INNER JOIN policy_dedup 的正当语义，须有回归防护。
+    const scoped = await duckdbService.query<{ policy_no: string; subject_shop_code: string; premium: number | null }>(
+      generateRepairDiversionListQuery(F, 500, 0, "org_level_3 = '零元机构'"),
+    );
+    const row = scoped.find((r) => r.policy_no === '610零E');
+    expect(row).toBeDefined(); // 0 元保单的赔案行未被 org 收窄误删
+    expect(row?.subject_shop_code).toBe('SCORPH01');
+    expect(row?.premium ?? null).toBeNull(); // policy_dedup HAVING>0 剔除 → premium 展示 null
   });
 
   it('local-resource：同码跨省登记厂 branchCode=SX 仅计 SX 赔案（防跨省灌入），RLS-off 计两省', async () => {
