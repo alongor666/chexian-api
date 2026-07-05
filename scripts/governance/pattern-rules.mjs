@@ -221,14 +221,14 @@ export const PATTERN_RULES = [
       /resolveEnvBranchCode/, // 已用 fail-closed 函数替换
       /resolveBranchCode/,
       /assertBranchCodeSet/,
-      /governance-branch-fallback:\s*allow/, // 显式豁免注释
+      /governance-allow:\s*branch-fallback/, // 显式豁免注释（2026-07-05 批次四并入统一命名空间，原词根零存量直接改名）
     ],
     desc: "数据路径静默默认四川，RLS 会静默失效",
     errorHeader: "发现省份静默默认反模式（数据路径中 ?? 'SC' / || 'SC'）",
     fixHints: [
       "修复（daily.mjs）：用 resolveEnvBranchCode('<context>') 替换 process.env.BRANCH_CODE || 'SC'",
       "修复（server TS）：用 resolveBranchCode(process.env.BRANCH_CODE, '<context>') 替换 ?? 'SC'",
-      '或加豁免注释 // governance-branch-fallback: allow <理由>',
+      '或加豁免注释 // governance-allow: branch-fallback <理由>',
     ],
   },
 ];

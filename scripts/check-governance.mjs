@@ -3609,7 +3609,7 @@ function checkLoopSelfEvolutionIntegrity() {
  *
  * 只扫 SQL fence（```sql / 含 duckdb|read_parquet / SELECT..FROM），排除 getMetricSql(...)（合法 SSOT 取数）、
  * AS alias（输出别名非输入列）、-- 注释；避免误报 K1 字段表里 "endorsement_type 不可用" 警示（markdown 表格非代码块）。
- * 豁免：代码块前 120 字符内写 `<!-- governance-field-gate: allow <理由> -->`。
+ * 豁免：代码块前 120 字符内写 `<!-- governance-allow: field-gate <理由> -->`（2026-07-05 批次四并入统一命名空间，原 governance-field-gate: allow 词根零存量直接改名）。
  * 局限：fence 提取用基础 ```...``` 正则（技能 .md 惯例），不支持 ~~~/嵌套 fence。
  */
 function checkSkillFieldGate() {
@@ -3664,8 +3664,8 @@ function checkSkillFieldGate() {
           hasParquetHint ||
           (!isNonSqlLang && (lang === 'sql' || /\bSELECT\b[\s\S]*\bFROM\b/i.test(fence)));
         if (!isSql) continue;
-        // 豁免：fence 前 120 字符内 `governance-field-gate: allow`（细粒度·每个违规 fence 显式标记，无整文件后门）
-        if (/governance-field-gate:\s*allow/.test(content.slice(Math.max(0, idx - 120), idx))) continue;
+        // 豁免：fence 前 120 字符内 `governance-allow: field-gate`（细粒度·每个违规 fence 显式标记，无整文件后门）
+        if (/governance-allow:\s*field-gate/.test(content.slice(Math.max(0, idx - 120), idx))) continue;
         // 清理避免误报：去单引号字符串字面量（同名字段的字符串值，如 '...'；不去双引号以免误删 duckdb -c "整个SQL"）
         // + -- 注释 + getMetricSql(简单 id，合法 SSOT 取数) + AS 输出别名
         const cleaned = fence
@@ -3687,7 +3687,7 @@ function checkSkillFieldGate() {
   error('技能 SQL 引用幽灵字段（fields.json 注册但 Parquet 未落，直查会 Binder Error）：');
   uniq.forEach((v) => console.log(`    - ${v}`));
   error(
-    '  修复：改用 getMetricSql(id) 或正确落列字段；确属存量待修可在 SQL fence 前加 `<!-- governance-field-gate: allow <reason> -->`。幽灵清单见 scripts/governance/parquet-columns.snapshot.json（schema 变更须 duckdb 重算同步）',
+    '  修复：改用 getMetricSql(id) 或正确落列字段；确属存量待修可在 SQL fence 前加 `<!-- governance-allow: field-gate <reason> -->`。幽灵清单见 scripts/governance/parquet-columns.snapshot.json（schema 变更须 duckdb 重算同步）',
   );
   return false;
 }
