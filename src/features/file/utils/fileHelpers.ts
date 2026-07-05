@@ -8,8 +8,14 @@
  * 行为与原组件内联实现逐字符一致。
  */
 
-/** 导入文件大小上限：100MB */
-export const MAX_IMPORT_SIZE = 100 * 1024 * 1024;
+/**
+ * 导入文件大小上限：200MB（客户端预校验，网络请求前拦超限文件）。
+ * 前端独立 bundle 无法读取 Node env，此为 server/src/config/env.ts
+ * dbEnv.MAX_UPLOAD_SIZE_MB（默认 200MB）的镜像常量——两值必须一致，
+ * 由 governance「上传上限对齐」闸逐字节校验防漂移。
+ * 上限不匹配的后果：前端比后端紧 → 合规文件被浏览器提前拦下报错误信息。
+ */
+export const MAX_IMPORT_SIZE = 200 * 1024 * 1024;
 
 /** 校验导入文件：非 .parquet 或超限返回错误串，合法返回 null */
 export function validateImportFile(file: { name: string; size: number }): string | null {
@@ -17,7 +23,8 @@ export function validateImportFile(file: { name: string; size: number }): string
     return '请选择 .parquet 格式的文件';
   }
   if (file.size > MAX_IMPORT_SIZE) {
-    return '文件大小超过限制（最大100MB）';
+    // 文案由常量派生，避免上限调整时数字与常量脱节
+    return `文件大小超过限制（最大${MAX_IMPORT_SIZE / 1024 / 1024}MB）`;
   }
   return null;
 }

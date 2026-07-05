@@ -105,7 +105,7 @@ last_updated: "2026-06-09"
 |---|--------|--------|------|
 | 1 | **SQL 注入防护** | Critical | 所有用户输入经 `sanitizeInput()` 清理；禁止字符串拼接 SQL；LIKE 用 `buildSafeLikeClause()` |
 | 2 | **SQL 验证器合规** | Critical | 只读限制（仅 SELECT/WITH）；单语句；必须引用 PolicyFact；禁止 SELECT policy_no；必须聚合 |
-| 3 | **文件上传安全** | Critical | 仅 `.parquet`/`.pq`；≤50MB；路径遍历防护（`../`）；文件名非法字符过滤 |
+| 3 | **文件上传安全** | Critical | 仅 `.parquet`/`.pq`；≤200MB（唯一事实源 `env.ts` `dbEnv.MAX_UPLOAD_SIZE_MB`，与 nginx `client_max_body_size` 对齐，governance「上传上限对齐」闸校验）；路径遍历防护（`../`）；文件名非法字符过滤 |
 | 4 | **CORS 与安全头** | High | COOP: same-origin；COEP: require-corp；建议添加 CSP |
 | 5 | **XSS 防护** | High | 禁止 `dangerouslySetInnerHTML`/`innerHTML`/`eval()`；React 自动转义 |
 | 6 | **数据隐私保护** | High | policy_no 仅 WHERE 可用；日志脱敏；错误消息不泄露 SQL/表结构；导出必须聚合 |

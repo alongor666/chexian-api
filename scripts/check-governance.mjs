@@ -59,6 +59,7 @@ import { parseLedger as parseLoopLedger, normalizeVerdict as normalizeLoopVerdic
 import { scanEntries as scanAutomationEntries, verifyMechanisms as verifyAutomationMechanisms } from './loop/automation-due.mjs';
 import { buildPatternChecks } from './governance/pattern-engine.mjs';
 import { PATTERN_RULES } from './governance/pattern-rules.mjs';
+import { checkUploadSizeLimitConsistency as runUploadSizeCheck } from './governance/upload-size-consistency.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3463,6 +3464,12 @@ function checkWecomEngineBranchIsolation() {
   return true;
 }
 
+// 上传上限对齐（安全审计 1200d2）：逻辑抽至 scripts/governance/upload-size-consistency.mjs
+// （check-governance.mjs 行数棘轮 H5 ≤4000，新增检查一律独立模块，勿膨胀单体）。
+function checkUploadSizeLimitConsistency() {
+  return runUploadSizeCheck({ rootDir: ROOT_DIR, io: { info, success, error } });
+}
+
 // 禁止模式族：声明式规则表驱动（奥卡姆批次二）。每组一个检查项，组名与旧函数时代一致；
 // 规则定义在 scripts/governance/pattern-rules.mjs，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs。
 const PATTERN_CHECK_MAP = new Map(
@@ -3529,6 +3536,7 @@ const CODE_GOVERNANCE_CHECKS = [
     retireWhen: 'B3 子目录隔离落地后随前缀防线退役（BACKLOG 2026-06-23-claude-801409 退役清单）',
   },
   { name: '企微引擎省份隔离', fn: checkWecomEngineBranchIsolation },
+  { name: '上传上限对齐', fn: checkUploadSizeLimitConsistency },
   { name: 'Loop自进化闭环完整性', fn: checkLoopSelfEvolutionIntegrity },
 ];
 

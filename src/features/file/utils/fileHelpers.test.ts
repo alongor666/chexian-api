@@ -12,13 +12,13 @@ describe('validateImportFile · 导入文件校验', () => {
     expect(validateImportFile({ name: 'parquet', size: 1 })).toBe('请选择 .parquet 格式的文件'); // 无点
   });
 
-  it('.parquet 但超过 100MB → 超限错误', () => {
+  it('.parquet 但超过上限 → 超限错误（文案由常量派生）', () => {
     expect(validateImportFile({ name: 'big.parquet', size: MAX_IMPORT_SIZE + 1 })).toBe(
-      '文件大小超过限制（最大100MB）'
+      `文件大小超过限制（最大${MAX_IMPORT_SIZE / 1024 / 1024}MB）`
     );
   });
 
-  it('合法 .parquet 且未超限 → null（边界：恰好 100MB 放行）', () => {
+  it('合法 .parquet 且未超限 → null（边界：恰好上限放行）', () => {
     expect(validateImportFile({ name: 'ok.parquet', size: 1024 })).toBeNull();
     expect(validateImportFile({ name: 'edge.parquet', size: MAX_IMPORT_SIZE })).toBeNull();
   });
