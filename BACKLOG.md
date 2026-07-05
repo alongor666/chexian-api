@@ -35,7 +35,7 @@
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
 
-**P2（28 项）**
+**P2（27 项）**
 
 - B314 — data-sources.json 契约/状态拆分（接续 B313）
 - B304 `PARTIAL` — earned-premium 双口径未文档化
@@ -64,7 +64,6 @@
 - 2026-07-03-claude-6c23b3 — 后端审查
 - 2026-07-03-claude-6e93c9 — patrol 巡检报告路由(/api/query/patrol/
 - 2026-07-03-claude-6ef9cd `PARTIAL` — 安全审计M2
-- 2026-07-05-claude-d84df6 — CI 未安装 duckdb CLI
 
 **P3（16 项）**
 
@@ -143,6 +142,5 @@
 | 2026-07-05-claude-49e3fd | 2026-07-05 | Chore | @claude | 综合费用率别名统一 + cost-cube 硬编码去漂移（B310 残留）：(1) SQL 返回别名 comprehensive_cost_ratio 与注册表 id comprehensive_expense_ratio 分裂，统一需改前端 5 处(cost-data/table-columns/transformData/CostAnalysisPanel/useExportHandlers) + agent 注册表 4 处 + cost-cube；(2) server/src/sql/cube/cost-cube.ts:319 同类硬编码 CASE 应比照 B310 改 getMetricSql。因跨前后端 10 处且触及 agent 热路径，从 B310 净简化小 PR 分离。【账】做完删 2 处硬编码公式+统一 1 别名/加 0 机制/触发条件=别名迁移需前后端同批改+cube-shadow 影子对账验证 | P3 | PROPOSED | N/A | N/A |  |
 | 2026-07-05-claude-7f984d | 2026-07-05 | 前端构建治理 | @claude | 为 vite chunk 图不变式加自动回归闸(code-reviewer PR#904 MEDIUM 发现)：#904 手工修复的两条不变式当前仅靠人工 build+肉眼看 dist 守护，未来加 vendor 分组规则/升级 echarts-for-react\|vite\|rollup 可能静默重引循环依赖或让 echarts 回到首屏而无告警。方向：postbuild CI 脚本断言(a)构建 chunk 图 DFS 零环 (b)dist/index.html 的 modulepreload 不含任何 echarts/zrender 命名 chunk；挂到 bun run build 或 governance。按 evidence-loop.md §4 性能类改动的 harness 归属登记。【账】做完加1回归脚本+1governance闸/触发条件=分包规则或 echarts/react 相关依赖升级 | P3 | PROPOSED | vite.config.ts,.claude/rules/evidence-loop.md | vite.config.ts,scripts/check-governance.mjs |  |
 | 2026-07-05-claude-8d31a5 | 2026-07-05 | Bugfix/Backend | @claude | generateMonthlyExpenseQuery 直接 FROM PolicyFact 未走 policy_dedup（B252 同类）：server/src/sql/cost/earned-premium-detail.ts 的月度费用查询 SUM(premium)/COUNT(DISTINCT policy_no)/SUM(fee_amount) 直读 PolicyFact，若存在批改副本（policy_no 非唯一，见 memory feedback_policy_join_dedup）则保费/费用按副本重复累加。需先 duckdb 直查确认 PolicyFact 是否含批改副本、premium 是逐批改还是净额，再决定是否套 policy_dedup（B274 owner 决策只覆盖附加税率，去重不在其内）。【账】做完删：月度费用查询裸 FROM PolicyFact；加：与其它成本查询一致的 policy_dedup CTE；触发条件：duckdb 直查证实 premium 因批改副本虚高。 | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts (generateMonthlyExpenseQuery) |  |
-| 2026-07-05-claude-d84df6 | 2026-07-05 | 测试治理 | @claude | CI 未安装 duckdb CLI：sx-promote.test.mjs 约30个集成/E2E用例（sha256一致性/staging→final原子提升/resume幂等）与 parquet-overlap-check.test.mjs 派生轴用例在 CI 恒为显式 skip，从未真正执行。需在 claude-code.yml 与 production-gate.yml 增加 duckdb 安装步骤 | P2 | PROPOSED | N/A | .github/workflows/,scripts/release/__tests__/sx-promote.test.mjs |  |
 | 2026-07-05-claude-da5ac0 | 2026-07-05 | Chore | @claude | 整条 patrol 功能链退役评估（3a6daf 残留）：删 chexian-patrol 命令后，patrol_engine.py(524行) + server/src/routes/query/patrol.ts(query.ts:65 活跃挂载) + src/shared/api/patrol-api.ts(client.ts 消费) + types/patrol.ts 仍在，但①数据源 renewal_universe/latest.parquet + RENEWAL_PATROL_REPORT_FRAMEWORK.md 缺失②前端无 patrol 页面/路由消费(grep 零命中)③apiClient.patrol 子客户端无组件调用。整链处于'基础设施在位但休眠'。退役涉及 query 路由聚合器 + apiClient 架构，风险高于删命令文件，须单独评估(diagnose-renewal 是否已实质覆盖→是则整链退役/否则明确保留场景)。【账】做完删4文件+改query.ts/client.ts/api-routes/2处子客户端注册 或 明确保留并补前端消费/加0机制/触发条件=确认diagnose-renewal覆盖度 | P3 | PROPOSED | N/A | N/A |  |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功能对等覆盖 v1 场景，再切 daily.mjs 调度并删 v1。承接 B253 弃置结论。【账】做完删 v1 脚本+DEFAULT_SCHEMA 硬编码/加 0 新机制/触发条件=确认 v2 功能对等 | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ |  |
