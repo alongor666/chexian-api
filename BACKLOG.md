@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（58 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（56 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -67,7 +67,7 @@
 - 2026-07-03-claude-6ef9cd `PARTIAL` — 安全审计M2
 - 2026-07-05-claude-d84df6 — CI 未安装 duckdb CLI
 
-**P3（18 项）**
+**P3（16 项）**
 
 - B247 — 图表 hex 色值审计
 - B254 — wecom_smartsheet state 生命周期管理（missing_vins T
@@ -80,8 +80,6 @@
 - 2026-06-25-claude-1b7736 — claims-detail/geo-comparison 的 cross_region_
 - 2026-07-03-claude-b714a7 — 安全审计L5
 - 2026-07-03-claude-fdaa10 — 安全审计L2
-- 2026-07-05-claude-1aed97 — src/shared/utils/security.ts 疑似死模块
-- 2026-07-05-claude-3a6502 — 清理上传上限第5处幽灵常量
 - 2026-07-05-claude-49e3fd — 综合费用率别名统一 + cost-cube 硬编码去漂移（B310 残留）
 - 2026-07-05-claude-7f984d — 为 vite chunk 图不变式加自动回归闸(code-reviewer PR#904
 - 2026-07-05-claude-8d31a5 — generateMonthlyExpenseQuery 直接 FROM PolicyFa
@@ -143,9 +141,7 @@
 | 2026-07-03-claude-6ef9cd | 2026-07-03 | 安全 | @claude | 安全审计M2：生产SPA(Nginx托管)缺Content-Security-Policy响应头。Express已配CSP+已移除unsafe-eval(B320)，但前端SPA由Nginx从/var/www/chexian/frontend/dist伺服，当前无CSP(csp.ts:19注释自认follow-up)。前端零dangerouslySetInnerHTML故实际风险低,属纵深防御缺口。本次已给deploy/nginx-fullstack.conf加CSP基线(模板,不自动部署);生产落地需在conf.d/chexian.conf(本地增量)监控窗口应用+对着已构建SPA测试(防script-src过严白屏)。来源:2026-07-03安全审计 | P2 | PARTIAL | N/A | server/src/config/csp.ts | deploy/nginx-fullstack.conf + deploy/nginx.conf 的 location=/index.html 已加 CSP 基线(default-src 'self'+对齐Express connect-src+echarts img blob/data);governance 52/52通过。残留:生产 conf.d/chexian.conf 监控窗口应用+对着已构建SPA验证不白屏 |
 | 2026-07-03-claude-b714a7 | 2026-07-03 | 安全 | @claude | 安全审计L5：诊断报告(diagnose-*skills)生成HTML时,数据字段(机构名/业务员名)的转义依赖skill层;配合报告CSP的script-src 'unsafe-inline',存在理论性数据驱动XSS(数据来自内部BI字段结构化,可利用性极低)。建议报告生成器对文本字段统一HTML转义。skill在~/.claude/skills/需走crystallize-skill改仓库。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | N/A | check-merged-drift 命中 PR #874 系误报：该 PR 未动 diagnose-* skills HTML 转义，保持 PROPOSED <br>架构价值审计（2026-07-04）：技术修复=一个 escape 工具函数（5 分钟），但须走 crystallize-skill 改仓库流程（开销远大于修复）；处置=不单独走流程，等下次因其他需求改 chexian-report-shell 时夹带；数据源为内部 BI 字段，可利用性极低 |
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/health无脚本,故实际无功能影响。收紧到nonce/hash策略是纯纵深加固,需先确认无Express服务的内联脚本依赖。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | server/src/config/csp.ts | 架构价值审计冻结（2026-07-04）：Express csp.ts 的 unsafe-inline 实测无功能影响（唯一 HTML 响应 reports.ts 有独立 REPORT_HTML_CSP；SPA 的 CSP 基线已由 PR #874 下发 nginx 模板，生产应用由 6ef9cd 追踪）；unsafe-inline→nonce 需重构全部内联脚本，成本高当前收益零。触发条件=SPA CSP 生产落地后仍有内联脚本注入实证 |
-| 2026-07-05-claude-1aed97 | 2026-07-05 | 测试治理 | @claude | src/shared/utils/security.ts 疑似死模块：src/ 零代码调用点（仅 INDEX.md 提及），MAX_FILE_SIZE 50MB 与 PR #918 确立的 200MB env SSOT 矛盾。确认无引用后连同 tests/security.test.ts 一并移除（红线：修补不拆除→先确认再动） | P3 | PROPOSED | N/A | src/shared/utils/security.ts,tests/security.test.ts |  |
 | 2026-07-05-claude-1c498b | 2026-07-05 | 测试治理 | @claude | Python 测试零回归保护：全仓37个 pytest 文件/452用例无任何自动化执行入口（CI/package.json/governance 均不跑），守护的是 ETL 分省隔离/赔案分区/企微同步幂等等高风险逻辑。需接入执行链（CI job 或 governance 步骤），并解决 CI 无 warehouse 数据时的 skip 策略 | P1 | PROPOSED | N/A | tests/pipelines/,数据管理/pipelines/,数据管理/integrations/wecom_smartsheet/ |  |
-| 2026-07-05-claude-3a6502 | 2026-07-05 | Chore | @claude | 清理上传上限第5处幽灵常量：src/shared/utils/security.ts SECURITY_LIMITS.MAX_FILE_SIZE=50MB + validateUploadedFile() 是上传流死代码（生产 UI 走 fileHelpers.ts validateImportFile，此函数仅被自身+tests/security.test.ts 引用）。值停在旧 50MB，未来 grep MAX_FILE_SIZE 做上限对齐时会误报'仍不一致'。处置：删死代码或标注 @deprecated。来源：1200d2 code-reviewer 自审 LOW。【账】做完删security.ts约6行+对应test；加0；触发条件=确认无动态调用后删，删前跑 bun run test --run tests/security.test.ts 确认剥离干净 | P3 | PROPOSED | N/A | N/A |  |
 | 2026-07-05-claude-49e3fd | 2026-07-05 | Chore | @claude | 综合费用率别名统一 + cost-cube 硬编码去漂移（B310 残留）：(1) SQL 返回别名 comprehensive_cost_ratio 与注册表 id comprehensive_expense_ratio 分裂，统一需改前端 5 处(cost-data/table-columns/transformData/CostAnalysisPanel/useExportHandlers) + agent 注册表 4 处 + cost-cube；(2) server/src/sql/cube/cost-cube.ts:319 同类硬编码 CASE 应比照 B310 改 getMetricSql。因跨前后端 10 处且触及 agent 热路径，从 B310 净简化小 PR 分离。【账】做完删 2 处硬编码公式+统一 1 别名/加 0 机制/触发条件=别名迁移需前后端同批改+cube-shadow 影子对账验证 | P3 | PROPOSED | N/A | N/A |  |
 | 2026-07-05-claude-7f984d | 2026-07-05 | 前端构建治理 | @claude | 为 vite chunk 图不变式加自动回归闸(code-reviewer PR#904 MEDIUM 发现)：#904 手工修复的两条不变式当前仅靠人工 build+肉眼看 dist 守护，未来加 vendor 分组规则/升级 echarts-for-react\|vite\|rollup 可能静默重引循环依赖或让 echarts 回到首屏而无告警。方向：postbuild CI 脚本断言(a)构建 chunk 图 DFS 零环 (b)dist/index.html 的 modulepreload 不含任何 echarts/zrender 命名 chunk；挂到 bun run build 或 governance。按 evidence-loop.md §4 性能类改动的 harness 归属登记。【账】做完加1回归脚本+1governance闸/触发条件=分包规则或 echarts/react 相关依赖升级 | P3 | PROPOSED | vite.config.ts,.claude/rules/evidence-loop.md | vite.config.ts,scripts/check-governance.mjs |  |
 | 2026-07-05-claude-8d31a5 | 2026-07-05 | Bugfix/Backend | @claude | generateMonthlyExpenseQuery 直接 FROM PolicyFact 未走 policy_dedup（B252 同类）：server/src/sql/cost/earned-premium-detail.ts 的月度费用查询 SUM(premium)/COUNT(DISTINCT policy_no)/SUM(fee_amount) 直读 PolicyFact，若存在批改副本（policy_no 非唯一，见 memory feedback_policy_join_dedup）则保费/费用按副本重复累加。需先 duckdb 直查确认 PolicyFact 是否含批改副本、premium 是逐批改还是净额，再决定是否套 policy_dedup（B274 owner 决策只覆盖附加税率，去重不在其内）。【账】做完删：月度费用查询裸 FROM PolicyFact；加：与其它成本查询一致的 policy_dedup CTE；触发条件：duckdb 直查证实 premium 因批改副本虚高。 | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts (generateMonthlyExpenseQuery) |  |
