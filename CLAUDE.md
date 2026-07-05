@@ -143,6 +143,7 @@ bun run typecheck                  # 仅类型检查
 bun run test --run                 # 单元测试一次性运行（⚠️ 不是 bun test；不带 --run 进 vitest watch）
 bun run test --run <文件路径>      # 跑单个测试文件
 bun run test:integration           # 集成测试（需 DuckDB 原生二进制，仅本地）
+bun run test:py                    # Python 测试（pytest，ETL/诊断/企微同步；范围见根级 pytest.ini）
 bun run test:e2e                   # E2E（需先 dev:full，凭据 admin/<在凭据库/E2E_PASSWORD 环境变量中获取>）
 bun run governance                 # 治理校验
 bun run verify:quick               # preflight + governance + typecheck
@@ -152,6 +153,7 @@ bun run verify:full                # verify:quick + 单元测试
 **CI 测试分层协议**（RED LINE）：
 - **单元测试** (`bun run test --run`): 测试文件数以 `vite.config.ts` include 为准 — CI + 本地
 - **集成测试** (`bun run test:integration`): 4 文件 — 仅本地（需 DuckDB 原生二进制）
+- **Python 测试** (`bun run test:py` = pytest): 收集范围以根级 `pytest.ini` testpaths 为准，依赖 `requirements-test.txt` — CI（production-gate）+ 本地；依赖本地 warehouse parquet 的用例无数据时**显式** skip（`-rs` 强制列出原因，禁止静默跳过）
 - CI 环境无法解析 `.node` 原生模块（vitest/jsdom 限制），相关测试必须在 `vite.config.ts` exclude 中排除
 - 新增原生模块依赖时，必须检查是否有对应测试需排除
 

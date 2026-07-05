@@ -7,3 +7,6 @@ pandas>=2.0.0
 pyarrow>=15.0.0
 openpyxl>=3.1.0
 numpy>=1.26.0
+# pandas read_excel 引擎（etl_validation.py / transform.py 的 EXCEL_ENGINE='calamine'）
+# 2026-07-05 CI 首跑暴露：本机装了但此处漏登记，7 个 ETL 测试在 CI ImportError
+python-calamine>=0.2.0

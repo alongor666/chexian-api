@@ -129,6 +129,28 @@ jobs:
         if: needs.changes.outputs.skip != 'true'
         run: bun run governance
 
+      # Python 测试（backlog 2026-07-05-claude-1c498b）：ETL 分省隔离 / 赔案分区 /
+      # 企微同步幂等等高风险逻辑的回归保护。收集入口 = 根级 pytest.ini testpaths；
+      # 依赖本地 warehouse parquet 的用例由各文件 skipif 守卫显式 skip（-rs 列出原因），
+      # CI 上零 parquet → 纯逻辑用例全跑、数据用例全显式 skipped，无静默跳过。
+      - name: Setup Python
+        if: needs.changes.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-test.txt
+            数据管理/requirements.txt
+
+      - name: Install Python test dependencies
+        if: needs.changes.outputs.skip != 'true'
+        run: pip install -r requirements-test.txt
+
+      - name: Python Tests (pytest)
+        if: needs.changes.outputs.skip != 'true'
+        run: python3 -m pytest
+
       - name: Skipped (docs/harness-only)
         if: needs.changes.outputs.skip == 'true'
         run: echo "纯 harness/docs PR：Production Gate 重活跳过；harness 内容一致性由 Governance Consistency Check 验证。"

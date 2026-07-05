@@ -19,6 +19,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:preflight": "node scripts/test-preflight.mjs",
+    "test:py": "python3 -m pytest",
     "test:coverage": "vitest --coverage",
     "test:e2e": "playwright test",
     "test:e2e:cleanup-gate": "playwright test tests/e2e/03-cleanup-zero-downtime-gate.spec.ts",
