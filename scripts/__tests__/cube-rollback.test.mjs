@@ -1,53 +1,29 @@
 /**
  * cube-rollback.mjs 单元测试
  *
- * cube-rollback.mjs 是 CLI 入口（process.exit / execFileSync 调用），
- * 测试核心契约：
+ * 直接 import 被测脚本导出的真实纯函数（脚本主入口由 import.meta 守卫隔离，
+ * import 时零副作用），测试核心契约：
  *   - sed 表达式生成（`--target shadow|routing|both` 决定哪些 key 被写入）
  *   - 三步链顺序（sed → reload → health 验活）
  *   - dry-run 模式：仅打印不执行 ssh
  *   - --target 参数三态各自影响哪些环境变量开关
- *
- * 由于脚本未导出任何函数，测试复现核心决策逻辑并通过 mock execFileSync 验证行为。
+ *   - parseArgs 参数解析（默认值 / 覆盖 / --help）
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-// ─── 内联 cube-rollback 的核心纯逻辑（sed 表达式生成）───────────────────────
-
-/**
- * 根据 target 决定要关闭哪些开关 → 生成 sed 表达式（与源码保持一致）
- */
-function buildSedExpression(target) {
-  const switches =
-    target === 'both'
-      ? ['CUBE_SHADOW_COMPARE', 'CUBE_ROUTING_ENABLED']
-      : target === 'shadow'
-      ? ['CUBE_SHADOW_COMPARE']
-      : target === 'routing'
-      ? ['CUBE_ROUTING_ENABLED']
-      : [];
-  // 与源码完全一致的 sed 转义（单引号转义）
-  return switches
-    .map((k) => `s/${k}: '\\''true'\\''/${k}: '\\''false'\\''/`)
-    .join(';');
-}
+import {
+  VALID_TARGETS,
+  affectedSwitches,
+  buildSedExpression,
+  buildRemoteCommand,
+  buildSshArgs,
+  parseArgs,
+} from '../cube-rollback.mjs';
 
 /**
- * 根据 target 决定受影响的开关列表
- */
-function affectedSwitches(target) {
-  if (target === 'both') return ['CUBE_SHADOW_COMPARE', 'CUBE_ROUTING_ENABLED'];
-  if (target === 'shadow') return ['CUBE_SHADOW_COMPARE'];
-  if (target === 'routing') return ['CUBE_ROUTING_ENABLED'];
-  return [];
-}
-
-/**
- * 验证 sed 表达式应用到 ecosystem 文本后的幂等性（已 false 的不变）
+ * 用 JS 模拟 sed 的替换效果，验证 sed 表达式应用到 ecosystem 文本后的幂等性
  */
 function applySed(ecosystemSrc, sedExpr) {
-  // 用 JS 模拟 sed 的替换效果（测试验证等价）
   const parts = sedExpr.split(';');
   let result = ecosystemSrc;
   for (const part of parts) {
@@ -85,6 +61,11 @@ describe('buildSedExpression — sed 表达式生成', () => {
   it('非法 target → 返回空字符串（无任何 sed 命令）', () => {
     const expr = buildSedExpression('invalid');
     expect(expr).toBe('');
+  });
+
+  it("sed 表达式使用远程 shell 单引号转义形式（'\\''true'\\'' → '\\''false'\\''）", () => {
+    const expr = buildSedExpression('shadow');
+    expect(expr).toBe("s/CUBE_SHADOW_COMPARE: '\\''true'\\''/CUBE_SHADOW_COMPARE: '\\''false'\\''/");
   });
 });
 
@@ -153,19 +134,11 @@ describe('sed 幂等性 — 已 false 的 ecosystem 跑 rollback 不变更', () 
   });
 });
 
-// ─── 三步链顺序验证（通过 mock execFileSync）────────────────────────────────
+// ─── 三步链顺序验证 ───────────────────────────────────────────────────────────
 
 describe('三步链 — sed → reload → health 验活顺序', () => {
   it('remote 命令字符串包含三步并以 && 连接（确保前步失败后步不执行）', () => {
-    // 验证 remote 命令组装顺序与 && 连接逻辑（与源码一致）
-    const target = 'routing';
-    const ecosystemPath = '/var/www/chexian/server/ecosystem.config.cjs';
-    const sedExpr = buildSedExpression(target);
-    const remote = [
-      `sudo sed -i "${sedExpr}" ${ecosystemPath}`,
-      `sudo /usr/local/bin/deploy-chexian-api reload`,
-      `curl -s http://localhost:3000/health | head -c 200`,
-    ].join(' && ');
+    const remote = buildRemoteCommand('routing', '/var/www/chexian/server/ecosystem.config.cjs');
 
     // 三步必须以 && 连接
     expect(remote.split(' && ')).toHaveLength(3);
@@ -177,12 +150,49 @@ describe('三步链 — sed → reload → health 验活顺序', () => {
     expect(remote).toContain('localhost:3000/health');
   });
 
+  it('remote 命令的 sed 步嵌入 buildSedExpression 结果与 ecosystemPath', () => {
+    const remote = buildRemoteCommand('shadow', '/custom/path/ecosystem.config.cjs');
+    expect(remote).toContain(buildSedExpression('shadow'));
+    expect(remote).toContain('/custom/path/ecosystem.config.cjs');
+  });
+
   it('ssh 命令包含 BatchMode=yes 和 ConnectTimeout=10（防止交互式等待）', () => {
-    const sshAlias = 'deployer@162.14.113.44';
-    const remote = 'echo test';
-    const sshCmd = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', sshAlias, remote];
+    const sshCmd = buildSshArgs('deployer@162.14.113.44', 'echo test');
     expect(sshCmd).toContain('BatchMode=yes');
     expect(sshCmd).toContain('ConnectTimeout=10');
+    // alias 与远程命令按序排在末尾
+    expect(sshCmd.slice(-2)).toEqual(['deployer@162.14.113.44', 'echo test']);
+  });
+});
+
+// ─── parseArgs 参数解析 ───────────────────────────────────────────────────────
+
+describe('parseArgs — CLI 参数解析', () => {
+  it('无参数 → target 为 null、dryRun=false、默认 sshAlias/ecosystemPath', () => {
+    const args = parseArgs([]);
+    expect(args.target).toBeNull();
+    expect(args.dryRun).toBe(false);
+    expect(args.sshAlias).toBe('deployer@162.14.113.44');
+    expect(args.ecosystemPath).toBe('/var/www/chexian/server/ecosystem.config.cjs');
+    expect(args.help).toBe(false);
+  });
+
+  it('--target both --dry-run --reason → 逐项解析', () => {
+    const args = parseArgs(['--target', 'both', '--dry-run', '--reason', 'B7 mismatch']);
+    expect(args.target).toBe('both');
+    expect(args.dryRun).toBe(true);
+    expect(args.reason).toBe('B7 mismatch');
+  });
+
+  it('--ssh-alias / --ecosystem-path 覆盖默认值', () => {
+    const args = parseArgs(['--ssh-alias', 'me@host', '--ecosystem-path', '/tmp/eco.cjs']);
+    expect(args.sshAlias).toBe('me@host');
+    expect(args.ecosystemPath).toBe('/tmp/eco.cjs');
+  });
+
+  it('--help / -h → help=true', () => {
+    expect(parseArgs(['--help']).help).toBe(true);
+    expect(parseArgs(['-h']).help).toBe(true);
   });
 });
 
@@ -200,7 +210,7 @@ describe('dry-run 模式 — 仅打印不执行 ssh', () => {
 
   it('dry-run=true → execFileSync 不被调用', () => {
     // 模拟 dry-run 逻辑（与源码一致：dryRun=true 则 process.exit(0)，execFileSync 不调用）
-    const dryRun = true;
+    const { dryRun } = parseArgs(['--target', 'shadow', '--dry-run']);
     if (!dryRun) {
       execSpy('ssh', []);
     }
@@ -208,9 +218,9 @@ describe('dry-run 模式 — 仅打印不执行 ssh', () => {
   });
 
   it('dry-run=false + execFileSync 成功 → 调用一次 ssh', () => {
-    const dryRun = false;
+    const { dryRun } = parseArgs(['--target', 'shadow']);
     if (!dryRun) {
-      execSpy('ssh', ['-o', 'BatchMode=yes', 'deployer@vps', 'echo ok'], { encoding: 'utf-8' });
+      execSpy('ssh', buildSshArgs('deployer@vps', 'echo ok'), { encoding: 'utf-8' });
     }
     expect(execSpy).toHaveBeenCalledOnce();
     expect(execSpy.mock.calls[0][0]).toBe('ssh');
@@ -227,9 +237,9 @@ describe('dry-run 模式 — 仅打印不执行 ssh', () => {
 // ─── 边界：--target 非法值的错误处理 ─────────────────────────────────────────
 
 describe('--target 参数验证边界', () => {
-  it("target='shadow|routing|both' 三者均视为合法", () => {
-    const validTargets = ['shadow', 'routing', 'both'];
-    for (const t of validTargets) {
+  it("target='shadow|routing|both' 三者均视为合法（与 VALID_TARGETS 一致）", () => {
+    expect(VALID_TARGETS).toEqual(['shadow', 'routing', 'both']);
+    for (const t of VALID_TARGETS) {
       const switches = affectedSwitches(t);
       expect(switches.length).toBeGreaterThan(0);
     }

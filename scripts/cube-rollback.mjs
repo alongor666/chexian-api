@@ -22,64 +22,100 @@
  *   revert PR #595/#600/#601/#602/#603/#604。但这里两道开关默认 'false' 已经等同从未存在。
  *
  * 相关：scripts/release/cube-promote.mjs（推进决策） · scripts/sentinel/cube-grayscale-sentinel.mjs（哨兵）
+ *
+ * 纯决策逻辑（affectedSwitches / buildSedExpression / buildRemoteCommand / buildSshArgs / parseArgs）
+ * 均已 export，供 scripts/__tests__/cube-rollback.test.mjs 直接 import 真实实现测试。
  */
 
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
-const argv = process.argv.slice(2);
-const args = {
-  target: null,
-  dryRun: false,
-  sshAlias: 'deployer@162.14.113.44',
-  ecosystemPath: '/var/www/chexian/server/ecosystem.config.cjs',
-  reason: '',
-};
-for (let i = 0; i < argv.length; i++) {
-  const a = argv[i];
-  const eat = () => argv[++i];
-  if (a === '--target') args.target = eat();
-  else if (a === '--dry-run') args.dryRun = true;
-  else if (a === '--ssh-alias') args.sshAlias = eat();
-  else if (a === '--ecosystem-path') args.ecosystemPath = eat();
-  else if (a === '--reason') args.reason = eat();
-  else if (a === '--help' || a === '-h') {
+export const VALID_TARGETS = ['shadow', 'routing', 'both'];
+
+/** 根据 target 决定受影响的开关列表；非法 target 返回空数组 */
+export function affectedSwitches(target) {
+  if (target === 'both') return ['CUBE_SHADOW_COMPARE', 'CUBE_ROUTING_ENABLED'];
+  if (target === 'shadow') return ['CUBE_SHADOW_COMPARE'];
+  if (target === 'routing') return ['CUBE_ROUTING_ENABLED'];
+  return [];
+}
+
+/** 生成远程 sed 表达式（单引号转义形式，把开关 'true' 改为 'false'） */
+export function buildSedExpression(target) {
+  return affectedSwitches(target)
+    .map((k) => `s/${k}: '\\''true'\\''/${k}: '\\''false'\\''/`)
+    .join(';');
+}
+
+/** 组装远程三步链：sed 改开关 → reload → health 验活（&& 连接，前步失败后步不执行） */
+export function buildRemoteCommand(target, ecosystemPath) {
+  return [
+    `sudo sed -i "${buildSedExpression(target)}" ${ecosystemPath}`,
+    `sudo /usr/local/bin/deploy-chexian-api reload`,
+    `curl -s http://localhost:3000/health | head -c 200`,
+  ].join(' && ');
+}
+
+/** 组装 ssh 参数（BatchMode + ConnectTimeout 防交互式挂起） */
+export function buildSshArgs(sshAlias, remote) {
+  return ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', sshAlias, remote];
+}
+
+/** 解析 CLI 参数；--help 时返回 { help: true } 由入口决定退出 */
+export function parseArgs(argv) {
+  const args = {
+    target: null,
+    dryRun: false,
+    sshAlias: 'deployer@162.14.113.44',
+    ecosystemPath: '/var/www/chexian/server/ecosystem.config.cjs',
+    reason: '',
+    help: false,
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    const eat = () => argv[++i];
+    if (a === '--target') args.target = eat();
+    else if (a === '--dry-run') args.dryRun = true;
+    else if (a === '--ssh-alias') args.sshAlias = eat();
+    else if (a === '--ecosystem-path') args.ecosystemPath = eat();
+    else if (a === '--reason') args.reason = eat();
+    else if (a === '--help' || a === '-h') args.help = true;
+  }
+  return args;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
     console.error('见文件头注释；--target shadow|routing|both [--dry-run] [--reason "..."]');
     process.exit(0);
   }
+
+  if (!VALID_TARGETS.includes(args.target)) {
+    console.error('必须 --target shadow|routing|both');
+    process.exit(2);
+  }
+
+  const remote = buildRemoteCommand(args.target, args.ecosystemPath);
+  const sshCmd = buildSshArgs(args.sshAlias, remote);
+
+  console.log(`[cube-rollback] target=${args.target}${args.reason ? ` reason="${args.reason}"` : ''}`);
+  console.log(`[cube-rollback] 将执行：ssh ${args.sshAlias} '${remote}'`);
+  if (args.dryRun) {
+    console.log('[cube-rollback] --dry-run，不执行');
+    process.exit(0);
+  }
+
+  try {
+    const out = execFileSync('ssh', sshCmd, { encoding: 'utf-8', stdio: ['inherit', 'pipe', 'inherit'] });
+    console.log(out);
+    console.log('[cube-rollback] 完成。建议跑 scripts/release/cube-promote.mjs 二次确认状态。');
+  } catch (err) {
+    console.error(`[cube-rollback] 失败：${err.message}`);
+    process.exit(1);
+  }
 }
 
-if (!['shadow', 'routing', 'both'].includes(args.target)) {
-  console.error('必须 --target shadow|routing|both');
-  process.exit(2);
-}
-
-const switches = args.target === 'both'
-  ? ['CUBE_SHADOW_COMPARE', 'CUBE_ROUTING_ENABLED']
-  : args.target === 'shadow'
-  ? ['CUBE_SHADOW_COMPARE']
-  : ['CUBE_ROUTING_ENABLED'];
-
-const sedExpr = switches.map((k) => `s/${k}: '\\''true'\\''/${k}: '\\''false'\\''/`).join(';');
-const remote = [
-  `sudo sed -i "${sedExpr}" ${args.ecosystemPath}`,
-  `sudo /usr/local/bin/deploy-chexian-api reload`,
-  `curl -s http://localhost:3000/health | head -c 200`,
-].join(' && ');
-
-const sshCmd = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', args.sshAlias, remote];
-
-console.log(`[cube-rollback] target=${args.target}${args.reason ? ` reason="${args.reason}"` : ''}`);
-console.log(`[cube-rollback] 将执行：ssh ${args.sshAlias} '${remote}'`);
-if (args.dryRun) {
-  console.log('[cube-rollback] --dry-run，不执行');
-  process.exit(0);
-}
-
-try {
-  const out = execFileSync('ssh', sshCmd, { encoding: 'utf-8', stdio: ['inherit', 'pipe', 'inherit'] });
-  console.log(out);
-  console.log('[cube-rollback] 完成。建议跑 scripts/release/cube-promote.mjs 二次确认状态。');
-} catch (err) {
-  console.error(`[cube-rollback] 失败：${err.message}`);
-  process.exit(1);
-}
+// 中文路径下禁用 `file://${argv[1]}` 拼接守卫（不做 URL 编码必失配），须 pathToFileURL 归一
+const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+if (isMain) main();
