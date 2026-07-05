@@ -17,11 +17,11 @@
 
 ---
 
-## 📋 活跃任务速查（56 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（55 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（12 项）**
+**P1（11 项）**
 
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
@@ -34,7 +34,6 @@
 - 2026-06-27-claude-e96d85 `PARTIAL` — 治理工程二·机构省份元数据单一事实源(含山西在线bug)
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
-- 2026-07-05-claude-e52a30 — governance 奥卡姆重构（用户 2026-07-04 全量授权）
 
 **P2（26 项）**
 
@@ -146,5 +145,4 @@
 | 2026-07-05-claude-7f984d | 2026-07-05 | 前端构建治理 | @claude | 为 vite chunk 图不变式加自动回归闸(code-reviewer PR#904 MEDIUM 发现)：#904 手工修复的两条不变式当前仅靠人工 build+肉眼看 dist 守护，未来加 vendor 分组规则/升级 echarts-for-react\|vite\|rollup 可能静默重引循环依赖或让 echarts 回到首屏而无告警。方向：postbuild CI 脚本断言(a)构建 chunk 图 DFS 零环 (b)dist/index.html 的 modulepreload 不含任何 echarts/zrender 命名 chunk；挂到 bun run build 或 governance。按 evidence-loop.md §4 性能类改动的 harness 归属登记。【账】做完加1回归脚本+1governance闸/触发条件=分包规则或 echarts/react 相关依赖升级 | P3 | PROPOSED | vite.config.ts,.claude/rules/evidence-loop.md | vite.config.ts,scripts/check-governance.mjs |  |
 | 2026-07-05-claude-8d31a5 | 2026-07-05 | Bugfix/Backend | @claude | generateMonthlyExpenseQuery 直接 FROM PolicyFact 未走 policy_dedup（B252 同类）：server/src/sql/cost/earned-premium-detail.ts 的月度费用查询 SUM(premium)/COUNT(DISTINCT policy_no)/SUM(fee_amount) 直读 PolicyFact，若存在批改副本（policy_no 非唯一，见 memory feedback_policy_join_dedup）则保费/费用按副本重复累加。需先 duckdb 直查确认 PolicyFact 是否含批改副本、premium 是逐批改还是净额，再决定是否套 policy_dedup（B274 owner 决策只覆盖附加税率，去重不在其内）。【账】做完删：月度费用查询裸 FROM PolicyFact；加：与其它成本查询一致的 policy_dedup CTE；触发条件：duckdb 直查证实 premium 因批改副本虚高。 | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts (generateMonthlyExpenseQuery) |  |
 | 2026-07-05-claude-da5ac0 | 2026-07-05 | Chore | @claude | 整条 patrol 功能链退役评估（3a6daf 残留）：删 chexian-patrol 命令后，patrol_engine.py(524行) + server/src/routes/query/patrol.ts(query.ts:65 活跃挂载) + src/shared/api/patrol-api.ts(client.ts 消费) + types/patrol.ts 仍在，但①数据源 renewal_universe/latest.parquet + RENEWAL_PATROL_REPORT_FRAMEWORK.md 缺失②前端无 patrol 页面/路由消费(grep 零命中)③apiClient.patrol 子客户端无组件调用。整链处于'基础设施在位但休眠'。退役涉及 query 路由聚合器 + apiClient 架构，风险高于删命令文件，须单独评估(diagnose-renewal 是否已实质覆盖→是则整链退役/否则明确保留场景)。【账】做完删4文件+改query.ts/client.ts/api-routes/2处子客户端注册 或 明确保留并补前端消费/加0机制/触发条件=确认diagnose-renewal覆盖度 | P3 | PROPOSED | N/A | N/A |  |
-| 2026-07-05-claude-e52a30 | 2026-07-05 | Refactor/Governance | @claude | governance 奥卡姆重构（用户 2026-07-04 全量授权）：57 项审计定位 8 重复/4 冲突/6 可合并族/若干移位日落项，分批推进。批次一（本 PR）执行层去重+冲突处置+低价值移位（57→52 项，实测 11.3s→1.85s）。后续批次：②pattern 扫描引擎+fixture 红绿基线（11 项禁止模式族收拢单引擎单遍历）③对账族引擎化 ④cube 族/省份族合并+统一豁免语法 governance-allow: <规则id> <引用> <理由>+检查生命周期 retireWhen 字段（前缀族挂 B3 子目录落地日落，接 801409 退役清单）⑤harness 扩自我适用检查。能力不降 oracle=每检查一 fixture 红绿对照。审计报告见本会话；外部对标 fitness functions/dependency-cruiser/semgrep/棘轮基线（B321 已判不引 ESLint，自研轻量引擎路线） | P1 | PROPOSED | scripts/INDEX.md | scripts/check-governance.mjs,scripts/lint-ui.mjs | 批次二完成：pattern 扫描引擎（scripts/governance/pattern-engine.mjs 规则表驱动+组内文件缓存+scanContentWithRule 纯函数）+ 规则表（pattern-rules.mjs，8 检查→11 规则保真移植）+ 红绿 fixture oracle（pattern-engine.test.mjs 26 用例+完备性断言强制新规则带 fixture）。check-governance.mjs -539 行（8 手写函数删除）；governance 52/52 保持 1.8s；端到端红绿探针验证（注入 params.isNev= 违规即红、清理即绿）。剩余：③对账族 ④cube/省份族+统一豁免语法+retireWhen ⑤harness 自我适用 <br>批次三完成：①cube 族 4→1（影子对账容差/影子路由覆盖/SQL三件套/版本绑定合并为「立方体不变量」，三张手工同步表下沉 cube-routes.mjs SSOT 字段——治理脚本不再违反自己立的单源规）②路由对账工具去重（extractConstPathSet/paramBase/QUERY_ROUTE_EXEMPT 抽共享，消除两处括号配平重复实现）③检查生命周期 retireWhen 字段落地（前缀族两项挂 B3 子目录日落，runCheckList 跑分尾部汇总提示——expires 哲学自我适用）。governance 49/49；容差篡改红测试即拦；scripts 测试 249/249。剩余：⑤harness 自我适用扩展+豁免语法统一（存量 18 处 marker） |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功能对等覆盖 v1 场景，再切 daily.mjs 调度并删 v1。承接 B253 弃置结论。【账】做完删 v1 脚本+DEFAULT_SCHEMA 硬编码/加 0 新机制/触发条件=确认 v2 功能对等 | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ |  |
