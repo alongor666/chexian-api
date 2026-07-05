@@ -20,15 +20,16 @@ describe('performance analysis SQL', () => {
     expect(filter).toContain("customer_category LIKE '%出租%'");
   });
 
-  it('summary SQL should expose premium/plan/auto_count/avg_premium/achievement/growth/ratio fields', () => {
+  it('summary SQL should expose premium/auto_count/avg_premium/growth/ratio fields', () => {
     const sql = generatePerformanceSummaryQuery('1=1', '1=1', 'all', 'month', 'mom', 'none');
 
     expect(sql).toContain('AS premium');
-    expect(sql).toContain('AS plan_premium');
     expect(sql).toContain('AS avg_premium');
-    expect(sql).toContain('AS achievement_rate');
     expect(sql).toContain('AS growth_rate');
     expect(sql).toContain('AS nev_rate');
+    // 42bf28：汇总表按险别组合分行、年计划仅业务员粒度，plan_premium/achievement_rate 恒 NULL 无信息量已删列
+    expect(sql).not.toContain('AS plan_premium');
+    expect(sql).not.toContain('AS achievement_rate');
   });
 
   it('summary SQL should support expandable dimensions', () => {

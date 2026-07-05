@@ -85,18 +85,43 @@ describe('API client contract coverage', () => {
     expect(resp.rows[0]?.penetration_rate).toBe(15);
   });
 
-  it('performance summary endpoint preserves year and dimension', async () => {
+  it('performance summary endpoint preserves year and dimension（并透传删列后的行形状 · 42bf28）', async () => {
     const { apiClient } = await importClient();
+    // 42bf28：汇总表恒 NULL 的 plan_premium/achievement_rate 两列已从后端与契约删除，
+    // 契约行不再包含这两字段；此处以代表性行断言保留字段透传、被删字段缺席。
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, data: {} }),
+      json: async () => ({
+        success: true,
+        data: {
+          rows: [{
+            coverage_combination: '整体',
+            row_label: '整体',
+            row_level: 0,
+            expand_key: null,
+            premium: 1234.5,
+            auto_count: 100,
+            avg_premium: 123.45,
+            growth_rate: 12.3,
+            nev_rate: 40,
+            renewal_rate: 55,
+            transfer_business_rate: 10,
+            new_car_rate: 30,
+            transfer_rate: 5,
+          }],
+        },
+      }),
     });
-    await apiClient.performance.summary({ year: '2026', dimension: 'team' });
+    const resp = await apiClient.performance.summary({ year: '2026', dimension: 'team' });
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/query/performance-summary?');
     expect(calledUrl).toContain('year=2026');
     expect(calledUrl).toContain('dimension=team');
+    const row = resp.rows[0]!;
+    expect(row.growth_rate).toBe(12.3);
+    expect('plan_premium' in row).toBe(false);
+    expect('achievement_rate' in row).toBe(false);
   });
 
   it('performance drilldown endpoint preserves drill path payload', async () => {
