@@ -5,9 +5,18 @@ set -e
 
 # --- 1. 拦截大文件（>500KB）---
 MAX_SIZE=512000
+# 白名单（按 basename 匹配，空格分隔）：git 跟踪的 append-only 事件账本等非生成产物，
+# 只增不减必然越过阈值，豁免大小闸避免每次记账提交被迫 --no-verify（d16230）。
+SIZE_ALLOWLIST="BACKLOG_LOG.jsonl"
 LARGE_FILES=""
 for file in $(git diff --cached --name-only --diff-filter=ACM); do
   if [ -f "$file" ]; then
+    base=$(basename "$file")
+    skip=""
+    for allow in $SIZE_ALLOWLIST; do
+      if [ "$base" = "$allow" ]; then skip=1; break; fi
+    done
+    if [ -n "$skip" ]; then continue; fi
     size=$(wc -c < "$file")
     if [ "$size" -gt "$MAX_SIZE" ]; then
       LARGE_FILES="$LARGE_FILES\n  $file ($(( size / 1024 ))KB)"
