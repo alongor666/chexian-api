@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（57 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（56 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -35,7 +35,7 @@
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
 
-**P2（30 项）**
+**P2（29 项）**
 
 - B255 `PARTIAL` — 报价数据「是否报价」字段不可靠 — 改用续保单号判定
 - B274 — total_expense 1.6% vs L4 注册表 1.5% 系数不一致
@@ -45,7 +45,6 @@
 - B311 — ETL version bump 早于视图物化竞态（后端架构审计 S4·待对账）
 - B335 — 批量卫生项（21 目录排查 §3 P2 汇总）
 - 2026-06-10-claude-3a6daf — 深入评估 chexian-patrol 续保巡检命令的设计思路
-- 2026-06-10-claude-b4da70 — 数据管理/cli.py 工具库空壳化处置
 - 2026-06-10-claude-e2240c — 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通
 - 2026-06-11-claude-3093a3 `IN_PROGRESS` — 重复组件收拢（全站重复审计 主题②）
 - 2026-06-11-claude-e9a906 — [口径裁决]地理跨区 sentinel 反转
@@ -105,7 +104,6 @@
 | B335 | 2026-06-05 | Refactor/Quality | @claude | **批量卫生项**（21 目录排查 §3 P2 汇总）：any 收敛（前端 ECharts 回调 ~130+、services 31 用 CallbackDataParams）、escapeSqlValue @deprecated 迁 escapeSqlLiteral（10+ SQL 模块）、目录碎片合并（charts/services 单文件并入 widgets/shared-export、widgets table+tables）、ui↔components 边界、INDEX.md 漂移、@deprecated 别名（conversion_rate/UserLoginPanel）、underwriting-recommendation 死红线策略 | P2 | PROPOSED | 开发文档/目录排查报告_2026-06-05.md §3 | src/widgets；src/shared；server/src/utils/security.ts；server/src/sql | 分批清理；各项 build/governance 绿 <br>架构价值审计窄化（2026-07-04）：escapeSqlValue 165 处迁移移出范围——实测已是 escapeSqlLiteral 纯别名、功能完全等价，机械替换的 diff 噪音与 review 成本超过收益（五分类=纯装饰）；@deprecated 标记本身已起文档告知作用。其余结构性子项（目录碎片/ui↔components 边界）如需推进应各自拆独立条目 |
 | 2026-06-09-claude-709fc0 | 2026-06-09 | ApiClient 神类拆分 | @claude | 契约覆盖 meta 守卫（gold-plating·非阻塞）：随 Phase 2 后续 7 域铺开，加一个自执行 meta 测试——枚举 apiClient 各命名空间方法、断言每个都在 client-contracts 契约表里有对应 case（或数量对账），让"新域无覆盖"在测试层自动暴露，替代"人记得追加"。来源：PR #542 评审观察项 #2。 | P3 | PROPOSED | N/A | src/shared/api/__tests__/client-contracts.test.ts |  |
 | 2026-06-10-claude-3a6daf | 2026-06-10 | 评估/工具链 | @claude | 深入评估 chexian-patrol 续保巡检命令的设计思路：其依赖的数据源 数据管理/warehouse/fact/renewal_universe/latest.parquet 与必读规范 数据管理/knowledge/ai/RENEWAL_PATROL_REPORT_FRAMEWORK.md 均不存在，巡检产物目录也不存在，命令当前不可执行。需评估：1) 三口径巡检（已到期/30天内/全年）是否已被 diagnose-renewal v2.2（基于 renewal_tracker）实质覆盖；2) 若有独有价值（5 优先客户类别×AI 深度研判），应重建数据链还是把独有逻辑并入 diagnose-renewal；3) 评估后决定修复或删除该命令。来源：2026-06-09 slash 命令全面优化评审。 | P2 | PROPOSED | .claude/commands/chexian-patrol.md | 数据管理/patrol/patrol_engine.py |  |
-| 2026-06-10-claude-b4da70 | 2026-06-10 | 评估/工具链 | @claude | 数据管理/cli.py 工具库空壳化处置：cli.py 注册的 9 个工具（analyze_parquet/analyze_excel/deep_analysis/field_relation/field_deep/field_exhaustive/excel_to_parquet/earned_premium/diagnose_agent CLI 入口）的模块文件目录 data_tools/ field_tools/ conversion_tools/ business_tools/ 在主仓库与 git 跟踪中全部不存在，2026-06-09 实测运行报模块文件不存在。需决策：1) 重建工具模块（如有真实使用场景）；2) 退役 cli.py 并删除 /chexian-data-tools 命令（替代能力已有：duckdb 直查/daily.mjs ETL/diagnose-* pipelines）。/chexian-data-tools 命令文件已改写为不可用状态指针。 | P2 | PROPOSED | .claude/commands/chexian-data-tools.md | 数据管理/cli.py |  |
 | 2026-06-10-claude-e2240c | 2026-06-10 | 续保追踪 | @claude | 续保页吨位货车(1T/2-9T/1-2T)与自卸/牵引/普货 chip 无法接通。根因：RenewalTrackerFact 派生域缺 tonnage_segment 与 vehicle_model 字段。需续保派生域 ETL 从主表 join 补这两字段（tonnage_segment 轻，vehicle_model 重）后，后端 renewal-tracker 路由加对应过滤。 | P2 | PROPOSED | N/A | server/src/sql/renewal-tracker.ts | 审计标注（2026-07-04）：tonnage_segment/vehicle_model 仍未接入属实；本条按 D3=B 决策挂起，已被多省派生域工程（6d5a267a/f955a467）认领为子项，勿独立重复排期 |
 | 2026-06-11-claude-02aa70 | 2026-06-11 | 产品决策 | @claude | 产品层冗余裁剪决策（需用户拍板，全站重复审计 主题⑤）：a) 报价转化页 A 版/B 版六专题大面积同件复用，同一内容 3 个入口，是否保留双版本；b) 成本分析页 basic 与 comprehensive 两视图明细表实质重叠（综合视图独有价值=象限图+ROI），是否合并；c) 客户流向页「转入来源」API 已封装前端从未调用（板块空缺，做或删）；d) 报表模板页「使用此模板」为空函数纯占位（做或删）。 | P3 | PROPOSED | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/features/quote-conversion；src/features/cost；src/features/customer-flow；src/features/report | owner 2026-07-04 拍板「删」：四点冗余全部裁剪——报价转化 A/B 版并存、basic/comprehensive 视图重叠、空板块、「使用此模板」空占位按钮。转为净简化执行任务（删代码），不再等产品评估 |
 | 2026-06-11-claude-3093a3 | 2026-06-11 | Refactor/Frontend | @claude | 重复组件收拢（全站重复审计 主题②）：机构×维度×时间热力图 4 套独立实现（performance-org/cross-sell/claims-detail/quote-conversion）、机构→团队→业务员下钻表 5 处、KPI 卡 5 套、趋势折线封装 5 套、导出对话框 2 个（widgets/export/ExportDialog vs features/file/ExportModal）+ crossSellExport 重写 CSV 下载、格式化函数多处本地重写（renewal-tracker/expense-development/growth 对应 shared/utils/formatters 已有）、dashboard useFilterState 与全局 FilterContext 双轨。逐类提共享部件，结合功能迭代渐进做。关联 B330（依赖违规）/B331（大文件拆分）。 | P2 | IN_PROGRESS | /Users/alongor666/.claude/plans/dedup-remediation-kind-black.md | src/widgets；src/shared；src/features/dashboard | 标签收拢实施时排查出 5 处 SSOT 之外的残留硬编码维度标签副本（本批未动）：① PerformanceAnalysisPanel.tsx:92-101 PERF_HEATMAP_DRILL_DIMENSIONS（team:'团队'/insurance_grade:'风险评分'，与同页 HEATMAP_DIMENSION_LABELS 已统一文案形成页内不一致，优先治理）；② CrossSellAnalysisPanel.tsx:389-396 HEATMAP_DRILL_DIMENSIONS（team:'团队'，同页不一致，优先治理）；③ claims-detail/ClaimsHeatmapPanel.tsx:29,35；④ premium-report/hooks/usePremiumPlan.ts:35 LEVEL_LABELS；⑤ quote-conversion/DrilldownTable.tsx:101。收拢时改为 pickDimensionLabels 派生。 <br>架构价值审计量化（2026-07-04）：8 个「重复」目标里 4 个实为零消费者死代码，共约 1038 行可直接删（widgets/kpi/KpiCard.tsx 58 行、widgets/export/ExportDialog.tsx 302 行、dashboard/hooks/useFilterState.ts 217 行、PerformanceOrgHeatmapSection.tsx 461 行 @deprecated）。执行顺序：①删 4 具死代码（零风险）②维度标签采用现成 pickDimensionLabels SSOT（顺修 Perf/Claims 文案不一致真 bug）③格式化函数换 import ④趋势折线抽公共 echarts 壳（~80-120 行）⑤热力图收拢（~2831 行，最后）。另发现未登记真重复：CSV 转义/BOM/Blob 在 crossSellExport.ts 与 CrossSellOrgTrendChart.tsx:158-186 各一份 <br>①删4具零消费者死代码完成（1037行）：widgets/kpi/KpiCard.tsx(58) + widgets/export/{ExportDialog.tsx,index.ts barrel}(301) + dashboard/hooks/useFilterState.ts(217) + dashboard/performance/PerformanceOrgHeatmapSection.tsx(461,@deprecated)。逐个 grep 复核零消费者（EnhancedKpiCard≠KpiCard、barrel 无人消费、ExportModal:43 仅注释、③④符号名全仓空）；4 文件均无对应测试；同步删 widgets/kpi/INDEX.md 过时 KpiCard.tsx 条目；bun run build 14.24s 零报错。残留②③④⑤待后续 PR |
