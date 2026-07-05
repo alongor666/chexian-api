@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（55 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（56 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -35,7 +35,7 @@
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
 
-**P2（26 项）**
+**P2（27 项）**
 
 - B314 — data-sources.json 契约/状态拆分（接续 B313）
 - B304 `PARTIAL` — earned-premium 双口径未文档化
@@ -50,6 +50,7 @@
 - 2026-06-19-claude-35998a `PARTIAL` — cx-cli 全面能力升级（5 阶段，对齐 dbt/Cube 级语义层 CLI）
 - 2026-06-20-claude-2eccfa `BLOCKED` — 山西机构规范化映射 (61 原始机构 → 11 经营单元)
 - 2026-06-22-16ab1c-b842bc — 报告托管 phase-2 GATED 续作
+- 2026-06-23-claude-e52d9b — 山西上线 G7 P2 — SX 预置账号 login→403 集成测试
 - 2026-06-23-claude-f77f8a — 跨省同 VIN 冲突登记机制（P3-E R32 P2·山西 GATED 上线前完成）
 - 2026-06-24-claude-0898bd — multi-branch-stress-test cross-sell 覆盖缺口
 - 2026-06-24-claude-f7590d — sx-promote.mjs 批量 staging→final rename 非跨进程崩
@@ -114,6 +115,7 @@
 | 2026-06-22-claude-03f6f0 | 2026-06-22 | 前端重构 follow-up | @claude | PerformanceAnalysisPanel 主组件(~900行)抽 usePerformancePanelController hook —— b331 拆分后续。codex 闸-1 判此项需先补行为测试再动(主组件 10+ 耦合 state/handler)，故 b331 本轮不做。 | P3 | PROPOSED | N/A | src/features/dashboard/PerformanceAnalysisPanel.tsx | 架构价值审计冻结（2026-07-04）：纯重构无行为变化但有回归风险，codex 闸已判须先补行为测试；触发条件=下次在该组件加新功能且现状明显拖慢开发时顺手做，不单独立项 |
 | 2026-06-22-claude-21c578 | 2026-06-22 | 前端重构 follow-up | @claude | 两个 distribution chart 去重：内部 DistributionChart(PerformancePanelDistributionChart) 与既有 performance/PerformanceDistributionChart.tsx option 已漂移，codex 闸-1 确认应另案统一。 | P3 | PROPOSED | N/A | src/features/dashboard/performance/PerformanceDistributionChart.tsx,src/features/dashboard/performance/PerformancePanelDistributionChart.tsx | 审计警示（2026-07-04）：抽查证实 PerformancePanelDistributionChart.tsx 与 performance/PerformanceDistributionChart.tsx 两文件均仍存在（origin/main git ls-tree 亲验），去重未完成——曾有 agent 审计误判「文件已删」，勿据此收账 |
 | 2026-06-23-claude-801409 | 2026-06-23 | 数据架构 · 多省 Phase B 隔离层(current/<省>/子目录) | @claude | Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P4): 用分省子目录 current/<省>/ 替代 #753 扁平目录+SX_前缀+rsync filter。高爆炸半径,用户 2026-06-23 授权动工,单任务 evidence-loop+双codex闸独立PR推进。范围红线: 仅SC+SX·readdir枚举实际子目录禁省常量·禁造加省脚手架·GATED严禁推SX进生产(current/SX空)·SC逐字节安全。子任务 B1(生死点装载发现)/B2(ETL落盘+扁平readdir站点)/B3(sync-vps退役5函数)/B4(web上传子目录化)/B5(RLS/性能/cutover)。 | P1 | IN_PROGRESS | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | server/src/services/data-bootstrapper.ts | B1 装载层子目录发现完成(PR pending): discoverInDir 静态发现顶层+current/<省>/(^[A-Z]{2}$ readdir枚举,禁省常量) + ParquetFileInfo.branch + enforceProvinceSubdirGate(GATED fail-closed: 非基准省+BRANCH_RLS_ENABLED!=true抛错/扁平+子目录并存抛错,基准省=getDeploymentBranchCode动态) + deduplicateOverlapping分组键纳branch(matching/非matching都branch::key防跨省同名同起期碰撞,P0生死点). 字节安全: 真实current/ discoverInDir返回同4扁平文件branch全undefined+新逻辑今日休眠. oracle: duckdb显式数组跨子目录读逐省==文件之和(loadMultipleParquet透明,无需改loader R28第7次). 18新单测+6现有dedup全绿+verify:full 3970+governance44/44+typecheck. 双闸零P0/P1: codex闸-1抓2P0(非matching键碰撞/GATED fail-open)+4P1全采纳; 闸-2零残留可合并; evidence-verifier CONFIRMED 9/9. 范围仅data-bootstrapper.ts(+111/-15)+新测试. 下一步 B2(ETL落盘+扁平readdir站点). <br>Phase B B2 完成（ETL gated 写侧 current/<省>/ 能力 + 全部读侧 readdir/glob 站点下钻子目录 + 每处子目录枚举断言）。读侧 6 站点：parquet-overlap-check/quick_reference/fetch-local-metrics/check-governance 下钻（显式文件列表 read_parquet([...])，非宽 ** glob）；full-snapshot-cache-key + renewal readiness 保持 flat 对齐延后 Python 消费者（renewal 加 subdir-only fail-closed）。写侧专用 env POLICY_CURRENT_SUBDIR_LAYOUT（默认 off SC 扁平字节安全），subdir 布局强制 noSync，不自动 flat-clear（留 cutover SOP）。范围外延后：18 个 Python DuckDB glob + B3 sync-vps + cube-probe/run.mjs。双闸：codex 闸-1 抓 6 P0（重塑写侧）+ 闸-2 抓 1 P1（** glob 过读 → 改显式列表）全修；evidence-verifier 8 攻击全反驳。verify:full 44/44+3993 测试+typecheck 全绿；字节安全 oracle current/SC/ ** = 扁平 2,600,421 行。B3/B4/B5 仍待。 <br>审计修正（2026-07-04 全量核查）：B1（PR #773）/B2（PR #777）已合并；B3 已实现完成但因与生产 cutover Option A（PR #783 扁平前缀）冲突被 owner 暂停，代码停在未合并分支 claude/multi-province-b3-syncvps（pr-evolution.md:1291）；B4/B5 未启动。无其他会话在推进——续作前先由 owner 定 B3 方向（Option A vs 子目录终局 D6） <br>owner 2026-07-04 拍板：B3 子目录方案（950267c6，分支 claude/multi-province-b3-syncvps）为多省隔离终局胜出，PR #783 前缀方案转过渡态待退役。本任务成为子目录落地唯一追踪主体（85759a 已归并弃置、a5aa03-P4 并入本线）。续作顺序：B3 rebase 合并 → B4/B5 → 前缀防线退役清单（含 governance 约 6 个前缀检查：checkPolicyGlobPrefixIsolation/checkProvincePrefixMapConsistency 等） |
+| 2026-06-23-claude-e52d9b | 2026-06-23 | 测试 · 多省(山西)GATED前置 | @claude | 山西上线 G7 P2 — SX 预置账号 login→403 集成测试：SX_GATED=0 时 POST /api/auth/login 用 sx_viewer 账号须返回 HTTP 403 + {code:PROVINCE_DISABLED} 而非 200；测试须覆盖 ① GATED=0 阻断、② GATED=1 穿通（200+token）、③ SC 账号不受 GATED 影响 三个断言。 | P2 | PROPOSED | 开发文档/multi-branch/全国多省架构决策_2026-06-19.md | server/src/services/auth.ts server/src/config/__tests__/preset-users.test.ts |  |
 | 2026-06-23-claude-f77f8a | 2026-06-23 | 数据架构 · 多省派生化 follow-up | @claude | 跨省同 VIN 冲突登记机制（P3-E R32 P2·山西 GATED 上线前完成）: P3-E new_energy_claims 用 ROW_NUMBER PARTITION BY VIN ORDER BY insurance_start_date DESC, policy_no DESC 同时取 org+branch 静默兜底——当前 distinct_branch_in_hit=1 安全。但山西 GATED 上线后若同一 VIN 跨省（610/618 多保单），现状只取最新单一分支，未登记/告警冲突。须在 enrich_org_and_branch_from_policy SQL 加 distinct_branch 统计：>1 时打 warning 日志（含 VIN/冲突分支列表）；若超过预设阈值走 fail-fast。codex 闸-1 P2#2 + 闸-2 P2 一致建议。山西上线前必修，否则机构归错风险。 | P2 | PROPOSED | N/A | 数据管理/pipelines/convert_new_energy_claims.py |  |
 | 2026-06-24-claude-0898bd | 2026-06-24 | 多省·山西 cutover | @claude | multi-branch-stress-test cross-sell 覆盖缺口：/api/query/cross-sell 压测里 HTTP 400(路由参数过时)被当失败排除→未进串读断言。补 cross-sell 必需参数以扩 gate 覆盖 | P2 | PROPOSED | N/A | scripts/multi-branch-stress-test.mjs |  |
 | 2026-06-24-claude-43e39b | 2026-06-24 | 多省·山西 cutover | @claude | achievement_cache/dim 兼容层跨省复合键（codex 闸-2 P1·SX salesman维度 GATED 上线前必修）：multiProvince 时 dedupedSalesmanDimSql PARTITION BY full_name / ytd_actual GROUP BY salesman_name / JOIN full_name=salesman_name 仍单键，SC/SX 同名会串数。修法：branchAware 时全升 (branch_code,full_name)/(branch_code,salesman_name) + SC/SX 同名集成测试。Task A SC-only 不触发（无 SX salesman），故非 Task A 阻断，是 SX salesman维度落地硬前置 | P1 | PROPOSED | N/A | server/src/services/duckdb-domain-loaders.ts |  |
