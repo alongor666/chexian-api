@@ -25,7 +25,14 @@
  *   node scripts/pull-bi-exports.mjs --dry-run              # rsync -n + 只打印校验与分发计划
  *   node scripts/pull-bi-exports.mjs --skip-rsync           # 跳过拉取，用现有 inbox 校验+分发
  *   node scripts/pull-bi-exports.mjs --skip-verify-province # 跳过省份内容核验（应急，红字告警）
+ *   node scripts/pull-bi-exports.mjs --allow-stale 02       # 显式豁免指定 code 的"mtime 非今天"闸（应急：
+ *                                                             上游当天没导但旧份有效仍要发布；仅豁免新鲜度）
  *   node scripts/pull-bi-exports.mjs --force                # 校验 error 降级为告警继续分发（应急）
+ *
+ * 分层校验语义（2026-07-05）：
+ *   - 硬闸 code（01/02/03/05）：任一异常 → 中止（HARD_REQUIRED_CODES）
+ *   - 可选 code（04 厂牌，低频维表）：异常 → 告警 + 跳过分发该文件（本地保留旧维表），不阻塞
+ *   - 契约外补导文件：manifest 之外、符合报表命名模式的 xlsx（上游补历史窗口）一并分发（[4b] 段）
  *
  * 环境变量：
  *   PULL_BI_SSH_ALIAS   （默认 myvps）
@@ -48,6 +55,7 @@ import {
   routeBranchCode,
   derivePolicyProvince,
   planCoverageArchive,
+  planBackfillFiles,
 } from '../数据管理/lib/bi-export-pull.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -62,14 +70,27 @@ const COLORS = { reset: '\x1b[0m', red: '\x1b[31m', green: '\x1b[32m', yellow: '
 function log(color, msg) { process.stdout.write(`${COLORS[color] || ''}${msg}${COLORS.reset}\n`); }
 
 function parseArgs(argv) {
-  const opts = { dryRun: false, skipRsync: false, skipVerifyProvince: false, force: false };
-  for (const a of argv) {
+  const opts = { dryRun: false, skipRsync: false, skipVerifyProvince: false, force: false, allowStaleCodes: [] };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
     if (a === '--dry-run') opts.dryRun = true;
     else if (a === '--skip-rsync') opts.skipRsync = true;
     else if (a === '--skip-verify-province') opts.skipVerifyProvince = true;
     else if (a === '--force') opts.force = true;
+    else if (a === '--allow-stale' || a.startsWith('--allow-stale=')) {
+      // 显式豁免指定 code 的「mtime 非今天」硬闸（应急：上游某表当天没导但旧份数据有效仍要发布）。
+      // 只豁免新鲜度——字节不一致 / 体积骤降不受影响；watcher 自动路径不透传本参数，断线闸长期不松。
+      const raw = a.includes('=') ? a.slice('--allow-stale='.length) : argv[++i];
+      const codes = (raw || '').split(',').map((c) => c.trim()).filter(Boolean);
+      const bad = codes.filter((c) => !REQUIRED_REPORT_CODES.includes(c));
+      if (codes.length === 0 || bad.length > 0) {
+        log('red', `--allow-stale 参数非法：${raw ?? '(空)'}（须逗号分隔 code，合法值 ${REQUIRED_REPORT_CODES.join('/')}）`);
+        process.exit(1);
+      }
+      opts.allowStaleCodes.push(...codes);
+    }
     else if (a === '--help' || a === '-h') {
-      log('cyan', '用法：node scripts/pull-bi-exports.mjs [--dry-run] [--skip-rsync] [--skip-verify-province] [--force]');
+      log('cyan', '用法：node scripts/pull-bi-exports.mjs [--dry-run] [--skip-rsync] [--skip-verify-province] [--allow-stale 02[,05]] [--force]');
       process.exit(0);
     } else {
       log('red', `未知参数：${a}（--help 查看用法）`);
@@ -111,7 +132,7 @@ function runRsync({ dryRun }) {
 
 // ── Step 2: manifest 校验 ──
 
-function loadManifestAndValidate({ force }) {
+function loadManifestAndValidate({ force, allowStaleCodes }) {
   const manifestPath = join(INBOX_DIR, MANIFEST_NAME);
   if (!existsSync(manifestPath)) {
     log('red', `❌ inbox 缺 ${MANIFEST_NAME}（${manifestPath}）——上游断线或从未拉取。`);
@@ -133,7 +154,7 @@ function loadManifestAndValidate({ force }) {
   }
 
   const todayBeijing = beijingDayOf(new Date());
-  const result = evaluateManifestReports(manifest, { todayBeijing, statByName });
+  const result = evaluateManifestReports(manifest, { todayBeijing, statByName, allowStaleCodes });
 
   log('cyan', `\n▶ [2/4] manifest 校验（北京时间今天 = ${todayBeijing}）`);
   for (const r of result.reports) {
@@ -154,7 +175,7 @@ function loadManifestAndValidate({ force }) {
       process.exit(1);
     }
   }
-  return result;
+  return { result, manifest };
 }
 
 // ── Step 3: 省份内容核验（fail-closed）──
@@ -244,65 +265,86 @@ function todayCompact() {
   return beijingDayOf(new Date()).replace(/-/g, '');
 }
 
-function distribute(reports, { dryRun }) {
-  log('cyan', '\n▶ [4/4] 分发到 ETL 源目录（shanxi_→staging/SX；sichuan_/无前缀→数据管理/ 根）');
-  const summary = [];
-  for (const r of reports) {
-    const branch = routeBranchCode(r.file);
-    const targetDir = branchSourceDir(DATA_DIR, branch);
-    const targetPath = join(targetDir, r.file);
-    const srcPath = join(INBOX_DIR, r.file);
-    if (!dryRun) mkdirSync(targetDir, { recursive: true });
+/**
+ * 分发单个文件到 ETL 源目录：省份路由 → 同品类覆盖归档 → 幂等原子落盘（保留 mtime）。
+ * manifest 当前份与契约外补导文件共用同一条路径，行为完全一致。
+ * @returns {string} action 描述
+ */
+function distributeOne(fileName, label, { dryRun }) {
+  const branch = routeBranchCode(fileName);
+  const targetDir = branchSourceDir(DATA_DIR, branch);
+  const targetPath = join(targetDir, fileName);
+  const srcPath = join(INBOX_DIR, fileName);
+  if (!dryRun) mkdirSync(targetDir, { recursive: true });
 
-    const existing = existsSync(targetDir)
-      ? readdirSync(targetDir).filter((n) => /\.xlsx$/i.test(n))
-      : [];
-    const plan = planCoverageArchive(r.file, existing);
+  const existing = existsSync(targetDir)
+    ? readdirSync(targetDir).filter((n) => /\.xlsx$/i.test(n))
+    : [];
+  const plan = planCoverageArchive(fileName, existing);
 
-    for (const name of plan.archive) {
-      const archiveDir = join(targetDir, '.xlsx-archive', todayCompact());
-      if (dryRun) {
-        log('yellow', `  [plan] 归档被覆盖旧文件：${name} → .xlsx-archive/${todayCompact()}/`);
-      } else {
-        mkdirSync(archiveDir, { recursive: true });
-        renameSync(join(targetDir, name), join(archiveDir, name));
-        log('yellow', `  📦 归档被覆盖旧文件：${name} → .xlsx-archive/${todayCompact()}/`);
-      }
-    }
-
-    let action;
-    if (plan.incomingRedundant) {
-      action = '跳过（目录已有同区间同品类文件）';
-    } else if (existsSync(targetPath)) {
-      const src = statSync(srcPath);
-      const dst = statSync(targetPath);
-      action = dst.size === src.size && Math.abs(dst.mtimeMs - src.mtimeMs) < 2000
-        ? '已是最新，跳过'
-        : '更新';
+  for (const name of plan.archive) {
+    const archiveDir = join(targetDir, '.xlsx-archive', todayCompact());
+    if (dryRun) {
+      log('yellow', `  [plan] 归档被覆盖旧文件：${name} → .xlsx-archive/${todayCompact()}/`);
     } else {
-      action = '新增';
+      mkdirSync(archiveDir, { recursive: true });
+      renameSync(join(targetDir, name), join(archiveDir, name));
+      log('yellow', `  📦 归档被覆盖旧文件：${name} → .xlsx-archive/${todayCompact()}/`);
     }
-
-    if ((action === '新增' || action === '更新') && !dryRun) {
-      const tmp = `${targetPath}.tmp-pull`;
-      try {
-        if (existsSync(tmp)) unlinkSync(tmp);
-        copyFileSync(srcPath, tmp);
-        const src = statSync(srcPath);
-        utimesSync(tmp, src.atime, src.mtime); // 保留 mtime：daily.mjs 缓存判定 / 取最新依赖它
-        renameSync(tmp, targetPath);
-      } catch (e) {
-        try { if (existsSync(tmp)) unlinkSync(tmp); } catch { /* 清理尽力而为 */ }
-        log('red', `  ❌ code ${r.code} 分发失败：${e.message}`);
-        process.exit(1);
-      }
-    }
-    const rel = targetDir.slice(PROJECT_ROOT.length + 1) || '.';
-    log(action.startsWith('跳过') || action.endsWith('跳过') ? 'yellow' : 'green',
-      `  ${dryRun ? '[plan] ' : ''}code ${r.code} [${branch}] ${action}：${rel}/${r.file}`);
-    summary.push({ code: r.code, branch, action, target: `${rel}/${r.file}` });
   }
-  return summary;
+
+  let action;
+  if (plan.incomingRedundant) {
+    action = '跳过（目录已有同区间同品类文件）';
+  } else if (existsSync(targetPath)) {
+    const src = statSync(srcPath);
+    const dst = statSync(targetPath);
+    action = dst.size === src.size && Math.abs(dst.mtimeMs - src.mtimeMs) < 2000
+      ? '已是最新，跳过'
+      : '更新';
+  } else {
+    action = '新增';
+  }
+
+  if ((action === '新增' || action === '更新') && !dryRun) {
+    const tmp = `${targetPath}.tmp-pull`;
+    try {
+      if (existsSync(tmp)) unlinkSync(tmp);
+      copyFileSync(srcPath, tmp);
+      const src = statSync(srcPath);
+      utimesSync(tmp, src.atime, src.mtime); // 保留 mtime：daily.mjs 缓存判定 / 取最新依赖它
+      renameSync(tmp, targetPath);
+    } catch (e) {
+      try { if (existsSync(tmp)) unlinkSync(tmp); } catch { /* 清理尽力而为 */ }
+      log('red', `  ❌ ${label} 分发失败：${e.message}`);
+      process.exit(1);
+    }
+  }
+  const rel = targetDir.slice(PROJECT_ROOT.length + 1) || '.';
+  log(action.includes('跳过') ? 'yellow' : 'green',
+    `  ${dryRun ? '[plan] ' : ''}${label} [${branch}] ${action}：${rel}/${fileName}`);
+  return action;
+}
+
+function distribute(reports, manifest, { dryRun }) {
+  log('cyan', '\n▶ [4/4] 分发到 ETL 源目录（shanxi_→staging/SX；sichuan_/无前缀→数据管理/ 根）');
+  for (const r of reports) {
+    distributeOne(r.file, `code ${r.code}`, { dryRun });
+  }
+
+  // 契约外补导文件：上游补导历史窗口时（如 2026-07-05 批量补导 02 报价 0624-0703 单日文件），
+  // manifest 只登记当前份，补导文件随 rsync 在 inbox 但不在 reports 里 —— 挑出符合五张表
+  // 命名模式的一并分发。排除集 = manifest 全部当前份（含被剔除的可选/异常份，防侧门混入）。
+  const inboxNames = existsSync(INBOX_DIR) ? readdirSync(INBOX_DIR) : [];
+  const currentFiles = (manifest.reports || []).map((r) => r?.file).filter(Boolean);
+  const backfills = planBackfillFiles(inboxNames, currentFiles);
+  if (backfills.length > 0) {
+    log('cyan', `\n▶ [4b] 契约外补导文件（manifest 之外、符合报表命名模式）：${backfills.length} 个`);
+    for (const name of backfills) {
+      distributeOne(name, '补导', { dryRun });
+    }
+  }
+  return backfills.length;
 }
 
 // ── 主流程 ──
@@ -317,11 +359,11 @@ function main() {
   if (opts.skipRsync) log('yellow', '\n⚠ 跳过 rsync（--skip-rsync），使用现有 inbox');
   else runRsync(opts);
 
-  const result = loadManifestAndValidate(opts);
+  const { result, manifest } = loadManifestAndValidate(opts);
   verifyProvince(result.reports, opts);
-  distribute(result.reports, opts);
+  const backfillCount = distribute(result.reports, manifest, opts);
 
-  log('green', `\n✅ 拉取${opts.dryRun ? '计划打印' : ''}完成：${result.reports.length}/${REQUIRED_REPORT_CODES.length} 张报表${opts.dryRun ? '' : '已就位，可跑 ETL（release:daily 或 daily.mjs）'}`);
+  log('green', `\n✅ 拉取${opts.dryRun ? '计划打印' : ''}完成：${result.reports.length}/${REQUIRED_REPORT_CODES.length} 张报表${backfillCount > 0 ? ` + ${backfillCount} 个补导文件` : ''}${opts.dryRun ? '' : '已就位，可跑 ETL（release:daily 或 daily.mjs）'}`);
 }
 
 main();

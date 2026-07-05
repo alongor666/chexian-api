@@ -327,13 +327,15 @@ async function main() {
     return; // 周期模式：下个 tick 重试，窗口结束由 mark-missed 兜底告警
   }
   const verdict = evaluateRemoteManifest(probe.manifest, { todayBeijing });
+  // 可选表（04 厂牌，低频维表）的异常是 warn：不拦就绪，但始终留痕（分发层会跳过异常份保留旧维表）
+  for (const i of verdict.issues.filter((x) => x.level === 'warn')) log('yellow', `  ⚠ ${i.message}`);
   if (!verdict.ready) {
-    for (const i of verdict.issues) log('yellow', `  ⏳ ${i.message}`);
+    for (const i of verdict.issues.filter((x) => x.level === 'error')) log('yellow', `  ⏳ ${i.message}`);
     log('yellow', `⏳ 上游未就绪（${verdict.reports.length}/5 张已出今天的表），${opts.once ? '' : '下个周期再探'}`);
     if (opts.once) process.exit(1);
     return;
   }
-  log('green', `✓ 上游五张齐全（均为北京 ${todayBeijing}）：${verdict.reports.map((r) => `${r.code}=${r.sizeMB}MB`).join(' ')}`);
+  log('green', `✓ 上游必需报表就绪（均为北京 ${todayBeijing}）：${verdict.reports.map((r) => `${r.code}=${r.sizeMB}MB`).join(' ')}`);
 
   if (opts.dryRun) {
     log('cyan', '（dry-run）就绪但不触发 release:daily');
