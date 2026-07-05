@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-22T02:50:36Z",
+  "generated_at": "2026-07-05T14:03:23Z",
   "generated_by": "数据管理/pipelines/field_coverage.py",
   "duckdb_version": "1.5.1",
   "note": "本地 AI 知识库事实源：字段×年份真实覆盖率。不随 VPS 发布。敏感列已脱敏（redacted=true）。effective_non_null_ratio 把空串/占位符算空。",
@@ -9,11 +9,11 @@
       "available": true,
       "glob": "数据管理/warehouse/fact/policy/current/*.parquet",
       "year_anchor": "policy_date",
-      "total_rows": 2600421,
+      "total_rows": 4453590,
       "data_range": {
         "anchor": "policy_date",
         "min": "2021-01-01 00:00:00",
-        "max": "2026-06-13 00:00:00"
+        "max": "2026-06-28 00:00:00"
       },
       "years": [
         "_ALL",
@@ -38,46 +38,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2562240,
-              "effective_non_null_ratio": 0.9853,
-              "distinct_count": 1769
+              "total_rows": 4453590,
+              "non_null_rows": 4302453,
+              "effective_non_null_ratio": 0.9661,
+              "distinct_count": 2334
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 426714,
-              "effective_non_null_ratio": 0.956,
-              "distinct_count": 779
+              "total_rows": 871020,
+              "non_null_rows": 816950,
+              "effective_non_null_ratio": 0.9379,
+              "distinct_count": 1086
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 422886,
-              "effective_non_null_ratio": 0.9922,
-              "distinct_count": 686
+              "total_rows": 813158,
+              "non_null_rows": 774990,
+              "effective_non_null_ratio": 0.9531,
+              "distinct_count": 862
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 462055,
-              "effective_non_null_ratio": 0.9946,
-              "distinct_count": 756
+              "total_rows": 861411,
+              "non_null_rows": 846665,
+              "effective_non_null_ratio": 0.9829,
+              "distinct_count": 948
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 440030,
-              "effective_non_null_ratio": 0.994,
-              "distinct_count": 829
+              "total_rows": 690527,
+              "non_null_rows": 674370,
+              "effective_non_null_ratio": 0.9766,
+              "distinct_count": 1032
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 549233,
-              "effective_non_null_ratio": 0.9911,
-              "distinct_count": 736
+              "total_rows": 813606,
+              "non_null_rows": 794618,
+              "effective_non_null_ratio": 0.9767,
+              "distinct_count": 924
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 261322,
-              "effective_non_null_ratio": 0.9808,
-              "distinct_count": 704
+              "total_rows": 403868,
+              "non_null_rows": 394860,
+              "effective_non_null_ratio": 0.9777,
+              "distinct_count": 938
             }
           }
         },
@@ -92,50 +92,51 @@
           "distinct_method": "exact",
           "redacted": false,
           "sample_values": [
-            "SC"
+            "SC",
+            "SX"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1
+              "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1
+              "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1
+              "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1
+              "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1
+              "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1
+              "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1
+              "distinct_count": 2
             }
           }
         },
@@ -152,51 +153,51 @@
           "sample_values": [
             "0.5",
             "1.0",
-            "0.7",
             "0.8",
+            "0.7",
             "0.6"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 674870,
-              "effective_non_null_ratio": 0.2595,
-              "distinct_count": 13
+              "total_rows": 4453590,
+              "non_null_rows": 1417811,
+              "effective_non_null_ratio": 0.3184,
+              "distinct_count": 14
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 113959,
-              "effective_non_null_ratio": 0.2553,
-              "distinct_count": 13
+              "total_rows": 871020,
+              "non_null_rows": 281539,
+              "effective_non_null_ratio": 0.3232,
+              "distinct_count": 14
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 112290,
-              "effective_non_null_ratio": 0.2635,
+              "total_rows": 813158,
+              "non_null_rows": 278006,
+              "effective_non_null_ratio": 0.3419,
               "distinct_count": 10
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 120028,
-              "effective_non_null_ratio": 0.2584,
+              "total_rows": 861411,
+              "non_null_rows": 285802,
+              "effective_non_null_ratio": 0.3318,
               "distinct_count": 10
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 128202,
-              "effective_non_null_ratio": 0.2896,
+              "total_rows": 690527,
+              "non_null_rows": 234378,
+              "effective_non_null_ratio": 0.3394,
               "distinct_count": 9
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 132216,
-              "effective_non_null_ratio": 0.2386,
+              "total_rows": 813606,
+              "non_null_rows": 221630,
+              "effective_non_null_ratio": 0.2724,
               "distinct_count": 9
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 68175,
-              "effective_non_null_ratio": 0.2559,
+              "total_rows": 403868,
+              "non_null_rows": 116456,
+              "effective_non_null_ratio": 0.2884,
               "distinct_count": 8
             }
           }
@@ -214,46 +215,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 674286,
-              "effective_non_null_ratio": 0.2593,
-              "distinct_count": 3317
+              "total_rows": 4453590,
+              "non_null_rows": 1416436,
+              "effective_non_null_ratio": 0.318,
+              "distinct_count": 5208
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 113375,
-              "effective_non_null_ratio": 0.254,
-              "distinct_count": 297
+              "total_rows": 871020,
+              "non_null_rows": 280084,
+              "effective_non_null_ratio": 0.3216,
+              "distinct_count": 1019
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 112290,
-              "effective_non_null_ratio": 0.2635,
-              "distinct_count": 287
+              "total_rows": 813158,
+              "non_null_rows": 278036,
+              "effective_non_null_ratio": 0.3419,
+              "distinct_count": 817
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 120028,
-              "effective_non_null_ratio": 0.2584,
-              "distinct_count": 543
+              "total_rows": 861411,
+              "non_null_rows": 285852,
+              "effective_non_null_ratio": 0.3318,
+              "distinct_count": 1134
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 128202,
-              "effective_non_null_ratio": 0.2896,
-              "distinct_count": 899
+              "total_rows": 690527,
+              "non_null_rows": 234378,
+              "effective_non_null_ratio": 0.3394,
+              "distinct_count": 1491
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 132216,
-              "effective_non_null_ratio": 0.2386,
-              "distinct_count": 1636
+              "total_rows": 813606,
+              "non_null_rows": 221630,
+              "effective_non_null_ratio": 0.2724,
+              "distinct_count": 2149
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 68175,
-              "effective_non_null_ratio": 0.2559,
-              "distinct_count": 1409
+              "total_rows": 403868,
+              "non_null_rows": 116456,
+              "effective_non_null_ratio": 0.2884,
+              "distinct_count": 1904
             }
           }
         },
@@ -268,53 +269,53 @@
           "distinct_method": "exact",
           "redacted": false,
           "sample_values": [
-            "A0交强险交通事故费率不浮动",
             "A3上三个及以上年度未发生有责任道路交通事故",
+            "A0交强险交通事故费率不浮动",
             "A1上一个年度未发生有责任道路交通事故",
             "A2上两个年度未发生有责任道路交通事故",
             "A4上一个年度发生一次有责任不涉及死亡的道路交通事故"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 1536486,
-              "effective_non_null_ratio": 0.5909,
+              "total_rows": 4453590,
+              "non_null_rows": 2644707,
+              "effective_non_null_ratio": 0.5938,
               "distinct_count": 7
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 177629,
-              "effective_non_null_ratio": 0.398,
+              "total_rows": 871020,
+              "non_null_rows": 433820,
+              "effective_non_null_ratio": 0.4981,
               "distinct_count": 7
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 199086,
-              "effective_non_null_ratio": 0.4671,
+              "total_rows": 813158,
+              "non_null_rows": 419618,
+              "effective_non_null_ratio": 0.516,
               "distinct_count": 7
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 225150,
-              "effective_non_null_ratio": 0.4846,
+              "total_rows": 861411,
+              "non_null_rows": 455820,
+              "effective_non_null_ratio": 0.5292,
               "distinct_count": 7
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 314407,
-              "effective_non_null_ratio": 0.7102,
+              "total_rows": 690527,
+              "non_null_rows": 456061,
+              "effective_non_null_ratio": 0.6605,
               "distinct_count": 7
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 421961,
-              "effective_non_null_ratio": 0.7614,
+              "total_rows": 813606,
+              "non_null_rows": 591976,
+              "effective_non_null_ratio": 0.7276,
               "distinct_count": 7
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 198253,
-              "effective_non_null_ratio": 0.7441,
+              "total_rows": 403868,
+              "non_null_rows": 287412,
+              "effective_non_null_ratio": 0.7116,
               "distinct_count": 7
             }
           }
@@ -330,53 +331,53 @@
           "distinct_method": "exact",
           "redacted": false,
           "sample_values": [
-            "1.0",
             "0.7",
+            "1.0",
             "0.9",
             "0.8",
             "1.1"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 1536486,
-              "effective_non_null_ratio": 0.5909,
+              "total_rows": 4453590,
+              "non_null_rows": 2644707,
+              "effective_non_null_ratio": 0.5938,
               "distinct_count": 6
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 177629,
-              "effective_non_null_ratio": 0.398,
+              "total_rows": 871020,
+              "non_null_rows": 433820,
+              "effective_non_null_ratio": 0.4981,
               "distinct_count": 6
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 199086,
-              "effective_non_null_ratio": 0.4671,
+              "total_rows": 813158,
+              "non_null_rows": 419618,
+              "effective_non_null_ratio": 0.516,
               "distinct_count": 6
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 225150,
-              "effective_non_null_ratio": 0.4846,
+              "total_rows": 861411,
+              "non_null_rows": 455820,
+              "effective_non_null_ratio": 0.5292,
               "distinct_count": 6
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 314407,
-              "effective_non_null_ratio": 0.7102,
+              "total_rows": 690527,
+              "non_null_rows": 456061,
+              "effective_non_null_ratio": 0.6605,
               "distinct_count": 6
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 421961,
-              "effective_non_null_ratio": 0.7614,
+              "total_rows": 813606,
+              "non_null_rows": 591976,
+              "effective_non_null_ratio": 0.7276,
               "distinct_count": 6
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 198253,
-              "effective_non_null_ratio": 0.7441,
+              "total_rows": 403868,
+              "non_null_rows": 287412,
+              "effective_non_null_ratio": 0.7116,
               "distinct_count": 6
             }
           }
@@ -399,44 +400,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 4
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 3
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 3
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 4
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 4
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 4
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 3
             }
@@ -455,46 +456,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 441
+              "distinct_count": 680
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 64
+              "distinct_count": 104
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 98
+              "distinct_count": 133
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 260
+              "distinct_count": 376
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 184
+              "distinct_count": 294
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 170
+              "distinct_count": 326
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 193
+              "distinct_count": 317
             }
           }
         },
@@ -512,51 +513,51 @@
             "非营业个人客车",
             "摩托车",
             "非营业货车",
-            "营业货车",
-            "非营业企业客车"
+            "非营业企业客车",
+            "营业货车"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 12
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 12
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 10
+              "distinct_count": 11
             }
           }
         },
@@ -571,54 +572,54 @@
           "distinct_method": "exact",
           "redacted": false,
           "sample_values": [
-            "修理厂",
             "直销",
+            "修理厂",
             "自营",
             "车行代理",
             "其他"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 1328837,
-              "effective_non_null_ratio": 0.511,
+              "total_rows": 4453590,
+              "non_null_rows": 1672370,
+              "effective_non_null_ratio": 0.3755,
               "distinct_count": 8
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 58081,
-              "effective_non_null_ratio": 0.1301,
+              "total_rows": 871020,
+              "non_null_rows": 60299,
+              "effective_non_null_ratio": 0.0692,
               "distinct_count": 3
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 97874,
-              "effective_non_null_ratio": 0.2296,
+              "total_rows": 813158,
+              "non_null_rows": 101775,
+              "effective_non_null_ratio": 0.1252,
               "distinct_count": 4
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 124474,
-              "effective_non_null_ratio": 0.2679,
+              "total_rows": 861411,
+              "non_null_rows": 134610,
+              "effective_non_null_ratio": 0.1563,
               "distinct_count": 5
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 324468,
-              "effective_non_null_ratio": 0.7329,
+              "total_rows": 690527,
+              "non_null_rows": 419051,
+              "effective_non_null_ratio": 0.6069,
               "distinct_count": 8
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 499439,
-              "effective_non_null_ratio": 0.9012,
-              "distinct_count": 7
+              "total_rows": 813606,
+              "non_null_rows": 644633,
+              "effective_non_null_ratio": 0.7923,
+              "distinct_count": 8
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 224501,
-              "effective_non_null_ratio": 0.8426,
-              "distinct_count": 6
+              "total_rows": 403868,
+              "non_null_rows": 312002,
+              "effective_non_null_ratio": 0.7725,
+              "distinct_count": 7
             }
           }
         },
@@ -636,50 +637,50 @@
             "46岁≤年龄＜61岁",
             "36岁≤年龄＜46岁",
             "28岁≤年龄＜36岁",
-            "年龄≥61岁",
-            "24岁≤年龄＜28岁"
+            "24岁≤年龄＜28岁",
+            "年龄≥61岁"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2383205,
-              "effective_non_null_ratio": 0.9165,
+              "total_rows": 4453590,
+              "non_null_rows": 4097651,
+              "effective_non_null_ratio": 0.9201,
               "distinct_count": 6
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 404345,
-              "effective_non_null_ratio": 0.9059,
+              "total_rows": 871020,
+              "non_null_rows": 797416,
+              "effective_non_null_ratio": 0.9155,
               "distinct_count": 6
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 378562,
-              "effective_non_null_ratio": 0.8882,
+              "total_rows": 813158,
+              "non_null_rows": 735314,
+              "effective_non_null_ratio": 0.9043,
               "distinct_count": 6
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 419156,
-              "effective_non_null_ratio": 0.9022,
+              "total_rows": 861411,
+              "non_null_rows": 783247,
+              "effective_non_null_ratio": 0.9093,
               "distinct_count": 6
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 407632,
-              "effective_non_null_ratio": 0.9208,
+              "total_rows": 690527,
+              "non_null_rows": 636407,
+              "effective_non_null_ratio": 0.9216,
               "distinct_count": 6
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 522451,
-              "effective_non_null_ratio": 0.9428,
+              "total_rows": 813606,
+              "non_null_rows": 766428,
+              "effective_non_null_ratio": 0.942,
               "distinct_count": 6
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 251059,
-              "effective_non_null_ratio": 0.9423,
+              "total_rows": 403868,
+              "non_null_rows": 378839,
+              "effective_non_null_ratio": 0.938,
               "distinct_count": 6
             }
           }
@@ -697,46 +698,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 72251,
-              "effective_non_null_ratio": 0.0278,
-              "distinct_count": 66467
+              "total_rows": 4453590,
+              "non_null_rows": 133976,
+              "effective_non_null_ratio": 0.0301,
+              "distinct_count": 129198
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 12625,
-              "effective_non_null_ratio": 0.0283,
-              "distinct_count": 12580
+              "total_rows": 871020,
+              "non_null_rows": 27320,
+              "effective_non_null_ratio": 0.0314,
+              "distinct_count": 31231
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 11204,
-              "effective_non_null_ratio": 0.0263,
-              "distinct_count": 12138
+              "total_rows": 813158,
+              "non_null_rows": 24698,
+              "effective_non_null_ratio": 0.0304,
+              "distinct_count": 24179
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 12507,
-              "effective_non_null_ratio": 0.0269,
-              "distinct_count": 13745
+              "total_rows": 861411,
+              "non_null_rows": 24211,
+              "effective_non_null_ratio": 0.0281,
+              "distinct_count": 25238
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 13303,
-              "effective_non_null_ratio": 0.03,
-              "distinct_count": 13198
+              "total_rows": 690527,
+              "non_null_rows": 22039,
+              "effective_non_null_ratio": 0.0319,
+              "distinct_count": 24851
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 16213,
-              "effective_non_null_ratio": 0.0293,
-              "distinct_count": 15231
+              "total_rows": 813606,
+              "non_null_rows": 25014,
+              "effective_non_null_ratio": 0.0307,
+              "distinct_count": 22079
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 6399,
-              "effective_non_null_ratio": 0.024,
-              "distinct_count": 5744
+              "total_rows": 403868,
+              "non_null_rows": 10694,
+              "effective_non_null_ratio": 0.0265,
+              "distinct_count": 12015
             }
           }
         },
@@ -753,46 +754,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 186938
+              "distinct_count": 202161
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 51508
+              "distinct_count": 71286
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 50174
+              "distinct_count": 64799
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 69298
+              "distinct_count": 82108
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 83979
+              "distinct_count": 115689
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 85745
+              "distinct_count": 88894
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 42056
+              "distinct_count": 73284
             }
           }
         },
@@ -809,46 +810,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 8091
+              "distinct_count": 8426
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 4778
+              "distinct_count": 5881
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 5489
+              "distinct_count": 6404
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 6442
+              "distinct_count": 7151
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 6724
+              "distinct_count": 7087
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 6582
+              "distinct_count": 7054
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 5800
+              "distinct_count": 6178
             }
           }
         },
@@ -871,44 +872,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 10
+              "distinct_count": 11
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 11
             }
@@ -933,45 +934,45 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 743090,
-              "effective_non_null_ratio": 0.2858,
+              "total_rows": 4453590,
+              "non_null_rows": 1349016,
+              "effective_non_null_ratio": 0.3029,
               "distinct_count": 7
             },
             "2021": {
-              "total_rows": 446332,
+              "total_rows": 871020,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2022": {
-              "total_rows": 426216,
+              "total_rows": 813158,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 75747,
-              "effective_non_null_ratio": 0.163,
+              "total_rows": 861411,
+              "non_null_rows": 184978,
+              "effective_non_null_ratio": 0.2147,
               "distinct_count": 6
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 259755,
-              "effective_non_null_ratio": 0.5868,
+              "total_rows": 690527,
+              "non_null_rows": 460259,
+              "effective_non_null_ratio": 0.6665,
               "distinct_count": 6
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 289439,
-              "effective_non_null_ratio": 0.5223,
+              "total_rows": 813606,
+              "non_null_rows": 483422,
+              "effective_non_null_ratio": 0.5942,
               "distinct_count": 7
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 118149,
-              "effective_non_null_ratio": 0.4435,
+              "total_rows": 403868,
+              "non_null_rows": 220357,
+              "effective_non_null_ratio": 0.5456,
               "distinct_count": 7
             }
           }
@@ -989,46 +990,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 2533
+              "distinct_count": 2559
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 796
+              "distinct_count": 815
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 917
+              "distinct_count": 921
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 852
+              "distinct_count": 863
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 809
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 739
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 516
+              "distinct_count": 616
             }
           }
         },
@@ -1051,45 +1052,45 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 847862,
-              "effective_non_null_ratio": 0.326,
+              "total_rows": 4453590,
+              "non_null_rows": 1548571,
+              "effective_non_null_ratio": 0.3477,
               "distinct_count": 8
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 4194,
-              "effective_non_null_ratio": 0.0094,
+              "total_rows": 871020,
+              "non_null_rows": 6993,
+              "effective_non_null_ratio": 0.008,
               "distinct_count": 6
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 41868,
-              "effective_non_null_ratio": 0.0982,
+              "total_rows": 813158,
+              "non_null_rows": 105712,
+              "effective_non_null_ratio": 0.13,
               "distinct_count": 7
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 76694,
-              "effective_non_null_ratio": 0.1651,
+              "total_rows": 861411,
+              "non_null_rows": 191812,
+              "effective_non_null_ratio": 0.2227,
               "distinct_count": 7
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 259126,
-              "effective_non_null_ratio": 0.5853,
+              "total_rows": 690527,
+              "non_null_rows": 455192,
+              "effective_non_null_ratio": 0.6592,
               "distinct_count": 8
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 327622,
-              "effective_non_null_ratio": 0.5912,
+              "total_rows": 813606,
+              "non_null_rows": 538284,
+              "effective_non_null_ratio": 0.6616,
               "distinct_count": 8
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 138358,
-              "effective_non_null_ratio": 0.5193,
+              "total_rows": 403868,
+              "non_null_rows": 250578,
+              "effective_non_null_ratio": 0.6204,
               "distinct_count": 8
             }
           }
@@ -1107,46 +1108,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 2419
+              "distinct_count": 2479
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 702
+              "distinct_count": 767
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 751
+              "distinct_count": 802
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 843
+              "distinct_count": 921
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 848
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 815
+              "distinct_count": 844
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 520
+              "distinct_count": 543
             }
           }
         },
@@ -1166,44 +1167,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -1222,45 +1223,45 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 822450,
-              "effective_non_null_ratio": 0.3163,
+              "total_rows": 4453590,
+              "non_null_rows": 1614441,
+              "effective_non_null_ratio": 0.3625,
               "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 94483,
-              "effective_non_null_ratio": 0.2117,
+              "total_rows": 871020,
+              "non_null_rows": 244886,
+              "effective_non_null_ratio": 0.2811,
               "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 100641,
-              "effective_non_null_ratio": 0.2361,
+              "total_rows": 813158,
+              "non_null_rows": 256630,
+              "effective_non_null_ratio": 0.3156,
               "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 113369,
-              "effective_non_null_ratio": 0.244,
+              "total_rows": 861411,
+              "non_null_rows": 274359,
+              "effective_non_null_ratio": 0.3185,
               "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 123796,
-              "effective_non_null_ratio": 0.2796,
+              "total_rows": 690527,
+              "non_null_rows": 227217,
+              "effective_non_null_ratio": 0.329,
               "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 129314,
-              "effective_non_null_ratio": 0.2333,
+              "total_rows": 813606,
+              "non_null_rows": 216511,
+              "effective_non_null_ratio": 0.2661,
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 260847,
-              "effective_non_null_ratio": 0.9791,
+              "total_rows": 403868,
+              "non_null_rows": 394838,
+              "effective_non_null_ratio": 0.9776,
               "distinct_count": 2
             }
           }
@@ -1276,49 +1277,49 @@
           "distinct_method": "exact",
           "redacted": false,
           "sample_values": [
-            "否",
-            "是"
+            "是",
+            "否"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -1340,44 +1341,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -1399,44 +1400,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -1458,44 +1459,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -1514,43 +1515,43 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
+              "total_rows": 4453590,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2021": {
-              "total_rows": 446332,
+              "total_rows": 871020,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2022": {
-              "total_rows": 426216,
+              "total_rows": 813158,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2023": {
-              "total_rows": 464572,
+              "total_rows": 861411,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2024": {
-              "total_rows": 442696,
+              "total_rows": 690527,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2025": {
-              "total_rows": 554177,
+              "total_rows": 813606,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2026": {
-              "total_rows": 266428,
+              "total_rows": 403868,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
@@ -1573,44 +1574,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -1632,44 +1633,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -1691,44 +1692,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -1747,46 +1748,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 6865
+              "distinct_count": 7884
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 3988
+              "distinct_count": 4406
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 3934
+              "distinct_count": 4462
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 4219
+              "distinct_count": 4734
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 4927
+              "distinct_count": 5144
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 5136
+              "distinct_count": 5851
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 4042
+              "distinct_count": 4535
             }
           }
         },
@@ -1803,45 +1804,45 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 44589,
-              "effective_non_null_ratio": 0.0171,
+              "total_rows": 4453590,
+              "non_null_rows": 48143,
+              "effective_non_null_ratio": 0.0108,
               "distinct_count": 56
             },
             "2021": {
-              "total_rows": 446332,
+              "total_rows": 871020,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2022": {
-              "total_rows": 426216,
+              "total_rows": 813158,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2023": {
-              "total_rows": 464572,
+              "total_rows": 861411,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2024": {
-              "total_rows": 442696,
+              "total_rows": 690527,
               "non_null_rows": 1373,
-              "effective_non_null_ratio": 0.0031,
+              "effective_non_null_ratio": 0.002,
               "distinct_count": 43
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 43139,
-              "effective_non_null_ratio": 0.0778,
+              "total_rows": 813606,
+              "non_null_rows": 46682,
+              "effective_non_null_ratio": 0.0574,
               "distinct_count": 56
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 77,
-              "effective_non_null_ratio": 0.0003,
+              "total_rows": 403868,
+              "non_null_rows": 88,
+              "effective_non_null_ratio": 0.0002,
               "distinct_count": 25
             }
           }
@@ -1861,49 +1862,49 @@
             "首年投保或未发生浮动",
             "连续1年投保且没有发生赔付",
             "连续3年投保且没有发生赔付",
-            "连续3年投保且发生1次赔付"
+            "连续2年投保且没有发生赔付"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 674870,
-              "effective_non_null_ratio": 0.2595,
-              "distinct_count": 34
+              "total_rows": 4453590,
+              "non_null_rows": 1417811,
+              "effective_non_null_ratio": 0.3184,
+              "distinct_count": 35
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 113959,
-              "effective_non_null_ratio": 0.2553,
-              "distinct_count": 34
+              "total_rows": 871020,
+              "non_null_rows": 281539,
+              "effective_non_null_ratio": 0.3232,
+              "distinct_count": 35
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 112290,
-              "effective_non_null_ratio": 0.2635,
+              "total_rows": 813158,
+              "non_null_rows": 278006,
+              "effective_non_null_ratio": 0.3419,
               "distinct_count": 26
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 120028,
-              "effective_non_null_ratio": 0.2584,
+              "total_rows": 861411,
+              "non_null_rows": 285802,
+              "effective_non_null_ratio": 0.3318,
               "distinct_count": 26
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 128202,
-              "effective_non_null_ratio": 0.2896,
+              "total_rows": 690527,
+              "non_null_rows": 234378,
+              "effective_non_null_ratio": 0.3394,
               "distinct_count": 22
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 132216,
-              "effective_non_null_ratio": 0.2386,
+              "total_rows": 813606,
+              "non_null_rows": 221630,
+              "effective_non_null_ratio": 0.2724,
               "distinct_count": 21
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 68175,
-              "effective_non_null_ratio": 0.2559,
+              "total_rows": 403868,
+              "non_null_rows": 116456,
+              "effective_non_null_ratio": 0.2884,
               "distinct_count": 19
             }
           }
@@ -1920,53 +1921,53 @@
           "redacted": false,
           "sample_values": [
             "天府",
+            "太原二部",
             "宜宾",
-            "高新",
-            "青羊",
-            "其他"
+            "其他",
+            "高新"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 15
+              "distinct_count": 26
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 15
+              "distinct_count": 26
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 15
+              "distinct_count": 26
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 15
+              "distinct_count": 26
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 14
+              "distinct_count": 25
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 14
+              "distinct_count": 26
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 14
+              "distinct_count": 15
             }
           }
         },
@@ -1983,46 +1984,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2434978,
-              "effective_non_null_ratio": 0.9364,
-              "distinct_count": 1234697
+              "total_rows": 4453590,
+              "non_null_rows": 4236155,
+              "effective_non_null_ratio": 0.9512,
+              "distinct_count": 1800996
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 387329,
-              "effective_non_null_ratio": 0.8678,
-              "distinct_count": 332984
+              "total_rows": 871020,
+              "non_null_rows": 797937,
+              "effective_non_null_ratio": 0.9161,
+              "distinct_count": 585858
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 401621,
-              "effective_non_null_ratio": 0.9423,
-              "distinct_count": 328883
+              "total_rows": 813158,
+              "non_null_rows": 781791,
+              "effective_non_null_ratio": 0.9614,
+              "distinct_count": 561440
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 437106,
-              "effective_non_null_ratio": 0.9409,
-              "distinct_count": 479277
+              "total_rows": 861411,
+              "non_null_rows": 824673,
+              "effective_non_null_ratio": 0.9574,
+              "distinct_count": 585747
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 435551,
-              "effective_non_null_ratio": 0.9839,
-              "distinct_count": 420660
+              "total_rows": 690527,
+              "non_null_rows": 677585,
+              "effective_non_null_ratio": 0.9813,
+              "distinct_count": 533706
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 522913,
-              "effective_non_null_ratio": 0.9436,
-              "distinct_count": 547379
+              "total_rows": 813606,
+              "non_null_rows": 770526,
+              "effective_non_null_ratio": 0.9471,
+              "distinct_count": 623122
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 250458,
-              "effective_non_null_ratio": 0.9401,
-              "distinct_count": 222314
+              "total_rows": 403868,
+              "non_null_rows": 383643,
+              "effective_non_null_ratio": 0.9499,
+              "distinct_count": 306385
             }
           }
         },
@@ -2039,46 +2040,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2044
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 336
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 374
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 391
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 395
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 340
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 156
+              "distinct_count": 175
             }
           }
         },
@@ -2095,46 +2096,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 2621118
+              "distinct_count": 4435447
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 418812
+              "distinct_count": 847999
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 466450
+              "distinct_count": 1083937
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 534904
+              "distinct_count": 986048
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 345122
+              "distinct_count": 651833
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 612588
+              "distinct_count": 967043
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 247655
+              "distinct_count": 415749
             }
           }
         },
@@ -2151,46 +2152,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 172475
+              "distinct_count": 270937
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 40425
+              "distinct_count": 66679
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 44402
+              "distinct_count": 62122
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 45590
+              "distinct_count": 68102
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 43276
+              "distinct_count": 69793
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 63694
+              "distinct_count": 91163
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 35580
+              "distinct_count": 48795
             }
           }
         },
@@ -2207,46 +2208,105 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 81905,
-              "effective_non_null_ratio": 0.0315,
-              "distinct_count": 59
+              "total_rows": 4453590,
+              "non_null_rows": 126618,
+              "effective_non_null_ratio": 0.0284,
+              "distinct_count": 64
             },
             "2021": {
-              "total_rows": 446332,
+              "total_rows": 871020,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2022": {
-              "total_rows": 426216,
+              "total_rows": 813158,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2023": {
-              "total_rows": 464572,
+              "total_rows": 861411,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2024": {
-              "total_rows": 442696,
+              "total_rows": 690527,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2025": {
-              "total_rows": 554177,
+              "total_rows": 813606,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 81905,
-              "effective_non_null_ratio": 0.3074,
-              "distinct_count": 59
+              "total_rows": 403868,
+              "non_null_rows": 126618,
+              "effective_non_null_ratio": 0.3135,
+              "distinct_count": 64
+            }
+          }
+        },
+        "renewal_mode": {
+          "physical_column": "renewal_mode",
+          "physical_type": "VARCHAR",
+          "field_id": "renewal_mode",
+          "label": "续保模式",
+          "source_column": "续保模式",
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "自留",
+            "兜底"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 4453590,
+              "non_null_rows": 3518,
+              "effective_non_null_ratio": 0.0008,
+              "distinct_count": 2
+            },
+            "2021": {
+              "total_rows": 871020,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2022": {
+              "total_rows": 813158,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2023": {
+              "total_rows": 861411,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2024": {
+              "total_rows": 690527,
+              "non_null_rows": 0,
+              "effective_non_null_ratio": 0.0,
+              "distinct_count": 0
+            },
+            "2025": {
+              "total_rows": 813606,
+              "non_null_rows": 3154,
+              "effective_non_null_ratio": 0.0039,
+              "distinct_count": 2
+            },
+            "2026": {
+              "total_rows": 403868,
+              "non_null_rows": 364,
+              "effective_non_null_ratio": 0.0009,
+              "distinct_count": 2
             }
           }
         },
@@ -2263,46 +2323,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 947069,
-              "effective_non_null_ratio": 0.3642,
-              "distinct_count": 785787
+              "total_rows": 4453590,
+              "non_null_rows": 1673351,
+              "effective_non_null_ratio": 0.3757,
+              "distinct_count": 1966775
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 125505,
-              "effective_non_null_ratio": 0.2812,
-              "distinct_count": 103624
+              "total_rows": 871020,
+              "non_null_rows": 243773,
+              "effective_non_null_ratio": 0.2799,
+              "distinct_count": 199239
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 155490,
-              "effective_non_null_ratio": 0.3648,
-              "distinct_count": 148492
+              "total_rows": 813158,
+              "non_null_rows": 306788,
+              "effective_non_null_ratio": 0.3773,
+              "distinct_count": 272336
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 177141,
-              "effective_non_null_ratio": 0.3813,
-              "distinct_count": 60229
+              "total_rows": 861411,
+              "non_null_rows": 338859,
+              "effective_non_null_ratio": 0.3934,
+              "distinct_count": 281140
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 184270,
-              "effective_non_null_ratio": 0.4162,
-              "distinct_count": 184327
+              "total_rows": 690527,
+              "non_null_rows": 313145,
+              "effective_non_null_ratio": 0.4535,
+              "distinct_count": 331461
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 200570,
-              "effective_non_null_ratio": 0.3619,
-              "distinct_count": 199162
+              "total_rows": 813606,
+              "non_null_rows": 308290,
+              "effective_non_null_ratio": 0.3789,
+              "distinct_count": 341377
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 104093,
-              "effective_non_null_ratio": 0.3907,
-              "distinct_count": 131991
+              "total_rows": 403868,
+              "non_null_rows": 162496,
+              "effective_non_null_ratio": 0.4023,
+              "distinct_count": 174206
             }
           }
         },
@@ -2319,46 +2379,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 747
+              "distinct_count": 1458
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 303
+              "distinct_count": 458
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 321
+              "distinct_count": 542
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 304
+              "distinct_count": 623
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 258
+              "distinct_count": 472
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 315
+              "distinct_count": 634
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 267
+              "distinct_count": 476
             }
           }
         },
@@ -2369,58 +2429,52 @@
           "label": "座位数",
           "source_column": "座位数",
           "registry_status": "registered",
-          "is_high_cardinality": false,
-          "distinct_method": "exact",
+          "is_high_cardinality": true,
+          "distinct_method": "approx",
           "redacted": false,
-          "sample_values": [
-            "5",
-            "2",
-            "7",
-            "3",
-            "4"
-          ],
+          "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 54
+              "distinct_count": 74
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 36
+              "distinct_count": 64
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 40
+              "distinct_count": 67
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 38
+              "distinct_count": 68
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 37
+              "distinct_count": 67
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 40
+              "distinct_count": 72
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 32
+              "distinct_count": 61
             }
           }
         },
@@ -2443,44 +2497,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 10
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 9
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 9
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 8
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 7
+              "distinct_count": 8
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 8
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 7
             }
@@ -2505,44 +2559,44 @@
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             }
@@ -2561,46 +2615,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1979
+              "distinct_count": 3498
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1568
+              "distinct_count": 2048
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1368
+              "distinct_count": 2438
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1572
+              "distinct_count": 2573
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1169
+              "distinct_count": 1837
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1520
+              "distinct_count": 1934
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1035
+              "distinct_count": 1441
             }
           }
         },
@@ -2617,52 +2671,52 @@
           "sample_values": [
             "普通载货汽车",
             "其他货车类型",
-            "仓栅",
             "厢式",
+            "仓栅",
             "牵引"
           ],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 118677,
-              "effective_non_null_ratio": 0.0456,
-              "distinct_count": 10
+              "total_rows": 4453590,
+              "non_null_rows": 166464,
+              "effective_non_null_ratio": 0.0374,
+              "distinct_count": 12
             },
             "2021": {
-              "total_rows": 446332,
+              "total_rows": 871020,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2022": {
-              "total_rows": 426216,
+              "total_rows": 813158,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2023": {
-              "total_rows": 464572,
+              "total_rows": 861411,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 47948,
-              "effective_non_null_ratio": 0.1083,
-              "distinct_count": 9
+              "total_rows": 690527,
+              "non_null_rows": 66000,
+              "effective_non_null_ratio": 0.0956,
+              "distinct_count": 12
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 44855,
-              "effective_non_null_ratio": 0.0809,
-              "distinct_count": 10
+              "total_rows": 813606,
+              "non_null_rows": 63752,
+              "effective_non_null_ratio": 0.0784,
+              "distinct_count": 12
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 25874,
-              "effective_non_null_ratio": 0.0971,
-              "distinct_count": 10
+              "total_rows": 403868,
+              "non_null_rows": 36712,
+              "effective_non_null_ratio": 0.0909,
+              "distinct_count": 12
             }
           }
         },
@@ -2679,46 +2733,46 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1686750
+              "distinct_count": 2597190
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 357302
+              "distinct_count": 696686
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 379839
+              "distinct_count": 759630
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 409053
+              "distinct_count": 708638
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 341922
+              "distinct_count": 519041
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 472118
+              "distinct_count": 667957
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 179896
+              "distinct_count": 326737
             }
           }
         },
@@ -2735,63 +2789,63 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 2600421,
-              "non_null_rows": 2600421,
+              "total_rows": 4453590,
+              "non_null_rows": 4453590,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 36146
+              "distinct_count": 55372
             },
             "2021": {
-              "total_rows": 446332,
-              "non_null_rows": 446332,
+              "total_rows": 871020,
+              "non_null_rows": 871020,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 18300
+              "distinct_count": 26320
             },
             "2022": {
-              "total_rows": 426216,
-              "non_null_rows": 426216,
+              "total_rows": 813158,
+              "non_null_rows": 813158,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 22147
+              "distinct_count": 32235
             },
             "2023": {
-              "total_rows": 464572,
-              "non_null_rows": 464572,
+              "total_rows": 861411,
+              "non_null_rows": 861411,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 17162
+              "distinct_count": 26199
             },
             "2024": {
-              "total_rows": 442696,
-              "non_null_rows": 442696,
+              "total_rows": 690527,
+              "non_null_rows": 690527,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 19426
+              "distinct_count": 25859
             },
             "2025": {
-              "total_rows": 554177,
-              "non_null_rows": 554177,
+              "total_rows": 813606,
+              "non_null_rows": 813606,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 20340
+              "distinct_count": 26153
             },
             "2026": {
-              "total_rows": 266428,
-              "non_null_rows": 266428,
+              "total_rows": 403868,
+              "non_null_rows": 403868,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 15974
+              "distinct_count": 17533
             }
           }
         }
       },
       "unmapped_fields": [],
-      "elapsed_ms": 5491,
+      "elapsed_ms": 12957,
       "warnings": []
     },
     "claims_detail": {
       "available": true,
       "glob": "数据管理/warehouse/fact/claims_detail/claims_*.parquet",
       "year_anchor": "report_time",
-      "total_rows": 288198,
+      "total_rows": 290305,
       "data_range": {
         "anchor": "report_time",
         "min": "2021-01-01 00:00:00",
-        "max": "2026-06-13 00:00:00"
+        "max": "2026-06-28 00:00:00"
       },
       "years": [
         "_ALL",
@@ -2816,8 +2870,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 110633
             },
@@ -2852,10 +2906,10 @@
               "distinct_count": 25108
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 16867
+              "distinct_count": 18076
             }
           }
         },
@@ -2872,8 +2926,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 20
             },
@@ -2908,8 +2962,8 @@
               "distinct_count": 14
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 13
             }
@@ -2928,8 +2982,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288196,
+              "total_rows": 290305,
+              "non_null_rows": 290303,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 328
             },
@@ -2964,8 +3018,8 @@
               "distinct_count": 319
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 293
             }
@@ -2984,9 +3038,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 250236,
-              "effective_non_null_ratio": 0.8683,
+              "total_rows": 290305,
+              "non_null_rows": 252148,
+              "effective_non_null_ratio": 0.8686,
               "distinct_count": 171586
             },
             "2021": {
@@ -3020,10 +3074,10 @@
               "distinct_count": 50617
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 22690,
-              "effective_non_null_ratio": 0.9214,
-              "distinct_count": 13382
+              "total_rows": 26733,
+              "non_null_rows": 24602,
+              "effective_non_null_ratio": 0.9203,
+              "distinct_count": 13873
             }
           }
         },
@@ -3040,9 +3094,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 273130,
-              "effective_non_null_ratio": 0.9477,
+              "total_rows": 290305,
+              "non_null_rows": 275156,
+              "effective_non_null_ratio": 0.9478,
               "distinct_count": 2596
             },
             "2021": {
@@ -3076,10 +3130,10 @@
               "distinct_count": 1760
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 23598,
-              "effective_non_null_ratio": 0.9583,
-              "distinct_count": 1275
+              "total_rows": 26733,
+              "non_null_rows": 25624,
+              "effective_non_null_ratio": 0.9585,
+              "distinct_count": 1281
             }
           }
         },
@@ -3096,8 +3150,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 31
             },
@@ -3132,8 +3186,8 @@
               "distinct_count": 31
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 31
             }
@@ -3152,8 +3206,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 157108
             },
@@ -3188,10 +3242,68 @@
               "distinct_count": 37230
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 16710
+              "distinct_count": 17791
+            }
+          }
+        },
+        "branch_code": {
+          "physical_column": "branch_code",
+          "physical_type": "VARCHAR",
+          "field_id": "branch_code",
+          "label": "分公司编码",
+          "source_column": null,
+          "registry_status": "registered",
+          "is_high_cardinality": false,
+          "distinct_method": "exact",
+          "redacted": false,
+          "sample_values": [
+            "SC"
+          ],
+          "by_year": {
+            "_ALL": {
+              "total_rows": 290305,
+              "non_null_rows": 290305,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2021": {
+              "total_rows": 49418,
+              "non_null_rows": 49418,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2022": {
+              "total_rows": 47553,
+              "non_null_rows": 47553,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2023": {
+              "total_rows": 56612,
+              "non_null_rows": 56612,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2024": {
+              "total_rows": 51321,
+              "non_null_rows": 51321,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2025": {
+              "total_rows": 58668,
+              "non_null_rows": 58668,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
+            },
+            "2026": {
+              "total_rows": 26733,
+              "non_null_rows": 26733,
+              "effective_non_null_ratio": 1.0,
+              "distinct_count": 1
             }
           }
         },
@@ -3208,8 +3320,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2044
             },
@@ -3244,10 +3356,10 @@
               "distinct_count": 340
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 156
+              "distinct_count": 175
             }
           }
         },
@@ -3264,8 +3376,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             },
@@ -3300,8 +3412,8 @@
               "distinct_count": 5
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             }
@@ -3320,8 +3432,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 263808
             },
@@ -3356,10 +3468,10 @@
               "distinct_count": 49932
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 21132
+              "distinct_count": 26270
             }
           }
         },
@@ -3376,8 +3488,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
@@ -3412,8 +3524,8 @@
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -3432,8 +3544,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2103
             },
@@ -3468,10 +3580,10 @@
               "distinct_count": 753
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 514
+              "distinct_count": 523
             }
           }
         },
@@ -3488,8 +3600,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 8
             },
@@ -3524,8 +3636,8 @@
               "distinct_count": 5
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 4
             }
@@ -3544,8 +3656,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
@@ -3580,8 +3692,8 @@
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             }
@@ -3600,8 +3712,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2
             },
@@ -3636,8 +3748,8 @@
               "distinct_count": 2
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 1
             }
@@ -3656,8 +3768,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 15
             },
@@ -3692,8 +3804,8 @@
               "distinct_count": 11
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 8
             }
@@ -3712,9 +3824,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 264099,
-              "effective_non_null_ratio": 0.9164,
+              "total_rows": 290305,
+              "non_null_rows": 265951,
+              "effective_non_null_ratio": 0.9161,
               "distinct_count": 85
             },
             "2021": {
@@ -3748,8 +3860,8 @@
               "distinct_count": 55
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 21638,
+              "total_rows": 26733,
+              "non_null_rows": 23490,
               "effective_non_null_ratio": 0.8787,
               "distinct_count": 46
             }
@@ -3768,9 +3880,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 180752,
-              "effective_non_null_ratio": 0.6272,
+              "total_rows": 290305,
+              "non_null_rows": 182211,
+              "effective_non_null_ratio": 0.6277,
               "distinct_count": 2044
             },
             "2021": {
@@ -3799,15 +3911,15 @@
             },
             "2025": {
               "total_rows": 58668,
-              "non_null_rows": 36528,
-              "effective_non_null_ratio": 0.6226,
-              "distinct_count": 451
+              "non_null_rows": 36544,
+              "effective_non_null_ratio": 0.6229,
+              "distinct_count": 457
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 14142,
-              "effective_non_null_ratio": 0.5743,
-              "distinct_count": 154
+              "total_rows": 26733,
+              "non_null_rows": 15585,
+              "effective_non_null_ratio": 0.583,
+              "distinct_count": 173
             }
           }
         },
@@ -3824,10 +3936,10 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 2884,
-              "effective_non_null_ratio": 0.01,
-              "distinct_count": 2310
+              "total_rows": 290305,
+              "non_null_rows": 2700,
+              "effective_non_null_ratio": 0.0093,
+              "distinct_count": 2137
             },
             "2021": {
               "total_rows": 49418,
@@ -3855,15 +3967,15 @@
             },
             "2025": {
               "total_rows": 58668,
-              "non_null_rows": 615,
-              "effective_non_null_ratio": 0.0105,
-              "distinct_count": 433
+              "non_null_rows": 547,
+              "effective_non_null_ratio": 0.0093,
+              "distinct_count": 422
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 2143,
-              "effective_non_null_ratio": 0.087,
-              "distinct_count": 1223
+              "total_rows": 26733,
+              "non_null_rows": 2027,
+              "effective_non_null_ratio": 0.0758,
+              "distinct_count": 1366
             }
           }
         },
@@ -3880,10 +3992,10 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 249610
+              "distinct_count": 256896
             },
             "2021": {
               "total_rows": 49418,
@@ -3916,10 +4028,10 @@
               "distinct_count": 52440
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 21176
+              "distinct_count": 23794
             }
           }
         },
@@ -3936,8 +4048,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 217015
             },
@@ -3972,10 +4084,10 @@
               "distinct_count": 45808
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 18711
+              "distinct_count": 20135
             }
           }
         },
@@ -3992,8 +4104,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 2044
             },
@@ -4028,10 +4140,10 @@
               "distinct_count": 340
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 156
+              "distinct_count": 175
             }
           }
         },
@@ -4048,10 +4160,10 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 287680,
+              "total_rows": 290305,
+              "non_null_rows": 289787,
               "effective_non_null_ratio": 0.9982,
-              "distinct_count": 69193
+              "distinct_count": 63727
             },
             "2021": {
               "total_rows": 49418,
@@ -4081,13 +4193,13 @@
               "total_rows": 58668,
               "non_null_rows": 58668,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 12476
+              "distinct_count": 14615
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 7119
+              "distinct_count": 6434
             }
           }
         },
@@ -4104,10 +4216,10 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 40820,
-              "effective_non_null_ratio": 0.1416,
-              "distinct_count": 8786
+              "total_rows": 290305,
+              "non_null_rows": 41198,
+              "effective_non_null_ratio": 0.1419,
+              "distinct_count": 9186
             },
             "2021": {
               "total_rows": 49418,
@@ -4137,13 +4249,13 @@
               "total_rows": 58668,
               "non_null_rows": 8911,
               "effective_non_null_ratio": 0.1519,
-              "distinct_count": 2318
+              "distinct_count": 2631
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 3716,
-              "effective_non_null_ratio": 0.1509,
-              "distinct_count": 1339
+              "total_rows": 26733,
+              "non_null_rows": 4094,
+              "effective_non_null_ratio": 0.1531,
+              "distinct_count": 1387
             }
           }
         },
@@ -4160,9 +4272,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 48963,
-              "effective_non_null_ratio": 0.1699,
+              "total_rows": 290305,
+              "non_null_rows": 49385,
+              "effective_non_null_ratio": 0.1701,
               "distinct_count": 1985
             },
             "2021": {
@@ -4196,10 +4308,10 @@
               "distinct_count": 607
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 3955,
-              "effective_non_null_ratio": 0.1606,
-              "distinct_count": 306
+              "total_rows": 26733,
+              "non_null_rows": 4377,
+              "effective_non_null_ratio": 0.1637,
+              "distinct_count": 323
             }
           }
         },
@@ -4216,9 +4328,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 257503,
-              "effective_non_null_ratio": 0.8935,
+              "total_rows": 290305,
+              "non_null_rows": 259469,
+              "effective_non_null_ratio": 0.8938,
               "distinct_count": 5655
             },
             "2021": {
@@ -4252,10 +4364,10 @@
               "distinct_count": 2152
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 21407,
-              "effective_non_null_ratio": 0.8693,
-              "distinct_count": 1368
+              "total_rows": 26733,
+              "non_null_rows": 23373,
+              "effective_non_null_ratio": 0.8743,
+              "distinct_count": 1403
             }
           }
         },
@@ -4272,8 +4384,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             },
@@ -4308,8 +4420,8 @@
               "distinct_count": 5
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 5
             }
@@ -4328,8 +4440,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 58162
             },
@@ -4361,13 +4473,13 @@
               "total_rows": 58668,
               "non_null_rows": 58668,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 23204
+              "distinct_count": 22022
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 7515
+              "distinct_count": 8909
             }
           }
         },
@@ -4384,9 +4496,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 31965,
-              "effective_non_null_ratio": 0.1109,
+              "total_rows": 290305,
+              "non_null_rows": 32296,
+              "effective_non_null_ratio": 0.1112,
               "distinct_count": 16332
             },
             "2021": {
@@ -4415,15 +4527,15 @@
             },
             "2025": {
               "total_rows": 58668,
-              "non_null_rows": 7115,
-              "effective_non_null_ratio": 0.1213,
+              "non_null_rows": 7135,
+              "effective_non_null_ratio": 0.1216,
               "distinct_count": 3986
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 2322,
-              "effective_non_null_ratio": 0.0943,
-              "distinct_count": 1405
+              "total_rows": 26733,
+              "non_null_rows": 2633,
+              "effective_non_null_ratio": 0.0985,
+              "distinct_count": 1328
             }
           }
         },
@@ -4440,7 +4552,7 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
+              "total_rows": 290305,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
@@ -4476,7 +4588,7 @@
               "distinct_count": 0
             },
             "2026": {
-              "total_rows": 24626,
+              "total_rows": 26733,
               "non_null_rows": 0,
               "effective_non_null_ratio": 0.0,
               "distinct_count": 0
@@ -4496,10 +4608,10 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 215060,
-              "effective_non_null_ratio": 0.7462,
-              "distinct_count": 37637
+              "total_rows": 290305,
+              "non_null_rows": 216794,
+              "effective_non_null_ratio": 0.7468,
+              "distinct_count": 37873
             },
             "2021": {
               "total_rows": 49418,
@@ -4527,15 +4639,15 @@
             },
             "2025": {
               "total_rows": 58668,
-              "non_null_rows": 43783,
-              "effective_non_null_ratio": 0.7463,
-              "distinct_count": 11876
+              "non_null_rows": 43818,
+              "effective_non_null_ratio": 0.7469,
+              "distinct_count": 11559
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 16973,
-              "effective_non_null_ratio": 0.6892,
-              "distinct_count": 5011
+              "total_rows": 26733,
+              "non_null_rows": 18672,
+              "effective_non_null_ratio": 0.6985,
+              "distinct_count": 5381
             }
           }
         },
@@ -4552,9 +4664,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 285309,
-              "effective_non_null_ratio": 0.99,
+              "total_rows": 290305,
+              "non_null_rows": 287602,
+              "effective_non_null_ratio": 0.9907,
               "distinct_count": 2044
             },
             "2021": {
@@ -4583,15 +4695,15 @@
             },
             "2025": {
               "total_rows": 58668,
-              "non_null_rows": 58058,
-              "effective_non_null_ratio": 0.9896,
-              "distinct_count": 451
+              "non_null_rows": 58125,
+              "effective_non_null_ratio": 0.9907,
+              "distinct_count": 457
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 22484,
-              "effective_non_null_ratio": 0.913,
-              "distinct_count": 156
+              "total_rows": 26733,
+              "non_null_rows": 24710,
+              "effective_non_null_ratio": 0.9243,
+              "distinct_count": 175
             }
           }
         },
@@ -4608,10 +4720,10 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 156157
+              "distinct_count": 158199
             },
             "2021": {
               "total_rows": 49418,
@@ -4644,10 +4756,10 @@
               "distinct_count": 33162
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 15921
+              "distinct_count": 16553
             }
           }
         },
@@ -4664,9 +4776,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 263586,
-              "effective_non_null_ratio": 0.9146,
+              "total_rows": 290305,
+              "non_null_rows": 265542,
+              "effective_non_null_ratio": 0.9147,
               "distinct_count": 10454
             },
             "2021": {
@@ -4700,10 +4812,10 @@
               "distinct_count": 3739
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 21312,
-              "effective_non_null_ratio": 0.8654,
-              "distinct_count": 2045
+              "total_rows": 26733,
+              "non_null_rows": 23268,
+              "effective_non_null_ratio": 0.8704,
+              "distinct_count": 2200
             }
           }
         },
@@ -4720,9 +4832,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 263586,
-              "effective_non_null_ratio": 0.9146,
+              "total_rows": 290305,
+              "non_null_rows": 265542,
+              "effective_non_null_ratio": 0.9147,
               "distinct_count": 9768
             },
             "2021": {
@@ -4756,10 +4868,10 @@
               "distinct_count": 2981
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 21312,
-              "effective_non_null_ratio": 0.8654,
-              "distinct_count": 1394
+              "total_rows": 26733,
+              "non_null_rows": 23268,
+              "effective_non_null_ratio": 0.8704,
+              "distinct_count": 1664
             }
           }
         },
@@ -4776,8 +4888,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 263952,
+              "total_rows": 290305,
+              "non_null_rows": 265876,
               "effective_non_null_ratio": 0.9159,
               "distinct_count": 201284
             },
@@ -4812,10 +4924,10 @@
               "distinct_count": 41530
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 21487,
-              "effective_non_null_ratio": 0.8725,
-              "distinct_count": 16128
+              "total_rows": 26733,
+              "non_null_rows": 23411,
+              "effective_non_null_ratio": 0.8757,
+              "distinct_count": 16570
             }
           }
         },
@@ -4832,10 +4944,10 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 154623,
-              "effective_non_null_ratio": 0.5365,
-              "distinct_count": 23598
+              "total_rows": 290305,
+              "non_null_rows": 155876,
+              "effective_non_null_ratio": 0.5369,
+              "distinct_count": 23191
             },
             "2021": {
               "total_rows": 49418,
@@ -4865,13 +4977,13 @@
               "total_rows": 58668,
               "non_null_rows": 31306,
               "effective_non_null_ratio": 0.5336,
-              "distinct_count": 8579
+              "distinct_count": 8489
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 13059,
-              "effective_non_null_ratio": 0.5303,
-              "distinct_count": 4097
+              "total_rows": 26733,
+              "non_null_rows": 14312,
+              "effective_non_null_ratio": 0.5354,
+              "distinct_count": 4117
             }
           }
         },
@@ -4888,9 +5000,9 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 38290,
-              "effective_non_null_ratio": 0.1329,
+              "total_rows": 290305,
+              "non_null_rows": 38634,
+              "effective_non_null_ratio": 0.1331,
               "distinct_count": 3
             },
             "2021": {
@@ -4924,9 +5036,9 @@
               "distinct_count": 3
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 3388,
-              "effective_non_null_ratio": 0.1376,
+              "total_rows": 26733,
+              "non_null_rows": 3732,
+              "effective_non_null_ratio": 0.1396,
               "distinct_count": 3
             }
           }
@@ -4944,8 +5056,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288198,
+              "total_rows": 290305,
+              "non_null_rows": 290305,
               "effective_non_null_ratio": 1.0,
               "distinct_count": 144477
             },
@@ -4980,10 +5092,10 @@
               "distinct_count": 44083
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 17421
+              "distinct_count": 19068
             }
           }
         },
@@ -5000,8 +5112,8 @@
           "sample_values": [],
           "by_year": {
             "_ALL": {
-              "total_rows": 288198,
-              "non_null_rows": 288041,
+              "total_rows": 290305,
+              "non_null_rows": 290148,
               "effective_non_null_ratio": 0.9995,
               "distinct_count": 3217
             },
@@ -5036,10 +5148,10 @@
               "distinct_count": 1986
             },
             "2026": {
-              "total_rows": 24626,
-              "non_null_rows": 24626,
+              "total_rows": 26733,
+              "non_null_rows": 26733,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 1638
+              "distinct_count": 1663
             }
           }
         }
@@ -5082,7 +5194,7 @@
         "treatment_type",
         "vehicle_series"
       ],
-      "elapsed_ms": 675,
+      "elapsed_ms": 1563,
       "warnings": []
     }
   },
