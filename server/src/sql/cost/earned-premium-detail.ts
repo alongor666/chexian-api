@@ -12,6 +12,7 @@ import {
   buildEarnedPremiumCase,
   getMonthEndDate,
 } from '../sql-builder.js';
+import { SURCHARGE_RATE } from '../../config/fixed-cost-params.js';
 import type { NewEarnedPremiumConfig } from './shared.js';
 
 // ==================== 2025年保单月度已赚 ====================
@@ -289,8 +290,8 @@ SELECT
   CAST(COUNT(DISTINCT policy_no) AS INTEGER) AS policy_count,
   ROUND(SUM(premium), 2) AS total_premium,
   ROUND(SUM(COALESCE(fee_amount, 0)), 2) AS total_fee,
-  ROUND(SUM(premium) * 0.016, 2) AS tax,
-  ROUND(SUM(COALESCE(fee_amount, 0)) + SUM(premium) * 0.016, 2) AS total_expense
+  ROUND(SUM(premium) * ${SURCHARGE_RATE}, 2) AS tax,
+  ROUND(SUM(COALESCE(fee_amount, 0)) + SUM(premium) * ${SURCHARGE_RATE}, 2) AS total_expense
 FROM PolicyFact
 WHERE ${whereClause}
   AND insurance_start_date IS NOT NULL
