@@ -85,6 +85,24 @@ jobs:
 
           timeout_minutes: 30
 
+      # DuckDB CLI + Python duckdb：让 sx-promote / parquet-overlap-check 的守卫用例真跑而非恒 skip
+      # （backlog 2026-07-05-claude-d84df6）。版本派生逻辑与 production-gate.yml 同步维护。
+      # 本 job 测试为顾问性质（continue-on-error），安装失败不阻断 agent 工作。
+      - name: Install DuckDB (CLI + Python)
+        if: success()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          DUCKDB_VERSION=$(jq -r '.dependencies["@duckdb/node-api"]' server/package.json | cut -d- -f1)
+          DUCKDB_MINOR=$(echo "$DUCKDB_VERSION" | cut -d. -f1-2)
+          curl -fsSL --retry 3 -o /tmp/duckdb_cli.zip \
+            "https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
+          mkdir -p "$HOME/.duckdb/bin"
+          unzip -o /tmp/duckdb_cli.zip -d "$HOME/.duckdb/bin"
+          echo "$HOME/.duckdb/bin" >> "$GITHUB_PATH"
+          "$HOME/.duckdb/bin/duckdb" --version
+          python3 -m pip install --quiet "duckdb==${DUCKDB_MINOR}.*" "pandas<3"
+
       - name: Run tests after changes
         if: success()
         continue-on-error: true

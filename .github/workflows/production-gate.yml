@@ -96,6 +96,27 @@ jobs:
         if: needs.changes.outputs.skip != 'true'
         run: bun run build
 
+      # DuckDB CLI + Python duckdb：让 sx-promote.test.mjs（duckdb CLI 守卫）与
+      # parquet-overlap-check.test.mjs（python duckdb 守卫）的集成/E2E 用例在 CI 真跑而非恒 skip
+      # （backlog 2026-07-05-claude-d84df6）。CLI 版本从 server/package.json 的 @duckdb/node-api
+      # （如 1.4.4-r.1 → v1.4.4）派生，与 Neo 保持 minor 兼容（CLAUDE.md §5）；python duckdb 同 minor。
+      - name: Install DuckDB (CLI + Python)
+        if: needs.changes.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          DUCKDB_VERSION=$(jq -r '.dependencies["@duckdb/node-api"]' server/package.json | cut -d- -f1)
+          DUCKDB_MINOR=$(echo "$DUCKDB_VERSION" | cut -d. -f1-2)
+          echo "目标 DuckDB 版本: v${DUCKDB_VERSION}（派生自 @duckdb/node-api，minor 线 ${DUCKDB_MINOR}.x）"
+          curl -fsSL --retry 3 -o /tmp/duckdb_cli.zip \
+            "https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
+          mkdir -p "$HOME/.duckdb/bin"
+          unzip -o /tmp/duckdb_cli.zip -d "$HOME/.duckdb/bin"
+          echo "$HOME/.duckdb/bin" >> "$GITHUB_PATH"
+          "$HOME/.duckdb/bin/duckdb" --version
+          # pandas 锁 2.x：duckdb 1.4 LTS 对 pandas 3 的兼容未验证；测试仅用 DataFrame 写 parquet fixture
+          python3 -m pip install --quiet "duckdb==${DUCKDB_MINOR}.*" "pandas<3"
+          python3 -c "import duckdb, pandas; print('python duckdb', duckdb.__version__, '/ pandas', pandas.__version__)"
+
       - name: Unit Tests
         if: needs.changes.outputs.skip != 'true'
         run: bun run test --run
