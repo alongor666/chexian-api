@@ -166,9 +166,11 @@ describe('generateComprehensiveCostQuery', () => {
     expect(sql).toContain('AS projected_margin_amount');
   });
 
-  it('综合费用率公式：(赔款 + 费用) / 满期保费', () => {
+  it('综合费用率公式：(赔款 + 费用) / 满期保费（注册表 comprehensive_expense_ratio SSOT）', () => {
     const sql = generateComprehensiveCostQuery(BASE_CONFIG);
-    expect(sql).toContain('SUM(reported_claims) + SUM(fee_amount)');
+    // B310：公式取自注册表 getMetricSql('comprehensive_expense_ratio')，
+    // 分子 = 赔款 + 费用（COALESCE 兜底），保留 comprehensive_cost_ratio 别名
+    expect(sql).toContain('SUM(reported_claims) + SUM(COALESCE(fee_amount, 0))');
   });
 
   it('使用指标注册表：满期保费 + 赔付率', () => {

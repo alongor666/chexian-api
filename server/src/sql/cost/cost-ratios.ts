@@ -214,12 +214,12 @@ SELECT
   --   fee_amount 经 Parquet 直查 2.59M 行 0 NULL，故 SUM(fee_amount)≡SUM(COALESCE(fee_amount,0))，KPI 中性）
   ${getMetricSql('expense_ratio')},
 
-  -- 综合费用率 = (赔款 + 费用) / 满期保费 * 100%
-  CASE
-    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
-    THEN ROUND((SUM(reported_claims) + SUM(fee_amount)) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2)
-    ELSE NULL
-  END AS comprehensive_cost_ratio,
+  -- 综合费用率：公式取注册表 comprehensive_expense_ratio 唯一事实源（B310 消除硬编码 CASE 漂移；
+  --   与同文件 expense_ratio 一致不在 SQL 内 ROUND，前端按 display.decimals 单次舍入）。
+  --   fee_amount 经 Parquet 直查 SC 2,618,348 行 0 NULL，SUM(fee_amount)≡SUM(COALESCE(fee_amount,0)) 中性。
+  --   保留既有 comprehensive_cost_ratio 别名：下游消费面广（前端 5 处 + agent 注册表 + cost-cube），
+  --   别名分裂（vs 注册表 id）统一另立后续项，本 PR 只做公式去漂移。
+  ${getMetricSql('comprehensive_expense_ratio').replace('AS comprehensive_expense_ratio', 'AS comprehensive_cost_ratio')},
 
   -- 满期边际贡献额（仅扣除变动成本）
   ${getMetricSql('earned_margin_amount')},
