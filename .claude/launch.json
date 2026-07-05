@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "生产构建预览 (Vite Preview / dist)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "preview", "--", "--port", "4173", "--strictPort"],
+      "port": 4173
+    },
+    {
       "name": "后端 API 服务器 (Express + DuckDB)",
       "runtimeExecutable": "node",
       "runtimeArgs": ["scripts/start.mjs", "--server"],

@@ -64,12 +64,17 @@ export default defineConfig({
         // 刻意不归组，跟随各自动态 import() 边界自然分包按需加载。
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return undefined;
-          if (/[\\/]node_modules[\\/](react|react-dom|react-router-dom|scheduler)[\\/]/.test(id)) {
+          // echarts-for-react / prop-types 必须与 React 同 chunk：它是 React 绑定
+          // （EChartsReactCore extends React.PureComponent）。若单独归入 echarts 组，
+          // Rollup 去重的 CJS interop helper（getDefaultExportFromCjs）会落在 echarts
+          // chunk，导致 vendor-react ↔ echarts chunk 循环依赖 —— 运行期 React 导出在
+          // TDZ 未就绪时被 extends，抛 "Class extends value undefined"（登录页白屏）。
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router-dom|scheduler|echarts-for-react|prop-types)[\\/]/.test(id)) {
             return 'vendor-react';
           }
-          if (/[\\/]node_modules[\\/](echarts|echarts-for-react|zrender)[\\/]/.test(id)) {
-            return 'vendor-echarts';
-          }
+          // echarts / zrender 刻意不归组（同 jspdf/html2canvas/exceljs）：所有图表页
+          // 均 React.lazy 懒加载，让 echarts 引擎（约 674KB）跟随各自动态 import() 边界
+          // 自然分包为共享懒 chunk，登录首屏不再 modulepreload echarts（2026-07-05-claude-e5ef78）。
           if (/[\\/]node_modules[\\/]date-fns[\\/]/.test(id)) {
             return 'vendor-data';
           }

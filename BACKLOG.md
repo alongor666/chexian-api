@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（55 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（56 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -35,7 +35,7 @@
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
 
-**P2（27 项）**
+**P2（28 项）**
 
 - B274 — total_expense 1.6% vs L4 注册表 1.5% 系数不一致
 - B314 — data-sources.json 契约/状态拆分（接续 B313）
@@ -64,6 +64,7 @@
 - 2026-07-03-claude-6c23b3 — 后端审查
 - 2026-07-03-claude-6e93c9 — patrol 巡检报告路由(/api/query/patrol/
 - 2026-07-03-claude-6ef9cd `PARTIAL` — 安全审计M2
+- 2026-07-05-claude-e5ef78 — echarts(719KB) 仍在登录页首屏加载
 
 **P3（17 项）**
 
@@ -145,4 +146,5 @@
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/health无脚本,故实际无功能影响。收紧到nonce/hash策略是纯纵深加固,需先确认无Express服务的内联脚本依赖。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | server/src/config/csp.ts | 架构价值审计冻结（2026-07-04）：Express csp.ts 的 unsafe-inline 实测无功能影响（唯一 HTML 响应 reports.ts 有独立 REPORT_HTML_CSP；SPA 的 CSP 基线已由 PR #874 下发 nginx 模板，生产应用由 6ef9cd 追踪）；unsafe-inline→nonce 需重构全部内联脚本，成本高当前收益零。触发条件=SPA CSP 生产落地后仍有内联脚本注入实证 |
 | 2026-07-05-claude-49e3fd | 2026-07-05 | Chore | @claude | 综合费用率别名统一 + cost-cube 硬编码去漂移（B310 残留）：(1) SQL 返回别名 comprehensive_cost_ratio 与注册表 id comprehensive_expense_ratio 分裂，统一需改前端 5 处(cost-data/table-columns/transformData/CostAnalysisPanel/useExportHandlers) + agent 注册表 4 处 + cost-cube；(2) server/src/sql/cube/cost-cube.ts:319 同类硬编码 CASE 应比照 B310 改 getMetricSql。因跨前后端 10 处且触及 agent 热路径，从 B310 净简化小 PR 分离。【账】做完删 2 处硬编码公式+统一 1 别名/加 0 机制/触发条件=别名迁移需前后端同批改+cube-shadow 影子对账验证 | P3 | PROPOSED | N/A | N/A |  |
 | 2026-07-05-claude-da5ac0 | 2026-07-05 | Chore | @claude | 整条 patrol 功能链退役评估（3a6daf 残留）：删 chexian-patrol 命令后，patrol_engine.py(524行) + server/src/routes/query/patrol.ts(query.ts:65 活跃挂载) + src/shared/api/patrol-api.ts(client.ts 消费) + types/patrol.ts 仍在，但①数据源 renewal_universe/latest.parquet + RENEWAL_PATROL_REPORT_FRAMEWORK.md 缺失②前端无 patrol 页面/路由消费(grep 零命中)③apiClient.patrol 子客户端无组件调用。整链处于'基础设施在位但休眠'。退役涉及 query 路由聚合器 + apiClient 架构，风险高于删命令文件，须单独评估(diagnose-renewal 是否已实质覆盖→是则整链退役/否则明确保留场景)。【账】做完删4文件+改query.ts/client.ts/api-routes/2处子客户端注册 或 明确保留并补前端消费/加0机制/触发条件=确认diagnose-renewal覆盖度 | P3 | PROPOSED | N/A | N/A |  |
+| 2026-07-05-claude-e5ef78 | 2026-07-05 | 前端首屏性能 | @claude | echarts(719KB) 仍在登录页首屏加载：修复 vendor-react↔vendor-echarts 循环依赖后(见本次 crash 修复 PR)，vendor-react 仍单向 import vendor-echarts 取 Rollup 共享的 CJS interop helper(getDefaultExportFromCjs)，导致 echarts 随 React 首屏 modulepreload。目标：让 echarts 仅在登录后按需 lazy 加载，登录页不下载 echarts。方向：排查首屏静态图中静态 import shared/utils/echarts 或 echarts/core 的组件改 React.lazy；或让 echarts 跟随动态 import 边界不强制归组(参 jspdf/html2canvas 的刻意不归组做法)。验证：dist/index.html 不再 modulepreload vendor-echarts + chunk 图仍为 DAG + 登录页 network 无 echarts。 | P2 | PROPOSED | vite.config.ts | vite.config.ts |  |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功能对等覆盖 v1 场景，再切 daily.mjs 调度并删 v1。承接 B253 弃置结论。【账】做完删 v1 脚本+DEFAULT_SCHEMA 硬编码/加 0 新机制/触发条件=确认 v2 功能对等 | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ |  |
