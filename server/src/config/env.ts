@@ -84,6 +84,21 @@ export const dbEnv = {
   DUCKDB_PATH: process.env.DUCKDB_PATH ?? ':memory:',
   /** Parquet 数据文件目录 */
   DATA_PATH: process.env.DATA_PATH ?? './data',
+  /**
+   * 单文件上传大小上限（MB）。唯一事实源——四处口径必须对齐：
+   *   1. multer limits.fileSize（server/src/routes/data.ts，从本变量派生字节数）
+   *   2. nginx client_max_body_size（deploy/nginx-fullstack.conf，静态模板不读 Node env，
+   *      须与本默认值手工对齐，由 governance「上传上限对齐」闸逐落点校验防漂移）
+   *   3. 前端预校验 MAX_IMPORT_SIZE（src/features/file/utils/fileHelpers.ts，客户端 bundle
+   *      无法读 Node env，须镜像本默认值；比后端紧会让合规文件被浏览器提前拦下）
+   *   4. 安全清单文档（.claude/commands/chexian-security-review.md）
+   * 默认 200（MB）：按实测活跃最大 Parquet ~72MB 取整加 ~2.7x 余量（覆盖未来省份 / 时间窗增长）。
+   * 生产有效上限由 nginx 先于 Express 拒绝决定，故 nginx 值必须 == 本默认值。
+   * 非正整数（NaN/0/负数）fallback 到默认，避免上传端点因坏 env 全面失效。
+   * 诚实边界：governance 闸只校验各落点源码默认；若部署期用 MAX_UPLOAD_SIZE_MB 运行时 env 覆盖
+   * 而不同步改 nginx 静态模板，闸无法察觉（静态模板无法读 env）——改上限须同时改模板。
+   */
+  MAX_UPLOAD_SIZE_MB: parsePositiveInt('MAX_UPLOAD_SIZE_MB', process.env.MAX_UPLOAD_SIZE_MB, 200),
   /** DuckDB 最大内存用量 */
   DUCKDB_MAX_MEMORY: process.env.DUCKDB_MAX_MEMORY ?? '4GB',
   /** DuckDB 线程数 */

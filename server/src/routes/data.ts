@@ -36,6 +36,7 @@ import {
   safeLog,
 } from '../utils/security.js';
 import { getDataDir, getKpiPlanConfigPath } from '../config/paths.js';
+import { dbEnv } from '../config/env.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
 
 const router = Router();
@@ -46,7 +47,9 @@ const router = Router();
 
 const CONFIG = {
   DATA_DIR: getDataDir(),
-  MAX_FILE_SIZE: 500 * 1024 * 1024, // 500MB
+  // 上传上限唯一事实源 = env.dbEnv.MAX_UPLOAD_SIZE_MB（默认 200MB）。
+  // 必须与 nginx client_max_body_size 对齐（governance「上传上限对齐」闸校验）。
+  MAX_FILE_SIZE: dbEnv.MAX_UPLOAD_SIZE_MB * 1024 * 1024,
   MAX_FILES_KEEP: 10, // 保留最近 10 个文件
   RATE_LIMIT_WINDOW: 15 * 60 * 1000, // 15 分钟
   RATE_LIMIT_MAX: 10, // 最多 10 次上传
