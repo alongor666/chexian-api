@@ -74,7 +74,7 @@ class ApiClient extends ApiClientCore {
   readonly crossSell = new CrossSellApi(this.transport);
   /** 业绩分析：apiClient.performance.{summary,trend,drilldown,orgHeatmap,topSalesman,bundle} */
   readonly performance = new PerformanceApi(this.transport);
-  /** 客户来源去向：apiClient.customerFlow.{summary,inflow,outflow,trend,metadata} */
+  /** 客户来源去向：apiClient.customerFlow.{summary,outflow,trend,metadata} */
   readonly customerFlow = new CustomerFlowApi(this.transport);
   /** AI：apiClient.ai.{detectRequirement,capabilities,quickSuggestions}（analyzeTrend 已于 B44f2ca 移除死代码） */
   readonly ai = new AiApi(this.transport);
@@ -244,7 +244,7 @@ class ApiClient extends ApiClientCore {
 
   // 维修资源 API（v1 + v2）已迁出至 repair 子客户端（见类首字段 + repair-api.ts）
 
-  // 客户来源去向 API（summary/inflow/outflow/trend/metadata）已迁出至 customerFlow 子客户端（见类首字段 + customer-flow-api.ts）
+  // 客户来源去向 API（summary/outflow/trend/metadata）已迁出至 customerFlow 子客户端（见类首字段 + customer-flow-api.ts）
 
   // 报价转化分析 API 已迁出至 quoteConversion 子客户端（见类首字段 + quote-conversion-api.ts）
 

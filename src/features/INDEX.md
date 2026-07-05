@@ -12,7 +12,6 @@
 | Growth | `growth/` | 增长率分析（同比、环比、年累计、自定义期间） | [README](./growth/README.md) |
 | Premium Report | `premium-report/` | 保费报表（机构保费统计+业务员保费明细+汇总） | 无独立文档 |
 | SQL Query | `sql-query/` | 交互式SQL查询（只读+聚合，预置模板，导出） | [README](./sql-query/README.md) |
-| Report | `report/` | 报表模板功能（预设分析场景模板） | [README](./report/README.md) |
 | Coefficient | `coefficient/` | 商车自主定价系数监控（阈值合规、周期分表、缺口保费） | 无独立文档 |
 | Cost | `cost/` | 成本分析（赔付率/费用率/综合费用率/变动成本率/已赚保费） | 无独立文档 |
 | Comprehensive Analysis | `comprehensive-analysis/` | 综合分析页（autowrKPI 六模块复刻，单接口 bundle） | 无独立文档 |
@@ -76,9 +75,6 @@
   - `zhipuClient.ts`: 智谱 API 客户端（调用 GLM 模型）
   - `configStore.ts`: API Key 配置存储（localStorage）
   - `AiSqlPanel.tsx`: AI SQL 面板（自然语言输入+配置管理+生成执行）
-
-### Report 模块
-- **`report/components/ReportTemplatesPanel.tsx`**: 报表模板选择面板（6个预设模板，分6类）
 
 ### Pages 模块（侧边栏独立页面）
 - **`pages/index.ts`**: 独立页面组件导出入口

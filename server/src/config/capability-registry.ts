@@ -132,19 +132,6 @@ export const capabilities: Capability[] = [
     ],
   },
   {
-    id: 'templates',
-    route: '/templates',
-    name: '报表模板',
-    icon: 'FileText',
-    description: 'NL2SQL 自然语言查询，17 个预置 SQL 模板',
-    keywords: ['SQL', '查询', '自定义查询', '模板', '自然语言'],
-    exampleQueries: [
-      '自定义SQL查询',
-      '用自然语言查数据',
-      '报表模板',
-    ],
-  },
-  {
     id: 'moto-cost',
     route: '/moto-cost',
     name: '摩意模型',

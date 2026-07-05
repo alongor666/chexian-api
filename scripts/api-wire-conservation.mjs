@@ -91,6 +91,12 @@ const POST_SPLIT_REMOVALS = [
     note: 'PR #547 评审发现零前端调用点；commit 5a759d10（2026-03-10）起 CrossSellOrgTrendChart 改用客户端「程序解读」，之后无组件调用。后端 /api/ai/trend-analysis 路由保守保留。',
     routeToken: 'AI_ROUTES.TREND_ANALYSIS',
   },
+  {
+    name: 'customerFlow.inflow',
+    backlogUid: '2026-06-11-claude-02aa70',
+    note: '产品层冗余裁剪 c 点：前端 CustomerFlowPage 仅渲染「流失去向」，从未调用 inflow()（全 src 零 .inflow 调用点）。后端 /api/query/customer-flow/inflow 路由保守保留——服务 agent 诊断链（tool-registry customer_flow.inflow / agent-customer-flow-diagnosis-service）。',
+    routeToken: 'QUERY_ROUTES.CUSTOMER_FLOW.INFLOW',
+  },
 ];
 
 const args = process.argv.slice(2);

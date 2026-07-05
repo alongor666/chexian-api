@@ -130,9 +130,8 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: 'performance', method: 'topSalesman', args: NO_ARGS },
   { ns: 'performance', method: 'bundle', args: () => [{}] },
 
-  // ── customerFlow（5）──
+  // ── customerFlow（4）──
   { ns: 'customerFlow', method: 'summary', args: NO_ARGS },
-  { ns: 'customerFlow', method: 'inflow', args: NO_ARGS },
   { ns: 'customerFlow', method: 'outflow', args: NO_ARGS },
   { ns: 'customerFlow', method: 'trend', args: NO_ARGS },
   { ns: 'customerFlow', method: 'metadata', args: NO_ARGS },
