@@ -7,34 +7,13 @@
  */
 import React from 'react';
 import { cardStyles, colorClasses, cn, fontStyles } from '@/shared/styles';
-import type { AsyncState, LedgerAction, LedgerCardMeta } from '../types';
+import { ACTION_STYLE, ActionShapeIcon } from './actionStyle';
+import { InfoTrigger } from '../infographs';
+import type { AsyncState, LedgerCardMeta } from '../types';
 
-/** 动作标签形状（颜色必叠形状，不只靠色相区分） */
-type ActionIcon = 'up' | 'diamond' | 'tri';
-
-const ACTION_STYLE: Record<LedgerAction, { cls: string; icon: ActionIcon }> = {
-  加码: { cls: cn('border-success bg-success-bg', colorClasses.text.successDark), icon: 'up' },
-  复制: { cls: cn('border-success bg-success-bg', colorClasses.text.successDark), icon: 'up' },
-  优化: { cls: cn('border-warning bg-warning-bg', colorClasses.text.warningDark), icon: 'diamond' },
-  整改: { cls: cn('border-danger bg-danger-bg', colorClasses.text.danger), icon: 'tri' },
-  预警: { cls: cn('border-danger bg-danger-bg', colorClasses.text.danger), icon: 'tri' },
-  暂停: {
-    cls: 'border-neutral-300 dark:border-neutral-600 bg-neutral-100 dark:bg-surface-3 text-neutral-600 dark:text-neutral-400',
-    icon: 'tri',
-  },
-};
-
-const ICON_PATH: Record<ActionIcon, string> = {
-  up: 'M6 1 L11 10 L1 10 Z',
-  diamond: 'M6 1 L11 6 L6 11 L1 6 Z',
-  tri: 'M6 1 L11 11 L1 11 Z',
-};
-
-export const ActionShapeIcon: React.FC<{ icon: ActionIcon; size?: number }> = ({ icon, size = 11 }) => (
-  <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
-    <path d={ICON_PATH[icon]} fill="currentColor" />
-  </svg>
-);
+// 双编码定义已下沉 components/actionStyle.tsx（与 infographs 决策映射表共用）；
+// 这里保留再导出，维持 ChartLedgerPage 既有 import 路径。
+export { ActionShapeIcon } from './actionStyle';
 
 interface Props {
   meta: LedgerCardMeta;
@@ -104,7 +83,8 @@ export const LedgerCard: React.FC<Props> = ({ meta, result, children }) => {
 
       {/* 右栏：图表（min-w-0：让内层 overflow-x-auto 接管宽表滚动而非撑破轨道） */}
       <div className="min-w-0">
-        <div className={cn(cardStyles.base, 'p-4')}>
+        <div className={cn(cardStyles.base, 'relative p-4')}>
+          <InfoTrigger meta={meta} />
           {children}
           <div className={cn('text-[11px] mt-2.5 pt-2.5 border-t', fontStyles.numeric, colorClasses.border.neutral, colorClasses.text.neutralMuted)}>
             {meta.note}
