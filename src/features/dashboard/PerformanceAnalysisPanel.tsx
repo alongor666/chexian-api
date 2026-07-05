@@ -531,10 +531,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-neutral-600">险别组合</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">车险保费(万元)</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">车险计划(万元)</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">车险件数</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">件均保费</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-600">达成率</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">增长率</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">新能源占比</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-600">续保占比</th>
@@ -546,12 +544,12 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
               <tbody>
                 {summaryQuery.loading && (
                   <tr>
-                    <td colSpan={12} className="px-4 py-8 text-center text-neutral-400">数据加载中...</td>
+                    <td colSpan={10} className="px-4 py-8 text-center text-neutral-400">数据加载中...</td>
                   </tr>
                 )}
                 {!summaryQuery.loading && parentSummaryRows.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="px-4 py-8 text-center text-neutral-400">暂无数据</td>
+                    <td colSpan={10} className="px-4 py-8 text-center text-neutral-400">暂无数据</td>
                   </tr>
                 )}
                 {!summaryQuery.loading && parentSummaryRows.map((row, index) => {
@@ -568,12 +566,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                           {canExpand ? `${isExpanded ? '▾' : '▸'} ` : ''}{row.row_label}
                         </td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.premium)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(row.plan_premium)}</td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatCount(row.auto_count)}</td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(row.avg_premium)}</td>
-                        <td className={cn('px-4 py-3 text-right', textStyles.numeric, getRateTextClass('achievement', row.achievement_rate))}>
-                          {row.achievement_rate === null ? '-' : formatPercent(row.achievement_rate)}
-                        </td>
                         <td className={cn('px-4 py-3 text-right', textStyles.numeric, getGrowthTextClass(classifyGrowthBand(row.growth_rate)), 'font-semibold')}>
                           {row.growth_rate === null ? '-' : formatPercent(row.growth_rate)}
                         </td>
@@ -587,12 +581,8 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
                         <tr key={`${row.coverage_combination}-${child.expand_key}`} className="border-b border-neutral-100 bg-neutral-50/40">
                           <td className={cn('px-4 py-2 pl-8', colorClasses.text.neutralDark)}>{child.row_label}</td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(child.premium)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatPremiumWanDisplay(child.plan_premium)}</td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatCount(child.auto_count)}</td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric)}>{formatAvgPremiumDisplay(child.avg_premium)}</td>
-                          <td className={cn('px-4 py-2 text-right', textStyles.numeric, getRateTextClass('achievement', child.achievement_rate))}>
-                            {child.achievement_rate === null ? '-' : formatPercent(child.achievement_rate)}
-                          </td>
                           <td className={cn('px-4 py-2 text-right', textStyles.numeric, getGrowthTextClass(classifyGrowthBand(child.growth_rate)), 'font-semibold')}>
                             {child.growth_rate === null ? '-' : formatPercent(child.growth_rate)}
                           </td>

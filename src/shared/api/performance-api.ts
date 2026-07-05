@@ -28,8 +28,6 @@ export class PerformanceApi {
       premium: number;
       auto_count: number;
       avg_premium: number;
-      plan_premium: number | null;
-      achievement_rate: number | null;
       growth_rate: number | null;
       nev_rate: number;
       renewal_rate: number;

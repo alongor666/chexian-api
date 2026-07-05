@@ -23,8 +23,6 @@ export interface PerformanceSummaryRow {
   premium: number;
   auto_count: number;
   avg_premium: number;
-  plan_premium: number | null;
-  achievement_rate: number | null;
   growth_rate: number | null;
   nev_rate: number;
   renewal_rate: number;
@@ -58,8 +56,6 @@ function mapSummaryRow(row: Record<string, unknown>): PerformanceSummaryRow {
     premium: Number(row.premium ?? 0),
     auto_count: Number(row.auto_count ?? 0),
     avg_premium: Number(row.avg_premium ?? 0),
-    plan_premium: row.plan_premium == null ? null : Number(row.plan_premium),
-    achievement_rate: row.achievement_rate == null ? null : Number(row.achievement_rate),
     growth_rate: row.growth_rate == null ? null : Number(row.growth_rate),
     nev_rate: Number(row.nev_rate ?? 0),
     renewal_rate: Number(row.renewal_rate ?? 0),

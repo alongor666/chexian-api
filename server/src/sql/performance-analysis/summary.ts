@@ -39,9 +39,8 @@ export function generatePerformanceSummaryQuery(
   const expandConfig = useExpandRows ? getExpandDimensionConfig(expandDims) : null;
 
   // 业务性质指标聚合 SQL — 4个CTE共用，避免重复定义。
-  // 注：汇总表按险别组合分行，而年计划只有业务员粒度（不分险别），故本查询不计算
-  // plan_premium / achievement_rate（恒 NULL，见 parent_metrics/child_metrics）；
-  // 旧版在此分摊年计划但从未输出，属死计算，已随 2026-06-11 口径统一一并移除。
+  // 注：汇总表按险别组合分行，而年计划只有业务员粒度（不分险别）；达成率/年计划列恒 NULL
+  // 无信息量，已于 2026-07-04（42bf28）从本查询与前端汇总表删除（标准口径见注册表 plan_completion_pct）。
   const businessMetricsSql = `
         SUM(premium_wan) AS premium,
         COUNT(DISTINCT CASE WHEN NOT is_endorsement THEN policy_key END) AS auto_count,
@@ -129,9 +128,6 @@ export function generatePerformanceSummaryQuery(
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.premium * 10000.0 / c.auto_count, 2) END AS avg_premium,
-        -- 年计划无险别组合维度，汇总表不展示达成率（标准口径见注册表 plan_completion_pct）
-        NULL::DOUBLE AS plan_premium,
-        NULL::DOUBLE AS achievement_rate,
         CASE
           WHEN COALESCE(p.premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.premium) * 100.0 / p.premium, 2)
@@ -202,8 +198,6 @@ export function generatePerformanceSummaryQuery(
         ROUND(c.premium, 4) AS premium,
         c.auto_count,
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.premium * 10000.0 / c.auto_count, 2) END AS avg_premium,
-        NULL::DOUBLE AS plan_premium,
-        NULL::DOUBLE AS achievement_rate,
         CASE
           WHEN COALESCE(p.premium, 0) = 0 THEN NULL
           ELSE ROUND((c.premium - p.premium) * 100.0 / p.premium, 2)
@@ -231,8 +225,6 @@ export function generatePerformanceSummaryQuery(
       premium,
       auto_count,
       avg_premium,
-      plan_premium,
-      achievement_rate,
       growth_rate,
       nev_rate,
       renewal_rate,
@@ -249,8 +241,6 @@ export function generatePerformanceSummaryQuery(
       premium,
       auto_count,
       avg_premium,
-      plan_premium,
-      achievement_rate,
       growth_rate,
       nev_rate,
       renewal_rate,
