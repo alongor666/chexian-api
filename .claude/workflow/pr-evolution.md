@@ -1905,3 +1905,17 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （本条即 governance #41 闸建议动作的执行；防回退已由该闸 error 级承担。headroom 预警暂缓——19KB 余量下无近期复发风险，实证再撞线一次再立项。）
+
+---
+
+## 2026-07-05 · #928×#929 并行卡片各自绿、合并后 main 红（pip user-site 遮蔽）
+
+- **根因**：两张并行 backlog 卡同时改 production-gate.yml 且**文本零冲突**（不同位置插步骤），但语义冲突：#928 的 Install DuckDB 用系统 pip 装 `pandas<3`（非 root 落 **user-site** `~/.local/lib/python3.12/site-packages`），而 #929 的 pytest 步骤经 actions/setup-python 3.12 + requirements-test.txt 装 pandas 3.x 到 toolcache site-packages——**user-site 在 sys.path 中优先**，pytest 实际 import 到 pandas 2.3.3，`test_customer_flow_split_products` 的 `'<NA>'` 断言失败。两个 PR 各自 run 都绿（各自基于旧 main，看不到对方步骤），合并后 main `8f7ad05b` 起红一轮。
+- **修复**：PR #931 去掉 `pandas<3` 上界与 requirements-test.txt 同源（`d51dde71`）；连带修复守卫真跑暴露的派生轴用例并发超时（suite timeout 30s）。
+- **预防**：
+  1. §3.1 rebase 时若 fetch 发现 main 在本卡开工后合入了**同文件/同 CI 链**的 PR，rebase 后不能只看文本无冲突——要重看对方改动与本卡的**运行时交互**（同一 job 内新步骤、共享解释器/PATH/缓存），必要时在本卡 PR 里先跑一次全套再合并。
+  2. CI 内多处 pip 安装时，版本约束必须**单一事实源**（requirements 文件），任何步骤不得另行加上/下界 pin；系统 pip（user-site）与 setup-python 解释器共存时，牢记 user-site 优先级更高、会跨解释器遮蔽。
+  3. 呼应 memory `feedback_loop_fanout_concurrent_collision`：dispatch 并行卡前按主题查同文件在途 PR；本次两卡同改 production-gate.yml，理应串行或合并为一卡。
+
+### needs_automation: false
+（同类失败首次；若再现「并行卡改同一 workflow 文件合并后红」则按进化铁律升级为 dispatch 前的自动交集检查——扩展现有 push 前 fetch 闸对 `.github/workflows/**` 的文件交集告警。）
