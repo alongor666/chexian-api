@@ -49,9 +49,9 @@ const InfographModal: React.FC<{ meta: LedgerCardMeta; def: InfographDef; onClos
         type="button"
         aria-label="关闭读图指南"
         onClick={onClose}
-        className="absolute inset-0 w-full h-full bg-neutral-900/50 dark:bg-neutral-900/70 cursor-default"
+        className="absolute inset-0 w-full h-full bg-neutral-900/50 dark:bg-neutral-900/70 backdrop-blur-md cursor-default"
       />
-      <div className={cn(cardStyles.base, 'relative w-full max-w-2xl max-h-[85vh] overflow-y-auto overscroll-contain p-6 sm:p-7')}>
+      <div className={cn(cardStyles.base, 'relative w-full max-w-4xl max-h-[88vh] overflow-y-auto overscroll-contain p-6 sm:p-8')}>
         {/* 头部 */}
         <div className="flex items-start justify-between gap-4 mb-1">
           <div>
@@ -88,10 +88,12 @@ const InfographModal: React.FC<{ meta: LedgerCardMeta; def: InfographDef; onClos
           <p className={cn('text-[15px] font-semibold leading-normal', colorClasses.text.primaryDark)}>{def.question}</p>
         </div>
 
-        {/* ② 图形解剖 */}
+        {/* ② 图形解剖（弹层加宽后 SVG 随容器等比放大，展示更全面） */}
         <SectionLabel>图形解剖</SectionLabel>
-        <div className={cn('rounded-md border p-2', colorClasses.border.neutral, 'bg-neutral-50 dark:bg-surface-2')}>
-          <Anatomy />
+        <div className={cn('rounded-md border px-4 py-5 sm:px-6 sm:py-7', colorClasses.border.neutral, 'bg-neutral-50 dark:bg-surface-2')}>
+          <div className="mx-auto max-w-3xl">
+            <Anatomy />
+          </div>
         </div>
         <ul className="mt-2 space-y-1">
           {def.anatomyNotes.map((n, i) => (

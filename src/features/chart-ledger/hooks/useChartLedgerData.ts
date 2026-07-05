@@ -61,10 +61,25 @@ function state(q: { isLoading: boolean; isError: boolean; refetch: () => unknown
   };
 }
 
+// ─── 维度切换 ────────────────────────────────────────────────
+/** 实体类图（01/02/03/04/09/10）可切换的分组维度；默认客户类别。 */
+export type LedgerDim = 'customer_category' | 'org_level_3' | 'coverage_combination';
+export const LEDGER_DIM_OPTIONS: { key: LedgerDim; label: string }[] = [
+  { key: 'customer_category', label: '客户类别' },
+  { key: 'org_level_3', label: '机构' },
+  { key: 'coverage_combination', label: '险别组合' },
+];
+export const dimLabel = (d: LedgerDim): string =>
+  LEDGER_DIM_OPTIONS.find((o) => o.key === d)?.label ?? '维度';
+
 // ─── Hook ───────────────────────────────────────────────────
-export function useChartLedgerData() {
+export function useChartLedgerData(dimension: LedgerDim = 'customer_category') {
   const { filters } = useGlobalFilters();
   const params = useMemo(() => buildFilterParams(filters), [filters]);
+  const dLabel = dimLabel(dimension);
+  // 箱线图（chart04）需要「主维度分组 + 组内二级实体分布」两层：当主维度已是机构时，
+  // 组内分布退化，改用客户类别作二级维度，避免「机构内跨机构分布」的无意义切分。
+  const boxSecondary = dimension === 'org_level_3' ? 'customer_category' : 'org_level_3';
   const claimsParams = useMemo(() => {
     const p: Record<string, string> = {};
     if (params.orgNames) p.orgName = params.orgNames;
@@ -86,39 +101,45 @@ export function useChartLedgerData() {
   }, [params]);
 
   const keyBase = JSON.stringify(params);
+  // 维度切换的实体图查询键含 dimension，切维度即独立取数、不与其它维度缓存串读。
+  const dimKey = `${dimension}|${keyBase}`;
 
   // ── 真实查询（每查询独立错误隔离，单图失败不拖垮整页） ──
-  const qOrg = useQuery({
-    queryKey: ['ledger', 'org', keyBase],
+  // qDim：实体图主查询，按所选维度（客户类别/机构/险别组合）聚合全部实体级指标，
+  //       驱动 chart01/02/09/10。qDimHeat / qDimBox 为需二级维度的图单独取数。
+  const qDim = useQuery({
+    queryKey: ['ledger', 'dim', dimKey],
     queryFn: () =>
       apiClient.getPivot(
-        ['org_level_3'],
+        [dimension],
         ['total_premium', 'expense_ratio', 'earned_claim_ratio', 'earned_margin_amount', 'policy_count'],
         params,
         500
       ),
   });
-  const qCust = useQuery({
-    queryKey: ['ledger', 'cust', keyBase],
-    queryFn: () =>
-      apiClient.getPivot(['customer_category'], ['total_premium', 'earned_claim_ratio', 'policy_count'], params, 100),
+  const qDimHeat = useQuery({
+    queryKey: ['ledger', 'dimHeat', dimKey],
+    queryFn: () => apiClient.getPivot([dimension, 'insurance_type'], ['earned_claim_ratio'], params, 500),
   });
-  const qHeatmap = useQuery({
-    queryKey: ['ledger', 'heatmap', keyBase],
-    queryFn: () => apiClient.getPivot(['org_level_3', 'insurance_type'], ['earned_claim_ratio'], params, 500),
-  });
-  const qBox = useQuery({
-    queryKey: ['ledger', 'box', keyBase],
+  const qDimBox = useQuery({
+    queryKey: ['ledger', 'dimBox', dimKey],
     queryFn: () =>
-      apiClient.getPivot(['customer_category', 'org_level_3'], ['avg_claim_amount', 'policy_count'], params, 500),
+      apiClient.getPivot([dimension, boxSecondary], ['avg_claim_amount', 'policy_count'], params, 500),
+  });
+  // qOrg：仅 chart12（机构 赔付率×增速四象限）用——增速数据只有机构级口径，故此图恒按机构，不随维度切换。
+  const qOrg = useQuery({
+    queryKey: ['ledger', 'org', keyBase],
+    queryFn: () =>
+      apiClient.getPivot(
+        ['org_level_3'],
+        ['earned_claim_ratio'],
+        params,
+        500
+      ),
   });
   const qWeek = useQuery({
     queryKey: ['ledger', 'week', keyBase],
     queryFn: () => apiClient.getPivot(['week_number'], ['earned_loss_frequency', 'variable_cost_ratio'], params, 100),
-  });
-  const qInsType = useQuery({
-    queryKey: ['ledger', 'instype', keyBase],
-    queryFn: () => apiClient.getPivot(['insurance_type'], ['total_premium', 'earned_claim_ratio'], params, 100),
   });
   const qWaterfall = useQuery({
     queryKey: ['ledger', 'waterfall', keyBase],
@@ -143,38 +164,38 @@ export function useChartLedgerData() {
     queryFn: () => apiClient.performance.orgHeatmap(params),
   });
 
-  // ── Chart 01 客群产能-质量矩阵（气泡） ──
+  // ── Chart 01 产能-质量矩阵（气泡）·按所选维度 ──
   const chart01: ChartResult<PointDatum[]> = useMemo(() => {
-    const rows = qCust.data?.rows ?? [];
+    const rows = qDim.data?.rows ?? [];
     const pts: PointDatum[] = rows
       .map((r) => ({
-        name: String(r.customer_category ?? '未知'),
+        name: String(r[dimension] ?? '未知'),
         x: wan(num(r.total_premium)),
         y: num(r.earned_claim_ratio),
         r: num(r.policy_count),
       }))
       .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
-    const s = state(qCust, pts.length === 0);
+    const s = state(qDim, pts.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: pts };
     const worst = [...pts].sort((a, b) => b.y - a.y)[0];
     const biggest = [...pts].sort((a, b) => b.x - a.x)[0];
     return {
       ...s,
       data: pts,
-      conclusion: `${worst.name}满期赔付率 ${formatPercent(worst.y)} 为各客群最高；规模最大的是 ${biggest.name}（${formatPremiumWan(biggest.x * 1e4)}万）。`,
+      conclusion: `${worst.name}满期赔付率 ${formatPercent(worst.y)} 为各${dLabel}最高；规模最大的是 ${biggest.name}（${formatPremiumWan(biggest.x * 1e4)}万）。`,
       points: [
         `规模最大：${biggest.name}，保费 ${formatPremiumWan(biggest.x * 1e4)}万，赔付率 ${formatPercent(biggest.y)}`,
         `质量最差：${worst.name}，赔付率 ${formatPercent(worst.y)}`,
-        `共 ${pts.length} 个客群纳入产能-质量对照`,
+        `共 ${pts.length} 个${dLabel}纳入产能-质量对照`,
       ],
     };
-  }, [qCust.data, qCust.isLoading, qCust.isError]);
+  }, [qDim.data, qDim.isLoading, qDim.isError, dimension, dLabel]);
 
-  // ── Chart 02 费用率异常散点（均值±2σ 规则） ──
+  // ── Chart 02 费用率异常散点（均值±2σ 规则）·按所选维度 ──
   const chart02: ChartResult<PointDatum[]> = useMemo(() => {
-    const rows = qOrg.data?.rows ?? [];
+    const rows = qDim.data?.rows ?? [];
     const base = rows
-      .map((r) => ({ name: String(r.org_level_3 ?? '未知'), x: num(r.expense_ratio), y: wan(num(r.total_premium)) }))
+      .map((r) => ({ name: String(r[dimension] ?? '未知'), x: num(r.expense_ratio), y: wan(num(r.total_premium)) }))
       .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
     // 机构数过少时均值±2σ 统计量本身不稳定，禁用离群点判定（与 chart04 箱线图 xs.length>=3 门槛一致的保守做法）
     const MIN_SAMPLE = 5;
@@ -183,43 +204,43 @@ export function useChartLedgerData() {
     const sd = std(base.map((p) => p.x));
     const hi = m + 2 * sd;
     const pts: PointDatum[] = base.map((p) => ({ ...p, outlier: enoughSample && p.x > hi }));
-    const s = state(qOrg, pts.length === 0);
+    const s = state(qDim, pts.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: pts };
     const outliers = pts.filter((p) => p.outlier).sort((a, b) => b.x - a.x);
     return {
       ...s,
       data: pts,
       conclusion: !enoughSample
-        ? `样本机构仅 ${pts.length} 家，不足 ${MIN_SAMPLE} 家，暂不做统计离群点判定。`
+        ? `样本${dLabel}仅 ${pts.length} 个，不足 ${MIN_SAMPLE} 个，暂不做统计离群点判定。`
         : outliers.length
-        ? `${outliers.length} 家机构费用率显著偏离主群（超 均值+2σ = ${formatPercent(hi)}），建议核实费用报销合理性（离群不等于违规，需人工复核）。`
-        : `全部 ${pts.length} 家机构费用率聚集在 均值±2σ 内，未见显著异常点。`,
+        ? `${outliers.length} 个${dLabel}费用率显著偏离主群（超 均值+2σ = ${formatPercent(hi)}），建议核实费用报销合理性（离群不等于违规，需人工复核）。`
+        : `全部 ${pts.length} 个${dLabel}费用率聚集在 均值±2σ 内，未见显著异常点。`,
       points: [
         `主群费用率均值 ${formatPercent(m)}，标准差 ${formatPercent(sd)}`,
-        enoughSample ? `离群参考上限（均值+2σ）= ${formatPercent(hi)}` : `机构数不足 ${MIN_SAMPLE} 家，离群上限仅供参考`,
+        enoughSample ? `离群参考上限（均值+2σ）= ${formatPercent(hi)}` : `${dLabel}数不足 ${MIN_SAMPLE} 个，离群上限仅供参考`,
         ...outliers.slice(0, 2).map((o) => `${o.name}：费用率 ${formatPercent(o.x)}，保费 ${formatPremiumWan(o.y * 1e4)}万 —— 建议核实`),
       ],
     };
-  }, [qOrg.data, qOrg.isLoading, qOrg.isError]);
+  }, [qDim.data, qDim.isLoading, qDim.isError, dimension, dLabel]);
 
-  // ── Chart 03 机构×险种风险热力图 ──
+  // ── Chart 03 风险热力图（所选维度 × 险种） ──
   const chart03 = useMemo(() => {
-    const rows = qHeatmap.data?.rows ?? [];
+    const rows = qDimHeat.data?.rows ?? [];
     const orgs: string[] = [];
     const lines: string[] = [];
     const cell = new Map<string, number>();
     rows.forEach((r) => {
-      const org = String(r.org_level_3 ?? '未知');
+      const org = String(r[dimension] ?? '未知');
       const line = String(r.insurance_type ?? '未知');
       const v = num(r.earned_claim_ratio);
       if (!orgs.includes(org)) orgs.push(org);
       if (!lines.includes(line)) lines.push(line);
       if (Number.isFinite(v)) cell.set(`${org}|${line}`, v);
     });
-    // 仅取赔付率最高的前 8 家机构，避免超表
+    // 仅取赔付率最高的前 8 个维度项，避免超表
     const orgMax = orgs.map((o) => ({ o, max: Math.max(...lines.map((l) => cell.get(`${o}|${l}`) ?? -Infinity)) }));
     const topOrgs = orgMax.filter((x) => Number.isFinite(x.max)).sort((a, b) => b.max - a.max).slice(0, 8).map((x) => x.o);
-    const s = state(qHeatmap, topOrgs.length === 0 || lines.length === 0);
+    const s = state(qDimHeat, topOrgs.length === 0 || lines.length === 0);
     const data = { orgs: topOrgs, lines, cell };
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data };
     // 找全表最高格
@@ -231,21 +252,22 @@ export function useChartLedgerData() {
     return {
       ...s,
       data,
-      conclusion: `${hotOrg} × ${hotLine} 满期赔付率 ${formatPercent(hotVal)}，为机构-险种组合中最高，建议限额承保。`,
+      conclusion: `${hotOrg} × ${hotLine} 满期赔付率 ${formatPercent(hotVal)}，为${dLabel}-险种组合中最高，建议限额承保。`,
       points: [
-        `热力图覆盖 ${topOrgs.length} 家高赔付机构 × ${lines.length} 个险种`,
+        `热力图覆盖 ${topOrgs.length} 个高赔付${dLabel} × ${lines.length} 个险种`,
         `最高风险格：${hotOrg} × ${hotLine} = ${formatPercent(hotVal)}`,
         `颜色越偏珊瑚色代表赔付率越高`,
       ],
     };
-  }, [qHeatmap.data, qHeatmap.isLoading, qHeatmap.isError]);
+  }, [qDimHeat.data, qDimHeat.isLoading, qDimHeat.isError, dimension, dLabel]);
 
-  // ── Chart 04 案均赔款箱线图（客群内机构分布的五数概括） ──
+  // ── Chart 04 案均赔款箱线图（所选维度内、跨二级实体分布的五数概括） ──
+  const boxSecondaryLabel = boxSecondary === 'org_level_3' ? '机构' : '客户类别';
   const chart04: ChartResult<BoxDatum[]> = useMemo(() => {
-    const rows = qBox.data?.rows ?? [];
+    const rows = qDimBox.data?.rows ?? [];
     const byCat = new Map<string, number[]>();
     rows.forEach((r) => {
-      const cat = String(r.customer_category ?? '未知');
+      const cat = String(r[dimension] ?? '未知');
       const v = wan(num(r.avg_claim_amount));
       if (Number.isFinite(v) && v > 0) {
         if (!byCat.has(cat)) byCat.set(cat, []);
@@ -267,7 +289,7 @@ export function useChartLedgerData() {
       })
       .sort((a, b) => b.max - a.max)
       .slice(0, 5);
-    const s = state(qBox, boxes.length === 0);
+    const s = state(qDimBox, boxes.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: boxes };
     const widest = [...boxes].sort((a, b) => b.max - b.min - (a.max - a.min))[0];
     return {
@@ -276,11 +298,11 @@ export function useChartLedgerData() {
       conclusion: `${widest.name}案均赔款离散度最高（${widest.min.toFixed(1)}–${widest.max.toFixed(1)}万），长尾赔案是主要风险来源。`,
       points: [
         `${widest.name}：中位数 ${widest.med.toFixed(1)}万，最大 ${widest.max.toFixed(1)}万 —— 长尾最明显`,
-        `箱体 = 客群内各机构案均赔款 Q1–Q3 区间`,
-        `共 ${boxes.length} 个客群参与分布对照（机构数≥3）`,
+        `箱体 = ${dLabel}内各${boxSecondaryLabel}案均赔款 Q1–Q3 区间`,
+        `共 ${boxes.length} 个${dLabel}参与分布对照（${boxSecondaryLabel}数≥3）`,
       ],
     };
-  }, [qBox.data, qBox.isLoading, qBox.isError]);
+  }, [qDimBox.data, qDimBox.isLoading, qDimBox.isError, dimension, dLabel, boxSecondaryLabel]);
 
   // ── Chart 05 出险频度趋势 ──
   const chart05 = useMemo(() => {
@@ -447,11 +469,11 @@ export function useChartLedgerData() {
     };
   }, [qWaterfall.data, qWaterfall.isLoading, qWaterfall.isError]);
 
-  // ── Chart 09 机构亏损帕累托 ──
+  // ── Chart 09 亏损帕累托（按所选维度） ──
   const chart09: ChartResult<ParetoBar[]> = useMemo(() => {
-    const rows = qOrg.data?.rows ?? [];
+    const rows = qDim.data?.rows ?? [];
     const losses = rows
-      .map((r) => ({ name: String(r.org_level_3 ?? '未知'), margin: wan(num(r.earned_margin_amount)) }))
+      .map((r) => ({ name: String(r[dimension] ?? '未知'), margin: wan(num(r.earned_margin_amount)) }))
       .filter((x) => Number.isFinite(x.margin) && x.margin < 0)
       .map((x) => ({ name: x.name, value: -x.margin }))
       .sort((a, b) => b.value - a.value)
@@ -462,41 +484,41 @@ export function useChartLedgerData() {
       acc += b.value;
       return { ...b, cumPct: total ? (acc / total) * 100 : 0 };
     });
-    const s = state(qOrg, bars.length === 0);
+    const s = state(qDim, bars.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: bars };
     const idx80 = bars.findIndex((b) => b.cumPct >= 80);
     const top3 = bars.slice(0, 3).reduce((a, b) => a + b.value, 0);
     return {
       ...s,
       data: bars,
-      conclusion: `前 3 家机构贡献 ${formatPercent(total ? (top3 / total) * 100 : 0)} 承保亏损，专项治理应优先覆盖这 ${Math.min(3, bars.length)} 家。`,
+      conclusion: `前 3 个${dLabel}贡献 ${formatPercent(total ? (top3 / total) * 100 : 0)} 承保亏损，专项治理应优先覆盖这 ${Math.min(3, bars.length)} 个。`,
       points: [
-        `亏损机构共 ${bars.length} 家，累计亏损 ${formatPremiumWan(total * 1e4)}万`,
-        idx80 >= 0 ? `累计占比越过 80% 出现在第 ${idx80 + 1} 家` : `亏损集中于头部机构`,
+        `亏损${dLabel}共 ${bars.length} 个，累计亏损 ${formatPremiumWan(total * 1e4)}万`,
+        idx80 >= 0 ? `累计占比越过 80% 出现在第 ${idx80 + 1} 个` : `亏损集中于头部${dLabel}`,
         `头部亏损：${bars.slice(0, 3).map((b) => b.name).join(' / ')}`,
       ],
     };
-  }, [qOrg.data, qOrg.isLoading, qOrg.isError]);
+  }, [qDim.data, qDim.isLoading, qDim.isError, dimension, dLabel]);
 
-  // ── Chart 10 险种结构树图 ──
+  // ── Chart 10 结构树图（按所选维度） ──
   const chart10: ChartResult<TreemapCell[]> = useMemo(() => {
-    const rows = qInsType.data?.rows ?? [];
+    const rows = qDim.data?.rows ?? [];
     const items = rows
-      .map((r) => ({ name: String(r.insurance_type ?? '未知'), value: wan(num(r.total_premium)) }))
+      .map((r) => ({ name: String(r[dimension] ?? '未知'), value: wan(num(r.total_premium)) }))
       .filter((x) => Number.isFinite(x.value) && x.value > 0)
       .sort((a, b) => b.value - a.value);
     const total = items.reduce((a, b) => a + b.value, 0);
     const cells: TreemapCell[] = items.map((it) => ({ ...it, share: total ? (it.value / total) * 100 : 0 }));
-    const s = state(qInsType, cells.length === 0);
+    const s = state(qDim, cells.length === 0);
     if (s.loading || s.error || s.empty) return { ...s, ...EMPTY_STATE, data: cells };
     const top = cells[0];
     return {
       ...s,
       data: cells,
-      conclusion: `${top.name}贡献 ${formatPercent(top.share)} 保费，是绝对压舱石；业务组合共 ${cells.length} 类险种。`,
+      conclusion: `${top.name}贡献 ${formatPercent(top.share)} 保费，是绝对压舱石；业务组合共 ${cells.length} 个${dLabel}。`,
       points: cells.slice(0, 3).map((c) => `${c.name}：${formatPercent(c.share)}（${formatPremiumWan(c.value * 1e4)}万）`),
     };
-  }, [qInsType.data, qInsType.isLoading, qInsType.isError]);
+  }, [qDim.data, qDim.isLoading, qDim.isError, dimension, dLabel]);
 
   // ── Chart 11 变动成本率控制图（CL±2σ 规则） ──
   const chart11 = useMemo(() => {

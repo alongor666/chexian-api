@@ -12,7 +12,7 @@
 import React, { useEffect, useState } from 'react';
 import { cn, colorClasses, fontStyles, cardStyles } from '@/shared/styles';
 import { CARD_META, FRAMEWORK, STAGES } from './ledgerMeta';
-import { useChartLedgerData } from './hooks/useChartLedgerData';
+import { useChartLedgerData, LEDGER_DIM_OPTIONS, type LedgerDim } from './hooks/useChartLedgerData';
 import { LedgerCard, ActionShapeIcon } from './components/LedgerCard';
 import {
   ChannelMatrixChart,
@@ -85,8 +85,38 @@ const ACTION_LEGEND: { icon: 'up' | 'diamond' | 'tri'; cls: string; text: string
   { icon: 'tri', cls: colorClasses.text.danger, text: '暂停 · 退出' },
 ];
 
+/** 维度切换器：驱动 6 张实体图（产能/费用/热力/箱线/帕累托/结构）按所选维度重分组 */
+const DimSwitcher: React.FC<{ value: LedgerDim; onChange: (d: LedgerDim) => void }> = ({ value, onChange }) => (
+  <div
+    role="group"
+    aria-label="图表分组维度"
+    className={cn('inline-flex items-center rounded-lg border p-0.5 gap-0.5', colorClasses.border.neutral, 'bg-neutral-50 dark:bg-surface-2')}
+  >
+    {LEDGER_DIM_OPTIONS.map((opt) => {
+      const on = opt.key === value;
+      return (
+        <button
+          key={opt.key}
+          type="button"
+          aria-pressed={on}
+          onClick={() => onChange(opt.key)}
+          className={cn(
+            'px-3 py-1.5 rounded-md text-[13px] font-semibold whitespace-nowrap transition-colors',
+            on
+              ? cn('bg-primary text-white shadow-sm')
+              : cn('bg-transparent hover:text-primary', colorClasses.text.neutralLight)
+          )}
+        >
+          {opt.label}
+        </button>
+      );
+    })}
+  </div>
+);
+
 export const ChartLedgerPage: React.FC = () => {
-  const d = useChartLedgerData();
+  const [dim, setDim] = useState<LedgerDim>('customer_category');
+  const d = useChartLedgerData(dim);
   const active = useActiveSection();
 
   // 图 id → 渲染节点
@@ -111,7 +141,7 @@ export const ChartLedgerPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-24">
+    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 pb-24">
       {/* 锚点导航（scrollspy 高亮当前阶段） */}
       {/* dark 不用 /85 半透明：surface-* 是 CSS 变量色（无 <alpha-value>），Tailwind 透明度修饰不生效会浅色穿透 */}
       <nav className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 flex items-center gap-0.5 overflow-x-auto bg-white/85 dark:bg-surface-1 backdrop-blur border-b border-neutral-200 dark:border-subtle">
@@ -140,6 +170,11 @@ export const ChartLedgerPage: React.FC = () => {
             </a>
           );
         })}
+        {/* 维度切换器：随导航常驻，滚动到任意图都可切换分组维度 */}
+        <div className="ml-auto pl-3 flex items-center gap-2 shrink-0">
+          <span className={cn('hidden md:inline text-[11px] tracking-[0.04em]', fontStyles.numeric, colorClasses.text.neutralMuted)}>分组维度</span>
+          <DimSwitcher value={dim} onChange={setDim} />
+        </div>
       </nav>
 
       {/* Hero */}
@@ -157,6 +192,12 @@ export const ChartLedgerPage: React.FC = () => {
           <b className={cn('font-semibold', colorClasses.text.neutralBlack)}>看完图之后谁来改、改什么</b>。下文按承保经营链路——
           <b className={cn('font-semibold', colorClasses.text.neutralBlack)}>渠道 → 承保 → 理赔 → 续保 → 财务</b>
           ——组织 12 类图表，每张图接入真实项目数据、配使用说明与决策动作。
+        </p>
+        <p className={cn('text-[13px] leading-relaxed mt-3 max-w-[680px]', colorClasses.text.neutralMuted)}>
+          右上角<b className={cn('font-semibold', colorClasses.text.neutralDark)}>分组维度</b>切换（机构 / 客户类别 / 险别组合，默认客户类别）作用于
+          <b className={cn('font-semibold', colorClasses.text.neutralDark)}>产能矩阵 · 费用异常 · 风险热力 · 案均箱线 · 亏损帕累托 · 结构树图</b>
+          6 张实体图；出险频度 / 发展三角 / 转化漏斗 / 能源瀑布 / 成本控制 5 张按各自口径固定；
+          赔付率-增速四象限因增速仅机构级口径，恒按机构展示。
         </p>
       </header>
 
