@@ -105,5 +105,3 @@ export interface RankingRow {
 }
 
 export type DrillLevel = 'org' | 'team' | 'salesman';
-
-export type QuoteConversionVersion = 'A' | 'B';
