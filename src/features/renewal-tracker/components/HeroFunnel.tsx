@@ -4,7 +4,8 @@
  * 三级递减条按 A 归一，右侧标注报价率/续保率，强化漏斗式收口的视觉暗示。
  */
 import { cn, fontStyles, colorClasses } from '@/shared/styles';
-import { formatNum, formatPct } from '../utils/format';
+import { formatCount } from '@/shared/utils/formatters';
+import { formatPct } from '../utils/format';
 import type { RenewalRow } from '../types';
 
 interface Props {
@@ -51,7 +52,7 @@ export default function HeroFunnel({ row }: Props) {
             className={cn('h-6 rounded-md flex items-center pl-2.5 text-xs font-semibold whitespace-nowrap', s.bar, s.text, fontStyles.numeric)}
             style={{ width: `${Math.max(16, s.width).toFixed(1)}%` }}
           >
-            {formatNum(s.value)}
+            {formatCount(s.value)}
           </div>
           <span className={cn('text-xs text-right min-w-[80px]', fontStyles.numeric, colorClasses.text.neutralLight)}>
             {s.note}

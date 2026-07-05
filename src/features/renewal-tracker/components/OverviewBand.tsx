@@ -7,8 +7,9 @@
  */
 import { useMemo } from 'react';
 import { cn, cardStyles, colorClasses, fontStyles } from '@/shared/styles';
+import { formatCount } from '@/shared/utils/formatters';
 import HeroFunnel from './HeroFunnel';
-import { formatNum, formatPct } from '../utils/format';
+import { formatPct } from '../utils/format';
 import { gradeRate, renewRate, isBadRow, type Grade } from '../utils/grading';
 import type { RenewalRow, Selection } from '../types';
 
@@ -101,7 +102,7 @@ export default function OverviewBand({ overall, orgRows, selection, onSelectOrg 
                     'grid grid-cols-[64px_1fr_52px] items-center gap-2.5 w-full px-1.5 py-1 rounded-md text-left transition-colors',
                     selected ? colorClasses.bg.primary : 'hover:bg-neutral-50 dark:hover:bg-surface-2',
                   )}
-                  title={`${o.org_level_3} · 续保率 ${formatPct(o.C, o.A)} · 应续 ${formatNum(o.A)}`}
+                  title={`${o.org_level_3} · 续保率 ${formatPct(o.C, o.A)} · 应续 ${formatCount(o.A)}`}
                 >
                   <span className={cn('text-xs truncate', colorClasses.text.neutral)}>{shortOrg(o.org_level_3)}</span>
                   <span className="h-2.5 rounded-full bg-neutral-200 dark:bg-white/10 overflow-hidden">
