@@ -17,11 +17,12 @@ import create_renewal_tracker as crt  # noqa: E402
 from sync_renewal import SyncConfig, build_source_rows  # noqa: E402
 
 
-# 该测试需要本地 parquet 数据存在
+# 该测试需要本地 parquet 数据存在（目录存在但无 *.parquet 时同样跳过，如 worktree 只有元数据文件）
 PARQUET_PATH = HERE.parents[1] / "warehouse" / "fact" / "policy" / "current"
+_HAS_PARQUET = PARQUET_PATH.exists() and any(PARQUET_PATH.glob("*.parquet"))
 
 
-@pytest.mark.skipif(not PARQUET_PATH.exists(), reason="本地 parquet 不存在，CI 跳过")
+@pytest.mark.skipif(not _HAS_PARQUET, reason="本地 parquet 不存在，CI 跳过")
 def test_dryrun_sql_matches_build_source_rows_for_leshan_may_jun() -> None:
     """脚本聚合 vs DRYRUN_VALIDATION_SQL_TEMPLATE 必须每业务员行数 + 总保费严格一致。"""
     org, start, end = "乐山", "2026-05-01", "2026-06-30"

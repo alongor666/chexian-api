@@ -39,7 +39,6 @@
 | 系数监控 | `coefficient.test.ts` | 114 | 阈值配置、周期计算、SQL生成 |
 | KPI | `kpi.test.ts` | 39 | 查询生成、字段验证 |
 | 续保分析 | `renewal.test.ts` | 30+ | 续保率SQL、下钻逻辑 |
-| 数据校验 | `real-data-validation.test.ts` | 68 | 真实数据场景 |
 
 ### 2.2 安全模块 (~90% 覆盖)
 

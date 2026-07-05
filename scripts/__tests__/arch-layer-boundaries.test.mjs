@@ -42,7 +42,7 @@ describe('normalizeArchTarget — 别名/相对路径归一', () => {
   });
 });
 
-describe('classifyArchViolations — 5 条边界规则', () => {
+describe('classifyArchViolations — 7 条边界规则', () => {
   it('(a) widgets → features 命中', () => {
     expect(classifyArchViolations('src/widgets/kpi/x.ts', 'features/dashboard/utils/kpiStatus'))
       .toHaveLength(1);
@@ -175,7 +175,7 @@ describe('isValidArchAllowMark — 逃生阀须带 backlog/PR 引用', () => {
   });
 });
 
-// 端到端：把违规说明符喂全链路（AST → normalize → classify），证明 5 条规则真能拦。
+// 端到端：把违规说明符喂全链路（AST → normalize → classify），证明 7 条规则真能拦。
 describe('端到端：违规 import 被链路捕获', () => {
   const cases = [
     { file: 'src/widgets/kpi/EnhancedKpiCard/types.ts', spec: '@/features/dashboard/utils/kpiStatus' },
