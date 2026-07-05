@@ -234,7 +234,7 @@
       "required": false,
       "dataTypes": ["BOOLEAN", "BOOL", "INTEGER", "TINYINT", "VARCHAR"],
       "aliases": ["是否报价", "is_quote", "isQuote", "报价标志", "quote_flag"],
-      "description": "报价标志（口径不可靠，待修正）"
+      "description": "报价标志（源 xlsx「是/否」标记不可靠）。已报价判定现行口径改用续保单号非空（is_renewal）；续保域报价覆盖率用 is_quoted+first_quote_time（见 metric-registry/categories/renewal.ts）。SQL 分析生成器不消费本字段，保留仅作原始留存（驾意险日报脚本历史用途）。详见业务规则字典 §是否报价 与 project_quote_data_issue（B255 收尾）"
     },
     {
       "id": "claim_cases",

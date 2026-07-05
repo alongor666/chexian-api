@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（56 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（55 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -35,9 +35,8 @@
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
 
-**P2（28 项）**
+**P2（27 项）**
 
-- B255 `PARTIAL` — 报价数据「是否报价」字段不可靠 — 改用续保单号判定
 - B274 — total_expense 1.6% vs L4 注册表 1.5% 系数不一致
 - B314 — data-sources.json 契约/状态拆分（接续 B313）
 - B304 `PARTIAL` — earned-premium 双口径未文档化
@@ -94,7 +93,6 @@
 |----|----------|------|----------|----------|--------|------|----------|----------|-----------|
 | B247 | 2026-04-17 | Chore/Hygiene | @claude | **图表 hex 色值审计**：`WaterfallChart.tsx` / `EnhancedKpiCard.tsx` / `quoteChartColors`（index.ts:644+）等处 ECharts option 中硬编码 hex（`#91CC75`, `#EE6666`, `#10B981` 等）。需评估能否统一导出为 CSS 变量或由 `semanticColors` 派生，并建立图表色 token 规范 | P3 | PROPOSED | `DESIGN.md` §2 / `CLAUDE.md` §1 | `src/shared/styles/index.ts`<br>相关图表组件 | 图表 hex 全部指向 token，无散落字面量 |
 | B254 | 2026-04-24 | Enhancement/Integration | @claude | **wecom_smartsheet state 生命周期管理（missing_vins TTL）**：当前 `plan_upsert` 对不再符合筛选条件的 VIN 只记录到 `missing_vins` 日志、不从 state 文件剔除。长期运行后（半年 +）state 会累积大量"僵尸 VIN"——企业微信表格已不展示但 state 仍记 record_id，遇到记录被人工删除时触发 `40058 record_id not found` 整批失败。**改造**：config 加 `state_ttl_days` 字段（默认保守 180 天），sync 时把"超过 N 天未在源数据出现"的 VIN 从 records 移到 `state_archive/{instance}_archived_{date}.json`（保留可追溯），同时清理对应 record_id。**触发时机**：(a) 上线运行 1-2 个月后观察 state 实际增长速度，根据数据决定 TTL 默认值（不是现在拍脑袋）；(b) 出现首例 `40058 record_id not found` 故障时立刻做。**预估工作量**：3-4 小时（含归档目录设计 + 单元测试） | P3 | PROPOSED | 模块 README "故障排查"章节 errcode 40058 | `数据管理/integrations/wecom_smartsheet/sync_renewal.py`(plan_upsert + new archive helpers)<br>`数据管理/integrations/wecom_smartsheet/state_archive/`(新目录)<br>`数据管理/integrations/wecom_smartsheet/config.*.json`(state_ttl_days) | state 文件不再无限增长 + 归档文件保留全部历史 + 5/5+新增 archive 测试通过 |
-| B255 | 2026-04-25 | Bugfix/Backend | @user | **报价数据「是否报价」字段不可靠 — 改用续保单号判定**：当前 `是否报价` 字段标注存在大量误差，正确"已报价"判定应以「续保单号非空」为准。原 CLAUDE.md §3 中以护栏形式登记，迁移至需求账本以便正式排期。AI 不得擅自修改字段含义/SQL 派生口径，需用户先核对全口径差异并给出迁移方案 | P2 | PARTIAL | 原 `CLAUDE.md` §3 报价口径护栏（已迁移） | `数据管理/pipelines/convert_quotes_v2.py`<br>`server/src/sql/quote-conversion.ts`<br>`server/src/sql/cross-sell.ts` 等引用 `是否报价` 处 | 账本勘误：关联代码 convert_quotes_v2.py 已不存在；quote-conversion.ts/cross-sell.ts 实际不引用是否报价。B255 提议口径(续保单号非空)已是现行 is_renewal 实现，迁移在数据/口径层已自然完成；残留仅 etl_fields.json/field-registry/文档中的陈旧引用(非阻断,清单见报告§7) <br>报告经 codex gate-2 对抗审查校准(用户要求)：P0=0,核心结论(三条目标SQL不引用旧is_quote/现行is_renewal=续保单号非空)成立。校准4个P1过度声称:0不一致是派生一致性非零误差;is_quote仍在normalizer/字段注册表残留(非'无消费方');cross-sell用is_renewal维度(非'影响=0');业务规则字典SSOT(:413)未更新。关闭建议改为'核心已落地、字段注册表/normalizer/业务规则字典残留治理待清理'。详见报告文末审查修订记录。 <br>审计校正（2026-07-04）：核心已落地——续保单号判定即现行 is_renewal 实现，全口径差异分析报告已出具并经 codex 闸-2 校准；残留仅字段注册表/normalizer/业务规则字典的引用清理（非阻断收尾），IN_PROGRESS 校正为 PARTIAL |
 | B274 | 2026-05-01 | Bugfix/Backend | @claude | **`total_expense` 1.6% vs L4 注册表 1.5% 系数不一致**：`server/src/sql/cost/earned-premium-detail.ts:292-293` 用魔法数 `0.016` 计算 `tax = SUM(premium) × 1.6%` 与 `total_expense = fee_amount + premium × 1.6%`，但 `metric-registry/categories/cost.ts:399` (fixed_cost_amount L4) 注释附加税费率为 1.5%，差 6.7%。`0.016` 无来源注释（车船税？附加税？业务字典也未定义）。同一查询还直接 `FROM PolicyFact` 未走 `policy_dedup`（与 B252 同类问题，未覆盖）。需用户确认实际附加税系数是 1.5% 还是 1.6%，并补字典定义 | P2 | PROPOSED | B252 同类去重问题 | `server/src/sql/cost/earned-premium-detail.ts`(292-293)<br>`server/src/config/metric-registry/categories/cost.ts`(L4 fixed_cost_amount) | 系数来源在字典定义清楚 + 代码与注册表一致 + 该查询走 policy_dedup <br>owner 2026-07-04 拍板：税率动态、暂定 1.5%。执行=earned-premium-detail.ts:292-293 的 0.016 硬编码改为引用注册表/fixed-cost-params.json 的 1.5% 单一事实源（三方对齐），并在注册表 changelog 注明「暂定值，税率动态待精算口径」 |
 | B314 | 2026-05-30 | Refactor/ETL | @claude | **data-sources.json 契约/状态拆分**（接续 B313）：把运行时状态字段 `row_count`/`last_updated`/`data_range`/`field_count` 从入库的 `data-sources.json` 拆到 `data-sources-status.json`（gitignored），契约部分（域定义 / ETL 配置 / schema / api_routes）留库。**动机**：状态字段每次 ETL 都变，污染代码平面 diff（该文件已提交 47 次，多为数据刷新）。**影响**：8 个 ETL 读写文件（daily.mjs `updateDataSources()` / data_sources_updater.py / refresh_metadata.py / sync_data_sources_metadata.py / quote_etl.py / convert_customer_flow.py / verify-data-release.mjs / customer-flow-etl-contract.test.ts）+ 统一 `write_data_sources_status()`。中风险，宜独立 PR + 多轮数据发布验证。 | P2 | PROPOSED | 接续 B313 | `数据管理/data-sources.json`<br>`数据管理/pipelines/*.py`<br>`scripts/verify-data-release.mjs` | 状态字段移出 git 后数据更新不再产生 data-sources.json diff；契约测试与 ETL 链路全绿 |
 | B304 | 2026-05-31 | Chore/Docs | @claude | **earned-premium 双口径未文档化**：`cost/earned-premium.ts:76-93`（+INTERVAL 364 DAY + 险类系数 α=0.82/0.94「财务口径」）vs `cost-ratios.ts:53,57-63`（+INTERVAL 1 YEAR 无系数「时间分摊口径」）。两接口都称"已赚保费"，下游混用会算错赔付率分母。修正：字段命名区分 + 开发文档说明适用场景；闰年 364→1 YEAR 一致性评估。**[2026-05-31 文档化子任务完成]**：两文件头补 JSDoc 警示（earned-premium.ts 含 5 列对照表 / cost-ratios.ts 反向引用），明确公式/系数/用途/调用方差异并禁止下游混用；字段重命名属 API breaking change 待独立排期 | P2 | PARTIAL | `开发文档/审计/SQL审计报告_2026-05-31.md` §2 D-5 | `server/src/sql/cost/earned-premium.ts`(文件头 JSDoc + 76-93)<br>`server/src/sql/cost/cost-ratios.ts`(文件头 JSDoc + 53,57-63) | ✅ 文档化：两文件 JSDoc 对照表落地；⏳ 字段重命名：需调用方影响面盘点 + API 兼容期方案 <br>架构价值审计（2026-07-04）：字段重命名（API breaking change）冻结——JSDoc 双向警示表可能已拿到 80% 收益；触发条件=再次出现双口径混用实证（过去一个月无新增混用则维持观察不做重命名） |
