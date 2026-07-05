@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（60 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（59 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -36,7 +36,7 @@
 - 2026-06-29-claude-ba7e61 — ETL 四川SC+山西SX数据混乱根治（路径B 运维债根治，本次只做B；路径A子目录化另
 - 2026-07-05-claude-1c498b — Python 测试零回归保护
 
-**P2（30 项）**
+**P2（29 项）**
 
 - B314 — data-sources.json 契约/状态拆分（接续 B313）
 - B304 `PARTIAL` — earned-premium 双口径未文档化
@@ -67,7 +67,6 @@
 - 2026-07-03-claude-6ef9cd `PARTIAL` — 安全审计M2
 - 2026-07-05-claude-cbfcbe — cube-rollback.test.mjs 是影子测试
 - 2026-07-05-claude-d84df6 — CI 未安装 duckdb CLI
-- 2026-07-05-claude-e96bf9 — 测试审计批量卫生项
 
 **P3（18 项）**
 
@@ -154,5 +153,4 @@
 | 2026-07-05-claude-cbfcbe | 2026-07-05 | 测试治理 | @claude | cube-rollback.test.mjs 是影子测试：被测脚本零export，测试内联复制 buildSedExpression/affectedSwitches 对复制品断言，真实脚本改坏测不出（假覆盖）。需仿照 sx-promote.mjs 把纯逻辑抽成可导出模块再测 | P2 | PROPOSED | N/A | scripts/cube-rollback.mjs,scripts/__tests__/cube-rollback.test.mjs |  |
 | 2026-07-05-claude-d84df6 | 2026-07-05 | 测试治理 | @claude | CI 未安装 duckdb CLI：sx-promote.test.mjs 约30个集成/E2E用例（sha256一致性/staging→final原子提升/resume幂等）与 parquet-overlap-check.test.mjs 派生轴用例在 CI 恒为显式 skip，从未真正执行。需在 claude-code.yml 与 production-gate.yml 增加 duckdb 安装步骤 | P2 | PROPOSED | N/A | .github/workflows/,scripts/release/__tests__/sx-promote.test.mjs |  |
 | 2026-07-05-claude-da5ac0 | 2026-07-05 | Chore | @claude | 整条 patrol 功能链退役评估（3a6daf 残留）：删 chexian-patrol 命令后，patrol_engine.py(524行) + server/src/routes/query/patrol.ts(query.ts:65 活跃挂载) + src/shared/api/patrol-api.ts(client.ts 消费) + types/patrol.ts 仍在，但①数据源 renewal_universe/latest.parquet + RENEWAL_PATROL_REPORT_FRAMEWORK.md 缺失②前端无 patrol 页面/路由消费(grep 零命中)③apiClient.patrol 子客户端无组件调用。整链处于'基础设施在位但休眠'。退役涉及 query 路由聚合器 + apiClient 架构，风险高于删命令文件，须单独评估(diagnose-renewal 是否已实质覆盖→是则整链退役/否则明确保留场景)。【账】做完删4文件+改query.ts/client.ts/api-routes/2处子客户端注册 或 明确保留并补前端消费/加0机制/触发条件=确认diagnose-renewal覆盖度 | P3 | PROPOSED | N/A | N/A |  |
-| 2026-07-05-claude-e96bf9 | 2026-07-05 | 测试治理 | @claude | 测试审计批量卫生项：删除4个零价值测试文件（tests/nl2sql-rule-engine.test.ts.skip、tests/hooks.test.ts.skip 引用已删源码；tests/coverage-report.test.ts 同义反复；tests/real-data-validation.test.ts 仅自比fixture未调用真实SQL生成器）+ 修复 test_dryrun_validation_sql.py skip守卫缺any(glob)兜底 + arch-layer-boundaries.test.mjs describe标题5条改7条 | P2 | PROPOSED | N/A | tests/,数据管理/integrations/wecom_smartsheet/tests/test_dryrun_validation_sql.py,scripts/__tests__/arch-layer-boundaries.test.mjs |  |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功能对等覆盖 v1 场景，再切 daily.mjs 调度并删 v1。承接 B253 弃置结论。【账】做完删 v1 脚本+DEFAULT_SCHEMA 硬编码/加 0 新机制/触发条件=确认 v2 功能对等 | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ |  |
