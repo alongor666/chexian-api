@@ -5,7 +5,7 @@
  * 续保率为「主角」，以 RateCell 迷你进度条强化可读性。
  */
 import { cn, colorClasses, fontStyles } from '@/shared/styles';
-import { formatNum } from '../utils/format';
+import { formatCount } from '@/shared/utils/formatters';
 import RateCell from './RateCell';
 import FunnelBar from './FunnelBar';
 import type { RenewalRow } from '../types';
@@ -26,9 +26,9 @@ export default function MetricCells({ row, showFunnel = false }: Props) {
           <FunnelBar row={row} />
         </td>
       )}
-      <td className={numCell}>{formatNum(row.A)}</td>
-      <td className={numCell}>{formatNum(row.B)}</td>
-      <td className={numCell}>{formatNum(row.C)}</td>
+      <td className={numCell}>{formatCount(row.A)}</td>
+      <td className={numCell}>{formatCount(row.B)}</td>
+      <td className={numCell}>{formatCount(row.C)}</td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
         <RateCell metric="quote" numerator={row.B} denominator={row.A} />
       </td>

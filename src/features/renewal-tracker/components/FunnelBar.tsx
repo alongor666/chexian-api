@@ -5,7 +5,8 @@
  * 续保率低于健康线（坏行）时整条切红，强化「差一眼可见」。
  */
 import { cn } from '@/shared/styles';
-import { formatNum, formatPct } from '../utils/format';
+import { formatCount } from '@/shared/utils/formatters';
+import { formatPct } from '../utils/format';
 import { isBadRow } from '../utils/grading';
 import type { RenewalRow } from '../types';
 
@@ -21,10 +22,10 @@ export default function FunnelBar({ row }: Props) {
   const aW = Math.min(100, Math.max(0, ((a - row.B) / a) * 100));
   const bad = isBadRow(row);
 
-  const title = `已续 ${formatNum(row.C)} (${formatPct(row.C, row.A)}) / 报价 ${formatNum(row.B)} (${formatPct(
+  const title = `已续 ${formatCount(row.C)} (${formatPct(row.C, row.A)}) / 报价 ${formatCount(row.B)} (${formatPct(
     row.B,
     row.A,
-  )}) / 应续 ${formatNum(row.A)}`;
+  )}) / 应续 ${formatCount(row.A)}`;
 
   return (
     <span
