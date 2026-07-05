@@ -4,8 +4,7 @@
  * 治理一致性校验脚本
  *
  * 校验规则：
- * 1. 必需文件存在性：根目录、索引目录
- * 2. 核心层索引完整性：src/shared、src/features、src/widgets、scripts
+ * 1. 必需文件与核心索引：根目录治理文件、三大索引、核心层 INDEX.md（原 1/2 两项同构合并，2026-07-04 奥卡姆批次一）
  * 3. BACKLOG.md 证据链：终态任务（DONE 完成 / CANCELLED·WONTFIX 弃置）必须有关联文档、关联代码、验收证据或弃置理由
  * 4. GEMINI.md 引用正确性（已移除 — GEMINI.md 不再维护）
  * 5. CLAUDE.md 关键章节：必须包含验证协议、工作流集成、数据准备章节
@@ -94,11 +93,12 @@ function info(message) {
 }
 
 // ============================================================
-// 1. 必需文件存在性检查
+// 1. 必需文件与核心索引存在性检查
+//    （原「核心层索引」检查与本检查同构——固定清单 + existsSync——2026-07-04 奥卡姆批次一合并）
 // ============================================================
 
 function checkRequiredFiles() {
-  info('检查必需文件存在性...');
+  info('检查必需文件与核心层索引存在性...');
 
   const requiredFiles = [
     // 根目录治理文件
@@ -110,6 +110,11 @@ function checkRequiredFiles() {
     '开发文档/00_index/DOC_INDEX.md',
     '开发文档/00_index/CODE_INDEX.md',
     '开发文档/00_index/PROGRESS_INDEX.md',
+    // 核心层 INDEX.md（原「核心层索引」检查并入）
+    'src/shared/INDEX.md',
+    'src/features/INDEX.md',
+    'src/widgets/INDEX.md',
+    'scripts/INDEX.md',
   ];
 
   let allExist = true;
@@ -128,41 +133,6 @@ function checkRequiredFiles() {
     return true;
   } else {
     error(`必需文件检查失败，缺少以下文件：`);
-    missing.forEach(file => console.log(`    - ${file}`));
-    return false;
-  }
-}
-
-// ============================================================
-// 2. 核心层索引完整性检查
-// ============================================================
-
-function checkCoreLayerIndices() {
-  info('检查核心层索引完整性...');
-
-  const coreLayerDirs = [
-    'src/shared',
-    'src/features',
-    'src/widgets',
-    'scripts',
-  ];
-
-  let allExist = true;
-  const missing = [];
-
-  for (const dir of coreLayerDirs) {
-    const indexPath = path.join(ROOT_DIR, dir, 'INDEX.md');
-    if (!fs.existsSync(indexPath)) {
-      allExist = false;
-      missing.push(`${dir}/INDEX.md`);
-    }
-  }
-
-  if (allExist) {
-    success('核心层索引检查通过');
-    return true;
-  } else {
-    error(`核心层索引检查失败，缺少以下 INDEX.md：`);
     missing.forEach(file => console.log(`    - ${file}`));
     return false;
   }
@@ -569,19 +539,29 @@ function checkMergeConflictMarkers() {
 // 第9项检查：暂存区调试产物阻断
 // ============================================================
 
-function checkStagedDebugArtifacts() {
-  info('检查暂存区调试产物...');
-
-  let stagedFiles = [];
+// 暂存区文件清单（供「调试产物」「凭据扫描」两闸复用——同一次 governance 只调一次 git，
+// 2026-07-04 奥卡姆批次一去重；--diff-filter=d 排除删除：删调试产物/凭据文件是好事，不拦）
+let stagedFilesCache; // undefined=未取；null=git 不可用；array=清单
+function getStagedFiles() {
+  if (stagedFilesCache !== undefined) return stagedFilesCache;
   try {
-    // Use --diff-filter=d to exclude deletions (deleting debug artifacts is fine)
     const output = execSync('git diff --cached --name-only --diff-filter=d -z', {
       cwd: ROOT_DIR,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
-    stagedFiles = output.split('\0').filter(Boolean);
+    stagedFilesCache = output.split('\0').filter(Boolean);
   } catch {
+    stagedFilesCache = null;
+  }
+  return stagedFilesCache;
+}
+
+function checkStagedDebugArtifacts() {
+  info('检查暂存区调试产物...');
+
+  const stagedFiles = getStagedFiles();
+  if (stagedFiles === null) {
     warning('无法读取 git 暂存区，跳过调试产物检查');
     return true;
   }
@@ -1399,16 +1379,8 @@ export function containsCredentialValue(content) {
 function checkStagedCredentials() {
   info('检查暂存区凭据/敏感产物...');
 
-  let stagedFiles = [];
-  try {
-    // Use --diff-filter=d to exclude deletions (deleting credential files is fine)
-    const output = execSync('git diff --cached --name-only --diff-filter=d -z', {
-      cwd: ROOT_DIR,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    stagedFiles = output.split('\0').filter(Boolean);
-  } catch {
+  const stagedFiles = getStagedFiles();
+  if (stagedFiles === null) {
     warning('无法读取 git 暂存区，跳过凭据扫描');
     return true;
   }
@@ -1735,23 +1707,32 @@ function checkGitignoreShadow() {
   try {
     // 获取所有已被 git 跟踪的文件
     const tracked = execSync('git ls-files', { cwd: ROOT_DIR, encoding: 'utf-8' }).trim().split('\n');
-    // 检查每个已跟踪文件是否会被当前 .gitignore 忽略
-    // 用 git check-ignore 批量检查
     const scriptFiles = tracked.filter(f => f.endsWith('.py') || f.endsWith('.ts') || f.endsWith('.mjs'));
-    let shadowedCount = 0;
-    for (const f of scriptFiles) {
-      try {
-        // 用 execFileSync 数组传参，避免文件名含 $()/反引号/引号时被 shell 注入执行
-        execFileSync('git', ['check-ignore', '-q', f], { cwd: ROOT_DIR, encoding: 'utf-8' });
-        // 如果没报错，说明文件会被忽略
-        warning(`.gitignore 会忽略已跟踪文件: ${f}（修改后将无法提交新变更）`);
-        shadowedCount++;
-      } catch {
-        // check-ignore 返回非0 = 不会被忽略，正常
+    if (scriptFiles.length === 0) {
+      success('无已跟踪脚本需要审计');
+      return true;
+    }
+    // 单次 --stdin 批量查询（原实现逐文件 spawn 一次 git check-ignore，数百次进程创建是
+    // governance 耗时黑洞——2026-07-04 奥卡姆批次一改为 1 次进程）。
+    // 退出码约定：0=至少一个被忽略（stdout 列出）；1=全部不被忽略；≥128=真错误。
+    let ignoredOut = '';
+    try {
+      ignoredOut = execFileSync('git', ['check-ignore', '--stdin'], {
+        cwd: ROOT_DIR,
+        encoding: 'utf-8',
+        input: scriptFiles.join('\n'),
+      });
+    } catch (e) {
+      if (e.status === 1) {
+        ignoredOut = ''; // 无命中，正常
+      } else {
+        throw e;
       }
     }
-    if (shadowedCount > 0) {
-      warning(`${shadowedCount} 个已跟踪脚本被 .gitignore 规则覆盖，修改后无法 git add`);
+    const shadowed = ignoredOut.split('\n').filter(Boolean);
+    if (shadowed.length > 0) {
+      shadowed.forEach(f => warning(`.gitignore 会忽略已跟踪文件: ${f}（修改后将无法提交新变更）`));
+      warning(`${shadowed.length} 个已跟踪脚本被 .gitignore 规则覆盖，修改后无法 git add`);
     } else {
       success('无已跟踪文件被 .gitignore 误覆盖');
     }
@@ -1811,7 +1792,9 @@ function checkMetricDocConsistency() {
 // 18. Dark Mode 质量门禁
 // ============================================================
 
-function checkDarkModeQuality() {
+// 2026-07-04 奥卡姆批次一：DarkMode/ECharts 两项属 UI 风格 lint 而非治理一致性，
+// 已移出 CODE_GOVERNANCE_CHECKS 主链，由 scripts/lint-ui.mjs（bun run lint:ui）独立承载，能力保留。
+export function checkDarkModeQuality() {
   info('检查 Dark Mode 质量门禁...');
 
   const srcDir = path.join(ROOT_DIR, 'src');
@@ -1880,7 +1863,7 @@ function checkDarkModeQuality() {
 // 18. ECharts splitLine 合规检查（DC-003 设计令牌）
 // ============================================================
 
-function checkEchartsSplitLine() {
+export function checkEchartsSplitLine() {
   info('检查 ECharts splitLine 合规（value 轴必须 show:false）...');
 
   const srcDir = path.join(ROOT_DIR, 'src');
@@ -2112,55 +2095,12 @@ function checkDataDrift() {
 }
 
 // ============================================================
-// 第22项检查：SQL 模块数与 CODE_INDEX 一致性
+// （已退役）第22项检查：SQL 模块数与 CODE_INDEX 一致性 —— 2026-07-04 奥卡姆批次一
+// 退役理由：与「CLAUDE.md计数防漂移」闸哲学冲突——本检查强制在 CODE_INDEX.md 维护
+// 会随迭代漂移的精确计数，而防漂移闸的判词恰是"这类数字 AI 干活不需要（会去 grep
+// 目录/注册表），留着只会漂移 + 误导，应改『以 X 为准』指针"。
+// CODE_INDEX.md 的 SQL 模块计数已同步改为指针表述，本检查随之删除。
 // ============================================================
-
-/**
- * 校验 server/src/sql/*.ts 文件数量与 CODE_INDEX.md SQL 表格中声明的数量一致。
- * 根因：CODE_INDEX 曾漂移至 14/24（实际 31），误导 agent 架构决策。
- */
-function checkSqlModuleCountConsistency() {
-  info('检查 SQL 模块数与 CODE_INDEX 一致性...');
-
-  const sqlDir = path.join(ROOT_DIR, 'server/src/sql');
-  const codeIndexPath = path.join(ROOT_DIR, '开发文档/00_index/CODE_INDEX.md');
-
-  if (!fs.existsSync(sqlDir)) {
-    warning('server/src/sql/ 目录不存在，跳过');
-    return true;
-  }
-
-  // 计算实际 SQL 文件数
-  const sqlFiles = fs.readdirSync(sqlDir).filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'));
-  const actualCount = sqlFiles.length;
-
-  if (!fs.existsSync(codeIndexPath)) {
-    warning('CODE_INDEX.md 不存在，跳过');
-    return true;
-  }
-
-  // 从 CODE_INDEX.md 提取声明的文件数（匹配 "31 个文件" 或 "31 个模块" 等模式）
-  const indexContent = fs.readFileSync(codeIndexPath, 'utf8');
-  const countMatch = indexContent.match(/server\/src\/sql\/.*?(\d+)\s*个/);
-
-  if (!countMatch) {
-    warning('CODE_INDEX.md 中未找到 SQL 模块数量声明，跳过');
-    return true;
-  }
-
-  const declaredCount = parseInt(countMatch[1], 10);
-
-  if (actualCount !== declaredCount) {
-    error(
-      `SQL 模块数不一致：CODE_INDEX.md 声明 ${declaredCount} 个，实际 ${actualCount} 个\n` +
-      `    ▶ 修复：更新 CODE_INDEX.md SQL 生成器表格（新增或删除文件后必须同步）`
-    );
-    return false;
-  }
-
-  success(`SQL 模块数一致（${actualCount} 个文件 = CODE_INDEX 声明 ${declaredCount} 个）`);
-  return true;
-}
 
 // ============================================================
 // 23. CLAUDE.md 体积预算检查
@@ -3220,6 +3160,9 @@ export const PRE_SYNC_READINESS_CHECKS = [
   { name: 'Claims去重', fn: checkClaimsDetailDeduplication },
   { name: '知识库一致性', fn: checkKnowledgeDataConsistency },
   { name: '单文件不混省', fn: checkSingleProvincePerFile },
+  // 2026-07-04 奥卡姆批次一：依赖真实 Parquet（CI 恒 skip）的数据检查从代码门禁移入数据就绪链，
+  // 与同族「单文件不混省」归位一致；B3 子目录隔离落地后随前缀防线一并退役（BACKLOG 2026-06-23-claude-801409）
+  { name: 'SC policy glob前缀隔离', fn: checkPolicyGlobPrefixIsolation },
 ];
 
 // post-sync 检查：sync-vps 之后跑（本地 vs VPS 清单一致性，ETL 后必然先漂移再同步）
@@ -3227,7 +3170,7 @@ export const POST_SYNC_READINESS_CHECKS = [
   { name: '数据漂移检测', fn: checkDataDrift },
 ];
 
-// 保留旧名以兼容现有调用方（=pre+post 全集，单独跑时仍是 4 项全过才通过）
+// 保留旧名以兼容现有调用方（=pre+post 全集，单独跑时全部项通过才通过）
 export const DATA_READINESS_CHECKS = [
   ...PRE_SYNC_READINESS_CHECKS,
   ...POST_SYNC_READINESS_CHECKS,
@@ -4141,8 +4084,7 @@ function checkWecomEngineBranchIsolation() {
 
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
-  { name: '必需文件', fn: checkRequiredFiles },
-  { name: '核心层索引', fn: checkCoreLayerIndices },
+  { name: '必需文件与核心索引', fn: checkRequiredFiles },
   { name: 'BACKLOG证据链', fn: checkBacklogEvidence },
   { name: 'CLAUDE章节', fn: checkClaudeMdSections },
   { name: 'DC-002合规', fn: checkDC002Compliance },
@@ -4161,10 +4103,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'gitignore审计', fn: checkGitignoreShadow },
   { name: '字段定义一致', fn: checkFieldDefinitionConsistency },
   { name: '指标字典一致', fn: checkMetricDocConsistency },
-  { name: 'DarkMode质量', fn: checkDarkModeQuality },
-  { name: 'ECharts网格线', fn: checkEchartsSplitLine },
   { name: 'sync-vps覆盖', fn: checkSyncVpsCoverage },
-  { name: 'SQL模块数一致', fn: checkSqlModuleCountConsistency },
   { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
   { name: 'rules eager-load 预算', fn: checkRulesEagerLoadBudget },
   { name: 'CLAUDE.md计数防漂移', fn: checkClaudeMdNoStaleCounts },
@@ -4194,7 +4133,6 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'ETL台账新鲜度', fn: checkEtlLedgerFreshness },
   { name: '技能字段闸', fn: checkSkillFieldGate },
   { name: '省份静默默认反模式', fn: checkBranchCodeFallbackAntipattern },
-  { name: 'SC policy glob前缀隔离', fn: checkPolicyGlobPrefixIsolation },
   { name: '省份前缀映射一致', fn: checkProvincePrefixMapConsistency },
   { name: '企微引擎省份隔离', fn: checkWecomEngineBranchIsolation },
   { name: 'Loop自进化闭环完整性', fn: checkLoopSelfEvolutionIntegrity },

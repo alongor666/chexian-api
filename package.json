@@ -43,6 +43,7 @@
     "governance:harness": "node scripts/governance/harness.mjs",
     "governance:hotfiles": "node scripts/check-hotfile-contracts.mjs",
     "governance:permissions": "node scripts/check-permission-coverage.mjs",
+    "lint:ui": "node scripts/lint-ui.mjs",
     "deploy:check": "node scripts/check-deploy-readiness.mjs",
     "deploy:check:health": "node scripts/check-deploy-readiness.mjs --require-health",
     "plans:manage": "node scripts/manage-plans.mjs",
