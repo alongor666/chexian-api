@@ -26,7 +26,7 @@ export const LedgerCard: React.FC<Props> = ({ meta, result, children }) => {
   return (
     <div
       id={meta.id}
-      className="grid grid-cols-1 lg:grid-cols-[0.82fr_1.18fr] gap-6 lg:gap-10 py-8 border-t border-neutral-200 dark:border-subtle scroll-mt-16"
+      className="grid grid-cols-1 lg:grid-cols-[0.68fr_1.32fr] gap-6 lg:gap-10 py-8 border-t border-neutral-200 dark:border-subtle scroll-mt-16"
     >
       {/* 左栏：叙述（min-w-0：防止右栏宽表把 grid 轨道撑爆挤扁本栏） */}
       <div className="min-w-0">
