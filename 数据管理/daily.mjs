@@ -66,7 +66,11 @@ import {
   isRangeCovered,
   isCoveredBySameQualifier,
   findCoveredKeys,
+  findPartialOverlapPairs,
 } from './lib/range-coverage.mjs';
+// 2026-07-06：上游导出窗口起点前移（四川实测）时，新旧全量文件呈"部分重叠、谁都不
+// 完全包含谁"关系，findCoveredKeys 覆盖不到，需要按"不重复不遗漏"原则合并
+import { mergeOverlappingWeeklyShard } from './lib/parquet-merge.mjs';
 // 多省 B4：跨省 claims 报案截止日新鲜度巡检（省份→claims 目录派生 + 巡检分类，可单测）
 import {
   branchClaimsDetailDir,
@@ -1884,6 +1888,8 @@ async function main() {
   const weeklyStart = config.weekly_start.replace(/-/g, '');
   let weeklyArchiveDone = false;  // 旧格式归档只做一次
 
+  const OLD_WEEKLY_RE = /^每日数据_(\d{8})_(\d{8})\.parquet$/;
+
   for (const file of shards.weekly) {
     const range = extractDateRange(file.name);
     const isNewFormat = file.name.startsWith('01_签单清单_') || /^\d{8}(-\d{8})?_01_签单清单/.test(file.name);
@@ -1946,6 +1952,74 @@ async function main() {
     args.push(..._premiumBranchArgs);
 
     runPythonScript(python, transformScript, args);
+
+    // 上游导出窗口起点前移检测（不重复不遗漏合并，2026-07-06 四川实测）：老格式区间命名
+    // 分片才适用（新格式剔摩/限摩等多文件天然共存，不走这套单文件替换语义）。
+    // findCoveredKeys 只处理"一方完全覆盖另一方"；此处补上"部分重叠、谁都不完全包含谁"
+    // 的场景（如老窗口 25-06-01~26-06-28 vs 新窗口 26-06-01~26-07-05），以及"本次文件被
+    // 现有分片完全覆盖"的场景——老格式设计上每次都重转（可能是历史批改/更正生效），
+    // 覆盖不代表内容没变，必须继续走合并把本次内容并入，而不是跳过重转（codex 评审 P1：
+    // 早期实现用"跳过重转"处理"本次刚合并出宽窗后又重转窄窗源"，会让真正的历史更正
+    // 永远学不到——统一走合并，本次文件（无论宽窄）永远权威，覆盖关系只影响 SQL 分支）。
+    //
+    // 注意：outputName 落盘用的是老格式命名 每日数据_START_END.parquet（下划线分隔），
+    // parseRangePrefix 只认新格式 START-END_qualifier（连字符分隔），解析不出老格式文件名，
+    // 且源 xlsx 解出的 qualifier（如 01_签单清单_定稿）跟老格式输出文件名本身也对不上——
+    // 本分支已被 !isNewFormat 限定在"单一血统、无剔摩/限摩变体"的老格式世界里，
+    // 两侧统一用固定 qualifier 比较，不依赖文件名反解 qualifier。
+    if (!isNewFormat && fileRange && existsSync(currentDir)) {
+      const LEGACY_QUALIFIER = '每日数据-老格式周更分片';
+      const mergeDryRun = process.argv.includes('--dry-run');
+      // 收敛循环（codex 评审 P1）：一轮转换可能同时与多份既有分片重叠（历史碎片残留），
+      // 每次合并后必须把"权威文件"更新为刚产出的合并结果，再重新扫描剩余重叠——
+      // 否则第二个 pair 还拿着已被归档走的旧 outputPath 当权威，合并会读不到文件而中断。
+      let authoritative = { key: outputName, path: outputPath, start: fileRange.start, end: fileRange.end };
+      const MAX_MERGE_ROUNDS = 20; // 安全上限，异常大量碎片时 fail-fast 而非死循环
+      for (let round = 0; round < MAX_MERGE_ROUNDS; round++) {
+        const otherRangeItems = readdirSync(currentDir)
+          .filter(f => f.endsWith('.parquet') && f !== authoritative.key)
+          .map(f => {
+            const m = f.match(OLD_WEEKLY_RE);
+            return m ? { key: f, start: m[1], end: m[2], qualifier: LEGACY_QUALIFIER } : null;
+          })
+          .filter(Boolean);
+        const incomingItem = { key: authoritative.key, start: authoritative.start, end: authoritative.end, qualifier: LEGACY_QUALIFIER };
+        // 谁都不完全包含谁 → 部分重叠；本次文件被某既有分片完全覆盖 → 该分片也纳入合并
+        // （不当"冗余跳过"，因为老格式的"本次文件"永远是最新重转、可能带历史更正）
+        const partialPair = findPartialOverlapPairs([incomingItem, ...otherRangeItems])
+          .find(p => p.a.key === authoritative.key || p.b.key === authoritative.key);
+        const coveringSibling = otherRangeItems.find(o => isRangeCovered(incomingItem, o));
+        const other = partialPair
+          ? (partialPair.a.key === authoritative.key ? partialPair.b : partialPair.a)
+          : coveringSibling;
+        if (!other) break; // 没有更多重叠，收敛完成
+
+        const mergedStart = incomingItem.start < other.start ? incomingItem.start : other.start;
+        const mergedEnd = incomingItem.end > other.end ? incomingItem.end : other.end;
+        const mergedName = `每日数据_${mergedStart}_${mergedEnd}.parquet`;
+        const mergedPath = join(currentDir, mergedName);
+        log('yellow', `⚠️  上游导出窗口重叠：${other.key} [${other.start}~${other.end}] ↔ ${authoritative.key} [${incomingItem.start}~${incomingItem.end}]`);
+        log('yellow', `   按"不重复不遗漏"合并（本次文件权威）${mergeDryRun ? '（--dry-run，只校验不落地）' : ''} → ${mergedName}`);
+        const result = await mergeOverlappingWeeklyShard({
+          authoritativePath: authoritative.path,
+          authoritativeStart: incomingItem.start,
+          authoritativeEnd: incomingItem.end,
+          otherPath: join(currentDir, other.key),
+          mergedPath,
+          archiveDir,
+          dryRun: mergeDryRun,
+        });
+        log('green',
+          `   ✓ ${mergeDryRun ? '校验通过（未落地）' : '合并完成'}：旧文件保留 ${result.otherKeptRows} 行 + 本次文件 ${result.authoritativeRows} 行 = ${result.mergedRows} 行（不重复不遗漏校验通过）`);
+
+        if (mergeDryRun) break; // dry-run 不落地，磁盘状态不变，继续循环会重复报同一对
+        authoritative = { key: mergedName, path: mergedPath, start: mergedStart, end: mergedEnd };
+        if (round === MAX_MERGE_ROUNDS - 1) {
+          log('red', `❌ 部分重叠合并超过 ${MAX_MERGE_ROUNDS} 轮仍未收敛，current/ 可能有异常大量历史碎片，请人工核查`);
+          process.exit(1);
+        }
+      }
+    }
 
     // 清空 staging（日增量已合入周更 xlsx）
     if (!isNewFormat) cleanStaging(stagingDir);

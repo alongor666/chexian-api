@@ -79,3 +79,35 @@ export function findCoveredKeys(items) {
   }
   return losers;
 }
+
+/**
+ * 找出「同品类但仅部分重叠——谁都不完全包含谁」的区间对。
+ *
+ * findCoveredKeys 只处理「一方严格覆盖另一方」的归档场景；上游导出窗口起点前移时
+ * （2026-07-06 四川实测：老全量 25-06-01~26-06-28 与新全量 26-06-01~26-07-05——新窗口
+ * 起点更晚、终点更晚，谁都不是谁的子集），两份文件会同时留在 current/，重叠区间
+ * （26-06-01~26-06-28）被算两次。此函数把这类 pair 挑出来，交给调用方按「不重复不遗漏」
+ * 原则合并（保留较早文件重叠前的部分 + 采纳较晚文件全部）。
+ *
+ * @param {Array<{key:string,start:string,end:string,qualifier:string}>} items
+ * @returns {Array<{a:{key,start,end,qualifier}, b:{key,start,end,qualifier}}>}
+ *   a.start <= b.start，按 key 去重（同一对不会正反各出现一次）
+ */
+export function findPartialOverlapPairs(items) {
+  const pairs = [];
+  const seen = new Set();
+  for (const a of items) {
+    for (const b of items) {
+      if (a.key === b.key) continue;
+      if (a.qualifier !== b.qualifier) continue; // 同品类才互斥判定
+      if (isRangeCovered(a, b) || isRangeCovered(b, a)) continue; // 完全覆盖交给 findCoveredKeys
+      const overlaps = a.start <= b.end && b.start <= a.end;
+      if (!overlaps) continue;
+      const pairKey = [a.key, b.key].sort().join('|');
+      if (seen.has(pairKey)) continue;
+      seen.add(pairKey);
+      pairs.push(a.start <= b.start ? { a, b } : { a: b, b: a });
+    }
+  }
+  return pairs;
+}
