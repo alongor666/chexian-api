@@ -186,26 +186,22 @@ python3 pipelines/enrich.py \
 
 ### 4. 企业微信智能表格同步
 
-**模块**: `integrations/wecom_smartsheet/`（多实例，config 驱动）
+**模块**: `integrations/wecom_smartsheet/`（多实例，`instances/*.yaml` 配置驱动，v2 引擎）
 
 功能：
-- 读取保单明细、报价数据和续回匹配口径
+- 读取保单明细、报价数据和续回匹配口径（按实例 `branch_code` 省份隔离，fail-closed）
 - 按车架号维护 `record_id` 状态（各实例独立 state 文件）
-- 对企业微信智能表格执行新增/更新同步
+- 对企业微信智能表格执行新增/更新同步（payload hash 未变化则跳过）
 
-每个 `config.{instance}.json` 对应一个机构/一张表，state 和 log 按 `instance_name` 独立命名：
+每个 `instances/{instance}.yaml` 对应一张表，state 和 log 按 `instance_name` 独立命名：
 
 ```bash
-# 手动 dry-run（自贡）
-python3 integrations/wecom_smartsheet/sync_renewal.py \
-  --config integrations/wecom_smartsheet/config.zigong.json --dry-run
-
-# 手动 dry-run（天府）
-python3 integrations/wecom_smartsheet/sync_renewal.py \
-  --config integrations/wecom_smartsheet/config.tianfu.json --dry-run
+# 手动 dry-run（不调用 webhook）
+python3 integrations/wecom_smartsheet/sync_renewal_v2.py \
+  --instance integrations/wecom_smartsheet/instances/sichuan_2025_h1.yaml --dry-run
 ```
 
-**自动化**：`daily.mjs` 步骤 8 遍历模块内所有 `config.*.json`，按 `WECOM_SMARTSHEET_ENABLED=1`（`.env.local`）开关决定是否推送。失败降级告警不阻塞 ETL。
+**自动化**：`daily.mjs` 步骤 8 遍历模块内所有 `instances/*.yaml`，按 `WECOM_SMARTSHEET_ENABLED=1`（`.env.local`）开关决定是否推送。失败降级告警不阻塞 ETL。（旧 v1 `config.*.json` 推送链路已退役，详见模块 README。）
 
 ## 配置说明
 

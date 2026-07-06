@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Sync commercial renewal rows to WeCom Smart Sheet (multi-instance).
+"""商业险续保追踪取数库（原 v1 推送引擎，推送职责已退役）。
 
-This module is intentionally local to 数据管理/integrations so it can reuse the
-warehouse parquet contract without turning the main ETL into an external-system
-sync job. Each `config.<instance>.json` drives one WeCom Smart Sheet target;
-state and logs are namespaced per instance.
+⚠️ 职责状态（2026-07-05-claude-fed2b1 评估结论）：
+- **推送引擎职责已由 sync_renewal_v2.py 接管**：daily.mjs 调度只扫 instances/*.yaml
+  走 v2；本脚本的 config.*.json 推送链路已无任何实例（仓库与运行目录均无 config.*.json，
+  历史日志全部为 v2 家族），禁止新增 config.*.json 恢复其推送用途——本脚本的
+  build_source_rows 读 policy current/ 无 branch_code 省份隔离（裸 glob 混省 SC+SX），
+  且不在 governance 企微隔离闸（checkWecomEngineBranchIsolation）引擎清单内。
+- **保留原因**：create_renewal_tracker.py 与 tests/test_dryrun_validation_sql.py
+  依赖本模块的 SyncConfig + build_source_rows 提供「保险止期窗口」
+  （insurance_end_date_from/to）取数能力，v2 引擎只支持起期窗口，无法替代。
+  库消费方均按 org_level_3 单机构过滤（事实上排除他省机构），推送函数不再被调度。
+- **删除条件**（届时连同 test_sync_renewal.py 一并删）：create_renewal_tracker 的
+  取数迁移到带省份隔离的独立查询层，或 v2 引擎补齐止期窗口过滤。
 """
 
 from __future__ import annotations

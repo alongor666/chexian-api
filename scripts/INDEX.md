@@ -81,9 +81,9 @@
 
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
-| `数据管理/integrations/wecom_smartsheet/sync_renewal.py` | 按 `config.{instance}.json` 将分支机构商业险续保追踪名单按车架号 upsert 到企业微信智能表格（多实例） | `python3 数据管理/integrations/wecom_smartsheet/sync_renewal.py --config 数据管理/integrations/wecom_smartsheet/config.zigong.json --dry-run` |
+| `数据管理/integrations/wecom_smartsheet/sync_renewal_v2.py` | 按 `instances/{instance}.yaml` + `field_registry*.yaml` 将商业险续保追踪名单按车架号 upsert 到企业微信智能表格（配置驱动、branch_code 省份隔离 fail-closed）。v1 `sync_renewal.py` 推送职责已退役（2026-07-05-claude-fed2b1），文件仅作为 `create_renewal_tracker.py` 的止期窗口取数库保留 | `python3 数据管理/integrations/wecom_smartsheet/sync_renewal_v2.py --instance 数据管理/integrations/wecom_smartsheet/instances/sichuan_2025_h1.yaml --dry-run` |
 
-**自动化触发**：`daily.mjs` 步骤 8 会自动遍历模块内所有 `config.*.json` 并同步，由 `WECOM_SMARTSHEET_ENABLED=1`（`.env.local`）开关控制。失败降级告警不阻塞 ETL。
+**自动化触发**：`daily.mjs` 步骤 8 会自动遍历模块内所有 `instances/*.yaml`（可经 `script:` 行路由到 `sync_filtered_policies.py` 等引擎）并同步，由 `WECOM_SMARTSHEET_ENABLED=1`（`.env.local`）开关控制。失败降级告警不阻塞 ETL。
 
 ### 🚀 启动类
 
