@@ -205,7 +205,21 @@ const WARM_LIGHT_ORG_CONCURRENCY = 2;
 const WARM_MAX_ATTEMPTS = 2;
 const WARM_RETRY_BACKOFF_MS = 750;
 export const STARTUP_DOMAIN_WARMUP_TIMEOUT_MS = 120_000;
-const STARTUP_DOMAIN_WARMUP_ORDER = ['ClaimsDetail', 'ClaimsAgg', 'CrossSell'] as const;
+/**
+ * listen 前必须就绪的域（294022 收窄）：仅保留 KPI 首屏硬依赖。
+ * - ClaimsDetail/ClaimsAgg：dashboard-bundle 预热（listen 前）的 KPI SQL LEFT JOIN ClaimsAgg，
+ *   后移会把降级窗口引入首屏，故保留。
+ * - CrossSell 已移出：其 CrossSellDailyAgg 物化在 VPS（threads≤2 分批模式）需约 3 分钟，
+ *   曾在 listen 前串行等待导致每次 reload/部署全站 502 数分钟（BACKLOG 294022）。
+ */
+const STARTUP_DOMAIN_WARMUP_ORDER = ['ClaimsDetail', 'ClaimsAgg'] as const;
+/**
+ * listen 后异步预热的域（294022）：预热完成前，交叉销售路由由 createDomainMiddleware
+ * 惰性加载兜底（首请求等待 ≤15s，超时 503 + Retry-After），其余全站路由立即可服务。
+ */
+const POST_LISTEN_DOMAIN_WARMUP_ORDER = ['CrossSell'] as const;
+/** CrossSellDailyAgg 物化 VPS 实测可达数分钟，上限给足避免误报超时中断预热链。*/
+export const POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS = 600_000;
 /**
  * 用 v8 heapUsed 而非 RSS 做安全阀：
  * RSS 包含 vite/DuckDB native 内存（本地动辄 4-5GB），不能反映 cache 实际占用。
@@ -434,13 +448,41 @@ export class CacheWarmer {
             return;
         }
 
-        // 启动预热允许长等待，避免 ClaimsAgg/CrossSell 冷物化超过 15s 后跳过首屏缓存。
-        // ClaimsAgg 是 KPI 冷启动依赖，必须先于 CrossSell，避免 CrossSellDailyAgg 长物化挡住 KPI 预热。
+        // 启动预热允许长等待，避免 ClaimsAgg 冷物化超过 15s 后跳过首屏缓存。
+        // CrossSell 不在此清单（294022）：其长物化曾挡住 listen 造成全站 502，
+        // 已移至 warmPostListenDomains 在 listen 后异步执行。
         for (const domain of STARTUP_DOMAIN_WARMUP_ORDER) {
             // eslint-disable-next-line no-await-in-loop
             await bootstrapper.ensureDomainLoaded(domain, {
                 timeoutMs: STARTUP_DOMAIN_WARMUP_TIMEOUT_MS,
             });
+        }
+    }
+
+    /**
+     * listen 后异步域预热（294022）：目前仅 CrossSell（CrossSellDailyAgg 物化）。
+     *
+     * 单个域失败/超时不抛出——物化 promise 在 LazyDomainRegistry 内仍继续跑，
+     * 交叉销售路由的惰性中间件会在完成后自然放行；吞掉错误保证调用方
+     * （warmCommonRoutes 预热链）不被中断。
+     */
+    async warmPostListenDomains(): Promise<void> {
+        const bootstrapper = getBootstrapper();
+        if (!bootstrapper) {
+            logger.warn('[CacheWarmer] Bootstrapper not registered, skipped post-listen domain warming.');
+            return;
+        }
+        for (const domain of POST_LISTEN_DOMAIN_WARMUP_ORDER) {
+            const t0 = Date.now();
+            try {
+                // eslint-disable-next-line no-await-in-loop
+                await bootstrapper.ensureDomainLoaded(domain, {
+                    timeoutMs: POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS,
+                });
+                logger.info(`[CacheWarmer] Post-listen domain ${domain} warmed in ${Date.now() - t0}ms.`);
+            } catch (e) {
+                logger.warn(`[CacheWarmer] Post-listen domain ${domain} warming failed after ${Date.now() - t0}ms (lazy middleware will keep serving 503 until loaded):`, e);
+            }
         }
     }
 

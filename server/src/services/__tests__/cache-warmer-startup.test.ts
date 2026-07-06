@@ -63,7 +63,7 @@ vi.mock('../../utils/logger.js', () => ({
   },
 }));
 
-import { STARTUP_DOMAIN_WARMUP_TIMEOUT_MS, cacheWarmer } from '../cache-warmer.js';
+import { STARTUP_DOMAIN_WARMUP_TIMEOUT_MS, POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS, cacheWarmer } from '../cache-warmer.js';
 
 describe('cacheWarmer.warmStartupCritical', () => {
   beforeEach(() => {
@@ -76,7 +76,7 @@ describe('cacheWarmer.warmStartupCritical', () => {
     fetchDashboardBundleDataMock.mockResolvedValue({ success: true, data: {} });
   });
 
-  it('内部启动预热按 ClaimsDetail → ClaimsAgg → CrossSell 顺序长等待，避免 CrossSell 长物化挡住 KPI 依赖', async () => {
+  it('listen 前启动预热只等 ClaimsDetail → ClaimsAgg（KPI 首屏硬依赖），不含 CrossSell（294022：长物化曾挡住 listen 致全站 502）', async () => {
     await cacheWarmer.warmStartupCritical();
 
     expect(ensureDomainLoadedMock).toHaveBeenNthCalledWith(1, 'ClaimsDetail', {
@@ -85,14 +85,13 @@ describe('cacheWarmer.warmStartupCritical', () => {
     expect(ensureDomainLoadedMock).toHaveBeenNthCalledWith(2, 'ClaimsAgg', {
       timeoutMs: STARTUP_DOMAIN_WARMUP_TIMEOUT_MS,
     });
-    expect(ensureDomainLoadedMock).toHaveBeenNthCalledWith(3, 'CrossSell', {
-      timeoutMs: STARTUP_DOMAIN_WARMUP_TIMEOUT_MS,
-    });
+    expect(ensureDomainLoadedMock).toHaveBeenCalledTimes(2);
+    expect(ensureDomainLoadedMock).not.toHaveBeenCalledWith('CrossSell', expect.anything());
     expect(fetchDashboardBundleDataMock).toHaveBeenCalledTimes(1);
   });
 
   it('关键域预热失败时不继续生成 dashboard 或启动 top-org 背景预热', async () => {
-    ensureDomainLoadedMock.mockRejectedValueOnce(new Error('Domain CrossSell loading timeout (15000ms)'));
+    ensureDomainLoadedMock.mockRejectedValueOnce(new Error('Domain ClaimsAgg loading timeout (15000ms)'));
 
     await cacheWarmer.warmStartupCritical();
     await Promise.resolve();
@@ -100,5 +99,28 @@ describe('cacheWarmer.warmStartupCritical', () => {
     expect(fetchDashboardBundleDataMock).not.toHaveBeenCalled();
     expect(setRouteCacheMock).not.toHaveBeenCalled();
     expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('cacheWarmer.warmPostListenDomains', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ensureDomainLoadedMock.mockResolvedValue(undefined);
+  });
+
+  it('listen 后异步预热 CrossSell，使用长超时（物化 VPS 实测可达数分钟）', async () => {
+    await cacheWarmer.warmPostListenDomains();
+
+    expect(ensureDomainLoadedMock).toHaveBeenCalledTimes(1);
+    expect(ensureDomainLoadedMock).toHaveBeenCalledWith('CrossSell', {
+      timeoutMs: POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS,
+    });
+  });
+
+  it('单个域预热失败/超时不抛出（吞掉错误保证后续 warmCommonRoutes 链不被中断），仅记录 warn', async () => {
+    ensureDomainLoadedMock.mockRejectedValueOnce(new Error('Domain CrossSell loading timeout (600000ms)'));
+
+    await expect(cacheWarmer.warmPostListenDomains()).resolves.toBeUndefined();
+    expect(loggerMock.warn).toHaveBeenCalledTimes(1);
   });
 });

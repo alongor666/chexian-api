@@ -335,7 +335,7 @@ import { getBootstrapper } from '../../services/bootstrapper-registry.js';
  * 未注册（bootstrapper 未初始化）：直接 next()，不阻塞
  */
 export function createDomainMiddleware(...domains: string[]) {
-  return async (_req: Request, _res: Response, next: NextFunction): Promise<void> => {
+  return async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     const bootstrapper = getBootstrapper();
     if (!bootstrapper) {
       // 测试环境或 bootstrapper 未初始化时，跳过惰性加载
@@ -348,6 +348,17 @@ export function createDomainMiddleware(...domains: string[]) {
       }
       next();
     } catch (err) {
+      // 294022：加载超时补 Retry-After——CrossSell 等长物化域在 listen 后异步预热
+      // 期间，提示客户端/网关按节奏重试而非立即放弃。
+      // 另：LazyDomainRegistry 抛的是裸 Error（statusCode 仅为挂载属性），errorHandler
+      // 只认 AppError 实例 → 超时曾统一落 500。降级窗口语义要求 503，此处转换。
+      if ((err as { statusCode?: number })?.statusCode === 503) {
+        if (!res.headersSent) {
+          res.setHeader('Retry-After', '30');
+        }
+        next(new AppError(503, (err as Error).message));
+        return;
+      }
       next(err);
     }
   };

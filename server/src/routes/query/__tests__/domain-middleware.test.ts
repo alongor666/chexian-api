@@ -80,9 +80,10 @@ vi.mock('../../../services/bootstrapper-registry.js', () => ({
 import { createDomainMiddleware } from '../shared.js';
 import { getBootstrapper } from '../../../services/bootstrapper-registry.js';
 
-// 最简 Request/Response stub（createDomainMiddleware 不使用 req/res）
+// 最简 Request/Response stub（503 分支会调用 res.setHeader 写 Retry-After）
 const mockReq = {} as Request;
-const mockRes = {} as Response;
+const makeRes = () => ({ setHeader: vi.fn(), headersSent: false });
+const mockRes = makeRes();
 
 describe('createDomainMiddleware — 惰性域加载中间件工厂', () => {
   beforeEach(() => {
@@ -121,8 +122,9 @@ describe('createDomainMiddleware — 惰性域加载中间件工厂', () => {
     expect(next).toHaveBeenCalledWith(); // next() with no args
   });
 
-  // DM-03: ensureDomainLoaded 抛出 statusCode=503（超时）时将 err 传给 next
-  it('DM-03: 域加载超时（503）时将错误传给 next(err)', async () => {
+  // DM-03: ensureDomainLoaded 抛出 statusCode=503（超时）时转换为 AppError(503) + Retry-After
+  // （294022：裸 Error 挂 statusCode 属性会被 errorHandler 落 500，降级窗口语义要求 503）
+  it('DM-03: 域加载超时（503）时转换为 AppError(503) 传给 next，并设置 Retry-After 头', async () => {
     const timeoutErr = Object.assign(
       new Error('Domain ClaimsDetail loading timeout (15000ms)'),
       { statusCode: 503 }
@@ -133,14 +135,18 @@ describe('createDomainMiddleware — 惰性域加载中间件工厂', () => {
     (getBootstrapper as ReturnType<typeof vi.fn>).mockReturnValue(mockBootstrapper);
 
     const next = vi.fn() as unknown as NextFunction;
+    const res = makeRes();
     const middleware = createDomainMiddleware('ClaimsDetail');
 
-    await middleware(mockReq as any, mockRes as any, next);
+    await middleware(mockReq as any, res as any, next);
 
     expect(next).toHaveBeenCalledOnce();
-    expect(next).toHaveBeenCalledWith(timeoutErr);
     const passedErr = (next as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(passedErr.statusCode).toBe(503);
+    expect(passedErr.message).toBe('Domain ClaimsDetail loading timeout (15000ms)');
+    // errorHandler 只认 AppError 实例（instanceof 判定）——必须是转换后的 AppError
+    expect(passedErr.constructor.name).toBe('AppError');
+    expect(res.setHeader).toHaveBeenCalledWith('Retry-After', '30');
   });
 
   // DM-04: ensureDomainLoaded 抛出通用错误时将 err 传给 next
