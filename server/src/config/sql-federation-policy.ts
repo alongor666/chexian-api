@@ -149,6 +149,19 @@ export function isFederationEnabled(): boolean {
 }
 
 /**
+ * 多省 Phase B gated 写侧开关：是否启用 `current/<省>/` 子目录布局（服务端侧）。
+ *
+ * 与 ETL 侧 `数据管理/lib/branch-naming.mjs isPolicyCurrentSubdirLayout` 同名同语义
+ * （同一 env `POLICY_CURRENT_SUBDIR_LAYOUT`，默认 off = 扁平 current/ 字节安全）；
+ * mjs 无法被服务端 TS import，故两侧各持一份实现、以注释互指为对齐契约。
+ * B4（web 上传链路）用它决定 multer 落盘目录与数据管理路由候选目录，
+ * 不复用 BRANCH_RLS_ENABLED（RLS 是安全开关，绑定写布局会让开 RLS 意外触发物理迁移）。
+ */
+export function isPolicyCurrentSubdirLayout(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.POLICY_CURRENT_SUBDIR_LAYOUT === 'true';
+}
+
+/**
  * 省份编码白名单正则（CHAR(2) 大写字母，如 SC/SX）。
  * 作为「单一事实源」被 resolveBranchCode / getDeploymentBranchCode / permission.ts 共享。
  */

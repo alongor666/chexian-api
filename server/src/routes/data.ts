@@ -38,6 +38,11 @@ import {
 import { getDataDir, getKpiPlanConfigPath } from '../config/paths.js';
 import { dbEnv } from '../config/env.js';
 import { inspectParquetSource, getParquetLoadRejectionReason, getParquetLoadWarning } from '../utils/parquet-source.js';
+import {
+  resolveUploadTargetDir,
+  resolveManagedParquetDirs,
+  discoverCurrentParquetPaths,
+} from './data-layout.js';
 
 const router = Router();
 
@@ -67,7 +72,8 @@ if (!fs.existsSync(CURRENT_DATA_SUBDIR)) {
 }
 
 function resolveManagedParquetPath(safeFilename: string): string | null {
-  const candidateDirs = [CURRENT_DATA_SUBDIR, CONFIG.DATA_DIR];
+  // B4：subdir 布局开启时前插 current/<部署省>/（只下钻部署省，clear/download 不触他省）
+  const candidateDirs = resolveManagedParquetDirs(CURRENT_DATA_SUBDIR, CONFIG.DATA_DIR);
 
   for (const dir of candidateDirs) {
     const candidatePath = path.join(dir, safeFilename);
@@ -112,7 +118,17 @@ function checkRateLimit(userId: string): void {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, CURRENT_DATA_SUBDIR);
+    // B4：与 ETL 写侧（branchOutputRoot）同开关同语义——默认扁平 current/（现状），
+    // POLICY_CURRENT_SUBDIR_LAYOUT=true 时落 current/<部署省>/（省码经 ^[A-Z]{2}$ 守卫）
+    try {
+      const targetDir = resolveUploadTargetDir(CURRENT_DATA_SUBDIR);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      cb(null, targetDir);
+    } catch (err) {
+      cb(err instanceof Error ? err : new Error(String(err)), '');
+    }
   },
   filename: (req, file, cb) => {
     // 使用 UUID + 安全化的原文件名，避免冲突和注入
@@ -199,7 +215,8 @@ function listManagedParquetFiles(): Array<{
   modifiedTime: Date;
   isCurrent: boolean;
 }> {
-  const candidateDirs = [CURRENT_DATA_SUBDIR, CONFIG.DATA_DIR];
+  // B4：subdir 布局开启时前插 current/<部署省>/（同名文件保留 mtime 最新的一条，逻辑不变）
+  const candidateDirs = resolveManagedParquetDirs(CURRENT_DATA_SUBDIR, CONFIG.DATA_DIR);
   const byFilename = new Map<string, {
     filename: string;
     sizeMB: number;
@@ -368,9 +385,11 @@ router.post(
             const newDate = parseInt(matchNew[2], 10);
             const suffix = matchNew[3];
 
-            const existingFiles = fs.readdirSync(CURRENT_DATA_SUBDIR).filter(f => f.endsWith('.parquet') && f !== req.file!.filename);
+            // B4：同前缀归档扫描跟随实际落盘目录（multer 已按布局开关写入扁平或 current/<省>/）
+            const uploadedDir = path.dirname(filePath);
+            const existingFiles = fs.readdirSync(uploadedDir).filter(f => f.endsWith('.parquet') && f !== req.file!.filename);
             for (const f of existingFiles) {
-              const fullPathOld = path.join(CURRENT_DATA_SUBDIR, f);
+              const fullPathOld = path.join(uploadedDir, f);
               const matchOld = f.match(/(?:^[a-f0-9\-]{36}_)?(.*?)(\d{8})(.*?)\.parquet$/i);
 
               if (matchOld) {
@@ -392,9 +411,9 @@ router.post(
           }
 
           // 4. 加载 current 目录下所有有效的 Parquet（跳过损坏/空文件，避免整批加载失败）
-          const candidateFiles = fs.readdirSync(CURRENT_DATA_SUBDIR)
-            .filter(f => f.endsWith('.parquet'))
-            .map(f => path.join(CURRENT_DATA_SUBDIR, f));
+          // B4：发现逻辑复用 B1 装载层（顶层扁平 + current/<省>/ 子目录 + GATED fail-closed 闸），
+          // 扁平布局下返回集合与旧 readdir 逐字节等价；闸抛错走 loadErr 分支（清理上传文件 + 400）
+          const candidateFiles = discoverCurrentParquetPaths(CURRENT_DATA_SUBDIR);
 
           const validCandidateFiles: string[] = [];
           for (const candidateFile of candidateFiles) {
