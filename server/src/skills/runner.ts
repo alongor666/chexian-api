@@ -12,6 +12,7 @@
  */
 
 import { AppError } from '../middleware/error.js';
+import { isSuperUser, resolveSpecialFeatures } from '../middleware/special-feature.js';
 import type { Skill, SkillContext, SkillResult, SkillRunRecord } from './types.js';
 import { saveRun, generateRunId } from './run-store.js';
 import { applyRedLinePolicy } from './red-line-policy.js';
@@ -40,10 +41,14 @@ export async function runSkill<R = unknown>(
     throw new AppError(400, `Skill ${skill.id} input invalid: ${path} - ${issue?.message ?? 'unknown'}`);
   }
 
-  // 2. 权限校验
+  // 2. 权限校验：requiredPermissions 取值是功能开关名（如 'cost'），对照用户 specialFeatures。
+  // 历史 bug：曾写成 role === p，而 p 是功能名、role 是角色枚举，永不相等——声明形同虚设。
   if (skill.requiredPermissions?.length) {
-    const role = ctx.role ?? '';
-    const hasAll = skill.requiredPermissions.every((p) => role === 'branch_admin' || role === p);
+    const specialFeatures =
+      ctx.specialFeatures ?? (await resolveSpecialFeatures(ctx.username));
+    const hasAll = skill.requiredPermissions.every(
+      (p) => isSuperUser(ctx.username) || (specialFeatures?.includes(p) ?? false)
+    );
     if (!hasAll) {
       throw new AppError(403, `Skill ${skill.id} requires permissions: ${skill.requiredPermissions.join(', ')}`);
     }

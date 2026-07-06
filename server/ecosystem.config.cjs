@@ -35,6 +35,11 @@ module.exports = {
         //  要让 PM2 重读 process.env 必须用 shell 前缀赋值 + --update-env。codex P1 PR#391 修正）
         STATE_STORE_BACKEND: 'sqlite',
         STATE_DB_PATH: '/var/www/chexian/server/data/state.db',
+        // 综合分析视图开放度（权限治理 Critical-1，镜像前端 .env.production 的
+        // VITE_ENABLE_COMPREHENSIVE_ANALYSIS='true'，两处必须同步）：
+        // 'true' = 全员开放（生产现状，后端 cost 闸旁路）；改 'false' 全关；
+        // 删除本行 = 按用户 specialFeatures 'cost' 强制（届时前端构建变量须同步撤）。
+        ENABLE_COMPREHENSIVE_ANALYSIS: 'true',
         // 通用立方体灰度阶段 1（BACKLOG uid=2026-06-11-claude-90a92c，PR #595/#600-#603）：
         // 影子对账 —— 对外仍返回原路径结果，后台双跑立方体逐字段比对。
         // 观测面：GET /health 的 cubes + cubeShadow；差异明细在 PM2 日志 [CubeShadow]。

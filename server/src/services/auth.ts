@@ -13,6 +13,7 @@ import { PRESET_USERS, getPresetVisibleBranches } from '../config/preset-users.j
 import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
 import { ensurePresetUser, getUserByUsername } from './access-control.js';
+import { isIpAllowed as isIpAllowedShared } from '../utils/ip.js';
 
 /**
  * 用户凭证（从前端复用）
@@ -241,25 +242,9 @@ class AuthService {
     }
   }
 
-  private normalizeIpValue(ip: string): string {
-    let normalized = ip.trim();
-    if (normalized.includes(',')) {
-      normalized = normalized.split(',')[0].trim();
-    }
-    if (normalized.startsWith('::ffff:')) {
-      normalized = normalized.slice(7);
-    }
-    if (normalized === '::1') {
-      normalized = '127.0.0.1';
-    }
-    return normalized;
-  }
-
+  // IP 归一化与白名单比对已抽至 utils/ip.ts（登录与 PAT 校验共用），此处仅委托
   private isIpAllowed(clientIp: string | undefined, allowedIps: string[] | undefined): boolean {
-    if (!allowedIps || allowedIps.length === 0) return true;
-    if (!clientIp) return false;
-    const normalizedClient = this.normalizeIpValue(clientIp);
-    return allowedIps.some(ip => this.normalizeIpValue(ip) === normalizedClient);
+    return isIpAllowedShared(clientIp, allowedIps);
   }
 
   /**

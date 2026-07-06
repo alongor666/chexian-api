@@ -21,6 +21,7 @@ import {
   type ComprehensiveDimension,
   type ComprehensiveGranularity,
 } from '../../sql/comprehensive-analysis.js';
+import { requireSpecialFeature } from '../../middleware/special-feature.js';
 
 const router = Router();
 
@@ -309,8 +310,12 @@ async function handleComprehensiveBundle(req: Request, res: Response): Promise<v
   }, HTTP_MAX_AGE.bundle);
 }
 
+// cost 功能开关闸（权限治理 Critical-1）：镜像前端"综合分析视图"准入语义
+// （ENABLE_COMPREHENSIVE_ANALYSIS='true' 全员旁路 / 'false' 全关 / 未设置按 specialFeatures）。
+// 必须放在 handler 之前，防直连 API 绕过前端闸。
 router.get(
   '/comprehensive-bundle',
+  requireSpecialFeature('cost'),
   asyncHandler(async (req, res) => {
     await handleComprehensiveBundle(req, res);
   })
@@ -318,6 +323,7 @@ router.get(
 
 router.get(
   '/comprehensive-analysis-bundle',
+  requireSpecialFeature('cost'),
   asyncHandler(async (req, res) => {
     await handleComprehensiveBundle(req, res);
   })

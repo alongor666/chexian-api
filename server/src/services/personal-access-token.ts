@@ -21,6 +21,7 @@ import { getUserByUsername, type AccessUser } from './access-control.js';
 import { authConfig } from '../config/auth.js';
 import { dbEnv } from '../config/env.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { isIpAllowed } from '../utils/ip.js';
 import { AppError } from '../middleware/error.js';
 import {
   saveApiTokens,
@@ -500,6 +501,12 @@ export async function verifyPat(rawToken: string, clientIp?: string): Promise<Ve
   }
   if (!user.active) {
     throw new AppError(403, 'Account disabled');
+  }
+
+  // IP 白名单每次调用都比对（含 verifyCache 命中路径——缓存只免 bcrypt，不免此闸），
+  // 否则 PAT 泄漏后可从任意 IP 使用，账号级 allowedIps 对 PAT 形同虚设
+  if (!isIpAllowed(clientIp, user.allowedIps)) {
+    throw new AppError(403, 'Client IP not in the allowlist for this account');
   }
 
   if (clientIp) {

@@ -200,6 +200,19 @@ export const dbEnv = {
   SQL_FEDERATION_ENABLED: process.env.SQL_FEDERATION_ENABLED ?? 'false',
 } as const;
 
+// ─── 功能开关配置 ──────────────────────────────────────────────────────────────
+
+export const featureEnv = {
+  /**
+   * 综合分析视图开放度，镜像前端构建期变量 VITE_ENABLE_COMPREHENSIVE_ANALYSIS
+   * （.env.production='true'），两处必须同步，否则前端放行、后端 403（或反之）。
+   * 三态：'true' 全员开放（cost 闸旁路）；'false' 全员关闭；未设置 → 按 specialFeatures 强制。
+   * 生产 PM2 侧在 server/ecosystem.config.cjs env 块设置。
+   */
+  ENABLE_COMPREHENSIVE_ANALYSIS:
+    process.env.ENABLE_COMPREHENSIVE_ANALYSIS ?? process.env.VITE_ENABLE_COMPREHENSIVE_ANALYSIS,
+} as const;
+
 // ─── AI 提供商配置 ─────────────────────────────────────────────────────────────
 
 export const aiEnv = {

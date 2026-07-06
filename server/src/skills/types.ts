@@ -19,6 +19,11 @@ export interface SkillContext {
   username: string;
   role: string;
   organization?: string;
+  /**
+   * 用户功能开关（可选）。未提供时 runner 在校验 requiredPermissions 前按 username
+   * 从 access-control 存储解析（middleware/special-feature.ts resolveSpecialFeatures）。
+   */
+  specialFeatures?: string[];
   /** 行级过滤 SQL WHERE 子句，由 permissionMiddleware 生成 */
   permissionFilter: string;
   /** 请求追踪 ID（与 X-Request-Id 一致） */
@@ -75,7 +80,10 @@ export interface Skill<I extends z.ZodTypeAny = z.ZodTypeAny, R = unknown> {
   description: string;
   inputSchema: I;
   outputResultSchema: z.ZodType<R>;
-  /** 必需的权限（向 ctx.role / specialFeatures 校验） */
+  /**
+   * 必需的功能开关（取值为 specialFeatures 项，如 'cost'）。runner 对照用户
+   * specialFeatures 校验（超管恒通过），与角色无关——角色边界由路由层 requireRole 承担。
+   */
   requiredPermissions?: string[];
   /** 是否纯确定性（不调用 LLM）。runner 据此强制校验 */
   deterministic: boolean;

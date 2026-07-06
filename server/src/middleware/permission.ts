@@ -335,6 +335,7 @@ export function isValidBranchCode(code: string): boolean {
  * 数据面已按 branch_code 做行级隔离，但 /api/auth/users|roles 管理面历史上只判角色
  * （requireRole(BRANCH_ADMIN)），导致单省 branch_admin（如山西 sxAdmin）可跨省列出/改密/
  * 禁用/提权四川账号——与其数据权限矛盾的管理面越权。本函数把管理面收敛到与数据面一致的省范围。
+ * users 面用本函数 + canManageBranch 按省收敛；roles 面（全局资产）用 isNationalAdmin 收敛写操作。
  *
  * 返回：
  * - `null` → 可管理**全部**（RLS 关，单租户，行为不变）
@@ -366,6 +367,28 @@ export function canManageBranch(scope: string[] | null, targetBranch: string | u
   if (scope === null) return true;
   if (!targetBranch) return false;
   return scope.includes(targetBranch);
+}
+
+/**
+ * 判断调用者是否为「系统级超管」——全局资产（如 /api/auth/roles 角色定义）写操作的门槛。
+ *
+ * 角色表是全局单表（不分省），单省 branch_admin 改 org_user 的 allowedRoutes 会跨省
+ * 影响其他省账号的权限，故角色写操作必须收敛到全国级管理员；单省 admin 保留只读。
+ *
+ * 判据（复用既有机制）：
+ * - RLS 关（单租户）→ true，行为与历史一致；
+ * - RLS 开 → 要求 visibleBranches 过滤合法省码后非空。依据 preset-users.ts 被测试锁死的
+ *   不变量「任一非空 visibleBranches 必等于全部注册省」，非空即全国超管。
+ */
+export function isNationalAdmin(user: {
+  branchCode?: string;
+  visibleBranches?: string[];
+}): boolean {
+  if (!isBranchRlsEnabled()) return true;
+  const vb = Array.isArray(user.visibleBranches)
+    ? user.visibleBranches.filter(isValidBranchCode)
+    : [];
+  return vb.length > 0;
 }
 
 /**

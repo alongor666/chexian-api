@@ -259,6 +259,48 @@ describe('verifyPat', () => {
     await expectRejectError(verifyPat(created.plaintext), 401, 'Token owner no longer exists');
   });
 
+  it('配置了 allowedIps 且 IP 不匹配 → 403（即使 secret 正确）', async () => {
+    const created = await setupValidToken();
+    setMockedUser({ ...defaultUser, allowedIps: ['10.0.0.1'] });
+    await expectRejectError(
+      verifyPat(created.plaintext, '10.0.0.2'),
+      403, 'Client IP not in the allowlist for this account',
+    );
+  });
+
+  it('配置了 allowedIps 但拿不到 clientIp → 403（fail-closed）', async () => {
+    const created = await setupValidToken();
+    setMockedUser({ ...defaultUser, allowedIps: ['10.0.0.1'] });
+    await expectRejectError(
+      verifyPat(created.plaintext),
+      403, 'Client IP not in the allowlist for this account',
+    );
+  });
+
+  it('allowedIps 为空数组 → 放行（未启用白名单的账号不受影响）', async () => {
+    const created = await setupValidToken();
+    setMockedUser({ ...defaultUser, allowedIps: [] });
+    const result = await verifyPat(created.plaintext, '8.8.8.8');
+    expect(result.user.username).toBe('alice');
+  });
+
+  it('IPv6 映射前缀归一化后命中白名单 → 放行', async () => {
+    const created = await setupValidToken();
+    setMockedUser({ ...defaultUser, allowedIps: ['192.168.1.5'] });
+    const result = await verifyPat(created.plaintext, '::ffff:192.168.1.5');
+    expect(result.tokenId).toBe(created.token.tokenId);
+  });
+
+  it('验证缓存命中路径也执行 IP 闸：合法 IP 建缓存后换非法 IP 再调 → 403', async () => {
+    const created = await setupValidToken();
+    setMockedUser({ ...defaultUser, allowedIps: ['10.0.0.1'] });
+    await verifyPat(created.plaintext, '10.0.0.1'); // 首次成功，写入 verifyCache
+    await expectRejectError(
+      verifyPat(created.plaintext, '6.6.6.6'),
+      403, 'Client IP not in the allowlist for this account',
+    );
+  });
+
   it('校验缓存命中后跳过 bcrypt（第二次调用即便 bcrypt 慢也快速返回）', async () => {
     const created = await setupValidToken();
     await verifyPat(created.plaintext);

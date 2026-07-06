@@ -21,6 +21,7 @@ import {
   UserRole,
   getManageableBranchScope,
   canManageBranch,
+  isNationalAdmin,
 } from '../permission.js';
 import { AppError } from '../error.js';
 
@@ -760,5 +761,30 @@ describe('用户管理面按省隔离：canManageBranch', () => {
   it('全国超管 scope → 放行集合内所有省', () => {
     expect(canManageBranch(['SC', 'SX'], 'SC')).toBe(true);
     expect(canManageBranch(['SC', 'SX'], 'SX')).toBe(true);
+  });
+});
+
+describe('角色管理面全局收敛：isNationalAdmin', () => {
+  it('RLS 关 → true（单租户行为不变）', () => {
+    envMock.BRANCH_RLS_ENABLED = 'false';
+    expect(isNationalAdmin({ branchCode: 'SX' })).toBe(true);
+    expect(isNationalAdmin({})).toBe(true);
+  });
+
+  it('RLS 开 + 单省 branch_admin（无 visibleBranches）→ false（山西 admin 不能改全局角色）', () => {
+    envMock.BRANCH_RLS_ENABLED = 'true';
+    expect(isNationalAdmin({ branchCode: 'SX' })).toBe(false);
+    expect(isNationalAdmin({ branchCode: 'SC' })).toBe(false);
+  });
+
+  it('RLS 开 + 全国超管（visibleBranches 非空）→ true', () => {
+    envMock.BRANCH_RLS_ENABLED = 'true';
+    expect(isNationalAdmin({ branchCode: 'SC', visibleBranches: ['SC', 'SX'] })).toBe(true);
+  });
+
+  it('RLS 开 + visibleBranches 仅含非法形态省码 → false（fail-closed）', () => {
+    envMock.BRANCH_RLS_ENABLED = 'true';
+    expect(isNationalAdmin({ visibleBranches: ['sc', 'S1'] })).toBe(false);
+    expect(isNationalAdmin({ visibleBranches: [] })).toBe(false);
   });
 });
