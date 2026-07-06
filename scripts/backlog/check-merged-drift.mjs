@@ -20,6 +20,13 @@
  *   —— B### 短且在「登记/顺带提及」类提交里泛滥，匹配它会大量误报（实测 27 例）。
  *   代价：纯曾用号的历史任务漏检；收益：零误报，护栏可信。
  *
+ * 误报压制（2026-07-06）：启发式仍会命中「记账/引用」类提交（squash 信息提及 uid、
+ *   PR 正文声明"分离为后续项"——当轮 6 条命中逐条权威核实全部属此类）。人工核实为
+ *   误报后，向该事项追加含「系误报」标记并点名提交短 SHA / PR 号的 note：
+ *     bun scripts/backlog.mjs note <uid> "check-merged-drift 命中 <短SHA或PR#N> 系误报：<核实结论>"
+ *   后续轮次即按 (uid, 提交) 逐对跳过；同 uid 新出现的不同实现提交仍照常上报。
+ *   判定纯函数在 drift-dismissal.mjs（单测 tests/backlog-drift-dismissal.test.ts）。
+ *
  * 用法：
  *   bun scripts/backlog/check-merged-drift.mjs           # advisory，列漂移候选，退出 0
  *   bun scripts/backlog/check-merged-drift.mjs --strict   # 有漂移则退出 1（可选 CI 闸）
@@ -30,6 +37,7 @@
  */
 import { execSync } from 'node:child_process';
 import { loadLog, fold, displayId } from './lib.mjs';
+import { partitionByDismissal } from './drift-dismissal.mjs';
 
 /** 任务的可搜索标识：现代 uid 短后缀（YYYY-MM-DD-actor-XXXXXX → XXXXXX），≥5 字符才够独特 */
 function tokensFor(t) {
@@ -99,9 +107,10 @@ function implementationCommits(token, paths) {
       files = [];
     }
     // 改动了任一非账本文件 + 命中 declared code 路径 → 算实现提交（非登记/顺带提及）
+    // 保留全 SHA：误报压制按 note 里的短 SHA 做前缀匹配，展示时再截短
     const nonLedger = files.filter(f => !LEDGER_FILES.has(f));
     if (nonLedger.length > 0 && touchesDeclaredCode(nonLedger, paths)) {
-      out.push({ hash: hash.slice(0, 8), subject });
+      out.push({ hash, subject });
     }
   }
   return out;
@@ -119,6 +128,7 @@ function main() {
   const tasks = fold(events);
 
   const drifts = [];
+  const dismissedLog = []; // 被误报 note 压制的 (uid, 提交) 对，供输出可见（压制不静默）
   for (const t of tasks.values()) {
     if (t.status !== 'PROPOSED') continue; // 仅查「未开始」态——最干净的矛盾信号
     const tokens = tokensFor(t);
@@ -131,14 +141,25 @@ function main() {
         if (!seen.has(c.hash)) { seen.add(c.hash); commits.push(c); }
       }
     }
-    if (commits.length > 0) {
-      drifts.push({ id: displayId(t), uid: t.uid, priority: t.priority, desc: t.desc.slice(0, 60), commits });
+    if (commits.length === 0) continue;
+    // 误报压制：按该事项「系误报」note 点名的 SHA/PR 号逐对豁免；未点名的新提交仍上报
+    const { kept, dismissed } = partitionByDismissal(commits, t.notes);
+    if (dismissed.length > 0) {
+      dismissedLog.push({ id: displayId(t), uid: t.uid, hashes: dismissed.map(c => c.hash.slice(0, 8)) });
+    }
+    if (kept.length > 0) {
+      drifts.push({ id: displayId(t), uid: t.uid, priority: t.priority, desc: t.desc.slice(0, 60), commits: kept });
     }
   }
 
   if (JSON_OUT) {
-    console.log(JSON.stringify({ skipped: false, driftCount: drifts.length, drifts }, null, 2));
+    console.log(JSON.stringify({ skipped: false, driftCount: drifts.length, drifts, dismissed: dismissedLog }, null, 2));
     return drifts.length > 0 && STRICT ? 1 : 0;
+  }
+
+  if (dismissedLog.length > 0) {
+    const pairs = dismissedLog.map(d => `${d.id} × ${d.hashes.join('/')}`).join('；');
+    console.log(`🔇 已按误报 note 压制 ${dismissedLog.reduce((n, d) => n + d.hashes.length, 0)} 条候选（${pairs}）\n`);
   }
 
   if (drifts.length === 0) {
@@ -150,11 +171,12 @@ function main() {
   for (const d of drifts) {
     console.log(`  [${d.priority}] ${d.id} — ${d.desc}`);
     for (const c of d.commits.slice(0, 4)) {
-      console.log(`        ${c.hash}  ${c.subject}`);
+      console.log(`        ${c.hash.slice(0, 8)}  ${c.subject}`);
     }
     console.log(`     → 核实该提交是否已并入 main：`);
     console.log(`        已合并 → bun scripts/backlog.mjs status ${d.uid} DONE --evidence "PR/commit ..."`);
-    console.log(`        开放 PR 未合并 → 勿重复实现；note 登记 PR 号，合并后再置 DONE\n`);
+    console.log(`        开放 PR 未合并 → 勿重复实现；note 登记 PR 号，合并后再置 DONE`);
+    console.log(`        核实为记账/引用类误报 → bun scripts/backlog.mjs note ${d.uid} "check-merged-drift 命中 <短SHA或PR#N> 系误报：<结论>"（后续轮按 (uid,提交) 逐对压制）\n`);
   }
   console.log('提示：IN_PROGRESS 的多提交任务不在此列（合法）；本检测只盯「PROPOSED + 有实现提交」的自相矛盾。');
   return STRICT ? 1 : 0;
