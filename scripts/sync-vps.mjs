@@ -28,7 +28,6 @@
  *   数据管理/warehouse/fact/cross_sell/           →  data/fact/cross_sell/
  *   数据管理/warehouse/fact/customer_flow/        →  data/fact/customer_flow/
  *   数据管理/warehouse/fact/renewal_tracker/      →  data/fact/renewal_tracker/
- *   数据管理/patrol_reports/                      →  data/patrol_reports/
  *   server/data/reports/                          →  data/reports/  （追加同步，不删除远端历史报告；后端鉴权访问）
  *   public/reports/                               →  frontend/dist/reports/  （追加同步；Nginx 静态托管，浏览器 /reports/* 可直达）
  *
@@ -91,7 +90,6 @@ const LOCAL_NEW_ENERGY_CLAIMS_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/
 const LOCAL_RENEWAL_TRACKER_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_tracker');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_region');
-const LOCAL_PATROL_REPORTS_DIR = join(ROOT_DIR, '数据管理/patrol_reports');
 const LOCAL_HTML_REPORTS_DIR = join(ROOT_DIR, 'server/data/reports');
 const LOCAL_PUBLIC_REPORTS_DIR = join(ROOT_DIR, 'public/reports');
 // GATED 多省：非 SC 省派生域隔离副本根（warehouse/validation/<省>/<域>），sync 推到 VPS data/validation/<省>/<域>（PR-2）
@@ -810,7 +808,6 @@ function buildStandardSyncTasks(remote, frontendDist, opts = {}) {
     { label: 'fact/renewal_tracker', local: LOCAL_RENEWAL_TRACKER_DIR,    remote: `${remote}/fact/renewal_tracker`,  critical: false },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',     local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
-    { label: 'patrol_reports',       local: LOCAL_PATROL_REPORTS_DIR,     remote: `${remote}/patrol_reports`,        critical: false },
     { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${remote}/reports`,               critical: false, deleteRemote: false },
     { label: 'public_reports',       local: LOCAL_PUBLIC_REPORTS_DIR,     remote: `${frontendDist}/reports`,         critical: false, deleteRemote: false },
     // 多省维度元数据（salesman/plan/repair）→ VPS data/validation/<省>/dim/<域>

@@ -109,8 +109,6 @@ export const QUERY_ROUTES = {
     CITY: 'policy-geo/city',
   },
 
-  // 巡检报告
-  PATROL: 'patrol',
 
   // 续保追踪
   RENEWAL_TRACKER: 'renewal-tracker',

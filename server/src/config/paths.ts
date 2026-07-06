@@ -257,22 +257,6 @@ export function getRenewalTrackerPaths(): string[] {
   ];
 }
 
-// ── 巡检报告 JSON 路径 ──
-
-export function getPatrolReportPaths(domain: string): string[] {
-  return [
-    path.resolve(SERVER_ROOT, `../数据管理/patrol_reports/${domain}/latest.json`),
-    path.resolve(getDataDir(), `patrol_reports/${domain}/latest.json`),
-  ];
-}
-
-export function getPatrolNarrativePaths(domain: string): string[] {
-  return [
-    path.resolve(SERVER_ROOT, `../数据管理/patrol_reports/${domain}/report.md`),
-    path.resolve(getDataDir(), `patrol_reports/${domain}/report.md`),
-  ];
-}
-
 // ── HTML 报告托管目录 ──────────────────────────────────────────────────────
 
 /** HTML 报告托管目录：server/data/reports/，由 /api/reports/:filename 路由 serve */

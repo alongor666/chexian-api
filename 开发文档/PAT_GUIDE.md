@@ -79,7 +79,6 @@ cx whoami                          # 验证身份/数据范围/tokenId
 cx routes --search 赔案            # 按 tag 分组列路由 + 关键词搜索
 cx query KPI --year=2026 --org_level_3=分公司A
 cx query /repair/overview          # path 直通（不依赖 catalog）
-cx query PATROL --domain=renewal   # 带 path 参数路由（:domain 自动填充）
 cx query TREND --granularity=week --format=csv > trend.csv
 echo "SELECT org_level_3, SUM(premium) FROM PolicyFact GROUP BY 1" | cx sql -
 cx filters --dimension org_level_3 # 维度可选值

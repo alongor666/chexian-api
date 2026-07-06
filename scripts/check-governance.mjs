@@ -2442,14 +2442,13 @@ function extractConstPathSet(source, constName) {
   return new Set([...source.slice(braceStart, braceEnd).matchAll(/'(\/[^']*)'/g)].map((m) => m[1]));
 }
 
-/** 参数化路由归一：'/patrol/:domain' → '/patrol' */
+/** 参数化路由归一：'/foo/:id' → '/foo' */
 const paramBase = (p) => (p.includes('/:') ? p.slice(0, p.indexOf('/:')) : p);
 
 /** query/ 路由目录中的非业务端点文件（公共模块/纯分发器/纯文件 IO）——RLS 覆盖与立方体影子覆盖两闸共用 */
 const QUERY_ROUTE_EXEMPT = new Set([
   'shared.ts', // 公共模块，非路由
   'bundles.ts', // 仅 router.use 子路由分发，无业务端点
-  'patrol.ts', // 只读巡检 JSON 文件，无 SQL 查询
 ]);
 
 function checkQueryCatalogConsistency() {

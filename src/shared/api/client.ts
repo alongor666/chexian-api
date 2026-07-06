@@ -46,7 +46,6 @@ import { WorkflowsApi } from './workflows-api';
 import { AuthApi } from './auth-api';
 import { PremiumApi } from './premium-api';
 import { GeoApi } from './geo-api';
-import { PatrolApi } from './patrol-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
 export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
@@ -88,8 +87,6 @@ class ApiClient extends ApiClientCore {
   readonly premium = new PremiumApi(this.transport);
   /** 承保地理分布：apiClient.geo.{province,city} */
   readonly geo = new GeoApi(this.transport);
-  /** 巡检报告：apiClient.patrol.{report,narrative} */
-  readonly patrol = new PatrolApi(this.transport);
 
   // ============================================
   // 认证 API
@@ -240,7 +237,7 @@ class ApiClient extends ApiClientCore {
   // AI API（detectRequirement/capabilities/quickSuggestions）已迁出至 ai 子客户端（见类首字段 + ai-api.ts）
   // analyzeTrend 已于 BACKLOG 2026-06-09-claude-44f2ca 确认为死代码并移除（零调用点，见 ai-api.ts 文件头注释）
 
-  // 巡检报告 API（report/narrative）已迁出至 patrol 子客户端（见类首字段 + patrol-api.ts）
+  // 巡检报告 API（report/narrative）已随 patrol 功能链整链退役删除（BACKLOG 2026-07-05-claude-da5ac0，零调用点，POST_SPLIT_REMOVALS 已登记）
 
   // 维修资源 API（v1 + v2）已迁出至 repair 子客户端（见类首字段 + repair-api.ts）
 

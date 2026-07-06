@@ -129,8 +129,6 @@ export const QUERY_ROUTES = {
     HEATMAP: '/claims-detail/heatmap',
   },
 
-  // 巡检报告
-  PATROL: '/patrol',
 
   // 续保追踪
   RENEWAL_TRACKER: '/renewal-tracker',

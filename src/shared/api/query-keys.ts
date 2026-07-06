@@ -63,9 +63,6 @@ export const queryKeys = {
   comprehensiveBundle: (params: Record<string, unknown>) =>
     ['comprehensive-bundle', params] as const,
 
-  // ── 巡检报告 ──
-  patrolReport: (domain: string) =>
-    ['patrol-report', domain] as const,
 
   // ── 筛选器 ──
   filterOptions: () => ['filter-options'] as const,

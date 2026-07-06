@@ -444,30 +444,7 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
     tags: ['bundle'],
   },
 
-  // ── 巡检 + 续保追踪 ────────────────────────────
-  {
-    // 2026-06-09 修正：原 path '/patrol' 在服务端不存在（实挂载为 /patrol/:domain），CLI/MCP 调用必 404
-    key: 'PATROL', path: '/patrol/:domain', method: 'GET',
-    summary: '业务巡检报告',
-    description: '返回指定域的最新巡检报告（path 参数 domain，当前支持 renewal）。',
-    parameters: [
-      { name: 'domain', type: 'string', required: true, description: '巡检域（path 参数）', enum: ['renewal'] },
-    ],
-    timeWindow: 'snapshot',
-    dataScope: 'any',
-    tags: ['patrol'],
-  },
-  {
-    key: 'PATROL_NARRATIVE', path: '/patrol/:domain/narrative', method: 'GET',
-    summary: '业务巡检叙事报告',
-    description: '返回指定域巡检报告的叙事文本版（path 参数 domain，当前支持 renewal）。',
-    parameters: [
-      { name: 'domain', type: 'string', required: true, description: '巡检域（path 参数）', enum: ['renewal'] },
-    ],
-    timeWindow: 'snapshot',
-    dataScope: 'any',
-    tags: ['patrol'],
-  },
+  // ── 续保追踪 ────────────────────────────
   {
     key: 'RENEWAL_TRACKER', path: '/renewal-tracker', method: 'GET',
     summary: '续保追踪',
