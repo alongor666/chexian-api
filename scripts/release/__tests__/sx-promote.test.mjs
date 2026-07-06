@@ -1,14 +1,15 @@
 /**
  * sx-promote.mjs 单元 + 集成测试
  *
- * 测试范围（单元层）：
- *   1. 源文件名 → SX_ 前缀目标文件名映射（`SX_每日数据_*` 格式）
- *   2. 子目录护栏：目标路径末段为 ^[A-Z]{2}$ 形式时应抛错
- *   3. --force 护栏：只允许覆盖 SX_ 前缀文件，拒绝 SC 裸名等非 SX_ 前缀
- *   4. 源文件已有 SX_ 前缀（防重复 promote）时应抛错
+ * 测试范围（单元层 · B5 分省子目录布局）：
+ *   1. 源文件名 → 目标文件名映射：current/SX/ 下**裸名**（不加 SX_ 前缀，省份由子目录承载）
+ *   2. 目标护栏（assertSxSubdirTarget，语义反转）：目标末段**必须是** SX 子目录，否则抛错
+ *   3. --force 护栏（assertForceOnlyInSxSubdir）：只允许覆盖 SX/ 子目录内文件
+ *   4. 源文件已有 SX_ 前缀（疑似旧扁平前缀产物混回源目录）时应抛错
  *   5. sha256File：同内容返回相同 hash，不同内容不同 hash
  *   6. assertSourceDirSafety：--apply 非默认源须 --unsafe-source-dir
  *   7. validateBranchCodeSX（mock）：branch_code 缺失/非 SX/premium 缺失/全 SX 正常
+ *   8. assertParentLayoutReady（B5-11 布局中间态守卫）：父目录顶层残留扁平 parquet → 拒绝
  *
  * 测试范围（集成层 — 真实 tmpdir + duckdb CLI）：
  *   ① 源非 SX（branch_code≠SX）→ 拒绝（Phase A fail-fast）
@@ -25,11 +26,12 @@
  *   - sha256File 流式：防回归（流式 vs 一次性结果一致）
  *
  * 测试范围（端到端层 — spawn 真实进程 + duckdb CLI）：
- *   E2E-1: 正常 apply → exit 0 + final 存在 + ready-marker + staging 清理
+ *   E2E-1: 正常 apply → exit 0 + current/SX/ 裸名 final 存在 + ready-marker + staging 清理
  *   E2E-2: 源非 SX → exit 1 + 无 final + 无 staging 残留
  *   E2E-3: leftover preflight 拦截 .staging 残留 → exit 1
  *   E2E-4: leftover + --resume → 幂等重跑完成
  *   E2E-5: 幂等重跑 — sha256 一致自动 skip → exit 0
+ *   E2E-6: 布局中间态守卫 — 父目录顶层有扁平 parquet → --apply exit 1（cutover T-1 未完成拒绝晋升）
  *
  * 集成测试依赖 duckdb CLI（`brew install duckdb`）。
  * CI 环境如无 duckdb CLI 则跳过集成测试（参 CLAUDE.md 集成测试分层）。
@@ -51,8 +53,9 @@ import { fileURLToPath } from 'node:url';
 // ─────────────────────────── 被测纯函数导入 ───────────────────────────
 
 import {
-  assertNoSubdirIntent,
-  assertForceOnlyOnSxFiles,
+  assertSxSubdirTarget,
+  assertParentLayoutReady,
+  assertForceOnlyInSxSubdir,
   assertSourceDirSafety,
   discoverSourceFiles,
   sha256File,
@@ -69,14 +72,14 @@ const BRANCH_PREFIX = 'SX';
 const BRANCH_PAT = `${BRANCH_PREFIX}_`;
 
 /**
- * 计算源文件名 → 目标文件名（SX_ 前缀扁平格式）
+ * 计算源文件名 → 目标文件名（B5 分省子目录布局：current/SX/ 下裸名，省份由子目录承载）
  * 保持与脚本内 discoverSourceFiles 中同一逻辑严格一致
  */
 function srcToDstName(srcName) {
   if (srcName.startsWith(BRANCH_PAT)) {
     throw new Error(`源文件 "${srcName}" 已带 ${BRANCH_PAT} 前缀，疑似重复 promote`);
   }
-  return `${BRANCH_PAT}${srcName}`;
+  return srcName;
 }
 
 // ─────────────────────────── duckdb CLI 可用性检测 ───────────────────────────
@@ -148,87 +151,115 @@ afterAll(() => {
 
 // ─────────────────────────── 单元测试：文件名映射 ───────────────────────────
 
-describe('sx-promote: 源→目标文件名映射', () => {
-  it('普通 SX ETL 产物文件名应加 SX_ 前缀', () => {
+describe('sx-promote: 源→目标文件名映射（B5 裸名，不加前缀）', () => {
+  it('普通 SX ETL 产物文件名应保持裸名（省份由 current/SX/ 子目录承载）', () => {
     expect(srcToDstName('每日数据_20240101_20261231.parquet'))
-      .toBe('SX_每日数据_20240101_20261231.parquet');
+      .toBe('每日数据_20240101_20261231.parquet');
   });
 
-  it('静态分片文件名应正确加前缀', () => {
+  it('静态分片文件名应保持裸名', () => {
     expect(srcToDstName('每日数据_20210101_20231231.parquet'))
-      .toBe('SX_每日数据_20210101_20231231.parquet');
+      .toBe('每日数据_20210101_20231231.parquet');
   });
 
-  it('新格式文件名（带范围前缀）应正确加前缀', () => {
+  it('新格式文件名（带范围前缀）应保持裸名', () => {
     expect(srcToDstName('20240601-20260623_01_签单清单_定稿.parquet'))
-      .toBe('SX_20240601-20260623_01_签单清单_定稿.parquet');
+      .toBe('20240601-20260623_01_签单清单_定稿.parquet');
   });
 
-  it('源文件已有 SX_ 前缀时应抛错（防重复 promote）', () => {
+  it('源文件已有 SX_ 前缀时应抛错（疑似旧扁平前缀产物混回源目录）', () => {
     expect(() => srcToDstName('SX_每日数据_20240101_20261231.parquet'))
       .toThrow(/已带 SX_ 前缀/);
   });
-
-  it('SX_ 前缀后的文件名映射是纯字符串拼接，不截断任何字符', () => {
-    const src = '特殊_文件名_2024.parquet';
-    const dst = srcToDstName(src);
-    expect(dst).toBe(`SX_${src}`);
-    expect(dst.startsWith(BRANCH_PAT)).toBe(true);
-    expect(dst.endsWith('.parquet')).toBe(true);
-  });
 });
 
-// ─────────────────────────── 单元测试：子目录互斥护栏 ───────────────────────────
+// ─────────────────────────── 单元测试：目标护栏（B5 语义反转：必须是 SX 子目录） ───────────────────────────
 
-describe('sx-promote: 子目录互斥护栏', () => {
-  it('目标目录末段为 SC 省码格式时应抛错', () => {
-    expect(() => assertNoSubdirIntent('/data/warehouse/fact/policy/current/SC'))
-      .toThrow(/SC.*省码目录格式.*触发.*GATED/);
-  });
-
-  it('目标目录末段为 SX 省码格式时应抛错（防止建子目录）', () => {
-    expect(() => assertNoSubdirIntent('/data/warehouse/fact/policy/current/SX'))
-      .toThrow(/SX.*省码目录格式.*触发.*GATED/);
-  });
-
-  it('其他两字母大写目录也应抛错（通用防御）', () => {
-    expect(() => assertNoSubdirIntent('/path/GD'))
-      .toThrow(/GD.*省码目录格式/);
-  });
-
-  it('正常的 current/ 目录路径应通过', () => {
-    expect(() => assertNoSubdirIntent('/data/warehouse/fact/policy/current'))
+describe('sx-promote: assertSxSubdirTarget（目标必须是 current/SX 子目录）', () => {
+  it('目标为 current/SX（生产默认）应通过', () => {
+    expect(() => assertSxSubdirTarget('/data/warehouse/fact/policy/current/SX'))
       .not.toThrow();
   });
 
-  it('末段包含数字或小写的目录名应通过（非省码格式）', () => {
-    expect(() => assertNoSubdirIntent('/tmp/test-current')).not.toThrow();
-    expect(() => assertNoSubdirIntent('/tmp/current1')).not.toThrow();
-    expect(() => assertNoSubdirIntent('/tmp/Sc')).not.toThrow();  // 小写不匹配
+  it('测试 tmpdir 末段为 SX 也应通过（--target-dir /tmp/xxx/SX）', () => {
+    expect(() => assertSxSubdirTarget('/tmp/test-current/SX')).not.toThrow();
+  });
+
+  it('目标为 current/ 根（旧扁平语义）应抛错——防止重新制造顶层扁平文件', () => {
+    expect(() => assertSxSubdirTarget('/data/warehouse/fact/policy/current'))
+      .toThrow(/不是 SX 省份子目录/);
+  });
+
+  it('目标为 current/SC（他省子目录）应抛错——本脚本只晋升 SX', () => {
+    expect(() => assertSxSubdirTarget('/data/warehouse/fact/policy/current/SC'))
+      .toThrow(/不是 SX 省份子目录/);
+  });
+
+  it('末段小写 sx / 其他名称应抛错（严格等于省码 SX）', () => {
+    expect(() => assertSxSubdirTarget('/tmp/sx')).toThrow(/不是 SX 省份子目录/);
+    expect(() => assertSxSubdirTarget('/tmp/test-current')).toThrow(/不是 SX 省份子目录/);
   });
 });
 
-// ─────────────────────────── 单元测试：--force 护栏 ───────────────────────────
+// ─────────────────────────── 单元测试：布局中间态守卫（B5-11） ───────────────────────────
 
-describe('sx-promote: --force 护栏', () => {
-  it('SX_ 前缀文件可以被 --force 覆盖', () => {
-    expect(() => assertForceOnlyOnSxFiles('SX_每日数据_20240101_20261231.parquet'))
+describe('sx-promote: assertParentLayoutReady（父目录顶层不得残留扁平 parquet）', () => {
+  it('父目录不存在（全新环境）→ 放行', () => {
+    expect(() => assertParentLayoutReady('/tmp/nonexistent-layout-abc123/SX')).not.toThrow();
+  });
+
+  it('父目录为空 → 放行', () => {
+    const parent = join(tmpRoot, 'layout_empty_current');
+    mkdirSync(parent, { recursive: true });
+    expect(() => assertParentLayoutReady(join(parent, 'SX'))).not.toThrow();
+  });
+
+  it('父目录仅有省份子目录（已完成 cutover T-1 迁移）→ 放行', () => {
+    const parent = join(tmpRoot, 'layout_subdir_current');
+    mkdirSync(join(parent, 'SC'), { recursive: true });
+    writeFileSync(join(parent, 'SC', 'sc_data.parquet'), 'sc');
+    mkdirSync(join(parent, 'SX'), { recursive: true });
+    expect(() => assertParentLayoutReady(join(parent, 'SX'))).not.toThrow();
+  });
+
+  it('父目录顶层残留扁平 parquet（cutover T-1 未完成）→ 抛错拒绝', () => {
+    const parent = join(tmpRoot, 'layout_flat_current');
+    mkdirSync(parent, { recursive: true });
+    writeFileSync(join(parent, '每日数据_20260101.parquet'), 'flat');
+    expect(() => assertParentLayoutReady(join(parent, 'SX')))
+      .toThrow(/布局中间态守卫.*扁平 parquet/s);
+  });
+
+  it('父目录顶层非 parquet 杂项（json/txt）不触发守卫', () => {
+    const parent = join(tmpRoot, 'layout_misc_current');
+    mkdirSync(parent, { recursive: true });
+    writeFileSync(join(parent, 'schema-analysis.json'), '{}');
+    writeFileSync(join(parent, '.sx-promote-ready'), '{}');
+    expect(() => assertParentLayoutReady(join(parent, 'SX'))).not.toThrow();
+  });
+});
+
+// ─────────────────────────── 单元测试：--force 护栏（B5 子目录版） ───────────────────────────
+
+describe('sx-promote: --force 护栏（仅允许覆盖 SX/ 子目录内文件）', () => {
+  it('SX 子目录内裸名文件可以被 --force 覆盖', () => {
+    expect(() => assertForceOnlyInSxSubdir('/w/fact/policy/current/SX/每日数据_20240101.parquet'))
       .not.toThrow();
   });
 
-  it('SC 裸名文件（无前缀）被 --force 时应抛错', () => {
-    expect(() => assertForceOnlyOnSxFiles('每日数据_20240101_20261231.parquet'))
-      .toThrow(/仅允许覆盖 SX_.*前缀文件.*拒绝覆盖/);
+  it('current/ 顶层文件（SC 裸名扁平）被 --force 时应抛错', () => {
+    expect(() => assertForceOnlyInSxSubdir('/w/fact/policy/current/每日数据_20240101.parquet'))
+      .toThrow(/仅允许覆盖 current\/SX\/ 子目录内的文件.*拒绝覆盖/);
   });
 
-  it('GD_ 等其他省前缀文件被 --force 时也应抛错（不只保护 SC）', () => {
-    expect(() => assertForceOnlyOnSxFiles('GD_每日数据_20240101_20261231.parquet'))
-      .toThrow(/仅允许覆盖 SX_.*前缀文件.*拒绝覆盖/);
+  it('current/SC/ 内文件被 --force 时应抛错（不只保护顶层）', () => {
+    expect(() => assertForceOnlyInSxSubdir('/w/fact/policy/current/SC/每日数据_20240101.parquet'))
+      .toThrow(/仅允许覆盖 current\/SX\/ 子目录内的文件/);
   });
 
-  it('无任何前缀的纯数字命名文件被 --force 时应抛错', () => {
-    expect(() => assertForceOnlyOnSxFiles('20240101_data.parquet'))
-      .toThrow(/仅允许覆盖 SX_.*前缀文件/);
+  it('小写 sx 目录内文件被 --force 时应抛错（严格等于省码 SX）', () => {
+    expect(() => assertForceOnlyInSxSubdir('/w/current/sx/data.parquet'))
+      .toThrow(/仅允许覆盖 current\/SX\/ 子目录内的文件/);
   });
 });
 
@@ -387,8 +418,10 @@ describe('sx-promote: discoverSourceFiles', () => {
 
     const files = discoverSourceFiles({ sourceDir: src, targetDir: dst });
     expect(files).toHaveLength(2);
-    expect(files[0].dstName).toBe('SX_每日数据_20210101_20231231.parquet');
-    expect(files[1].dstName).toBe('SX_每日数据_20240101_20261231.parquet');
+    // B5 裸名映射：dstName == 源名（省份由 current/SX/ 子目录承载）
+    expect(files[0].dstName).toBe('每日数据_20210101_20231231.parquet');
+    expect(files[1].dstName).toBe('每日数据_20240101_20261231.parquet');
+    expect(files[0].dstPath).toBe(join(dst, '每日数据_20210101_20231231.parquet'));
     // stagingPath 不以 .parquet 结尾（bootstrapper/sync-vps 双保险）
     for (const f of files) {
       expect(f.stagingPath.endsWith('.staging')).toBe(true);
@@ -426,42 +459,28 @@ describe('sx-promote: discoverSourceFiles', () => {
   });
 });
 
-// ─────────────────────────── 单元测试：SX_ glob 与 sync-vps 对齐 ───────────────────────────
+// ─────────────────────────── 单元测试：子目录布局与装载层/sync-vps 对齐 ───────────────────────────
 
-describe('sx-promote: SX_ glob 与 sync-vps 对齐验证', () => {
-  it('SX_ 前缀文件应匹配 sync-vps 的 SX_*.parquet glob（字符串断言）', () => {
-    const sxFiles = [
-      'SX_每日数据_20240101_20261231.parquet',
-      'SX_每日数据_20210101_20231231.parquet',
-      'SX_20240601-20260623_01_签单清单.parquet',
-    ];
-    const scFiles = [
-      '每日数据_20240101_20261231.parquet',  // SC 裸名
-      'schema-analysis.json',
-    ];
-    const matchGlob = (f) => f.startsWith('SX_') && f.endsWith('.parquet');
-    for (const f of sxFiles) expect(matchGlob(f)).toBe(true);
-    for (const f of scFiles) expect(matchGlob(f)).toBe(false);
+describe('sx-promote: 子目录布局与装载层/sync-vps 对齐验证（B5）', () => {
+  it('目标路径落在 current/SX/ 子目录内（与 discoverInDir Pass2 ^[A-Z]{2}$ 枚举对齐）', () => {
+    const src = join(tmpRoot, 'align_src');
+    const dst = join(tmpRoot, 'align_current', 'SX');
+    mkdirSync(src, { recursive: true });
+    writeFileSync(join(src, '每日数据_20240101.parquet'), 'x');
+    const [f] = discoverSourceFiles({ sourceDir: src, targetDir: dst });
+    // 所在目录末段是省码 SX（装载层按目录名得 branch='SX'；文件名本身不再承载省份）
+    expect(f.dstPath).toBe(join(dst, '每日数据_20240101.parquet'));
+    expect(/^[A-Z]{2}$/.test('SX')).toBe(true);
+    expect(f.dstName.startsWith('SX_')).toBe(false); // 裸名：不再有扁平前缀
   });
 
   it('.staging 文件不被 *.parquet glob 匹配（bootstrapper/sync-vps 双保险）', () => {
     const stagingFiles = [
-      'SX_每日数据_20240101.parquet.staging',
+      '每日数据_20240101.parquet.staging',
       'data.parquet.staging',
     ];
     for (const f of stagingFiles) {
       expect(f.endsWith('.parquet')).toBe(false);
-    }
-  });
-
-  it('SC 裸名文件不得匹配 SX_ glob（保证不被 SX rsync 推送到 VPS）', () => {
-    const sc裸名 = [
-      '每日数据_20240101_20261231.parquet',
-      '01_签单清单_20260601.parquet',
-      'schema-analysis.json',
-    ];
-    for (const f of sc裸名) {
-      expect(f.startsWith('SX_')).toBe(false);
     }
   });
 });
@@ -549,7 +568,7 @@ describe('sx-promote: 集成测试（真实 tmpdir + duckdb CLI）', () => {
     const srcHash = await sha256File(parquetPath);
     const { copyFileSync: copy } = await import('node:fs');
 
-    const dstPath = join(intDstDir, 'SX_sx_valid.parquet');
+    const dstPath = join(intDstDir, 'sx_valid.parquet');
     copy(parquetPath, dstPath);
     const dstHash = await sha256File(dstPath);
 
@@ -562,7 +581,7 @@ describe('sx-promote: 集成测试（真实 tmpdir + duckdb CLI）', () => {
    */
   itDuckdb('⑥ 目标已存在且 sha256 不一致可被检测', async () => {
     const srcPath = join(intSrcDir, 'sx_check_src.parquet');
-    const dstPath = join(intDstDir, 'SX_sx_check_src.parquet');
+    const dstPath = join(intDstDir, 'sx_check_src.parquet');
 
     writeParquetViaDuckdb(srcPath, [
       { branch_code: 'SX', premium: 1000 },
@@ -771,7 +790,7 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
   beforeAll(() => {
     if (!DUCKDB_AVAILABLE) return;
     e2eSrcDir = join(tmpRoot, 'e2e_src');
-    e2eDstDir = join(tmpRoot, 'e2e_dst');
+    e2eDstDir = join(tmpRoot, 'e2e_current', 'SX'); // B5：目标必须是 SX 省份子目录
     mkdirSync(e2eSrcDir, { recursive: true });
     mkdirSync(e2eDstDir, { recursive: true });
   });
@@ -809,7 +828,7 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
     expect(exitCode).toBe(0);
 
     // final 文件存在
-    const finalPath = join(e2eDstDir, 'SX_每日数据_20240101_20261231.parquet');
+    const finalPath = join(e2eDstDir, '每日数据_20240101_20261231.parquet');
     expect(existsSync(finalPath)).toBe(true);
 
     // .sx-promote-ready 存在
@@ -855,7 +874,7 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
     expect(exitCode).toBe(1);
 
     // 无 final 文件
-    const finalPath = join(e2eDstDir, 'SX_每日数据_20240101_20261231.parquet');
+    const finalPath = join(e2eDstDir, '每日数据_20240101_20261231.parquet');
     expect(existsSync(finalPath)).toBe(false);
 
     // 无 staging 残留
@@ -876,7 +895,7 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
     ]);
 
     // 手动写一个 .staging 残留
-    const staleStagingPath = join(e2eDstDir, 'SX_每日数据_stale.parquet.staging');
+    const staleStagingPath = join(e2eDstDir, '每日数据_stale.parquet.staging');
     writeFileSync(staleStagingPath, 'stale');
 
     const { exitCode, stdout } = await runScript([
@@ -903,7 +922,7 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
     ]);
 
     // 手动写一个 .staging 残留
-    const staleStagingPath = join(e2eDstDir, 'SX_每日数据_stale.parquet.staging');
+    const staleStagingPath = join(e2eDstDir, '每日数据_stale.parquet.staging');
     writeFileSync(staleStagingPath, 'stale');
 
     const { exitCode } = await runScript([
@@ -916,7 +935,7 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
     expect(exitCode).toBe(0);
 
     // final 文件存在
-    const finalPath = join(e2eDstDir, 'SX_每日数据_20240101_20261231.parquet');
+    const finalPath = join(e2eDstDir, '每日数据_20240101_20261231.parquet');
     expect(existsSync(finalPath)).toBe(true);
 
     // ready-marker 存在
@@ -948,4 +967,58 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
     // 第二次应有 skip 提示
     expect(r2.stdout).toMatch(/sha256.*一致.*跳过|skipped_identical|跳过/);
   }, 120_000);
+
+  /**
+   * E2E-6: 布局中间态守卫（B5-11）— 父目录（current/）顶层仍有扁平 parquet
+   * （= cutover T-1 布局迁移未完成）→ --apply exit 1，且不写任何目标文件。
+   * 场景：本 PR 合并后、cutover 实跑前，有人误跑 promote —— 必须被事前拦截，
+   * 否则写出 current/SX/ 会造成扁平+子目录并存 → 装载层互斥闸拒启。
+   */
+  itDuckdb('E2E-6: 父目录顶层残留扁平 parquet → --apply exit 1（布局中间态守卫）', async () => {
+    const flatParent = join(tmpRoot, 'e2e_flat_current');
+    const flatTarget = join(flatParent, 'SX');
+    mkdirSync(flatParent, { recursive: true });
+    // 模拟 cutover 前扁平混放现状：顶层 SC 裸名文件
+    writeFileSync(join(flatParent, '每日数据_20260101.parquet'), 'flat-sc');
+
+    const srcFile = join(e2eSrcDir, '每日数据_20240101_20261231.parquet');
+    writeParquetViaDuckdb(srcFile, [
+      { branch_code: 'SX', premium: 800 },
+    ]);
+
+    const { exitCode, stdout } = await runScript([
+      '--apply', '--rls-confirmed',
+      '--source-dir', e2eSrcDir, '--unsafe-source-dir',
+      '--target-dir', flatTarget,
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stdout).toMatch(/布局中间态守卫/);
+    // 未写任何目标文件（SX 子目录根本没被创建）
+    expect(existsSync(flatTarget)).toBe(false);
+    // 顶层扁平文件原样保留
+    expect(existsSync(join(flatParent, '每日数据_20260101.parquet'))).toBe(true);
+  }, 30_000);
+
+  /**
+   * E2E-7: 目标护栏（语义反转）— --target-dir 传 current/ 根（旧扁平语义）→ exit 1
+   */
+  itDuckdb('E2E-7: --target-dir 传 current/ 根 → exit 1（目标必须是 SX 子目录）', async () => {
+    const plainTarget = join(tmpRoot, 'e2e_plain_current');
+    mkdirSync(plainTarget, { recursive: true });
+
+    const srcFile = join(e2eSrcDir, '每日数据_20240101_20261231.parquet');
+    writeParquetViaDuckdb(srcFile, [
+      { branch_code: 'SX', premium: 900 },
+    ]);
+
+    const { exitCode, stdout } = await runScript([
+      '--apply', '--rls-confirmed',
+      '--source-dir', e2eSrcDir, '--unsafe-source-dir',
+      '--target-dir', plainTarget,
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stdout).toMatch(/不是 SX 省份子目录/);
+  }, 30_000);
 });

@@ -124,66 +124,74 @@ describe('inspectPolicyCurrentLayout', () => {
 });
 
 // ============================================================
-// B3 · sync 前 GATED 子目录闸（镜像 data-bootstrapper.ts，比 B1 严；基准省参数驱动，默认固定 SC）
+// B3/B5 · sync 前 GATED 子目录闸（镜像 data-bootstrapper.ts，比 B1 严；
+// B5 cutover 起白名单参数驱动（allowedBranches），默认最保守 ['SC']）
 // ============================================================
-describe('findPolicyCurrentSyncGateViolations — sync 前 GATED 子目录闸（fail-closed）', () => {
-  it('纯扁平（今天现状）→ 零违规（休眠放行，字节安全）', () => {
+describe('findPolicyCurrentSyncGateViolations — sync 前 GATED 子目录闸（fail-closed，白名单语义）', () => {
+  it('纯扁平（cutover 前生产现状）→ 零违规（休眠放行，字节安全）', () => {
     makeCurrent({ flat: ['a.parquet', 'b.parquet'] });
-    expect(findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' })).toEqual([]);
+    expect(findPolicyCurrentSyncGateViolations(dir, { allowedBranches: ['SC'] })).toEqual([]);
   });
 
   it('空目录 → 零违规', () => {
     makeCurrent({});
-    expect(findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' })).toEqual([]);
+    expect(findPolicyCurrentSyncGateViolations(dir, { allowedBranches: ['SC'] })).toEqual([]);
   });
 
-  it('仅基准省子目录（current/SC/，基准=SC）→ 零违规（基准省子目录允许同步）', () => {
+  it('仅白名单省子目录（current/SC/，白名单=[SC]）→ 零违规（名单内省份放行）', () => {
     makeCurrent({ subdirs: { SC: ['x.parquet'] } });
-    expect(findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' })).toEqual([]);
+    expect(findPolicyCurrentSyncGateViolations(dir, { allowedBranches: ['SC'] })).toEqual([]);
   });
 
-  it('非基准省子目录（current/SX/，基准=SC）→ GATED fail-closed 违规（无条件，不给 RLS 放行口）', () => {
+  it('名单外省子目录（current/SX/，白名单=[SC]）→ GATED fail-closed 违规（无条件，不给 RLS 放行口）', () => {
     makeCurrent({ subdirs: { SX: ['x.parquet'] } });
-    const v = findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' });
+    const v = findPolicyCurrentSyncGateViolations(dir, { allowedBranches: ['SC'] });
     expect(v).toHaveLength(1);
     expect(v[0]).toContain('GATED');
     expect(v[0]).toContain('SX');
     expect(v[0]).toContain('validation');
   });
 
-  it('基准省=SX 时，current/SC/ 变成非基准省 → 违规（基准由参数驱动，非硬编码 SC）', () => {
-    makeCurrent({ subdirs: { SC: ['x.parquet'] } });
-    const v = findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SX' });
-    expect(v).toHaveLength(1);
-    expect(v[0]).toContain('SC');
+  it('B5 cutover 白名单=[SC,SX] → current/SC/ + current/SX/ 双省子目录全部放行（零违规）', () => {
+    makeCurrent({ subdirs: { SC: ['x.parquet'], SX: ['y.parquet'] } });
+    expect(findPolicyCurrentSyncGateViolations(dir, { allowedBranches: ['SC', 'SX'] })).toEqual([]);
   });
 
-  it('扁平 + 子目录并存 → 迁移态冲突违规', () => {
+  it('白名单=[SC,SX] 时第三省（current/GD/）仍 GATED 拒绝（名单外省不随扩省自动放行）', () => {
+    makeCurrent({ subdirs: { SC: ['x.parquet'], SX: ['y.parquet'], GD: ['z.parquet'] } });
+    const v = findPolicyCurrentSyncGateViolations(dir, { allowedBranches: ['SC', 'SX'] });
+    expect(v).toHaveLength(1);
+    expect(v[0]).toContain('GATED');
+    expect(v[0]).toContain('GD');
+    expect(v[0]).not.toContain('[SX]'); // SX 在名单内，不应出现在违规省清单
+  });
+
+  it('扁平 + 子目录并存 → 迁移态冲突违规（白名单不豁免并存态）', () => {
     makeCurrent({ flat: ['flat.parquet'], subdirs: { SC: ['sub.parquet'] } });
-    const v = findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' });
+    const v = findPolicyCurrentSyncGateViolations(dir, { allowedBranches: ['SC', 'SX'] });
     expect(v.some((m) => m.includes('迁移态冲突'))).toBe(true);
   });
 
-  it('扁平 + 非基准省子目录并存 → 同时报迁移冲突 + GATED（两类违规）', () => {
+  it('扁平 + 名单外省子目录并存 → 同时报迁移冲突 + GATED（两类违规）', () => {
     makeCurrent({ flat: ['flat.parquet'], subdirs: { SX: ['sub.parquet'] } });
-    const v = findPolicyCurrentSyncGateViolations(dir, { deploymentBranch: 'SC' });
+    const v = findPolicyCurrentSyncGateViolations(dir, { allowedBranches: ['SC'] });
     expect(v).toHaveLength(2);
     expect(v.some((m) => m.includes('迁移态冲突'))).toBe(true);
     expect(v.some((m) => m.includes('GATED'))).toBe(true);
   });
 
-  it('默认基准省（不传 deploymentBranch）→ 固定 SC（禁读 ETL BRANCH_CODE，codex 闸-2 P1）', () => {
+  it('默认白名单（不传 allowedBranches）→ 最保守 [SC]（禁读 ETL BRANCH_CODE，codex 闸-2 P1）', () => {
     makeCurrent({ subdirs: { SC: ['x.parquet'] } });
-    // 默认基准省固定 'SC' → current/SC/ 零违规（与 env BRANCH_CODE 无关）
+    // 默认白名单固定 ['SC'] → current/SC/ 零违规（与 env BRANCH_CODE 无关）
     expect(findPolicyCurrentSyncGateViolations(dir)).toEqual([]);
   });
 
-  it('默认基准省不受 env BRANCH_CODE=SX 影响（解耦 ETL 声明省，防 current/SX/ 误放行）', () => {
+  it('默认白名单不受 env BRANCH_CODE=SX 影响（解耦 ETL 声明省，防 current/SX/ 误放行）', () => {
     const saved = process.env.BRANCH_CODE;
     process.env.BRANCH_CODE = 'SX'; // 模拟 SX ETL 残留 env
     try {
       makeCurrent({ subdirs: { SX: ['x.parquet'] } });
-      // 即便 env BRANCH_CODE=SX，默认基准省仍固定 SC → current/SX/ 仍 GATED fail-closed
+      // 即便 env BRANCH_CODE=SX，默认白名单仍固定 ['SC'] → current/SX/ 仍 GATED fail-closed
       const v = findPolicyCurrentSyncGateViolations(dir);
       expect(v).toHaveLength(1);
       expect(v[0]).toContain('GATED');

@@ -120,23 +120,25 @@ export function inspectPolicyCurrentLayout(currentDir) {
  * （SX 仍走 `validation/SX`）。故 B3 sync 闸**无条件** fail-closed 任何非基准省子目录，不给 RLS 开关放行口——
  * 否则 B3 越界执行 B5 cutover。
  *
- * ⚠️ `deploymentBranch` 参数驱动（默认 'SC'=当前生产唯一在线省），但**禁用 ETL 的 `BRANCH_CODE` env 注入**
- * （codex 闸-2 P1）——sync-vps 调用方须固定传 'SC'，否则 SX ETL 时 env `BRANCH_CODE=SX` 会把 `current/SX/`
- * 误判基准省放行 → 推生产，违 GATED 红线。B5 cutover 时由调用方改传显式授权的基准省（非读 BRANCH_CODE）。
+ * ⚠️ `allowedBranches` 白名单参数驱动（默认 ['SC']=最保守），但**禁用 ETL 的 `BRANCH_CODE` env 注入**
+ * （codex 闸-2 P1 原判保留）——若被 sync 闸采信，SX ETL 残留的 env `BRANCH_CODE=SX` 会把 `current/SX/`
+ * 误判放行 → 推生产，违 GATED 红线。白名单只能由调用方传**代码里显式写死的授权常量**
+ * （sync-vps `SYNC_ALLOWED_BRANCHES`；B5 cutover PR 与 owner 授权同批扩为 ['SC','SX']，SOP §2-1）。
+ * 白名单是**推送授权面**（安全闸），不是数据发现面——发现仍 readdir 枚举，不违背禁省常量红线。
  *
  * 两类违规：
  *   ① 扁平顶层 parquet 与省份子目录 parquet 并存 → 迁移态冲突（B2 落子目录后顶层须清空，cutover SOP 处理）。
- *   ② 任何 `branch !== deploymentBranch` 子目录含分片 → GATED fail-closed（非基准省严禁进 current/→ 推生产）。
+ *   ② 任何 `branch ∉ allowedBranches` 子目录含分片 → GATED fail-closed（名单外省严禁进 current/→ 推生产）。
  *
- * 今天 current/ 扁平无子目录 → subdir 为空 → 返回 [] 休眠（生产字节安全，闸不触发）。
+ * 扁平布局（无子目录）→ subdir 为空 → 返回 [] 休眠（生产字节安全，闸不触发）。
  * @param {string} currentDir
- * @param {{deploymentBranch?: string}} [opts] deploymentBranch 默认 'SC'（生产基准省，禁读 ETL BRANCH_CODE）
+ * @param {{allowedBranches?: string[]}} [opts] allowedBranches 默认 ['SC']（最保守；禁读 ETL BRANCH_CODE）
  * @returns {string[]} 违规消息（空数组=放行）
  */
-export function findPolicyCurrentSyncGateViolations(currentDir, { deploymentBranch = 'SC' } = {}) {
+export function findPolicyCurrentSyncGateViolations(currentDir, { allowedBranches = ['SC'] } = {}) {
   const shards = listPolicyCurrentShards(currentDir);
   const subdir = shards.filter(s => s.branch !== undefined);
-  if (subdir.length === 0) return []; // 扁平/空（含今天现状）→ 休眠放行
+  if (subdir.length === 0) return []; // 扁平/空 → 休眠放行
   const violations = [];
 
   const flat = shards.filter(s => s.branch === undefined);
@@ -148,12 +150,12 @@ export function findPolicyCurrentSyncGateViolations(currentDir, { deploymentBran
     );
   }
 
-  const nonBaseline = [...new Set(subdir.map(s => s.branch))].filter(b => b !== deploymentBranch).sort();
-  if (nonBaseline.length > 0) {
+  const nonAllowed = [...new Set(subdir.map(s => s.branch))].filter(b => !allowedBranches.includes(b)).sort();
+  if (nonAllowed.length > 0) {
     violations.push(
-      `GATED fail-closed：current/ 发现非基准省子目录数据 [${nonBaseline.join(',')}]（部署基准省=${deploymentBranch}）。` +
-      `非基准省严禁同步进生产（跨省串读 + 越界执行 B5 cutover）——应隔离在 validation/<省>/，` +
-      `真正上线是独立 GATED cutover 须用户授权。`,
+      `GATED fail-closed：current/ 发现同步白名单外省份子目录数据 [${nonAllowed.join(',')}]` +
+      `（同步白名单=[${allowedBranches.join(',')}]）。名单外省份严禁同步进生产（跨省串读 + 越界执行` +
+      ` cutover）——应隔离在 validation/<省>/，真正上线是独立 GATED cutover，须 owner 授权后经 PR 扩白名单。`,
     );
   }
 
