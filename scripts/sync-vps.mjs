@@ -519,6 +519,7 @@ async function rsyncDir(alias, localDir, remoteDir, label, options = {}) {
   log('yellow', `  rsync ${label}${deleteRemote ? '' : ' (no --delete)'}${branchTag}: ${src} → ${alias}:${dst}`);
 
   try {
+    await runLocal('ssh', [alias, `mkdir -p ${quoteForSingle(remoteDir)}`], { silent: true });
     await runLocal('rsync', [
       '-azv',
       ...deleteArgs,

@@ -25,12 +25,13 @@ const dedupedSalesmanDimSql = (includeBranchCode: boolean): string => {
   // UNION ALL BY NAME 注入），去重子查询透传该列供下游 SalesmanTeamMapping/SalesmanPlanFact 分省 RLS。
   // 单省（默认）includeBranchCode=false → 与历史 SQL 逐字节一致（SalesmanDim 无 branch_code，不可选）。
   const bc = includeBranchCode ? ', branch_code' : '';
+  const partitionKey = includeBranchCode ? 'branch_code, full_name' : 'full_name';
   return `
       SELECT business_no, salesman_name, full_name, team, organization${bc}
       FROM (
         SELECT business_no, salesman_name, full_name, team, organization${bc},
                ROW_NUMBER() OVER (
-                 PARTITION BY full_name
+                 PARTITION BY ${partitionKey}
                  ORDER BY tenure_months DESC NULLS LAST, business_no
                ) AS rn
         FROM SalesmanDim
@@ -87,6 +88,9 @@ export async function loadDimParquet(
   // 加列会破坏单省字节安全，故必须 gated）。
   const salesmanDimCols = await db.query<{ column_name: string }>('DESCRIBE SalesmanDim');
   const multiProvince = salesmanDimCols.some((c) => c.column_name?.toLowerCase() === 'branch_code');
+  const planBranchSelect = multiProvince ? ', branch_code' : '';
+  const planBranchGroup = multiProvince ? 'branch_code, full_name' : 'full_name';
+  const planJoin = multiProvince ? 's.full_name = p.full_name AND s.branch_code = p.branch_code' : 's.full_name = p.full_name';
 
   // 2. 创建 PlanFact 表（多年多级计划）
   await db.query(`
@@ -114,11 +118,11 @@ export async function loadDimParquet(
       -- 计划年动态取 PlanFact 内最新年（原硬编码 2026：跨年后新计划入库时
       -- 本表计划列会停在旧年/归零）。列名 car_insurance_plan_2026 为历史遗留
       -- （8+ 处下游引用），语义＝"最新计划年的年计划"。
-      SELECT full_name, SUM(plan_vehicle) AS plan_vehicle
+      SELECT full_name${planBranchSelect}, SUM(plan_vehicle) AS plan_vehicle
       FROM PlanFact
       WHERE plan_year = (SELECT MAX(plan_year) FROM PlanFact) AND level = 'salesman'
-      GROUP BY full_name
-    ) p ON s.full_name = p.full_name
+      GROUP BY ${planBranchGroup}
+    ) p ON ${planJoin}
   `);
   const tmCount = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM SalesmanTeamMapping');
   console.log(`[DuckDB] SalesmanTeamMapping (compat) built: ${tmCount[0]?.cnt ?? 0} records`);
@@ -135,15 +139,15 @@ export async function loadDimParquet(
       p.plan_vehicle,
       p.plan_total${multiProvince ? ',\n      s.branch_code' : ''}
     FROM (
-      SELECT full_name, plan_year,
+      SELECT full_name${planBranchSelect}, plan_year,
              SUM(plan_vehicle) AS plan_vehicle,
              SUM(plan_total)   AS plan_total
       FROM PlanFact
       WHERE level = 'salesman'
-      GROUP BY full_name, plan_year
+      GROUP BY ${planBranchGroup}, plan_year
     ) p
     LEFT JOIN (${dedupedSalesmanDimSql(multiProvince)}
-    ) s ON p.full_name = s.full_name
+    ) s ON ${planJoin}
   `);
   console.log('[DuckDB] SalesmanPlanFact (compat) view created — multi-year support');
 
@@ -280,6 +284,36 @@ export async function buildAchievementView(
   const branchAware =
     multiProvince && policyFactCols.some((c) => c.column_name?.toLowerCase() === 'branch_code');
   const ytdBranchCol = branchAware ? ', MAX(branch_code) AS branch_code' : '';
+  const ytdGroupBy = branchAware ? 'branch_code, salesman_name' : 'salesman_name';
+  const pfBranchCol = branchAware ? ', branch_code' : '';
+  const pfGroupBy = branchAware ? 'branch_code, salesman_name' : 'salesman_name';
+  const joinA = branchAware
+    ? 'm.full_name = a.salesman_name AND m.branch_code = a.branch_code'
+    : 'm.full_name = a.salesman_name';
+  const joinPrev = (alias: string) => branchAware
+    ? `m.full_name = ${alias}.salesman_name AND m.branch_code = ${alias}.branch_code`
+    : `m.full_name = ${alias}.salesman_name`;
+  const joinPartB = (alias: string) => branchAware
+    ? `a.salesman_name = ${alias}.salesman_name AND a.branch_code = ${alias}.branch_code`
+    : `a.salesman_name = ${alias}.salesman_name`;
+  const crossOrgSelect = branchAware ? 'full_name, branch_code' : 'full_name';
+  const crossOrgJoin = branchAware
+    ? 'JOIN cross_org_names c ON p.salesman_name = c.full_name AND p.branch_code = c.branch_code'
+    : 'WHERE p.salesman_name IN (SELECT full_name FROM cross_org_names)';
+  const byOrgBranchCol = branchAware ? ', p.branch_code' : '';
+  const byOrgGroupBy = branchAware ? 'p.branch_code, p.salesman_name, p.org_level_3' : 'p.salesman_name, p.org_level_3';
+  const byOrgJoin = (alias: string) => branchAware
+    ? `m.full_name = ${alias}.salesman_name AND m.branch_code = ${alias}.branch_code`
+    : `m.full_name = ${alias}.salesman_name`;
+  const byOrgPrevJoin = (alias: string) => branchAware
+    ? `m.full_name = ${alias}.salesman_name AND m.branch_code = ${alias}.branch_code AND ao.org_level_3 = ${alias}.org_level_3`
+    : `m.full_name = ${alias}.salesman_name AND ao.org_level_3 = ${alias}.org_level_3`;
+  const partBNotInMapping = branchAware
+    ? `NOT EXISTS (
+        SELECT 1 FROM SalesmanTeamMapping m
+        WHERE m.full_name = a.salesman_name AND m.branch_code = a.branch_code
+      )`
+    : 'a.salesman_name NOT IN (SELECT full_name FROM SalesmanTeamMapping)';
   const aBranchCol = branchAware
     ? ',\n      m.branch_code                                              AS branch_code'
     : '';
@@ -313,48 +347,48 @@ export async function buildAchievementView(
       SELECT salesman_name, SUM(premium) / 10000 AS actual_vehicle${ytdBranchCol}
       FROM PolicyFact
       WHERE policy_date >= DATE '${planYear}-01-01'
-      GROUP BY salesman_name
+      GROUP BY ${ytdGroupBy}
     ),
     -- 3. 上年同期（精确日期：去年 1月1日 到 max_date-1年）
     prev_ytd AS (
-      SELECT salesman_name, SUM(premium) / 10000 AS prev_actual
+      SELECT salesman_name${pfBranchCol}, SUM(premium) / 10000 AS prev_actual
       FROM PolicyFact
       WHERE policy_date >= DATE '${prevYear}-01-01'
         AND policy_date <= (SELECT max_date - INTERVAL 1 YEAR FROM time_prog)
-      GROUP BY salesman_name
+      GROUP BY ${pfGroupBy}
     ),
     -- 4. 上年全年（用于计划增长率：今年计划 / 上年全年 - 1）
     prev_full AS (
-      SELECT salesman_name, SUM(premium) / 10000 AS prev_full_year
+      SELECT salesman_name${pfBranchCol}, SUM(premium) / 10000 AS prev_full_year
       FROM PolicyFact
       WHERE policy_date BETWEEN DATE '${prevYear}-01-01' AND DATE '${prevYear}-12-31'
-      GROUP BY salesman_name
+      GROUP BY ${pfGroupBy}
     ),
     -- 5-7. 跨机构业务员（organization='未分配'）按 org_level_3 拆分的聚合
     cross_org_names AS (
-      SELECT full_name FROM SalesmanTeamMapping WHERE organization = '未分配'
+      SELECT ${crossOrgSelect} FROM SalesmanTeamMapping WHERE organization = '未分配'
     ),
     ytd_by_org AS (
-      SELECT salesman_name, org_level_3, SUM(premium) / 10000 AS actual_vehicle
-      FROM PolicyFact
-      WHERE policy_date >= DATE '${planYear}-01-01'
-        AND salesman_name IN (SELECT full_name FROM cross_org_names)
-      GROUP BY salesman_name, org_level_3
+      SELECT p.salesman_name, p.org_level_3${byOrgBranchCol}, SUM(p.premium) / 10000 AS actual_vehicle
+      FROM PolicyFact p
+      ${crossOrgJoin}
+      ${branchAware ? 'WHERE' : 'AND'} p.policy_date >= DATE '${planYear}-01-01'
+      GROUP BY ${byOrgGroupBy}
     ),
     prev_ytd_by_org AS (
-      SELECT salesman_name, org_level_3, SUM(premium) / 10000 AS prev_actual
-      FROM PolicyFact
-      WHERE policy_date >= DATE '${prevYear}-01-01'
-        AND policy_date <= (SELECT max_date - INTERVAL 1 YEAR FROM time_prog)
-        AND salesman_name IN (SELECT full_name FROM cross_org_names)
-      GROUP BY salesman_name, org_level_3
+      SELECT p.salesman_name, p.org_level_3${byOrgBranchCol}, SUM(p.premium) / 10000 AS prev_actual
+      FROM PolicyFact p
+      ${crossOrgJoin}
+      ${branchAware ? 'WHERE' : 'AND'} p.policy_date >= DATE '${prevYear}-01-01'
+        AND p.policy_date <= (SELECT max_date - INTERVAL 1 YEAR FROM time_prog)
+      GROUP BY ${byOrgGroupBy}
     ),
     prev_full_by_org AS (
-      SELECT salesman_name, org_level_3, SUM(premium) / 10000 AS prev_full_year
-      FROM PolicyFact
-      WHERE policy_date BETWEEN DATE '${prevYear}-01-01' AND DATE '${prevYear}-12-31'
-        AND salesman_name IN (SELECT full_name FROM cross_org_names)
-      GROUP BY salesman_name, org_level_3
+      SELECT p.salesman_name, p.org_level_3${byOrgBranchCol}, SUM(p.premium) / 10000 AS prev_full_year
+      FROM PolicyFact p
+      ${crossOrgJoin}
+      ${branchAware ? 'WHERE' : 'AND'} p.policy_date BETWEEN DATE '${prevYear}-01-01' AND DATE '${prevYear}-12-31'
+      GROUP BY ${byOrgGroupBy}
     )
 
     -- Part A1：正常映射业务员（organization != '未分配'）
@@ -385,9 +419,9 @@ export async function buildAchievementView(
         ELSE NULL
       END AS plan_growth_rate${aBranchCol}
     FROM SalesmanTeamMapping m
-    LEFT JOIN ytd_actual  a  ON m.full_name = a.salesman_name
-    LEFT JOIN prev_ytd    pv ON m.full_name = pv.salesman_name
-    LEFT JOIN prev_full   pf ON m.full_name = pf.salesman_name
+    LEFT JOIN ytd_actual  a  ON ${joinA}
+    LEFT JOIN prev_ytd    pv ON ${joinPrev('pv')}
+    LEFT JOIN prev_full   pf ON ${joinPrev('pf')}
     CROSS JOIN time_prog  tp
     WHERE m.organization != '未分配'
 
@@ -413,9 +447,9 @@ export async function buildAchievementView(
       END AS yoy_rate,
       NULL                                                       AS plan_growth_rate${aBranchCol}
     FROM SalesmanTeamMapping m
-    JOIN ytd_by_org ao ON m.full_name = ao.salesman_name
-    LEFT JOIN prev_ytd_by_org  po  ON m.full_name = po.salesman_name  AND ao.org_level_3 = po.org_level_3
-    LEFT JOIN prev_full_by_org pfo ON m.full_name = pfo.salesman_name AND ao.org_level_3 = pfo.org_level_3
+    JOIN ytd_by_org ao ON ${byOrgJoin('ao')}
+    LEFT JOIN prev_ytd_by_org  po  ON ${byOrgPrevJoin('po')}
+    LEFT JOIN prev_full_by_org pfo ON ${byOrgPrevJoin('pfo')}
     CROSS JOIN time_prog tp
     WHERE m.organization = '未分配'
 
@@ -441,10 +475,10 @@ export async function buildAchievementView(
       END AS yoy_rate,
       NULL                                                       AS plan_growth_rate${bBranchCol}
     FROM ytd_actual a
-    LEFT JOIN prev_ytd  pv ON a.salesman_name = pv.salesman_name
-    LEFT JOIN prev_full pf ON a.salesman_name = pf.salesman_name
+    LEFT JOIN prev_ytd  pv ON ${joinPartB('pv')}
+    LEFT JOIN prev_full pf ON ${joinPartB('pf')}
     CROSS JOIN time_prog tp
-    WHERE a.salesman_name NOT IN (SELECT full_name FROM SalesmanTeamMapping)
+    WHERE ${partBNotInMapping}
   `);
 
   const countResult = await db.query<{ cnt: number }>(
