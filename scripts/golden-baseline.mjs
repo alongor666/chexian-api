@@ -172,11 +172,6 @@ const ENDPOINT_DEFINITIONS = [
     deprecated: false,
   },
 
-  // ── /api/query/patrol（动态路由，用 premium 域测试）
-  // 注：patrol/:domain 与 narrative 是「读取已生成巡检报告文件」的文件托管端点（patrol.ts），
-  // 非查询/计算端点：① 无报告文件即 404（环境依赖、不可复现）② 报告内容随数据/时间变（非确定性，
-  // --compare 必假阳）。对 SQL/perf 重构 oracle 无价值，故**不纳入黄金基线**（原 'premium' 还是无效域）。
-
   // ── /api/filters ──────────────────────────
   { slug: 'filters-options', path: '/api/filters/options', params: {}, deprecated: false },
 

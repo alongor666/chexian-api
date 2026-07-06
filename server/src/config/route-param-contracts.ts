@@ -178,10 +178,6 @@ export const ROUTE_PARAM_CONTRACTS: Record<string, RouteParamContract> = {
     ],
   },
   '/sql': { extraKeys: ['sql'] },
-
-  // ── 巡检（仅 path 参数） ─────────────────────────
-  '/patrol/:domain': { pathParams: ['domain'] },
-  '/patrol/:domain/narrative': { pathParams: ['domain'] },
 };
 
 /** 合成某路由的合法参数名集合（zod keys ∪ common keys ∪ extraKeys ∪ pathParams） */

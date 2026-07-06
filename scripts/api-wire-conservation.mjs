@@ -55,7 +55,7 @@ const TRANSPORT_METHODS = [
 const SUB_CLIENT_FILES = [
   'quote-conversion', 'claims-detail', 'repair', 'cross-sell', 'performance',
   'customer-flow', 'ai', 'data', 'workflows', 'auth',
-  'premium', 'geo', 'patrol',
+  'premium', 'geo',
 ];
 
 /**
@@ -96,6 +96,17 @@ const POST_SPLIT_REMOVALS = [
     backlogUid: '2026-06-11-claude-02aa70',
     note: '产品层冗余裁剪 c 点：前端 CustomerFlowPage 仅渲染「流失去向」，从未调用 inflow()（全 src 零 .inflow 调用点）。后端 /api/query/customer-flow/inflow 路由保守保留——服务 agent 诊断链（tool-registry customer_flow.inflow / agent-customer-flow-diagnosis-service）。',
     routeToken: 'QUERY_ROUTES.CUSTOMER_FLOW.INFLOW',
+  },
+  {
+    name: 'patrol.report',
+    backlogUid: '2026-07-05-claude-da5ac0',
+    note: 'patrol 功能链整链退役：前端零消费（「经营巡检」抽屉走 workflows.run 而非 apiClient.patrol）、引擎无任何调度、产物目录（数据管理/patrol_reports/）从未生成致路由必 404；业务意图（续保盯盘巡检）已由同数据源的 diagnose-renewal v2.2 实质覆盖。与前两条不同：后端 /patrol/:domain 路由、patrol_engine.py、patrol-api.ts、types/patrol.ts 全部同步删除（整链退役，非「路由保留」型豁免）。',
+    routeToken: 'QUERY_ROUTES.PATROL',
+  },
+  {
+    name: 'patrol.narrative',
+    backlogUid: '2026-07-05-claude-da5ac0',
+    note: '同 patrol.report（整链退役，共用 QUERY_ROUTES.PATROL 令牌豁免）。',
   },
 ];
 
@@ -246,7 +257,7 @@ try {
     failures.push(`路由集 LOST≠∅（端点被搬丢）：${lostTokens.join(', ')}`);
   }
   if (exemptedLost.length > 0) {
-    notes.push(`路由令牌 ${exemptedLost.join(', ')} 因 POST_SPLIT_REMOVALS 登记豁免 LOST 检查（前端调用方已删，后端路由保留）`);
+    notes.push(`路由令牌 ${exemptedLost.join(', ')} 因 POST_SPLIT_REMOVALS 登记豁免 LOST 检查（调用方已删；路由保留或随链退役，见各条 note）`);
   }
 } catch {
   notes.push(`路由集 LOST 检查跳过：git 历史缺 ${BASELINE_COMMIT}（浅克隆环境，非失败）`);

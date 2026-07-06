@@ -514,22 +514,6 @@
     "auth": false,
     "dedupe": ""
   },
-  "patrol.narrative": {
-    "verb": "GET",
-    "path": "/query/patrol/cost/narrative",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": "GET:/query/patrol/cost/narrative"
-  },
-  "patrol.report": {
-    "verb": "GET",
-    "path": "/query/patrol/cost",
-    "params": [],
-    "bodyKeys": null,
-    "auth": true,
-    "dedupe": "GET:/query/patrol/cost"
-  },
   "performance.bundle": {
     "verb": "GET",
     "path": "/query/performance-bundle",

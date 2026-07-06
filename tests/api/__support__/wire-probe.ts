@@ -177,9 +177,6 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: 'geo', method: 'province', args: NO_ARGS },
   { ns: 'geo', method: 'city', args: NO_ARGS },
 
-  // ── patrol（2）──
-  { ns: 'patrol', method: 'report', args: () => ['cost'] },
-  { ns: 'patrol', method: 'narrative', args: () => ['cost'] },
 ];
 
 /** 把一次 fetch(url, options) 归一化成稳定线缆签名 */

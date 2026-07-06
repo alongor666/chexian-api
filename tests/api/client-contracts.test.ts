@@ -387,9 +387,6 @@ describe('namespaced sub-client URL contracts', () => {
     // ── geo（本 PR 残渣域归并）──
     { name: 'geo.province', path: '/query/policy-geo/province?', run: (c) => c.geo.province({ org: '乐山' }), expectParam: true },
     { name: 'geo.city', path: '/query/policy-geo/city?', run: (c) => c.geo.city({ org: '乐山' }), expectParam: true },
-    // ── patrol（本 PR 残渣域归并；入参为 domain 字符串，路径无 query）──
-    { name: 'patrol.report', path: '/query/patrol/cost', run: (c) => c.patrol.report('cost') },
-    { name: 'patrol.narrative', path: '/query/patrol/cost/narrative', run: (c) => c.patrol.narrative('cost') },
   ];
 
   it.each(cases)('$name builds $path', async ({ run, path, expectParam, expectMethod }) => {
