@@ -304,9 +304,14 @@ export class DataBootstrapper {
     const groups = new Map<string, ParquetFileInfo[]>();
 
     // B1：分组键纳入 branch 维度，防 SC/SX 同起期（或同名）文件跨省互补误删/碰撞覆盖。
-    // 扁平文件 branch=undefined → 键前缀恒 ''（`::…`），分组与现状逐字节等价。
+    // B5 补漏（2026-07-06 实测）：#753 Option A 过渡态的扁平前缀文件（如 SX_每日数据_*）branch
+    // 为 undefined，与 SC 裸名文件同起期会落进同一分组被「保留 endDate 最新」剔除——实测
+    // `SX_每日数据_20250601_20260628.parquet` 被 `每日数据_20250601_20260705.parquet` 静默挤出，
+    // 山西 2025-06 起增量保单整段不装载。故扁平文件以文件名省前缀（`^[A-Z]{2}_`，#753 既定约定，
+    // 非省常量枚举）参与分组；无前缀（SC 裸名/sichuan_ 小写）→ 键前缀恒 ''，与现状逐字节等价。
+    // 仅作用于去重分组，不改 discoverInDir 的 branch 标注（否则扁平前缀会误触发子目录互斥闸）。
     for (const f of files) {
-      const branchPrefix = `${f.branch ?? ''}::`;
+      const branchPrefix = `${f.branch ?? DataBootstrapper.flatPrefixBranch(f.name) ?? ''}::`;
       const m = datePattern.exec(f.name);
       if (!m) {
         // 非匹配文件：键 = branch::文件名（跨省同名文件不再互相覆盖，P0 生死点）
@@ -345,6 +350,15 @@ export class DataBootstrapper {
     }
 
     return result;
+  }
+
+  /**
+   * 扁平文件名的省前缀（#753 Option A 过渡态约定：`SX_每日数据_*.parquet`）。
+   * 仅供 deduplicateOverlapping 分组键使用——通用 `^[A-Z]{2}_` 约定，不枚举省常量；
+   * SC 裸名 / `sichuan_` 小写前缀不匹配 → undefined（与历史分组行为一致）。
+   */
+  static flatPrefixBranch(name: string): string | undefined {
+    return /^([A-Z]{2})_/.exec(name)?.[1];
   }
 
   /**

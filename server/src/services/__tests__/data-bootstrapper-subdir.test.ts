@@ -93,6 +93,8 @@ describe('DataBootstrapper.discoverInDir', () => {
 });
 
 // ── ② deduplicateOverlapping（branch-aware 分组键）──────────────────────────
+// 关联：data-bootstrapper-dedup.test.ts 覆盖 allComplementary（剔摩/限摩互补豁免）本体；
+// 本文件覆盖分组键（branch/扁平前缀）维度，flatPrefixBranch 边界用例也在本文件末尾。
 describe('DataBootstrapper.deduplicateOverlapping (branch-aware)', () => {
   const dedup = (files: FileInfo[]): FileInfo[] => (makeBootstrapper()).deduplicateOverlapping(files);
 
@@ -132,6 +134,74 @@ describe('DataBootstrapper.deduplicateOverlapping (branch-aware)', () => {
   it('单文件 → 原样返回', () => {
     const files = [fileInfo('only_20240101_20240601.parquet', undefined)];
     expect(dedup(files)).toHaveLength(1);
+  });
+
+  // ── B5 补漏：扁平 #753 前缀文件（branch=undefined）按文件名省前缀参与分组 ──
+  // 生产等价场景实测（2026-07-06）：SX_每日数据_20250601_20260628 被 SC 每日数据_20250601_20260705
+  // 同起期剔除 → 山西 2025-06 起增量整段不装载。以下用例锁死修复。
+  it('扁平跨省同起期（SX_ 前缀 vs SC 裸名）→ 两省全保留（P0：山西增量被剔除回归锁）', () => {
+    const files = [
+      fileInfo('每日数据_20250601_20260705.parquet', undefined),
+      fileInfo('SX_每日数据_20250601_20260628.parquet', undefined),
+    ];
+    const got = dedup(files);
+    expect(got.map(f => f.name).sort()).toEqual([
+      'SX_每日数据_20250601_20260628.parquet',
+      '每日数据_20250601_20260705.parquet',
+    ]);
+  });
+
+  it('扁平同省前缀同起期（SX_ vs SX_）→ 仍去重保留 endDate 最新', () => {
+    const files = [
+      fileInfo('SX_每日数据_20250601_20260601.parquet', undefined),
+      fileInfo('SX_每日数据_20250601_20260628.parquet', undefined),
+    ];
+    const got = dedup(files);
+    expect(got).toHaveLength(1);
+    expect(got[0].name).toBe('SX_每日数据_20250601_20260628.parquet');
+  });
+
+  it('sichuan_ 小写前缀不视作省前缀 → 与 SC 裸名同组去重（历史行为不变）', () => {
+    const files = [
+      fileInfo('sichuan_每日数据_20250601_20260601.parquet', undefined),
+      fileInfo('每日数据_20250601_20260705.parquet', undefined),
+    ];
+    const got = dedup(files);
+    expect(got).toHaveLength(1);
+    expect(got[0].name).toBe('每日数据_20250601_20260705.parquet');
+  });
+
+  it('扁平跨省剔摩/限摩同起期（SX_ 前缀 vs SC 裸名）→ 各落各组全保留，互补豁免不跨省触发', () => {
+    const files = [
+      fileInfo('SX_01_签单清单_剔摩_20240101_20260504.parquet', undefined),
+      fileInfo('01_签单清单_限摩_20240101_20260504.parquet', undefined),
+    ];
+    expect(dedup(files)).toHaveLength(2);
+  });
+
+  it('子目录 branch 优先于文件名前缀（current/SC/ 内 SX_ 命名残留不改变归组省）', () => {
+    const files = [
+      fileInfo('SX_每日数据_20250601_20260601.parquet', 'SC'),
+      fileInfo('每日数据_20250601_20260705.parquet', 'SC'),
+    ];
+    // 同为 SC 组 → 去重保留 endDate 最新（branch 字段是权威，前缀仅扁平兜底）
+    const got = dedup(files);
+    expect(got).toHaveLength(1);
+    expect(got[0].name).toBe('每日数据_20250601_20260705.parquet');
+  });
+});
+
+describe('DataBootstrapper.flatPrefixBranch', () => {
+  it('SX_ → SX；sichuan_/裸名/三字母/含数字前缀 → undefined', () => {
+    expect(DataBootstrapper.flatPrefixBranch('SX_每日数据_1_2.parquet')).toBe('SX');
+    expect(DataBootstrapper.flatPrefixBranch('sichuan_每日数据_1_2.parquet')).toBeUndefined();
+    expect(DataBootstrapper.flatPrefixBranch('每日数据_1_2.parquet')).toBeUndefined();
+    expect(DataBootstrapper.flatPrefixBranch('SCX_x.parquet')).toBeUndefined();
+    expect(DataBootstrapper.flatPrefixBranch('V2_x.parquet')).toBeUndefined();
+  });
+
+  it('契约锁定：非省码的二大写字母前缀（如 AB_）按通用约定解析为该前缀——后果方向是「独立成组多保留」而非误删（可接受）', () => {
+    expect(DataBootstrapper.flatPrefixBranch('AB_CD_20240101_20260504.parquet')).toBe('AB');
   });
 });
 
