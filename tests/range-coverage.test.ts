@@ -5,6 +5,7 @@ import {
   isRangeCovered,
   isCoveredBySameQualifier,
   findCoveredKeys,
+  findPartialOverlapPairs,
 } from '../数据管理/lib/range-coverage.mjs';
 
 describe('parseRangePrefix（区间 + 品类解析）', () => {
@@ -130,5 +131,59 @@ describe('findCoveredKeys（核心：区间覆盖 + 同品类互斥，闸-1 B3-0
       item('hist2', '20240101', '20250531'),
     ];
     expect(findCoveredKeys(items)).toEqual(new Set(['frag1', 'frag2', 'frag3']));
+  });
+});
+
+describe('findPartialOverlapPairs（部分重叠——谁都不完全包含谁，2026-07-06 上游窗口前移实测）', () => {
+  const item = (key: string, start: string, end: string, qualifier = '01_签单清单_定稿') => ({ key, start, end, qualifier });
+
+  it('🔴 复现事故：老窗口 25-06-01~26-06-28 与新窗口 26-06-01~26-07-05 → 部分重叠一对', () => {
+    const items = [
+      item('old', '20250601', '20260628'),
+      item('new', '20260601', '20260705'),
+    ];
+    const pairs = findPartialOverlapPairs(items);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].a.key).toBe('old'); // a.start <= b.start
+    expect(pairs[0].b.key).toBe('new');
+  });
+
+  it('完全覆盖不算部分重叠（交给 findCoveredKeys 处理，本函数不重复报告）', () => {
+    const items = [
+      item('window', '20260614', '20260625'),
+      item('full', '20250601', '20260628'),
+    ];
+    expect(findPartialOverlapPairs(items)).toEqual([]);
+  });
+
+  it('不同品类（剔摩/限摩）即使日期重叠也不算部分重叠（B3-01 同款防护）', () => {
+    const items = [
+      item('剔摩', '20250601', '20260628', '01_签单清单_剔摩'),
+      item('限摩', '20260601', '20260705', '01_签单清单_限摩'),
+    ];
+    expect(findPartialOverlapPairs(items)).toEqual([]);
+  });
+
+  it('历史不重叠分段（互不相交）→ 不算重叠', () => {
+    const items = [item('hist1', '20210101', '20231231'), item('hist2', '20240101', '20250531')];
+    expect(findPartialOverlapPairs(items)).toEqual([]);
+  });
+
+  it('三文件场景：A↔B 两两独立部分重叠，即使各自也被 C 完全覆盖（判定按 pair 独立，不看第三方）', () => {
+    const items = [
+      item('A', '20250601', '20260331'),   // 与 B 部分重叠（起点更早，终点更早）
+      item('B', '20260101', '20260628'),   // 与 A 重叠；单独看也被 C 完全覆盖
+      item('C', '20250101', '20260930'),   // 完全覆盖 A 和 B（真实链路里 findCoveredKeys 会先把两者都归档）
+    ];
+    const pairs = findPartialOverlapPairs(items);
+    // A↔C、B↔C 是完全覆盖关系（isRangeCovered 短路跳过）；只剩 A↔B 这一对部分重叠
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].a.key).toBe('A');
+    expect(pairs[0].b.key).toBe('B');
+  });
+
+  it('单文件 / 空数组 → 空结果', () => {
+    expect(findPartialOverlapPairs([])).toEqual([]);
+    expect(findPartialOverlapPairs([item('solo', '20250601', '20260628')])).toEqual([]);
   });
 });

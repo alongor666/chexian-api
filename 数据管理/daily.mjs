@@ -66,7 +66,11 @@ import {
   isRangeCovered,
   isCoveredBySameQualifier,
   findCoveredKeys,
+  findPartialOverlapPairs,
 } from './lib/range-coverage.mjs';
+// 2026-07-06：上游导出窗口起点前移（四川实测）时，新旧全量文件呈"部分重叠、谁都不
+// 完全包含谁"关系，findCoveredKeys 覆盖不到，需要按"不重复不遗漏"原则合并
+import { mergeOverlappingWeeklyShard } from './lib/parquet-merge.mjs';
 // 多省 B4：跨省 claims 报案截止日新鲜度巡检（省份→claims 目录派生 + 巡检分类，可单测）
 import {
   branchClaimsDetailDir,
@@ -1884,6 +1888,8 @@ async function main() {
   const weeklyStart = config.weekly_start.replace(/-/g, '');
   let weeklyArchiveDone = false;  // 旧格式归档只做一次
 
+  const OLD_WEEKLY_RE = /^每日数据_(\d{8})_(\d{8})\.parquet$/;
+
   for (const file of shards.weekly) {
     const range = extractDateRange(file.name);
     const isNewFormat = file.name.startsWith('01_签单清单_') || /^\d{8}(-\d{8})?_01_签单清单/.test(file.name);
@@ -1894,6 +1900,24 @@ async function main() {
       ? file.name.replace(/\.xlsx$/i, '.parquet')
       : `每日数据_${range.start}_${range.end}.parquet`;
     const outputPath = join(currentDir, outputName);
+
+    // 老格式源文件"跑腿"检测：若本文件的区间已被 current/ 里某个既有分片完全覆盖
+    // （典型场景：上一轮已把窄窗合并成宽窗，本轮这份窄窗 xlsx 还没清理、继续被重转），
+    // 跳过重转——否则会重新制造出一个被覆盖的冗余文件，再次触发重叠。
+    // 2026-07-06 实测：合并出 每日数据_20250601_20260705.parquet 后，同一轮里紧接着
+    // 重转 sichuan_20250601-20260628 这份旧源，原样写出 每日数据_20250601_20260628.parquet
+    // （被刚合并的宽窗完全覆盖）——不加这一步，重叠会在合并后立刻重新出现。
+    if (!isNewFormat && existsSync(currentDir)) {
+      const coveringSibling = readdirSync(currentDir).find(f => {
+        if (!f.endsWith('.parquet') || f === outputName) return false;
+        const m = f.match(OLD_WEEKLY_RE);
+        return m && isRangeCovered({ start: range.start, end: range.end }, { start: m[1], end: m[2] });
+      });
+      if (coveringSibling) {
+        log('green', `✓ 区间已被现有分片完全覆盖，跳过重转：${file.name} → ${outputName}（覆盖者: ${coveringSibling}）`);
+        continue;
+      }
+    }
 
     // 范围前缀分片：归档 current/ 中同 start 不同 end 的旧范围 parquet（防重叠双倍计入）
     // 放在缓存检测之前，保证即使本文件缓存命中也清掉历史残留分片
@@ -1946,6 +1970,50 @@ async function main() {
     args.push(..._premiumBranchArgs);
 
     runPythonScript(python, transformScript, args);
+
+    // 上游导出窗口起点前移检测（不重复不遗漏合并，2026-07-06 四川实测）：老格式区间命名
+    // 分片才适用（新格式剔摩/限摩等多文件天然共存，不走这套单文件替换语义）。
+    // findCoveredKeys 只处理"一方完全覆盖另一方"；此处补上"部分重叠、谁都不完全包含谁"
+    // 的场景（如老窗口 25-06-01~26-06-28 vs 新窗口 26-06-01~26-07-05）。
+    // 注意：outputName 落盘用的是老格式命名 每日数据_START_END.parquet（下划线分隔），
+    // parseRangePrefix 只认新格式 START-END_qualifier（连字符分隔），解析不出老格式文件名，
+    // 且源 xlsx 解出的 qualifier（如 01_签单清单_定稿）跟老格式输出文件名本身也对不上——
+    // 本分支已被 !isNewFormat 限定在"单一血统、无剔摩/限摩变体"的老格式世界里，
+    // 两侧统一用固定 qualifier 比较，不依赖文件名反解 qualifier。
+    if (!isNewFormat && fileRange && existsSync(currentDir)) {
+      const LEGACY_QUALIFIER = '每日数据-老格式周更分片';
+      const otherRangeItems = readdirSync(currentDir)
+        .filter(f => f.endsWith('.parquet') && f !== outputName)
+        .map(f => {
+          const m = f.match(OLD_WEEKLY_RE);
+          return m ? { key: f, start: m[1], end: m[2], qualifier: LEGACY_QUALIFIER } : null;
+        })
+        .filter(Boolean);
+      const incomingItem = { key: outputName, start: fileRange.start, end: fileRange.end, qualifier: LEGACY_QUALIFIER };
+      const overlapPairs = findPartialOverlapPairs([incomingItem, ...otherRangeItems])
+        .filter(p => p.a.key === outputName || p.b.key === outputName);
+      for (const pair of overlapPairs) {
+        const other = pair.a.key === outputName ? pair.b : pair.a;
+        const mergedStart = fileRange.start < other.start ? fileRange.start : other.start;
+        const mergedEnd = fileRange.end > other.end ? fileRange.end : other.end;
+        const mergedName = `每日数据_${mergedStart}_${mergedEnd}.parquet`;
+        const mergedPath = join(currentDir, mergedName);
+        const mergeDryRun = process.argv.includes('--dry-run');
+        log('yellow', `⚠️  上游导出窗口部分重叠：${other.key} [${other.start}~${other.end}] ↔ ${outputName} [${fileRange.start}~${fileRange.end}]`);
+        log('yellow', `   按"不重复不遗漏"合并（本次刚转换文件权威）${mergeDryRun ? '（--dry-run，只校验不落地）' : ''} → ${mergedName}`);
+        const result = await mergeOverlappingWeeklyShard({
+          authoritativePath: outputPath,
+          authoritativeStart: fileRange.start,
+          authoritativeEnd: fileRange.end,
+          otherPath: join(currentDir, other.key),
+          mergedPath,
+          archiveDir,
+          dryRun: mergeDryRun,
+        });
+        log('green',
+          `   ✓ ${mergeDryRun ? '校验通过（未落地）' : '合并完成'}：旧文件保留 ${result.otherKeptRows} 行 + 本次文件 ${result.authoritativeRows} 行 = ${result.mergedRows} 行（不重复不遗漏校验通过）`);
+      }
+    }
 
     // 清空 staging（日增量已合入周更 xlsx）
     if (!isNewFormat) cleanStaging(stagingDir);
