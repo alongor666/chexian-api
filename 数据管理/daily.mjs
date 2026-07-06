@@ -49,7 +49,7 @@ import { inspectPolicyCurrentLayout } from '../scripts/lib/policy-current-shards
 // 分片判定纯函数抽到 lib/shard-classify.mjs（可单测，daily.mjs 顶层执行 main() 无法被 import）
 import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
 // 多省 ETL 路由纯函数（0a：非 SC 省 premium 源走 staging/<省>、产物隔离到 warehouse/validation/<省>，绝不进 current/；ADR D5）
-import { branchSourceDir, branchOutputRoot, isPolicyCurrentSubdirLayout } from './lib/branch-naming.mjs';
+import { branchSourceDir, branchOutputRoot } from './lib/branch-naming.mjs';
 // 多省 B1 命名路由：源文件拼音前缀↔branch_code 派生 + 按省防混省过滤 + 前缀感知 glob（可单测）
 import {
   buildBranchAwareGlobs,
@@ -1563,13 +1563,10 @@ async function main() {
   // 取锁后注册退出钩子（含 process.exit/信号路径）自动释放。
   acquireLock(scriptDir);
 
-  // B2（codex 闸-1 P0-5）：子目录布局开启时强制 --no-sync —— sync-vps（B3 前）按文件名前缀分省，
-  // rsync 不排除 current/<省>/，自动同步会把子目录推生产。B3 退役前禁子目录布局下自动 sync。
-  const _subdirLayout = isPolicyCurrentSubdirLayout();
-  const noSync = process.argv.includes('--no-sync') || _subdirLayout;
-  if (_subdirLayout && !process.argv.includes('--no-sync')) {
-    log('yellow', '⚠ POLICY_CURRENT_SUBDIR_LAYOUT=true：强制 --no-sync（sync-vps 分省同步退役 B3 前禁子目录布局自动 sync）');
-  }
+  // B3：sync-vps 已退役 #753 前缀方案、改分省子目录（current/<省>/ → data/current/<省>/）并加 GATED 预检
+  // （非基准省/扁平+子目录并存 fail-closed），B2 的「子目录布局强制 --no-sync」前置条件已解除。
+  // 物理 cutover（把子目录推生产）仍是 B5 独立授权动作，由 sync-vps GATED 预检守住非基准省不进生产。
+  const noSync = process.argv.includes('--no-sync');
   const skipReport = process.argv.includes('--skip-report');
   const ALL_DOMAINS = ['premium', 'claims', 'claims_detail', 'quotes', 'cross_sell', 'brand', 'repair', 'customer_flow', 'new_energy_claims', 'new_energy', 'renewal_tracker', 'all'];
   const subcommand = process.argv.find(a => ALL_DOMAINS.includes(a));
