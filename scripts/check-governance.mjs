@@ -60,6 +60,7 @@ import { scanEntries as scanAutomationEntries, verifyMechanisms as verifyAutomat
 import { buildPatternChecks } from './governance/pattern-engine.mjs';
 import { PATTERN_RULES } from './governance/pattern-rules.mjs';
 import { checkUploadSizeLimitConsistency as runUploadSizeCheck } from './governance/upload-size-consistency.mjs';
+import { governanceCheckChunkInvariants } from './check-chunk-invariants.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3538,6 +3539,8 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '企微引擎省份隔离', fn: checkWecomEngineBranchIsolation },
   { name: '上传上限对齐', fn: checkUploadSizeLimitConsistency },
   { name: 'Loop自进化闭环完整性', fn: checkLoopSelfEvolutionIntegrity },
+  // vite chunk 图不变式（PR #904 防回归，7f984d）：实现在独立模块，无 dist 跳过、有 dist 真检
+  { name: 'vite chunk图不变式', fn: () => governanceCheckChunkInvariants({ info, warning, error, success }, path.join(ROOT_DIR, 'dist')) },
 ];
 
 // ============================================================

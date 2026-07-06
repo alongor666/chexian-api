@@ -40,6 +40,7 @@
     "benchmark:key-routes": "node scripts/benchmark-key-routes.mjs",
     "benchmark:key-routes:soak": "node scripts/benchmark-key-routes-soak.mjs",
     "test:all": "bun run typecheck && bun run build && bun run test --run && bun run test:e2e tests/e2e/04-subpage-no-refresh.spec.ts",
+    "check:chunks": "node scripts/check-chunk-invariants.mjs",
     "governance": "node scripts/check-governance.mjs && node scripts/check-permission-coverage.mjs && bun run governance:harness",
     "governance:harness": "node scripts/governance/harness.mjs",
     "governance:hotfiles": "node scripts/check-hotfile-contracts.mjs",
