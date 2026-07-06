@@ -314,6 +314,41 @@ class OrgAndBranchEnrichTest(unittest.TestCase):
         self.assertEqual(result.iloc[0]["org_level_3"], "最新机构")
         self.assertEqual(result.iloc[0]["branch_code"], "SC")
 
+    def test_same_vin_cross_branch_conflict_raises(self):
+        """同一 VIN 命中多个 branch_code 时禁止用 ROW_NUMBER 最新保单静默兜底。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_dir = Path(tmp)
+            _write_policy_parquet(
+                policy_dir / "policy.parquet",
+                [
+                    {
+                        "vehicle_frame_no": "VIN1",
+                        "org_level_3": "四川机构",
+                        "branch_code": "SC",
+                        "insurance_start_date": pd.Timestamp("2025-01-01"),
+                        "policy_no": "SC2025",
+                    },
+                    {
+                        "vehicle_frame_no": "VIN1",
+                        "org_level_3": "山西机构",
+                        "branch_code": "SX",
+                        "insurance_start_date": pd.Timestamp("2025-06-01"),
+                        "policy_no": "SX2025",
+                    },
+                ],
+            )
+
+            df = self._make_claims_df([
+                {"claim_no": "R1", "vehicle_frame_no": "VIN1"},
+            ])
+            with self.assertRaises(RuntimeError) as ctx:
+                enrich_org_and_branch_from_policy(df, policy_dir=str(policy_dir))
+
+        msg = str(ctx.exception)
+        self.assertIn("同 VIN 跨省 branch_code 冲突", msg)
+        self.assertIn("VIN1", msg)
+        self.assertIn("SC,SX", msg)
+
     # ── 源 Excel 含三级机构列时直接使用，不被 policy JOIN 覆盖 ──────────
     def test_existing_org_level_3_preserved_if_present(self):
         """若 Excel 里已有三级机构，policy JOIN 不应覆盖（Excel 值优先）；

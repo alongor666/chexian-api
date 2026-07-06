@@ -88,6 +88,9 @@ function getJwtSecret() {
  */
 const REAL_DATA_MEASURE_FIELDS = [
   'policy_count', 'count', 'org_count', 'salesman_count',
+  'total_auto_count', 'total_driver_count', 'danjiao_auto_count', 'danjiao_driver_count',
+  'jiaosan_auto_count', 'jiaosan_driver_count', 'zhuquan_auto_count', 'zhuquan_driver_count',
+  'auto_count', 'driver_count',
   'total_premium', 'signed_premium', 'matured_premium',
   'vehicle_premium', 'driver_premium', 'premium',
   'reported_claims', 'claim_cases',
@@ -121,7 +124,11 @@ export function realDataSignals(row) {
  */
 export function countRealDataRows(body) {
   const data = body?.data;
-  const rows = Array.isArray(data) ? data : data != null ? [data] : [];
+  const rows = Array.isArray(data)
+    ? data
+    : data && typeof data === 'object' && (data.summary || Array.isArray(data.rows))
+      ? [data.summary, ...(Array.isArray(data.rows) ? data.rows : [])].filter(Boolean)
+      : data != null ? [data] : [];
   let count = 0;
   const sample = [];
   for (const row of rows) {
@@ -137,7 +144,7 @@ export function countRealDataRows(body) {
 const ROUTES = [
   '/api/query/kpi?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-11',
   '/api/query/trend?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-11&granularity=day&perspective=premium',
-  '/api/query/cross-sell?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-11',
+  '/api/query/cross-sell?dateField=policy_date&startDate=2026-01-01&endDate=2026-05-11&vehicleCategory=passenger&seatCoverageLevel=all&groupBy=org_level_3&drillPath=%5B%5D',
 ];
 
 async function runOne(token, url, branchLabel) {

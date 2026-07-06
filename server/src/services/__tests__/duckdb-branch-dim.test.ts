@@ -202,4 +202,75 @@ describe('维度表多省共存加载（ADR G3）', () => {
     );
     expect(Number(nullBranch[0].c)).toBe(0);
   });
+
+  it('多省（SC+SX）：同 full_name 跨省时按 (branch_code, full_name) 隔离计划与实绩', async () => {
+    const p = (n: string) => path.join(tmpDir, n).replace(/\\/g, '/');
+    const scSame = p('sc_same_name_salesman.parquet');
+    const sxSame = p('sx_same_name_salesman.parquet');
+    const scSamePlan = p('sc_same_name_plan.parquet');
+    const sxSamePlan = p('sx_same_name_plan.parquet');
+
+    await copySalesman(scSame, [['100000003', '跨省同名业务员', '乐山']]);
+    await duckdbService.query(`
+      COPY (
+        SELECT '200000003' AS business_no, '跨省同名业务员' AS salesman_name, '跨省同名业务员' AS full_name,
+               '晋组' AS team, '太原' AS organization, 12 AS tenure_months, 'SX' AS branch_code
+      ) TO '${sxSame}' (FORMAT PARQUET)
+    `);
+    await duckdbService.query(`
+      COPY (
+        SELECT '跨省同名业务员' AS full_name, 2026 AS plan_year, 'salesman' AS level,
+               CAST(100 AS DOUBLE) AS plan_vehicle, CAST(100 AS DOUBLE) AS plan_total
+      ) TO '${scSamePlan}' (FORMAT PARQUET)
+    `);
+    await duckdbService.query(`
+      COPY (
+        SELECT '跨省同名业务员' AS full_name, 2026 AS plan_year, 'salesman' AS level,
+               CAST(300 AS DOUBLE) AS plan_vehicle, CAST(300 AS DOUBLE) AS plan_total, 'SX' AS branch_code
+      ) TO '${sxSamePlan}' (FORMAT PARQUET)
+    `);
+    await duckdbService.query(`
+      CREATE OR REPLACE TABLE PolicyFact AS
+      SELECT * FROM (VALUES
+        (DATE '2026-03-01', '跨省同名业务员', CAST(10000 AS DOUBLE), '乐山', 'SC'),
+        (DATE '2026-03-02', '跨省同名业务员', CAST(30000 AS DOUBLE), '太原', 'SX')
+      ) AS t(policy_date, salesman_name, premium, org_level_3, branch_code)
+    `);
+
+    await loadDimParquet(
+      duckdbService, scSame, scSamePlan,
+      [{ branchCode: 'SX', path: sxSame }],
+      [{ branchCode: 'SX', path: sxSamePlan }],
+    );
+
+    const mappingRows = await duckdbService.query<{
+      branch_code: string;
+      full_name: string;
+      plan: number;
+    }>(`
+      SELECT branch_code, full_name, car_insurance_plan_2026 AS plan
+      FROM SalesmanTeamMapping
+      WHERE full_name = '跨省同名业务员'
+      ORDER BY branch_code
+    `);
+    expect(mappingRows).toEqual([
+      { branch_code: 'SC', full_name: '跨省同名业务员', plan: 100 },
+      { branch_code: 'SX', full_name: '跨省同名业务员', plan: 300 },
+    ]);
+
+    const achievementRows = await duckdbService.query<{
+      branch_code: string;
+      actual: number;
+      plan: number;
+    }>(`
+      SELECT branch_code, actual_vehicle AS actual, plan_vehicle AS plan
+      FROM achievement_cache
+      WHERE full_name = '跨省同名业务员'
+      ORDER BY branch_code
+    `);
+    expect(achievementRows).toEqual([
+      { branch_code: 'SC', actual: 1, plan: 100 },
+      { branch_code: 'SX', actual: 3, plan: 300 },
+    ]);
+  });
 });

@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -148,6 +149,45 @@ def enrich_org_and_branch_from_policy(
     glob_pattern = str(policy_path / "*.parquet")
     print(f"   JOIN PolicyFact（VIN → org_level_3 + branch_code）: {glob_pattern}")
     try:
+        input_vins = {
+            str(v).strip().upper()
+            for v in result["vehicle_frame_no"].dropna().tolist()
+            if str(v).strip()
+        }
+        if input_vins:
+            conflict_df = duckdb.sql(f"""
+                SELECT vehicle_frame_no, distinct_branch_count, branch_codes
+                FROM (
+                    SELECT
+                        UPPER(TRIM(CAST(vehicle_frame_no AS VARCHAR))) AS vehicle_frame_no,
+                        COUNT(DISTINCT branch_code) AS distinct_branch_count,
+                        STRING_AGG(DISTINCT CAST(branch_code AS VARCHAR), ',' ORDER BY CAST(branch_code AS VARCHAR)) AS branch_codes
+                    FROM read_parquet('{glob_pattern}')
+                    WHERE vehicle_frame_no IS NOT NULL
+                      AND TRIM(CAST(vehicle_frame_no AS VARCHAR)) <> ''
+                      AND branch_code IS NOT NULL
+                      AND TRIM(CAST(branch_code AS VARCHAR)) <> ''
+                    GROUP BY UPPER(TRIM(CAST(vehicle_frame_no AS VARCHAR)))
+                    HAVING COUNT(DISTINCT branch_code) > 1
+                )
+            """).df()
+            if not conflict_df.empty:
+                conflict_df = conflict_df[conflict_df["vehicle_frame_no"].isin(input_vins)]
+            if not conflict_df.empty:
+                threshold_raw = os.environ.get("NEW_ENERGY_VIN_BRANCH_CONFLICT_FAIL_THRESHOLD", "0")
+                try:
+                    fail_threshold = max(0, int(threshold_raw))
+                except ValueError:
+                    fail_threshold = 0
+                samples = conflict_df.head(5).to_dict(orient="records")
+                message = (
+                    f"同 VIN 跨省 branch_code 冲突: {len(conflict_df):,} 个 VIN；"
+                    f"样本={samples}；阈值={fail_threshold}。"
+                )
+                if len(conflict_df) > fail_threshold:
+                    raise RuntimeError(f"❌ {message}新能源 branch_code 派生禁止用最新单保单静默兜底。")
+                print(f"   ⚠ {message}未超过阈值，继续按最新保单兜底。")
+
         # 同一 ROW_NUMBER 取 org_level_3 + branch_code → 保证省份与机构来自同一张最新保单。
         # 前提：policy parquet 必须含 insurance_start_date + policy_no + branch_code
         # （P1 #762 已注入 branch_code 列，每行 100% 'SC'）。
@@ -205,6 +245,8 @@ def enrich_org_and_branch_from_policy(
         )
     except Exception as exc:
         exc_msg = str(exc)
+        if "同 VIN 跨省 branch_code 冲突" in exc_msg:
+            raise
         # Schema/Binder 类错误（policy parquet 缺必需列 insurance_start_date / policy_no /
         # branch_code 等）显式上抛，避免 all 模式继续生成错误的产物。
         schema_error_signals = ("Binder Error", "Referenced column", "does not exist", "No such column")

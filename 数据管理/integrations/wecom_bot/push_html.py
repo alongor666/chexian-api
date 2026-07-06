@@ -204,6 +204,24 @@ def stage_html(
     return target
 
 
+def write_report_owner_sidecar(target: Path, owner_org: str | None, owner_branch: str | None) -> Path | None:
+    """写单文件报告归属 sidecar：<report>.html.meta.json。"""
+    org = (owner_org or "").strip()
+    branch = (owner_branch or "").strip().upper()
+    if not org and not branch:
+        return None
+    if not org:
+        raise ValueError("--org 不能为空：写报告归属 sidecar 时必须声明 ownerOrg")
+    payload: dict[str, str] = {"ownerOrg": org}
+    if branch:
+        if not re.fullmatch(r"[A-Z]{2}", branch):
+            raise ValueError(f"--branch 必须是两位大写分公司编码，如 SC/SX：{owner_branch}")
+        payload["ownerBranch"] = branch
+    sidecar = target.with_name(target.name + ".meta.json")
+    sidecar.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return sidecar
+
+
 def derive_title_from_url(url: str) -> str:
     """从公网 URL 末段派生默认标题（去 .html/.htm 后缀）。
 
@@ -260,6 +278,8 @@ def main() -> int:
         default=DEFAULT_BASE_URL,
         help=f"公网 base URL（默认 {DEFAULT_BASE_URL}，VPS 应改成 https://chexian.cretvalu.com）",
     )
+    parser.add_argument("--org", help="报告归属三级机构；提供后写 <report>.html.meta.json")
+    parser.add_argument("--branch", help="报告归属分公司编码（SC/SX 等）；需与 --org 同用")
     parser.add_argument(
         "--force-new",
         action="store_true",
@@ -291,6 +311,8 @@ def main() -> int:
                 f"[ERROR] --external-url 应指向 .html / .htm: {args.external_url}\n"
             )
             return 2
+        if args.org or args.branch:
+            print("[WARN] --external-url 模式无法定位本地 HTML 文件，跳过报告归属 sidecar 写入")
         public_url = args.external_url
         title = args.title or derive_title_from_url(public_url)
         print(f"[外链] 跳过 stage，直接写入企微表格：{public_url}")
@@ -329,6 +351,13 @@ def main() -> int:
         )
         public_url = f"{base_url}/api/reports/{staged.name}"
         print(f"[托管] HTML 已落到：{staged}")
+        try:
+            sidecar = write_report_owner_sidecar(staged, args.org, args.branch)
+        except ValueError as exc:
+            sys.stderr.write(f"[ERROR] {exc}\n")
+            return 2
+        if sidecar:
+            print(f"[归属] sidecar 已写入：{sidecar}")
         print(f"[公网] URL：{public_url}")
 
     # 2. 复用或新建推送智能表格

@@ -106,6 +106,23 @@ describe('countRealDataRows', () => {
     expect(countRealDataRows(trend).count).toBe(2);
   });
 
+  it('cross-sell 响应形状：统计 data.summary 与 data.rows，不把外层对象当 unknown-shape', () => {
+    const crossSell = {
+      data: {
+        summary: { group_name: '四川分公司', total_auto_count: 10, total_driver_count: 3 },
+        rows: [
+          { group_name: '乐山', auto_count: 4, driver_count: 1 },
+          { group_name: '太原', auto_count: 0, driver_count: 0 },
+        ],
+        drillPath: [],
+        groupBy: 'org_level_3',
+      },
+    };
+    const { count, sample } = countRealDataRows(crossSell);
+    expect(count).toBe(2);
+    expect(sample[0].map((s) => s.field)).toContain('total_auto_count');
+  });
+
   it('空数组 / 空响应 / 无 data → count 0', () => {
     expect(countRealDataRows({ data: [] }).count).toBe(0);
     expect(countRealDataRows({ data: null }).count).toBe(0);
