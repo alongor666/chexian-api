@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-06T08:51:21Z",
+  "generated_at": "2026-07-06T09:24:13Z",
   "generated_by": "数据管理/pipelines/field_coverage.py",
   "duckdb_version": "1.5.1",
   "note": "本地 AI 知识库事实源：字段×年份真实覆盖率。不随 VPS 发布。敏感列已脱敏（redacted=true）。effective_non_null_ratio 把空串/占位符算空。",
@@ -793,7 +793,7 @@
               "total_rows": 414392,
               "non_null_rows": 414392,
               "effective_non_null_ratio": 1.0,
-              "distinct_count": 74871
+              "distinct_count": 73284
             }
           }
         },
@@ -1805,7 +1805,7 @@
           "by_year": {
             "_ALL": {
               "total_rows": 4464114,
-              "non_null_rows": 48146,
+              "non_null_rows": 48143,
               "effective_non_null_ratio": 0.0108,
               "distinct_count": 56
             },
@@ -1841,7 +1841,7 @@
             },
             "2026": {
               "total_rows": 414392,
-              "non_null_rows": 91,
+              "non_null_rows": 88,
               "effective_non_null_ratio": 0.0002,
               "distinct_count": 25
             }
@@ -2834,7 +2834,7 @@
         }
       },
       "unmapped_fields": [],
-      "elapsed_ms": 7018,
+      "elapsed_ms": 6548,
       "warnings": []
     },
     "claims_detail": {
@@ -5194,7 +5194,7 @@
         "treatment_type",
         "vehicle_series"
       ],
-      "elapsed_ms": 691,
+      "elapsed_ms": 677,
       "warnings": []
     }
   },

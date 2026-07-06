@@ -83,7 +83,10 @@ export async function mergeOverlappingWeeklyShard({
   const startIso = toIsoDate(authoritativeStart);
   const endIso = toIsoDate(authoritativeEnd);
   const mergedTmp = `${mergedPath}.tmp-merge`;
-  const otherKeptWhere = `${dateColumn} < '${startIso}' OR ${dateColumn} > '${endIso}'`;
+  // NULL 日期用三值逻辑求值为 UNKNOWN，< / > 都不成立会被这条 WHERE 静默排除在
+  // "保留"之外——但 authoritative 侧对同一批 NULL 日期行完全没有筛选依据去补偿，
+  // 结果是这些行凭空消失、行数核对却测不出来（codex 评审 P2）。显式 OR IS NULL 保留。
+  const otherKeptWhere = `${dateColumn} < '${startIso}' OR ${dateColumn} > '${endIso}' OR ${dateColumn} IS NULL`;
 
   const countRows = async (sql) => {
     const rows = await runDuckdb(sql, { timeoutMs: 120_000 });
@@ -106,11 +109,14 @@ export async function mergeOverlappingWeeklyShard({
     { timeoutMs: 180_000 }
   );
 
+  // 注意：这只是「物理行数」核对（UNION ALL 没有静默丢行/多行），不代表业务口径的
+  // 「不重复」——不校验 policy_no 去重、保费金额是否一致（codex 评审 #4，重叠窗口内
+  // 本次文件本就权威覆盖旧文件同期数据，两者内容不一致是预期允许的，不应阻塞合并）。
   const mergedRows = await countRows(`SELECT COUNT(*) AS n FROM read_parquet('${q(mergedTmp)}')`);
   if (mergedRows !== otherKeptRows + authoritativeRows) {
     if (existsSync(mergedTmp)) unlinkSync(mergedTmp);
     throw new Error(
-      `[parquet-merge] 合并后行数对不上（不重复不遗漏校验失败）：` +
+      `[parquet-merge] 合并后行数对不上（物理行数核对失败，UNION ALL 疑似丢行/多行）：` +
       `旧文件保留 ${otherKeptRows} + 本次文件 ${authoritativeRows} = ${otherKeptRows + authoritativeRows}，实得 ${mergedRows}`
     );
   }
@@ -122,7 +128,9 @@ export async function mergeOverlappingWeeklyShard({
   }
 
   mkdirSync(archiveDir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  // 毫秒时间戳 + 短随机后缀（codex 评审 #5）：daily.mjs 的收敛循环可能同一进程内连续
+  // 多次调用本函数，理论上可能落在同一毫秒——加随机后缀防止 renameSync 覆盖历史归档。
+  const stamp = `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 8)}`;
   if (existsSync(otherPath)) {
     renameSync(otherPath, join(archiveDir, `${otherPath.split('/').pop().replace('.parquet', '')}_${stamp}.parquet`));
   }

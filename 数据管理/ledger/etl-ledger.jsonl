@@ -216,3 +216,5 @@
 {"ts":"2026-07-06T16:51:13.528+08:00","run_id":"20260706-085000","status":"success","backfilled":false,"stage":"etl","step":"renewal_tracker_transform","domain":"renewal_tracker","row_count":128125,"field_count":24}
 {"ts":"2026-07-06T16:53:27.788+08:00","run_id":"20260706-085000","status":"success","backfilled":false,"stage":"vps_sync","step":"rsync_all"}
 {"ts":"2026-07-06T16:54:03.748+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"vps_sync","step":"rsync_all"}
+{"ts":"2026-07-06T17:23:19.595+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"etl","step":"premium_transform","domain":"premium","row_count":5093283,"field_count":42,"date_range":"2021-01-01 ~ 2026-05-16"}
+{"ts":"2026-07-06T17:24:04.934+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"etl","step":"premium_transform","domain":"premium","row_count":4464114,"field_count":42,"date_range":"2021-01-01 ~ 2026-05-16"}
