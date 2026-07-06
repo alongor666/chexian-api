@@ -10,6 +10,8 @@
  *   1.   node 数据管理/daily.mjs <subcommand>                （默认 all；可传 premium/claims_detail 等）
  *   1.5. python3 ~/.claude/skills/diagnose-period-trend/lib/cli.py --view v1  （生成驾驶舱 HTML）
  *   2.   bun run governance                                   （24+ 项校验，失败则中止）
+ *   2.8. ssh 备份 state.db（PAT/用户/角色权威数据）到 VPS 独立目录，保留最近 N 份；
+ *                                                              失败只告警不阻塞（STATE_DB_BACKUP_ENABLED=0 可关）
  *   3.   ssh sudo /usr/local/bin/deploy-chexian-api reload    （pm2 delete + start，可恢复 errored）
  *   4.   curl https://chexian.cretvalu.com/health             （重试 8 次 / 5 秒间隔）
  *   4.5. rsync public/reports/ → VPS frontend/dist/reports/   （Nginx 静态托管）
@@ -30,6 +32,10 @@
  * 环境变量：
  *   SYNC_VPS_SSH_ALIAS         （默认 chexian-vps-deploy）
  *   SYNC_AND_RELOAD_HEALTH_URL （默认 https://chexian.cretvalu.com/health）
+ *   STATE_DB_BACKUP_ENABLED    （默认启用；'0'/'false' 关闭 state.db 备份步骤）
+ *   STATE_DB_REMOTE_PATH       （默认 /var/www/chexian/server/data/state.db）
+ *   STATE_DB_BACKUP_DIR        （默认 /var/www/chexian/server/data/backups/state）
+ *   STATE_DB_BACKUP_KEEP       （默认 14，保留最近 N 份按天备份）
  */
 
 import { spawn } from 'child_process';
@@ -41,6 +47,9 @@ import { recordEvent, LEDGER_PATH } from './etl-ledger/record.mjs';
 import { writeReport, loadEvents } from './etl-ledger/render.mjs';
 // 多省 B2 分省编排：遍历注册的非 SC 省逐域生成 daily.mjs 步骤（省份枚举单一来源 source-file-routing）
 import { buildBranchEtlSteps } from '../数据管理/lib/branch-publish.mjs';
+// state.db 远程备份（575d2f）：reload 前在 VPS 上备份 PAT/用户/角色权威数据，失败不阻塞
+import { resolveStateDbBackupConfig, buildStateDbBackupScript } from './lib/state-db-backup.mjs';
+import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -470,6 +479,32 @@ async function main() {
     } catch (err) {
       log('yellow', `⚠ 飞书归档失败（不阻断主流程）：${err.message}`);
     }
+  }
+
+  // Stage 3.8: state.db 远程备份（575d2f）— reload 前把 PAT/用户/角色权威数据备份到独立目录。
+  // 失败只告警不阻塞发布（备份是兜底手段，不能反过来拦住数据上线）；
+  // deployer 若无读权限可设 STATE_DB_BACKUP_ENABLED=0 关闭并由 owner 在 VPS 授权后再开。
+  try {
+    const backupCfg = resolveStateDbBackupConfig(process.env);
+    if (!backupCfg.enabled) {
+      log('yellow', '\n⚠ 跳过 state.db 备份（STATE_DB_BACKUP_ENABLED=0）');
+    } else {
+      const dateStamp = (beijingDayOf(new Date()) || '').replaceAll('-', '');
+      const script = buildStateDbBackupScript({
+        remoteDbPath: backupCfg.remoteDbPath,
+        backupDir: backupCfg.backupDir,
+        dateStamp,
+        keep: backupCfg.keep,
+      });
+      await runCmd(
+        'state.db backup',
+        'ssh',
+        ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', sshAlias, script],
+        { dryRun: opts.dryRun, timeoutMs: 60000 }
+      );
+    }
+  } catch (err) {
+    log('yellow', `\n⚠ state.db 备份失败（不阻断发布，请尽快人工排查权限/路径）：${err.message}`);
   }
 
   // Stage 4: full_snapshot 域优先数据 reload，其他域才 PM2 reload
