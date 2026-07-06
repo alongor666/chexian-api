@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（38 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（41 项 · 数据截至 2026-07-06 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -31,7 +31,7 @@
 - 2026-06-27-claude-e96d85 `PARTIAL` — 治理工程二·机构省份元数据单一事实源(含山西在线bug)
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 
-**P2（18 项）**
+**P2（20 项）**
 
 - B314 — data-sources.json 契约/状态拆分（接续 B313）
 - B304 `PARTIAL` — earned-premium 双口径未文档化
@@ -51,8 +51,10 @@
 - 2026-07-03-claude-6c23b3 — 后端审查
 - 2026-07-03-claude-6e93c9 — patrol 巡检报告路由(/api/query/patrol/
 - 2026-07-05-claude-2419ed — auto-release-daily.mjs（launchd 每日自动发布，今日刚装）不
+- 2026-07-06-claude-286f55 — 产品决策
+- 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 
-**P3（13 项）**
+**P3（14 项）**
 
 - B247 — 图表 hex 色值审计
 - B254 — wecom_smartsheet state 生命周期管理（missing_vins T
@@ -67,6 +69,7 @@
 - 2026-07-05-claude-8d31a5 — generateMonthlyExpenseQuery 直接 FROM PolicyFa
 - 2026-07-05-claude-da5ac0 — 整条 patrol 功能链退役评估（3a6daf 残留）
 - 2026-07-05-claude-fed2b1 — 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，
+- 2026-07-06-claude-0e26ba — session 级 IP 绑定评估
 
 ---
 
@@ -112,3 +115,6 @@
 | 2026-07-05-claude-8d31a5 | 2026-07-05 | Bugfix/Backend | @claude | generateMonthlyExpenseQuery 直接 FROM PolicyFact 未走 policy_dedup（B252 同类）：server/src/sql/cost/earned-premium-detail.ts 的月度费用查询 SUM(premium)/COUNT(DISTINCT policy_no)/SUM(fee_amount) 直读 PolicyFact，若存在批改副本（policy_no 非唯一，见 memory feedback_policy_join_dedup）则保费/费用按副本重复累加。需先 duckdb 直查确认 PolicyFact 是否含批改副本、premium 是逐批改还是净额，再决定是否套 policy_dedup（B274 owner 决策只覆盖附加税率，去重不在其内）。【账】做完删：月度费用查询裸 FROM PolicyFact；加：与其它成本查询一致的 policy_dedup CTE；触发条件：duckdb 直查证实 premium 因批改副本虚高。 | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts (generateMonthlyExpenseQuery) |  |
 | 2026-07-05-claude-da5ac0 | 2026-07-05 | Chore | @claude | 整条 patrol 功能链退役评估（3a6daf 残留）：删 chexian-patrol 命令后，patrol_engine.py(524行) + server/src/routes/query/patrol.ts(query.ts:65 活跃挂载) + src/shared/api/patrol-api.ts(client.ts 消费) + types/patrol.ts 仍在，但①数据源 renewal_universe/latest.parquet + RENEWAL_PATROL_REPORT_FRAMEWORK.md 缺失②前端无 patrol 页面/路由消费(grep 零命中)③apiClient.patrol 子客户端无组件调用。整链处于'基础设施在位但休眠'。退役涉及 query 路由聚合器 + apiClient 架构，风险高于删命令文件，须单独评估(diagnose-renewal 是否已实质覆盖→是则整链退役/否则明确保留场景)。【账】做完删4文件+改query.ts/client.ts/api-routes/2处子客户端注册 或 明确保留并补前端消费/加0机制/触发条件=确认diagnose-renewal覆盖度 | P3 | PROPOSED | N/A | N/A |  |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功能对等覆盖 v1 场景，再切 daily.mjs 调度并删 v1。承接 B253 弃置结论。【账】做完删 v1 脚本+DEFAULT_SCHEMA 硬编码/加 0 新机制/触发条件=确认 v2 功能对等 | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ |  |
+| 2026-07-06-claude-0e26ba | 2026-07-06 | 安全治理 | @claude | session 级 IP 绑定评估:allowedIps 目前只在登录时校验一次(JWT 签发后不再比对,PAT 侧已于权限治理 PR 补齐每次校验)。若要 JWT 会话也绑 IP,需评估移动网络/办公网出口 IP 漂移导致正常用户会话中断的可用性代价,可选折中=仅对显式配置 allowedIps 的账号启用。属较大改造,先决策再动手 | P3 | PROPOSED | N/A | server/src/middleware/auth.ts,server/src/services/auth.ts:136 |  |
+| 2026-07-06-claude-286f55 | 2026-07-06 | 安全治理 | @claude | 产品决策:综合分析视图开放度与 cost 功能开关互相矛盾——生产 .env.production 的 VITE_ENABLE_COMPREHENSIVE_ANALYSIS='true' + server/ecosystem.config.cjs 的 ENABLE_COMPREHENSIVE_ANALYSIS='true' 让综合分析对全员开放,specialFeatures 'cost' 开关实际零效力(后端闸已随权限治理 PR 落地但被 env 旁路)。需业务拍板:要么撤 env 全开、让 cost 开关真正生效(前后端两处 env 必须同步撤);要么承认全员开放、把用户面 cost 开关下掉避免安全幻觉 | P2 | PROPOSED | N/A | server/src/middleware/special-feature.ts,server/ecosystem.config.cjs,.env.production |  |
+| 2026-07-06-claude-de1e40 | 2026-07-06 | 安全治理 | @claude | org_user 路由白名单扩展到非 query 域(/api/data、/api/ai、/api/agent、/api/copilot 等)需改为按域显式声明是否纳管,替代 mountedOutsideQuery 一刀切跳过。⚠️ 242c07 曾因盲目套白名单致 agent 诊断路由误伤 403,扩域必须逐域回归。现状数据层 RLS 仍生效,仅功能边界缺失,非紧急 | P2 | PROPOSED | N/A | server/src/middleware/permission.ts:186-201 |  |

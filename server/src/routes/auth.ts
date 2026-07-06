@@ -18,6 +18,7 @@ import {
   getManageableBranchScope,
   canManageBranch,
   isValidBranchCode,
+  isNationalAdmin,
 } from '../middleware/permission.js';
 import { checkAccountLock, recordLoginFailure, resetLoginAttempts } from '../middleware/rateLimiter.js';
 import { auditAuthEvent } from '../middleware/audit.js';
@@ -400,6 +401,10 @@ router.post(
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
+    // 角色表是全局单表：单省 admin 改角色定义会跨省影响其他省账号，写操作收敛到系统级超管
+    if (!isNationalAdmin(req.user ?? {})) {
+      throw new AppError(403, '角色定义为全局资产，仅系统级管理员可修改');
+    }
     const parseResult = roleSchema.safeParse(req.body);
     if (!parseResult.success) {
       throw new AppError(400, parseResult.error.issues[0].message);
@@ -415,6 +420,9 @@ router.put(
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
+    if (!isNationalAdmin(req.user ?? {})) {
+      throw new AppError(403, '角色定义为全局资产，仅系统级管理员可修改');
+    }
     const parseResult = roleSchema.safeParse({ ...req.body, role: req.params.role });
     if (!parseResult.success) {
       throw new AppError(400, parseResult.error.issues[0].message);
@@ -430,6 +438,9 @@ router.delete(
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
   asyncHandler(async (req: Request, res: Response) => {
+    if (!isNationalAdmin(req.user ?? {})) {
+      throw new AppError(403, '角色定义为全局资产，仅系统级管理员可修改');
+    }
     await deleteRole(req.params.role);
     res.json({ success: true, data: { deleted: true } });
   })
