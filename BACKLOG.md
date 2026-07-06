@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（39 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（38 项 · 数据截至 2026-07-05 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -31,7 +31,7 @@
 - 2026-06-27-claude-e96d85 `PARTIAL` — 治理工程二·机构省份元数据单一事实源(含山西在线bug)
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 
-**P2（19 项）**
+**P2（18 项）**
 
 - B314 — data-sources.json 契约/状态拆分（接续 B313）
 - B304 `PARTIAL` — earned-premium 双口径未文档化
@@ -50,7 +50,6 @@
 - 2026-07-03-claude-131dd8 — 后端审查
 - 2026-07-03-claude-6c23b3 — 后端审查
 - 2026-07-03-claude-6e93c9 — patrol 巡检报告路由(/api/query/patrol/
-- 2026-07-03-claude-6ef9cd `PARTIAL` — 安全审计M2
 - 2026-07-05-claude-2419ed — auto-release-daily.mjs（launchd 每日自动发布，今日刚装）不
 
 **P3（13 项）**
@@ -106,7 +105,6 @@
 | 2026-07-03-claude-131dd8 | 2026-07-03 | CI/测试 | @claude | 后端审查：CI 完全不跑 DuckDB 原生绑定集成测试(vite.config.ts exclude 22个 duckdb-*.test.ts + 立方体影子对账7个)，含当前最活跃的多省 RLS 隔离测试(duckdb-branch-rls-resolve/repair-branch-rls等)。相关代码回归唯一安全网只剩人工本地 test:integration。建议 CI runner 装原生二进制或 pre-push/release 关卡强制跑 | P2 | PROPOSED | N/A | vite.config.ts |  |
 | 2026-07-03-claude-6c23b3 | 2026-07-03 | 生产可靠性 | @claude | 后端审查：核心数据目录 policy/current(critical) 走普通 rsync --delete 非原子，覆盖期间与意外重启/reload 重叠会 glob 到半份数据(仅 customer_flow/new_energy_claims 走 rsyncLatestAtomically)。建议 critical 目录改影子目录+rename 原子切换。属部署链改动需 VPS 测试 | P2 | PROPOSED | N/A | scripts/sync-vps.mjs |  |
 | 2026-07-03-claude-6e93c9 | 2026-07-03 | 安全/权限模型 | @claude | patrol 巡检报告路由(/api/query/patrol/:domain)无 RLS——读单一全局巡检文件，任何登录用户看同一份全量报告，单省 admin/org_user 可跨省看数据。真正按省隔离需 Python 巡检管道(patrol_engine.py)产 per-province 文件 + 路由按 req.user.effectiveBranch 选文件（管道级改动，非后端单点可闭环）。从 P1 用户管理面隔离(d23bd0,已上线PR#869)拆出 | P2 | PROPOSED | N/A | 数据管理/.../patrol_engine.py |  |
-| 2026-07-03-claude-6ef9cd | 2026-07-03 | 安全 | @claude | 安全审计M2：生产SPA(Nginx托管)缺Content-Security-Policy响应头。Express已配CSP+已移除unsafe-eval(B320)，但前端SPA由Nginx从/var/www/chexian/frontend/dist伺服，当前无CSP(csp.ts:19注释自认follow-up)。前端零dangerouslySetInnerHTML故实际风险低,属纵深防御缺口。本次已给deploy/nginx-fullstack.conf加CSP基线(模板,不自动部署);生产落地需在conf.d/chexian.conf(本地增量)监控窗口应用+对着已构建SPA测试(防script-src过严白屏)。来源:2026-07-03安全审计 | P2 | PARTIAL | N/A | server/src/config/csp.ts | deploy/nginx-fullstack.conf + deploy/nginx.conf 的 location=/index.html 已加 CSP 基线(default-src 'self'+对齐Express connect-src+echarts img blob/data);governance 52/52通过。残留:生产 conf.d/chexian.conf 监控窗口应用+对着已构建SPA验证不白屏 |
 | 2026-07-03-claude-b714a7 | 2026-07-03 | 安全 | @claude | 安全审计L5：诊断报告(diagnose-*skills)生成HTML时,数据字段(机构名/业务员名)的转义依赖skill层;配合报告CSP的script-src 'unsafe-inline',存在理论性数据驱动XSS(数据来自内部BI字段结构化,可利用性极低)。建议报告生成器对文本字段统一HTML转义。skill在~/.claude/skills/需走crystallize-skill改仓库。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | N/A | check-merged-drift 命中 PR #874 系误报：该 PR 未动 diagnose-* skills HTML 转义，保持 PROPOSED <br>架构价值审计（2026-07-04）：技术修复=一个 escape 工具函数（5 分钟），但须走 crystallize-skill 改仓库流程（开销远大于修复）；处置=不单独走流程，等下次因其他需求改 chexian-report-shell 时夹带；数据源为内部 BI 字段，可利用性极低 |
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/health无脚本,故实际无功能影响。收紧到nonce/hash策略是纯纵深加固,需先确认无Express服务的内联脚本依赖。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | server/src/config/csp.ts | 架构价值审计冻结（2026-07-04）：Express csp.ts 的 unsafe-inline 实测无功能影响（唯一 HTML 响应 reports.ts 有独立 REPORT_HTML_CSP；SPA 的 CSP 基线已由 PR #874 下发 nginx 模板，生产应用由 6ef9cd 追踪）；unsafe-inline→nonce 需重构全部内联脚本，成本高当前收益零。触发条件=SPA CSP 生产落地后仍有内联脚本注入实证 |
 | 2026-07-05-claude-2419ed | 2026-07-05 | 数据管道/自动化 | @claude | auto-release-daily.mjs（launchd 每日自动发布，今日刚装）不会自动 git commit ETL 产生的台账文件（data-sources.json/etl-ledger.jsonl/QUICK_REFERENCE.md/knowledge/ai/field-coverage-report.json），依赖人工定期提交清空 diff，否则累积迟早再撞 governance PR体量>2000行门禁（今日实测：field-coverage-report.json 因两周未提交单文件即达2481行，触发过一次失败，已用 GOVERNANCE_LARGE_PR_OK 豁免+补提交清空）。用户拍板：先登记，本次不动代码。方向：release 成功后自动 commit+push 这几个追踪文件，或把这些文件迁出 git 改纯本地/VPS 传输不入库。 | P2 | PROPOSED | N/A | N/A |  |
