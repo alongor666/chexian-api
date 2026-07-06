@@ -386,10 +386,40 @@ describe('generateGeoRiskByPlateQuery', () => {
 // ═══════════════════════════════════════════════════
 
 describe('generateGeoComparisonQuery', () => {
-  it('使用 CTE base 计算跨地区标识', () => {
+  it('使用 CTE base_raw + base 计算跨地区标识（e9a906）', () => {
     const sql = generateGeoComparisonQuery(EMPTY_FILTERS);
-    expect(sql).toContain('WITH base AS');
+    expect(sql).toContain('WITH base_raw AS');
+    expect(sql).toContain('base AS');
+    expect(sql).toContain('plate_home_city');
     expect(sql).toContain('is_cross_region');
+  });
+
+  it('e9a906：未映射前缀不再恒判跨区 — 无 ELSE MATCH 哨兵，改为 ELSE NULL', () => {
+    const sql = generateGeoComparisonQuery(EMPTY_FILTERS);
+    expect(sql).not.toContain("ELSE 'MATCH'");
+    expect(sql).toContain('ELSE NULL');
+  });
+
+  it('e9a906：plate_home_city 为 NULL（无法识别城市）时归非跨区（按保单归属一致）', () => {
+    const sql = generateGeoComparisonQuery(EMPTY_FILTERS);
+    expect(sql).toContain('WHEN plate_home_city IS NULL THEN FALSE');
+    expect(sql).toContain('WHEN accident_city != plate_home_city THEN TRUE');
+  });
+
+  it('e9a906：映射补全至 21 个川牌前缀，值域逐字对齐（含自治州全称）', () => {
+    const sql = generateGeoComparisonQuery(EMPTY_FILTERS);
+    // 原有 6 个之外的补全抽查
+    expect(sql).toContain("WHEN p.plate_no LIKE '川D%' THEN '510400攀枝花市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川H%' THEN '510900遂宁市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川T%' THEN '512000资阳市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川Z%' THEN '510800广元市'");
+    // 自治州以 Parquet 实际值域全称为准，非「市」短名
+    expect(sql).toContain("WHEN p.plate_no LIKE '川U%' THEN '513200阿坝藏族羌族自治州'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川V%' THEN '513300甘孜藏族自治州'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川W%' THEN '513400凉山彝族自治州'");
+    // 共 21 个川牌前缀映射到「区划码+全称」
+    const mapped = sql.match(/WHEN p\.plate_no LIKE '川[A-Z]%' THEN '51\d{4}/g) ?? [];
+    expect(mapped.length).toBe(21);
   });
 
   it('过滤 plate_no IS NOT NULL', () => {
