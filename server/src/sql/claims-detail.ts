@@ -339,7 +339,7 @@ export function generateGeoComparisonQuery(filters: ClaimsDetailFilters, whereCl
   const where = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
   return `
-    WITH base AS (
+    WITH base_raw AS (
       SELECT
         c.accident_city,
         CASE
@@ -364,24 +364,50 @@ export function generateGeoComparisonQuery(filters: ClaimsDetailFilters, whereCl
           WHEN p.plate_no LIKE '渝%' THEN '重庆'
           ELSE '其他'
         END AS plate_city,
+        -- e9a906: 车牌前缀 → accident_city 值域字符串（区划码+全称，逐字对齐 Parquet 实际值域）。
+        -- 无法识别城市的前缀（渝牌对应两个区划值、外省牌等）→ NULL，按保单归属视为非跨区。
+        CASE
+          WHEN p.plate_no LIKE '川A%' THEN '510100成都市'
+          WHEN p.plate_no LIKE '川B%' THEN '510700绵阳市'
+          WHEN p.plate_no LIKE '川C%' THEN '510300自贡市'
+          WHEN p.plate_no LIKE '川D%' THEN '510400攀枝花市'
+          WHEN p.plate_no LIKE '川E%' THEN '510500泸州市'
+          WHEN p.plate_no LIKE '川F%' THEN '510600德阳市'
+          WHEN p.plate_no LIKE '川H%' THEN '510900遂宁市'
+          WHEN p.plate_no LIKE '川J%' THEN '511000内江市'
+          WHEN p.plate_no LIKE '川K%' THEN '511100乐山市'
+          WHEN p.plate_no LIKE '川L%' THEN '511300南充市'
+          WHEN p.plate_no LIKE '川M%' THEN '511400眉山市'
+          WHEN p.plate_no LIKE '川Q%' THEN '511500宜宾市'
+          WHEN p.plate_no LIKE '川R%' THEN '511700达州市'
+          WHEN p.plate_no LIKE '川S%' THEN '511800雅安市'
+          WHEN p.plate_no LIKE '川T%' THEN '512000资阳市'
+          WHEN p.plate_no LIKE '川U%' THEN '513200阿坝藏族羌族自治州'
+          WHEN p.plate_no LIKE '川V%' THEN '513300甘孜藏族自治州'
+          WHEN p.plate_no LIKE '川W%' THEN '513400凉山彝族自治州'
+          WHEN p.plate_no LIKE '川X%' THEN '511600广安市'
+          WHEN p.plate_no LIKE '川Y%' THEN '511900巴中市'
+          WHEN p.plate_no LIKE '川Z%' THEN '510800广元市'
+          ELSE NULL
+        END AS plate_home_city,
         c.reserve_amount,
-        c.is_bodily_injury,
-        CASE WHEN c.accident_city != (
-          CASE
-            WHEN p.plate_no LIKE '川A%' THEN '510100成都市'
-            WHEN p.plate_no LIKE '川B%' THEN '510700绵阳市'
-            WHEN p.plate_no LIKE '川C%' THEN '510300自贡市'
-            WHEN p.plate_no LIKE '川E%' THEN '510500泸州市'
-            WHEN p.plate_no LIKE '川F%' THEN '510600德阳市'
-            WHEN p.plate_no LIKE '川Q%' THEN '511500宜宾市'
-            ELSE 'MATCH'
-          END
-        ) THEN TRUE ELSE FALSE END AS is_cross_region
+        c.is_bodily_injury
       FROM ClaimsDetail c
       JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
       WHERE ${where}${policyWhere}
         AND p.plate_no IS NOT NULL
         AND c.accident_city IS NOT NULL  -- 与 generateGeoRiskByAccidentQuery 共享 cohort（codex review PR #411 第三轮 P1）
+    ),
+    base AS (
+      SELECT
+        *,
+        -- e9a906 拍板口径：plate_home_city 为 NULL（无法识别归属城市）视为与保单归属一致，归非跨区
+        CASE
+          WHEN plate_home_city IS NULL THEN FALSE
+          WHEN accident_city != plate_home_city THEN TRUE
+          ELSE FALSE
+        END AS is_cross_region
+      FROM base_raw
     )
     SELECT
       COUNT(*) AS total_cases,
