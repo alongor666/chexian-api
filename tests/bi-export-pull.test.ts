@@ -128,6 +128,73 @@ describe('evaluateManifestReports（断线兜底：缺 code / 旧 mtime / 字节
   });
 });
 
+describe('多省份 manifest（分省上线后同一 code 下 SC+SX 两条 — 2026-07-06 修复 .find() 丢省 bug）', () => {
+  // 复现实测：manifest 里山西排在四川前面，.find() 版本永远只挑到山西，
+  // 四川的 01/02/03/05 从未被分发/校验，本地 ETL 源静默停在陈旧快照且不报错。
+  function sxSc(code: string) {
+    const sx = report(code, {
+      province: 'shanxi',
+      file: `shanxi_20250601-20260705_${code}_报表.xlsx`,
+    });
+    const sc = report(code, {
+      province: 'sichuan',
+      file: `sichuan_20260601-20260705_${code}_报表.xlsx`,
+    });
+    return [sx, sc];
+  }
+
+  function multiProvinceBatch() {
+    return REQUIRED_REPORT_CODES.flatMap((c: string) => (c === '04' ? [report(c)] : sxSc(c)));
+  }
+
+  it('SC+SX 均新鲜 → 两条都进 reports（不再只挑第一条）', () => {
+    const reports = multiProvinceBatch();
+    const r = evaluateManifestReports(manifestOf(reports), { todayBeijing: TODAY, statByName: statsFor(reports) });
+    expect(r.ok).toBe(true);
+    const code01 = r.reports.filter((x: { code: string }) => x.code === '01');
+    expect(code01).toHaveLength(2);
+    expect(code01.map((x: { province: string }) => x.province).sort()).toEqual(['shanxi', 'sichuan'].sort());
+  });
+
+  it('🔴 复现事故：SX 新鲜但 SC 停在昨天 → 硬闸整体 ok=false 且精确指名是 sichuan 那条不新鲜', () => {
+    const reports = multiProvinceBatch();
+    const scIdx = reports.findIndex((r) => r.code === '01' && r.province === 'sichuan');
+    reports[scIdx] = { ...reports[scIdx], mtime: '2026-07-03T02:31:14Z' }; // 北京 07-03，非今天
+    const r = evaluateManifestReports(manifestOf(reports), { todayBeijing: TODAY, statByName: statsFor(reports) });
+    // 硬闸 code：不健康的省份仍留在 reports 里（原语义——outer ok=false 才是真正的拦截点，
+    // --force 时靠这份 reports 继续分发），关键是 ok 必须为 false 且精确点名哪个省份的问题。
+    expect(r.ok).toBe(false);
+    const code01 = r.reports.filter((x: { code: string }) => x.code === '01');
+    expect(code01.map((x: { province: string }) => x.province).sort()).toEqual(['shanxi', 'sichuan'].sort());
+    expect(r.issues.find((i: { code: string | null; message: string }) => i.code === '01' && i.message.includes('sichuan'))?.message)
+      .toContain('不是北京时间今天');
+    // 山西那条本身没问题，不应该被牵连出一条不相关的 error
+    expect(r.issues.filter((i: { code: string | null }) => i.code === '01')).toHaveLength(1);
+  });
+
+  it('--allow-stale 只豁免被指名 code 里所有省份的新鲜度', () => {
+    const reports = multiProvinceBatch();
+    const scIdx = reports.findIndex((r) => r.code === '02' && r.province === 'sichuan');
+    reports[scIdx] = { ...reports[scIdx], mtime: '2026-07-03T02:31:14Z' };
+    const r = evaluateManifestReports(manifestOf(reports), {
+      todayBeijing: TODAY, statByName: statsFor(reports), allowStaleCodes: ['02'],
+    });
+    expect(r.ok).toBe(true);
+    expect(r.reports.filter((x: { code: string }) => x.code === '02')).toHaveLength(2);
+  });
+
+  it('evaluateRemoteManifest 同样逐省判定：SC 停在昨天 → 未就绪，仅 SX 计入已出', () => {
+    const reports = multiProvinceBatch();
+    const scIdx = reports.findIndex((r) => r.code === '05' && r.province === 'sichuan');
+    reports[scIdx] = { ...reports[scIdx], mtime: '2026-07-03T02:31:14Z' };
+    const r = evaluateRemoteManifest(manifestOf(reports), { todayBeijing: TODAY });
+    expect(r.ready).toBe(false);
+    const code05 = r.reports.filter((x: { code: string }) => x.code === '05');
+    expect(code05).toHaveLength(1);
+    expect(code05[0].province).toBe('shanxi');
+  });
+});
+
 describe('routeBranchCode（前缀→省份路由；前缀只是路由键，权威判据是内容核验）', () => {
   it('shanxi_ → SX', () => {
     expect(routeBranchCode('shanxi_20250601-20260703_01_签单清单_定稿.xlsx')).toBe('SX');

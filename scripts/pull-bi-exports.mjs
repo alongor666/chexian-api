@@ -158,7 +158,8 @@ function loadManifestAndValidate({ force, allowStaleCodes }) {
 
   log('cyan', `\n▶ [2/4] manifest 校验（北京时间今天 = ${todayBeijing}）`);
   for (const r of result.reports) {
-    log('green', `  ✓ code ${r.code} ${r.reportName} | ${r.sizeMB}MB | mtime北京 ${beijingDayOf(r.mtime)}`);
+    const tag = r.province ? `[${r.province}] ` : '';
+    log('green', `  ✓ code ${r.code} ${tag}${r.reportName} | ${r.sizeMB}MB | mtime北京 ${beijingDayOf(r.mtime)}`);
   }
   for (const issue of result.issues) {
     log(issue.level === 'error' ? 'red' : 'yellow', `  ${issue.level === 'error' ? '❌' : '⚠'} ${issue.message}`);
@@ -213,12 +214,13 @@ function samplePolicyNos(python, xlsxPath, sourceColumn, nrows) {
 
 function verifyProvince(reports, { skipVerifyProvince }) {
   log('cyan', '\n▶ [3/4] 省份内容核验（文件名前缀是配置标签，不可当权威省份判据）');
-  const signing = reports.find((r) => r.code === '01');
-  if (!signing) {
+  // 分省上线后 01 签单表每省一条当前份（见 bi-export-pull.mjs 的 .filter() 修复说明），
+  // 必须逐条核验 —— 只核验第一条会让另一省的省份错配（如换账号没改 PROVINCE 配置）溜过去。
+  const signings = reports.filter((r) => r.code === '01');
+  if (signings.length === 0) {
     log('yellow', '  ⚠ 本批无 01 签单表，跳过省份内容核验');
     return;
   }
-  const declaredCode = routeBranchCode(signing.file);
   const fail = (msg) => {
     if (skipVerifyProvince) {
       log('red', `  ⚠ ${msg}`);
@@ -238,25 +240,32 @@ function verifyProvince(reports, { skipVerifyProvince }) {
   } catch (e) {
     return fail(e.message);
   }
-  let samples;
-  try {
-    samples = samplePolicyNos(python, join(INBOX_DIR, signing.file), derivation.policySourceColumn, PROVINCE_SAMPLE_ROWS);
-  } catch (e) {
-    return fail(e.message);
+
+  for (const signing of signings) {
+    const declaredCode = routeBranchCode(signing.file);
+    let samples;
+    try {
+      samples = samplePolicyNos(python, join(INBOX_DIR, signing.file), derivation.policySourceColumn, PROVINCE_SAMPLE_ROWS);
+    } catch (e) {
+      fail(e.message);
+      continue;
+    }
+    const verdict = derivePolicyProvince(samples, derivation.mapping, derivation.prefixLength);
+    if (!verdict.consistent) {
+      fail(
+        `01 签单保单号省份不一致：已注册省 ${JSON.stringify(verdict.counts)}，未知前缀 ${JSON.stringify(verdict.unknownPrefixes)}（抽样 ${verdict.sampled} 行，文件 ${signing.file}）`
+      );
+      continue;
+    }
+    if (verdict.code !== declaredCode) {
+      fail(
+        `省份错配：文件名前缀声明 ${declaredCode}，但保单号内容实测 ${verdict.code}（抽样 ${verdict.sampled} 行全部一致，文件 ${signing.file}）。` +
+        '典型根因 = 上游换登录账号但没改导出脚本 PROVINCE 常量，须先修上游再拉。'
+      );
+      continue;
+    }
+    log('green', `  ✓ 内容实测 ${verdict.code}（抽样 ${verdict.sampled} 行保单号一致）= 文件名声明 ${declaredCode}（${signing.file}）`);
   }
-  const verdict = derivePolicyProvince(samples, derivation.mapping, derivation.prefixLength);
-  if (!verdict.consistent) {
-    return fail(
-      `01 签单保单号省份不一致：已注册省 ${JSON.stringify(verdict.counts)}，未知前缀 ${JSON.stringify(verdict.unknownPrefixes)}（抽样 ${verdict.sampled} 行）`
-    );
-  }
-  if (verdict.code !== declaredCode) {
-    return fail(
-      `省份错配：文件名前缀声明 ${declaredCode}，但保单号内容实测 ${verdict.code}（抽样 ${verdict.sampled} 行全部一致）。` +
-      '典型根因 = 上游换登录账号但没改导出脚本 PROVINCE 常量，须先修上游再拉。'
-    );
-  }
-  log('green', `  ✓ 内容实测 ${verdict.code}（抽样 ${verdict.sampled} 行保单号一致）= 文件名声明 ${declaredCode}`);
 }
 
 // ── Step 4: 分发到 ETL 源目录 ──
@@ -363,7 +372,10 @@ function main() {
   verifyProvince(result.reports, opts);
   const backfillCount = distribute(result.reports, manifest, opts);
 
-  log('green', `\n✅ 拉取${opts.dryRun ? '计划打印' : ''}完成：${result.reports.length}/${REQUIRED_REPORT_CODES.length} 张报表${backfillCount > 0 ? ` + ${backfillCount} 个补导文件` : ''}${opts.dryRun ? '' : '已就位，可跑 ETL（release:daily 或 daily.mjs）'}`);
+  // 一个 code 现在可能有多省份份数（如 01/02/03/05 各 SC+SX 两份），
+  // 分子分母都用「份数」对不上「code 数」会看着像超过 100% —— 拆开报告两个数字更清楚。
+  const distinctCodes = new Set(result.reports.map((r) => r.code)).size;
+  log('green', `\n✅ 拉取${opts.dryRun ? '计划打印' : ''}完成：${distinctCodes}/${REQUIRED_REPORT_CODES.length} 张报表（共 ${result.reports.length} 份，含分省）${backfillCount > 0 ? ` + ${backfillCount} 个补导文件` : ''}${opts.dryRun ? '' : '已就位，可跑 ETL（release:daily 或 daily.mjs）'}`);
 }
 
 main();
