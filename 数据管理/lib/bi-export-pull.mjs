@@ -100,40 +100,47 @@ export function evaluateManifestReports(manifest, { todayBeijing, statByName, al
     const report = optional ? warn : err;
     const optNote = optional ? '（可选表：跳过分发，保留本地旧维表）' : '';
 
-    const r = manifest.reports.find((x) => x && x.code === code);
-    if (!r) {
+    // 分省上线后，同一 code 下可能有多个省份的当前份（如 01/02/03/05 各有 SC+SX 两条）。
+    // .find() 只取数组里第一条会静默丢弃后面省份的报表 —— 必须 .filter() 逐条校验+分发
+    // （2026-07-06 实测：SX 排在 manifest 前面，.find() 版本导致 SC 的 01/03/05 从未被
+    // 分发，ETL 每天重复处理同一份陈旧源文件却不报错）。
+    const entries = manifest.reports.filter((x) => x && x.code === code);
+    if (entries.length === 0) {
       report(code, `manifest 缺 code ${code}${optional ? optNote : '（上游断线兜底：当天可能缺文件，禁止默默用旧数据）'}`);
       continue;
     }
-    const stat = statByName?.[r.file] ?? null;
-    if (!stat) {
-      report(code, `code ${code} 本地文件缺失：${r.file}（rsync 未落地？）${optNote}`);
-      continue;
-    }
-    let healthy = true;
-    if (Number.isFinite(r.sizeBytes) && stat.size !== r.sizeBytes) {
-      // 传输完整性问题不属于"新鲜度"，--allow-stale 不豁免
-      report(code, `code ${code} 字节数不一致：本地 ${stat.size} ≠ manifest ${r.sizeBytes}（传输不完整或上游正在重写）${optNote}`);
-      healthy = false;
-    }
-    const day = beijingDayOf(r.mtime);
-    if (day !== todayBeijing) {
-      if (!optional && allowStaleCodes.includes(code)) {
-        warn(code, `code ${code} mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}）——已被 --allow-stale 显式豁免，按旧份分发`);
-        // 豁免：不影响 healthy，照常分发
-      } else {
-        report(code, `code ${code} mtime 不是北京时间今天：${day ?? '(无效)'} ≠ ${todayBeijing}${optional ? optNote : '（上游断线，禁止默默用旧数据）'}`);
+    for (const r of entries) {
+      const tag = r.province ? `[${r.province}] ` : '';
+      const stat = statByName?.[r.file] ?? null;
+      if (!stat) {
+        report(code, `code ${code} ${tag}本地文件缺失：${r.file}（rsync 未落地？）${optNote}`);
+        continue;
+      }
+      let healthy = true;
+      if (Number.isFinite(r.sizeBytes) && stat.size !== r.sizeBytes) {
+        // 传输完整性问题不属于"新鲜度"，--allow-stale 不豁免
+        report(code, `code ${code} ${tag}字节数不一致：本地 ${stat.size} ≠ manifest ${r.sizeBytes}（传输不完整或上游正在重写）${optNote}`);
         healthy = false;
       }
+      const day = beijingDayOf(r.mtime);
+      if (day !== todayBeijing) {
+        if (!optional && allowStaleCodes.includes(code)) {
+          warn(code, `code ${code} ${tag}mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}）——已被 --allow-stale 显式豁免，按旧份分发`);
+          // 豁免：不影响 healthy，照常分发
+        } else {
+          report(code, `code ${code} ${tag}mtime 不是北京时间今天：${day ?? '(无效)'} ≠ ${todayBeijing}${optional ? optNote : '（上游断线，禁止默默用旧数据）'}`);
+          healthy = false;
+        }
+      }
+      const minMB = MIN_SIZE_MB_BY_CODE[code];
+      if (minMB != null && Number.isFinite(r.sizeMB) && r.sizeMB < minMB) {
+        report(code, `code ${code} ${tag}体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）${optNote}`);
+        healthy = false;
+      }
+      // 硬闸 code：即使个别检查失败也保留在 reports 之外由 ok=false 整体拦截（原语义）；
+      // 可选 code：只有完全健康才进入分发列表
+      if (!optional || healthy) reports.push(r);
     }
-    const minMB = MIN_SIZE_MB_BY_CODE[code];
-    if (minMB != null && Number.isFinite(r.sizeMB) && r.sizeMB < minMB) {
-      report(code, `code ${code} 体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）${optNote}`);
-      healthy = false;
-    }
-    // 硬闸 code：即使个别检查失败也保留在 reports 之外由 ok=false 整体拦截（原语义）；
-    // 可选 code：只有完全健康才进入分发列表
-    if (!optional || healthy) reports.push(r);
   }
 
   return { ok: !issues.some((i) => i.level === 'error'), issues, reports };
@@ -169,22 +176,27 @@ export function evaluateRemoteManifest(manifest, { todayBeijing }) {
     const optNote = optional ? '（可选表不拦就绪）' : '';
     const push = (message) => issues.push({ level, code, message });
 
-    const r = manifest.reports.find((x) => x && x.code === code);
-    if (!r) {
+    // 同一 code 可能有多省份当前份（见 evaluateManifestReports 同一处修复说明），
+    // 就绪判定要求该 code 下每个省份的当前份都新鲜，否则某省会被静默漏发布。
+    const entries = manifest.reports.filter((x) => x && x.code === code);
+    if (entries.length === 0) {
       push(`code ${code} 未出表（manifest 缺席）${optNote}`);
       continue;
     }
-    const day = beijingDayOf(r.mtime);
-    if (day !== todayBeijing) {
-      push(`code ${code} mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}），未出今天的表${optNote}`);
-      continue;
+    for (const r of entries) {
+      const tag = r.province ? `[${r.province}] ` : '';
+      const day = beijingDayOf(r.mtime);
+      if (day !== todayBeijing) {
+        push(`code ${code} ${tag}mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}），未出今天的表${optNote}`);
+        continue;
+      }
+      const minMB = MIN_SIZE_MB_BY_CODE[code];
+      if (minMB != null && Number.isFinite(r.sizeMB) && r.sizeMB < minMB) {
+        push(`code ${code} ${tag}体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）${optNote}`);
+        continue;
+      }
+      reports.push(r);
     }
-    const minMB = MIN_SIZE_MB_BY_CODE[code];
-    if (minMB != null && Number.isFinite(r.sizeMB) && r.sizeMB < minMB) {
-      push(`code ${code} 体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）${optNote}`);
-      continue;
-    }
-    reports.push(r);
   }
   return { ready: !issues.some((i) => i.level === 'error'), issues, reports };
 }
