@@ -46,7 +46,7 @@ import { bumpDataVersionFromTimestamp } from './data-version.js';
 // Types
 // ============================================
 
-interface ParquetFileInfo {
+export interface ParquetFileInfo {
   name: string;
   path: string;
   size: number;
@@ -228,6 +228,14 @@ export class DataBootstrapper {
    * 今天 current/ 扁平无子目录 → discoverInDir 返回 branch 全 undefined → 本闸两条均不触发 → 行为休眠。
    */
   private enforceProvinceSubdirGate(files: ParquetFileInfo[]): ParquetFileInfo[] {
+    return DataBootstrapper.enforceProvinceSubdirGate(files);
+  }
+
+  /**
+   * GATED 闸静态实现（B4 复用点）：web 上传后的 current/ 合并加载（routes/data-layout.ts）
+   * 与启动 bootstrap 共用同一份 fail-closed 判定，禁止在 data.ts 手写第二份闸逻辑。
+   */
+  static enforceProvinceSubdirGate(files: ParquetFileInfo[]): ParquetFileInfo[] {
     const subdirFiles = files.filter(f => f.branch !== undefined);
     if (subdirFiles.length === 0) return files; // 无省份子目录 → 休眠（含今天扁平布局）
 
