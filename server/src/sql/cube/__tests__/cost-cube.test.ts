@@ -127,7 +127,7 @@ describe('generateCostCubeQuery（输出列与 cost-ratios.ts 逐列同名）', 
     expenseRatio: ['dim_key', 'policy_count', 'total_premium', 'total_fee', 'expense_ratio'],
     comprehensiveCost: [
       'dim_key', 'policy_count', 'total_premium', 'total_reported_claims', 'total_fee',
-      'earned_premium', 'earned_claim_ratio', 'expense_ratio', 'comprehensive_cost_ratio',
+      'earned_premium', 'earned_claim_ratio', 'expense_ratio', 'comprehensive_expense_ratio',
       'earned_margin_amount', 'projected_margin_amount',
     ],
     variableCost: [
