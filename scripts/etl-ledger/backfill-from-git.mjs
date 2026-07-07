@@ -5,6 +5,10 @@
  * 主力来源 = data-sources.json 的 git 提交历史（每次 ETL 同步 metadata 都留痕）。
  * 诚实边界：历史 row_count 取自快照参考值（手填，可能与当时真实 Parquet 有偏差）；
  * 粒度为「每次 metadata 提交」，非每次真实 ETL run；git 只留成功提交 → 历史段无失败记录。
+ *
+ * 适用边界（B314 契约/状态拆分后）：拆分之日起 data-sources.json 的 git 历史不再携带
+ * row_count 等状态字段（改由 gitignored 的 data-sources-status.json 承载，台账由
+ * daily.mjs 直接埋点），本工具只服务拆分前历史段的回填，勿对新历史使用。
  */
 import { appendFileSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';

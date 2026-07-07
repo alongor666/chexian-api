@@ -94,6 +94,9 @@ import {
 // 新命名全量文件之前，使 convert_claims_detail.py 的 drop_duplicates(keep='last') 让
 // 「最新全量」覆盖「旧快照」，而非相反（可单测，见 tests/claims-source-order.test.ts）
 import { orderClaimsSourceFiles } from './lib/claims-source-order.mjs';
+// data-sources.json 契约/状态拆分（BACKLOG B314）：运行时状态（row_count/last_updated/
+// field_count/data_range）改写到 gitignored 的 data-sources-status.json，契约文件保持纯粹
+import { readStatusDomains, writeStatusDomain, mergeDomainStatus } from './lib/data-sources-status.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -418,6 +421,7 @@ function cleanStaging(stagingDir) {
 // ── data-sources.json 自动更新 ──
 
 const DATA_SOURCES_PATH = join(__dirname, 'data-sources.json');
+const DATA_SOURCES_STATUS_PATH = join(__dirname, 'data-sources-status.json');
 const QUICK_REFERENCE_PATH = join(__dirname, 'knowledge/QUICK_REFERENCE.md');
 
 function updateDataSources(domainId, { rowCount, fieldCount, dataRange } = {}) {
@@ -427,21 +431,26 @@ function updateDataSources(domainId, { rowCount, fieldCount, dataRange } = {}) {
     const domain = config.domains?.find(d => d.id === domainId);
     if (!domain) { log('yellow', `  ⚠️ data-sources.json 中未找到域 '${domainId}'`); return; }
 
-    domain.last_updated = new Date().toISOString().slice(0, 10);
-    if (rowCount != null) domain.row_count = rowCount;
-    if (fieldCount != null) domain.field_count = fieldCount;
-    if (dataRange != null) domain.data_range = dataRange;
+    // 状态字段（B314 拆分后）只写状态文件，契约文件 data-sources.json 保持不动
+    const lastUpdated = new Date().toISOString().slice(0, 10);
+    const writtenEntry = writeStatusDomain(DATA_SOURCES_STATUS_PATH, domainId, {
+      last_updated: lastUpdated,
+      row_count: rowCount,
+      field_count: fieldCount,
+      data_range: dataRange,
+    });
 
-    writeFileSync(DATA_SOURCES_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-    log('green', `  📋 data-sources.json 已更新: ${domainId} (rows=${rowCount?.toLocaleString() ?? '-'})`);
-    // ②etl 埋点：每域成功更新 metadata = 一次转换成功（统一锚点，覆盖所有域）
+    log('green', `  📋 data-sources-status.json 已更新: ${domainId} (rows=${rowCount?.toLocaleString() ?? '-'})`);
+    // ②etl 埋点：每域成功更新状态 = 一次转换成功（统一锚点，覆盖所有域）
+    // fallback 取「契约 + 状态」合并视图（旧值），而非仅契约（契约不再携带这些字段）
+    const merged = mergeDomainStatus(domain, readStatusDomains(DATA_SOURCES_STATUS_PATH)[domainId]);
     recordEvent({
       stage: 'etl', step: `${domainId}_transform`, domain: domainId, status: 'success',
-      row_count: rowCount ?? domain.row_count, field_count: fieldCount ?? domain.field_count,
-      date_range: domain.data_range,
+      row_count: rowCount ?? merged.row_count, field_count: fieldCount ?? merged.field_count,
+      date_range: dataRange ?? merged.data_range ?? writtenEntry.data_range,
     });
   } catch (e) {
-    log('yellow', `  ⚠️ data-sources.json 更新失败: ${e.message}`);
+    log('yellow', `  ⚠️ data-sources-status.json 更新失败: ${e.message}`);
   }
 }
 

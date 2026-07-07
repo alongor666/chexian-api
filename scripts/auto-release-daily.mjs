@@ -48,6 +48,7 @@ import { beijingDayOf, evaluateRemoteManifest } from '../数据管理/lib/bi-exp
 import {
   DEFAULT_WINDOW, DEFAULT_MAX_ATTEMPTS, isValidHHMM, decideTickAction, nextState,
 } from '../数据管理/lib/auto-release-decision.mjs';
+import { evaluateLedgerUncommittedBulk, LEDGER_TRACKED_FILES } from './etl-ledger/governance-check.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(__filename, '../..');
@@ -210,6 +211,27 @@ function runReleaseDaily() {
   return { ok: r.status === 0, detail: `exit=${r.status}` };
 }
 
+/**
+ * 发布成功收尾：提醒入库台账文件的未提交 diff 体量（2419ed）。
+ * 本脚本刻意不自动 commit/push（launchd 无人环境跑 git push+gh 的故障面 > 收益，
+ * 取舍详见 2419ed 落账）；只复用 governance 同一判定函数打日志提醒，
+ * 用户经 auto-release:status / governance 均可见。失败降级静默，不影响发布结果。
+ */
+function remindLedgerUncommitted() {
+  try {
+    const r = spawnSync('git', ['-c', 'core.quotepath=off', 'diff', '--numstat', 'HEAD', '--', ...LEDGER_TRACKED_FILES], {
+      cwd: PROJECT_ROOT, encoding: 'utf8',
+    });
+    if (r.status !== 0 || !r.stdout) return;
+    const files = r.stdout.split('\n').filter(Boolean).map((line) => {
+      const [added, deleted, ...rest] = line.split('\t');
+      return { path: rest.join('\t'), added: Number(added) || 0, deleted: Number(deleted) || 0 };
+    });
+    const { level, message } = evaluateLedgerUncommittedBulk({ files });
+    log(level === 'ok' ? 'cyan' : 'yellow', `📒 ${message}`);
+  } catch { /* 提醒失败不影响发布结果 */ }
+}
+
 // ── launchd 安装 / 卸载 ──
 
 function resolveNodeBin() {
@@ -352,6 +374,7 @@ async function main() {
   if (result.ok) {
     writeState(nextState('released', { todayBeijing, prevState: state, note: '自动发布成功', nowISO: now }));
     await notify('自动发布成功', `release:daily 完成（北京 ${todayBeijing} ${beijingNowHHMM()}），五张表 mtime 均为今天`);
+    remindLedgerUncommitted();
   } else {
     const st = nextState('failed', { todayBeijing, prevState: state, note: `release:daily 失败 ${result.detail}`, nowISO: now });
     writeState(st);

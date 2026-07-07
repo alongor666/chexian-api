@@ -1,15 +1,21 @@
 #!/usr/bin/env node
 /**
- * 发布后验证脚本：比对本地 parquet 实读值与 data-sources.json（和可选 manifest）声明值。
+ * 发布后验证脚本：比对本地 parquet 实读值与 data-sources.json + data-sources-status.json
+ * （和可选 manifest）声明值。
  *
- * 基线来源（零手工输入）：
- *   1. `数据管理/data-sources.json` 的 output 路径、row_count、data_range（权威元数据）
- *   2. 可选 `--manifest <path>`：manifest 的 expected_max_date / expected_min_date / report_end
- *      优先覆盖 data-sources.json 的日期期望（用于新发布演练）
+ * 基线来源（零手工输入，B314 契约/状态拆分后）：
+ *   1. `数据管理/data-sources.json`：契约（output 路径等入库元数据，不含 row_count/data_range）
+ *   2. `数据管理/data-sources-status.json`：运行时状态（row_count/data_range，ETL 自动生成，
+ *      gitignored；首跑 ETL 前可能不存在或缺该域记录）
+ *      两者按 `mergeDomainStatus` 合并（状态覆盖契约同名字段）作为期望值来源
+ *   3. 可选 `--manifest <path>`：manifest 的 expected_max_date / expected_min_date / report_end
+ *      优先覆盖合并视图的日期期望（用于新发布演练）
  *
  * 检查规则：
- *   - row_count：parquet 实读 >= 元数据声明（允许增长，不允许缩减）
+ *   - row_count：parquet 实读 >= 合并视图声明（允许增长，不允许缩减）
  *   - max_date：声明了 data_range 或 manifest 期望时必须一致
+ *   - 合并视图既无 row_count 也无 data_range（活跃域但状态文件缺基线）：打印警告，
+ *     仍执行 parquet 可读性探测与 manifest 期望比对，不计入失败
  *
  * 用法:
  *   node scripts/verify-data-release.mjs                                 # 默认基线
@@ -23,10 +29,13 @@ import { spawnSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+// 中文相对路径在 ESM **静态** import 下是安全的（项目坑仅在动态 import 中文路径，见项目记忆）
+import { readStatusDomains, mergeDomainStatus } from '../数据管理/lib/data-sources-status.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..');
 const DATA_SOURCES_PATH = join(PROJECT_ROOT, '数据管理/data-sources.json');
+const DATA_SOURCES_STATUS_PATH = join(PROJECT_ROOT, '数据管理/data-sources-status.json');
 
 const PARQUET_DATE_COLUMN = {
   premium: 'policy_date',
@@ -97,16 +106,19 @@ function main() {
   }
 
   const cfg = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'));
+  const statusDomains = readStatusDomains(DATA_SOURCES_STATUS_PATH);
   const manifestExp = loadManifestExpectations(args.manifest);
 
   let failed = 0;
   let checked = 0;
-  console.log(`▶ 发布验证（basin: data-sources.json${args.manifest ? ` + manifest` : ''}）\n`);
+  console.log(`▶ 发布验证（basin: data-sources.json + data-sources-status.json${args.manifest ? ` + manifest` : ''}）\n`);
 
   for (const domain of cfg.domains) {
     if (args.domain && domain.id !== args.domain) continue;
     if (!domain.output) continue;
     checked++;
+
+    const merged = mergeDomainStatus(domain, statusDomains[domain.id]);
 
     const parquetGlob = join(PROJECT_ROOT, '数据管理', domain.output).replace(/\\/g, '/');
     const dateColumn = PARQUET_DATE_COLUMN[domain.id] || null;
@@ -118,13 +130,17 @@ function main() {
       continue;
     }
 
+    if (merged.row_count == null && merged.data_range == null) {
+      console.log(`  ⚠ ${domain.id.padEnd(22)} 无状态基线（data-sources-status.json 缺该域），跳过 row_count/data_range 期望比对`);
+    }
+
     const errors = [];
-    if (typeof domain.row_count === 'number' && probe.rows < domain.row_count) {
-      errors.push(`row_count ${probe.rows} < 声明 ${domain.row_count}`);
+    if (typeof merged.row_count === 'number' && probe.rows < merged.row_count) {
+      errors.push(`row_count ${probe.rows} < 声明 ${merged.row_count}`);
     }
 
     const expectedMax = manifestExp[domain.id]?.max_date
-      || (domain.data_range && domain.data_range !== '-' ? domain.data_range.split('~').pop().trim() : null);
+      || (merged.data_range && merged.data_range !== '-' ? merged.data_range.split('~').pop().trim() : null);
     if (expectedMax && probe.max_date && probe.max_date !== expectedMax) {
       errors.push(`max_date ${probe.max_date} ≠ 期望 ${expectedMax}`);
     }
