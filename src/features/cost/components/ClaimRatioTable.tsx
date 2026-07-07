@@ -45,6 +45,20 @@ interface DisplayClaimRatioData {
 }
 
 /**
+ * 排序比较器：赔付率从高到低，汇总行置底。
+ *
+ * 对称比较（避免双汇总行时 comparator 违反反对称——原实现 isAgg(a) 命中即恒返回 1，
+ * isAgg(b) 命中即恒返回 -1，两个汇总行互比时同时得到 compare(a,b)=1 与
+ * compare(b,a)=1，破坏 sort 稳定性；参照 ComprehensiveMetricTable.tsx 的对称写法）。
+ */
+export function compareClaimRatioRows(a: ClaimRatioData, b: ClaimRatioData): number {
+  const isAggA = isBranchSummaryRow(a.dim_key);
+  const isAggB = isBranchSummaryRow(b.dim_key);
+  if (isAggA !== isAggB) return isAggA ? 1 : -1;
+  return (b.earned_claim_ratio ?? 0) - (a.earned_claim_ratio ?? 0);
+}
+
+/**
  * 转换数据为显示格式
  * 遵循全局格式化规范（见 CLAUDE.md §2.5）：
  * - 件数：整数，千分位 → formatCount
@@ -99,12 +113,7 @@ export const ClaimRatioTable: React.FC<ClaimRatioTableProps> = ({
 
   // 转换数据（先排序：赔付率从高到低，汇总行置底）
   const displayData = useMemo(() => {
-    const sorted = data.slice().sort((a, b) => {
-      const isAgg = (key: string) => isBranchSummaryRow(key);
-      if (isAgg(a.dim_key)) return 1;
-      if (isAgg(b.dim_key)) return -1;
-      return (b.earned_claim_ratio ?? 0) - (a.earned_claim_ratio ?? 0);
-    });
+    const sorted = data.slice().sort(compareClaimRatioRows);
     return transformData(sorted);
   }, [data]);
 

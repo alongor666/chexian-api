@@ -12,31 +12,6 @@
  * 团队与业务员合并为同一下钻层，前端树形折叠/展开展示。
  */
 
-// ─── 维度类型定义 ────────────────────────────────────────────────────────────
-
-/** 业绩分析支持的下钻维度 */
-export type PerformanceDrillDimension =
-  | 'org_level_3'
-  | 'team'
-  | 'salesman'
-  | 'customer_category';
-
-/** 驾意险支持的下钻维度（数据已锁客车，无客户类别层） */
-export type CrossSellDrillDimension =
-  | 'org_level_3'
-  | 'team'
-  | 'salesman';
-
-/** 续保分析层级（线性，顺序固定 — V1 兼容） */
-export type RenewalDrillLevel = 'company' | 'org' | 'team' | 'salesman';
-
-/** 续保分析自由维度（V2） */
-export type RenewalDrillDimension =
-  | 'org_level_3'
-  | 'team'
-  | 'salesman'
-  | 'customer_category';
-
 // ─── 维度中文标签 ────────────────────────────────────────────────────────────
 
 /**
@@ -87,49 +62,6 @@ export interface ConditionalDimensionRule {
  */
 export const CONDITIONAL_DIMENSION_RULES: ConditionalDimensionRule[] = [];
 
-// ─── 板块维度配置 ────────────────────────────────────────────────────────────
-
-/** 业绩分析 — 自由维度下钻 */
-export const PERFORMANCE_DIMENSIONS: PerformanceDrillDimension[] = [
-  'org_level_3',
-  'team',
-  'salesman',
-  'customer_category',
-];
-
-/** 驾意险 — 自由维度下钻（数据锁客车，无客户类别层） */
-export const CROSS_SELL_DIMENSIONS: CrossSellDrillDimension[] = [
-  'org_level_3',
-  'team',
-  'salesman',
-];
-
-/** 续保分析 — 线性层级（V1 兼容，去掉 'coverage' 层） */
-export const RENEWAL_LEVEL_ORDER: RenewalDrillLevel[] = [
-  'company',
-  'org',
-  'team',
-  'salesman',
-];
-
-export const RENEWAL_LEVEL_LABELS: Record<RenewalDrillLevel, string> = {
-  company: '四川分公司',
-  org: '三级机构',
-  team: '销售团队',
-  salesman: '业务员',
-};
-
-/** 续保分析 — 自由维度下钻（V2） */
-export const RENEWAL_DIMENSIONS: RenewalDrillDimension[] = [
-  'org_level_3',
-  'team',
-  'salesman',
-  'customer_category',
-];
-
-/** 假日营销 — 2层线性（机构→业务员；暂未合并 team 层，下次迭代） */
-export const HOLIDAY_LEVEL_ORDER = ['org', 'salesman'] as const;
-
 // ─── 工具函数 ────────────────────────────────────────────────────────────────
 
 /**
@@ -154,14 +86,4 @@ export function getConditionalDimensions(
   }
 
   return extras;
-}
-
-/**
- * 判断某个维度是否属于条件维度。
- * 2026-04-17 收敛后恒返回 false；保留以避免消费方破坏。
- */
-export function isConditionalDimension(dimension: string): boolean {
-  return CONDITIONAL_DIMENSION_RULES.some((rule) =>
-    rule.addDimensions.includes(dimension),
-  );
 }
