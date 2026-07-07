@@ -1,5 +1,5 @@
 {
-  "_comment": "数据域元数据注册表 — 唯一事实源。ETL 脚本运行后自动更新 last_updated。",
+  "_comment": "数据域契约注册表 — 唯一事实源（域定义/ETL 配置/trigger/api_routes）。运行时状态（row_count/last_updated/data_range/field_count）已拆至 data-sources-status.json（gitignored，ETL 自动生成，缺失时首跑自动创建；B314）。deprecated/上游停更域保留末次状态字段作冻结快照兜底，status 存在时以 status 为准。",
   "domains": [
     {
       "id": "premium",
@@ -11,10 +11,6 @@
       "output": "warehouse/fact/policy/current/*.parquet",
       "update_cadence": "daily_incremental",
       "shard_strategy": "3层分片(static/weekly/daily)",
-      "last_updated": "2026-07-06",
-      "data_range": "2021-01-01 ~ 2026-05-16",
-      "row_count": 4464114,
-      "field_count": 42,
       "key_fields": [
         "保单号",
         "签单日期",
@@ -46,10 +42,6 @@
       "etl_script": "pipelines/convert_claims_detail.py",
       "output": "warehouse/fact/claims_detail/claims_*.parquet",
       "update_cadence": "daily_cdc_partition",
-      "last_updated": "2026-07-06",
-      "data_range": "2019-01-01 ~ 2026-05-16",
-      "row_count": 291218,
-      "field_count": 41,
       "key_fields": [
         "claim_no",
         "policy_no",
@@ -92,10 +84,6 @@
       },
       "output": "warehouse/fact/quotes_conversion/latest.parquet",
       "update_cadence": "with_quote_data",
-      "last_updated": "2026-07-06",
-      "data_range": "2025-12-02 ~ 2026-05-20",
-      "row_count": 919274,
-      "field_count": 33,
       "key_fields": [
         "quote_time",
         "org_level_3",
@@ -161,9 +149,6 @@
       "etl_script": "无",
       "output": "warehouse/dim/plate_region/latest.parquet",
       "update_cadence": "irregular",
-      "last_updated": "2026-03-01",
-      "row_count": 435,
-      "field_count": 3,
       "key_fields": [
         "plate_prefix",
         "province",
@@ -189,9 +174,6 @@
       },
       "output": "warehouse/dim/brand/latest.parquet",
       "update_cadence": "with_premium",
-      "last_updated": "2026-07-06",
-      "row_count": 371359,
-      "field_count": 15,
       "key_fields": [
         "vehicle_model_code",
         "vehicle_model_name",
@@ -213,9 +195,6 @@
       "etl_script": "warehouse/dim/generate_dim_tables.py",
       "output": "warehouse/dim/salesman/latest.parquet",
       "update_cadence": "annual_or_semiannual",
-      "last_updated": "2026-06-10",
-      "row_count": 615,
-      "field_count": 10,
       "key_fields": [
         "business_no",
         "salesman_name",
@@ -234,9 +213,6 @@
       "etl_script": "warehouse/dim/generate_dim_tables.py",
       "output": "warehouse/dim/plan/latest.parquet",
       "update_cadence": "annual_or_semiannual",
-      "last_updated": "2026-06-10",
-      "row_count": 855,
-      "field_count": 16,
       "key_fields": [
         "plan_year",
         "level",
@@ -352,11 +328,7 @@
         "/api/query/repair/status"
       ],
       "frontend_page": "repair",
-      "notes": "维修厂合作数据，12列+派生 shop_code（前8位编码），含核损金额/换件折扣率/合作状态。2026-04-18 重设计：引入 coop_tier 三态分类 + shop_code JOIN ClaimsDetail",
-      "last_updated": "2026-07-06",
-      "row_count": 6776,
-      "field_count": 14,
-      "data_range": "2025-01-01 ~ 2026-05-21"
+      "notes": "维修厂合作数据，12列+派生 shop_code（前8位编码），含核损金额/换件折扣率/合作状态。2026-04-18 重设计：引入 coop_tier 三态分类 + shop_code JOIN ClaimsDetail"
     },
     {
       "id": "customer_flow",
@@ -454,10 +426,7 @@
       "duckdb_relation": "NewEnergyClaims (VIEW)",
       "api_routes": [],
       "frontend_page": null,
-      "notes": "新能源出险每日全量快照；首版仅标准化报案时间、报案号、车架号、结案状态、立案/已决金额和 source_batch_date，供后续新能源专项分析接入。",
-      "last_updated": "2026-07-06",
-      "row_count": 901,
-      "field_count": 11
+      "notes": "新能源出险每日全量快照；首版仅标准化报案时间、报案号、车架号、结案状态、立案/已决金额和 source_batch_date，供后续新能源专项分析接入。"
     },
     {
       "id": "renewal_tracker",
@@ -492,10 +461,7 @@
         "/api/query/renewal-tracker"
       ],
       "frontend_page": "renewal-tracker",
-      "notes": "派生域：2025 起保 + 2026 到期商业险宇宙。dual-key 续保匹配 (source_policy_no + VIN)。报价窗口 2025-12-03 起。从 renewal-tracker 子项目迁移（2026-04-19，替代 2026-04-18 下线的 renewal 模块）",
-      "last_updated": "2026-07-06",
-      "row_count": 128125,
-      "field_count": 24
+      "notes": "派生域：2025 起保 + 2026 到期商业险宇宙。dual-key 续保匹配 (source_policy_no + VIN)。报价窗口 2025-12-03 起。从 renewal-tracker 子项目迁移（2026-04-19，替代 2026-04-18 下线的 renewal 模块）"
     }
   ]
 }

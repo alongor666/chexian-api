@@ -3836,11 +3836,12 @@ except Exception as e:
 function checkEtlLedgerFreshness() {
   info('检查 ETL 台账新鲜度（防漏记）...');
   const ledgerPath = path.join(ROOT_DIR, '数据管理/ledger/etl-ledger.jsonl');
-  const dataSourcesPath = path.join(ROOT_DIR, '数据管理/data-sources.json');
+  const statusPath = path.join(ROOT_DIR, '数据管理/data-sources-status.json');
   const ledgerExists = fs.existsSync(ledgerPath);
   const ledgerMtimeMs = ledgerExists ? fs.statSync(ledgerPath).mtimeMs : 0;
-  const dataSourcesMtimeMs = fs.existsSync(dataSourcesPath) ? fs.statSync(dataSourcesPath).mtimeMs : 0;
-  const { level, message } = evaluateLedgerFreshness({ ledgerExists, ledgerMtimeMs, dataSourcesMtimeMs });
+  const statusExists = fs.existsSync(statusPath);
+  const statusMtimeMs = statusExists ? fs.statSync(statusPath).mtimeMs : 0;
+  const { level, message } = evaluateLedgerFreshness({ ledgerExists, ledgerMtimeMs, statusExists, statusMtimeMs });
   if (level === 'ok') {
     success(message);
     return true;

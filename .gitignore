@@ -209,3 +209,7 @@ artifacts/
 # 浏览器/QA 截图（可能含登录表单/token/凭据/敏感业务数据）：本地保留便于复用，永不入库防泄漏
 screenshots/
 social-card-sx-renewal/
+
+# B314：数据域运行时状态（row_count/last_updated/data_range/field_count）不入库，
+# ETL 自动生成；契约部分留 数据管理/data-sources.json
+数据管理/data-sources-status.json
