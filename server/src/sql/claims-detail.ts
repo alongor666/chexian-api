@@ -292,14 +292,14 @@ const PLATE_GEO_PROVINCES_BY_BRANCH: Record<string, readonly string[]> = {
 };
 
 /**
- * SC 车牌归属地 CASE（legacy，字节安全保留，禁改写）。
+ * SC 车牌归属地 CASE（legacy 字面量结构保留，值已修正）。
  *
- * ⚠️ 已知缺陷（2026-07-07 本次多省改造排查中发现，非本次引入）：对照
- * 数据管理/warehouse/dim/plate_region/latest.parquet 权威值域，H/J/K/L/M/R/S/T/Z
- * 九个前缀存在系统性错位一位（如「川H」权威归属广元，此处却写成遂宁——疑似
- * 历史转录时漏抄「川G→成都」一行导致后续逐位下移）。按"业务口径错误禁止顺手改，
- * 需登记 BACKLOG"的红线，本次不改动该 CASE 字面量（含缺陷原样保留，四川
- * 输出字节不变），缺陷已登记 BACKLOG 2026-07-07-claude-d3ef27 供后续单独核实修复。
+ * 🔧 已修复（BACKLOG 2026-07-07-claude-d3ef27）：对照
+ * 数据管理/warehouse/dim/plate_region/latest.parquet 权威值域直查结果，原 CASE 存在
+ * 两类缺陷：① H/J/K/L/M/R/S/T/Z 九个前缀相对权威值域系统性错位一位（如「川H」原写
+ * 遂宁，权威归属广元）；② 「川G→成都」整行缺失（G 牌案件此前落入 ELSE '其他'，
+ * 未计入地理风险面板）。本次按权威值域逐条修正 + 补齐 G，未改动其余已正确的前缀
+ * 与 CASE 结构。修复前后数字对比见 PR body。
  */
 const SC_PLATE_CITY_CASE = `CASE
           WHEN p.plate_no LIKE '川A%' THEN '成都'
@@ -308,21 +308,22 @@ const SC_PLATE_CITY_CASE = `CASE
           WHEN p.plate_no LIKE '川D%' THEN '攀枝花'
           WHEN p.plate_no LIKE '川E%' THEN '泸州'
           WHEN p.plate_no LIKE '川F%' THEN '德阳'
-          WHEN p.plate_no LIKE '川H%' THEN '遂宁'
-          WHEN p.plate_no LIKE '川J%' THEN '内江'
-          WHEN p.plate_no LIKE '川K%' THEN '乐山'
-          WHEN p.plate_no LIKE '川L%' THEN '南充'
-          WHEN p.plate_no LIKE '川M%' THEN '眉山'
+          WHEN p.plate_no LIKE '川G%' THEN '成都'
+          WHEN p.plate_no LIKE '川H%' THEN '广元'
+          WHEN p.plate_no LIKE '川J%' THEN '遂宁'
+          WHEN p.plate_no LIKE '川K%' THEN '内江'
+          WHEN p.plate_no LIKE '川L%' THEN '乐山'
+          WHEN p.plate_no LIKE '川M%' THEN '资阳'
           WHEN p.plate_no LIKE '川Q%' THEN '宜宾'
-          WHEN p.plate_no LIKE '川R%' THEN '达州'
-          WHEN p.plate_no LIKE '川S%' THEN '雅安'
-          WHEN p.plate_no LIKE '川T%' THEN '资阳'
+          WHEN p.plate_no LIKE '川R%' THEN '南充'
+          WHEN p.plate_no LIKE '川S%' THEN '达州'
+          WHEN p.plate_no LIKE '川T%' THEN '雅安'
           WHEN p.plate_no LIKE '川U%' THEN '阿坝'
           WHEN p.plate_no LIKE '川V%' THEN '甘孜'
           WHEN p.plate_no LIKE '川W%' THEN '凉山'
           WHEN p.plate_no LIKE '川X%' THEN '广安'
           WHEN p.plate_no LIKE '川Y%' THEN '巴中'
-          WHEN p.plate_no LIKE '川Z%' THEN '广元'
+          WHEN p.plate_no LIKE '川Z%' THEN '眉山'
           WHEN p.plate_no LIKE '渝%' THEN '重庆'
           ELSE '其他'
         END`;
@@ -330,9 +331,9 @@ const SC_PLATE_CITY_CASE = `CASE
 /**
  * 生成地理风险分析（车牌归属地）查询。
  *
- * @param branchCode 部署省（'SC'/'SX'）。SC/未知/缺省 → 沿用历史硬编码 CASE
- *   （字节安全，含已知缺陷原样保留）；已在 PLATE_GEO_PROVINCES_BY_BRANCH 登记的
- *   其他省（如 SX）→ JOIN PlateRegionMap 维表派生（权威值域，非猜测）。
+ * @param branchCode 部署省（'SC'/'SX'）。SC/未知/缺省 → 沿用硬编码 CASE（结构保留，
+ *   映射值已按权威值域修正，见 SC_PLATE_CITY_CASE 注释）；已在 PLATE_GEO_PROVINCES_BY_BRANCH
+ *   登记的其他省（如 SX）→ JOIN PlateRegionMap 维表派生（权威值域，非猜测）。
  */
 export function generateGeoRiskByPlateQuery(
   filters: ClaimsDetailFilters,
@@ -406,10 +407,12 @@ export function generateGeoRiskByPlateQuery(
 // ── 7. 地理风险对比（出险地 vs 车牌归属地）──
 
 /**
- * SC 跨区判定 plate_home_city CASE（legacy，字节安全保留，禁改写）。
+ * SC 跨区判定 plate_home_city CASE（legacy 字面量结构保留，值已修正）。
  *
- * ⚠️ 与 SC_PLATE_CITY_CASE 同源同缺陷：H/J/K/L/M/R/S/T/Z 九个前缀相对权威值域
- * 系统性错位一位（详见 SC_PLATE_CITY_CASE 上方注释），本次不改动、已登记 BACKLOG 2026-07-07-claude-d3ef27。
+ * 🔧 与 SC_PLATE_CITY_CASE 同源同缺陷，已一并修复（详见 SC_PLATE_CITY_CASE 上方注释，
+ * BACKLOG 2026-07-07-claude-d3ef27）：H/J/K/L/M/R/S/T/Z 九个前缀（区划码+城市名整体
+ * 一对）按权威值域重新归位到正确前缀键；补齐此前完全缺失的「川G→510100成都市」。
+ * 渝牌仍不判定（对应两个区划值，历史既有设计，非本次范围）。
  */
 const SC_PLATE_HOME_CITY_CASE = `CASE
           WHEN p.plate_no LIKE '川A%' THEN '510100成都市'
@@ -418,30 +421,31 @@ const SC_PLATE_HOME_CITY_CASE = `CASE
           WHEN p.plate_no LIKE '川D%' THEN '510400攀枝花市'
           WHEN p.plate_no LIKE '川E%' THEN '510500泸州市'
           WHEN p.plate_no LIKE '川F%' THEN '510600德阳市'
-          WHEN p.plate_no LIKE '川H%' THEN '510900遂宁市'
-          WHEN p.plate_no LIKE '川J%' THEN '511000内江市'
-          WHEN p.plate_no LIKE '川K%' THEN '511100乐山市'
-          WHEN p.plate_no LIKE '川L%' THEN '511300南充市'
-          WHEN p.plate_no LIKE '川M%' THEN '511400眉山市'
+          WHEN p.plate_no LIKE '川G%' THEN '510100成都市'
+          WHEN p.plate_no LIKE '川H%' THEN '510800广元市'
+          WHEN p.plate_no LIKE '川J%' THEN '510900遂宁市'
+          WHEN p.plate_no LIKE '川K%' THEN '511000内江市'
+          WHEN p.plate_no LIKE '川L%' THEN '511100乐山市'
+          WHEN p.plate_no LIKE '川M%' THEN '512000资阳市'
           WHEN p.plate_no LIKE '川Q%' THEN '511500宜宾市'
-          WHEN p.plate_no LIKE '川R%' THEN '511700达州市'
-          WHEN p.plate_no LIKE '川S%' THEN '511800雅安市'
-          WHEN p.plate_no LIKE '川T%' THEN '512000资阳市'
+          WHEN p.plate_no LIKE '川R%' THEN '511300南充市'
+          WHEN p.plate_no LIKE '川S%' THEN '511700达州市'
+          WHEN p.plate_no LIKE '川T%' THEN '511800雅安市'
           WHEN p.plate_no LIKE '川U%' THEN '513200阿坝藏族羌族自治州'
           WHEN p.plate_no LIKE '川V%' THEN '513300甘孜藏族自治州'
           WHEN p.plate_no LIKE '川W%' THEN '513400凉山彝族自治州'
           WHEN p.plate_no LIKE '川X%' THEN '511600广安市'
           WHEN p.plate_no LIKE '川Y%' THEN '511900巴中市'
-          WHEN p.plate_no LIKE '川Z%' THEN '510800广元市'
+          WHEN p.plate_no LIKE '川Z%' THEN '511400眉山市'
           ELSE NULL
         END`;
 
 /**
  * 生成地理风险对比（出险地 vs 车牌归属地）查询。
  *
- * @param branchCode 部署省。SC/未知/缺省 → 沿用历史硬编码 CASE（字节安全，含已知
- *   缺陷原样保留）；已登记的其他省（如 SX）→ JOIN PlateRegionMap 派生，
- *   JOIN 不到（未知前缀）与 #939 语义一致，归非跨区。
+ * @param branchCode 部署省。SC/未知/缺省 → 沿用硬编码 CASE（结构保留，映射值已按
+ *   权威值域修正，见 SC_PLATE_HOME_CITY_CASE 注释）；已登记的其他省（如 SX）→ JOIN
+ *   PlateRegionMap 派生，JOIN 不到（未知前缀）与 #939 语义一致，归非跨区。
  */
 export function generateGeoComparisonQuery(
   filters: ClaimsDetailFilters,
