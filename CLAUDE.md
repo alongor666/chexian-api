@@ -52,8 +52,7 @@
 2. 判断复杂度：L1-L3（单行 SQL 表达式）→ 添加到 `categories/*.ts`；L4（CTE/窗口函数/多表 JOIN）→ SQL 生成器中实现，引用注册表原子指标
 3. 必须包含：id + name + formula + sql.expression + display + 至少 1 个 testCase + changelog
 4. `bun scripts/metric-registry/validate.ts` 校验通过
-5. `bun scripts/metric-registry/generate-frontend-map.ts` 更新前端映射
-6. `bun scripts/metric-registry/generate-metric-doc.ts` 更新指标字典文档（governance「指标字典一致」闸校验，漏跑变红）
+5. `bun scripts/metric-registry/generate-metric-doc.ts` 更新指标字典文档（governance「指标字典一致」闸校验，漏跑变红）
 
 **禁止**：
 - ❌ 在 SQL 生成器中硬编码新指标公式而不在注册表注册
@@ -82,7 +81,7 @@
 
 | 注册表 | 路径 | 覆盖范围 | codegen |
 |--------|------|---------|---------|
-| 指标注册表 | `server/src/config/metric-registry/` | L1-L3 原子指标（数量以 `validate.ts` 为准） | `generate-frontend-map.ts` + `generate-metric-doc.ts` |
+| 指标注册表 | `server/src/config/metric-registry/` | L1-L3 原子指标（数量以 `validate.ts` 为准） | `generate-metric-doc.ts` |
 | 字段注册表 | `server/src/config/field-registry/fields.json` | 必需 + 可选字段（数量以 `fields.json` 为准） | `field-registry/generate.mjs` |
 | 客户类别 | `src/shared/config/customer-categories.ts` + `server/src/config/` | 11 类枚举 | — |
 | 环境变量 | `server/src/config/env.ts` | 20+ 变量（6 分组） | — |
