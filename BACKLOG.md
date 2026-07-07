@@ -27,7 +27,7 @@
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 
-**P2（21 项）**
+**P2（20 项）**
 
 - B304 `PARTIAL` — earned-premium 双口径未文档化
 - B306 — DuckDB 性能高危三件套
@@ -48,10 +48,9 @@
 - 2026-07-06-claude-286f55 — 产品决策
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-07-claude-6d1dfe — route-param-contracts 对 /quote-conversion/* 
-- 2026-07-07-claude-d3ef27 — claims-detail.ts 川牌车牌前缀→城市 CASE 存在系统性错位一位缺陷
 - 2026-07-07-claude-dce69c — 净化剥离中央化
 
-**P3（15 项）**
+**P3（16 项）**
 
 - B247 — 图表 hex 色值审计
 - B254 — wecom_smartsheet state 生命周期管理（missing_vins T
@@ -68,6 +67,7 @@
 - 2026-07-07-claude-ca822c — KPI 卡归一到 widgets/kpi/EnhancedKpiCard
 - 2026-07-07-claude-cfaf91 — 企微续保同步脚本 数据管理/integrations/wecom_smartsheet/
 - 2026-07-07-claude-e80304 — 前后端 BRANCH 映射镜像目前仅靠人工核对一致，无自动化 governance 闸
+- 2026-07-07-claude-f23ffc — SC 车牌归属地判定统一改造为 JOIN PlateRegionMap（与 SX 同路径
 
 ---
 
@@ -111,6 +111,6 @@
 | 2026-07-07-claude-beb706 | 2026-07-07 | 数据管道 | @claude | 热重载（同进程 ETL）后 CrossSellDailyAgg 物化表不自动重建：LazyDomainRegistry 对已 loaded 域 no-op，invalidateCache 只清 SQL 缓存不重建物化表——交叉销售数据可能滞后于 PolicyFact 直到下次进程重启。系 294022 修复（PR #952）architect 闸 NOTES-3 发现的修复前既有行为，非回归；候选修法=onDataVersionChange 时对已 loaded 的 CrossSell 走 lazyRegistry.reload | P3 | PROPOSED | N/A | server/src/services/lazy-domain-registry.ts,server/src/services/data-bootstrapper.ts |  |
 | 2026-07-07-claude-ca822c | 2026-07-07 | 前端重构 follow-up | @claude | KPI 卡归一到 widgets/kpi/EnhancedKpiCard：GrowthKpiCards、CrossSellSummaryKpiBoard、VariableCostKpiBoard、quote-conversion KpiCards 四套特性层自实现逐页替换为共享基座。侦察证据见 开发文档/架构设计/前端极简架构规划_2026-07-07.md §四B-2 | P3 | PROPOSED | 开发文档/架构设计/前端极简架构规划_2026-07-07.md | N/A |  |
 | 2026-07-07-claude-cfaf91 | 2026-07-07 | 架构治理/多省 | @claude | 企微续保同步脚本 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py 的 ORG_SLUGS 常量写死四川12机构中文名→拼音slug映射（高新→gaoxin等），prime_state_from_wecom.py/cleanup_org_renewal_dup.py 复用同一常量。这是 2026-06-27-claude-e96d85「治理工程二」原始问题描述里点名的4处硬编码位置之一，但不属于该条目已完成的UI层四阶段（PR #953/#956/#959/#963）范围——本条目是后端 Python 数据集成脚本，非终端用户可感知UI，独立登记跟进。若山西续保企微同步需要走这套脚本，需仿照前端 BRANCH_ORGANIZATIONS 模式补充 SX 11机构→slug映射（山西现有独立的 sync_renewal_v2.py + instances/*.yaml 按省实例化架构，需先确认这套 xlsx 同步脚本是否仍在用、是否与 v2 实例架构重叠，避免重复建设） | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py |  |
-| 2026-07-07-claude-d3ef27 | 2026-07-07 | 数据口径/理赔地理 | @claude | claims-detail.ts 川牌车牌前缀→城市 CASE 存在系统性错位一位缺陷：H/J/K/L/M/R/S/T/Z 九个前缀相对 数据管理/warehouse/dim/plate_region/latest.parquet 权威值域整体下移一位（如「川H」硬编码归遂宁，权威值域实为广元；「川M」硬编码归眉山，权威值域实为资阳）。疑似历史转录时漏抄「川G→成都」一行导致后续逐位下移。影响 generateGeoRiskByPlateQuery（车牌归属地展示）与 generateGeoComparisonQuery（异地出险率判定）两处同源同缺陷 CASE，二者当前均已改造为按 branchCode 分支（SC 走本 legacy CASE 原样保留字节安全，SX 走 PlateRegionMap JOIN 已验证正确）。发现于 2026-06-27-claude-e96d85 阶段4多省改造排查（duckdb 直查 dim 表 vs 硬编码值域逐位比对，证据见对话记录）。修复方向：与业务确认后，将两处 SC_PLATE_CITY_CASE/SC_PLATE_HOME_CITY_CASE 常量按权威值域改写为正确映射（或统一改造为 JOIN PlateRegionMap 并限定 province IN ('四川','重庆')），需评估修复后 SC 用户可见的『车牌归属地』面板与『异地出险率』历史数字将发生变化，建议先与业务侧确认是否已按错误口径形成认知基线再决定是否修复及如何解释数字变化 | P2 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
 | 2026-07-07-claude-dce69c | 2026-07-07 | 架构治理/多省 | @claude | 净化剥离中央化：域→支持列白名单上收 route-param-contracts.ts，共享 parser 按白名单自动过滤（8f71c0 architect 闸 P1-1）。现 cross-sell/quote-conversion/customer-flow 三处路由层各自维护剥离清单，与视图定义（duckdb-domain-loaders.ts）无编译期关联，第四个域出现同类 Binder Error 会重演人肉排查。 | P2 | PROPOSED | N/A | server/src/config/route-param-contracts.ts |  |
 | 2026-07-07-claude-e80304 | 2026-07-07 | 架构治理/多省 | @claude | 前后端 BRANCH 映射镜像目前仅靠人工核对一致，无自动化 governance 闸：src/shared/utils/branchDisplay.ts 的 BRANCH_LABELS ↔ server/src/config/branch-names.ts 的 BRANCH_NAMES；src/shared/config/organizations.ts 的 SX_ORGANIZATIONS/BRANCH_ORGANIZATIONS ↔ server/src/services/permission.ts 的同名常量。当前（2026-07-07，工程二阶段2/3/4 收尾核实）两组常量逐字节一致，无漂移。建议参照既有『能力矩阵镜像』闸（checkFilterCapabilityMirror，用 BEGIN/END 锚点比对两文件文本）的模式，给这两组 BRANCH 映射也加锚点+governance 检查，防止未来任一端修改（如新增第三省）漏改另一端。工作量：4 个文件加锚点注释 + 新增 1 个 governance 检查函数，中等规模，独立 PR 更合适 | P3 | PROPOSED | N/A | scripts/check-governance.mjs |  |
+| 2026-07-07-claude-f23ffc | 2026-07-07 | 数据口径/理赔地理 | @claude | SC 车牌归属地判定统一改造为 JOIN PlateRegionMap（与 SX 同路径），消除维护两份车牌前缀映射（SC_PLATE_CITY_CASE/SC_PLATE_HOME_CITY_CASE 硬编码 CASE + PlateRegionMap 权威维表）的漂移风险。PR #971（d3ef27）修复错位缺陷时已评估该方案：JOIN 路径对自治州名做 regexp_replace(city,'(市\|自治州\|地区\|盟)$','') 只剥离行政区划后缀，会把「阿坝藏族羌族自治州」等输出为「阿坝藏族羌族」（保留民族全称），与现有硬编码 CASE 的短名输出「阿坝」不一致——这是超出错位修复范围的格式变更，需先与业务确认统一后的自治州显示格式（保留短名 or 采用长名），确认后再将 SC 从 PLATE_GEO_PROVINCES_BY_BRANCH 的 branchCode !== 'SC' 特判中移除、统一走 JOIN。 | P3 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
