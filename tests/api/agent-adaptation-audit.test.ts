@@ -49,7 +49,6 @@ describe('agent adaptation audit routing', () => {
     expect(comprehensiveReview?.supportLevel).toBe('caution');
     expect(comprehensiveReview?.coreMetrics).toEqual(
       expect.arrayContaining([
-        'comprehensive_cost_ratio',
         'comprehensive_expense_ratio',
         'combined_cost_amount',
         'combined_cost_ratio',
@@ -57,20 +56,25 @@ describe('agent adaptation audit routing', () => {
         'fixed_cost_ratio',
       ])
     );
+    // 49e3fd：别名统一后旧 id 双档案已并入 comprehensive_expense_ratio，不得复活
+    expect(comprehensiveReview?.coreMetrics).not.toContain('comprehensive_cost_ratio');
     expect(costDiagnosis?.coreMetrics).not.toEqual(
       expect.arrayContaining(['combined_cost_ratio', 'fixed_cost_ratio', 'comprehensive_expense_ratio'])
     );
   });
 
-  it('keeps comprehensive_cost_ratio aligned across registry, mapping, and capability list', async () => {
+  it('keeps comprehensive_expense_ratio aligned across registry, mapping, and capability list', async () => {
     const audit = getAgentCapabilityAudit();
     const review = audit.capabilities.find((item) => item.id === 'comprehensive_cost_indicator_review');
     const { metricCapabilityMapping } = await import('../../server/src/agent/registry/metric-capability-mapping.js');
     const { agentMetricRegistry } = await import('../../server/src/agent/registry/agent-metric-registry.js');
 
-    expect(review?.coreMetrics).toContain('comprehensive_cost_ratio');
-    expect(metricCapabilityMapping.comprehensive_cost_ratio).toContain('comprehensive_cost_indicator_review');
-    expect(agentMetricRegistry.some((m) => m.id === 'comprehensive_cost_ratio')).toBe(true);
+    expect(review?.coreMetrics).toContain('comprehensive_expense_ratio');
+    expect(metricCapabilityMapping.comprehensive_expense_ratio).toContain('comprehensive_cost_indicator_review');
+    expect(agentMetricRegistry.some((m) => m.id === 'comprehensive_expense_ratio')).toBe(true);
+    // 49e3fd：旧 id comprehensive_cost_ratio 双档案已合并，注册表/映射中不得复活
+    expect(agentMetricRegistry.some((m) => m.id === 'comprehensive_cost_ratio')).toBe(false);
+    expect(metricCapabilityMapping).not.toHaveProperty('comprehensive_cost_ratio');
   });
 
   it('routes variable cost questions to cost indicator diagnosis', () => {

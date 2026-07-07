@@ -5,13 +5,20 @@ import { AgentRegistryMetaSchema } from '../schemas/agent-registry-meta.schema.j
 // 表级版本：任何条目变更必须 bump version 并追加 changelog（governance「Agent注册表版本」强制）
 export const agentDataCapabilityRegistryMeta = AgentRegistryMetaSchema.parse({
   registryId: 'agent-data-capability',
-  version: '1.0.0',
+  version: '1.1.0',
   changelog: [
     {
       version: '1.0.0',
       date: '2026-06-11',
       changes:
         '建立表级版本纪元：补 version/changelog 可追溯字段（harness 对标门槛 3，BACKLOG 2026-06-11-claude-f5646f）。',
+    },
+    {
+      version: '1.1.0',
+      date: '2026-07-07',
+      changes:
+        'comprehensive_cost_indicator_review 的 coreMetrics 去除旧 id comprehensive_cost_ratio：' +
+        'SQL 别名统一到指标注册表 id 后双档案合并，统一为 comprehensive_expense_ratio（BACKLOG 2026-07-05-claude-49e3fd）。',
     },
   ],
 });
@@ -172,7 +179,6 @@ export const agentDataCapabilityRegistry = AgentCapabilityDefinitionSchema.array
     supportLevel: 'caution',
     description: '如果项目存在 comprehensiveCost，则仅作为历史经营指标审阅，不作为财务综合成本率 Agent。',
     coreMetrics: [
-      'comprehensive_cost_ratio',
       'comprehensive_expense_ratio',
       'combined_cost_amount',
       'combined_cost_ratio',

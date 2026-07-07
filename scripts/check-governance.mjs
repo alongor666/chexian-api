@@ -50,7 +50,7 @@ import {
   syncQuickReferenceFile,
 } from '../数据管理/pipelines/quick_reference.mjs';
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
-import { evaluateLedgerFreshness } from './etl-ledger/governance-check.mjs';
+import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
 import { listPolicyCurrentShards } from './lib/policy-current-shards.mjs';
 import {
   parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow, TERMINAL_STATUSES,
@@ -3540,6 +3540,8 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '分层依赖边界', fn: checkArchLayerBoundaries },
   { name: 'spawn参数引号安全', fn: checkSpawnArgQuoteSafety },
   { name: 'ETL台账新鲜度', fn: checkEtlLedgerFreshness },
+  // 2419ed：实现在独立模块（H5 单体棘轮：新增检查勿再膨胀本文件）
+  { name: '台账未提交体量', fn: () => runLedgerUncommittedBulkCheck({ rootDir: ROOT_DIR, info, success, warning }) },
   { name: '技能字段闸', fn: checkSkillFieldGate },
   patternCheck('省份静默默认反模式'),
   {
@@ -3836,11 +3838,12 @@ except Exception as e:
 function checkEtlLedgerFreshness() {
   info('检查 ETL 台账新鲜度（防漏记）...');
   const ledgerPath = path.join(ROOT_DIR, '数据管理/ledger/etl-ledger.jsonl');
-  const dataSourcesPath = path.join(ROOT_DIR, '数据管理/data-sources.json');
+  const statusPath = path.join(ROOT_DIR, '数据管理/data-sources-status.json');
   const ledgerExists = fs.existsSync(ledgerPath);
   const ledgerMtimeMs = ledgerExists ? fs.statSync(ledgerPath).mtimeMs : 0;
-  const dataSourcesMtimeMs = fs.existsSync(dataSourcesPath) ? fs.statSync(dataSourcesPath).mtimeMs : 0;
-  const { level, message } = evaluateLedgerFreshness({ ledgerExists, ledgerMtimeMs, dataSourcesMtimeMs });
+  const statusExists = fs.existsSync(statusPath);
+  const statusMtimeMs = statusExists ? fs.statSync(statusPath).mtimeMs : 0;
+  const { level, message } = evaluateLedgerFreshness({ ledgerExists, ledgerMtimeMs, statusExists, statusMtimeMs });
   if (level === 'ok') {
     success(message);
     return true;

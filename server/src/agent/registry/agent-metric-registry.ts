@@ -5,13 +5,21 @@ import { AgentRegistryMetaSchema } from '../schemas/agent-registry-meta.schema.j
 // 表级版本：任何条目变更必须 bump version 并追加 changelog（governance「Agent注册表版本」强制）
 export const agentMetricRegistryMeta = AgentRegistryMetaSchema.parse({
   registryId: 'agent-metric',
-  version: '1.0.0',
+  version: '1.1.0',
   changelog: [
     {
       version: '1.0.0',
       date: '2026-06-11',
       changes:
         '建立表级版本纪元：补 version/changelog 可追溯字段（harness 对标门槛 3，BACKLOG 2026-06-11-claude-f5646f）。',
+    },
+    {
+      version: '1.1.0',
+      date: '2026-07-07',
+      changes:
+        '合并 comprehensive_cost_ratio 与 comprehensive_expense_ratio 双档案为单条 comprehensive_expense_ratio：' +
+        '二者是同一业务指标（综合费用率）经 /api/query/cost 与 /api/query/comprehensive-analysis-bundle 两条路径的分裂档案，' +
+        'SQL 返回别名统一到指标注册表 id 后分裂键消失（BACKLOG 2026-07-05-claude-49e3fd）。',
     },
   ],
 });
@@ -298,24 +306,6 @@ export const agentMetricRegistry = AgentMetricDefinitionSchema.array().parse([
     forbiddenInterpretations: ['承保利润', '利润率', '财务亏损', '财务盈利'],
   },
   {
-    id: 'comprehensive_cost_ratio',
-    name: '综合费用率/综合成本相关历史指标',
-    aliases: ['综合费用率', '综合成本率', 'comprehensiveCost'],
-    category: 'cost',
-    supportLevel: 'caution',
-    businessDefinition: '项目 cost 模块已有 comprehensiveCost 历史经营指标审阅口径。',
-    formula: '项目已有 SQL 口径：(赔款 + 费用) / 满期保费',
-    sourceEndpoints: [COST_ENDPOINT],
-    sourceRoutes: [COST_ROUTE, COST_RATIO_SQL],
-    sourceSqlGenerators: ['generateComprehensiveCostQuery'],
-    requiredParams: ['analysisType=comprehensiveCost', 'cutoffDate'],
-    supportedDimensions: ['org_level_3', 'customer_category', 'coverage_combination', 'org_customer', 'org_coverage'],
-    supportedUseCases: ['comprehensive_cost_indicator_review'],
-    cautionNotes: ['仅作为项目已有经营指标审阅，不得解释为完整财务综合成本率。'],
-    forbiddenInterpretations: ['承保利润', '财务综合成本率', '利润率', '盈亏判断'],
-    replacementSuggestions: ['经营成本压力请使用 variable_cost_ratio、earned_claim_ratio、expense_ratio 分别分析。'],
-  },
-  {
     id: 'earned_profit_amount',
     name: '利润额',
     aliases: ['利润额', '满期利润额', 'earned_profit_amount'],
@@ -377,19 +367,25 @@ export const agentMetricRegistry = AgentMetricDefinitionSchema.array().parse([
   {
     id: 'comprehensive_expense_ratio',
     name: '综合费用率',
-    aliases: ['综合费用率', 'comprehensive_expense_ratio'],
+    aliases: ['综合费用率', '综合成本率', 'comprehensiveCost', 'comprehensive_expense_ratio'],
     category: 'cost',
     supportLevel: 'caution',
-    businessDefinition: '底层成本指标注册表和综合分析中已有的扩展经营成本指标，只能作为 caution 审阅。',
+    businessDefinition:
+      '底层成本指标注册表口径的综合费用率，经 cost 模块（analysisType=comprehensiveCost）与综合分析两条路径提供，只能作为 caution 审阅。' +
+      '（49e3fd：SQL 别名统一到注册表 id 后，原 comprehensive_cost_ratio 双档案并入本条。）',
     formula: '底层注册表口径：(已报告赔款 + 费用金额) / 满期保费',
     sourceMetrics: ['comprehensive_expense_ratio'],
-    sourceEndpoints: ['/api/query/comprehensive-analysis-bundle'],
-    sourceRoutes: [COST_METRIC_REGISTRY, COMPREHENSIVE_ROUTE, COMPREHENSIVE_SQL],
-    sourceSqlGenerators: ['generateComprehensiveDimensionMetricsQuery', 'generateComprehensiveSummaryQuery'],
+    sourceEndpoints: [COST_ENDPOINT, '/api/query/comprehensive-analysis-bundle'],
+    sourceRoutes: [COST_METRIC_REGISTRY, COST_ROUTE, COST_RATIO_SQL, COMPREHENSIVE_ROUTE, COMPREHENSIVE_SQL],
+    sourceSqlGenerators: ['generateComprehensiveCostQuery', 'generateComprehensiveDimensionMetricsQuery', 'generateComprehensiveSummaryQuery'],
     requiredParams: [],
-    supportedDimensions: ['org_level_3', 'customer_category', 'coverage_combination'],
+    supportedDimensions: ['org_level_3', 'customer_category', 'coverage_combination', 'org_customer', 'org_coverage'],
     supportedUseCases: ['comprehensive_cost_indicator_review'],
-    cautionNotes: ['仅作为项目已有扩展经营成本口径审阅，不进入成本指标诊断主路径。'],
+    cautionNotes: [
+      '仅作为项目已有扩展经营成本口径审阅，不进入成本指标诊断主路径。',
+      '经 /api/query/cost 路径访问时需 analysisType=comprehensiveCost + cutoffDate 参数。',
+      '不得解释为完整财务综合成本率。',
+    ],
     forbiddenInterpretations: CAUTION_COST_FORBIDDEN,
     replacementSuggestions: ['成本诊断主路径请使用 variable_cost_ratio、earned_claim_ratio、expense_ratio。'],
   },

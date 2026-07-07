@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-"""扫描所有域的 parquet，从 schema 实读 field_count / row_count，回写 data-sources.json。
+"""扫描所有域的 parquet，从 schema 实读 field_count / row_count，回写运行时状态。
 
 用途：
     ETL 历史曾有 5 个 convert 漏调 update_data_sources()（B 阶段已统一兜底），
-    导致 data-sources.json 中部分域的 field_count / row_count 长期过时。
+    导致运行时状态中部分域的 field_count / row_count 长期过时。
     本脚本作为元数据校准工具，从 parquet 事实源重读并回写。
+
+B314 拆分说明：对比基准不再直接读 data-sources.json（该文件已降级为静态契约，
+不再含 row_count/field_count 的最新值），改为经 read_merged_domains() 读取
+「契约 + data-sources-status.json 运行时状态」的合并视图（状态优先，契约中
+残留的旧字段仅作 deprecated 域的冻结快照兜底）。写入侧仍走 update_data_sources()，
+该函数内部已改为只写状态文件，此处零改动。
 
 用法：
     python3 数据管理/pipelines/sync_data_sources_metadata.py          # 执行
@@ -15,13 +21,12 @@ from __future__ import annotations
 
 import argparse
 import glob
-import json
 import sys
 from pathlib import Path
 
 import duckdb  # type: ignore
 
-from pipelines.data_sources_updater import update_data_sources
+from pipelines.data_sources_updater import read_merged_domains, update_data_sources
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_SOURCES_PATH = ROOT / "data-sources.json"
@@ -49,8 +54,8 @@ def main() -> int:
         print(f"✖ 找不到 {DATA_SOURCES_PATH}", file=sys.stderr)
         return 1
 
-    registry = json.loads(DATA_SOURCES_PATH.read_text(encoding="utf-8"))
-    reg_by_id = {d["id"]: d for d in registry["domains"]}
+    merged_domains = read_merged_domains(data_sources_path=DATA_SOURCES_PATH)
+    reg_by_id = {d["id"]: d for d in merged_domains}
 
     con = duckdb.connect()
     changes: list[tuple[str, str]] = []
