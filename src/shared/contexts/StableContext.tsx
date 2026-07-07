@@ -18,6 +18,7 @@ import { createLogger } from '../utils/logger';
 import type { FilterOptions, DualDateMetadata } from '../types/data';
 import { formatSalesmanName } from '../utils/formatters';
 import { useDataStatus } from './DataContext';
+import { useBranch } from './BranchContext';
 import { apiClient } from '../api/client';
 
 const logger = createLogger('StableContext');
@@ -65,16 +66,19 @@ interface StableProviderProps {
 
 export const StableProvider: React.FC<StableProviderProps> = ({ children }) => {
   const { isDataLoaded } = useDataStatus();
+  const { effectiveBranch } = useBranch();
 
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({});
   const [salesmanTeamMap, setSalesmanTeamMap] = useState<Map<string, string>>(new Map());
   const [dualDateMetadata, setDualDateMetadata] = useState<DualDateMetadata>();
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [initializedBranchKey, setInitializedBranchKey] = useState<string | null>(null);
   const [latestInitResult, setLatestInitResult] = useState<{
     maxDate: string;
     dataYear: number;
   } | null>(null);
+  const branchKey = effectiveBranch ?? '__default__';
 
   // maxDataDate 和 availableYears 直接取 policy 口径（默认口径）
   // 注：两个口径（policy_date / insurance_start_date）在当前实现中使用相同的日期范围
@@ -151,7 +155,7 @@ export const StableProvider: React.FC<StableProviderProps> = ({ children }) => {
 
   // 初始化筛选器（幂等：已初始化则跳过）
   const initializeFilters = useCallback(async () => {
-    if (isInitialized) return;
+    if (isInitialized && initializedBranchKey === branchKey) return;
     if (!isDataLoaded) {
       logger.debug('StableContext: 初始化跳过，数据未加载');
       return;
@@ -164,20 +168,23 @@ export const StableProvider: React.FC<StableProviderProps> = ({ children }) => {
         setLatestInitResult(result);
       }
       setIsInitialized(true);
+      setInitializedBranchKey(branchKey);
       logger.info('StableContext: 初始化完成');
     } catch (err) {
       logger.error('StableContext: 初始化失败', err);
     } finally {
       setIsLoading(false);
     }
-  }, [isInitialized, isDataLoaded, loadFilterOptions]);
+  }, [isInitialized, initializedBranchKey, branchKey, isDataLoaded, loadFilterOptions]);
 
-  // 数据加载完成后自动初始化
+  // 数据加载完成或有效分公司变化后自动初始化。
+  // BranchProvider 已在切省时清 query/SW 缓存；筛选选项存在 StableContext 本地状态，
+  // 这里必须随 effectiveBranch 重拉，避免所有页面下拉沿用旧省机构。
   useEffect(() => {
-    if (isDataLoaded && !isInitialized && !isLoading) {
+    if (isDataLoaded && (!isInitialized || initializedBranchKey !== branchKey) && !isLoading) {
       initializeFilters();
     }
-  }, [isDataLoaded, isInitialized, isLoading, initializeFilters]);
+  }, [isDataLoaded, isInitialized, initializedBranchKey, branchKey, isLoading, initializeFilters]);
 
   // memoize：否则每次 Provider 渲染都造新 value 对象，48 个 useGlobalFilters 消费者
   // 随任意上游渲染全部重渲染，使"拆稳定状态避免重渲染"的设计落空。
