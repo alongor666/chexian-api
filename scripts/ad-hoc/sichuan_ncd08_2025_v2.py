@@ -28,10 +28,19 @@
   N. 赔案类型构成（2024 vs 2025 同期）
   O. 赔款集中度 + Top 大案
 """
+import sys
+from pathlib import Path
 import duckdb
 from collections import defaultdict
 
-POLICY_GLOB = "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/warehouse/fact/policy/current/*.parquet"
+ROOT = Path(__file__).resolve().parents[2]
+_DM = ROOT / "数据管理"
+if str(_DM) not in sys.path:
+    sys.path.insert(0, str(_DM))  # 供 import pipelines.*（branch_paths SSOT · 801409 cutover 前置）
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
+
+# 双布局自适应（branch_paths SSOT）：跨省全量读（一次性复盘脚本，行为等价）
+POLICY_GLOB = policy_current_glob(ROOT / "数据管理/warehouse/fact/policy/current", missing_ok=True)
 CLAIMS_GLOB = "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/warehouse/fact/claims_detail/claims_*.parquet"
 
 con = duckdb.connect(":memory:")

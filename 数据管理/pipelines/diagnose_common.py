@@ -10,6 +10,11 @@
 import os
 from pathlib import Path
 
+try:  # 数据管理 在 sys.path（wecom/tests 惯例）
+    from pipelines.branch_paths import policy_current_glob
+except ImportError:  # pipelines 目录在 sys.path（diagnose 族直跑惯例）
+    from branch_paths import policy_current_glob
+
 # ============================================================================
 # 路径 & SQL 常量
 # ============================================================================
@@ -46,11 +51,12 @@ def branch_paths(branch, data_root=DATA_ROOT):
     if branch == "SC":
         fact = data_root / "warehouse" / "fact"
         return {
-            # [!S]* 排除 SX_ 前缀：fact/current 物理混放 SC+SX（Phase A 前缀架构），裸 *.parquet
-            # 会混入 SX 致四川诊断虚高约 70%（实证 SC 261.6 万 + SX 183.3 万）。[!S]* 实测 SC
-            # 纯净（保留数字开头 + sichuan_，排除 SX_）。文件名前缀可靠性由 governance
-            # 「省份文件名前缀一致性」闸校验兜底（防未来 SX 文件名漂移成非 SX_ 前缀致静默漏）。
-            "policy_glob": str(fact / "policy" / "current" / "[!S]*.parquet"),
+            # policy_glob 走 branch_paths SSOT 双布局自适应（801409 cutover 前置）：
+            # 扁平布局 → [!S]*.parquet（排除 SX_ 前缀防四川诊断虚高约 70%，实证 SC 261.6 万 +
+            # SX 183.3 万；前缀可靠性由 governance「[!S]* glob 前缀隔离」闸兜底）；
+            # 子目录布局（cutover 后）→ current/SC/*.parquet；并存 → fail-closed 抛错。
+            # missing_ok=True：worktree/CI 无数据时回落现状扁平串，保模块级 import 不崩。
+            "policy_glob": policy_current_glob(fact / "policy" / "current", "SC", missing_ok=True),
             "claims_glob": str(fact / "claims_detail" / "claims_*.parquet"),
             "quotes": str(fact / "quotes_conversion" / "latest.parquet"),
             "renewal_tracker": str(fact / "renewal_tracker" / "latest.parquet"),

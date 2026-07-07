@@ -39,7 +39,14 @@ from time import sleep as time_module_sleep
 
 HERE = Path(__file__).resolve().parent
 DATA_ROOT = HERE.parents[1]
-DEFAULT_POLICY_GLOB = DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
+if str(DATA_ROOT) not in sys.path:
+    sys.path.insert(0, str(DATA_ROOT))  # 供 import pipelines.*（branch_paths SSOT）
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
+
+# 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：扁平/子目录自动路由
+DEFAULT_POLICY_GLOB = policy_current_glob(
+    DATA_ROOT / "warehouse" / "fact" / "policy" / "current", missing_ok=True
+)
 DEFAULT_QUOTES_PATH = DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet"
 DEFAULT_SALESMAN_PATH = DATA_ROOT / "warehouse" / "dim" / "salesman" / "latest.parquet"
 

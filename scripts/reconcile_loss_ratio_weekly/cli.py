@@ -60,7 +60,10 @@ def main(argv: list[str] | None = None) -> int:
     # 把 CLI 参数注入 config（让下游模块用统一来源）
     _config.XLSX_PATH = args.xlsx
     _config.DATA_REPO_ROOT = Path(args.data_root)
-    _config.POLICY_PARQUET_GLOB = str(_config.DATA_REPO_ROOT / '数据管理/warehouse/fact/policy/current/*.parquet')
+    # 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：与 config 模块级同源
+    _config.POLICY_PARQUET_GLOB = _config.policy_current_glob(
+        _config.DATA_REPO_ROOT / '数据管理/warehouse/fact/policy/current', missing_ok=True
+    )
     _config.CLAIMS_PARQUET_GLOB = str(_config.DATA_REPO_ROOT / '数据管理/warehouse/fact/claims_detail/*.parquet')
     _config.OUTPUT_BASE_DIR = Path(args.output)
 

@@ -28,12 +28,18 @@
 from __future__ import annotations
 import datetime as dt
 from collections import defaultdict
+import sys
 from pathlib import Path
 
 import duckdb
 
 ROOT = Path(__file__).resolve().parents[2]
-POLICY_GLOB = str(ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
+_DM = ROOT / "数据管理"
+if str(_DM) not in sys.path:
+    sys.path.insert(0, str(_DM))  # 供 import pipelines.*（branch_paths SSOT · 801409 cutover 前置）
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
+# 双布局自适应（branch_paths SSOT）：跨省全量读（一次性复盘脚本，行为等价）
+POLICY_GLOB = policy_current_glob(ROOT / "数据管理/warehouse/fact/policy/current", missing_ok=True)
 CLAIMS_GLOB = str(ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 REPORT_DIR = ROOT / "数据管理/数据分析报告"
 REPORT_DIR.mkdir(parents=True, exist_ok=True)

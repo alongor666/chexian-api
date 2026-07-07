@@ -12,6 +12,7 @@
 """
 
 import os
+import sys
 from pathlib import Path
 
 # ─── 路径（codex review P2 fix：移除硬编码路径，改用环境变量 + 仓库相对默认值）───
@@ -21,10 +22,16 @@ from pathlib import Path
 # - CX_RECONCILE_OUTPUT：输出根（默认 = 仓库根/数据管理/validation/loss-ratio-weekly）
 
 SCRIPT_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(SCRIPT_REPO_ROOT / '数据管理') not in sys.path:
+    sys.path.insert(0, str(SCRIPT_REPO_ROOT / '数据管理'))  # 供 import pipelines.*（branch_paths SSOT）
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
 
 # 数据源：相对仓库根（CI / 容器内可通过 CX_DATA_ROOT 覆盖）
 DATA_REPO_ROOT = Path(os.environ.get('CX_DATA_ROOT', str(SCRIPT_REPO_ROOT)))
-POLICY_PARQUET_GLOB = str(DATA_REPO_ROOT / '数据管理/warehouse/fact/policy/current/*.parquet')
+# 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：全量读；missing_ok 保 CI 无数据时可 import
+POLICY_PARQUET_GLOB = policy_current_glob(
+    DATA_REPO_ROOT / '数据管理/warehouse/fact/policy/current', missing_ok=True
+)
 CLAIMS_PARQUET_GLOB = str(DATA_REPO_ROOT / '数据管理/warehouse/fact/claims_detail/*.parquet')
 
 # xlsx：无默认值（环境特定，必须显式提供）

@@ -16,7 +16,13 @@
 import json, subprocess, urllib.parse, urllib.request, sys, os
 
 PROJECT = "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api"
-PARQUET = "read_parquet('数据管理/warehouse/fact/policy/current/*.parquet', union_by_name=true)"
+from pathlib import Path as _Path
+if PROJECT + "/数据管理" not in sys.path:
+    sys.path.insert(0, PROJECT + "/数据管理")  # 供 import pipelines.*（branch_paths SSOT · 801409 cutover 前置）
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
+# 双布局自适应（branch_paths SSOT）：跨省全量读（一次性对账脚本，行为等价）
+_POLICY_GLOB = policy_current_glob(_Path(PROJECT) / "数据管理/warehouse/fact/policy/current", missing_ok=True)
+PARQUET = f"read_parquet('{_POLICY_GLOB}', union_by_name=true)"
 PAT = json.load(open(os.path.expanduser("~/.chexian/config.json")))["token"]
 BASE = "https://chexian.cretvalu.com/api/query/kpi"
 

@@ -30,11 +30,11 @@ _CANDIDATES = [
 _MAIN_REPO_WH = Path(
     "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/warehouse"
 )
-PARQUET_DIR = next((p for p in _CANDIDATES if p.exists() and any(p.glob("*.parquet"))), None)
+PARQUET_DIR = next((p for p in _CANDIDATES if p.exists() and any(p.rglob("*.parquet"))), None)
 if PARQUET_DIR is None and (_MAIN_REPO_WH / "fact/policy/current").exists():
     PARQUET_DIR = _MAIN_REPO_WH / "fact/policy/current"
 
-_HAS_PARQUET = PARQUET_DIR is not None and any(PARQUET_DIR.glob("*.parquet"))
+_HAS_PARQUET = PARQUET_DIR is not None and any(PARQUET_DIR.rglob("*.parquet"))
 
 
 def _write_instance(tmp_path: Path, extra: str = "") -> Path:
@@ -89,7 +89,10 @@ def test_registered_branch_code_loads(tmp_path: Path) -> None:
 def _point_to_data(monkeypatch):
     """把模块级数据路径指向真实 parquet（worktree 回落主仓）。"""
     wh = PARQUET_DIR.parents[2]  # .../warehouse
-    monkeypatch.setattr(m, "DEFAULT_POLICY_GLOB", PARQUET_DIR / "*.parquet")
+    # 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：与生产 DEFAULT_POLICY_GLOB 同源，
+    # 否则 cutover 后守卫（rglob 见子目录数据）判定运行、但消费扁平 glob 读 0 行报错。
+    from pipelines.branch_paths import policy_current_glob
+    monkeypatch.setattr(m, "DEFAULT_POLICY_GLOB", policy_current_glob(PARQUET_DIR, missing_ok=True))
     monkeypatch.setattr(m, "DEFAULT_QUOTES_PATH", wh / "fact/quotes_conversion/latest.parquet")
     monkeypatch.setattr(m, "DEFAULT_SALESMAN_PATH", wh / "dim/salesman/latest.parquet")
     monkeypatch.setattr(m, "DEFAULT_CUSTOMER_FLOW_PATH", wh / "fact/customer_flow/latest.parquet")

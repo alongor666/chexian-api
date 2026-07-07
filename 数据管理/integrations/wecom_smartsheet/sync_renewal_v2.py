@@ -46,8 +46,13 @@ from pipelines.branch_assert import (  # noqa: E402
     get_branch_mapping,
     is_national_view,
 )
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
 
-DEFAULT_POLICY_GLOB = DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
+# 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：扁平→current/*.parquet（现状）、
+# 子目录→current/[A-Z][A-Z]/*.parquet；省份隔离仍由下方 SQL 的 WHERE branch_code=? 承担。
+DEFAULT_POLICY_GLOB = policy_current_glob(
+    DATA_ROOT / "warehouse" / "fact" / "policy" / "current", missing_ok=True
+)
 DEFAULT_QUOTES_PATH = DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet"
 DEFAULT_SALESMAN_PATH = DATA_ROOT / "warehouse" / "dim" / "salesman" / "latest.parquet"
 DEFAULT_CUSTOMER_FLOW_PATH = DATA_ROOT / "warehouse" / "fact" / "customer_flow" / "latest.parquet"

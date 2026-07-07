@@ -15,6 +15,10 @@ import pandas as pd
 
 # 配置
 SCRIPT_DIR = Path(__file__).parent.parent
+
+if str(SCRIPT_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR.parent))  # 供 import pipelines.*（branch_paths SSOT · 801409 cutover 前置）
+from pipelines.branch_paths import policy_current_files  # noqa: E402
 CONFIG = {
     'data_path': SCRIPT_DIR.parent / 'warehouse/fact/policy/current',
     'cross_sell_path': SCRIPT_DIR.parent / 'warehouse/fact/cross_sell/latest.parquet',
@@ -30,7 +34,8 @@ def find_parquet_files():
     if not data_dir.exists():
         raise FileNotFoundError(f"数据目录不存在: {data_dir}")
 
-    parquet_files = sorted(data_dir.glob('*.parquet'))
+    # 双布局自适应（branch_paths SSOT）：四川驾乘日报，取 SC 分片（扁平/子目录自动路由）
+    parquet_files = sorted(Path(p) for p in policy_current_files(data_dir, 'SC'))
     if not parquet_files:
         raise FileNotFoundError(f"未找到 Parquet 文件: {data_dir}")
 

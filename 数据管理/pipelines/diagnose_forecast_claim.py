@@ -46,6 +46,7 @@ except ImportError:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from diagnose_common import branch_paths
+from branch_paths import policy_current_files  # noqa: E402（双布局 SSOT · 801409 cutover 前置）
 
 
 # ─── Path Resolution ─────────────────────────────────────────────
@@ -99,10 +100,13 @@ def select_policy_files(policy_dir: Path, customer_categories: list[str] | None,
     - 含摩托车 + 其他 / ALL → 限摩 + 剔摩
     - 历史年份（base_start 早于 2024-01-01） → 加入 21-23 全量
     """
-    files = []
-    motor_file = policy_dir / '01_签单清单_限摩_20240101_20260504.parquet'
-    nonmotor_file = policy_dir / '01_签单清单_剔摩_20240101_20260504.parquet'
-    legacy_file = policy_dir / '01_签单清单_全量_21-23年.parquet'
+    # 经 branch_paths SSOT 枚举 policy_dir 下真实存在的 SC 分片（继承 0文件/并存布局 fail-closed +
+    # 扁平/子目录双布局一致 · 801409 cutover 前置），再按历史固定分片名匹配（保留 限摩/剔摩/全量
+    # 选择语义）。此前用 `policy_dir / <硬编名>` 直 join，绕开 SSOT 的 fail-closed 保护（architect 闸 HIGH）。
+    available = {Path(p).name: Path(p) for p in policy_current_files(policy_dir, "SC")}
+    motor_file = available.get('01_签单清单_限摩_20240101_20260504.parquet')
+    nonmotor_file = available.get('01_签单清单_剔摩_20240101_20260504.parquet')
+    legacy_file = available.get('01_签单清单_全量_21-23年.parquet')
 
     cats = customer_categories
     if cats is None:
@@ -116,10 +120,10 @@ def select_policy_files(policy_dir: Path, customer_categories: list[str] | None,
         files = [motor_file, nonmotor_file]
 
     base_year = int(base_start[:4])
-    if base_year < 2024 and legacy_file.exists():
+    if base_year < 2024 and legacy_file is not None:
         files.append(legacy_file)
 
-    files = [f for f in files if f.exists()]
+    files = [f for f in files if f is not None]
     if not files:
         raise RuntimeError(f"未找到合适的 policy parquet 文件 in {policy_dir}")
     return files

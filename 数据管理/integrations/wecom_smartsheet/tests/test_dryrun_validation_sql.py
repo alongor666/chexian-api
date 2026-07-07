@@ -14,12 +14,12 @@ HERE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE))
 
 import create_renewal_tracker as crt  # noqa: E402
-from sync_renewal import SyncConfig, build_source_rows  # noqa: E402
+from sync_renewal import DEFAULT_POLICY_GLOB, SyncConfig, build_source_rows  # noqa: E402
 
 
 # 该测试需要本地 parquet 数据存在（目录存在但无 *.parquet 时同样跳过，如 worktree 只有元数据文件）
 PARQUET_PATH = HERE.parents[1] / "warehouse" / "fact" / "policy" / "current"
-_HAS_PARQUET = PARQUET_PATH.exists() and any(PARQUET_PATH.glob("*.parquet"))
+_HAS_PARQUET = PARQUET_PATH.exists() and any(PARQUET_PATH.rglob("*.parquet"))
 
 
 @pytest.mark.skipif(not _HAS_PARQUET, reason="本地 parquet 不存在，CI 跳过")
@@ -41,8 +41,11 @@ def test_dryrun_sql_matches_build_source_rows_for_leshan_may_jun() -> None:
     }
 
     # 2) 模板 SQL 路径
+    # 与 build_source_rows 的 SyncConfig 默认 policy_glob 同源（= sync_renewal.DEFAULT_POLICY_GLOB，
+    # 已双布局自适应 · 801409 cutover 前置），否则 cutover 后 dry-run SQL 用扁平 glob 会读 0 行、
+    # 与脚本真实取数漂移，令这个「SQL 口径锚点」测试失效。
     sql = crt.DRYRUN_VALIDATION_SQL_TEMPLATE.format(
-        policy_glob=str(PARQUET_PATH / "*.parquet"),
+        policy_glob=str(DEFAULT_POLICY_GLOB),
         org=org, start=start, end=end,
     )
     con = duckdb.connect(":memory:")
