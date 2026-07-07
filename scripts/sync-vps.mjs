@@ -58,12 +58,20 @@ import {
 } from './lib/policy-current-shards.mjs';
 
 /**
- * B3 sync 生产基准省（GATED 闸 + 任务构建用）——**固定 'SC'**（当前生产唯一在线省）。
- * 刻意**不读 ETL 的 `BRANCH_CODE` env**（codex 闸-2 P1）：该 env 在 SX ETL 时为 'SX'，若被 sync 闸采信
- * 会把 `current/SX/` 误判基准省放行 → 推生产，违 GATED 红线。B5 cutover 把 SX 真正上线时，由显式授权的
- * 部署/cutover 开关改这里（非读 BRANCH_CODE），届时再参数化；B3 范围内任何非 SC 子目录无条件 fail-closed。
+ * B5 cutover · sync 生产多省白名单（GATED 闸 + 任务构建用）——显式常量 ['SC','SX']。
+ * owner 已授权 SX 子目录 cutover（2026-07-06，本白名单 PR 与授权同批，SOP §2-1）；
+ * 白名单先于生产 T-1 布局迁移合并是安全的：扁平布局下 buildPolicyCurrentTasks 走单任务路径，
+ * 白名单不参与判定，行为与改前逐字节等价。
+ *
+ * 两条不变量（改动本常量前必读）：
+ *   1. 刻意**不读 ETL 的 `BRANCH_CODE` env**（codex 闸-2 P1 原判保留）：该 env 在 SX ETL 时为 'SX'，
+ *      若被 sync 闸采信会把任意 `current/<省>/` 误判放行 → 推生产，违 GATED 红线。新增省份上线时
+ *      由 owner 授权的 cutover PR 显式改这里（非读 BRANCH_CODE / 任何运行时输入）。
+ *   2. 白名单是**推送授权面**（安全闸），不是数据发现面——数据发现仍由 inspectPolicyCurrentLayout
+ *      readdir 枚举实际子目录（天然 N 省），不违背「禁硬编码省常量做发现」红线；名单外省子目录
+ *      由 GATED 预检 fail-closed（findPolicyCurrentSyncGateViolations）。
  */
-const SYNC_BASELINE_BRANCH = 'SC';
+const SYNC_ALLOWED_BRANCHES = Object.freeze(['SC', 'SX']);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -386,25 +394,31 @@ const RSYNC_EXCLUDE_ARGS = RSYNC_EXCLUDES.flatMap((p) => ['--exclude', p]);
  * 设计（codex 闸-1 P0-1/P0-2 收紧）：
  *   - **扁平布局**（subdirCount===0，含今天 SC 生产现状 + 空目录）→ 单任务 `policy/current` → `data/current`，
  *     rsync 无 filter，**与退役前 branchCode=null 短路路径逐字节等价**（字节安全基线）。
- *   - **子目录独占**（subdirOnly）→ **仅基准省**子目录每省独立任务 `current/<省>/` → `data/current/<省>/`；
- *     --delete 作用域天然限于该子目录（每省隔离）。非基准省子目录**防御性排除**，由 GATED 预检大声 fail-closed
- *     （`findPolicyCurrentSyncGateViolations`，main 内 dryRun 前）——B3 不把非基准省推生产（B5 cutover 独立授权）。
- *   - **遍历实际子目录**（`inspectPolicyCurrentLayout` readdir 枚举），数据/配置驱动，禁硬编码 ['SC','SX'] 省常量。
+ *   - **子目录独占**（subdirOnly）→ **仅白名单省**子目录每省独立任务 `current/<省>/` → `data/current/<省>/`
+ *     （B5 cutover 起白名单=['SC','SX']，两省各一个 critical 任务）；--delete 作用域天然限于该子目录
+ *     （每省隔离）。名单外省子目录**防御性排除**，由 GATED 预检大声 fail-closed
+ *     （`findPolicyCurrentSyncGateViolations`，main 内 dryRun 前）——名单外省上线须 owner 授权 PR 扩白名单。
+ *   - **遍历实际子目录**（`inspectPolicyCurrentLayout` readdir 枚举），数据/配置驱动——白名单只做授权
+ *     过滤（安全闸），不做数据发现，禁硬编码省常量做发现。
  *
  * 所有 policy 任务带 `kind:'policy-current'`：供 main 的 `willSyncPolicy` 跨「扁平/子目录」两种 label 识别，
  * 不被「子目录 label = policy/current/<省>」绕过 freshness 完整性闸（codex 闸-1 P0-2）。
  *
  * @param {string} localCurrentDir policy/current 本地根目录
  * @param {string} remoteCurrent   VPS 远端 current 目录（如 `<remote>/current`）
- * @param {string} [deploymentBranch] 部署基准省（默认 SYNC_BASELINE_BRANCH='SC'，禁读 ETL BRANCH_CODE）
+ * @param {string[]} [allowedBranches] 同步白名单（默认 SYNC_ALLOWED_BRANCHES，禁读 ETL BRANCH_CODE）。
+ *   ⚠️ 默认值刻意与 helper 库 findPolicyCurrentSyncGateViolations 的默认 ['SC']（最保守）不同：
+ *   本函数默认即生产白名单，因为其唯一生产调用方 buildStandardSyncTasks 走默认参数，且 main 的
+ *   GATED 预检用同一 SYNC_ALLOWED_BRANCHES 常量把关在前——两面白名单同源，不存在组合漂移
+ *   （architect 闸 P2-1 标注）。新增调用方须显式传参或确认默认语义。
  * @returns {Array<{label:string, kind:string, local:string, remote:string, critical:boolean}>}
  */
-function buildPolicyCurrentTasks(localCurrentDir, remoteCurrent, deploymentBranch = SYNC_BASELINE_BRANCH) {
+function buildPolicyCurrentTasks(localCurrentDir, remoteCurrent, allowedBranches = SYNC_ALLOWED_BRANCHES) {
   const layout = inspectPolicyCurrentLayout(localCurrentDir);
   if (layout.subdirOnly) {
-    // 子目录独占：仅同步基准省子目录（非基准省由 GATED 预检 fail-closed，此处防御性排除不静默推生产）
+    // 子目录独占：仅同步白名单内省份子目录（名单外省由 GATED 预检 fail-closed，此处防御性排除不静默推生产）
     return layout.branches
-      .filter((branch) => branch === deploymentBranch)
+      .filter((branch) => allowedBranches.includes(branch))
       .map((branch) => ({
         label: `policy/current/${branch}`,
         kind: 'policy-current',
@@ -558,9 +572,10 @@ async function queryVpsPolicyFingerprint(config) {
  *
  * 本地 policy 数据若比 VPS 现役更旧/更少则 block，防残缺数据覆盖生产。
  *
- * B3 安全前提（codex 闸-1 P1-2）：GATED 预检（findPolicyCurrentSyncGateViolations）已保证
- * **只有基准省**会进入同步（非基准省子目录无条件 fail-closed），故本地全量指纹 = 基准省全量，
- * 与 VPS 全量（基准省）可比——全量比较不会被异省行数掩盖 stale 基准省，无需分省降级路径。
+ * B3/B5 安全前提（codex 闸-1 P1-2）：GATED 预检（findPolicyCurrentSyncGateViolations）已保证
+ * **只有白名单省**会进入同步（名单外省子目录无条件 fail-closed），故本地全量指纹 = 白名单省全量，
+ * 与 VPS 全量可比——cutover 前后生产 current/ 均为同一批 SC+SX 数据（扁平前缀 → 分省子目录仅布局
+ * 搬迁，数据面不变），全量比较不会被异省行数掩盖 stale 省份，无需分省降级路径。
  * 本地指纹由 queryLocalPolicyFingerprint 经 helper 显式枚举（覆盖扁平 + 基准省子目录两种布局）。
  */
 // 导出供单元测试；生产调用路径通过 main() 内部间接使用。
@@ -1155,14 +1170,14 @@ async function main(argv = process.argv.slice(2)) {
 
   const runConfig = resolveRunConfig(parsedArgs);
 
-  // 🔴 GATED 省份子目录预检（B3 · 纯本地 · 最先执行 · 覆盖 dry-run/check/real · codex 闸-1 P1-3）：
-  // current/ 出现非基准省子目录（如 SX）或扁平+子目录并存 → fail-closed，绝不把非基准省推生产
-  // （SX 仍走 validation/SX 隔离；真正上线是 B5 独立 GATED cutover，须用户授权）。
+  // 🔴 GATED 省份子目录预检（B3/B5 · 纯本地 · 最先执行 · 覆盖 dry-run/check/real · codex 闸-1 P1-3）：
+  // current/ 出现白名单外省份子目录或扁平+子目录并存 → fail-closed，绝不把名单外省推生产
+  // （名单外省走 validation/<省>/ 隔离；上线是独立 GATED cutover，须 owner 授权 PR 扩白名单）。
   // 镜像 data-bootstrapper.ts:enforceProvinceSubdirGate，但比 B1 严（不给 BRANCH_RLS_ENABLED 放行口）。
   // 置于 SSH 配置解析之前：纯本地 fail-closed 闸不应被 SSH/密钥状态阻断或绕过。
-  // 基准省固定 SYNC_BASELINE_BRANCH='SC'（禁读 ETL BRANCH_CODE，codex 闸-2 P1）。
-  // 今天 current/ 扁平无子目录 → 返回 [] 休眠，生产路径行为不变。
-  const gateViolations = findPolicyCurrentSyncGateViolations(LOCAL_CURRENT_DIR, { deploymentBranch: SYNC_BASELINE_BRANCH });
+  // 白名单固定 SYNC_ALLOWED_BRANCHES=['SC','SX']（禁读 ETL BRANCH_CODE，codex 闸-2 P1 原判保留）。
+  // 扁平布局（无子目录）→ 返回 [] 休眠，生产路径行为不变。
+  const gateViolations = findPolicyCurrentSyncGateViolations(LOCAL_CURRENT_DIR, { allowedBranches: SYNC_ALLOWED_BRANCHES });
   if (gateViolations.length > 0) {
     log('red', '❌ GATED 省份子目录闸（sync 前 fail-closed）：');
     for (const v of gateViolations) log('red', `   ${v}`);
@@ -1246,6 +1261,7 @@ async function main(argv = process.argv.slice(2)) {
 // isFileInBranch）+ getSyncBranchCode + queryLocalPolicyFingerprintForBranch 已于 B3 退役删除（改分省子目录）。
 export {
   DEFAULTS,
+  SYNC_ALLOWED_BRANCHES,
   expandHomePath,
   getSSHConfigPaths,
   parseArgs,

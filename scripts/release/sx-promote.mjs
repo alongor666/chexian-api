@@ -1,16 +1,24 @@
 #!/usr/bin/env node
 /**
- * SX Premium Cutover 脚本 — validation/SX → current/ (Option A 扁平前缀布局)
+ * SX Premium 晋升脚本 — validation/SX → current/SX/ (分省子目录布局 · B5 cutover SOP §2-2)
  *
- * ⚠️  诚实边界：本脚本是 Day-1 SOP 序列里的「一步」，**不负责**：
+ * 布局沿革：#753/Option A 曾用「current/ 顶层 SX_ 前缀扁平文件」过渡；owner 2026-07-04 拍板
+ * 分省子目录终局（current/SC/ + current/SX/），B5 cutover（2026-07-06 授权）起本脚本目标改为
+ * 「current/SX/ 下裸名文件」（不再加 SX_ 前缀——省份由子目录承载，与装载层 discoverInDir /
+ * sync-vps buildPolicyCurrentTasks 的 `current/<省>/` 语义对齐）。
+ *
+ * ⚠️  部署顺序互锁（architect 闸 P1-2）：本子目录化改造与 sync-vps 多省白名单（SOP §2-1）
+ *   **同一 PR 同批合并**——若白名单先开而 promote 仍写顶层扁平前缀文件，等于给「倒灌顶层扁平」
+ *   开推送通道，会触发装载层扁平/子目录并存互斥闸拒启。
+ *
+ * ⚠️  诚实边界：本脚本是 cutover SOP 序列里的「一步」，**不负责**：
  *   - 开启 BRANCH_RLS_ENABLED（服务端安全闸，须 operator 独立核实后手动切换）
- *   - sync-vps（同步到 VPS 须另跑 `SYNC_VPS_BRANCH_CODE=SX node scripts/sync-vps.mjs --dry-run` 先验）
+ *   - sync-vps（同步到 VPS 须另跑 `node scripts/sync-vps.mjs --dry-run` 先验）
  *   - 发放山西账号
  *
  * ⚠️  崩溃原子性声明（请勿在此处声称"atomic"）：
  *   本脚本的 Phase E（staging → final 批量 rename）**非跨进程崩溃原子**。
- *   这是 Option A 扁平布局的固有限制：rename 是逐文件串行的，进程被 kill 会留下
- *   部分 final 已完成 + 部分 staging 仍存在的中间态。
+ *   rename 是逐文件串行的，进程被 kill 会留下部分 final 已完成 + 部分 staging 仍存在的中间态。
  *
  *   安全靠三层叠加缓解（不声称完全消除）：
  *     ① Day-1 SOP 串行纪律：operator 必须确认本脚本 exit 0 且 .sx-promote-ready
@@ -18,12 +26,12 @@
  *     ② 幂等重跑：sha256 一致自动 skip；残余 staging 由下次运行重新处理
  *     ③ leftover preflight：残留 .staging/.bak_* 默认拦截 --apply（第 4 条）
  *
- *   彻底的崩溃原子（无中间态）需 Option B 子目录单次 swap 或 sync/bootstrap 共守
+ *   彻底的崩溃原子（无中间态）需子目录单次 swap 或 sync/bootstrap 共守
  *   文件系统级 lock，超出本脚本范围，已登记为 follow-up。
  *
  * 调用时机：BRANCH_RLS_ENABLED=true 已在服务端核实生效（用 --rls-confirmed 声明）、
- * SX parquet 在 validation/ 通过 ETL 质量校验后，由 operator 在 Day-1 SOP 序列中手动触发
- * （非自动化推送）。
+ * SX parquet 在 validation/ 通过 ETL 质量校验、**且本地 current/ 已完成子目录布局迁移**
+ * （cutover SOP T-1；布局中间态守卫会拦截扁平未迁移场景）后，由 operator 手动触发（非自动化推送）。
  *
  * 硬化要点（双闸 P0/P1/P0-2 缓解）：
  *   P0-1. 源省份 fail-fast：每文件 duckdb CLI 查 branch_code='SX' 全行一致，任一不满足 exit 1
@@ -40,25 +48,28 @@
  *   P1-6. 空源 --apply 失败（除非 --allow-empty）
  *   P1-7. 目标已存在时比较 sha256 字节一致，不一致 fail-fast
  *   P1-8. sha256 流式计算（createReadStream + hash.update）防大 parquet 整文件进内存（P1 第2轮）
- *   P2-9. assertNoSubdirIntent 在 mkdirSync 之前调用
+ *   P2-9. assertSxSubdirTarget 在 mkdirSync 之前调用（B5 语义反转：原 assertNoSubdirIntent 防子目录，
+ *         现要求目标**必须是** current/SX 省份子目录）
  *   P2-10. --apply 必须携带 --rls-confirmed（operator 声明已核实生产 RLS-on）
+ *   B5-11. 布局中间态守卫 assertParentLayoutReady：目标父目录（current/）顶层仍有扁平 parquet
+ *         （= cutover T-1 布局迁移未完成）→ --apply 拒绝执行——否则写出 current/SX/ 会造成
+ *         「扁平+子目录并存」，装载层互斥闸拒启（本 PR 合并后、cutover 完成前的窗口期事故防线）
  *
- * 文件命名（Option A 扁平前缀）：
+ * 文件命名（分省子目录布局，B5 起）：
  *   SX premium ETL 产物形如 `每日数据_<start>_<end>.parquet`，落在 warehouse/validation/SX/
- *   promote 后目标：current/ 根下 `SX_每日数据_<start>_<end>.parquet`
- *   格局：`SX_*.parquet`（二字母大写前缀）— 与 sync-vps buildRsyncBranchFilterArgs('SX')
- *           的 `SX_*.parquet` glob 完全对齐；SC 裸名文件永不被误匹配。
+ *   promote 后目标：current/SX/ 下**同名裸名文件**（省份由子目录承载，不再加 SX_ 前缀）。
+ *   与装载层 discoverInDir Pass2（`^[A-Z]{2}$` 子目录 → branch=目录名）及 sync-vps
+ *   buildPolicyCurrentTasks（`current/<省>/` 每省独立任务）语义对齐；SC 数据在 current/SC/，物理隔离。
  *
  * staging 命名规范：
  *   `.staging` 扩展而非 `.parquet`，确保：
  *   - data-bootstrapper.ts `name.endsWith('.parquet')` 不加载 staging 文件
  *   - sync-vps `*.parquet` glob 不同步 staging 文件
- *   - 两层双保险，staging 期间服务端零风险
+ *   - 两层双保险，staging 期间服务端零风险（staging/backup 路径均随目标一起落在 current/SX/ 内）
  *
  * 互斥安全：data-bootstrapper.ts 的 GATED fail-closed 检测「扁平顶层 parquet 与省份子目录 parquet
- *   并存」会拦截 → 扁平 SX_ 前缀文件**不建子目录**，与 bootstrap 互斥闸完全相容。
- *   Pass 2 子目录枚举仅匹配 ^[A-Z]{2}$ **目录**（不匹配文件），SX_ 前缀文件是顶层扁平文件，
- *   branch = undefined，不触发任何子目录闸。
+ *   并存」。B5 起本脚本写子目录，与该闸的关系从「不建子目录」反转为「只建子目录 + 靠
+ *   assertParentLayoutReady 保证顶层已清空」——两侧共同保证不出现并存态。
  *
  * --force 策略（两选一，已选 Option B）：
  *   Option A：--force 带 backup/restore，适合需要覆盖已存在 SX 文件的场景
@@ -72,7 +83,7 @@
  *   node scripts/release/sx-promote.mjs --apply --rls-confirmed --force   # 允许覆盖已存在的 SX_ 文件（测试用）
  *   node scripts/release/sx-promote.mjs --apply --rls-confirmed --allow-empty  # 允许源目录为空
  *   node scripts/release/sx-promote.mjs --apply --rls-confirmed --resume  # 跳过 leftover preflight（幂等恢复）
- *   node scripts/release/sx-promote.mjs --target-dir /tmp/test-current         # 指定目标目录（测试用）
+ *   node scripts/release/sx-promote.mjs --target-dir /tmp/test-current/SX      # 指定目标目录（测试用，末段必须是 SX）
  *   node scripts/release/sx-promote.mjs --source-dir /custom/path              # 覆盖源目录（测试/测试用，需 --unsafe-source-dir）
  *   node scripts/release/sx-promote.mjs --source-dir /custom --unsafe-source-dir  # 非默认源目录（测试用，打 ERROR 警告）
  *   node scripts/release/sx-promote.mjs --run-id 20260623T120000  # 指定 run-id 用于 backup 命名
@@ -83,8 +94,9 @@
  *
  * 相关：
  *   数据管理/lib/branch-naming.mjs       — SX 输出根逻辑（branchOutputRoot）
- *   scripts/sync-vps.mjs               — buildRsyncBranchFilterArgs('SX') / SX_ glob
- *   server/src/services/data-bootstrapper.ts — 互斥闸（GATED fail-closed）
+ *   scripts/sync-vps.mjs               — buildPolicyCurrentTasks / SYNC_ALLOWED_BRANCHES（current/<省>/ 任务）
+ *   server/src/services/data-bootstrapper.ts — 互斥闸（GATED fail-closed）+ discoverInDir 子目录枚举
+ *   开发文档/multi-branch/子目录布局cutover_SOP_2026-07-06.md — §2-2 本改造的授权与顺序互锁
  *   scripts/prepublish-gate/lib/fetch-local-metrics.mjs — duckdb CLI 用法参照
  */
 
@@ -106,9 +118,10 @@ const PROJECT_ROOT = resolve(__filename, '../../..');
 
 const WAREHOUSE_ROOT = join(PROJECT_ROOT, '数据管理', 'warehouse');
 const DEFAULT_SOURCE_DIR = join(WAREHOUSE_ROOT, 'validation', 'SX');
-const DEFAULT_TARGET_DIR = join(WAREHOUSE_ROOT, 'fact', 'policy', 'current');
+// B5 子目录布局：晋升目标 = current/SX/（裸名文件，省份由子目录承载）
+const DEFAULT_TARGET_DIR = join(WAREHOUSE_ROOT, 'fact', 'policy', 'current', 'SX');
 
-// SX parquet 文件的两字母大写前缀（与 sync-vps buildRsyncBranchFilterArgs 完全对齐）
+// 省码（子目录名）；SX_ 前缀仅用于识别旧 #753 扁平前缀产物（防呆），不再用于目标命名
 const BRANCH_PREFIX = 'SX';
 const BRANCH_PAT = `${BRANCH_PREFIX}_`;
 
@@ -318,17 +331,52 @@ export async function validateBranchCodeSX(parquetPath, { runDuckdb = runDuckdbC
 // ─────────────────────────── 安全护栏 ───────────────────────────
 
 /**
- * 禁子目录护栏：目标路径下不得创建 [A-Z]{2} 形式的子目录。
+ * 省份子目录目标护栏（B5 语义反转，原 assertNoSubdirIntent）：
+ * 目标路径末段**必须是** SX 省份子目录（分省子目录布局，如 .../current/SX）。
+ * 反转原因：#753/Option A 时代目标是 current/ 顶层扁平前缀文件，防误建子目录；
+ * B5 cutover 起子目录是终局布局，反过来要求目标就是 current/SX——防止误传 current/ 根
+ * 又写出顶层扁平文件（会与 current/SC/ 并存 → 装载层互斥闸拒启）。
  * 必须在 mkdirSync 之前调用（P2-9）。
  * @param {string} targetRoot
  */
-export function assertNoSubdirIntent(targetRoot) {
+export function assertSxSubdirTarget(targetRoot) {
   const dirName = basename(targetRoot);
-  if (/^[A-Z]{2}$/.test(dirName)) {
+  if (dirName !== BRANCH_PREFIX) {
     throw new Error(
-      `[sx-promote] --target-dir "${targetRoot}" 末段是省码目录格式（${dirName}），` +
-      `这会在 current/ 下建子目录，触发 bootstrap GATED fail-closed。` +
-      `应传 current/ 根目录，而非省份子目录。`
+      `[sx-promote] --target-dir "${targetRoot}" 末段是「${dirName}」，不是 SX 省份子目录。` +
+      `B5 分省子目录布局下晋升目标必须是 current/${BRANCH_PREFIX}/（裸名文件，省份由子目录承载）。` +
+      `写 current/ 根会重新制造顶层扁平文件 → 与 current/SC/ 并存 → 装载层互斥闸拒启。`
+    );
+  }
+}
+
+/**
+ * 布局中间态守卫（B5-11，新增）：目标父目录（current/）顶层不得残留扁平 parquet。
+ *
+ * 窗口期风险：本子目录化 PR 合并后、cutover T-1 布局迁移完成前，current/ 仍是扁平混放
+ * （SC 裸名 + 旧 SX_ 前缀）。此时若跑 promote 写出 current/SX/，会形成「扁平+子目录并存」——
+ * 装载层 enforceProvinceSubdirGate 与 sync GATED 预检都会 fail-closed，服务拒启。
+ * 本守卫把事故从「装载层拒启（事后）」提前到「promote 拒绝执行（事前）」。
+ *
+ * 判定：父目录不存在 / 为空 / 仅子目录（已完成迁移）→ 放行；顶层存在任何 *.parquet → 拒绝。
+ * @param {string} targetRoot 目标目录（current/SX）
+ */
+export function assertParentLayoutReady(targetRoot) {
+  const parentDir = dirname(targetRoot);
+  if (!existsSync(parentDir)) return; // 父目录不存在（全新环境/测试 tmpdir）→ mkdirSync 会一并创建
+  let entries;
+  try {
+    entries = readdirSync(parentDir);
+  } catch {
+    return; // 读取失败不在此拦（权限问题由后续 mkdirSync/复制流程暴露）
+  }
+  const flatParquets = entries.filter((f) => f.endsWith('.parquet'));
+  if (flatParquets.length > 0) {
+    throw new Error(
+      `[sx-promote] 布局中间态守卫：目标父目录 ${parentDir} 顶层仍有 ${flatParquets.length} 个扁平 parquet` +
+      `（如 ${flatParquets.slice(0, 3).join('、')}）——current/ 尚未完成分省子目录布局迁移（cutover SOP T-1）。` +
+      `此时写 current/${BRANCH_PREFIX}/ 会造成「扁平+子目录并存」，装载层互斥闸将拒绝启动。` +
+      `请先按 cutover SOP 完成 T-1 布局迁移（顶层 parquet 全部归入 SC/、SX/ 子目录）后再晋升。`
     );
   }
 }
@@ -372,14 +420,17 @@ export function leftoverPreflight(targetDir, { resume = false } = {}) {
 }
 
 /**
- * --force 安全护栏：只允许覆盖 SX_ 前缀文件，绝不允许覆盖 SC 裸名或其他省前缀文件。
- * @param {string} filename
+ * --force 安全护栏（B5 子目录版）：只允许覆盖 **SX 子目录内**的文件，绝不允许覆盖
+ * SX/ 之外（如 current/ 顶层 SC 裸名、current/SC/ 内）的文件。
+ * 布局沿革：#753 时代按 `SX_` 文件名前缀判定；B5 起省份由子目录承载（目标文件是裸名），
+ * 判定基准随之改为「所在目录末段 === 'SX'」。
+ * @param {string} dstPath 目标文件完整路径
  */
-export function assertForceOnlyOnSxFiles(filename) {
-  if (!filename.startsWith(BRANCH_PAT)) {
+export function assertForceOnlyInSxSubdir(dstPath) {
+  if (basename(dirname(dstPath)) !== BRANCH_PREFIX) {
     throw new Error(
-      `[sx-promote] --force 仅允许覆盖 ${BRANCH_PAT}* 前缀文件，拒绝覆盖: ${filename}。` +
-      `此护栏防止误删 SC 数据。`
+      `[sx-promote] --force 仅允许覆盖 current/${BRANCH_PREFIX}/ 子目录内的文件，拒绝覆盖: ${dstPath}。` +
+      `此护栏防止误删 SC 或其他省数据。`
     );
   }
 }
@@ -492,14 +543,15 @@ export function discoverSourceFiles({ sourceDir, targetDir }) {
   }
 
   return entries.map(name => {
-    // 禁止：源文件已有省前缀（防重复 promote 产生 SX_SX_ 嵌套）
+    // 禁止：源文件带旧 #753 扁平前缀（疑似旧 promote 产物被误放回 validation/SX；
+    // B5 裸名布局下若照搬会把带前缀文件名带进 current/SX/，命名污染且暗示源目录被污染）
     if (name.startsWith(BRANCH_PAT)) {
       throw new Error(
         `[sx-promote] 源文件 "${name}" 已带 ${BRANCH_PAT} 前缀，` +
-        `疑似之前 promote 产物被误放回 validation/SX。请检查源目录。`
+        `疑似旧扁平前缀时代 promote 产物被误放回 validation/SX。请检查源目录。`
       );
     }
-    const dstName = `${BRANCH_PAT}${name}`;  // SX_每日数据_<start>_<end>.parquet
+    const dstName = name;  // B5 子目录布局：current/SX/ 下裸名（省份由子目录承载，不加前缀）
     const dstPath = join(targetDir, dstName);
     // staging 路径：不以 .parquet 结尾，bootstrapper 和 sync-vps 均不会加载
     const stagingPath = `${dstPath}.staging`;
@@ -531,7 +583,7 @@ async function printPlan(files) {
     return;
   }
 
-  console.log(`  ${'源文件名'.padEnd(50)} → ${'目标文件名（SX_ 前缀）'}`);
+  console.log(`  ${'源文件名'.padEnd(50)} → ${'目标文件名（current/SX/ 裸名）'}`);
   console.log('  ' + '─'.repeat(90));
 
   for (const f of files) {
@@ -571,8 +623,8 @@ async function printPlan(files) {
 
   console.log('');
   log('plan', `总计: ${totalRows.toLocaleString()} 行${premiumAvailable ? `，保费合计 ${totalPremium.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '（保费字段不可用）'}`);
-  log('info', `promote 后文件名: SX_*.parquet（与 sync-vps buildRsyncBranchFilterArgs('SX') glob 对齐）`);
-  log('info', `bootstrap 兼容性: 扁平顶层文件，branch=undefined，不触发子目录互斥闸`);
+  log('info', `promote 后落点: current/SX/ 下裸名文件（与装载层 discoverInDir Pass2 / sync-vps current/<省>/ 任务对齐）`);
+  log('info', `bootstrap 兼容性: 省份子目录文件，branch='SX'；前提 = current/ 顶层已无扁平 parquet（布局守卫把关）`);
   console.log('');
   log('dryrun', `确认无误后，运行：node scripts/release/sx-promote.mjs --apply --rls-confirmed`);
 }
@@ -593,8 +645,9 @@ export async function applyPromote(files) {
   log('info', `  目标: ${targetDir}`);
   console.log('');
 
-  // P2-9: assertNoSubdirIntent 在 mkdirSync 之前
-  assertNoSubdirIntent(targetDir);
+  // P2-9: assertSxSubdirTarget 在 mkdirSync 之前（B5 语义反转）+ B5-11 布局中间态守卫
+  assertSxSubdirTarget(targetDir);
+  assertParentLayoutReady(targetDir);
 
   // 确保目标目录存在
   if (!existsSync(targetDir)) {
@@ -655,8 +708,8 @@ export async function applyPromote(files) {
         writeManifest(manifest);
         process.exit(1);
       }
-      // --force：只允许覆盖 SX_ 前缀文件（护栏）
-      assertForceOnlyOnSxFiles(f.dstName);
+      // --force：只允许覆盖 SX 子目录内文件（护栏，B5 子目录版）
+      assertForceOnlyInSxSubdir(f.dstPath);
       log('warn', `  --force：目标内容不一致，将先 backup 再覆盖：${f.dstName}`);
     }
     toProcess.push(f);
@@ -884,9 +937,9 @@ export async function applyPromote(files) {
   console.log('');
   log('info', '⬇  后续步骤（需 operator 手动确认后执行）：');
   log('info', '   1. 确认服务端 BRANCH_RLS_ENABLED=true 已生效（SX 用户只能查 SX 数据）');
-  log('info', '   2. 同步到 VPS（先 dry-run）:');
-  log('info', '      SYNC_VPS_BRANCH_CODE=SX node scripts/sync-vps.mjs --dry-run');
-  log('info', '      SYNC_VPS_BRANCH_CODE=SX node scripts/sync-vps.mjs');
+  log('info', '   2. 同步到 VPS（先 dry-run；SX 在 SYNC_ALLOWED_BRANCHES 白名单内，无需任何 env）:');
+  log('info', '      node scripts/sync-vps.mjs --dry-run');
+  log('info', '      node scripts/sync-vps.mjs');
   log('info', '   3. PM2 reload: sudo /usr/local/bin/deploy-chexian-api reload');
   log('info', '   4. 健康检查: curl https://chexian.cretvalu.com/health');
 }
@@ -920,7 +973,7 @@ function rollbackAll(stagedFiles, backupMap) {
 
 function writeManifest(manifest) {
   // manifest 落点跟随 targetDir（与 .sx-promote-ready 标记一致），而非固定仓库相对路径。
-  //   - 真实 promote（targetDir = current/）：清单与 .sx-promote-ready + SX_*.parquet 同处一地，
+  //   - 真实 promote（targetDir = current/SX/）：清单与 .sx-promote-ready + 裸名 parquet 同处一地，
   //     operator 可在同一目录核查（Day-1 SOP「确认 ready-marker 存在后才跑 sync-vps」纪律不变）。
   //   - 测试（--target-dir /tmp/...）：清单落 tmp，绝不覆写被 git 追踪的仓库文件（防 spurious 脏状态）。
   // 这两份产物均以 . 开头且非 .parquet，不被 bootstrapper/sync-vps 加载或同步，并经 .gitignore 排除。
@@ -939,7 +992,7 @@ function writeManifest(manifest) {
 async function main() {
   console.log('');
   console.log('═══════════════════════════════════════════════════════════════');
-  console.log('  SX Premium Cutover — validation/SX → current/ (Option A)');
+  console.log('  SX Premium 晋升 — validation/SX → current/SX/（分省子目录布局 · B5）');
   console.log(`  模式: ${args.apply ? '【APPLY】' : '【DRY-RUN（默认）】'}${args.force ? ' [--force]' : ''}${args.rlsConfirmed ? ' [--rls-confirmed]' : ''}`);
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('');
@@ -966,12 +1019,25 @@ async function main() {
     process.exit(1);
   }
 
-  // P2-9：assertNoSubdirIntent 在 mkdirSync 之前（main 顶部）
+  // P2-9：assertSxSubdirTarget 在 mkdirSync 之前（main 顶部，B5 语义反转：目标必须是 current/SX）
   try {
-    assertNoSubdirIntent(targetDir);
+    assertSxSubdirTarget(targetDir);
   } catch (e) {
     log('error', e.message);
     process.exit(1);
+  }
+
+  // B5-11 布局中间态守卫：current/ 顶层仍有扁平 parquet（cutover T-1 未完成）→ apply 拒绝执行；
+  // dry-run 仅警告（允许在迁移前预览计划，但明确标注当前不可 apply）
+  try {
+    assertParentLayoutReady(targetDir);
+  } catch (e) {
+    if (args.apply) {
+      log('error', e.message);
+      process.exit(1);
+    }
+    log('warn', `${e.message}`);
+    log('warn', `（dry-run 继续打印计划；完成 cutover T-1 布局迁移前 --apply 会被本守卫拒绝）`);
   }
 
   // P0-2a leftover preflight：检测目标目录残留 .staging/.bak_*（仅 apply 模式）
