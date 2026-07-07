@@ -50,7 +50,7 @@ import {
   syncQuickReferenceFile,
 } from '../数据管理/pipelines/quick_reference.mjs';
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
-import { evaluateLedgerFreshness } from './etl-ledger/governance-check.mjs';
+import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
 import { listPolicyCurrentShards } from './lib/policy-current-shards.mjs';
 import {
   parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow, TERMINAL_STATUSES,
@@ -3540,6 +3540,8 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '分层依赖边界', fn: checkArchLayerBoundaries },
   { name: 'spawn参数引号安全', fn: checkSpawnArgQuoteSafety },
   { name: 'ETL台账新鲜度', fn: checkEtlLedgerFreshness },
+  // 2419ed：实现在独立模块（H5 单体棘轮：新增检查勿再膨胀本文件）
+  { name: '台账未提交体量', fn: () => runLedgerUncommittedBulkCheck({ rootDir: ROOT_DIR, info, success, warning }) },
   { name: '技能字段闸', fn: checkSkillFieldGate },
   patternCheck('省份静默默认反模式'),
   {

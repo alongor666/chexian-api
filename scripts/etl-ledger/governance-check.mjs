@@ -20,6 +20,7 @@
  *   - 两者都存在 → 按 mtime 差值与阈值比较
  */
 
+import { execFileSync } from 'node:child_process';
 
 /**
  * @param {object} p
@@ -57,4 +58,76 @@ export function evaluateLedgerFreshness({ ledgerExists, ledgerMtimeMs, statusExi
     level: 'ok',
     message: `ETL 台账新鲜（与 data-sources-status.json mtime 滞后 ${Math.max(0, lagHours).toFixed(1)}h 内）`,
   };
+}
+
+/**
+ * 台账白名单：B314 拆分后仍入库、且随日常发布变动的追踪文件（2419ed）。
+ * data-sources.json 状态字段已拆出（B314）、field-coverage-report.json 已迁出 git（2419ed），
+ * 均不在此列。
+ */
+export const LEDGER_TRACKED_FILES = [
+  '数据管理/ledger/etl-ledger.jsonl',
+  '数据管理/knowledge/QUICK_REFERENCE.md',
+];
+
+/**
+ * 台账未提交体量判定（纯函数）——2419ed 防累积撞 PR 体量门禁。
+ * 背景：auto-release 每日发布会更新上述入库台账文件但不自动 commit（自动 push 机制过重，
+ * 见 2419ed 取舍），累积 diff 搭车他人 PR 曾撞 2000 行体量门禁。阈值 300 行 ≈ 2-3 周累积。
+ *
+ * @param {object} p
+ * @param {Array<{path: string, added: number, deleted: number}>} p.files 各台账文件未提交 diff 行数
+ * @param {number} [p.thresholdLines=300] 提醒阈值（新增+删除行合计）
+ * @returns {{level: 'ok'|'warn', totalLines: number, message: string}}
+ */
+export function evaluateLedgerUncommittedBulk({ files, thresholdLines = 300 }) {
+  const totalLines = (files || []).reduce((sum, f) => sum + (f.added || 0) + (f.deleted || 0), 0);
+  if (totalLines > thresholdLines) {
+    const detail = (files || []).filter((f) => (f.added || 0) + (f.deleted || 0) > 0)
+      .map((f) => `${f.path} +${f.added}/-${f.deleted}`).join('；');
+    return {
+      level: 'warn',
+      totalLines,
+      message: `台账文件未提交 diff 累积 ${totalLines} 行（阈值 ${thresholdLines}）：${detail}——请尽快单独 chore commit 清空（git add <台账文件> && git commit），避免搭车其他 PR 撞体量门禁`,
+    };
+  }
+  return { level: 'ok', totalLines, message: `台账未提交 diff ${totalLines} 行（阈值 ${thresholdLines} 内）` };
+}
+
+/**
+ * governance 检查主体「台账未提交体量」（2419ed）——实现在本模块，
+ * check-governance.mjs 只注册（H5 单体棘轮 4000 行上限，新检查不进单体）。
+ *
+ * --numstat 相对 HEAD（含已暂存+未暂存）；CI 工作区干净天然 0 行不误报。
+ * core.quotepath=off：中文路径原样输出，避免 warn 明细出现八进制转义。
+ *
+ * @param {object} p
+ * @param {string} p.rootDir 仓库根目录
+ * @param {(m: string) => void} p.info
+ * @param {(m: string) => void} p.success
+ * @param {(m: string) => void} p.warning
+ * @returns {boolean} 恒 true（warn 级提醒，不阻断 governance；2419ed 取舍：自动 push 机制过重）
+ */
+export function runLedgerUncommittedBulkCheck({ rootDir, info, success, warning }) {
+  info('检查台账文件未提交体量（2419ed 防累积撞 PR 体量门禁）...');
+  let out;
+  try {
+    out = execFileSync('git', ['-c', 'core.quotepath=off', 'diff', '--numstat', 'HEAD', '--', ...LEDGER_TRACKED_FILES], {
+      cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    warning('git diff 不可用（无 git 环境），跳过台账体量检查');
+    return true;
+  }
+  const files = out.split('\n').filter(Boolean).map((line) => {
+    const [added, deleted, ...rest] = line.split('\t');
+    return { path: rest.join('\t'), added: Number(added) || 0, deleted: Number(deleted) || 0 };
+  });
+  const { level, message } = evaluateLedgerUncommittedBulk({ files });
+  if (level === 'ok') {
+    success(message);
+  } else {
+    warning(message);
+  }
+  return true;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateLedgerFreshness } from '../etl-ledger/governance-check.mjs';
+import { evaluateLedgerFreshness, evaluateLedgerUncommittedBulk, LEDGER_TRACKED_FILES } from '../etl-ledger/governance-check.mjs';
 
 const T = (iso) => Date.parse(iso);
 const base = {
@@ -44,5 +44,49 @@ describe('evaluateLedgerFreshness（三态：ledgerExists × statusExists）', (
   it('阈值可配置', () => {
     const r = evaluateLedgerFreshness({ ...base, statusMtimeMs: T('2026-06-27T14:00:00Z'), thresholdHours: 6 }); // +4h < 6h
     expect(r.level).toBe('ok');
+  });
+});
+
+describe('evaluateLedgerUncommittedBulk（2419ed 台账未提交体量提醒）', () => {
+  it('白名单只含拆分后仍入库的台账文件', () => {
+    expect(LEDGER_TRACKED_FILES).toEqual([
+      '数据管理/ledger/etl-ledger.jsonl',
+      '数据管理/knowledge/QUICK_REFERENCE.md',
+    ]);
+  });
+
+  it('无 diff（CI 工作区干净）→ ok，0 行', () => {
+    const r = evaluateLedgerUncommittedBulk({ files: [] });
+    expect(r.level).toBe('ok');
+    expect(r.totalLines).toBe(0);
+  });
+
+  it('累积在阈值内 → ok', () => {
+    const r = evaluateLedgerUncommittedBulk({
+      files: [{ path: '数据管理/ledger/etl-ledger.jsonl', added: 120, deleted: 0 }],
+    });
+    expect(r.level).toBe('ok');
+    expect(r.totalLines).toBe(120);
+  });
+
+  it('累积超阈值 → warn，消息含体量与可执行提示', () => {
+    const r = evaluateLedgerUncommittedBulk({
+      files: [
+        { path: '数据管理/ledger/etl-ledger.jsonl', added: 400, deleted: 0 },
+        { path: '数据管理/knowledge/QUICK_REFERENCE.md', added: 4, deleted: 4 },
+      ],
+    });
+    expect(r.level).toBe('warn');
+    expect(r.totalLines).toBe(408);
+    expect(r.message).toContain('chore commit');
+    expect(r.message).toContain('体量门禁');
+  });
+
+  it('阈值可配置', () => {
+    const r = evaluateLedgerUncommittedBulk({
+      files: [{ path: '数据管理/ledger/etl-ledger.jsonl', added: 100, deleted: 0 }],
+      thresholdLines: 50,
+    });
+    expect(r.level).toBe('warn');
   });
 });

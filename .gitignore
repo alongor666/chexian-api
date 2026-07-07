@@ -213,3 +213,7 @@ social-card-sx-renewal/
 # B314：数据域运行时状态（row_count/last_updated/data_range/field_count）不入库，
 # ETL 自动生成；契约部分留 数据管理/data-sources.json
 数据管理/data-sources-status.json
+
+# 2419ed：字段覆盖率报告只服务本地 AI 知识库（派生自本地 parquet，克隆环境天然过时），
+# 不入库、不随 VPS 发布；单次刷新 ~2400 行曾撞 PR 体量门禁
+数据管理/knowledge/ai/field-coverage-report.json
