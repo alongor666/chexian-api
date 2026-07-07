@@ -5,16 +5,21 @@
  * 但后端零消费——直连 API（PAT / CLI / MCP / curl）可绕过前端闸。本中间件补上最后一道
  * 运行时校验。
  *
- * 语义镜像前端 src/shared/config/organizations.ts（canAccessCost / canAccessMotoCost /
+ * 2026-07-06-claude-286f55 产品决策：生产环境三态开关恒为 'true'，'cost' 判定实际
+ * 全员放行，前端已下掉对应用户面权限开关（不再有 canAccessCost / COST_ALLOWED_USERS
+ * 镜像，见 src/shared/config/organizations.ts）。本文件的 cost 判定（
+ * canAccessCostFeature / COST_FALLBACK_USERS）予以保留，作为 'false' / 未设置两态下
+ * 的防御性兜底（非生产环境、未来部署形态可能取不同 env 值），非死代码。
+ *
+ * moto_cost 判定语义仍镜像前端 src/shared/config/organizations.ts（canAccessMotoCost /
  * SUPER_USERS），**两处必须同步修改**：
- * - cost：specialFeatures 已定义 → 须含 'cost'；未定义 → 回退静态白名单 COST_FALLBACK_USERS；
  * - moto_cost：超管恒通过；否则 specialFeatures 须含 'moto_cost'（未定义 → 拒绝）；
- * - 超管不变量：admin / xuechenglong 对 moto_cost 恒通过（与前端一致，cost 走白名单回退）。
+ * - 超管不变量：admin / xuechenglong 对 moto_cost 恒通过（与前端一致）。
  *
  * 环境开关三态（镜像前端 VITE_ENABLE_COMPREHENSIVE_ANALYSIS，生产 .env.production='true'）：
  * - 'true'  → 全员放行（旁路本闸，与前端"全员可见"一致，生产现状不变）；
  * - 'false' → 全员拒绝（前端整个视图隐藏，后端一并关闭）；
- * - 未设置  → 按 specialFeatures 强制（前端此态下由 canAccessCost 决定可见性）。
+ * - 未设置  → 按 specialFeatures 强制（cost 走 COST_FALLBACK_USERS 兜底）。
  */
 
 import type { Request, Response, NextFunction } from 'express';
