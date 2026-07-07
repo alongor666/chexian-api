@@ -224,6 +224,9 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
   const isBranchAdmin = userPermission?.role === UserRole.BRANCH_ADMIN;
   const isOrgUser = userPermission?.role === UserRole.ORG_USER;
   const isTelemarketingUser = userPermission?.role === UserRole.TELEMARKETING_USER;
+  // 注：按用户默认 branchCode 取，不感知超管切省（PermissionContext 无法依赖
+  // BranchContext，避免循环引用）。切省感知版见 BranchContext.useEffectiveVisibleOrganizations，
+  // 需要机构下拉随切省联动的消费方（如 FilterLayoutV2）应改用该 hook。
   const visibleOrganizations = userPermission
     ? getVisibleOrganizations(userPermission)
     : ['全部'];

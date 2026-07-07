@@ -5,7 +5,7 @@ import { MultiSelectDropdown, type MultiSelectOption } from './MultiSelectDropdo
 import { AnalysisYearSelector } from './AnalysisYearSelector';
 import type { AdvancedFilterState, DateCriteria } from '../../shared/types/data';
 import type { FilterFieldsConfig, FilterSelectionModeConfig, DateCriteriaType, AllowedYearsRange } from '../../shared/types/filters';
-import { useVisibleOrganizations } from '../../shared/contexts/PermissionContext';
+import { useEffectiveVisibleOrganizations } from '../../shared/contexts/BranchContext';
 import { Lock } from 'lucide-react';
 import { colorClasses } from '../../shared/styles';
 
@@ -147,7 +147,7 @@ export const FilterLayoutV2: React.FC<FilterLayoutV2Props> = ({
   const orgMode = selectionModes?.organizationMode ?? 'multi';
 
   // 获取用户可见的机构列表（权限控制）
-  const visibleOrganizations = useVisibleOrganizations();
+  const visibleOrganizations = useEffectiveVisibleOrganizations();
   const visibleOrgValues = React.useMemo(
     () => visibleOrganizations.filter((org) => org !== '全部'),
     [visibleOrganizations]

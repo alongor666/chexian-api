@@ -126,6 +126,7 @@ function sortSummaryData(
   data: DisplaySummaryData[],
   sortField: SortField,
   sortDirection: 'asc' | 'desc',
+  // 调用方（本文件内）恒显式传参，此默认值仅 TS 签名占位，不在运行时生效
   provinceLabel = '四川'
 ): DisplaySummaryData[] {
   const fixedKeys = [provinceLabel, '同城', '异地', '合计'];
@@ -172,8 +173,8 @@ export const EarnedPremiumTable = memo<EarnedPremiumTableProps>(function EarnedP
   onDetailFilterChange,
 }) {
   const { effectiveBranch } = useBranch();
-  // 省份中文名（SX='山西', SC='四川', null/ALL 兜底'四川'）
-  const provinceLabel = branchLabel(effectiveBranch) === '全国' ? '四川' : branchLabel(effectiveBranch);
+  // 省份中文名（SX='山西', SC='四川', null/ALL='全国'——不再兜底硬编码四川）
+  const provinceLabel = branchLabel(effectiveBranch);
 
   // 明细表筛选状态（默认显示全部月份，覆盖滚动12个月完整窗口）
   const [detailFilter, setDetailFilter] = useState<EarnedPremiumDetailFilter>({
