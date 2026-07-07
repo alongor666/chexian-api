@@ -274,7 +274,6 @@ allowed_tools: |
   Bash(git:*)
   Bash(npx:vitest*)
   Bash(bun scripts/metric-registry/validate.ts)   # 指标校验
-  Bash(bun scripts/metric-registry/generate-frontend-map.ts)  # 前端映射生成
   WebFetch
 ```
 

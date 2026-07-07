@@ -315,11 +315,9 @@ SELECT
   ...
 ```
 
-4. Update frontend map: `bun scripts/metric-registry/generate-frontend-map.ts`
-
-5. Update Dashboard component to display it:
+4. Update Dashboard component to display it:
 ```typescript
 <KpiCard title="件均保费" value={kpis.avg_policy_value} formatter={fmtMoney} />
 ```
 
-6. Update tests in `tests/kpi.test.ts`
+5. Update tests in `tests/kpi.test.ts`

@@ -307,8 +307,7 @@ src/hooks/useTruckAnalysis.ts - Parameter 'data' implicitly has an 'any' type
 **流程**（按 CLAUDE.md §14 指标开发协议）：
 1. 添加到 `server/src/config/metric-registry/categories/cost.ts`（含 testCase + changelog）
 2. `bun scripts/metric-registry/validate.ts` — 校验通过
-3. `bun scripts/metric-registry/generate-frontend-map.ts` — 更新前端映射
-4. 不要在 SQL 生成器中硬编码此指标公式
+3. 不要在 SQL 生成器中硬编码此指标公式
 
 **验证**：`bun run governance` 通过
 ```
