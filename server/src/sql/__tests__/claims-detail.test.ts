@@ -347,13 +347,31 @@ describe('generateGeoRiskByPlateQuery', () => {
     expect(sql).toContain('WITH claim_with_plate AS');
   });
 
-  it('四川各城市 LIKE 规则完整（21 个城市）', () => {
+  it('四川各城市 LIKE 规则完整（22 个城市，含川G）', () => {
     const sql = generateGeoRiskByPlateQuery(EMPTY_FILTERS);
     expect(sql).toContain("WHEN p.plate_no LIKE '川A%' THEN '成都'");
     expect(sql).toContain("WHEN p.plate_no LIKE '川B%' THEN '绵阳'");
-    expect(sql).toContain("WHEN p.plate_no LIKE '川K%' THEN '乐山'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川K%' THEN '内江'");
     expect(sql).toContain("WHEN p.plate_no LIKE '川W%' THEN '凉山'");
     expect(sql).toContain("WHEN p.plate_no LIKE '渝%' THEN '重庆'");
+  });
+
+  it('BACKLOG 2026-07-07-claude-d3ef27：按权威值域（plate_region/latest.parquet）修正 H/J/K/L/M/R/S/T/Z 九个前缀错位一位 + 补齐此前完全缺失的川G', () => {
+    const sql = generateGeoRiskByPlateQuery(EMPTY_FILTERS);
+    expect(sql).toContain("WHEN p.plate_no LIKE '川G%' THEN '成都'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川H%' THEN '广元'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川J%' THEN '遂宁'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川K%' THEN '内江'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川L%' THEN '乐山'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川M%' THEN '资阳'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川R%' THEN '南充'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川S%' THEN '达州'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川T%' THEN '雅安'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川Z%' THEN '眉山'");
+    // 抽样验证未受影响的正确前缀原样保留
+    expect(sql).toContain("WHEN p.plate_no LIKE '川A%' THEN '成都'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川Q%' THEN '宜宾'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川U%' THEN '阿坝'");
   });
 
   it('过滤其他地区：WHERE plate_city != 其他', () => {
@@ -429,20 +447,35 @@ describe('generateGeoComparisonQuery', () => {
     expect(sql).toContain('WHEN accident_city != plate_home_city THEN TRUE');
   });
 
-  it('e9a906：映射补全至 21 个川牌前缀，值域逐字对齐（含自治州全称）', () => {
+  it('e9a906：映射补全至 22 个川牌前缀（含川G），值域逐字对齐（含自治州全称）', () => {
     const sql = generateGeoComparisonQuery(EMPTY_FILTERS);
     // 原有 6 个之外的补全抽查
     expect(sql).toContain("WHEN p.plate_no LIKE '川D%' THEN '510400攀枝花市'");
-    expect(sql).toContain("WHEN p.plate_no LIKE '川H%' THEN '510900遂宁市'");
-    expect(sql).toContain("WHEN p.plate_no LIKE '川T%' THEN '512000资阳市'");
-    expect(sql).toContain("WHEN p.plate_no LIKE '川Z%' THEN '510800广元市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川H%' THEN '510800广元市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川T%' THEN '511800雅安市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川Z%' THEN '511400眉山市'");
     // 自治州以 Parquet 实际值域全称为准，非「市」短名
     expect(sql).toContain("WHEN p.plate_no LIKE '川U%' THEN '513200阿坝藏族羌族自治州'");
     expect(sql).toContain("WHEN p.plate_no LIKE '川V%' THEN '513300甘孜藏族自治州'");
     expect(sql).toContain("WHEN p.plate_no LIKE '川W%' THEN '513400凉山彝族自治州'");
-    // 共 21 个川牌前缀映射到「区划码+全称」
+    // 共 22 个川牌前缀映射到「区划码+全称」
     const mapped = sql.match(/WHEN p\.plate_no LIKE '川[A-Z]%' THEN '51\d{4}/g) ?? [];
-    expect(mapped.length).toBe(21);
+    expect(mapped.length).toBe(22);
+  });
+
+  it('BACKLOG 2026-07-07-claude-d3ef27：按权威值域修正 H/J/K/L/M/R/S/T/Z 九个「区划码+城市名」错位一位 + 补齐川G', () => {
+    const sql = generateGeoComparisonQuery(EMPTY_FILTERS);
+    expect(sql).toContain("WHEN p.plate_no LIKE '川G%' THEN '510100成都市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川H%' THEN '510800广元市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川J%' THEN '510900遂宁市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川K%' THEN '511000内江市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川L%' THEN '511100乐山市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川M%' THEN '512000资阳市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川R%' THEN '511300南充市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川S%' THEN '511700达州市'");
+    // 抽样验证未受影响的正确前缀原样保留
+    expect(sql).toContain("WHEN p.plate_no LIKE '川A%' THEN '510100成都市'");
+    expect(sql).toContain("WHEN p.plate_no LIKE '川Q%' THEN '511500宜宾市'");
   });
 
   it('过滤 plate_no IS NOT NULL', () => {
