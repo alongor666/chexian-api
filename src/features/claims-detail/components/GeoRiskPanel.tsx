@@ -40,6 +40,8 @@ import {
   getProvinceAbbrev,
   getCityAbbrev,
 } from '@/shared/utils/province-abbrev';
+import { useBranch } from '@/shared/contexts/BranchContext';
+import { BRANCH_LABELS } from '@/shared/utils/branchDisplay';
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
 import { isGeoRiskEmpty } from './claimsEmptyState';
 
@@ -187,6 +189,9 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
   const { geoAccident, geoPlate, geoComparison, frequencyYoy } = hook;
+  const { effectiveBranch } = useBranch();
+  // 当前用户归属省（SX='山西', SC='四川', null/ALL 兜底'四川'），决定下钻预热地图按哪个省预加载
+  const defaultProvince = (effectiveBranch ? BRANCH_LABELS[effectiveBranch] : null) ?? '四川';
   const [mapMetric, setMapMetric] = useState<MapMetric>('cases');
   const [mapLevel, setMapLevel] = useState<MapLevel>('china');
   const [currentProvince, setCurrentProvince] = useState<string>('');
@@ -196,13 +201,15 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
   const [mapError, setMapError] = useState<string | null>(null);
 
   useEffect(() => {
-    preloadDefaultMaps()
+    // 首屏是 'china' 级地图（与 GeoSection 不同），preloadDefaultMaps(defaultProvince) 只是为
+    // 用户所属省的下钻预热，避免山西用户点击下钻时仍去加载四川地图。
+    preloadDefaultMaps(defaultProvince)
       .then(() => {
         setMapsReady(true);
         return ensureMapRegistered('china').then(key => setCurrentMapKey(key));
       })
       .catch(() => setMapError('地图资源加载失败，请刷新页面重试'));
-  }, []);
+  }, [defaultProvince]);
 
   const { fetchGeoData, fetchFrequencyYoy } = hook;
   const loadData = useCallback(() => {
