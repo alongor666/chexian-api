@@ -9,7 +9,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EChartsOption } from 'echarts';
-import { echarts } from '../../shared/utils/echarts';
+import { EChartContainer } from '../../widgets/charts/EChartContainer';
 import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import { buttonStyles, cardStyles, colors, cn, tableStyles, textStyles } from '../../shared/styles';
 import { useTheme } from '../../shared/theme';
@@ -208,9 +208,6 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
     () => ({ local: orgGroups.SAME_CITY, remote: orgGroups.REMOTE, province: allOrgs }),
     [orgGroups, allOrgs]
   );
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
-
   // ── 图表内部状态 ──────────────────────────────────────────────────────────
   const [coverage, setCoverage] = useState<CoverageCombinationFilter>('交三');
   const [region, setRegion] = useState<RegionType>('local');
@@ -466,36 +463,6 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
     };
   }, [rows, isDark]);
 
-  // ── ECharts 初始化与更新 ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!chartRef.current) return;
-    if (!chartInstanceRef.current) {
-      chartInstanceRef.current = echarts.init(chartRef.current);
-    }
-    chartInstanceRef.current.setOption(option, { notMerge: false });
-  }, [option]);
-
-  useEffect(() => {
-    const chart = chartInstanceRef.current;
-    if (!chart) return;
-    const resizeObserver = new ResizeObserver(() => {
-      chart.resize();
-    });
-    if (chartRef.current) {
-      resizeObserver.observe(chartRef.current);
-    }
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      chartInstanceRef.current?.dispose();
-      chartInstanceRef.current = null;
-    };
-  }, []);
-
   // ── 当前区域的机构列表 ────────────────────────────────────────────────────
   const orgList = regionOrgs[region];
   const displayTitle = selectedOrg
@@ -610,7 +577,8 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
               {error}
             </div>
           )}
-          <div ref={chartRef} style={{ height: 300, width: '100%' }} />
+          {/* notMerge=false（merge 模式）：保住用户手动拖动的 dataZoom 位置跨数据刷新不重置 */}
+          <EChartContainer option={option} notMerge={false} height={300} />
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-700">

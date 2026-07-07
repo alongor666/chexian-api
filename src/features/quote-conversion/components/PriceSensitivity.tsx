@@ -1,34 +1,26 @@
-import { useRef, useEffect } from 'react';
-import * as echarts from 'echarts/core';
-import { BarChart, LineChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import { useMemo } from 'react';
+import type { EChartsCoreOption } from 'echarts/core';
+import { EChartContainer } from '../../../widgets/charts/EChartContainer';
 import { cardStyles, colorClasses, quoteChartColors, cn } from '../../../shared/styles';
 import { useTheme } from '../../../shared/theme';
 import { formatCount } from '../../../shared/utils/formatters';
 import { useQuotePrice } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';
 
-echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
-
 interface Props {
   filters: QuoteFilters;
 }
 
 export function PriceSensitivity({ filters }: Props) {
-  const chartRef = useRef<HTMLDivElement>(null);
   const { data, isLoading } = useQuotePrice(filters);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
-  useEffect(() => {
-    if (!chartRef.current || !data || data.length === 0) return;
-
-    const chart = echarts.init(chartRef.current);
-    const filtered = data.filter(r => r.discount_bin >= 0.3 && r.discount_bin <= 1.0);
+  const option = useMemo<EChartsCoreOption>(() => {
+    const filtered = (data ?? []).filter(r => r.discount_bin >= 0.3 && r.discount_bin <= 1.0);
 
     const textColor = isDark ? '#a3a3a3' : '#666';
-    const option: echarts.EChartsCoreOption = {
+    return {
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'cross' },
@@ -81,15 +73,6 @@ export function PriceSensitivity({ filters }: Props) {
         },
       ],
     };
-
-    chart.setOption(option);
-    const resizeOb = new ResizeObserver(() => chart.resize());
-    resizeOb.observe(chartRef.current);
-
-    return () => {
-      resizeOb.disconnect();
-      chart.dispose();
-    };
   }, [data, isDark]);
 
   return (
@@ -101,7 +84,7 @@ export function PriceSensitivity({ filters }: Props) {
       {isLoading ? (
         <div className="animate-pulse h-72 bg-neutral-100 dark:bg-neutral-800 rounded" />
       ) : data && data.length > 0 ? (
-        <div ref={chartRef} className="h-72" />
+        <EChartContainer option={option} height={288} />
       ) : (
         <div className={cn('h-72 flex items-center justify-center', colorClasses.text.neutralMuted, 'text-sm')}>
           暂无价格分析数据
