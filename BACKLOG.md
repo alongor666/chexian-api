@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（42 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（40 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -52,7 +52,7 @@
 - 2026-07-07-claude-d3ef27 — claims-detail.ts 川牌车牌前缀→城市 CASE 存在系统性错位一位缺陷
 - 2026-07-07-claude-dce69c — 净化剥离中央化
 
-**P3（17 项）**
+**P3（15 项）**
 
 - B247 — 图表 hex 色值审计
 - B254 — wecom_smartsheet state 生命周期管理（missing_vins T
@@ -62,8 +62,6 @@
 - 2026-06-22-claude-03f6f0 — PerformanceAnalysisPanel 主组件(~900行)抽 usePerf
 - 2026-07-03-claude-b714a7 — 安全审计L5
 - 2026-07-03-claude-fdaa10 — 安全审计L2
-- 2026-07-05-claude-49e3fd — 综合费用率别名统一 + cost-cube 硬编码去漂移（B310 残留）
-- 2026-07-05-claude-8d31a5 — generateMonthlyExpenseQuery 直接 FROM PolicyFa
 - 2026-07-05-claude-fed2b1 — 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，
 - 2026-07-06-claude-0e26ba — session 级 IP 绑定评估
 - 2026-07-07-claude-322e6e — 矩阵热力图抽共享组件
@@ -104,8 +102,6 @@
 | 2026-07-03-claude-6c23b3 | 2026-07-03 | 生产可靠性 | @claude | 后端审查：核心数据目录 policy/current(critical) 走普通 rsync --delete 非原子，覆盖期间与意外重启/reload 重叠会 glob 到半份数据(仅 customer_flow/new_energy_claims 走 rsyncLatestAtomically)。建议 critical 目录改影子目录+rename 原子切换。属部署链改动需 VPS 测试 | P2 | PROPOSED | N/A | scripts/sync-vps.mjs |  |
 | 2026-07-03-claude-b714a7 | 2026-07-03 | 安全 | @claude | 安全审计L5：诊断报告(diagnose-*skills)生成HTML时,数据字段(机构名/业务员名)的转义依赖skill层;配合报告CSP的script-src 'unsafe-inline',存在理论性数据驱动XSS(数据来自内部BI字段结构化,可利用性极低)。建议报告生成器对文本字段统一HTML转义。skill在~/.claude/skills/需走crystallize-skill改仓库。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | N/A | check-merged-drift 命中 PR #874 系误报：该 PR 未动 diagnose-* skills HTML 转义，保持 PROPOSED <br>架构价值审计（2026-07-04）：技术修复=一个 escape 工具函数（5 分钟），但须走 crystallize-skill 改仓库流程（开销远大于修复）；处置=不单独走流程，等下次因其他需求改 chexian-report-shell 时夹带；数据源为内部 BI 字段，可利用性极低 <br>check-merged-drift 命中 PR #879（2adc3011）及分支提交 98d73afb 系误报：均为记账/引用，未动 diagnose-* skills HTML 转义（2026-07-06 逐条权威核实；PR #874 前次已登记系误报） <br>check-merged-drift 再次误报（本轮命中 PR #879/2adc3011 与 #874/3b8d82cf，均已合并）：两 PR 改动文件清单经 git show --stat 核实均无 diagnose-*/HTML 转义相关；诊断 skill 实体在 ~/.claude/skills 仓外，仓内 PR 本就无法实现本项。保持 PROPOSED（等下次改 chexian-report-shell 时夹带） <br>check-merged-drift 命中 d6ad418e/40092939(PR #944) 系误报：#944 是漂移误报压制机制本身（其账本改动引用本 uid 作先例），未动 diagnose-* skills HTML 转义。保持 PROPOSED |
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/health无脚本,故实际无功能影响。收紧到nonce/hash策略是纯纵深加固,需先确认无Express服务的内联脚本依赖。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | server/src/config/csp.ts | 架构价值审计冻结（2026-07-04）：Express csp.ts 的 unsafe-inline 实测无功能影响（唯一 HTML 响应 reports.ts 有独立 REPORT_HTML_CSP；SPA 的 CSP 基线已由 PR #874 下发 nginx 模板，生产应用由 6ef9cd 追踪）；unsafe-inline→nonce 需重构全部内联脚本，成本高当前收益零。触发条件=SPA CSP 生产落地后仍有内联脚本注入实证 |
-| 2026-07-05-claude-49e3fd | 2026-07-05 | Chore | @claude | 综合费用率别名统一 + cost-cube 硬编码去漂移（B310 残留）：(1) SQL 返回别名 comprehensive_cost_ratio 与注册表 id comprehensive_expense_ratio 分裂，统一需改前端 5 处(cost-data/table-columns/transformData/CostAnalysisPanel/useExportHandlers) + agent 注册表 4 处 + cost-cube；(2) server/src/sql/cube/cost-cube.ts:319 同类硬编码 CASE 应比照 B310 改 getMetricSql。因跨前后端 10 处且触及 agent 热路径，从 B310 净简化小 PR 分离。【账】做完删 2 处硬编码公式+统一 1 别名/加 0 机制/触发条件=别名迁移需前后端同批改+cube-shadow 影子对账验证 | P3 | PROPOSED | N/A | N/A | check-merged-drift 命中 PR #897（9abdcf62）系误报：B310 主体提交正文声明本项分离为后续项，未实现（2026-07-06 逐条权威核实） <br>check-merged-drift 命中 9abdcf62(PR #897,已合并)系误报：#897 正文明确把本项作为后续项从该 PR 分离（gh MCP 拉取 PR body 核实）。origin/main 代码核实：cost-cube.ts 综合费用率硬编码 CASE 仍在（约 L315-319），comprehensive_cost_ratio 别名仍散布前后端 10 个文件。保持 PROPOSED |
-| 2026-07-05-claude-8d31a5 | 2026-07-05 | Bugfix/Backend | @claude | generateMonthlyExpenseQuery 直接 FROM PolicyFact 未走 policy_dedup（B252 同类）：server/src/sql/cost/earned-premium-detail.ts 的月度费用查询 SUM(premium)/COUNT(DISTINCT policy_no)/SUM(fee_amount) 直读 PolicyFact，若存在批改副本（policy_no 非唯一，见 memory feedback_policy_join_dedup）则保费/费用按副本重复累加。需先 duckdb 直查确认 PolicyFact 是否含批改副本、premium 是逐批改还是净额，再决定是否套 policy_dedup（B274 owner 决策只覆盖附加税率，去重不在其内）。【账】做完删：月度费用查询裸 FROM PolicyFact；加：与其它成本查询一致的 policy_dedup CTE；触发条件：duckdb 直查证实 premium 因批改副本虚高。 | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts (generateMonthlyExpenseQuery) | check-merged-drift 命中 PR #912（b7cee011）及分支提交 bf048ffa 系误报：B274 税率修正仅提及本项，generateMonthlyExpenseQuery 未改走 policy_dedup（2026-07-06 逐条权威核实） <br>check-merged-drift 命中 b7cee011(PR #912,已合并)系误报：#912 仅做 B274 附加税费率对齐（本项描述已预判『B274 决策不含去重』）。origin/main 核实：generateMonthlyExpenseQuery 仍裸 FROM PolicyFact（earned-premium-detail.ts:295），未套 policy_dedup。保持 PROPOSED |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功能对等覆盖 v1 场景，再切 daily.mjs 调度并删 v1。承接 B253 弃置结论。【账】做完删 v1 脚本+DEFAULT_SCHEMA 硬编码/加 0 新机制/触发条件=确认 v2 功能对等 | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ | 评估完成（严格对等矩阵）：①推送引擎职责 v2 完全对等且严格更优——v1 DEFAULT_SCHEMA 18 个 field_id 在 field_registry.yaml 全部有声明且实例 fields_enabled 全启用；state 同名同构（v2 records 增 payload_hash 为超集，接管旧 state 只触发 update 不触发 add，无行级重复风险）；40058/update 失败降级、missing_vins 只记不删、限流语义均对等；v2 另有 branch_code fail-closed+出口断言/幂等 hash 跳过/重复投保审计/跨批排他。②调度证据：仓库与运行目录均无 config.*.json（v1 兼容段扫描恒为空），463 个历史日志全为 v2 家族 → daily.mjs 8b v1 兼容段已删（行为逐字节不变），并消除治理盲区（v1 不在 governance 企微隔离闸引擎清单、无省份隔离，留着调度入口=混省推送地雷）。③v1 文件不删（差距）：create_renewal_tracker.py 与 test_dryrun_validation_sql.py 依赖其 SyncConfig+build_source_rows 的「止期窗口」(insurance_end_date_from/to) 取数能力，v2 引擎只支持起期窗口，非 drop-in 替代；且该消费方正被 cutover 前置A卡改动。删除条件：create_renewal_tracker 取数迁移到带省份隔离的独立查询层，或 v2 补齐止期窗口过滤（届时连同 test_sync_renewal.py 一并删）。 |
 | 2026-07-06-claude-0e26ba | 2026-07-06 | 安全治理 | @claude | session 级 IP 绑定评估:allowedIps 目前只在登录时校验一次(JWT 签发后不再比对,PAT 侧已于权限治理 PR 补齐每次校验)。若要 JWT 会话也绑 IP,需评估移动网络/办公网出口 IP 漂移导致正常用户会话中断的可用性代价,可选折中=仅对显式配置 allowedIps 的账号启用。属较大改造,先决策再动手 | P3 | PROPOSED | N/A | server/src/middleware/auth.ts,server/src/services/auth.ts:136 | check-merged-drift 命中 c59a5058/37a3c234(PR #943) 系误报：#943 只补了 PAT 侧每次 IP 校验（事项文本自述），JWT session 侧未动——origin/main 核实 middleware/auth.ts 零 allowedIps 引用，无每请求比对。保持 PROPOSED（先决策再动手） |
 | 2026-07-06-claude-151236 | 2026-07-06 | 部署链 | @claude | governance 增加双锁一致性闸:server/package.json 的语义范围必须被 server/package-lock.json 锁定版本满足(npm ci 的锁漂移在 CI 早于部署暴露)。根因:#942 重建 bun.lock/server/bun.lock 但漏 npm 锁,main 部署连败三次全靠回滚兜底(runs 28784860923/28785804360/c59a5058)。双锁体系(bun 本地/CI + npm VPS 部署)任一侧重建必须联动另一侧 | P2 | PROPOSED | N/A | server/package-lock.json,scripts/check-governance.mjs |  |
