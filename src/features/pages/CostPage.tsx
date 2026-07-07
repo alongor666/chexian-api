@@ -4,8 +4,6 @@ import { CostAnalysisPanel } from '../cost/components/CostAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
 import { buttonStyles, cn } from '@/shared/styles';
-import { usePermission } from '@/shared/contexts/PermissionContext';
-import { canAccessCost } from '@/shared/config/organizations';
 import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
 import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 
@@ -17,7 +15,6 @@ type CostView = 'basic' | 'comprehensive';
 
 export const CostPage: React.FC = () => {
   const { filters, setFilters, maxDataDate } = useGlobalFilters();
-  const { userPermission } = usePermission();
   const [searchParams] = useSearchParams();
   const initialView = (searchParams.get('view') as CostView) || 'basic';
   const [view, setView] = useState<CostView>(initialView);
@@ -31,10 +28,10 @@ export const CostPage: React.FC = () => {
     return label ? `${label} — 成本分析` : '成本分析';
   }, [quickFilters]);
 
+  // 成本分析（含综合分析视图）对全员开放（2026-07-06-claude-286f55）：
+  // env 开关仅保留全局关闭能力（'false'），不再叠加 per-user cost 权限位判断。
   const comprehensiveSwitch = import.meta.env.VITE_ENABLE_COMPREHENSIVE_ANALYSIS;
-  const enableComprehensiveAnalysis =
-    comprehensiveSwitch === 'true'
-      || (comprehensiveSwitch !== 'false' && canAccessCost(userPermission?.username, userPermission?.specialFeatures));
+  const enableComprehensiveAnalysis = comprehensiveSwitch !== 'false';
 
   if (view === 'comprehensive' && enableComprehensiveAnalysis) {
     return (

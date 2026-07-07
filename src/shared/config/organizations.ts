@@ -523,15 +523,9 @@ export function canAccessMotoCost(username: string | undefined, specialFeatures?
 }
 
 /**
- * 成本分析功能白名单用户（静态回退）
- * 优先使用动态 specialFeatures
+ * 成本分析（含综合分析视图）对全员开放（产品决策 2026-07-06-claude-286f55）：
+ * 生产环境 env 三态开关恒为 'true'，per-user specialFeatures 'cost' 判定已无实际效力，
+ * 前端不再维护该判定，用户面权限开关已下掉（AccessControlPage 不再提供该勾选项）。
+ * 后端 requireSpecialFeature('cost') 网关予以保留，作为非生产环境的防御性兜底，见
+ * server/src/middleware/special-feature.ts 顶部说明。
  */
-export const COST_ALLOWED_USERS = ['chexianbu', 'linxia', 'xuechenglong', 'admin'];
-
-export function canAccessCost(username: string | undefined, specialFeatures?: string[]): boolean {
-  if (!username) return false;
-  if (specialFeatures !== undefined) {
-    return specialFeatures.includes('cost');
-  }
-  return COST_ALLOWED_USERS.includes(username);
-}
