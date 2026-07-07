@@ -280,17 +280,28 @@ export function generateGeoRiskByAccidentQuery(filters: ClaimsDetailFilters, whe
 
 // ── 6. 地理风险分析（车牌归属地）──
 
-export function generateGeoRiskByPlateQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
-  const where = buildWhere(filters);
-  const policyWhere = buildPolicyWhere(filters);
-  return `
-    WITH claim_with_plate AS (
-      SELECT
-        c.*,
-        p.plate_no,
-        p.org_level_3,
-        p.customer_category,
-        CASE
+/**
+ * branchCode → 车牌归属地面板纳入的省份全称集合（PlateRegionMap.province 值）。
+ *
+ * SC 保留原历史口径「四川 + 重庆」（成渝间车辆流动频繁，既有业务口径，非本次新增）。
+ * 新省默认仅纳入本省，禁猜测邻省——如需纳入邻省，走业务确认后再登记本表。
+ */
+const PLATE_GEO_PROVINCES_BY_BRANCH: Record<string, readonly string[]> = {
+  SC: ['四川', '重庆'],
+  SX: ['山西'],
+};
+
+/**
+ * SC 车牌归属地 CASE（legacy，字节安全保留，禁改写）。
+ *
+ * ⚠️ 已知缺陷（2026-07-07 本次多省改造排查中发现，非本次引入）：对照
+ * 数据管理/warehouse/dim/plate_region/latest.parquet 权威值域，H/J/K/L/M/R/S/T/Z
+ * 九个前缀存在系统性错位一位（如「川H」权威归属广元，此处却写成遂宁——疑似
+ * 历史转录时漏抄「川G→成都」一行导致后续逐位下移）。按"业务口径错误禁止顺手改，
+ * 需登记 BACKLOG"的红线，本次不改动该 CASE 字面量（含缺陷原样保留，四川
+ * 输出字节不变），缺陷已登记 BACKLOG 2026-07-07-claude-d3ef27 供后续单独核实修复。
+ */
+const SC_PLATE_CITY_CASE = `CASE
           WHEN p.plate_no LIKE '川A%' THEN '成都'
           WHEN p.plate_no LIKE '川B%' THEN '绵阳'
           WHEN p.plate_no LIKE '川C%' THEN '自贡'
@@ -314,7 +325,66 @@ export function generateGeoRiskByPlateQuery(filters: ClaimsDetailFilters, whereC
           WHEN p.plate_no LIKE '川Z%' THEN '广元'
           WHEN p.plate_no LIKE '渝%' THEN '重庆'
           ELSE '其他'
+        END`;
+
+/**
+ * 生成地理风险分析（车牌归属地）查询。
+ *
+ * @param branchCode 部署省（'SC'/'SX'）。SC/未知/缺省 → 沿用历史硬编码 CASE
+ *   （字节安全，含已知缺陷原样保留）；已在 PLATE_GEO_PROVINCES_BY_BRANCH 登记的
+ *   其他省（如 SX）→ JOIN PlateRegionMap 维表派生（权威值域，非猜测）。
+ */
+export function generateGeoRiskByPlateQuery(
+  filters: ClaimsDetailFilters,
+  whereClause: string = '1=1',
+  branchCode?: string,
+): string {
+  const where = buildWhere(filters);
+  const policyWhere = buildPolicyWhere(filters);
+  const includedProvinces = branchCode && branchCode !== 'SC' ? PLATE_GEO_PROVINCES_BY_BRANCH[branchCode] : undefined;
+
+  if (includedProvinces) {
+    const provinceList = includedProvinces.map((v) => `'${escapeSqlValue(v)}'`).join(', ');
+    return `
+    WITH claim_with_plate AS (
+      SELECT
+        c.*,
+        p.plate_no,
+        p.org_level_3,
+        p.customer_category,
+        CASE
+          WHEN prm.city IS NULL THEN '其他'
+          ELSE regexp_replace(prm.city, '(市|自治州|地区|盟)$', '')
         END AS plate_city
+      FROM ClaimsDetail c
+      JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
+      LEFT JOIN PlateRegionMap prm
+        ON SUBSTRING(p.plate_no, 1, 2) = prm.plate_prefix
+       AND prm.province IN (${provinceList})
+      WHERE ${where}${policyWhere}
+    )
+    SELECT
+      plate_city,
+      COUNT(*) AS cases,
+      ROUND(SUM(reserve_amount) / 1e4, 0) AS reserve_wan,
+      ROUND(AVG(reserve_amount), 0) AS avg_reserve,
+      SUM(CASE WHEN is_bodily_injury THEN 1 ELSE 0 END) AS injury_cases,
+      ROUND(SUM(CASE WHEN is_bodily_injury THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS injury_pct
+    FROM claim_with_plate
+    WHERE plate_city != '其他'
+    GROUP BY plate_city
+    ORDER BY cases DESC
+  `;
+  }
+
+  return `
+    WITH claim_with_plate AS (
+      SELECT
+        c.*,
+        p.plate_no,
+        p.org_level_3,
+        p.customer_category,
+        ${SC_PLATE_CITY_CASE} AS plate_city
       FROM ClaimsDetail c
       JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
       WHERE ${where}${policyWhere}
@@ -335,38 +405,13 @@ export function generateGeoRiskByPlateQuery(filters: ClaimsDetailFilters, whereC
 
 // ── 7. 地理风险对比（出险地 vs 车牌归属地）──
 
-export function generateGeoComparisonQuery(filters: ClaimsDetailFilters, whereClause: string = '1=1'): string {
-  const where = buildWhere(filters);
-  const policyWhere = buildPolicyWhere(filters);
-  return `
-    WITH base_raw AS (
-      SELECT
-        c.accident_city,
-        CASE
-          WHEN p.plate_no LIKE '川A%' THEN '成都'
-          WHEN p.plate_no LIKE '川B%' THEN '绵阳'
-          WHEN p.plate_no LIKE '川C%' THEN '自贡'
-          WHEN p.plate_no LIKE '川D%' THEN '攀枝花'
-          WHEN p.plate_no LIKE '川E%' THEN '泸州'
-          WHEN p.plate_no LIKE '川F%' THEN '德阳'
-          WHEN p.plate_no LIKE '川H%' THEN '遂宁'
-          WHEN p.plate_no LIKE '川J%' THEN '内江'
-          WHEN p.plate_no LIKE '川K%' THEN '乐山'
-          WHEN p.plate_no LIKE '川L%' THEN '南充'
-          WHEN p.plate_no LIKE '川M%' THEN '眉山'
-          WHEN p.plate_no LIKE '川Q%' THEN '宜宾'
-          WHEN p.plate_no LIKE '川R%' THEN '达州'
-          WHEN p.plate_no LIKE '川S%' THEN '雅安'
-          WHEN p.plate_no LIKE '川T%' THEN '资阳'
-          WHEN p.plate_no LIKE '川X%' THEN '广安'
-          WHEN p.plate_no LIKE '川Y%' THEN '巴中'
-          WHEN p.plate_no LIKE '川Z%' THEN '广元'
-          WHEN p.plate_no LIKE '渝%' THEN '重庆'
-          ELSE '其他'
-        END AS plate_city,
-        -- e9a906: 车牌前缀 → accident_city 值域字符串（区划码+全称，逐字对齐 Parquet 实际值域）。
-        -- 无法识别城市的前缀（渝牌对应两个区划值、外省牌等）→ NULL，按保单归属视为非跨区。
-        CASE
+/**
+ * SC 跨区判定 plate_home_city CASE（legacy，字节安全保留，禁改写）。
+ *
+ * ⚠️ 与 SC_PLATE_CITY_CASE 同源同缺陷：H/J/K/L/M/R/S/T/Z 九个前缀相对权威值域
+ * 系统性错位一位（详见 SC_PLATE_CITY_CASE 上方注释），本次不改动、已登记 BACKLOG 2026-07-07-claude-d3ef27。
+ */
+const SC_PLATE_HOME_CITY_CASE = `CASE
           WHEN p.plate_no LIKE '川A%' THEN '510100成都市'
           WHEN p.plate_no LIKE '川B%' THEN '510700绵阳市'
           WHEN p.plate_no LIKE '川C%' THEN '510300自贡市'
@@ -389,7 +434,73 @@ export function generateGeoComparisonQuery(filters: ClaimsDetailFilters, whereCl
           WHEN p.plate_no LIKE '川Y%' THEN '511900巴中市'
           WHEN p.plate_no LIKE '川Z%' THEN '510800广元市'
           ELSE NULL
-        END AS plate_home_city,
+        END`;
+
+/**
+ * 生成地理风险对比（出险地 vs 车牌归属地）查询。
+ *
+ * @param branchCode 部署省。SC/未知/缺省 → 沿用历史硬编码 CASE（字节安全，含已知
+ *   缺陷原样保留）；已登记的其他省（如 SX）→ JOIN PlateRegionMap 派生，
+ *   JOIN 不到（未知前缀）与 #939 语义一致，归非跨区。
+ */
+export function generateGeoComparisonQuery(
+  filters: ClaimsDetailFilters,
+  whereClause: string = '1=1',
+  branchCode?: string,
+): string {
+  const where = buildWhere(filters);
+  const policyWhere = buildPolicyWhere(filters);
+  const includedProvinces = branchCode && branchCode !== 'SC' ? PLATE_GEO_PROVINCES_BY_BRANCH[branchCode] : undefined;
+
+  if (includedProvinces) {
+    const provinceList = includedProvinces.map((v) => `'${escapeSqlValue(v)}'`).join(', ');
+    return `
+    WITH base_raw AS (
+      SELECT
+        c.accident_city,
+        -- accident_city 值域为「区划码+全称」（如 510100成都市），剥离前导数字后
+        -- 与 PlateRegionMap.city（如 成都市）同格式，可直接比较（duckdb 直查验证过）。
+        regexp_replace(c.accident_city, '^[0-9]+', '') AS accident_city_norm,
+        -- JOIN 不到（未知前缀）→ NULL，与 #939 语义一致：视为与保单归属一致，归非跨区。
+        prm.city AS plate_home_city,
+        c.reserve_amount,
+        c.is_bodily_injury
+      FROM ClaimsDetail c
+      JOIN ${buildDedupedPolicySubquery(whereClause)} p ON c.policy_no = p.policy_no
+      LEFT JOIN PlateRegionMap prm
+        ON SUBSTRING(p.plate_no, 1, 2) = prm.plate_prefix
+       AND prm.province IN (${provinceList})
+      WHERE ${where}${policyWhere}
+        AND p.plate_no IS NOT NULL
+        AND c.accident_city IS NOT NULL  -- 与 generateGeoRiskByAccidentQuery 共享 cohort（codex review PR #411 第三轮 P1）
+    ),
+    base AS (
+      SELECT
+        *,
+        CASE
+          WHEN plate_home_city IS NULL THEN FALSE
+          WHEN accident_city_norm != plate_home_city THEN TRUE
+          ELSE FALSE
+        END AS is_cross_region
+      FROM base_raw
+    )
+    SELECT
+      COUNT(*) AS total_cases,
+      SUM(CASE WHEN is_cross_region THEN 1 ELSE 0 END) AS cross_region_cases,
+      ROUND(SUM(CASE WHEN is_cross_region THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS cross_region_pct,
+      ROUND(AVG(CASE WHEN is_cross_region THEN reserve_amount END), 0) AS cross_region_avg_reserve,
+      ROUND(AVG(CASE WHEN NOT is_cross_region THEN reserve_amount END), 0) AS local_avg_reserve
+    FROM base
+  `;
+  }
+
+  return `
+    WITH base_raw AS (
+      SELECT
+        c.accident_city,
+        -- e9a906: 车牌前缀 → accident_city 值域字符串（区划码+全称，逐字对齐 Parquet 实际值域）。
+        -- 无法识别城市的前缀（渝牌对应两个区划值、外省牌等）→ NULL，按保单归属视为非跨区。
+        ${SC_PLATE_HOME_CITY_CASE} AS plate_home_city,
         c.reserve_amount,
         c.is_bodily_injury
       FROM ClaimsDetail c

@@ -379,6 +379,29 @@ describe('generateGeoRiskByPlateQuery', () => {
     expect(sql).toContain(') p ON c.policy_no = p.policy_no');
     expect(sql).toContain('p.plate_no');
   });
+
+  it('branchCode 未传/传 SC → 沿用历史硬编码 CASE（字节安全，四川行为不变）', () => {
+    const sqlNoParam = generateGeoRiskByPlateQuery(EMPTY_FILTERS, '1=1');
+    const sqlSC = generateGeoRiskByPlateQuery(EMPTY_FILTERS, '1=1', 'SC');
+    expect(sqlNoParam).toBe(sqlSC);
+    expect(sqlSC).toContain("WHEN p.plate_no LIKE '川A%' THEN '成都'");
+    expect(sqlSC).not.toContain('PlateRegionMap');
+  });
+
+  it('branchCode=SX → JOIN PlateRegionMap 派生，不含四川硬编码 CASE（阶段4）', () => {
+    const sql = generateGeoRiskByPlateQuery(EMPTY_FILTERS, '1=1', 'SX');
+    expect(sql).toContain('LEFT JOIN PlateRegionMap prm');
+    expect(sql).toContain("ON SUBSTRING(p.plate_no, 1, 2) = prm.plate_prefix");
+    expect(sql).toContain("prm.province IN ('山西')");
+    expect(sql).not.toContain("WHEN p.plate_no LIKE '川A%'");
+    expect(sql).toContain("WHERE plate_city != '其他'");
+  });
+
+  it('未登记的 branchCode（第三省）回落历史硬编码 CASE（字节安全兜底）', () => {
+    const sql = generateGeoRiskByPlateQuery(EMPTY_FILTERS, '1=1', 'ZZ');
+    expect(sql).toContain("WHEN p.plate_no LIKE '川A%' THEN '成都'");
+    expect(sql).not.toContain('PlateRegionMap');
+  });
 });
 
 // ═══════════════════════════════════════════════════
@@ -444,6 +467,31 @@ describe('generateGeoComparisonQuery', () => {
   it('包含跨区域保费对比逻辑（local_avg_reserve）', () => {
     const sql = generateGeoComparisonQuery(EMPTY_FILTERS);
     expect(sql).toContain('CASE WHEN NOT is_cross_region THEN reserve_amount END');
+  });
+
+  it('branchCode 未传/传 SC → 沿用历史硬编码 CASE（字节安全，四川行为不变）', () => {
+    const sqlNoParam = generateGeoComparisonQuery(EMPTY_FILTERS, '1=1');
+    const sqlSC = generateGeoComparisonQuery(EMPTY_FILTERS, '1=1', 'SC');
+    expect(sqlNoParam).toBe(sqlSC);
+    expect(sqlSC).toContain("WHEN p.plate_no LIKE '川A%' THEN '510100成都市'");
+    expect(sqlSC).not.toContain('PlateRegionMap');
+  });
+
+  it('branchCode=SX → JOIN PlateRegionMap 派生 plate_home_city，未知前缀仍归非跨区（阶段4，兼容 #939）', () => {
+    const sql = generateGeoComparisonQuery(EMPTY_FILTERS, '1=1', 'SX');
+    expect(sql).toContain('LEFT JOIN PlateRegionMap prm');
+    expect(sql).toContain("prm.province IN ('山西')");
+    expect(sql).toContain('prm.city AS plate_home_city');
+    expect(sql).toContain("regexp_replace(c.accident_city, '^[0-9]+', '') AS accident_city_norm");
+    expect(sql).toContain('WHEN plate_home_city IS NULL THEN FALSE');
+    expect(sql).toContain('WHEN accident_city_norm != plate_home_city THEN TRUE');
+    expect(sql).not.toContain("WHEN p.plate_no LIKE '川A%'");
+  });
+
+  it('未登记的 branchCode（第三省）回落历史硬编码 CASE（字节安全兜底）', () => {
+    const sql = generateGeoComparisonQuery(EMPTY_FILTERS, '1=1', 'ZZ');
+    expect(sql).toContain("WHEN p.plate_no LIKE '川A%' THEN '510100成都市'");
+    expect(sql).not.toContain('PlateRegionMap');
   });
 });
 
