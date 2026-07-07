@@ -160,7 +160,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const { whereClause } = parseFiltersAndBuildWhere(req);
-    const sql = generateGeoRiskByPlateQuery(filters, whereClause);
+    const branchCode = req.effectiveBranch ?? req.user?.branchCode;
+    const sql = generateGeoRiskByPlateQuery(filters, whereClause, branchCode);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -176,7 +177,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
     const { whereClause } = parseFiltersAndBuildWhere(req);
-    const sql = generateGeoComparisonQuery(filters, whereClause);
+    const branchCode = req.effectiveBranch ?? req.user?.branchCode;
+    const sql = generateGeoComparisonQuery(filters, whereClause, branchCode);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data: data[0] ?? {} });
   })
