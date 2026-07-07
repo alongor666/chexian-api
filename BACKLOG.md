@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（40 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（39 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -27,7 +27,7 @@
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 
-**P2（22 项）**
+**P2（21 项）**
 
 - B304 `PARTIAL` — earned-premium 双口径未文档化
 - B306 — DuckDB 性能高危三件套
@@ -48,7 +48,6 @@
 - 2026-07-06-claude-286f55 — 产品决策
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-07-claude-6d1dfe — route-param-contracts 对 /quote-conversion/* 
-- 2026-07-07-claude-821d85 — ECharts 图表容器归一
 - 2026-07-07-claude-d3ef27 — claims-detail.ts 川牌车牌前缀→城市 CASE 存在系统性错位一位缺陷
 - 2026-07-07-claude-dce69c — 净化剥离中央化
 
@@ -109,7 +108,6 @@
 | 2026-07-06-claude-de1e40 | 2026-07-06 | 安全治理 | @claude | org_user 路由白名单扩展到非 query 域(/api/data、/api/ai、/api/agent、/api/copilot 等)需改为按域显式声明是否纳管,替代 mountedOutsideQuery 一刀切跳过。⚠️ 242c07 曾因盲目套白名单致 agent 诊断路由误伤 403,扩域必须逐域回归。现状数据层 RLS 仍生效,仅功能边界缺失,非紧急 | P2 | PROPOSED | N/A | server/src/middleware/permission.ts:186-201 | check-merged-drift 命中 c59a5058/37a3c234(PR #943) 系误报：本项是 #943 会话立的 follow-up（按域显式声明纳管），origin/main 核实 permission.ts mountedOutsideQuery 一刀切跳过仍在（2 处命中），扩域未实施。保持 PROPOSED |
 | 2026-07-07-claude-322e6e | 2026-07-07 | 前端重构 follow-up | @claude | 矩阵热力图抽共享组件：业绩机构热力图V2(8组件族)、交叉销售指标热力图、赔案热力图、报价转化维度热力图四套并存，抽「行×期矩阵+打灯+下钻回调」共享件，各页保留取数与口径。侦察证据见 开发文档/架构设计/前端极简架构规划_2026-07-07.md §四B-3 | P3 | PROPOSED | 开发文档/架构设计/前端极简架构规划_2026-07-07.md | N/A |  |
 | 2026-07-07-claude-6d1dfe | 2026-07-07 | 架构治理/契约 | @claude | route-param-contracts 对 /quote-conversion/* 与 /customer-flow/* 未声明 useCommon 但 handler 实际消费 commonFilterSchema（净化子集），契约与运行时偏差且 governance 对账单向不拦（8f71c0 architect 闸 P1-2）。需扩展契约表达「useCommon 但排除某些 key」语义并补齐两域声明，否则 MCP/CLI tool description 失真。 | P2 | PROPOSED | N/A | server/src/config/route-param-contracts.ts |  |
-| 2026-07-07-claude-821d85 | 2026-07-07 | 前端重构 follow-up | @claude | ECharts 图表容器归一：手写 echarts.init+resize/dispose 生命周期样板约10处（交叉销售趋势/四象限/机构趋势、业绩趋势/分布、报价转化 PriceSensitivity/TimeTrend、TopSalesmanQuadrant 等）统一迁移到单一图表容器封装；新增图表禁止手写 init。侦察证据见 开发文档/架构设计/前端极简架构规划_2026-07-07.md §四B-1 | P2 | PROPOSED | 开发文档/架构设计/前端极简架构规划_2026-07-07.md | N/A |  |
 | 2026-07-07-claude-beb706 | 2026-07-07 | 数据管道 | @claude | 热重载（同进程 ETL）后 CrossSellDailyAgg 物化表不自动重建：LazyDomainRegistry 对已 loaded 域 no-op，invalidateCache 只清 SQL 缓存不重建物化表——交叉销售数据可能滞后于 PolicyFact 直到下次进程重启。系 294022 修复（PR #952）architect 闸 NOTES-3 发现的修复前既有行为，非回归；候选修法=onDataVersionChange 时对已 loaded 的 CrossSell 走 lazyRegistry.reload | P3 | PROPOSED | N/A | server/src/services/lazy-domain-registry.ts,server/src/services/data-bootstrapper.ts |  |
 | 2026-07-07-claude-ca822c | 2026-07-07 | 前端重构 follow-up | @claude | KPI 卡归一到 widgets/kpi/EnhancedKpiCard：GrowthKpiCards、CrossSellSummaryKpiBoard、VariableCostKpiBoard、quote-conversion KpiCards 四套特性层自实现逐页替换为共享基座。侦察证据见 开发文档/架构设计/前端极简架构规划_2026-07-07.md §四B-2 | P3 | PROPOSED | 开发文档/架构设计/前端极简架构规划_2026-07-07.md | N/A |  |
 | 2026-07-07-claude-cfaf91 | 2026-07-07 | 架构治理/多省 | @claude | 企微续保同步脚本 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py 的 ORG_SLUGS 常量写死四川12机构中文名→拼音slug映射（高新→gaoxin等），prime_state_from_wecom.py/cleanup_org_renewal_dup.py 复用同一常量。这是 2026-06-27-claude-e96d85「治理工程二」原始问题描述里点名的4处硬编码位置之一，但不属于该条目已完成的UI层四阶段（PR #953/#956/#959/#963）范围——本条目是后端 Python 数据集成脚本，非终端用户可感知UI，独立登记跟进。若山西续保企微同步需要走这套脚本，需仿照前端 BRANCH_ORGANIZATIONS 模式补充 SX 11机构→slug映射（山西现有独立的 sync_renewal_v2.py + instances/*.yaml 按省实例化架构，需先确认这套 xlsx 同步脚本是否仍在用、是否与 v2 实例架构重叠，避免重复建设） | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py |  |

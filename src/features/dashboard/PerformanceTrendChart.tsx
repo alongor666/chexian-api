@@ -1,7 +1,8 @@
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useMemo } from 'react';
 import type { EChartsOption } from 'echarts';
 import { SVGRenderer } from 'echarts/renderers';
 import { echarts } from '@/shared/utils/echarts';
+import { EChartContainer, buildEmptyChartOption } from '../../widgets/charts/EChartContainer';
 
 // 本组件用 SVG 渲染器（renderer: 'svg'）。SVGRenderer 已从共享 echarts 注册中移除，
 // 故在此按需注册（echarts.use 幂等，重复调用安全）。
@@ -48,8 +49,6 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
 }: PerformanceTrendChartProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
   const xData = useMemo(() => {
     const set = new Set<string>();
@@ -128,29 +127,12 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
     });
   }, [formatValue, metric, series, xData]);
 
-  useEffect(() => {
-    if (!chartRef.current) return;
-    if (!chartInstanceRef.current) {
-      chartInstanceRef.current = echarts.init(chartRef.current, undefined, { renderer: 'svg' });
-    }
-    const chart = chartInstanceRef.current;
-    if (!chart) return;
-    if (loading) return;
-
+  const option = useMemo<EChartsOption>(() => {
     if (xData.length === 0 || lineSeries.length === 0) {
-      chart.clear();
-      chart.setOption({
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: { text: '暂无走势数据', fill: colors.neutral[400], fontSize: 14 },
-        },
-      });
-      return;
+      return buildEmptyChartOption('暂无走势数据') as EChartsOption;
     }
 
-    const option: EChartsOption = {
+    return {
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
@@ -192,25 +174,7 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
       },
       series: lineSeries,
     };
-
-    chart.setOption(option, true);
-    const resizeObserver = new ResizeObserver(() => {
-      chart.resize();
-    });
-    if (chartRef.current) {
-      resizeObserver.observe(chartRef.current);
-    }
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [lineSeries, loading, metric, title, xData, isDark]);
-
-  useEffect(() => {
-    return () => {
-      chartInstanceRef.current?.dispose();
-      chartInstanceRef.current = null;
-    };
-  }, []);
+  }, [lineSeries, metric, xData, isDark]);
 
   return (
     <section className={cn(cardStyles.standard, 'space-y-3')}>
@@ -223,7 +187,7 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
           <span>加载中...</span>
         </div>
       ) : (
-        <div ref={chartRef} className="h-[320px] w-full" />
+        <EChartContainer option={option} renderer="svg" height={320} />
       )}
     </section>
   );

@@ -1,14 +1,10 @@
-import { useRef, useEffect, useState } from 'react';
-import * as echarts from 'echarts/core';
-import { BarChart, LineChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import { useMemo, useState } from 'react';
+import type { EChartsCoreOption } from 'echarts/core';
+import { EChartContainer } from '../../../widgets/charts/EChartContainer';
 import { cardStyles, colorClasses, quoteChartColors, toggleButtonStyles, cn } from '../../../shared/styles';
 import { useTheme } from '../../../shared/theme';
 import { useQuoteTrend } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';
-
-echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
 
 interface Props {
   filters: QuoteFilters;
@@ -16,33 +12,29 @@ interface Props {
 }
 
 export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
-  const chartRef = useRef<HTMLDivElement>(null);
   const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>(defaultGranularity);
   const { data, isLoading } = useQuoteTrend(filters, granularity);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
-  useEffect(() => {
-    if (!chartRef.current || !data || data.length === 0) return;
-
-    const chart = echarts.init(chartRef.current);
-
+  const option = useMemo<EChartsCoreOption>(() => {
+    const rows = data ?? [];
     // 按时间桶聚合（续保+转保分别一条线）
-    const timeBuckets = [...new Set(data.map(r => r.time_bucket ?? ''))].sort();
+    const timeBuckets = [...new Set(rows.map(r => r.time_bucket ?? ''))].sort();
     const renewalData = timeBuckets.map(t => {
-      const row = data.find(r => r.time_bucket === t && r.renewal_type === '续保');
+      const row = rows.find(r => r.time_bucket === t && r.renewal_type === '续保');
       return row?.underwriting_rate ?? 0;
     });
     const switchData = timeBuckets.map(t => {
-      const row = data.find(r => r.time_bucket === t && r.renewal_type === '转保');
+      const row = rows.find(r => r.time_bucket === t && r.renewal_type === '转保');
       return row?.underwriting_rate ?? 0;
     });
     const totalQuotes = timeBuckets.map(t => {
-      return data.filter(r => r.time_bucket === t).reduce((sum, r) => sum + (r.total_quotes ?? 0), 0);
+      return rows.filter(r => r.time_bucket === t).reduce((sum, r) => sum + (r.total_quotes ?? 0), 0);
     });
 
     const textColor = isDark ? '#a3a3a3' : '#666';
-    const option: echarts.EChartsCoreOption = {
+    return {
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
       legend: { data: ['报价量', '续保转化率', '转保转化率'], top: 0, textStyle: { fontSize: 11, color: textColor } },
       grid: { left: 50, right: 50, top: 40, bottom: 30 },
@@ -81,15 +73,6 @@ export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
         },
       ],
     };
-
-    chart.setOption(option);
-    const resizeOb = new ResizeObserver(() => chart.resize());
-    resizeOb.observe(chartRef.current);
-
-    return () => {
-      resizeOb.disconnect();
-      chart.dispose();
-    };
   }, [data, isDark]);
 
   const granOptions = [
@@ -119,7 +102,7 @@ export function TimeTrend({ filters, defaultGranularity = 'week' }: Props) {
       {isLoading ? (
         <div className="animate-pulse h-72 bg-neutral-100 dark:bg-neutral-800 rounded" />
       ) : data && data.length > 0 ? (
-        <div ref={chartRef} className="h-72" />
+        <EChartContainer option={option} height={288} />
       ) : (
         <div className={cn('h-72 flex items-center justify-center', colorClasses.text.neutralMuted, 'text-sm')}>
           暂无趋势数据
