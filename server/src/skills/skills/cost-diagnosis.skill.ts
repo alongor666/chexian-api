@@ -100,7 +100,7 @@ interface CombinedCostRow {
   earned_premium: number | null;
   earned_claim_ratio: number | null;
   expense_ratio: number | null;
-  comprehensive_cost_ratio: number | null;
+  comprehensive_expense_ratio: number | null;
 }
 
 function classifyRisk(
@@ -189,7 +189,7 @@ export const costDiagnosisSkill: Skill<typeof InputSchema, Result> = {
         earnedClaimRatio,
         earnedLossFrequency: r.earned_loss_frequency === null || r.earned_loss_frequency === undefined ? null : Number(r.earned_loss_frequency),
         avgClaimAmount: r.avg_claim_amount === null || r.avg_claim_amount === undefined ? null : Number(r.avg_claim_amount),
-        comprehensiveCostRatio: combined?.comprehensive_cost_ratio === null || combined?.comprehensive_cost_ratio === undefined ? null : Number(combined.comprehensive_cost_ratio),
+        comprehensiveCostRatio: combined?.comprehensive_expense_ratio === null || combined?.comprehensive_expense_ratio === undefined ? null : Number(combined.comprehensive_expense_ratio),
         expenseRatio: combined?.expense_ratio === null || combined?.expense_ratio === undefined ? null : Number(combined.expense_ratio),
         riskLevel: classifyRisk(earnedClaimRatio, input.redThreshold, input.yellowThreshold),
         premiumShare: totalPremiumSum > 0 ? Number((totalPremium / totalPremiumSum).toFixed(4)) : 0,

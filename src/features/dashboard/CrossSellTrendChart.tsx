@@ -6,9 +6,9 @@
  * 时间基准：自然签单日期
  */
 
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useMemo } from 'react';
 import type { EChartsOption } from 'echarts';
-import { echarts } from '../../shared/utils/echarts';
+import { EChartContainer, buildEmptyChartOption } from '../../widgets/charts/EChartContainer';
 import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import { cardStyles, textStyles, colors, cn } from '../../shared/styles';
 import { useTheme } from '../../shared/theme';
@@ -115,8 +115,6 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
 }: CrossSellTrendChartProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
   const trendQuery = useCrossSellTrend({
     filters,
@@ -167,33 +165,14 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
     return { min, max };
   }, [seriesData]);
 
-  useEffect(() => {
-    if (!chartRef.current) return;
-    if (!chartInstanceRef.current) {
-      chartInstanceRef.current = echarts.init(chartRef.current);
-    }
-    const chart = chartInstanceRef.current;
-
-    if (loading) return;
-
+  const option = useMemo<EChartsOption>(() => {
     if (timePeriods.length === 0) {
-      // clear() removes all prior axis/series state before setting graphic-only option
-      // (prevents "coordinateSystem undefined" ECharts crash when xAxis has no series)
-      chart.clear();
-      chart.setOption({
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: { text: '暂无走势数据', fill: colors.neutral[400], fontSize: 14 },
-        },
-      });
-      return;
+      return buildEmptyChartOption('暂无走势数据') as EChartsOption;
     }
 
     const markPointData = buildCrossSellTrendMarkPointData(annotations, overallExtremes, timePeriods);
 
-    const option: EChartsOption = {
+    return {
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
@@ -263,25 +242,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
           : undefined,
       })) as any,
     };
-
-    chart.setOption(option, true);
-    const resizeObserver = new ResizeObserver(() => {
-      chart.resize();
-    });
-    if (chartRef.current) {
-      resizeObserver.observe(chartRef.current);
-    }
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [timePeriods, seriesData, loading, metric, overallExtremes, annotations, isDark]);
-
-  useEffect(() => {
-    return () => {
-      chartInstanceRef.current?.dispose();
-      chartInstanceRef.current = null;
-    };
-  }, []);
+  }, [timePeriods, seriesData, metric, overallExtremes, annotations, isDark]);
 
   return (
     <section className={cn(cardStyles.standard, 'space-y-3')}>
@@ -297,7 +258,7 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
           <span>加载中...</span>
         </div>
       ) : (
-        <div ref={chartRef} className="h-[280px] w-full" />
+        <EChartContainer option={option} height={280} />
       )}
     </section>
   );

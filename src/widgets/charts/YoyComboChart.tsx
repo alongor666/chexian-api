@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useMemo } from 'react';
 import type { EChartsOption, SeriesOption } from 'echarts';
-import { echarts } from '../../shared/utils/echarts';
+import { EChartContainer, buildEmptyChartOption } from './EChartContainer';
 import { formatPremiumWan } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 import { getYearChartColor } from '../../shared/styles';
@@ -40,36 +40,9 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<ReturnType<typeof echarts.init> | null>(null);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    if (!chartInstance.current) {
-      chartInstance.current = echarts.init(chartRef.current);
-    }
-
-    const chart = chartInstance.current;
-    if (!chart) return;
-
-    if (loading) {
-      chart.showLoading();
-      return;
-    }
-
-    chart.hideLoading();
-
+  const option = useMemo<EChartsOption>(() => {
     if (!data || data.length === 0) {
-      chart.setOption({
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: { text: '暂无数据', fontSize: 13, fill: '#999' },
-        },
-      }, true);
-      return;
+      return buildEmptyChartOption('暂无数据') as EChartsOption;
     }
 
     const theme = getChartTheme(isDark);
@@ -141,7 +114,7 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
       },
     ];
 
-    const option: EChartsOption = {
+    return {
       tooltip: {
         ...theme.tooltipConfig,
         trigger: 'axis' as const,
@@ -228,27 +201,11 @@ export const YoyComboChart: React.FC<YoyComboChartProps> = ({
       ],
       series,
     };
-
-    chart.setOption(option, true);
-
-  }, [data, loading, analysisYear, isDark, height]);
-
-  useEffect(() => {
-    return () => {
-      chartInstance.current?.dispose();
-      chartInstance.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleResize = () => chartInstance.current?.resize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [data, analysisYear, isDark, height]);
 
   return (
     <div className={cn(cardStyles.base, 'p-3')}>
-      <div ref={chartRef} style={{ width: '100%', height: `${height}px` }} />
+      <EChartContainer option={option} loading={loading} height={height} />
     </div>
   );
 };

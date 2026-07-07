@@ -96,7 +96,7 @@ export const COMPREHENSIVE_COST_COLUMNS: TableColumn<ComprehensiveCostData>[] =
     },
     { key: 'expense_ratio', header: '费用率(%)', width: 100, align: 'right' },
     {
-      key: 'comprehensive_cost_ratio',
+      key: 'comprehensive_expense_ratio',
       header: '综合费用率(%)',
       width: 120,
       align: 'right',

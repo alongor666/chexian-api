@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useMemo } from 'react';
 import type { EChartsOption, SeriesOption } from 'echarts';
-import { echarts } from '../../shared/utils/echarts';
+import { EChartContainer, buildEmptyChartOption } from './EChartContainer';
 import { formatPremiumWan, formatRate, formatCount, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 import { getYearChartColor } from '../../shared/styles';
@@ -67,7 +67,7 @@ const CHART_COLORS = {
 } as const;
 
 /**
- * 渲染主折线图（V4.0 设计简报 §5）
+ * 主折线图 option（V4.0 设计简报 §5）
  *
  * - 本年保费实线（primary 色，线宽 2.5）
  * - 上年同期 ghost 虚线（opacity 0.55）
@@ -75,15 +75,14 @@ const CHART_COLORS = {
  * - 线端直接标注最新值（endLabel），无图例
  * - 无网格线、坐标轴极简、精确值进 tooltip
  */
-function renderPrimaryLineChart(
-  chart: ReturnType<typeof echarts.init>,
+function buildPrimaryLineChartOption(
   barData: PremiumTrendBarData[],
   title: string,
   _timeView: TimeView,
   analysisYear: number,
   isDark: boolean,
   targetPremiumWan?: number,
-): void {
+): EChartsOption {
   const theme = getChartTheme(isDark);
   const currentYear = String(analysisYear);
   const prevYear = String(analysisYear - 1);
@@ -172,7 +171,7 @@ function renderPrimaryLineChart(
     },
   ];
 
-  const option: EChartsOption = {
+  return {
     title: title ? {
       text: title,
       left: 'center',
@@ -236,21 +235,18 @@ function renderPrimaryLineChart(
       { type: 'inside', start: 0, end: 100 },
     ],
   };
-
-  chart.setOption(option, true);
 }
 
 /**
- * 渲染双Y轴柱状+折线组合图（V3.0）
+ * 双Y轴柱状+折线组合图 option（V3.0）
  */
-function renderBarLineCombo(
-  chart: ReturnType<typeof echarts.init>,
+function buildBarLineComboOption(
   barData: PremiumTrendBarData[],
   title: string,
   timeView: TimeView,
   analysisYear: number,
   isDark: boolean,
-): void {
+): EChartsOption {
   const theme = getChartTheme(isDark);
   const currentYear = String(analysisYear);
   const prevYear = String(analysisYear - 1);
@@ -306,7 +302,7 @@ function renderBarLineCombo(
     });
   }
 
-  const option: EChartsOption = {
+  return {
     title: title ? {
       text: title,
       left: 'center',
@@ -393,15 +389,12 @@ function renderBarLineCombo(
       { type: 'inside' },
     ],
   };
-
-  chart.setOption(option, true);
 }
 
 /**
- * 渲染传统折线图（旧逻辑，向后兼容）
+ * 传统折线图 option（旧逻辑，向后兼容）
  */
-function renderLegacyLineChart(
-  chart: ReturnType<typeof echarts.init>,
+function buildLegacyLineChartOption(
   data: LineChartProps['data'],
   title: string,
   timeView: TimeView,
@@ -409,19 +402,13 @@ function renderLegacyLineChart(
   endDate: string | undefined,
   yAxisLabel: string,
   isDark: boolean,
-): void {
+): EChartsOption {
   const theme = getChartTheme(isDark);
   if (data.length === 0) {
-    chart.setOption({
+    return {
+      ...(buildEmptyChartOption('暂无数据') as EChartsOption),
       title: { text: title, left: 'center' },
-      graphic: {
-        type: 'text',
-        left: 'center',
-        top: 'middle',
-        style: { text: '暂无数据', fontSize: 16, fill: '#999' },
-      },
-    });
-    return;
+    };
   }
 
   // 判断日期跨度是否超过 183 天
@@ -504,7 +491,7 @@ function renderLegacyLineChart(
     });
   });
 
-  const option: EChartsOption = {
+  return {
     title: {
       text: title,
       left: 'center',
@@ -626,8 +613,6 @@ function renderLegacyLineChart(
     series: [...premiumSeries, ...ratioSeries],
     dataZoom: [{ type: 'slider', start: 0, end: 100, height: 20, bottom: 40 }, { type: 'inside' }],
   };
-
-  chart.setOption(option, true);
 }
 
 /**
@@ -654,67 +639,29 @@ export const LineChart: React.FC<LineChartProps> = ({
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<ReturnType<typeof echarts.init> | null>(null);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    if (!chartInstance.current) {
-      chartInstance.current = echarts.init(chartRef.current);
-    }
-
-    const chart = chartInstance.current;
-    if (!chart) return;
-
-    if (loading) {
-      chart.showLoading();
-      return;
-    }
-
-    chart.hideLoading();
-
+  const option = useMemo<EChartsOption>(() => {
     // V4.0: 主折线模式（设计简报 §5，showPrimaryLineMode=true 时最优先）
     if (showPrimaryLineMode && barChartData && barChartData.length > 0) {
       const year = analysisYear ?? new Date().getFullYear();
-      renderPrimaryLineChart(chart, barChartData, title, timeView, year, isDark, targetPremiumWan);
-    // V3.0: 原有柱+折线组合图（showPrimaryLineMode=false 时维持原逻辑）
-    } else if (!showPrimaryLineMode && barChartData && barChartData.length > 0) {
-      const year = analysisYear ?? new Date().getFullYear();
-      renderBarLineCombo(chart, barChartData, title, timeView, year, isDark);
-    } else if (data.length === 0) {
-      chart.setOption({
-        title: { text: title, left: 'center' },
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: { text: '暂无数据', fontSize: 16, fill: '#999' },
-        },
-      }, true);
-    } else {
-      renderLegacyLineChart(chart, data, title, timeView, startDate, endDate, yAxisLabel, isDark);
+      return buildPrimaryLineChartOption(barChartData, title, timeView, year, isDark, targetPremiumWan);
     }
-
-  }, [data, loading, title, timeView, startDate, endDate, yAxisLabel, barChartData, analysisYear, isDark, showPrimaryLineMode, targetPremiumWan]);
-
-  // resize 独立订阅（空依赖），避免随主 useEffect 的频繁依赖变化反复增删监听器
-  useEffect(() => {
-    const handleResize = () => chartInstance.current?.resize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      chartInstance.current?.dispose();
-      chartInstance.current = null;
-    };
-  }, []);
+    // V3.0: 原有柱+折线组合图（showPrimaryLineMode=false 时维持原逻辑）
+    if (!showPrimaryLineMode && barChartData && barChartData.length > 0) {
+      const year = analysisYear ?? new Date().getFullYear();
+      return buildBarLineComboOption(barChartData, title, timeView, year, isDark);
+    }
+    if (data.length === 0) {
+      return {
+        ...(buildEmptyChartOption('暂无数据') as EChartsOption),
+        title: { text: title, left: 'center' },
+      };
+    }
+    return buildLegacyLineChartOption(data, title, timeView, startDate, endDate, yAxisLabel, isDark);
+  }, [data, title, timeView, startDate, endDate, yAxisLabel, barChartData, analysisYear, isDark, showPrimaryLineMode, targetPremiumWan]);
 
   return (
     <div className={cn(cardStyles.standard)}>
-      <div ref={chartRef} style={{ height: `${height}px`, width: '100%' }} />
+      <EChartContainer option={option} loading={loading} height={height} />
     </div>
   );
 };

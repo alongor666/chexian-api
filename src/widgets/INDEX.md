@@ -10,6 +10,7 @@
 
 | 组件 | 职责 |
 |------|------|
+| `EChartContainer.tsx` | **ECharts 生命周期唯一实现**（init/setOption/resize/dispose + 内建 loading + `buildEmptyChartOption` 空态；backlog 2026-07-07-claude-821d85）。新增图表禁止手写 `echarts.init`，一律构建 option 交给本容器 |
 | `BarChart.tsx` | 柱状图（横向/纵向） |
 | `LineChart.tsx` | 折线图（多系列） |
 | `RoseChart.tsx` | 玫瑰图（占比展示） |

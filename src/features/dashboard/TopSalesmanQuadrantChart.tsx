@@ -3,9 +3,9 @@
  * Top Salesman Quadrant Chart
  */
 
-import { memo, useEffect, useRef, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import type { EChartsOption } from 'echarts';
-import { echarts } from '@/shared/utils/echarts';
+import { EChartContainer, buildEmptyChartOption } from '../../widgets/charts/EChartContainer';
 import { formatCount, formatPercent, formatDriverPremiumWan } from '@/shared/utils/formatters';
 import { colors } from '@/shared/styles';
 import { useTheme } from '@/shared/theme';
@@ -27,12 +27,9 @@ interface TopSalesmanQuadrantChartProps {
 
 export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
     data,
-    coverage,
     rateThreshold,
     avgPremiumThreshold,
 }: TopSalesmanQuadrantChartProps) {
-    const chartRef = useRef<HTMLDivElement>(null);
-    const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === 'dark';
 
@@ -77,16 +74,9 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
         return { quadrantStats };
     }, [data, rateThreshold, avgPremiumThreshold]);
 
-    useEffect(() => {
-        if (!chartRef.current) return;
-        if (!chartInstanceRef.current) {
-            chartInstanceRef.current = echarts.init(chartRef.current);
-        }
-        const chart = chartInstanceRef.current;
-
+    const option = useMemo<EChartsOption>(() => {
         if (data.length === 0) {
-            chart.clear();
-            return;
+            return buildEmptyChartOption('') as EChartsOption;
         }
 
         // 计算数据范围
@@ -124,7 +114,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             };
         });
 
-        const option: EChartsOption = {
+        return {
             grid: {
                 left: '12%',
                 right: '12%',
@@ -246,26 +236,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                 },
             ],
         };
+    }, [data, quadrantStats, rateThreshold, avgPremiumThreshold, isDark]);
 
-        chart.setOption(option, true);
-
-        const resizeObserver = new ResizeObserver(() => {
-            chart.resize();
-        });
-        if (chartRef.current) {
-            resizeObserver.observe(chartRef.current);
-        }
-        return () => {
-            resizeObserver.disconnect();
-        };
-    }, [data, coverage, quadrantStats, rateThreshold, avgPremiumThreshold, isDark]);
-
-    useEffect(() => {
-        return () => {
-            chartInstanceRef.current?.dispose();
-            chartInstanceRef.current = null;
-        };
-    }, []);
-
-    return <div ref={chartRef} className="w-full h-full" />;
+    return <EChartContainer option={option} height="100%" className="w-full h-full" />;
 });

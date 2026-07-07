@@ -275,7 +275,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
       { key: 'total_fee', header: '费用金额(万)', width: 100, align: 'right' },
       { key: 'earned_claim_ratio', header: '赔付率', width: 100, align: 'right' },
       { key: 'expense_ratio', header: '费用率', width: 100, align: 'right' },
-      { key: 'comprehensive_cost_ratio', header: '综合费用率', width: 120, align: 'right' },
+      { key: 'comprehensive_expense_ratio', header: '综合费用率', width: 120, align: 'right' },
     ],
     [dimensionLabel]
   );

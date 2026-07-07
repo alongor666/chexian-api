@@ -159,7 +159,7 @@ describe('generateComprehensiveCostQuery', () => {
 
   it('输出综合费用率、费用率和边际贡献额', () => {
     const sql = generateComprehensiveCostQuery(BASE_CONFIG);
-    expect(sql).toContain('AS comprehensive_cost_ratio');
+    expect(sql).toContain('AS comprehensive_expense_ratio');
     expect(sql).toContain('AS expense_ratio');
     expect(sql).toContain('AS earned_claim_ratio');
     expect(sql).toContain('AS earned_margin_amount');
@@ -169,7 +169,7 @@ describe('generateComprehensiveCostQuery', () => {
   it('综合费用率公式：(赔款 + 费用) / 满期保费（注册表 comprehensive_expense_ratio SSOT）', () => {
     const sql = generateComprehensiveCostQuery(BASE_CONFIG);
     // B310：公式取自注册表 getMetricSql('comprehensive_expense_ratio')，
-    // 分子 = 赔款 + 费用（COALESCE 兜底），保留 comprehensive_cost_ratio 别名
+    // 分子 = 赔款 + 费用（COALESCE 兜底），别名已统一为注册表 id（49e3fd）
     expect(sql).toContain('SUM(reported_claims) + SUM(COALESCE(fee_amount, 0))');
   });
 

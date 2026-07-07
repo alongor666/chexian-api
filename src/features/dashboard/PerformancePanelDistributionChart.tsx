@@ -1,8 +1,8 @@
 // 从 PerformanceAnalysisPanel.tsx 抽出的内部分布图（b331 拆分·行为零变更）。
 // 业绩分析分布图唯一实现（漂移双胞胎 performance/PerformanceDistributionChart.tsx 已随 21c578 去重删除）。
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import type { EChartsOption } from 'echarts';
-import { echarts } from '@/shared/utils/echarts';
+import { EChartContainer, buildEmptyChartOption } from '../../widgets/charts/EChartContainer';
 import { useTheme } from '@/shared/theme';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import { cardStyles, cn, colorClasses, colors, textStyles } from '@/shared/styles';
@@ -25,8 +25,6 @@ export function DistributionChart({
   loading: boolean;
   error: string | null;
 }) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
   const { resolvedTheme } = useTheme();
 
   const points = useMemo(() => {
@@ -70,18 +68,10 @@ export function DistributionChart({
     };
   }, [points]);
 
-  useEffect(() => {
-    if (!chartRef.current) return;
-    if (!chartInstanceRef.current) {
-      chartInstanceRef.current = echarts.init(chartRef.current);
-    }
-    const chart = chartInstanceRef.current;
-    if (!chart) return;
-    if (loading) return;
-
+  const option = useMemo<EChartsOption>(() => {
     if (error) {
-      chart.clear();
-      chart.setOption({
+      return {
+        ...(buildEmptyChartOption() as EChartsOption),
         graphic: {
           type: 'text',
           left: 'center',
@@ -92,25 +82,11 @@ export function DistributionChart({
             fontSize: 13,
           },
         },
-      });
-      return;
+      };
     }
 
     if (points.length === 0) {
-      chart.clear();
-      chart.setOption({
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: {
-            text: '暂无达成率/增长率分布数据',
-            fill: colors.neutral[400],
-            fontSize: 13,
-          },
-        },
-      });
-      return;
+      return buildEmptyChartOption('暂无达成率/增长率分布数据') as EChartsOption;
     }
 
     const bucket = {
@@ -130,7 +106,7 @@ export function DistributionChart({
     const textColor = isDark ? '#f0f0f0' : '#333';
     const subTextColor = isDark ? '#a3a3a3' : '#666';
 
-    const option: EChartsOption = {
+    return {
       textStyle: { color: textColor },
       tooltip: {
         trigger: 'item',
@@ -251,29 +227,7 @@ export function DistributionChart({
         },
       ],
     };
-
-    chart.setOption(option, true);
-  }, [axisRange, error, loading, points, resolvedTheme]);
-
-  // ResizeObserver 仅需挂载时注册一次。此前与 setOption 同处一个 effect，
-  // 导致每次数据/主题变化都 disconnect + 重建 observer（无谓 DOM 操作）。
-  // resize 回调按调用时读取实例 ref，与图表 init 的时序无关。
-  useEffect(() => {
-    const el = chartRef.current;
-    if (!el) return;
-    const resizeObserver = new ResizeObserver(() => {
-      chartInstanceRef.current?.resize();
-    });
-    resizeObserver.observe(el);
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      chartInstanceRef.current?.dispose();
-      chartInstanceRef.current = null;
-    };
-  }, []);
+  }, [axisRange, error, points, resolvedTheme]);
 
   return (
     <section className={cn(cardStyles.standard, 'space-y-3')}>
@@ -281,7 +235,7 @@ export function DistributionChart({
       <div className={cn(textStyles.caption, colorClasses.text.neutralLight)}>
         分界线：达成率 {PERFORMANCE_ACHIEVEMENT_THRESHOLD}% / 增长率 {PERFORMANCE_GROWTH_THRESHOLD}%。
       </div>
-      <div ref={chartRef} className="h-[360px] w-full" />
+      <EChartContainer option={option} loading={loading} height={360} />
     </section>
   );
 }

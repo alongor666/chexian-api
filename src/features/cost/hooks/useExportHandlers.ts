@@ -116,7 +116,7 @@ export function useExportHandlers({
         费用金额: row.total_fee || 0,
         '满期赔付率(%)': row.earned_claim_ratio || 0,
         '费用率(%)': row.expense_ratio || 0,
-        '综合费用率(%)': row.comprehensive_cost_ratio || 0,
+        '综合费用率(%)': row.comprehensive_expense_ratio || 0,
       }));
 
       const filename = `综合费用率分析_${dimensionLabel}_${getTimestampForFilename()}`;
