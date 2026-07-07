@@ -84,7 +84,13 @@ def read_parquet_source(path: Path) -> str:
 
 
 def default_policy_source(root: Path) -> str:
-    return read_parquet_source(root / "数据管理/warehouse/fact/policy/current/*.parquet")
+    # policy/current 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：跨省全量读
+    dm = str(root / "数据管理")
+    if dm not in sys.path:
+        sys.path.insert(0, dm)
+    from pipelines.branch_paths import policy_current_glob
+    glob = policy_current_glob(root / "数据管理/warehouse/fact/policy/current", missing_ok=True)
+    return read_parquet_source(Path(glob))
 
 
 def default_claims_source(root: Path) -> str:

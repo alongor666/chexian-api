@@ -23,7 +23,12 @@ sys.path.insert(0, str(SKILL_ROOT))
 from lib import standard_query  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-POLICY_GLOB = str(ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
+_DM = ROOT / "数据管理"
+if str(_DM) not in sys.path:
+    sys.path.insert(0, str(_DM))  # 供 import pipelines.*（branch_paths SSOT · 801409 cutover 前置）
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
+# 双布局自适应（branch_paths SSOT）：跨省全量读（一次性复盘脚本，行为等价）
+POLICY_GLOB = policy_current_glob(ROOT / "数据管理/warehouse/fact/policy/current", missing_ok=True)
 CLAIMS_GLOB = str(ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 
 VALUATION = date.today().isoformat()

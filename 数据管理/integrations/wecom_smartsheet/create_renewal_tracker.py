@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import field_spec as fs  # noqa: E402
-from sync_renewal import SyncConfig, build_source_rows  # noqa: E402
+from sync_renewal import DEFAULT_POLICY_GLOB, SyncConfig, build_source_rows  # noqa: E402
 from _safety import read_cell_text  # noqa: E402 — cell 文本提取 SSOT（原 _read_text 已收敛至此）
 
 
@@ -1080,8 +1080,10 @@ def main() -> int:
     if args.dry_run:
         log("info", "=" * 60)
         log("info", "DRY-RUN 同口径校验 SQL（与 build_source_rows() CTE 等价）：")
+        # 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：dry-run 校验 SQL 与真实取数
+        # （build_source_rows 的 SyncConfig.policy_glob 默认）同源，避免 cutover 后展示 SQL 读 0 行误导。
         validation_sql = DRYRUN_VALIDATION_SQL_TEMPLATE.format(
-            policy_glob="数据管理/warehouse/fact/policy/current/*.parquet",
+            policy_glob=str(DEFAULT_POLICY_GLOB),
             org=args.org, start=args.start, end=args.end,
         )
         print()

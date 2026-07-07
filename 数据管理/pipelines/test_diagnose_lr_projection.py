@@ -23,7 +23,7 @@ from diagnose_lr_projection import (  # type: ignore
 
 PROJECT_ROOT = _HERE.parent.parent
 PARQUET_DIR = PROJECT_ROOT / "数据管理" / "warehouse" / "fact" / "policy" / "current"
-_HAS_PARQUET = PARQUET_DIR.exists() and any(PARQUET_DIR.glob("*.parquet"))
+_HAS_PARQUET = PARQUET_DIR.exists() and any(PARQUET_DIR.rglob("*.parquet"))
 SCRIPT_PATH = PROJECT_ROOT / "数据管理" / "pipelines" / "diagnose_lr_projection.py"
 
 

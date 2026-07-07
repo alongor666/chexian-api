@@ -39,8 +39,10 @@ import pyarrow.parquet as pq
 # 同时支持「作为脚本直跑」（pipelines/ 在 sys.path[0]）与「作为 pipelines.* 包导入」（测试）两种上下文。
 try:
     from pipelines.derived_fields import apply_derived_fields
+    from pipelines.branch_paths import policy_current_files
 except ImportError:  # pragma: no cover - 脚本直跑路径
     from derived_fields import apply_derived_fields
+    from branch_paths import policy_current_files
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 REGISTRY_PATH = ROOT / "server/src/config/field-registry/fields.json"
@@ -277,7 +279,13 @@ def main():
         print(f"❌ 扫描目录不存在: {scan_root}")
         return 1
 
-    parquet_files = collect_parquet_files(scan_root, args.recursive)
+    # 默认扫 policy/current（非递归）走 branch_paths SSOT 双布局自适应（801409 cutover 前置）：
+    # 扁平顶层或 current/<省>/ 子目录都能枚举到，0 文件 fail-closed（禁静默空结果）。
+    # 显式 --path 或 --recursive（多域一次性 backfill）仍走通用 collect_parquet_files。
+    if not args.path and not args.recursive:
+        parquet_files = [Path(p) for p in policy_current_files(scan_root)]
+    else:
+        parquet_files = collect_parquet_files(scan_root, args.recursive)
     rel = scan_root.relative_to(ROOT) if scan_root.is_relative_to(ROOT) else scan_root
     suffix = "（递归）" if args.recursive else ""
     print(f"\n📁 扫描 {rel}{suffix}: {len(parquet_files)} 个分片\n")

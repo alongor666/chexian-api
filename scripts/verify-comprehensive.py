@@ -29,6 +29,13 @@ except ImportError:
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CURRENT_PATH = PROJECT_ROOT / "数据管理/warehouse/fact/policy/current"
+if str(PROJECT_ROOT / "数据管理") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "数据管理"))  # 供 import pipelines.*（branch_paths SSOT）
+from pipelines.branch_paths import (  # noqa: E402
+    PolicyCurrentLayoutError,
+    has_policy_current_parquet,
+    policy_current_glob,
+)
 
 
 def query_parquet(start: str, end: str) -> dict:
@@ -39,12 +46,16 @@ def query_parquet(start: str, end: str) -> dict:
         print(f"ERROR: 找不到源目录 {CURRENT_PATH}", file=sys.stderr)
         sys.exit(1)
 
-    parquets = sorted(p.name for p in CURRENT_PATH.glob("*.parquet"))
-    if not parquets:
+    if not has_policy_current_parquet(CURRENT_PATH):
         print(f"ERROR: {CURRENT_PATH} 下无 Parquet 文件", file=sys.stderr)
         sys.exit(1)
 
-    glob = str(CURRENT_PATH / "*.parquet")
+    # 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：全量读（跨省验证）
+    try:
+        glob = policy_current_glob(CURRENT_PATH)
+    except PolicyCurrentLayoutError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
 
     sql = f"""
     WITH base AS (

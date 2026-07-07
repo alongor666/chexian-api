@@ -20,8 +20,18 @@ from datetime import date
 from pathlib import Path
 import duckdb
 
+try:  # 数据管理 在 sys.path
+    from pipelines.branch_paths import policy_current_glob
+except ImportError:  # pipelines 目录在 sys.path（直跑脚本惯例）
+    from branch_paths import policy_current_glob
+
 REPO = Path(__file__).resolve().parent.parent.parent
-POLICY = f"read_parquet('{REPO}/数据管理/warehouse/fact/policy/current/*.parquet', union_by_name := true)"
+# 双布局自适应（branch_paths SSOT）。注意：本脚本历史即为裸全量读（未按省过滤），
+# 布局适配保持行为等价；混省口径问题另行治理（memory fact-current-mixes-sc-sx-bare-glob）。
+_POLICY_GLOB = policy_current_glob(
+    REPO / "数据管理/warehouse/fact/policy/current", missing_ok=True
+)
+POLICY = f"read_parquet('{_POLICY_GLOB}', union_by_name := true)"
 CLAIMS = f"read_parquet('{REPO}/数据管理/warehouse/fact/claims_detail/claims_*.parquet', union_by_name := true)"
 OUTDIR = REPO / "数据管理/数据分析报告"
 VALUATION = "DATE '2026-04-21'"

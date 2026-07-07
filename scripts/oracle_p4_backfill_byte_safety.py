@@ -25,6 +25,7 @@ DATA_ROOT_DEFAULT = ROOT / "数据管理/warehouse"
 
 sys.path.insert(0, str(ROOT / "数据管理"))
 from pipelines.backfill_derived_fields import apply_derivation, load_derived_rules  # noqa: E402
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
 
 
 def _hash_business_columns(df: pd.DataFrame, exclude: set[str]) -> dict[str, str]:
@@ -40,7 +41,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-root", default=str(DATA_ROOT_DEFAULT))
     args = ap.parse_args()
-    glob = f"{args.data_root}/fact/policy/current/*.parquet"
+    # 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：premium 可信域全量（SC）
+    from pathlib import Path as _P
+    glob = policy_current_glob(_P(args.data_root) / "fact/policy/current", missing_ok=True)
 
     rules = [fd for fd in load_derived_rules() if fd["id"] == "branch_code"]
     if not rules:

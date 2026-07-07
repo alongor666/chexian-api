@@ -47,6 +47,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent.parent))  # 数据管理/ 根：供 import pipelines.*
 from sync_renewal_v2 import post_webhook  # noqa: E402
 from pipelines.branch_assert import assert_single_branch, is_national_view  # noqa: E402
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
 from lib.idempotent_smartsheet import (  # noqa: E402  幂等共享库（6 道防线，详见库 docstring）
     KeySpec,
     stable_value as _stable_value,
@@ -63,8 +64,10 @@ def _keyspec(instance: "InstanceConfig") -> KeySpec:
         return KeySpec.composite(instance.composite_key)
     return KeySpec.primary(instance.primary_key)
 
-DEFAULT_POLICY_GLOB = str(
-    HERE.parent.parent / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
+# 双布局自适应（branch_paths SSOT · 801409 cutover 前置）；省份隔离由实例 extra_where
+# 注入的 branch_code 条件 + fetch_rows 出口 assert_single_branch 承担，本 glob 只做路径路由。
+DEFAULT_POLICY_GLOB = policy_current_glob(
+    HERE.parent.parent / "warehouse" / "fact" / "policy" / "current", missing_ok=True
 )
 
 

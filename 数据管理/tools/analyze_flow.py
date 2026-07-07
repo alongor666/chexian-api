@@ -49,6 +49,9 @@ except ImportError:
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _SCRIPT_DIR.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))  # 供 import pipelines.*（branch_paths SSOT）
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
 _WAREHOUSE = _PROJECT_ROOT / 'warehouse'
 _CF_PATH = _WAREHOUSE / 'fact' / 'customer_flow' / 'latest.parquet'
 _POLICY_DIR = _WAREHOUSE / 'fact' / 'policy' / 'current'
@@ -157,9 +160,11 @@ def _build_category_conditions(args) -> list[str]:
 def load_data(con: duckdb.DuckDBPyConnection, args):
     """加载并关联数据，返回筛选后的表名 'flow'"""
 
+    # policy/current 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：跨省全量读
+    _policy_glob = policy_current_glob(_POLICY_DIR, missing_ok=True)
     con.execute(f"""
         CREATE TABLE policy AS
-        SELECT * FROM read_parquet('{_POLICY_DIR}/*.parquet', union_by_name=true)
+        SELECT * FROM read_parquet('{_policy_glob}', union_by_name=true)
     """)
     _load_quotes(con)
 

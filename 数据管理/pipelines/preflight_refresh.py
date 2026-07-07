@@ -22,6 +22,11 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipelines.etl_validation import load_excel_all_sheets  # noqa: E402
+from pipelines.branch_paths import (  # noqa: E402
+    PolicyCurrentLayoutError,
+    has_policy_current_parquet,
+    policy_current_files,
+)
 
 
 class PreflightError(RuntimeError):
@@ -61,10 +66,16 @@ def reject_conflicting_active_files(root: Path, pattern: str, allowed: set[Path]
 
 def check_premium_overlap(root: Path, min_date: str, max_date: str) -> None:
     current = root / "数据管理/warehouse/fact/policy/current"
-    if not current.exists():
+    if not current.exists() or not has_policy_current_parquet(current):
         return
     col = PARQUET_DATE_COLUMN["premium"]
-    for parquet in current.glob("*.parquet"):
+    # 双布局自适应（branch_paths SSOT）：扁平顶层 + 单层省份子目录一并纳入重叠检查。
+    # 并存态 fail-closed 转 PreflightError（main 只捕 PreflightError，否则并存中间态丑 traceback）。
+    try:
+        parquet_paths = [Path(p) for p in policy_current_files(current)]
+    except PolicyCurrentLayoutError as e:
+        raise PreflightError(f"policy/current 布局异常，无法做 premium 重叠检查: {e}") from e
+    for parquet in parquet_paths:
         parquet_str = str(parquet).replace("'", "''")
         try:
             row = duckdb.sql(

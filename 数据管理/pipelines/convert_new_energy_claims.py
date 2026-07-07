@@ -32,6 +32,7 @@ if _DATA_ROOT not in sys.path:
 
 from pipelines.etl_validation import PLACEHOLDER_STRS, load_excel_all_sheets, verify_non_empty
 from pipelines.parquet_utils import write_parquet_with_metadata
+from pipelines.branch_paths import has_policy_current_parquet, policy_current_glob
 
 
 OUTPUT_COLUMNS = [
@@ -131,7 +132,8 @@ def enrich_org_and_branch_from_policy(
         )
 
     policy_path = Path(policy_dir)
-    if not policy_path.exists() or not any(policy_path.glob("*.parquet")):
+    # 双布局自适应（branch_paths SSOT）：扁平顶层或 current/<省>/ 子目录均可探测
+    if not policy_path.exists() or not has_policy_current_parquet(policy_path):
         raise RuntimeError(
             f"❌ policy_dir 不存在或无 Parquet 文件，无法派生 branch_code："
             f"{policy_dir}（new_energy_claims 上下文禁止静默退化）。"
@@ -146,7 +148,8 @@ def enrich_org_and_branch_from_policy(
     if "branch_code" in result.columns:
         result = result.drop(columns=["branch_code"])
 
-    glob_pattern = str(policy_path / "*.parquet")
+    # 双布局自适应（branch_paths SSOT）：全量读（VIN→branch_code JOIN 需跨省全集）
+    glob_pattern = policy_current_glob(policy_path)
     print(f"   JOIN PolicyFact（VIN → org_level_3 + branch_code）: {glob_pattern}")
     try:
         input_vins = {

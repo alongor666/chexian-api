@@ -41,12 +41,20 @@ from pathlib import Path
 
 import duckdb
 
+try:  # 数据管理 在 sys.path
+    from pipelines.branch_paths import policy_current_glob
+except ImportError:  # pipelines 目录在 sys.path（直跑脚本惯例）
+    from branch_paths import policy_current_glob
+
 # ============================================================================
 # 路径常量（仿 diagnose_common.py，禁止硬编码绝对路径）
 # ============================================================================
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-DEFAULT_POLICY_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/policy/current/*.parquet")
+# 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：全量口径（跨省，覆盖率统计）
+DEFAULT_POLICY_GLOB = policy_current_glob(
+    PROJECT_ROOT / "数据管理/warehouse/fact/policy/current", missing_ok=True
+)
 DEFAULT_CLAIMS_GLOB = str(PROJECT_ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 DEFAULT_OUTPUT = str(PROJECT_ROOT / "数据管理/knowledge/ai/field-coverage-report.json")
 FIELDS_JSON = PROJECT_ROOT / "server/src/config/field-registry/fields.json"

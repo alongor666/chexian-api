@@ -35,9 +35,15 @@ from openpyxl import load_workbook
 HERE = Path(__file__).resolve().parent
 DATA_ROOT = HERE.parents[1]
 REPO_ROOT = HERE.parents[2]
+if str(DATA_ROOT) not in sys.path:
+    sys.path.insert(0, str(DATA_ROOT))  # 供 import pipelines.*（branch_paths SSOT）
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
 DEFAULT_STATE_PATH = HERE / "state" / "renewal_2026_may_jul_vin_record_map_6fDmy0.json"
 DEFAULT_TABLE_SCHEMA_PATH = HERE / "outputs" / "renewal_may_jul_schema_6fDmy0.json"
-DEFAULT_POLICY_GLOB = DATA_ROOT / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
+# 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：扁平/子目录自动路由
+DEFAULT_POLICY_GLOB = policy_current_glob(
+    DATA_ROOT / "warehouse" / "fact" / "policy" / "current", missing_ok=True
+)
 DEFAULT_RENEWAL_TRACKER_PATH = DATA_ROOT / "warehouse" / "fact" / "renewal_tracker" / "latest.parquet"
 DEFAULT_QUOTES_PATH = DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet"
 DEFAULT_CUSTOMER_FLOW_PATH = DATA_ROOT / "warehouse" / "fact" / "customer_flow" / "latest.parquet"

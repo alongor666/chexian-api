@@ -47,6 +47,7 @@ BRANCH_CODE = "SC"
 # 复用各域已合并 derive 逻辑（worktree tracked，非 ETL 重跑）。
 sys.path.insert(0, str(ROOT / "数据管理"))
 from pipelines.quote_etl import derive_branch_code  # noqa: E402
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
 from pipelines.convert_renewal_tracker import (  # noqa: E402
     derive_renewal_tracker_branch_code,
 )
@@ -89,7 +90,8 @@ def _branch_series_new_energy(table: pa.Table, root: Path) -> pd.Series:
     if null_vin > 0:
         print(f"   ❌ new_energy {null_vin} 行 VIN 为 NULL/空 — 无法经 VIN 证省，禁常量兜底，fail-fast")
         sys.exit(1)
-    policy_glob = str(root / "fact/policy/current/*.parquet")
+    # 双布局自适应（branch_paths SSOT）：全量读（需跨省全集以证明 miss=0 + 全 SC）
+    policy_glob = policy_current_glob(root / "fact/policy/current")
     con = duckdb.connect()
     con.register("ne", df[["vehicle_frame_no"]])
     safe = policy_glob.replace("'", "''")

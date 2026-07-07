@@ -130,11 +130,25 @@ def get_project_root():
     return Path.cwd()
 
 
+def _policy_glob() -> str:
+    """policy/current 双布局自适应 glob（branch_paths SSOT · 801409 cutover 前置）。
+
+    本脚本历史即为跨省全量读（未按 branch_code 过滤），布局适配保持行为等价；
+    混省口径问题另行治理（memory fact-current-mixes-sc-sx-bare-glob）。
+    """
+    root = get_project_root()
+    dm = str(root / "数据管理")
+    if dm not in sys.path:
+        sys.path.insert(0, dm)
+    from pipelines.branch_paths import policy_current_glob
+    return policy_current_glob(root / "数据管理/warehouse/fact/policy/current", missing_ok=True)
+
+
 def build_base_query(segment_filter: str) -> str:
     """构建基础 FROM + WHERE 子句"""
     return f"""
     FROM read_parquet('{get_project_root()}/数据管理/warehouse/fact/claims_detail/claims_*.parquet') cd
-    JOIN read_parquet('{get_project_root()}/数据管理/warehouse/fact/policy/current/*.parquet') p
+    JOIN read_parquet('{_policy_glob()}') p
         ON cd.policy_no = p.policy_no
     WHERE {AMT} > 0
       AND cd.accident_description IS NOT NULL AND LENGTH(cd.accident_description) > 5

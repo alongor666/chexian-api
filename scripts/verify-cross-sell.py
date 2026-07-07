@@ -8,9 +8,9 @@
 
 import argparse
 import json
-import os
 import subprocess
 import sys
+from pathlib import Path
 
 try:
     import duckdb
@@ -18,19 +18,29 @@ except ImportError:
     print("ERROR: 需要安装 duckdb: pip3 install duckdb", file=sys.stderr)
     sys.exit(1)
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT / "数据管理") not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT / "数据管理"))  # 供 import pipelines.*（branch_paths SSOT）
+from pipelines.branch_paths import (  # noqa: E402
+    PolicyCurrentLayoutError,
+    policy_current_files,
+)
+
 
 def query_parquet(date: str) -> dict:
     """直查 Parquet 源数据"""
     con = duckdb.connect()
 
-    # 从 current/ 分片目录加载
+    # 从 current/ 分片目录加载（双布局自适应 · branch_paths SSOT · 801409 cutover 前置）：
+    # 驾乘推介率为四川口径，取 SC 分片；保持原「取代表性分片」语义（列表已排序，确定性），
+    # 扁平/子目录自动路由、0 文件 fail-closed。
     current_path = "数据管理/warehouse/fact/policy/current/"
-
-    parquets = [f for f in os.listdir(current_path) if f.endswith(".parquet")]
-    if not parquets:
-        print(f"ERROR: 找不到 {current_path} 下的 Parquet 文件", file=sys.stderr)
+    try:
+        sc_files = policy_current_files(current_path, "SC")
+    except PolicyCurrentLayoutError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
-    path = os.path.join(current_path, parquets[0])
+    path = sc_files[0]
     date_filter = f'AND CAST("签单日期" AS DATE) = \'{date}\''
 
     passenger_filter = """\"客户类别\" IN ('非营业个人客车', '非营业企业客车', '非营业机关客车')"""

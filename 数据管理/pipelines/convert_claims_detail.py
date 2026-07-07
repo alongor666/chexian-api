@@ -20,6 +20,11 @@ _DATA_ROOT = str(Path(__file__).resolve().parent.parent)
 if _DATA_ROOT not in sys.path:
     sys.path.insert(0, _DATA_ROOT)
 
+from pipelines.branch_paths import (  # noqa: E402
+    has_policy_current_parquet,
+    policy_current_glob,
+)
+
 
 # ── 字段映射：中文 → 英文 snake_case ──
 
@@ -130,8 +135,9 @@ def _enrich_insurance_start_date(df: pd.DataFrame, policy_dir: str | None) -> pd
     joined_count = 0
     if policy_dir:
         policy_path = Path(policy_dir)
-        if policy_path.exists() and any(policy_path.glob('*.parquet')):
-            glob_pattern = str(policy_path / '*.parquet')
+        # 双布局自适应（branch_paths SSOT）：扁平顶层或 current/<省>/ 子目录均可探测/读取
+        if policy_path.exists() and has_policy_current_parquet(policy_path):
+            glob_pattern = policy_current_glob(policy_path)
             print(f"   JOIN PolicyFact: {glob_pattern}")
             try:
                 result = duckdb.sql(f"""

@@ -45,7 +45,15 @@ import duckdb
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent.parent
-PARQUET_POLICY = REPO_ROOT / "数据管理" / "warehouse" / "fact" / "policy" / "current" / "*.parquet"
+_DATA_ROOT = REPO_ROOT / "数据管理"
+if str(_DATA_ROOT) not in sys.path:
+    sys.path.insert(0, str(_DATA_ROOT))  # 供 import pipelines.*（branch_paths SSOT）
+from pipelines.branch_paths import policy_current_glob  # noqa: E402
+
+# 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：扁平/子目录自动路由
+PARQUET_POLICY = policy_current_glob(
+    _DATA_ROOT / "warehouse" / "fact" / "policy" / "current", missing_ok=True
+)
 PARQUET_CLAIMS = REPO_ROOT / "数据管理" / "warehouse" / "fact" / "claims_detail" / "*.parquet"
 
 FEEDBACK_PLACEHOLDER = "<!-- FEEDBACK_URL -->"
@@ -142,7 +150,7 @@ def build_filtered_cte(agent_name: str, start_date: str, end_date: str, personal
         premium,
         COALESCE(fee_amount, 0) AS fee_amount,
         CAST(policy_date AS DATE) AS policy_date
-      FROM read_parquet('{PARQUET_POLICY.as_posix()}', union_by_name=true)
+      FROM read_parquet('{PARQUET_POLICY}', union_by_name=true)
       WHERE agent_name = '{safe_agent}'
         AND CAST(insurance_start_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'
         {extra_filter}
