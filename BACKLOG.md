@@ -17,8 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（42 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
-## 📋 活跃任务速查（40 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（39 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -28,8 +27,7 @@
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 
-**P2（23 项）**
-**P2（22 项）**
+**P2（21 项）**
 
 - B304 `PARTIAL` — earned-premium 双口径未文档化
 - B306 — DuckDB 性能高危三件套

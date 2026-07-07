@@ -1,7 +1,6 @@
 # 需求账本归档 (BACKLOG ARCHIVE)
 
-**用途**：存放终态（DONE 已完成 / CANCELLED·WONTFIX 已弃置）任务，完整保留 ID、描述、证据/理由，供历史追溯。当前 317 项（已完成 294 · 已弃置 23）。
-**用途**：存放终态（DONE 已完成 / CANCELLED·WONTFIX 已弃置）任务，完整保留 ID、描述、证据/理由，供历史追溯。当前 321 项（已完成 297 · 已弃置 24）。
+**用途**：存放终态（DONE 已完成 / CANCELLED·WONTFIX 已弃置）任务，完整保留 ID、描述、证据/理由，供历史追溯。当前 322 项（已完成 298 · 已弃置 24）。
 
 **铁律**：
 - 本文件是 [`BACKLOG_LOG.jsonl`](./BACKLOG_LOG.jsonl) 的**派生视图**，由 `bun scripts/governance-backlog-curate.mjs --apply` 折叠日志渲染，**禁止手工编辑**。
