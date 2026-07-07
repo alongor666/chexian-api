@@ -60,6 +60,37 @@ interface FilterContextOwnValue {
 
 const FilterContext = createContext<FilterContextOwnValue | null>(null);
 
+type OptionBackedFilterKey =
+  | 'org_level_3'
+  | 'salesman_name'
+  | 'customer_category'
+  | 'coverage_combination'
+  | 'insurance_grade';
+
+const assignOptionBackedFilter = (
+  target: AdvancedFilterState,
+  key: OptionBackedFilterKey,
+  value: string[] | undefined,
+) => {
+  switch (key) {
+    case 'org_level_3':
+      target.org_level_3 = value;
+      break;
+    case 'salesman_name':
+      target.salesman_name = value;
+      break;
+    case 'customer_category':
+      target.customer_category = value;
+      break;
+    case 'coverage_combination':
+      target.coverage_combination = value;
+      break;
+    case 'insurance_grade':
+      target.insurance_grade = value;
+      break;
+  }
+};
+
 /**
  * 向后兼容 hook：返回原有 11 字段接口（合并 FilterContext + StableContext）。
  * 所有 48 个现有消费者无需修改。
@@ -119,6 +150,40 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       logger.info('FilterContext: 已同步初始日期范围, dataYear=', dataYear, 'maxDate=', maxDate);
     }
   }, [_internal.latestInitResult, isFilterSynced]);
+
+  // 筛选选项会随切省/换号重新加载；清理不再属于当前选项集的旧筛选值，
+  // 防止所有页面继续带旧省机构/业务员请求新省接口。
+  useEffect(() => {
+    if (!_internal.isInitialized) return;
+
+    const optionBackedKeys: OptionBackedFilterKey[] = [
+      'org_level_3',
+      'salesman_name',
+      'customer_category',
+      'coverage_combination',
+      'insurance_grade',
+    ];
+
+    setFilters((prev) => {
+      const next: AdvancedFilterState = { ...prev };
+      let changed = false;
+
+      for (const key of optionBackedKeys) {
+        const selected = prev[key];
+        const optionList = filterOptions[key];
+        if (!Array.isArray(selected) || !optionList) continue;
+
+        const allowedValues = new Set(optionList.map((option) => option.value));
+        const sanitized = selected.filter((value) => allowedValues.has(value));
+        if (sanitized.length !== selected.length) {
+          assignOptionBackedFilter(next, key, sanitized.length > 0 ? sanitized : undefined);
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [_internal.isInitialized, filterOptions]);
 
   const availableSalesmen = useMemo(() => {
     const allSalesmen = (filterOptions.salesman_name || []).map((option) => option.value);
