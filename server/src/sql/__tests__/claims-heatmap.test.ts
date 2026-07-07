@@ -335,3 +335,23 @@ describe('generateClaimsHeatmapQuery — customCutoffs', () => {
     expect(sql).toMatch(/prev_claims_cumulative AS[\s\S]*?CAST\(c\.accident_time AS DATE\) <= \(ac\.cutoff - INTERVAL 1 YEAR\)::DATE/);
   });
 });
+
+// ═══════════════════════════════════════════════════
+// 多省截止日隔离（2026-07-07）
+// ═══════════════════════════════════════════════════
+
+describe('generateClaimsHeatmapQuery — 多省截止日隔离', () => {
+  it('传 cutoffBranchCode → ref_date 限定本省 branch_code', () => {
+    const sql = generateClaimsHeatmapQuery(
+      EMPTY, 'org_level_3', 'insurance_start_date', 'report_time', 2026,
+      undefined, '1=1', 'SX',
+    );
+    expect(sql).toContain(`AS max_date FROM PolicyFact WHERE branch_code = 'SX'`);
+  });
+
+  it('不传 cutoffBranchCode → ref_date 不加分省过滤（与历史逐字节一致）', () => {
+    const sql = generateClaimsHeatmapQuery(EMPTY, 'org_level_3', 'insurance_start_date', 'report_time', 2026);
+    const refDateCte = sql.slice(sql.indexOf('ref_date AS ('), sql.indexOf('year_bounds AS ('));
+    expect(refDateCte).not.toContain('branch_code');
+  });
+});
