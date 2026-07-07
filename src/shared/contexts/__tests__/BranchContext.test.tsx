@@ -62,7 +62,7 @@ vi.mock('../PermissionContext', () => ({
   }),
 }));
 
-import { BranchProvider, useBranch } from '../BranchContext';
+import { BranchProvider, useBranch, useEffectiveVisibleOrganizations } from '../BranchContext';
 
 // ─────────────────────────── 测试组件：暴露 setBranch 触发点 ───────────────────────────
 
@@ -180,5 +180,49 @@ describe('BranchContext.setBranch — in-flight 回填回归测试', () => {
     const cancelQueriesOrder = mockCancelQueries.mock.invocationCallOrder[0];
     const clearOrder = mockClear.mock.invocationCallOrder[0];
     expect(cancelQueriesOrder).toBeLessThan(clearOrder);
+  });
+});
+
+// ─────────────────────────── useEffectiveVisibleOrganizations 切省联动回归 ───────────────────────────
+// 背景（阶段2审查发现）：PermissionContext.useVisibleOrganizations 只读 permission.branchCode
+// （用户默认省），全国超管切省后机构下拉仍显示默认省的机构清单。本 hook 额外读
+// BranchContext.effectiveBranch 修复该缺口，mock userPermission 与上方测试一致
+// （branchCode='SC', visibleBranches=['SC','SX']）。
+
+function VisibleOrgsProbe({ target }: { target: string }) {
+  const { setBranch } = useBranch();
+  const visibleOrganizations = useEffectiveVisibleOrganizations();
+  return (
+    <div>
+      <span data-testid="visible-orgs">{visibleOrganizations.join(',')}</span>
+      <button onClick={() => setBranch(target)}>切换到{target}</button>
+    </div>
+  );
+}
+
+describe('useEffectiveVisibleOrganizations — 超管切省后机构下拉联动', () => {
+  it('切省前：按用户默认 branchCode(SC) 显示四川机构清单', () => {
+    render(
+      <BranchProvider>
+        <VisibleOrgsProbe target="SX" />
+      </BranchProvider>
+    );
+    const orgs = screen.getByTestId('visible-orgs').textContent ?? '';
+    expect(orgs).toContain('乐山');
+    expect(orgs).not.toContain('太原一部');
+  });
+
+  it('切省到 SX 后：机构下拉联动显示山西机构清单，不再是切省前的默认省', () => {
+    render(
+      <BranchProvider>
+        <VisibleOrgsProbe target="SX" />
+      </BranchProvider>
+    );
+
+    fireEvent.click(screen.getByText('切换到SX'));
+
+    const orgs = screen.getByTestId('visible-orgs').textContent ?? '';
+    expect(orgs).toContain('太原一部');
+    expect(orgs).not.toContain('乐山');
   });
 });

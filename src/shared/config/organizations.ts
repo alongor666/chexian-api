@@ -5,7 +5,7 @@
  */
 
 /**
- * 三级机构列表（12个）
+ * 三级机构列表（12个，四川 SC）
  * 对应 salesman_organization_mapping.json 中的 organizations
  */
 export const ORGANIZATIONS = [
@@ -22,6 +22,36 @@ export const ORGANIZATIONS = [
   '青羊',
   '高新',
 ] as const;
+
+/**
+ * 山西（SX）经营单元列表（11个）。
+ * SSOT：数据管理/config/branch-org-mapping/SX.json 的 "units"；与
+ * server/src/services/permission.ts 的 SX_ORGANIZATIONS 镜像一致
+ * （前后端独立编译域，禁止 import，逐条对齐）。
+ */
+export const SX_ORGANIZATIONS = [
+  '太原一部',
+  '太原二部',
+  '经代、车商、重客',
+  '大同',
+  '阳泉',
+  '长治',
+  '晋城',
+  '晋中',
+  '运城',
+  '临汾',
+  '吕梁',
+] as const;
+
+/**
+ * branchCode → 该分公司机构列表。新增省份上线时须在此登记，否则该省
+ * branch_admin 的前端机构下拉会回落到默认（SC）。镜像
+ * server/src/services/permission.ts 的 BRANCH_ORGANIZATIONS。
+ */
+export const BRANCH_ORGANIZATIONS: Record<string, readonly string[]> = {
+  SC: ORGANIZATIONS,
+  SX: SX_ORGANIZATIONS,
+};
 
 /**
  * 机构类型
@@ -110,14 +140,45 @@ export const ORGANIZATION_HIERARCHY = {
 } as const;
 
 /**
- * 获取用户可见的机构列表
+ * 获取用户可见的机构列表。
+ *
  * @param permission 用户权限配置
+ * @param effectiveBranch 全国超管解析后的有效省（'SC'/'SX'/'ALL'）。
+ *   - 缺省 → 按 permission.branchCode 取（普通用户/未切省，行为不变，字节安全）。
+ *   - 单省码 → 取该省机构（超管切省）。
+ *   - 'ALL' → 合并该超管 visibleBranches 各省机构（去重、按省顺序）。
+ *   镜像 server/src/services/permission.ts 同名函数，防全国超管切省后
+ *   机构下拉仍显示默认省（前端阶段2审查发现的对称缺口）。
  * @returns 可见的机构列表（包含"全部"和用户所属机构）
  */
-export function getVisibleOrganizations(permission: UserPermission): string[] {
+export function getVisibleOrganizations(
+  permission: UserPermission,
+  effectiveBranch?: string | null,
+): string[] {
   if (permission.role === UserRole.BRANCH_ADMIN || permission.role === UserRole.TELEMARKETING_USER) {
-    // 分公司管理员/电销用户：可见所有机构
-    return ['全部', ...ORGANIZATIONS];
+    // 全国超管「全国」合并视图：合并 visibleBranches 各省机构（数据驱动，禁硬编码省份）。
+    if (effectiveBranch === 'ALL') {
+      const branches =
+        permission.visibleBranches && permission.visibleBranches.length > 0
+          ? permission.visibleBranches
+          : Object.keys(BRANCH_ORGANIZATIONS);
+      const merged: string[] = [];
+      const seen = new Set<string>();
+      for (const b of branches) {
+        for (const org of BRANCH_ORGANIZATIONS[b] ?? []) {
+          if (!seen.has(org)) {
+            seen.add(org);
+            merged.push(org);
+          }
+        }
+      }
+      return ['全部', ...merged];
+    }
+    // 单省：优先用有效省（超管切省后的 effectiveBranch），否则用本人 branchCode。
+    // 分公司管理员/电销用户：可见本省所有机构（未知/缺省回落 SC，字节安全）。
+    const branchKey = effectiveBranch ?? permission.branchCode;
+    const branchOrgs = (branchKey && BRANCH_ORGANIZATIONS[branchKey]) || ORGANIZATIONS;
+    return ['全部', ...branchOrgs];
   }
 
   if (permission.role === UserRole.ORG_USER && permission.organization) {

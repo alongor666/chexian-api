@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { usePermission } from './PermissionContext';
 import { branchLabel, branchCompanyName, resolveEffectiveBranch } from '../utils/branchDisplay';
+import { getVisibleOrganizations } from '../config/organizations';
 
 // 省份显示派生（省份码→名/分公司名/有效省解析）单一事实源在 utils/branchDisplay.ts。
 // 此处 re-export 保持既有 import 兼容（如 TopNavigation 从本模块取 branchLabel）。
@@ -107,4 +108,22 @@ export const BranchProvider: React.FC<BranchProviderProps> = ({ children }) => {
   );
 
   return <BranchContext.Provider value={value}>{children}</BranchContext.Provider>;
+};
+
+/**
+ * 可见机构列表（切省感知版）。
+ *
+ * 与 PermissionContext.useVisibleOrganizations 的区别：本 hook 额外读取
+ * BranchContext.effectiveBranch（含超管切省/全国合并选择），解决全国超管
+ * 切省后机构下拉仍显示默认省的缺口（前后端对称修复，镜像 server 侧
+ * filters.ts 传 req.effectiveBranch 给 permissionService.getVisibleOrganizations）。
+ * 普通单省用户 effectiveBranch === 本人 branchCode，行为与旧 hook 一致（字节安全）。
+ */
+export const useEffectiveVisibleOrganizations = (): string[] => {
+  const { userPermission } = usePermission();
+  const { effectiveBranch } = useBranch();
+  return useMemo(
+    () => (userPermission ? getVisibleOrganizations(userPermission, effectiveBranch) : ['全部']),
+    [userPermission, effectiveBranch]
+  );
 };
