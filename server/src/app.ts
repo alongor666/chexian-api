@@ -353,11 +353,14 @@ async function startServer() {
       // 此处把节点恢复为健康，让负载均衡重新纳入流量（消除"启动失败后永久 503"）。
       dataReady = true;
       await cacheWarmer.warmStartupCritical();
+      // 294022：CrossSell（CrossSellDailyAgg 物化）不再阻塞上方 await，改为异步链：
+      // 先物化 CrossSell（最小化交叉销售路由的 503 降级窗口），完成后再跑笛卡尔预热。
       // 笛卡尔预热依赖 listen 端口，必须在 listen 后才能跑；
       // 监听者注册位置在 listen 之前，所以这里发起即可（首次 listen 完成后再触发也安全）
-      cacheWarmer.warmCommonRoutes().catch((err) =>
-        console.warn('[Server] warmCommonRoutes (post-ETL) failed:', err),
-      );
+      cacheWarmer
+        .warmPostListenDomains()
+        .then(() => cacheWarmer.warmCommonRoutes())
+        .catch((err) => console.warn('[Server] post-listen warming (post-ETL) failed:', err));
     });
 
     // 3. 标记就绪 + 启动 HTTP
@@ -377,12 +380,15 @@ async function startServer() {
         console.log('[Server] PM2 ready signal sent');
       }
 
-      // 笛卡尔预热：在 PM2 ready 信号之后异步触发，不阻塞 readiness。
+      // listen 后异步预热链（294022）：先 CrossSell 物化（曾在 listen 前阻塞 ~3 分钟
+      // 造成 reload 期全站 502，现移到这里；物化期间交叉销售路由由惰性中间件兜底
+      // 503+Retry-After，其余路由立即可服务），完成后再跑笛卡尔预热。
       // 内部 fetch 自调用，依赖 listen 已完成；setImmediate 让出当前 tick。
       setImmediate(() => {
-        cacheWarmer.warmCommonRoutes().catch((err) =>
-          console.warn('[Server] warmCommonRoutes (startup) failed:', err),
-        );
+        cacheWarmer
+          .warmPostListenDomains()
+          .then(() => cacheWarmer.warmCommonRoutes())
+          .catch((err) => console.warn('[Server] post-listen warming (startup) failed:', err));
       });
     });
   } catch (error) {

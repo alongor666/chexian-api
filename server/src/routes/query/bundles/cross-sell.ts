@@ -11,6 +11,7 @@ import {
   isBundleRoutesEnabled, buildRouteCacheKey,
   getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
+  createDomainMiddleware,
 } from '../shared.js';
 import {
   CROSS_SELL_DIMENSIONS,
@@ -38,6 +39,11 @@ const router = Router();
 
 router.get(
   '/cross-sell-bundle',
+  // 294022：本路由 SQL 直查 CrossSellDailyAgg，此前无惰性域中间件——修复前靠
+  // "CrossSell 在 listen 前物化完成"兜底；预热移到 listen 后异步后，降级窗口内
+  // 裸查会抛 table not found（500）。补挂中间件对齐 cross-sell.ts 其余路由的
+  // 降级语义（加载等待 ≤15s，超时 503+Retry-After）。
+  createDomainMiddleware('CrossSell'),
   asyncHandler(async (req, res) => {
     if (!isBundleRoutesEnabled()) {
       throw new AppError(503, 'Cross-sell bundle route is disabled');
