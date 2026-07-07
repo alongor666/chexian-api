@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（43 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（44 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -55,7 +55,7 @@
 - 2026-07-07-claude-d3ef27 — claims-detail.ts 川牌车牌前缀→城市 CASE 存在系统性错位一位缺陷
 - 2026-07-07-claude-dce69c — 净化剥离中央化
 
-**P3（15 项）**
+**P3（16 项）**
 
 - B247 — 图表 hex 色值审计
 - B254 — wecom_smartsheet state 生命周期管理（missing_vins T
@@ -72,6 +72,7 @@
 - 2026-07-07-claude-322e6e — 矩阵热力图抽共享组件
 - 2026-07-07-claude-beb706 — 热重载（同进程 ETL）后 CrossSellDailyAgg 物化表不自动重建
 - 2026-07-07-claude-ca822c — KPI 卡归一到 widgets/kpi/EnhancedKpiCard
+- 2026-07-07-claude-e80304 — 前后端 BRANCH 映射镜像目前仅靠人工核对一致，无自动化 governance 闸
 
 ---
 
@@ -122,3 +123,4 @@
 | 2026-07-07-claude-ca822c | 2026-07-07 | 前端重构 follow-up | @claude | KPI 卡归一到 widgets/kpi/EnhancedKpiCard：GrowthKpiCards、CrossSellSummaryKpiBoard、VariableCostKpiBoard、quote-conversion KpiCards 四套特性层自实现逐页替换为共享基座。侦察证据见 开发文档/架构设计/前端极简架构规划_2026-07-07.md §四B-2 | P3 | PROPOSED | 开发文档/架构设计/前端极简架构规划_2026-07-07.md | N/A |  |
 | 2026-07-07-claude-d3ef27 | 2026-07-07 | 数据口径/理赔地理 | @claude | claims-detail.ts 川牌车牌前缀→城市 CASE 存在系统性错位一位缺陷：H/J/K/L/M/R/S/T/Z 九个前缀相对 数据管理/warehouse/dim/plate_region/latest.parquet 权威值域整体下移一位（如「川H」硬编码归遂宁，权威值域实为广元；「川M」硬编码归眉山，权威值域实为资阳）。疑似历史转录时漏抄「川G→成都」一行导致后续逐位下移。影响 generateGeoRiskByPlateQuery（车牌归属地展示）与 generateGeoComparisonQuery（异地出险率判定）两处同源同缺陷 CASE，二者当前均已改造为按 branchCode 分支（SC 走本 legacy CASE 原样保留字节安全，SX 走 PlateRegionMap JOIN 已验证正确）。发现于 2026-06-27-claude-e96d85 阶段4多省改造排查（duckdb 直查 dim 表 vs 硬编码值域逐位比对，证据见对话记录）。修复方向：与业务确认后，将两处 SC_PLATE_CITY_CASE/SC_PLATE_HOME_CITY_CASE 常量按权威值域改写为正确映射（或统一改造为 JOIN PlateRegionMap 并限定 province IN ('四川','重庆')），需评估修复后 SC 用户可见的『车牌归属地』面板与『异地出险率』历史数字将发生变化，建议先与业务侧确认是否已按错误口径形成认知基线再决定是否修复及如何解释数字变化 | P2 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
 | 2026-07-07-claude-dce69c | 2026-07-07 | 架构治理/多省 | @claude | 净化剥离中央化：域→支持列白名单上收 route-param-contracts.ts，共享 parser 按白名单自动过滤（8f71c0 architect 闸 P1-1）。现 cross-sell/quote-conversion/customer-flow 三处路由层各自维护剥离清单，与视图定义（duckdb-domain-loaders.ts）无编译期关联，第四个域出现同类 Binder Error 会重演人肉排查。 | P2 | PROPOSED | N/A | server/src/config/route-param-contracts.ts |  |
+| 2026-07-07-claude-e80304 | 2026-07-07 | 架构治理/多省 | @claude | 前后端 BRANCH 映射镜像目前仅靠人工核对一致，无自动化 governance 闸：src/shared/utils/branchDisplay.ts 的 BRANCH_LABELS ↔ server/src/config/branch-names.ts 的 BRANCH_NAMES；src/shared/config/organizations.ts 的 SX_ORGANIZATIONS/BRANCH_ORGANIZATIONS ↔ server/src/services/permission.ts 的同名常量。当前（2026-07-07，工程二阶段2/3/4 收尾核实）两组常量逐字节一致，无漂移。建议参照既有『能力矩阵镜像』闸（checkFilterCapabilityMirror，用 BEGIN/END 锚点比对两文件文本）的模式，给这两组 BRANCH 映射也加锚点+governance 检查，防止未来任一端修改（如新增第三省）漏改另一端。工作量：4 个文件加锚点注释 + 新增 1 个 governance 检查函数，中等规模，独立 PR 更合适 | P3 | PROPOSED | N/A | scripts/check-governance.mjs |  |

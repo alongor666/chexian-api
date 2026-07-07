@@ -3,12 +3,26 @@ import { cardStyles, colorClasses, fontStyles, tableStyles } from '../../../shar
 import { RateCell } from '../../../shared/ui';
 import { formatCount } from '../../../shared/utils/formatters';
 import { useQuoteDrilldown } from '../hooks/useQuoteConversion';
-import type { QuoteFilters, DrillLevel } from '../types';
+import type { QuoteFilters, DrillLevel, DrilldownRow } from '../types';
 import { isBranchSummaryRow } from '../../../shared/utils/branchDisplay';
 import { DIMENSION_LABELS } from '../../../shared/config/drilldown-dimensions';
 
 interface Props {
   filters: QuoteFilters;
+}
+
+/**
+ * 排序比较器：转化率从低到高，汇总行置顶。
+ *
+ * 对称比较（避免双汇总行时 comparator 违反反对称——原实现 isAgg(a) 命中即恒返回 -1，
+ * isAgg(b) 命中即恒返回 1，两个汇总行互比时同时得到 compare(a,b)=-1 与
+ * compare(b,a)=-1，破坏 sort 稳定性；参照 ComprehensiveMetricTable.tsx 的对称写法）。
+ */
+export function compareDrilldownRows(a: DrilldownRow, b: DrilldownRow): number {
+  const isAggA = isBranchSummaryRow(a.group_name);
+  const isAggB = isBranchSummaryRow(b.group_name);
+  if (isAggA !== isAggB) return isAggA ? -1 : 1;
+  return (a.underwriting_rate ?? 0) - (b.underwriting_rate ?? 0);
 }
 
 /** 下钻层级 → SSOT 维度键；列头标签从 DIMENSION_LABELS 派生，杜绝 机构/团队 文案漂移 */
@@ -118,13 +132,7 @@ export function DrilldownTable({ filters }: Props) {
               </tr>
             </thead>
             <tbody>
-              {(data ?? []).slice().sort((a, b) => {
-                // 汇总行（"全部"/"合计"等）置顶
-                const isAgg = (name: string) => isBranchSummaryRow(name);
-                if (isAgg(a.group_name)) return -1;
-                if (isAgg(b.group_name)) return 1;
-                return (a.underwriting_rate ?? 0) - (b.underwriting_rate ?? 0);
-              }).map((row) => (
+              {(data ?? []).slice().sort(compareDrilldownRows).map((row) => (
                 <tr
                   key={row.group_key}
                   className={`${tableStyles.row} ${currentLevel.level !== 'salesman' ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800' : ''}`}
