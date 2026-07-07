@@ -4,21 +4,26 @@
 
 ## 数据源
 
-- 保单明细：`数据管理/warehouse/fact/policy/current/*.parquet`
+- 保单明细：`数据管理/warehouse/fact/policy/current/*.parquet`（引擎按实例 `branch_code` 注入省份过滤）
 - 报价数据：`数据管理/warehouse/fact/quotes_conversion/latest.parquet`
 - 业务员团队：`数据管理/warehouse/dim/salesman/latest.parquet`
+- 客户来源去向：`数据管理/warehouse/fact/customer_flow/latest.parquet`（流失公司）
 - 续保模式：当前同步统一写入 `未分类`
 
-## 多实例设计
+## 多实例设计（v2 引擎，配置驱动）
 
-每个 `config.{instance}.json` 对应一个机构/一张智能表格：
+推送引擎 = `sync_renewal_v2.py`，每个 `instances/{instance}.yaml` 对应一张智能表格；
+字段语义在 `field_registry*.yaml` 注册，实例通过 `fields_enabled` 选择启用字段。
+实例 YAML 必须顶层声明 `branch_code`（省份隔离键，缺省 fail-closed 中止），可用
+`script:` 行路由到 `sync_filtered_policies.py` 等其他引擎（daily.mjs 据此分发）。
 
-| 配置文件 | 机构 | 止期范围 | Webhook env |
-|---|---|---|---|
-| `config.zigong.json` | 自贡 | 2026-03-31 ~ 2026-05-30 | `WECOM_SMARTSHEET_WEBHOOK_ZIGONG` |
-| `config.tianfu.json` | 天府 | 2026-03-31 ~ 2026-04-29 | `WECOM_SMARTSHEET_WEBHOOK_TIANFU` |
+> **v1 推送已退役（2026-07-05-claude-fed2b1）**：旧 `config.{instance}.json` 驱动的
+> `sync_renewal.py` 推送链路已从 daily.mjs 调度移除（无任何 config.*.json 实例存量，
+> 历史日志全部为 v2 家族）。`sync_renewal.py` 文件保留，仅作为
+> `create_renewal_tracker.py` 的「止期窗口」取数库；**禁止新增 config.*.json
+> 恢复 v1 推送**——它无 branch_code 省份隔离，不受 governance 企微隔离闸保护。
 
-实例共享：险类 = 商业保险、保费 > 300、唯一键 = 车架号、速率限制 3000 条/分钟。
+实例共享：险类 = 商业保险、唯一键 = 车架号、速率限制 3000 条/分钟。
 
 **state 与 log 按 instance 隔离**：
 - `state/{instance_name}_vin_record_map.json`（`car frame no → record_id`，运行态、被 `.gitignore`）
@@ -29,7 +34,7 @@
 | 企业微信字段 | 数据来源 |
 | --- | --- |
 | 到期日 | `policy.insurance_end_date` |
-| 三级机构 | `policy.org_level_3` |
+| 三级机构 | `salesman.organization`（业务员维度表权威归属），无匹配时 `未知机构` |
 | 销售团队 | `salesman.team`，无匹配时取报价团队或 `未分配` |
 | 车牌号码 | `policy.plate_no` |
 | 车架号 | `policy.vehicle_frame_no` |
@@ -50,8 +55,8 @@
 ```bash
 # chexian-api/.env.local（git 已忽略）
 WECOM_SMARTSHEET_ENABLED=1
-WECOM_SMARTSHEET_WEBHOOK_ZIGONG='https://qyapi.weixin.qq.com/cgi-bin/wedoc/smartsheet/webhook?key=...'
-WECOM_SMARTSHEET_WEBHOOK_TIANFU='https://qyapi.weixin.qq.com/cgi-bin/wedoc/smartsheet/webhook?key=...'
+# 各实例 webhook 以实例 YAML 的 webhook_env 声明为准，例：
+WECOM_SMARTSHEET_WEBHOOK_SC_2025H1='https://qyapi.weixin.qq.com/cgi-bin/wedoc/smartsheet/webhook?key=...'
 ```
 
 模板见 `chexian-api/.env.example`。`daily.mjs` 启动时轻量加载 `.env.local`（不依赖 dotenv 包）。
@@ -59,13 +64,13 @@ WECOM_SMARTSHEET_WEBHOOK_TIANFU='https://qyapi.weixin.qq.com/cgi-bin/wedoc/smart
 ## 手动运行
 
 ```bash
-# dry-run（不调用 webhook）
-python3 数据管理/integrations/wecom_smartsheet/sync_renewal.py \
-  --config 数据管理/integrations/wecom_smartsheet/config.zigong.json --dry-run
+# dry-run（不调用 webhook，只打印新增/更新计划）
+python3 数据管理/integrations/wecom_smartsheet/sync_renewal_v2.py \
+  --instance 数据管理/integrations/wecom_smartsheet/instances/sichuan_2025_h1.yaml --dry-run
 
 # 正式同步单个实例
-python3 数据管理/integrations/wecom_smartsheet/sync_renewal.py \
-  --config 数据管理/integrations/wecom_smartsheet/config.tianfu.json
+python3 数据管理/integrations/wecom_smartsheet/sync_renewal_v2.py \
+  --instance 数据管理/integrations/wecom_smartsheet/instances/sichuan_2025_h1.yaml
 ```
 
 ### 机构表批量同步（xlsx 登记表）
@@ -142,10 +147,10 @@ node scripts/sync-and-reload.mjs --wecom --wecom-org 新都,资阳
 
 ## 新增实例
 
-1. 在当前目录新建 `config.{new_instance}.json`，指定 `instance_name`, `org_level_3`, 日期范围, `webhook_env`
+1. 复制 `instances/` 下最接近的 YAML 为 `instances/{new_instance}.yaml`，改 `instance_name`、`filters`（起期窗口等）、`webhook_env`、`fields_enabled`，并**顶层声明 `branch_code`**（缺省引擎 fail-closed 拒跑）
 2. 在 `.env.local` 追加对应 `webhook_env` 的 URL
-3. 在 `.env.example` 登记 env 变量名（不含密钥）
-4. 下次跑 `daily.mjs` 自动纳入
+3. 在 `.env.example` 登记 env 变量名（不含密钥），并在 `WEBHOOK_TARGETS.md` 登记目标表
+4. 先手动 `--dry-run` 核对新增/更新计划，再等下次 `daily.mjs` 自动纳入（暂停实例 = 文件名加 `.disabled` 后缀）
 
 ## 更新策略
 
@@ -217,7 +222,7 @@ push_add_records_idempotent(                                # 防线 4+5
 
 | errcode | 含义 | 处理步骤 |
 |---|---|---|
-| `40036` / `field not found` | schema 声明的 fieldId 在表格中不存在 | (1) 企业微信智能表格界面找到对应字段，复制其 fieldId<br>(2) 对照 `sync_renewal.py` 的 `DEFAULT_SCHEMA`（35-52 行）<br>(3) 若字段被删/改 ID，更新 `DEFAULT_SCHEMA` 后重跑 |
+| `40036` / `field not found` | schema 声明的 fieldId 在表格中不存在 | (1) 企业微信智能表格界面找到对应字段，复制其 fieldId<br>(2) 对照 `field_registry*.yaml` 中该字段的 `field_id`<br>(3) 若字段被删/改 ID，更新注册表后重跑 |
 | `60011` / `permission denied` | Webhook 权限不足 | (1) 企业微信后台检查 Webhook 是否被禁用/降级为只读<br>(2) 检查 `.env.local` 中的 `WECOM_SMARTSHEET_WEBHOOK_{INSTANCE}` URL 是否过期/被重置<br>(3) 重新生成 Webhook URL → 更新 `.env.local` → 重跑 |
 | `45009` / `rate limit exceeded` | 超过分钟级限流 | (1) 检查 config 里 `sheet_records_per_minute_limit`（默认 3000）<br>(2) 同一文档下多个 Webhook 总和不能超 10000/分钟，多实例并发时降低单实例限速<br>(3) 脚本会自动等待 60s 重试，若长期触发说明数据量超模型设计（4000+），考虑拆分时间窗口 |
 | `40058` / `record_id not found` | state 文件里的 record_id 在表格中已不存在 | 通常发生在销售人员手工删除了表格记录。处理：<br>(1) `cat state/{instance}_vin_record_map.json \| jq 'del(.records["LV..."])'` 删除有问题的 VIN 条目（或整体备份后清空 records 走全量重建）<br>(2) 重跑 sync，脚本会走 `add_records` 重建映射 |
@@ -228,7 +233,7 @@ push_add_records_idempotent(                                # 防线 4+5
 当企业微信表格记录被人工删除导致后续 update 失败时：
 
 ```bash
-INSTANCE=zigong  # 或 tianfu
+INSTANCE=sichuan_2025_h1  # 实例名 = instances/*.yaml 的 instance_name
 STATE=数据管理/integrations/wecom_smartsheet/state/${INSTANCE}_vin_record_map.json
 BACKUP=数据管理/integrations/wecom_smartsheet/state/${INSTANCE}_vin_record_map.bak.$(date +%Y%m%d).json
 
@@ -247,8 +252,8 @@ print(f'已剔除 {len(problem_vins)} 个 VIN')
 "
 
 # 3. 重跑（被剔除的 VIN 走 add_records 重建）
-python3 数据管理/integrations/wecom_smartsheet/sync_renewal.py \
-  --config 数据管理/integrations/wecom_smartsheet/config.${INSTANCE}.json
+python3 数据管理/integrations/wecom_smartsheet/sync_renewal_v2.py \
+  --instance 数据管理/integrations/wecom_smartsheet/instances/${INSTANCE}.yaml
 ```
 
 ### 整张表全量重建
@@ -256,16 +261,17 @@ python3 数据管理/integrations/wecom_smartsheet/sync_renewal.py \
 当表格被整体重建/迁移（fieldId 全变）时，最快方式是清空 state + 在新表上重跑：
 
 ```bash
-INSTANCE=tianfu
+INSTANCE=sichuan_2025_h1
 
 # 1. 备份后清空 state（不能直接删，state 文件路径要保留）
 mv state/${INSTANCE}_vin_record_map.json state/${INSTANCE}_vin_record_map.bak.json
 echo '{"summary":{},"records":{}}' > state/${INSTANCE}_vin_record_map.json
 
-# 2. 更新 sync_renewal.py 的 DEFAULT_SCHEMA 为新表的 fieldId 映射
+# 2. 更新 field_registry*.yaml 中各字段的 field_id 为新表映射
 
-# 3. 重跑 add_records 全量
-python3 sync_renewal.py --config config.${INSTANCE}.json
+# 3. 先 dry-run 核对计划，再重跑 add_records 全量
+python3 sync_renewal_v2.py --instance instances/${INSTANCE}.yaml --dry-run
+python3 sync_renewal_v2.py --instance instances/${INSTANCE}.yaml
 ```
 
 ### 排查 Webhook 是否被禁用

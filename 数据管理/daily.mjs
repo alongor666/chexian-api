@@ -1056,39 +1056,36 @@ async function syncToVps(scriptDir) {
   }
 }
 
-// ETL 完成后按 config.{instance}.json 逐个同步到企业微信智能表格
+// ETL 完成后按 instances/*.yaml 逐个同步到企业微信智能表格（v2 引擎，配置驱动）
 // 由 WECOM_SMARTSHEET_ENABLED=1 开关控制（默认关闭），失败降级告警不阻塞 ETL
+// v1（sync_renewal.py + config.*.json）推送调度已退役（2026-07-05-claude-fed2b1 评估）：
+//   仓库与运行目录均无 config.*.json（v1 兼容段扫描结果恒为空），历史运行日志全部为
+//   v2 家族实例；且 v1 无 branch_code 省份隔离、不在 governance 企微隔离闸引擎清单内，
+//   恢复其推送调度须先补省份隔离并纳入该闸。sync_renewal.py 文件本身保留——它是
+//   create_renewal_tracker.py 的「止期窗口」取数库（v2 引擎不提供该过滤能力）。
 async function runPostEtlIntegrations(scriptDir, python) {
   if (process.env.WECOM_SMARTSHEET_ENABLED !== '1') return;
 
   const integrationDir = join(scriptDir, 'integrations/wecom_smartsheet');
   const scriptV2 = join(integrationDir, 'sync_renewal_v2.py');
-  const scriptV1 = join(integrationDir, 'sync_renewal.py');
   const instancesDir = join(integrationDir, 'instances');
 
-  // v2：优先扫描 instances/*.yaml
+  // v2：扫描 instances/*.yaml
   let v2Instances = [];
   if (existsSync(scriptV2) && existsSync(instancesDir)) {
     v2Instances = readdirSync(instancesDir)
       .filter(f => f.endsWith('.yaml') || f.endsWith('.yml'))
       .sort();
   }
-  // v1 兼容：旧 config.*.json 仍跑（待 v2 稳定后删）
-  let v1Configs = [];
-  if (existsSync(scriptV1)) {
-    v1Configs = readdirSync(integrationDir)
-      .filter(f => f.startsWith('config.') && f.endsWith('.json'))
-      .sort();
-  }
 
-  const total = v2Instances.length + v1Configs.length;
+  const total = v2Instances.length;
   if (total === 0) return;
 
   console.log('');
   log('green', '╔══════════════════════════════════════════╗');
   log('green', '║  8. 企业微信智能表格同步                   ║');
   log('green', '╚══════════════════════════════════════════╝');
-  log('cyan', `  实例数: ${total}（v2 yaml=${v2Instances.length}, v1 json=${v1Configs.length}）`);
+  log('cyan', `  实例数: ${total}（v2 yaml）`);
 
   // 8a. v2 yaml 实例
   //   yaml 内可声明 `script: <name>.py` 路由到 sync_renewal_v2.py 之外的引擎
@@ -1139,23 +1136,6 @@ async function runPostEtlIntegrations(scriptDir, python) {
       for (const line of msg.split('\n')) if (line.trim()) log('red', `     ${line}`);
       log('yellow', `     详细日志：${join(integrationDir, 'logs')}/${instance}_sync_*.json`);
       log('yellow', `     手动重试：python3 ${targetScript} --instance ${yamlPath} --dry-run`);
-    }
-  }
-
-  // 8b. v1 json 实例（向后兼容，待 v2 稳定后删）
-  for (const configFile of v1Configs) {
-    const instance = configFile.replace(/^config\.|\.json$/g, '');
-    log('cyan', `\n  ▶ [v1] ${instance}`);
-    try {
-      runPythonScript(python, scriptV1, [
-        '--config', `"${join(integrationDir, configFile)}"`,
-      ]);
-      log('green', `  ✓ ${instance} 同步完成`);
-    } catch (err) {
-      const msg = (err.message || '').trim();
-      log('red', `  ⚠ ${instance} 同步失败（降级告警，不阻塞 ETL）`);
-      for (const line of msg.split('\n')) if (line.trim()) log('red', `     ${line}`);
-      log('yellow', `     手动重试：python3 ${scriptV1} --config ${join(integrationDir, configFile)} --dry-run`);
     }
   }
 }
