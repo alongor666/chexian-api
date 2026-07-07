@@ -1,5 +1,5 @@
 // 从 PerformanceAnalysisPanel.tsx 抽出的内部分布图（b331 拆分·行为零变更）。
-// 注意：与既有 performance/PerformanceDistributionChart.tsx 是两个已漂移的组件，本轮保持独立（去重见 follow-up 21c578）。
+// 业绩分析分布图唯一实现（漂移双胞胎 performance/PerformanceDistributionChart.tsx 已随 21c578 去重删除）。
 import { useEffect, useMemo, useRef } from 'react';
 import type { EChartsOption } from 'echarts';
 import { echarts } from '@/shared/utils/echarts';
