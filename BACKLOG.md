@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（39 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（38 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -27,7 +27,7 @@
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 
-**P2（20 项）**
+**P2（19 项）**
 
 - B304 `PARTIAL` — earned-premium 双口径未文档化
 - B306 — DuckDB 性能高危三件套
@@ -45,7 +45,6 @@
 - 2026-07-03-claude-131dd8 — 后端审查
 - 2026-07-03-claude-6c23b3 — 后端审查
 - 2026-07-06-claude-151236 — governance 增加双锁一致性闸
-- 2026-07-06-claude-286f55 — 产品决策
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-07-claude-6d1dfe — route-param-contracts 对 /quote-conversion/* 
 - 2026-07-07-claude-dce69c — 净化剥离中央化
@@ -104,7 +103,6 @@
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功能对等覆盖 v1 场景，再切 daily.mjs 调度并删 v1。承接 B253 弃置结论。【账】做完删 v1 脚本+DEFAULT_SCHEMA 硬编码/加 0 新机制/触发条件=确认 v2 功能对等 | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ | 评估完成（严格对等矩阵）：①推送引擎职责 v2 完全对等且严格更优——v1 DEFAULT_SCHEMA 18 个 field_id 在 field_registry.yaml 全部有声明且实例 fields_enabled 全启用；state 同名同构（v2 records 增 payload_hash 为超集，接管旧 state 只触发 update 不触发 add，无行级重复风险）；40058/update 失败降级、missing_vins 只记不删、限流语义均对等；v2 另有 branch_code fail-closed+出口断言/幂等 hash 跳过/重复投保审计/跨批排他。②调度证据：仓库与运行目录均无 config.*.json（v1 兼容段扫描恒为空），463 个历史日志全为 v2 家族 → daily.mjs 8b v1 兼容段已删（行为逐字节不变），并消除治理盲区（v1 不在 governance 企微隔离闸引擎清单、无省份隔离，留着调度入口=混省推送地雷）。③v1 文件不删（差距）：create_renewal_tracker.py 与 test_dryrun_validation_sql.py 依赖其 SyncConfig+build_source_rows 的「止期窗口」(insurance_end_date_from/to) 取数能力，v2 引擎只支持起期窗口，非 drop-in 替代；且该消费方正被 cutover 前置A卡改动。删除条件：create_renewal_tracker 取数迁移到带省份隔离的独立查询层，或 v2 补齐止期窗口过滤（届时连同 test_sync_renewal.py 一并删）。 |
 | 2026-07-06-claude-0e26ba | 2026-07-06 | 安全治理 | @claude | session 级 IP 绑定评估:allowedIps 目前只在登录时校验一次(JWT 签发后不再比对,PAT 侧已于权限治理 PR 补齐每次校验)。若要 JWT 会话也绑 IP,需评估移动网络/办公网出口 IP 漂移导致正常用户会话中断的可用性代价,可选折中=仅对显式配置 allowedIps 的账号启用。属较大改造,先决策再动手 | P3 | PROPOSED | N/A | server/src/middleware/auth.ts,server/src/services/auth.ts:136 | check-merged-drift 命中 c59a5058/37a3c234(PR #943) 系误报：#943 只补了 PAT 侧每次 IP 校验（事项文本自述），JWT session 侧未动——origin/main 核实 middleware/auth.ts 零 allowedIps 引用，无每请求比对。保持 PROPOSED（先决策再动手） |
 | 2026-07-06-claude-151236 | 2026-07-06 | 部署链 | @claude | governance 增加双锁一致性闸:server/package.json 的语义范围必须被 server/package-lock.json 锁定版本满足(npm ci 的锁漂移在 CI 早于部署暴露)。根因:#942 重建 bun.lock/server/bun.lock 但漏 npm 锁,main 部署连败三次全靠回滚兜底(runs 28784860923/28785804360/c59a5058)。双锁体系(bun 本地/CI + npm VPS 部署)任一侧重建必须联动另一侧 | P2 | PROPOSED | N/A | server/package-lock.json,scripts/check-governance.mjs |  |
-| 2026-07-06-claude-286f55 | 2026-07-06 | 安全治理 | @claude | 产品决策:综合分析视图开放度与 cost 功能开关互相矛盾——生产 .env.production 的 VITE_ENABLE_COMPREHENSIVE_ANALYSIS='true' + server/ecosystem.config.cjs 的 ENABLE_COMPREHENSIVE_ANALYSIS='true' 让综合分析对全员开放,specialFeatures 'cost' 开关实际零效力(后端闸已随权限治理 PR 落地但被 env 旁路)。需业务拍板:要么撤 env 全开、让 cost 开关真正生效(前后端两处 env 必须同步撤);要么承认全员开放、把用户面 cost 开关下掉避免安全幻觉 | P2 | PROPOSED | N/A | server/src/middleware/special-feature.ts,server/ecosystem.config.cjs,.env.production | check-merged-drift 命中 c59a5058/37a3c234(PR #943) 系误报：#943 落了后端闸但本项是其暴露的 env 旁路产品决策——origin/main 核实 ecosystem.config.cjs 仍 ENABLE_COMPREHENSIVE_ANALYSIS='true'，矛盾未裁决。保持 PROPOSED（待业务拍板） |
 | 2026-07-06-claude-de1e40 | 2026-07-06 | 安全治理 | @claude | org_user 路由白名单扩展到非 query 域(/api/data、/api/ai、/api/agent、/api/copilot 等)需改为按域显式声明是否纳管,替代 mountedOutsideQuery 一刀切跳过。⚠️ 242c07 曾因盲目套白名单致 agent 诊断路由误伤 403,扩域必须逐域回归。现状数据层 RLS 仍生效,仅功能边界缺失,非紧急 | P2 | PROPOSED | N/A | server/src/middleware/permission.ts:186-201 | check-merged-drift 命中 c59a5058/37a3c234(PR #943) 系误报：本项是 #943 会话立的 follow-up（按域显式声明纳管），origin/main 核实 permission.ts mountedOutsideQuery 一刀切跳过仍在（2 处命中），扩域未实施。保持 PROPOSED |
 | 2026-07-07-claude-322e6e | 2026-07-07 | 前端重构 follow-up | @claude | 矩阵热力图抽共享组件：业绩机构热力图V2(8组件族)、交叉销售指标热力图、赔案热力图、报价转化维度热力图四套并存，抽「行×期矩阵+打灯+下钻回调」共享件，各页保留取数与口径。侦察证据见 开发文档/架构设计/前端极简架构规划_2026-07-07.md §四B-3 | P3 | PROPOSED | 开发文档/架构设计/前端极简架构规划_2026-07-07.md | N/A |  |
 | 2026-07-07-claude-6d1dfe | 2026-07-07 | 架构治理/契约 | @claude | route-param-contracts 对 /quote-conversion/* 与 /customer-flow/* 未声明 useCommon 但 handler 实际消费 commonFilterSchema（净化子集），契约与运行时偏差且 governance 对账单向不拦（8f71c0 architect 闸 P1-2）。需扩展契约表达「useCommon 但排除某些 key」语义并补齐两域声明，否则 MCP/CLI tool description 失真。 | P2 | PROPOSED | N/A | server/src/config/route-param-contracts.ts |  |
