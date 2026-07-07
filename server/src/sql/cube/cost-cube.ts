@@ -311,12 +311,9 @@ SELECT
   ${getMetricSql('earned_premium')},
   ${getMetricSql('earned_claim_ratio')},
   ${getMetricSql('expense_ratio')},
-  -- 综合费用率 = (赔款 + 费用) / 满期保费 * 100%（与 cost-ratios.ts 逐字一致）
-  CASE
-    WHEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) > 0
-    THEN ROUND((SUM(reported_claims) + SUM(fee_amount)) * 100.0 / SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)), 2)
-    ELSE NULL
-  END AS comprehensive_cost_ratio,
+  -- 综合费用率：注册表 comprehensive_expense_ratio 唯一事实源（49e3fd 比照 B310 消除硬编码 CASE 漂移，
+  --   与 cost-ratios.ts 同源；不在 SQL 内 ROUND，前端按 display.decimals 单次舍入）
+  ${getMetricSql('comprehensive_expense_ratio')},
   ${getMetricSql('earned_margin_amount')},
   ${getMetricSql('projected_margin_amount')}
 FROM policy_exposure

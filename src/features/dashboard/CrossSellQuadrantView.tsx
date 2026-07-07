@@ -1,6 +1,6 @@
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useMemo } from 'react';
 import type { EChartsOption } from 'echarts';
-import { echarts } from '../../shared/utils/echarts';
+import { EChartContainer, buildEmptyChartOption } from '../../widgets/charts/EChartContainer';
 import { formatCount, formatPercent } from '../../shared/utils/formatters';
 import { cardStyles, textStyles, colors, cn } from '../../shared/styles';
 import { useTheme } from '../../shared/theme';
@@ -191,8 +191,6 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
 }: CrossSellQuadrantViewProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstanceRef = useRef<ReturnType<typeof echarts.init> | null>(null);
 
   const points = useMemo(() => {
     if (rows.length === 0) return [];
@@ -245,45 +243,12 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
     };
   }, [points]);
 
-  useEffect(() => {
-    if (!chartRef.current) return;
-    if (!chartInstanceRef.current) {
-      chartInstanceRef.current = echarts.init(chartRef.current);
-    }
-    const chart = chartInstanceRef.current;
-    if (!chart) return;
-
+  const option = useMemo<EChartsOption>(() => {
     if (points.length === 0) {
-      chart.setOption({
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: { text: '暂无可用于四象限分析的数据', fill: colors.neutral[400], fontSize: 14 },
-        },
-      });
-      return;
+      return buildEmptyChartOption('暂无可用于四象限分析的数据') as EChartsOption;
     }
-
-    chart.setOption(buildChartOption(points, isDark), true);
-
-    const resizeObserver = new ResizeObserver(() => {
-      chart.resize();
-    });
-    if (chartRef.current) {
-      resizeObserver.observe(chartRef.current);
-    }
-    return () => {
-      resizeObserver.disconnect();
-    };
+    return buildChartOption(points, isDark);
   }, [points, isDark]);
-
-  useEffect(() => {
-    return () => {
-      chartInstanceRef.current?.dispose();
-      chartInstanceRef.current = null;
-    };
-  }, []);
 
   if (rows.length === 0) return null;
 
@@ -315,7 +280,7 @@ export const CrossSellQuadrantView = memo(function CrossSellQuadrantView({
           当前分析维度：{currentDimensionLabel}；车险件数。
         </p>
       </div>
-      <div ref={chartRef} className="h-[460px] w-full" />
+      <EChartContainer option={option} height={460} />
     </section>
   );
 });

@@ -46,7 +46,7 @@ export const agentToolRegistry = AgentToolDefinitionSchema.array().parse([
     endpoint: '/api/query/cost',
     params: { analysisType: 'comprehensiveCost' },
     capabilityId: 'comprehensive_cost_indicator_review',
-    metrics: ['comprehensive_cost_ratio', 'earned_claim_ratio', 'expense_ratio', 'variable_cost_ratio'],
+    metrics: ['comprehensive_expense_ratio', 'earned_claim_ratio', 'expense_ratio', 'variable_cost_ratio'],
     blockedInterpretations: ['承保利润', '财务综合成本率', '盈亏判断'],
     allowedInterpretations: ['项目已有综合费用/综合成本类经营指标审阅', '与赔付率、费用率、变动成本率进行口径对照'],
     note: '必须显示口径警示。',

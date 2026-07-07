@@ -70,7 +70,7 @@ export interface ComprehensiveCostData {
   /** 费用率(%) */
   expense_ratio: number | null;
   /** 综合费用率(%) */
-  comprehensive_cost_ratio: number | null;
+  comprehensive_expense_ratio: number | null;
 }
 
 /**

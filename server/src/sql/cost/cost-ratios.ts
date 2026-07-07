@@ -217,9 +217,8 @@ SELECT
   -- 综合费用率：公式取注册表 comprehensive_expense_ratio 唯一事实源（B310 消除硬编码 CASE 漂移；
   --   与同文件 expense_ratio 一致不在 SQL 内 ROUND，前端按 display.decimals 单次舍入）。
   --   fee_amount 经 Parquet 直查 SC 2,618,348 行 0 NULL，SUM(fee_amount)≡SUM(COALESCE(fee_amount,0)) 中性。
-  --   保留既有 comprehensive_cost_ratio 别名：下游消费面广（前端 5 处 + agent 注册表 + cost-cube），
-  --   别名分裂（vs 注册表 id）统一另立后续项，本 PR 只做公式去漂移。
-  ${getMetricSql('comprehensive_expense_ratio').replace('AS comprehensive_expense_ratio', 'AS comprehensive_cost_ratio')},
+  --   别名已统一为注册表 id（49e3fd：前端/agent/cube 全链路同批改名，消除别名分裂）。
+  ${getMetricSql('comprehensive_expense_ratio')},
 
   -- 满期边际贡献额（仅扣除变动成本）
   ${getMetricSql('earned_margin_amount')},

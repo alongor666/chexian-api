@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useMemo } from 'react';
 import type { EChartsOption } from 'echarts';
 import type { TimeView } from './LineChart';
-import { echarts } from '../../shared/utils/echarts';
+import { EChartContainer, buildEmptyChartOption } from './EChartContainer';
 import { formatPercent, formatPremiumWan, formatWanDirect } from '../../shared/utils/formatters';
 import type { EChartsParam } from '../../shared/types/echarts';
 import { cardStyles, cn } from '../../shared/styles';
@@ -52,37 +52,12 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<ReturnType<typeof echarts.init> | null>(null);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    if (!chartInstance.current) {
-      chartInstance.current = echarts.init(chartRef.current);
-    }
-
-    const chart = chartInstance.current;
-    if (!chart) return;
-
-    if (loading) {
-      chart.showLoading();
-      return;
-    }
-
-    chart.hideLoading();
-
+  const option = useMemo<EChartsOption>(() => {
     if (data.length === 0) {
-      chart.setOption({
+      return {
+        ...(buildEmptyChartOption('暂无数据') as EChartsOption),
         title: { text: title, left: 'center' },
-        graphic: {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: { text: '暂无数据', fontSize: 16, fill: '#999' },
-        },
-      });
-      return;
+      };
     }
 
     // 判断日期跨度是否超过 183 天
@@ -131,7 +106,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
       });
     }
 
-    const option: EChartsOption = {
+    return {
       title: { text: title, left: 'center' },
       tooltip: {
         ...theme.tooltipConfig,
@@ -313,30 +288,11 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
             { type: 'slider', start: 0, end: 100, height: 20 },
           ],
     };
-
-    chart.setOption(option, true);
-  }, [data, loading, title, height, timeView, startDate, endDate, isDark]);
-
-  useEffect(() => {
-    return () => {
-      chartInstance.current?.dispose();
-      chartInstance.current = null;
-    };
-  }, []);
-
-  // Handle resize
-  useEffect(() => {
-    const handleResize = () => {
-      chartInstance.current?.resize();
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [data, title, height, timeView, startDate, endDate, isDark]);
 
   return (
     <div className={cn(cardStyles.standard)}>
-      <div ref={chartRef} style={{ width: '100%', height: `${height}px` }} />
+      <EChartContainer option={option} loading={loading} height={height} />
     </div>
   );
 };

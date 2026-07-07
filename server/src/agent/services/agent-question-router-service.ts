@@ -158,7 +158,7 @@ export function routeAgentQuestion(input: RouteQuestionInput): RouteQuestionResu
       blocked: false,
       status: 'caution',
       matchedCapabilityId: 'comprehensive_cost_indicator_review',
-      recommendedMetrics: ['comprehensive_cost_ratio', 'variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio'],
+      recommendedMetrics: ['comprehensive_expense_ratio', 'variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio'],
       recommendedTools: ['cost.comprehensive_cost', 'cost.variable_cost', 'cost.claim_ratio', 'cost.expense_ratio'],
       warnings: ['综合成本率为模糊提法，只能作为项目已有经营指标审阅，不得解释为承保利润、财务综合成本率或盈亏判断。'],
       replacementSuggestions: ['改问变动成本率', '改问赔付率', '改问费用率', '项目已有 comprehensiveCost 历史指标审阅'],

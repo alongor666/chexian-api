@@ -44,7 +44,7 @@ export interface DisplayComprehensiveData {
   total_fee: string;
   earned_claim_ratio: string;
   expense_ratio: string;
-  comprehensive_cost_ratio: string;
+  comprehensive_expense_ratio: string;
 }
 
 /**
@@ -99,7 +99,7 @@ export function transformComprehensiveData(
     total_fee: formatPremiumWan(row.total_fee),
     earned_claim_ratio: formatPercent(row.earned_claim_ratio),
     expense_ratio: formatPercent(row.expense_ratio),
-    comprehensive_cost_ratio: formatPercent(row.comprehensive_cost_ratio),
+    comprehensive_expense_ratio: formatPercent(row.comprehensive_expense_ratio),
   }));
 }
 
