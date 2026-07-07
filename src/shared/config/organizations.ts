@@ -95,6 +95,56 @@ export interface UserPermission {
 }
 
 /**
+ * 快速切换用户条目（开发/演示用，无密码登录）
+ */
+export interface QuickLoginUser {
+  username: string;
+  displayName: string;
+  role: UserRole;
+}
+
+/**
+ * branchCode → 快速切换用户清单（侧边栏底部面板 / 登录页快捷入口）。
+ * SC 清单为改动前逐字节保留（字节安全）；SX 清单账号取自
+ * server/src/config/preset-users.ts 的 SX 段（sxAdmin + 11 经营单元账号）。
+ * 未知/缺省 branchCode 回落 SC。
+ *
+ * 每省只保留一个超管快捷入口（对称于 SC 只有 admin），SX 段另有的
+ * yangjie0621（第二个 branch_admin）有意不纳入本清单。
+ */
+export const QUICK_LOGIN_USERS_BY_BRANCH: Record<string, readonly QuickLoginUser[]> = {
+  SC: [
+    { username: 'admin', displayName: '系统管理员', role: UserRole.BRANCH_ADMIN },
+    { username: 'leshan', displayName: '乐山机构', role: UserRole.ORG_USER },
+    { username: 'tianfu', displayName: '天府机构', role: UserRole.ORG_USER },
+    { username: 'yibin', displayName: '宜宾机构', role: UserRole.ORG_USER },
+    { username: 'deyang', displayName: '德阳机构', role: UserRole.ORG_USER },
+    { username: 'xindu', displayName: '新都机构', role: UserRole.ORG_USER },
+    { username: 'wuhou', displayName: '武侯机构', role: UserRole.ORG_USER },
+    { username: 'luzhou', displayName: '泸州机构', role: UserRole.ORG_USER },
+    { username: 'zigong', displayName: '自贡机构', role: UserRole.ORG_USER },
+    { username: 'ziyang', displayName: '资阳机构', role: UserRole.ORG_USER },
+    { username: 'dazhou', displayName: '达州机构', role: UserRole.ORG_USER },
+    { username: 'qingyang', displayName: '青羊机构', role: UserRole.ORG_USER },
+    { username: 'gaoxin', displayName: '高新机构', role: UserRole.ORG_USER },
+  ],
+  SX: [
+    { username: 'sxAdmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN },
+    { username: 'sx_taiyuan1', displayName: '太原一部机构', role: UserRole.ORG_USER },
+    { username: 'sx_taiyuan2', displayName: '太原二部机构', role: UserRole.ORG_USER },
+    { username: 'sx_jdcszk', displayName: '经代、车商、重客机构', role: UserRole.ORG_USER },
+    { username: 'sx_datong', displayName: '大同机构', role: UserRole.ORG_USER },
+    { username: 'sx_yangquan', displayName: '阳泉机构', role: UserRole.ORG_USER },
+    { username: 'sx_changzhi', displayName: '长治机构', role: UserRole.ORG_USER },
+    { username: 'sx_jincheng', displayName: '晋城机构', role: UserRole.ORG_USER },
+    { username: 'sx_jinzhong', displayName: '晋中机构', role: UserRole.ORG_USER },
+    { username: 'sx_yuncheng', displayName: '运城机构', role: UserRole.ORG_USER },
+    { username: 'sx_linfen', displayName: '临汾机构', role: UserRole.ORG_USER },
+    { username: 'sx_lvliang', displayName: '吕梁机构', role: UserRole.ORG_USER },
+  ],
+};
+
+/**
  * 机构角色默认可访问路由（未单独配置 allowedRoutes 时生效）
  */
 export const ORG_USER_DEFAULT_ALLOWED_ROUTES: readonly string[] = [

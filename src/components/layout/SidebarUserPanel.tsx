@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { UserRole } from '../../shared/config/organizations';
+import { useBranch } from '../../shared/contexts/BranchContext';
+import { UserRole, QUICK_LOGIN_USERS_BY_BRANCH } from '../../shared/config/organizations';
 import { useSidebar } from './SidebarLayout';
 import { colorClasses } from '../../shared/styles';
 import {
@@ -31,6 +32,7 @@ export const SidebarUserPanel: React.FC = () => {
     isOrgUser,
   } = usePermission();
   const { collapsed, isMobile } = useSidebar();
+  const { effectiveBranch } = useBranch();
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -49,22 +51,14 @@ export const SidebarUserPanel: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  // 预定义用户列表
-  const quickUsers = [
-    { username: 'admin', displayName: '系统管理员', role: UserRole.BRANCH_ADMIN, icon: Shield },
-    { username: 'leshan', displayName: '乐山机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'tianfu', displayName: '天府机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'yibin', displayName: '宜宾机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'deyang', displayName: '德阳机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'xindu', displayName: '新都机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'wuhou', displayName: '武侯机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'luzhou', displayName: '泸州机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'zigong', displayName: '自贡机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'ziyang', displayName: '资阳机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'dazhou', displayName: '达州机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'qingyang', displayName: '青羊机构', role: UserRole.ORG_USER, icon: Building },
-    { username: 'gaoxin', displayName: '高新机构', role: UserRole.ORG_USER, icon: Building },
-  ];
+  // 快速切换用户列表：按有效省取（未知/缺省 branchCode 回落 SC，字节安全）
+  const quickUsers = useMemo(() => {
+    const users = QUICK_LOGIN_USERS_BY_BRANCH[effectiveBranch ?? 'SC'] ?? QUICK_LOGIN_USERS_BY_BRANCH.SC;
+    return users.map((u) => ({
+      ...u,
+      icon: u.role === UserRole.BRANCH_ADMIN ? Shield : Building,
+    }));
+  }, [effectiveBranch]);
 
   const handleLogin = (username: string) => {
     login(username);

@@ -3,6 +3,7 @@ import {
   ORGANIZATIONS,
   SX_ORGANIZATIONS,
   BRANCH_ORGANIZATIONS,
+  QUICK_LOGIN_USERS_BY_BRANCH,
   UserRole,
   getVisibleOrganizations,
   type UserPermission,
@@ -104,5 +105,32 @@ describe('getVisibleOrganizations — effectiveBranch 参数（超管切省联�
     const permission: UserPermission = { ...superAdmin, visibleBranches: undefined };
     const visible = getVisibleOrganizations(permission, 'ALL');
     expect(visible).toEqual(['全部', ...ORGANIZATIONS, ...SX_ORGANIZATIONS]);
+  });
+});
+
+describe('QUICK_LOGIN_USERS_BY_BRANCH — 快速切换用户按省（阶段3）', () => {
+  it('SC 清单与改动前逐字节一致（admin + 12 机构，字节安全）', () => {
+    const sc = QUICK_LOGIN_USERS_BY_BRANCH.SC;
+    expect(sc).toHaveLength(13);
+    expect(sc[0]).toEqual({ username: 'admin', displayName: '系统管理员', role: UserRole.BRANCH_ADMIN });
+    expect(sc.map((u) => u.username)).toEqual([
+      'admin', 'leshan', 'tianfu', 'yibin', 'deyang', 'xindu', 'wuhou',
+      'luzhou', 'zigong', 'ziyang', 'dazhou', 'qingyang', 'gaoxin',
+    ]);
+  });
+
+  it('SX 清单为 sxAdmin + 11 经营单元账号（回归前山西用户看到的是四川账号列表）', () => {
+    const sx = QUICK_LOGIN_USERS_BY_BRANCH.SX;
+    expect(sx).toHaveLength(12);
+    expect(sx[0]).toEqual({ username: 'sxAdmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN });
+    expect(sx.map((u) => u.username)).not.toContain('admin');
+    expect(sx.map((u) => u.username)).not.toContain('leshan');
+  });
+
+  it('SX 机构账号名与 SX_ORGANIZATIONS 机构清单一一对应', () => {
+    const sxOrgUserDisplayNames = QUICK_LOGIN_USERS_BY_BRANCH.SX
+      .filter((u) => u.role === UserRole.ORG_USER)
+      .map((u) => u.displayName.replace(/机构$/, ''));
+    expect(sxOrgUserDisplayNames).toEqual([...SX_ORGANIZATIONS]);
   });
 });
