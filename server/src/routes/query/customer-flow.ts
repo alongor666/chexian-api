@@ -7,6 +7,7 @@
  */
 
 import { Router } from 'express';
+import type { Request } from 'express';
 import { z } from 'zod';
 import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache, parseFiltersAndBuildWhere } from './shared.js';
 import {
@@ -27,6 +28,51 @@ export const filterSchema = z.object({
   year: z.coerce.number().int().min(2020).max(2030).optional(),
 });
 
+/**
+ * 共享 parser（parseFiltersAndBuildWhere）里 CustomerFlow 视图不支持的通用参数
+ * （BACKLOG 8f71c0 · 2026-06-27 山西 13 账号验证撞出，与省份无关）。
+ * CustomerFlow 是 loadCustomerFlow 的 10 列显式投影视图（duckdb-domain-loaders.ts），
+ * 不含 policy_date/salesman_name/renewal_mode/tonnage_segment/insurance_grade 及
+ * is_renewal 等 PolicyFact 其余列，共享 parser 按这些参数注入 WHERE 会触发
+ * DuckDB Binder Error → HTTP 400「列不存在：policy_date」（duckdb-error-classifier）。
+ */
+const FLOW_UNSUPPORTED_COMMON_PARAMS = [
+  'salesmanNames', 'salesmanName',
+  'renewalModes', 'tonnageSegments', 'insuranceGrades',
+  'isRenewal', 'isNewCar', 'isTransfer', 'isNev',
+  'isRenewable', 'isCrossSell', 'isCommercialInsure',
+  'fuelCategory', // 三个取值均依赖 is_nev/fuel_type 列（本视图无）
+] as const;
+
+/**
+ * 净化副本（与 cross-sell sanitizeAggQuery 同款模式，不修改 req.query）：
+ *   - startDate/endDate 保留，dateField 强制 'insurance_start_date'（本视图唯一日期列，
+ *     与本域 year 筛选同口径）—— 保留调用方「时间窗」意图，不静默丢弃，同时杜绝共享
+ *     parser 默认 policy_date 口径造成的 Binder Error；
+ *   - 视图不存在列的维度参数防御性剥离，不做语义映射；
+ *   - vehicleQuickFilter 仅保留只用 customer_category 的取值（home_car/motorcycle/rental），
+ *     其余取值依赖 tonnage_segment/vehicle_model（本视图无）→ 剥离。
+ *
+ * 🔒 RLS 不变量：净化只作用于用户 query 参数维度，不触碰 permissionFilter 通道——
+ * buildWhereFromFilterParams 把 requirePermissionFilter(req.permissionFilter) 独立 AND 到
+ * WHERE 尾部（filter-params.ts），org_level_3/branch_code/is_telemarketing 三个 RLS 列
+ * 本视图均真实存在且不在剥离清单内，权限隔离不受净化影响。
+ */
+export function sanitizeFlowQuery(query: Request['query']): Request['query'] {
+  const out = { ...query };
+  for (const key of FLOW_UNSUPPORTED_COMMON_PARAMS) {
+    delete out[key];
+  }
+  if (out.startDate !== undefined || out.endDate !== undefined || out.dateField !== undefined) {
+    out.dateField = 'insurance_start_date';
+  }
+  const vqf = out.vehicleQuickFilter;
+  if (vqf !== undefined && vqf !== 'home_car' && vqf !== 'motorcycle' && vqf !== 'rental') {
+    delete out.vehicleQuickFilter;
+  }
+  return out;
+}
+
 function parseFilters(query: Record<string, unknown>): CustomerFlowFilters {
   const result = filterSchema.safeParse(query);
   if (!result.success) throw new AppError(400, result.error.issues[0].message);
@@ -39,7 +85,7 @@ router.get(
   withRouteCache('customer-flow-summary'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const { whereClause } = parseFiltersAndBuildWhere(req, sanitizeFlowQuery(req.query));
     const data = await duckdbService.query(generateFlowSummaryQuery(filters, whereClause));
     res.json({ success: true, data: data[0] ?? {} });
   })
@@ -51,7 +97,7 @@ router.get(
   withRouteCache('customer-flow-inflow'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const { whereClause } = parseFiltersAndBuildWhere(req, sanitizeFlowQuery(req.query));
     const data = await duckdbService.query(generateInflowQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -63,7 +109,7 @@ router.get(
   withRouteCache('customer-flow-outflow'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const { whereClause } = parseFiltersAndBuildWhere(req, sanitizeFlowQuery(req.query));
     const data = await duckdbService.query(generateOutflowQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -75,7 +121,7 @@ router.get(
   withRouteCache('customer-flow-trend'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const { whereClause } = parseFiltersAndBuildWhere(req, sanitizeFlowQuery(req.query));
     const data = await duckdbService.query(generateFlowTrendQuery(filters, whereClause));
     res.json({ success: true, data });
   })
@@ -86,7 +132,7 @@ router.get(
   '/customer-flow/metadata',
   withRouteCache('customer-flow-metadata', 14_400_000),
   asyncHandler(async (req, res) => {
-    const { whereClause } = parseFiltersAndBuildWhere(req);
+    const { whereClause } = parseFiltersAndBuildWhere(req, sanitizeFlowQuery(req.query));
     const data = await duckdbService.query(generateFlowMetadataQuery(whereClause));
     res.json({ success: true, data: data[0] ?? {} });
   })

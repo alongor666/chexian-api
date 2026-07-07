@@ -97,8 +97,10 @@ const ORG_FILTER = [COMMON_PARAMS.orgNames, COMMON_PARAMS.customerCategories, CO
 
 // 报价转化域公共参数（routes/query/quote-conversion.ts quoteFilterSchema）
 const QUOTE_PARAMS: QueryRouteParam[] = [
-  { name: 'dateStart', type: 'date', description: '起保日期下限 YYYY-MM-DD' },
-  { name: 'dateEnd', type: 'date', description: '起保日期上限 YYYY-MM-DD' },
+  // 口径修正（8f71c0 architect 闸 P2）：SQL 实际按 quote_time（报价时间）过滤（sql/quote-conversion.ts
+  // buildWhere），非起保日期；通用参数 startDate/endDate 在本域被等价映射到 dateStart/dateEnd（同口径）。
+  { name: 'dateStart', type: 'date', description: '报价时间下限 YYYY-MM-DD（quote_time 口径；通用参数 startDate 在本域等价映射至此）' },
+  { name: 'dateEnd', type: 'date', description: '报价时间上限 YYYY-MM-DD（quote_time 口径；通用参数 endDate 在本域等价映射至此）' },
   { name: 'renewalType', type: 'string', description: '续转类型', enum: ['续保', '转保'] },
   { name: 'orgName', type: 'string', description: '三级机构名（受 dataScope 限制）' },
   { name: 'teamName', type: 'string', description: '销售团队名' },

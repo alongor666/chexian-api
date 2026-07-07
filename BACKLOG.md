@@ -18,6 +18,7 @@
 ---
 
 ## 📋 活跃任务速查（40 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（43 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -30,7 +31,7 @@
 - 2026-06-27-claude-e96d85 `PARTIAL` — 治理工程二·机构省份元数据单一事实源(含山西在线bug)
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 
-**P2（20 项）**
+**P2（22 项）**
 
 - B314 — data-sources.json 契约/状态拆分（接续 B313）
 - B304 `PARTIAL` — earned-premium 双口径未文档化
@@ -52,6 +53,8 @@
 - 2026-07-06-claude-151236 — governance 增加双锁一致性闸
 - 2026-07-06-claude-286f55 — 产品决策
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
+- 2026-07-07-claude-6d1dfe — route-param-contracts 对 /quote-conversion/* 
+- 2026-07-07-claude-dce69c — 净化剥离中央化
 
 **P3（14 项）**
 
@@ -115,4 +118,6 @@
 | 2026-07-06-claude-151236 | 2026-07-06 | 部署链 | @claude | governance 增加双锁一致性闸:server/package.json 的语义范围必须被 server/package-lock.json 锁定版本满足(npm ci 的锁漂移在 CI 早于部署暴露)。根因:#942 重建 bun.lock/server/bun.lock 但漏 npm 锁,main 部署连败三次全靠回滚兜底(runs 28784860923/28785804360/c59a5058)。双锁体系(bun 本地/CI + npm VPS 部署)任一侧重建必须联动另一侧 | P2 | PROPOSED | N/A | server/package-lock.json,scripts/check-governance.mjs |  |
 | 2026-07-06-claude-286f55 | 2026-07-06 | 安全治理 | @claude | 产品决策:综合分析视图开放度与 cost 功能开关互相矛盾——生产 .env.production 的 VITE_ENABLE_COMPREHENSIVE_ANALYSIS='true' + server/ecosystem.config.cjs 的 ENABLE_COMPREHENSIVE_ANALYSIS='true' 让综合分析对全员开放,specialFeatures 'cost' 开关实际零效力(后端闸已随权限治理 PR 落地但被 env 旁路)。需业务拍板:要么撤 env 全开、让 cost 开关真正生效(前后端两处 env 必须同步撤);要么承认全员开放、把用户面 cost 开关下掉避免安全幻觉 | P2 | PROPOSED | N/A | server/src/middleware/special-feature.ts,server/ecosystem.config.cjs,.env.production | check-merged-drift 命中 c59a5058/37a3c234(PR #943) 系误报：#943 落了后端闸但本项是其暴露的 env 旁路产品决策——origin/main 核实 ecosystem.config.cjs 仍 ENABLE_COMPREHENSIVE_ANALYSIS='true'，矛盾未裁决。保持 PROPOSED（待业务拍板） |
 | 2026-07-06-claude-de1e40 | 2026-07-06 | 安全治理 | @claude | org_user 路由白名单扩展到非 query 域(/api/data、/api/ai、/api/agent、/api/copilot 等)需改为按域显式声明是否纳管,替代 mountedOutsideQuery 一刀切跳过。⚠️ 242c07 曾因盲目套白名单致 agent 诊断路由误伤 403,扩域必须逐域回归。现状数据层 RLS 仍生效,仅功能边界缺失,非紧急 | P2 | PROPOSED | N/A | server/src/middleware/permission.ts:186-201 | check-merged-drift 命中 c59a5058/37a3c234(PR #943) 系误报：本项是 #943 会话立的 follow-up（按域显式声明纳管），origin/main 核实 permission.ts mountedOutsideQuery 一刀切跳过仍在（2 处命中），扩域未实施。保持 PROPOSED |
+| 2026-07-07-claude-6d1dfe | 2026-07-07 | 架构治理/契约 | @claude | route-param-contracts 对 /quote-conversion/* 与 /customer-flow/* 未声明 useCommon 但 handler 实际消费 commonFilterSchema（净化子集），契约与运行时偏差且 governance 对账单向不拦（8f71c0 architect 闸 P1-2）。需扩展契约表达「useCommon 但排除某些 key」语义并补齐两域声明，否则 MCP/CLI tool description 失真。 | P2 | PROPOSED | N/A | server/src/config/route-param-contracts.ts |  |
 | 2026-07-07-claude-beb706 | 2026-07-07 | 数据管道 | @claude | 热重载（同进程 ETL）后 CrossSellDailyAgg 物化表不自动重建：LazyDomainRegistry 对已 loaded 域 no-op，invalidateCache 只清 SQL 缓存不重建物化表——交叉销售数据可能滞后于 PolicyFact 直到下次进程重启。系 294022 修复（PR #952）architect 闸 NOTES-3 发现的修复前既有行为，非回归；候选修法=onDataVersionChange 时对已 loaded 的 CrossSell 走 lazyRegistry.reload | P3 | PROPOSED | N/A | server/src/services/lazy-domain-registry.ts,server/src/services/data-bootstrapper.ts |  |
+| 2026-07-07-claude-dce69c | 2026-07-07 | 架构治理/多省 | @claude | 净化剥离中央化：域→支持列白名单上收 route-param-contracts.ts，共享 parser 按白名单自动过滤（8f71c0 architect 闸 P1-1）。现 cross-sell/quote-conversion/customer-flow 三处路由层各自维护剥离清单，与视图定义（duckdb-domain-loaders.ts）无编译期关联，第四个域出现同类 Binder Error 会重演人肉排查。 | P2 | PROPOSED | N/A | server/src/config/route-param-contracts.ts |  |
