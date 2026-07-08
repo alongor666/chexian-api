@@ -13,6 +13,10 @@ import {
   getMonthEndDate,
 } from '../sql-builder.js';
 import { SURCHARGE_RATE } from '../../config/fixed-cost-params.js';
+import {
+  EARNED_PREMIUM_LINE_FACTORS,
+  LINE_FACTOR_CASE_INLINE_SQL,
+} from '../../config/earned-premium-factors.js';
 import type { NewEarnedPremiumConfig } from './shared.js';
 
 // ==================== 2025年保单月度已赚 ====================
@@ -52,9 +56,9 @@ WITH policy_base AS (
     CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
     -- 险类系数 α
     CASE insurance_type
-      WHEN '交强险' THEN 0.82
-      WHEN '商业保险' THEN 0.94
-      ELSE 0.90
+      WHEN '交强险' THEN ${EARNED_PREMIUM_LINE_FACTORS.compulsory}
+      WHEN '商业保险' THEN ${EARNED_PREMIUM_LINE_FACTORS.commercial}
+      ELSE ${EARNED_PREMIUM_LINE_FACTORS.other}
     END AS line_factor,
     insurance_start_date
   FROM PolicyFact
@@ -134,9 +138,9 @@ WITH policy_base AS (
     CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
     -- 险类系数 α
     CASE insurance_type
-      WHEN '交强险' THEN 0.82
-      WHEN '商业保险' THEN 0.94
-      ELSE 0.90
+      WHEN '交强险' THEN ${EARNED_PREMIUM_LINE_FACTORS.compulsory}
+      WHEN '商业保险' THEN ${EARNED_PREMIUM_LINE_FACTORS.commercial}
+      ELSE ${EARNED_PREMIUM_LINE_FACTORS.other}
     END AS line_factor,
     insurance_start_date
   FROM PolicyFact
@@ -204,7 +208,7 @@ export function generateNewEarnedPremiumSummaryQuery(config: NewEarnedPremiumCon
           SELECT COALESCE(SUM(
             -- 累计已赚保费（到统计月末）
             (premium * (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END) *
-             (CASE insurance_type WHEN '交强险' THEN 0.82 WHEN '商业保险' THEN 0.94 ELSE 0.90 END) +
+             (${LINE_FACTOR_CASE_INLINE_SQL}) +
              premium * (1 - (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END)) *
              LEAST(
                GREATEST(DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1, 0),
@@ -213,7 +217,7 @@ export function generateNewEarnedPremiumSummaryQuery(config: NewEarnedPremiumCon
             -
             -- 减去截至窗口前一天的已赚保费
             (premium * (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END) *
-             (CASE insurance_type WHEN '交强险' THEN 0.82 WHEN '商业保险' THEN 0.94 ELSE 0.90 END) *
+             (${LINE_FACTOR_CASE_INLINE_SQL}) *
              (CASE WHEN CAST(insurance_start_date AS DATE) <= DATE '${windowPrevEnd}' THEN 1 ELSE 0 END) +
              premium * (1 - (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END)) *
              LEAST(
@@ -235,7 +239,7 @@ export function generateNewEarnedPremiumSummaryQuery(config: NewEarnedPremiumCon
               WHEN CAST(insurance_start_date AS DATE) <= DATE '${statMonthEnd}'
               THEN
                 premium * (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END) *
-                (CASE insurance_type WHEN '交强险' THEN 0.82 WHEN '商业保险' THEN 0.94 ELSE 0.90 END) +
+                (${LINE_FACTOR_CASE_INLINE_SQL}) +
                 premium * (1 - (CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END)) *
                 LEAST(
                   GREATEST(DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1, 0),

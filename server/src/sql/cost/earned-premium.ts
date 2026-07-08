@@ -24,6 +24,7 @@
 
 import { formatDate } from '../../utils/date.js';
 import { escapeSqlLiteral } from '../../utils/security.js';
+import { EARNED_PREMIUM_LINE_FACTORS } from '../../config/earned-premium-factors.js';
 import { generateEarnedPremiumPeriodQuery } from '../sql-builder.js';
 import type { EarnedPremiumConfig, NewEarnedPremiumConfig } from './shared.js';
 
@@ -94,9 +95,9 @@ WITH policy_earned AS (
     CASE WHEN premium <> 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
     -- 险类系数 α
     CASE insurance_type
-      WHEN '交强险' THEN 0.82
-      WHEN '商业保险' THEN 0.94
-      ELSE 0.90
+      WHEN '交强险' THEN ${EARNED_PREMIUM_LINE_FACTORS.compulsory}
+      WHEN '商业保险' THEN ${EARNED_PREMIUM_LINE_FACTORS.commercial}
+      ELSE ${EARNED_PREMIUM_LINE_FACTORS.other}
     END AS line_factor,
     -- 起保日是否在窗口内（用于首日费用计算）
     CASE
@@ -173,9 +174,9 @@ WITH policy_earned AS (
     CASE WHEN premium <> 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
     -- 险类系数 α
     CASE insurance_type
-      WHEN '交强险' THEN 0.82
-      WHEN '商业保险' THEN 0.94
-      ELSE 0.90
+      WHEN '交强险' THEN ${EARNED_PREMIUM_LINE_FACTORS.compulsory}
+      WHEN '商业保险' THEN ${EARNED_PREMIUM_LINE_FACTORS.commercial}
+      ELSE ${EARNED_PREMIUM_LINE_FACTORS.other}
     END AS line_factor,
     -- 起保日是否在窗口内
     CASE

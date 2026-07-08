@@ -1,10 +1,15 @@
 /**
  * 驾意险推介率状态规则（统一单一来源）
  *
- * 说明：
- * - 主全阈值：80/75/70
- * - 交三阈值：70/65/60
- * - 四象限阈值：主全 75，交三 60
+ * 阈值事实源：指标注册表 server/src/config/metric-registry/categories/cross-sell.ts
+ *   - cross_sell_zhuquan_rate.thresholds（80/75/70，lower_worse）
+ *   - cross_sell_jiaosan_rate.thresholds（70/65/60，lower_worse）
+ *
+ * 前端因分层边界（.claude/rules/architecture.md 规则(c)：禁 import server/src）
+ * 持有下方镜像常量，由 tests/cross-sell-rate-status.test.ts 的「注册表同步」用例
+ * 锁定一致性——改阈值必须先改注册表（bump version + changelog），再同步此处镜像。
+ *
+ * 四象限分界：主全取 warn(75)，交三取 danger(60)。
  */
 
 import { colorClasses, colors } from '../../shared/styles';
@@ -17,21 +22,31 @@ export type QuadrantId =
   | 'main_excellent_jiaosan_weak'
   | 'main_weak_jiaosan_excellent';
 
-export const MAIN_FULL_THRESHOLD = 75;
-export const JIAOSAN_THRESHOLD = 60;
+/** 镜像：注册表 cross_sell_zhuquan_rate.thresholds（lower_worse） */
+export const ZHUQUAN_RATE_THRESHOLDS = { notice: 80, warn: 75, danger: 70 } as const;
+/** 镜像：注册表 cross_sell_jiaosan_rate.thresholds（lower_worse） */
+export const JIAOSAN_RATE_THRESHOLDS = { notice: 70, warn: 65, danger: 60 } as const;
 
-export function getZhuquanStatus(rate: number): RateStatus {
-  if (rate >= 80) return 'excellent';
-  if (rate >= 75) return 'healthy';
-  if (rate >= 70) return 'abnormal';
+export const MAIN_FULL_THRESHOLD = ZHUQUAN_RATE_THRESHOLDS.warn;
+export const JIAOSAN_THRESHOLD = JIAOSAN_RATE_THRESHOLDS.danger;
+
+/** lower_worse 四级分档（与注册表 MetricThresholds 语义一致） */
+function classifyLowerWorse(
+  value: number,
+  thresholds: { notice: number; warn: number; danger: number }
+): RateStatus {
+  if (value >= thresholds.notice) return 'excellent';
+  if (value >= thresholds.warn) return 'healthy';
+  if (value >= thresholds.danger) return 'abnormal';
   return 'danger';
 }
 
+export function getZhuquanStatus(rate: number): RateStatus {
+  return classifyLowerWorse(rate, ZHUQUAN_RATE_THRESHOLDS);
+}
+
 export function getJiaosanStatus(rate: number): RateStatus {
-  if (rate >= 70) return 'excellent';
-  if (rate >= 65) return 'healthy';
-  if (rate >= 60) return 'abnormal';
-  return 'danger';
+  return classifyLowerWorse(rate, JIAOSAN_RATE_THRESHOLDS);
 }
 
 export function getRateStatusLabel(status: RateStatus): string {
@@ -60,18 +75,20 @@ export function getRateClassByField(field: CrossSellRateField, rate: number): st
     : getRateStatusClass(getJiaosanStatus(rate));
 }
 
+/**
+ * 驾意险单均保费阈值（元）——注册表暂无「按险别组合的驾意险单均保费」原子指标，
+ * 无法挂靠 thresholds；先集中在此单一来源并显式命名，注册表化缺口已登记 BACKLOG
+ * 2026-07-08-claude-fd244c。改值须同步 tests/cross-sell-rate-status.test.ts。
+ */
+export const ZHUQUAN_AVG_PREMIUM_THRESHOLDS = { notice: 333, warn: 300, danger: 260 } as const;
+export const JIAOSAN_AVG_PREMIUM_THRESHOLDS = { notice: 288, warn: 200, danger: 150 } as const;
+
 export function getAvgPremiumZhuquanStatus(premium: number): RateStatus {
-  if (premium >= 333) return 'excellent';
-  if (premium >= 300) return 'healthy';
-  if (premium >= 260) return 'abnormal';
-  return 'danger';
+  return classifyLowerWorse(premium, ZHUQUAN_AVG_PREMIUM_THRESHOLDS);
 }
 
 export function getAvgPremiumJiaosanStatus(premium: number): RateStatus {
-  if (premium >= 288) return 'excellent';
-  if (premium >= 200) return 'healthy';
-  if (premium >= 150) return 'abnormal';
-  return 'danger';
+  return classifyLowerWorse(premium, JIAOSAN_AVG_PREMIUM_THRESHOLDS);
 }
 
 export function getAvgPremiumClassByCoverage(coverageKey: string, premium: number): string {

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { colorClasses, inputStyles, cn } from '../../../shared/styles';
 import { CollapsibleFilterSection } from '@/shared/components/filters/CollapsibleFilterSection';
+import { useGlobalFilters } from '../../../shared/contexts/FilterContext';
 import type { QuoteFilters } from '../types';
 import {
   CAT_NON_COMMERCIAL_PERSONAL,
@@ -16,8 +17,14 @@ interface Props {
   onChange: (filters: QuoteFilters) => void;
 }
 
+/**
+ * 机构兜底名单 —— 仅在 /api/filters/options 尚未返回（或返回空）时使用；
+ * 常规路径机构选项与全局筛选器同源（FilterContext.filterOptions.org_level_3），
+ * 新增/调整机构无需改代码（2026-07-07 硬编码专项：原为写死 13 机构，跨省/新机构即过期）。
+ */
+const FALLBACK_ORGS = ['天府', '高新', '青羊', '宜宾', '新都', '德阳', '武侯', '资阳', '泸州', '乐山', '自贡', '达州', '本部'];
+
 const FILTER_OPTIONS = {
-  orgs: ['天府', '高新', '青羊', '宜宾', '新都', '德阳', '武侯', '资阳', '泸州', '乐山', '自贡', '达州', '本部'],
   customerCategories: [
     CAT_NON_COMMERCIAL_PERSONAL,
     CAT_NON_COMMERCIAL_TRUCK,
@@ -80,6 +87,11 @@ function SelectField<T extends string>({ label, value, placeholder, options, onC
 
 export function GlobalFilters({ filters, onChange }: Props) {
   const [quickKey, setQuickKey] = useState<string | null>(null);
+  const { filterOptions } = useGlobalFilters();
+  const orgOptions = useMemo(() => {
+    const orgs = (filterOptions.org_level_3 ?? []).map((option) => option.value);
+    return orgs.length > 0 ? orgs : FALLBACK_ORGS;
+  }, [filterOptions.org_level_3]);
   const update = (patch: Partial<QuoteFilters>) => {
     setQuickKey(null);
     onChange({ ...filters, ...patch });
@@ -147,7 +159,7 @@ export function GlobalFilters({ filters, onChange }: Props) {
           label="机构"
           value={filters.orgName ?? ''}
           placeholder="全部机构"
-          options={FILTER_OPTIONS.orgs}
+          options={orgOptions}
           onChange={(orgName) => update({ orgName })}
         />
         <SelectField

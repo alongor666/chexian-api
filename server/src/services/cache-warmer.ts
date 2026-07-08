@@ -420,8 +420,8 @@ export class CacheWarmer {
                 logger.warn('[CacheWarmer] No data found for the year, stopping warming.');
                 return;
             }
-            // DuckDB DATE 格式可能为 YYYY-MM-DD
-            const maxDate = typeof maxDateRaw === 'string' ? maxDateRaw.split(' ')[0] : '2026-12-31';
+            // DuckDB DATE 格式可能为 YYYY-MM-DD；非字符串时兜底为 dataYear 年末（原硬编码 2026-12-31 跨年即失效）
+            const maxDate = typeof maxDateRaw === 'string' ? maxDateRaw.split(' ')[0] : `${dataYear}-12-31`;
             const startDate = `${dataYear}-01-01`;
 
             logger.info(`[CacheWarmer] Deduced default date range: ${startDate} to ${maxDate}`);

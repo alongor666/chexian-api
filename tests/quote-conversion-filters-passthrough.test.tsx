@@ -19,6 +19,13 @@ vi.mock('@/shared/theme', () => ({
   useTheme: () => ({ resolvedTheme: 'light' }),
 }));
 
+// GlobalFilters 机构选项与全局筛选器同源（FilterContext），测试无 Provider 树，mock 之
+vi.mock('../src/shared/contexts/FilterContext', () => ({
+  useGlobalFilters: () => ({
+    filterOptions: { org_level_3: [] },
+  }),
+}));
+
 const mockUseQuoteKpi = vi.fn();
 const mockUseQuoteFunnel = vi.fn();
 const mockUseQuoteTrend = vi.fn();

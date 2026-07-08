@@ -5,10 +5,31 @@ import {
   getRateClassByField,
   getRateStatusLabel,
   getZhuquanStatus,
+  JIAOSAN_RATE_THRESHOLDS,
+  JIAOSAN_THRESHOLD,
+  MAIN_FULL_THRESHOLD,
   QUADRANT_META,
+  ZHUQUAN_RATE_THRESHOLDS,
 } from '../src/features/dashboard/crossSellRateStatus';
+import { getMetricOrThrow } from '../server/src/config/metric-registry/index.js';
 
 describe('cross-sell rate status rules', () => {
+  it('前端阈值镜像必须与指标注册表 thresholds 同步（红线：阈值事实源在注册表）', () => {
+    const zhuquan = getMetricOrThrow('cross_sell_zhuquan_rate').thresholds;
+    const jiaosan = getMetricOrThrow('cross_sell_jiaosan_rate').thresholds;
+
+    expect(zhuquan?.direction).toBe('lower_worse');
+    expect(jiaosan?.direction).toBe('lower_worse');
+    expect({ notice: zhuquan?.notice, warn: zhuquan?.warn, danger: zhuquan?.danger })
+      .toEqual(ZHUQUAN_RATE_THRESHOLDS);
+    expect({ notice: jiaosan?.notice, warn: jiaosan?.warn, danger: jiaosan?.danger })
+      .toEqual(JIAOSAN_RATE_THRESHOLDS);
+
+    // 四象限分界派生关系：主全取 warn，交三取 danger
+    expect(MAIN_FULL_THRESHOLD).toBe(zhuquan?.warn);
+    expect(JIAOSAN_THRESHOLD).toBe(jiaosan?.danger);
+  });
+
   it('should classify zhuquan thresholds correctly', () => {
     expect(getZhuquanStatus(80)).toBe('excellent');
     expect(getZhuquanStatus(75)).toBe('healthy');

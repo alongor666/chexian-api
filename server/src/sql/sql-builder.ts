@@ -7,8 +7,10 @@
  * 设计原则：
  * - 不替代现有 SQL 生成器，而是作为底层工具被它们调用
  * - 不做值转义（调用方自行负责安全）
- * - 保持轻量，无外部依赖
+ * - 保持轻量，无 npm 外部依赖（仅引用内部 config 常量作为口径事实源）
  */
+
+import { EARNED_PREMIUM_LINE_FACTORS } from '../config/earned-premium-factors.js';
 
 /**
  * 流式 SQL 查询构建器
@@ -358,9 +360,9 @@ WITH policy_base AS (
     CASE WHEN premium > 0 THEN COALESCE(fee_amount, 0) / premium ELSE 0 END AS fee_rate,
     -- 险类系数 α
     CASE insurance_type
-      WHEN '交强险' THEN 0.82
-      WHEN '商业保险' THEN 0.94
-      ELSE 0.90
+      WHEN '交强险' THEN ${EARNED_PREMIUM_LINE_FACTORS.compulsory}
+      WHEN '商业保险' THEN ${EARNED_PREMIUM_LINE_FACTORS.commercial}
+      ELSE ${EARNED_PREMIUM_LINE_FACTORS.other}
     END AS line_factor,
     insurance_start_date
   FROM PolicyFact
