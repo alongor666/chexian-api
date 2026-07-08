@@ -60,6 +60,7 @@ import {
 } from './lib/source-file-routing.mjs';
 // 多省 Bug 1：merge_parquet.py 参数构造纯函数（branchCode 经 ctx 透传，锁死 --declared-branch）
 import { buildMergeParquetArgs } from './lib/merge-parquet-args.mjs';
+import { readBranchOrgUnits } from './lib/period-trend-orgs.mjs';
 // 多省 B3 防重复：区间覆盖归档纯函数（被新全量区间完全覆盖的旧文件归档，仅同品类互斥）
 import {
   parseRangePrefix,
@@ -1009,7 +1010,10 @@ function runStrategyMultiMerge(ctx) {
 }
 
 // ETL 完成后调用 diagnose-period-trend skill，生成短中长期对照 HTML 报告
-// 失败仅 console.warn 不阻塞 ETL；HTML 写入 <project_root>/public/reports/diagnose-period-trend/<cutoff>.html
+// 失败仅 console.warn 不阻塞 ETL；产物：
+//   省级   → <project_root>/public/reports/diagnose-period-trend/<cutoff>-*.html
+//   机构级 → …/diagnose-period-trend/orgs/<branch>/<org>/<cutoff>-*.html（B004）
+// 机构清单 SSOT = config/branch-org-mapping/<branch>.json 的 units（缺失则告警跳过机构级）
 function runPeriodTrendReport(scriptDir, python) {
   const skillCli = join(homedir(), '.claude/skills/diagnose-period-trend/lib/cli.py');
   if (!existsSync(skillCli)) {
@@ -1018,23 +1022,50 @@ function runPeriodTrendReport(scriptDir, python) {
   }
   const projectRoot = dirname(scriptDir);
   log('cyan', '\n═══ 9. 短中长期对照报告（diagnose-period-trend skill）═══\n');
-  const result = spawnSync(
-    python,
-    [skillCli, '--view', 'all', '--project-root', projectRoot],
-    {
-      stdio: 'inherit',
-      cwd: projectRoot,
-      env: process.env,
-      timeout: 10 * 60 * 1000,
-      windowsHide: true,
+  const runOnce = (extraArgs, label) => {
+    const result = spawnSync(
+      python,
+      [skillCli, '--view', 'all', '--project-root', projectRoot, ...extraArgs],
+      {
+        stdio: 'inherit',
+        cwd: projectRoot,
+        env: process.env,
+        timeout: 10 * 60 * 1000,
+        windowsHide: true,
+      }
+    );
+    if (result.status !== 0) {
+      console.warn(`[ETL] 短中长期对照报告（${label}）生成失败（不阻塞 ETL），exit=${result.status}`);
+      if (result.error) console.warn(`        ${result.error.message}`);
+      return false;
     }
-  );
-  if (result.status !== 0) {
-    console.warn(`[ETL] 短中长期对照报告生成失败（不阻塞 ETL），exit=${result.status}`);
-    if (result.error) console.warn(`        ${result.error.message}`);
+    return true;
+  };
+
+  if (runOnce([], '省级')) {
+    log('green', '✅ 短中长期对照报告（省级）已生成');
+  }
+
+  // B004 机构级：按 branch-org-mapping/<branch>.json units 循环产出 orgs/<branch>/<org>/
+  const branchCode = resolveEnvBranchCode('runPeriodTrendReport');
+  let units;
+  try {
+    units = readBranchOrgUnits(join(scriptDir, 'config'), branchCode);
+  } catch (e) {
+    console.warn(`[ETL] 机构级短中长期报告跳过：机构清单 SSOT 异常 — ${e.message}`);
     return;
   }
-  log('green', '✅ 短中长期对照报告已生成');
+  if (units === null) {
+    console.warn(`[ETL] 机构级短中长期报告跳过：机构清单 SSOT 不存在（数据管理/config/branch-org-mapping/${branchCode}.json）`);
+    return;
+  }
+  log('cyan', `[ETL] 机构级短中长期报告：${branchCode} 共 ${units.length} 个机构（orgs/${branchCode}/<机构>/）`);
+  let orgOk = 0;
+  for (const org of units) {
+    if (runOnce(['--org', org, '--branch', branchCode], `机构 ${org}`)) orgOk++;
+  }
+  const level = orgOk === units.length ? 'green' : 'yellow';
+  log(level, `${orgOk === units.length ? '✅' : '⚠'} 机构级短中长期对照报告：${orgOk}/${units.length} 个机构成功`);
 }
 
 async function syncToVps(scriptDir) {
