@@ -218,6 +218,7 @@ src/features/*                                    # 功能模块 UI 渲染
 | `env.ts` | 环境变量集中管理（6 分组，启动时校验） |
 | `api-routes.ts` | API 路由路径常量（5 组，前后端一致） |
 | `paths.ts` | 文件路径配置 |
+| `earned-premium-factors.ts` | 已赚保费险类系数 α 唯一事实源（0.82/0.94/0.90，SQL 生成器共享，2026-07 硬编码专项收口） |
 | `preset-users.ts` | 预设用户凭据 |
 
 #### 中间件 (`server/src/middleware/`)

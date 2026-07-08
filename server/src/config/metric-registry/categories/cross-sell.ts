@@ -102,7 +102,7 @@ export const crossSellMetrics: readonly MetricDefinition[] = [
     id: 'cross_sell_jiaosan_rate',
     timeWindow: 'any',
     additive: false,
-    version: '1.0.0',
+    version: '1.1.0',
     name: '交三推介率',
     category: 'cross_sell',
     tags: ['cross_sell'],
@@ -133,14 +133,31 @@ export const crossSellMetrics: readonly MetricDefinition[] = [
         assertions: { jiaosan_rate: { op: 'gte', value: 0 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 cross-sell.ts 迁移' }],
+    thresholds: {
+      direction: 'lower_worse',
+      notice: 70,
+      warn: 65,
+      danger: 60,
+      unit: '%',
+      source: '业务经验阈值上收（原 src/features/dashboard/crossSellRateStatus.ts 前端硬编码，2026-07-07 注册表化）',
+    },
+    changelog: [
+      {
+        version: '1.1.0',
+        date: '2026-07-07',
+        changes:
+          '新增四级亮灯阈值（70/65/60，lower_worse）：原前端 crossSellRateStatus.ts 硬编码阈值上收注册表为事实源，' +
+          '前端保留镜像常量并由 tests/cross-sell-rate-status.test.ts 同步用例锁定。公式无变化。',
+      },
+      { version: '1.0.0', date: '2026-03-27', changes: '从 cross-sell.ts 迁移' },
+    ],
   },
 
   {
     id: 'cross_sell_zhuquan_rate',
     timeWindow: 'any',
     additive: false,
-    version: '1.0.0',
+    version: '1.1.0',
     name: '主全推介率',
     category: 'cross_sell',
     tags: ['cross_sell'],
@@ -171,6 +188,23 @@ export const crossSellMetrics: readonly MetricDefinition[] = [
         assertions: { zhuquan_rate: { op: 'gte', value: 0 } },
       },
     ],
-    changelog: [{ version: '1.0.0', date: '2026-03-27', changes: '从 cross-sell.ts 迁移' }],
+    thresholds: {
+      direction: 'lower_worse',
+      notice: 80,
+      warn: 75,
+      danger: 70,
+      unit: '%',
+      source: '业务经验阈值上收（原 src/features/dashboard/crossSellRateStatus.ts 前端硬编码，2026-07-07 注册表化）',
+    },
+    changelog: [
+      {
+        version: '1.1.0',
+        date: '2026-07-07',
+        changes:
+          '新增四级亮灯阈值（80/75/70，lower_worse）：原前端 crossSellRateStatus.ts 硬编码阈值上收注册表为事实源，' +
+          '前端保留镜像常量并由 tests/cross-sell-rate-status.test.ts 同步用例锁定。公式无变化。',
+      },
+      { version: '1.0.0', date: '2026-03-27', changes: '从 cross-sell.ts 迁移' },
+    ],
   },
 ];

@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（38 项 · 数据截至 2026-07-07 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（39 项 · 数据截至 2026-07-08 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -27,7 +27,7 @@
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 
-**P2（19 项）**
+**P2（20 项）**
 
 - B304 `PARTIAL` — earned-premium 双口径未文档化
 - B306 — DuckDB 性能高危三件套
@@ -48,6 +48,7 @@
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-07-claude-6d1dfe — route-param-contracts 对 /quote-conversion/* 
 - 2026-07-07-claude-dce69c — 净化剥离中央化
+- 2026-07-08-claude-fd244c — [硬编码专项遗留]已赚保费月度明细模块年份深度耦合
 
 **P3（16 项）**
 
@@ -112,3 +113,4 @@
 | 2026-07-07-claude-dce69c | 2026-07-07 | 架构治理/多省 | @claude | 净化剥离中央化：域→支持列白名单上收 route-param-contracts.ts，共享 parser 按白名单自动过滤（8f71c0 architect 闸 P1-1）。现 cross-sell/quote-conversion/customer-flow 三处路由层各自维护剥离清单，与视图定义（duckdb-domain-loaders.ts）无编译期关联，第四个域出现同类 Binder Error 会重演人肉排查。 | P2 | PROPOSED | N/A | server/src/config/route-param-contracts.ts |  |
 | 2026-07-07-claude-e80304 | 2026-07-07 | 架构治理/多省 | @claude | 前后端 BRANCH 映射镜像目前仅靠人工核对一致，无自动化 governance 闸：src/shared/utils/branchDisplay.ts 的 BRANCH_LABELS ↔ server/src/config/branch-names.ts 的 BRANCH_NAMES；src/shared/config/organizations.ts 的 SX_ORGANIZATIONS/BRANCH_ORGANIZATIONS ↔ server/src/services/permission.ts 的同名常量。当前（2026-07-07，工程二阶段2/3/4 收尾核实）两组常量逐字节一致，无漂移。建议参照既有『能力矩阵镜像』闸（checkFilterCapabilityMirror，用 BEGIN/END 锚点比对两文件文本）的模式，给这两组 BRANCH 映射也加锚点+governance 检查，防止未来任一端修改（如新增第三省）漏改另一端。工作量：4 个文件加锚点注释 + 新增 1 个 governance 检查函数，中等规模，独立 PR 更合适 | P3 | PROPOSED | N/A | scripts/check-governance.mjs |  |
 | 2026-07-07-claude-f23ffc | 2026-07-07 | 数据口径/理赔地理 | @claude | SC 车牌归属地判定统一改造为 JOIN PlateRegionMap（与 SX 同路径），消除维护两份车牌前缀映射（SC_PLATE_CITY_CASE/SC_PLATE_HOME_CITY_CASE 硬编码 CASE + PlateRegionMap 权威维表）的漂移风险。PR #971（d3ef27）修复错位缺陷时已评估该方案：JOIN 路径对自治州名做 regexp_replace(city,'(市\|自治州\|地区\|盟)$','') 只剥离行政区划后缀，会把「阿坝藏族羌族自治州」等输出为「阿坝藏族羌族」（保留民族全称），与现有硬编码 CASE 的短名输出「阿坝」不一致——这是超出错位修复范围的格式变更，需先与业务确认统一后的自治州显示格式（保留短名 or 采用长名），确认后再将 SC 从 PLATE_GEO_PROVINCES_BY_BRANCH 的 branchCode !== 'SC' 特判中移除、统一走 JOIN。 | P3 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
+| 2026-07-08-claude-fd244c | 2026-07-08 | 指标口径 | @claude | [硬编码专项遗留]已赚保费月度明细模块年份深度耦合：后端 earned-premium-detail.ts 写死 2025/2026/2027（generatePolicy2025/2026EarnedPremiumQuery、滚动汇总 UNION 12 个月锚定 2026），前端 transformData.ts/cost-summary-calc.ts 依赖 earned_2025_MM/earned_2026_MM 字段族与 Policy2025In2025Data 等年份命名类型——跨年需改代码。sql-builder.ts 已有参数化 generateEarnedPremiumPeriodQuery(policyYear/earnedYear) 可作重构基座，但涉及 API 字段契约变更（earned_YYYY_MM → 相对年 key）与前端类型重写，须 Parquet 直查对账后独立 PR。另：驾意险单均保费阈值（主全 333/300/260、交三 288/200/150）注册表无对应原子指标可挂靠 thresholds，已在 crossSellRateStatus.ts 集中命名常量，注册表化待此缺口补齐。 | P2 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts,src/features/cost/utils/transformData.ts,src/features/cost/utils/cost-summary-calc.ts,src/features/dashboard/crossSellRateStatus.ts |  |
