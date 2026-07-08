@@ -65,8 +65,8 @@ export class DataApi {
     return data.data as LoadResult;
   }
 
-  /** 获取 ETL 数据版本（数据截止日 + 构建时间）。HomePage / SW 共用。 */
-  version(): Promise<{ etlDate: string; buildTime: string; serverStartTime: string }> {
-    return this.t.request<{ etlDate: string; buildTime: string; serverStartTime: string }>('/data/version');
+  /** 获取 ETL 数据版本（数据截止日 + 构建时间 + 内容指纹）。HomePage / SW 共用。 */
+  version(): Promise<{ etlDate: string; buildTime: string; serverStartTime: string; contentVersion?: string }> {
+    return this.t.request<{ etlDate: string; buildTime: string; serverStartTime: string; contentVersion?: string }>('/data/version');
   }
 }

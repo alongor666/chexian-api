@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import {
   asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache, parseFiltersAndBuildWhere,
+  resolveBranchRlsCode,
 } from './shared.js';
 import {
   generatePendingOverviewQuery,
@@ -230,7 +231,10 @@ router.get(
       ? cohortYearsStr.split(',').map(Number).filter(n => !isNaN(n) && n >= 2020 && n <= 2030)
       : [2023, 2024, 2025, 2026];
     const { whereClause } = parseFiltersAndBuildWhere(req);
-    const sql = generateLossRatioDevelopmentQuery(filters, cohortYears, 24, whereClause);
+    // 多省截止日隔离：RLS 开启的分省用户 → cutoff 只看本省 MAX(policy_date)；
+    // RLS 关闭 / 全国合并视图 → undefined → SQL 与历史逐字节一致
+    const cutoffBranchCode = await resolveBranchRlsCode(req, 'PolicyFact');
+    const sql = generateLossRatioDevelopmentQuery(filters, cohortYears, 24, whereClause, cutoffBranchCode);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
@@ -304,7 +308,9 @@ router.get(
     }
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
-    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField, policyYear, customCutoffs, whereClause);
+    // 多省截止日隔离：同 loss-ratio-development，cutoff 按本省范围取
+    const cutoffBranchCode = await resolveBranchRlsCode(req, 'PolicyFact');
+    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField, policyYear, customCutoffs, whereClause, cutoffBranchCode);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })

@@ -575,15 +575,20 @@ export function generateLossRatioDevelopmentQuery(
   filters: ClaimsDetailFilters,
   cohortYears: number[] = [2023, 2024, 2025, 2026],
   maxDevMonth: number = 24,
-  whereClause: string = '1=1'
+  whereClause: string = '1=1',
+  cutoffBranchCode?: string
 ): string {
   const policyWhere = buildPolicyWhere(filters);
   const yearsIn = cohortYears.join(',');
+  // 多省截止日隔离（2026-07-07）：cutoff 锚点按当前用户的分省范围取 MAX(policy_date)，
+  // 否则山西/四川数据进度不一致时截止日被对方省"带跑"（跨省口径泄漏）。
+  // 未传（RLS 关闭 / 单省 / 全国合并视图）→ 不加过滤，SQL 与历史逐字节一致。
+  const cutoffScope = cutoffBranchCode ? ` WHERE branch_code = '${escapeSqlValue(cutoffBranchCode)}'` : '';
 
   return `
     WITH claims_cutoff_cte AS (
-      -- 与理赔热力图统一：以保单录入截止日为全局 cutoff
-      SELECT COALESCE(MAX(CAST(policy_date AS DATE)), CURRENT_DATE) AS claims_cutoff FROM PolicyFact
+      -- 与理赔热力图统一：以保单录入截止日为全局 cutoff（多省时限定本省范围）
+      SELECT COALESCE(MAX(CAST(policy_date AS DATE)), CURRENT_DATE) AS claims_cutoff FROM PolicyFact${cutoffScope}
     ),
     raw_policies AS (
       SELECT

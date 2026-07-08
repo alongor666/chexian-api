@@ -46,7 +46,7 @@ import os from 'os';
 import { recordEvent, LEDGER_PATH } from './etl-ledger/record.mjs';
 import { writeReport, loadEvents } from './etl-ledger/render.mjs';
 // 多省 B2 分省编排：遍历注册的非 SC 省逐域生成 daily.mjs 步骤（省份枚举单一来源 source-file-routing）
-import { buildBranchEtlSteps } from '../数据管理/lib/branch-publish.mjs';
+import { buildBranchEtlSteps, shouldEnableValidationBranchSync } from '../数据管理/lib/branch-publish.mjs';
 // state.db 远程备份（575d2f）：reload 前在 VPS 上备份 PAT/用户/角色权威数据，失败不阻塞
 import { resolveStateDbBackupConfig, buildStateDbBackupScript } from './lib/state-db-backup.mjs';
 import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
@@ -328,8 +328,8 @@ async function main() {
   // Stage 1.1: 多省 B2 分省发布——遍历注册的非 SC 省逐域跑（产物落 warehouse/validation/<省>）。
   // BRANCH_PUBLISH=1 让无源域 graceful skip 不中断；有源但转换失败 → fail-fast + 明确定位
   // （闸-1 P1-E），不让生产数据处于"部分省成功"混合状态。full_snapshot 单域模式不追加分省。
+  const branchSteps = fullSnapshotDomains.length === 0 ? buildBranchEtlSteps() : [];
   if (fullSnapshotDomains.length === 0) {
-    const branchSteps = buildBranchEtlSteps();
     if (branchSteps.length > 0) {
       const provinces = [...new Set(branchSteps.map(s => s.env.BRANCH_CODE))].join(', ');
       log('cyan', `\n▶ 分省发布：${branchSteps.length} 个非 SC 省·域步骤（${provinces}）`);
@@ -423,11 +423,25 @@ async function main() {
   // Stage 3: 数据同步。sync-and-reload 统一控制上传范围，daily.mjs 固定 --no-sync。
   const syncArgs = ['scripts/sync-vps.mjs', '--no-restart'];
   if (fullSnapshotDomains.length > 0) syncArgs.push('--domain', fullSnapshotDomains.join(','));
+  // 多省派生域随发布同步（2026-07-07 owner 授权）：Stage 1.1 已重算非 SC 省派生域到
+  // warehouse/validation/<省>，此处显式携带 SYNC_VALIDATION_BRANCHES=1 让 sync-vps 把
+  // validation/<省>/<派生域> 推到生产，否则山西理赔明细/报价转化/续保追踪等页面停更。
+  // 操作者显式设置该 env（含 '0'）时发布链不注入，保留人工关闭出口；判定逻辑见
+  // branch-publish.mjs shouldEnableValidationBranchSync（纯函数 + 单测）。
+  const syncEnv = {};
+  if (shouldEnableValidationBranchSync({
+    explicitEnv: process.env.SYNC_VALIDATION_BRANCHES,
+    branchStepCount: branchSteps.length,
+    fullSnapshotDomainCount: fullSnapshotDomains.length,
+  })) {
+    syncEnv.SYNC_VALIDATION_BRANCHES = '1';
+  }
   if (opts.dryRun) {
-    log('cyan', `\n▶ [VPS sync] node ${syncArgs.join(' ')}`);
+    const envPrefix = syncEnv.SYNC_VALIDATION_BRANCHES ? 'SYNC_VALIDATION_BRANCHES=1 ' : '';
+    log('cyan', `\n▶ [VPS sync] ${envPrefix}node ${syncArgs.join(' ')}`);
     log('yellow', '  (dry-run，跳过实际上传)');
   } else {
-    await runCmd('VPS sync', 'node', syncArgs, { dryRun: false });
+    await runCmd('VPS sync', 'node', syncArgs, { dryRun: false, env: syncEnv });
   }
 
   // Stage 3.5: 数据就绪校验（post-sync）— sync-vps 完成后，检查同步漂移
