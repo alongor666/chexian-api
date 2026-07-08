@@ -19,6 +19,7 @@ import {
   buildWhereFromFilterParamsWithoutDate,
 } from '../../utils/filter-params.js';
 import { commonFilterSchema } from '../../utils/filter-params.js';
+import { parseCohortYears } from '../../utils/cohort-years.js';
 import { AppError } from '../../middleware/error.js';
 
 const router = Router();
@@ -44,10 +45,8 @@ router.get(
       requirePermissionFilter(req.permissionFilter)
     );
 
-    const cohortYearsStr = req.query.cohortYears;
-    const cohortYears = typeof cohortYearsStr === 'string'
-      ? cohortYearsStr.split(',').map(Number).filter(n => !isNaN(n) && n >= 2020 && n <= 2030)
-      : [2023, 2024, 2025, 2026];
+    // 默认最近 4 个起保年份（动态派生，防跨年硬编码），解析口径见 utils/cohort-years.ts
+    const cohortYears = parseCohortYears(req.query.cohortYears);
 
     const sql = generateExpenseRatioDevelopmentQuery(whereClause, cohortYears);
     const data = await duckdbService.query(sql);
