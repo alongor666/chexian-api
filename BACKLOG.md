@@ -18,6 +18,7 @@
 ---
 
 ## 📋 活跃任务速查（38 项 · 数据截至 2026-07-08 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（41 项 · 数据截至 2026-07-08 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -49,7 +50,7 @@
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-08-claude-fd244c — [硬编码专项遗留]已赚保费月度明细模块年份深度耦合
 
-**P3（16 项）**
+**P3（17 项）**
 
 - B247 — 图表 hex 色值审计
 - B254 — wecom_smartsheet state 生命周期管理（missing_vins T
@@ -67,6 +68,7 @@
 - 2026-07-07-claude-cfaf91 — 企微续保同步脚本 数据管理/integrations/wecom_smartsheet/
 - 2026-07-07-claude-e80304 — 前后端 BRANCH 映射镜像目前仅靠人工核对一致，无自动化 governance 闸
 - 2026-07-07-claude-f23ffc — SC 车牌归属地判定统一改造为 JOIN PlateRegionMap（与 SX 同路径
+- 2026-07-08-claude-a28f3d — 后端硬编码专项残留（需契约/业务拍板，未随批次一 2026-07-08-claude-7
 
 ---
 
@@ -111,4 +113,5 @@
 | 2026-07-07-claude-cfaf91 | 2026-07-07 | 架构治理/多省 | @claude | 企微续保同步脚本 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py 的 ORG_SLUGS 常量写死四川12机构中文名→拼音slug映射（高新→gaoxin等），prime_state_from_wecom.py/cleanup_org_renewal_dup.py 复用同一常量。这是 2026-06-27-claude-e96d85「治理工程二」原始问题描述里点名的4处硬编码位置之一，但不属于该条目已完成的UI层四阶段（PR #953/#956/#959/#963）范围——本条目是后端 Python 数据集成脚本，非终端用户可感知UI，独立登记跟进。若山西续保企微同步需要走这套脚本，需仿照前端 BRANCH_ORGANIZATIONS 模式补充 SX 11机构→slug映射（山西现有独立的 sync_renewal_v2.py + instances/*.yaml 按省实例化架构，需先确认这套 xlsx 同步脚本是否仍在用、是否与 v2 实例架构重叠，避免重复建设） | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py |  |
 | 2026-07-07-claude-e80304 | 2026-07-07 | 架构治理/多省 | @claude | 前后端 BRANCH 映射镜像目前仅靠人工核对一致，无自动化 governance 闸：src/shared/utils/branchDisplay.ts 的 BRANCH_LABELS ↔ server/src/config/branch-names.ts 的 BRANCH_NAMES；src/shared/config/organizations.ts 的 SX_ORGANIZATIONS/BRANCH_ORGANIZATIONS ↔ server/src/services/permission.ts 的同名常量。当前（2026-07-07，工程二阶段2/3/4 收尾核实）两组常量逐字节一致，无漂移。建议参照既有『能力矩阵镜像』闸（checkFilterCapabilityMirror，用 BEGIN/END 锚点比对两文件文本）的模式，给这两组 BRANCH 映射也加锚点+governance 检查，防止未来任一端修改（如新增第三省）漏改另一端。工作量：4 个文件加锚点注释 + 新增 1 个 governance 检查函数，中等规模，独立 PR 更合适 | P3 | PROPOSED | N/A | scripts/check-governance.mjs |  |
 | 2026-07-07-claude-f23ffc | 2026-07-07 | 数据口径/理赔地理 | @claude | SC 车牌归属地判定统一改造为 JOIN PlateRegionMap（与 SX 同路径），消除维护两份车牌前缀映射（SC_PLATE_CITY_CASE/SC_PLATE_HOME_CITY_CASE 硬编码 CASE + PlateRegionMap 权威维表）的漂移风险。PR #971（d3ef27）修复错位缺陷时已评估该方案：JOIN 路径对自治州名做 regexp_replace(city,'(市\|自治州\|地区\|盟)$','') 只剥离行政区划后缀，会把「阿坝藏族羌族自治州」等输出为「阿坝藏族羌族」（保留民族全称），与现有硬编码 CASE 的短名输出「阿坝」不一致——这是超出错位修复范围的格式变更，需先与业务确认统一后的自治州显示格式（保留短名 or 采用长名），确认后再将 SC 从 PLATE_GEO_PROVINCES_BY_BRANCH 的 branchCode !== 'SC' 特判中移除、统一走 JOIN。 | P3 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
+| 2026-07-08-claude-a28f3d | 2026-07-08 | 架构治理/硬编码 | @claude | 后端硬编码专项残留（需契约/业务拍板，未随批次一 2026-07-08-claude-773784 改动）：①/api/query/cost?type=earned-new 保单年度已赚保费 API 契约把年份烧进函数名与响应键（generatePolicy2025In2025Query 等 4 函数、响应键 policy2025In2026 等；earned-premium-detail.ts 整文件同构），2027 年起接口语义过期，需连前端消费方一起参数化保单年度（响应键动态化=前后端契约变更，须同 PR）②前端 planYear 默认值同款硬编码（usePremiumPlan.ts useState(2026)、PremiumPlanPanel.tsx filters.analysis_year\|\|2026），后端已数据驱动化，前端跨年仍会显式发 2026，需改为缺省不传由后端解析或从数据接口取 ③expense-forecast 路由 operatingCostRate 缺省 9（routes/query/cost.ts:128）为业务经营成本率假设值，宜归入 fixed-cost-params.json 唯一事实源并由业务确认。触发条件：2026Q4 前（跨年前）必须处理①②，否则 2027-01-01 起保单年度已赚保费视图与保费计划看板默认年份双双失真 | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts；server/src/routes/query/cost.ts；src/features/premium-report/ |  |
 | 2026-07-08-claude-fd244c | 2026-07-08 | 指标口径 | @claude | [硬编码专项遗留]已赚保费月度明细模块年份深度耦合：后端 earned-premium-detail.ts 写死 2025/2026/2027（generatePolicy2025/2026EarnedPremiumQuery、滚动汇总 UNION 12 个月锚定 2026），前端 transformData.ts/cost-summary-calc.ts 依赖 earned_2025_MM/earned_2026_MM 字段族与 Policy2025In2025Data 等年份命名类型——跨年需改代码。sql-builder.ts 已有参数化 generateEarnedPremiumPeriodQuery(policyYear/earnedYear) 可作重构基座，但涉及 API 字段契约变更（earned_YYYY_MM → 相对年 key）与前端类型重写，须 Parquet 直查对账后独立 PR。另：驾意险单均保费阈值（主全 333/300/260、交三 288/200/150）注册表无对应原子指标可挂靠 thresholds，已在 crossSellRateStatus.ts 集中命名常量，注册表化待此缺口补齐。 | P2 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts,src/features/cost/utils/transformData.ts,src/features/cost/utils/cost-summary-calc.ts,src/features/dashboard/crossSellRateStatus.ts |  |
