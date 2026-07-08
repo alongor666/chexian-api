@@ -6,8 +6,11 @@
 
 /**
  * 三级机构列表（12个，四川 SC）
- * 对应 salesman_organization_mapping.json 中的 organizations
+ * 对应 salesman_organization_mapping.json 中的 organizations。
+ * 与 server/src/services/permission.ts 的 ORGANIZATIONS 镜像一致
+ * （前后端独立编译域，禁止 import，逐条对齐）。governance「省份映射前后端镜像」锚点对账。
  */
+// ── SC-ORG-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
 export const ORGANIZATIONS = [
   '乐山',
   '天府',
@@ -22,13 +25,15 @@ export const ORGANIZATIONS = [
   '青羊',
   '高新',
 ] as const;
+// ── SC-ORG-MIRROR-END ──
 
 /**
  * 山西（SX）经营单元列表（11个）。
  * SSOT：数据管理/config/branch-org-mapping/SX.json 的 "units"；与
  * server/src/services/permission.ts 的 SX_ORGANIZATIONS 镜像一致
- * （前后端独立编译域，禁止 import，逐条对齐）。
+ * （前后端独立编译域，禁止 import，逐条对齐）。governance「省份映射前后端镜像」锚点对账。
  */
+// ── SX-ORG-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
 export const SX_ORGANIZATIONS = [
   '太原一部',
   '太原二部',
@@ -42,16 +47,19 @@ export const SX_ORGANIZATIONS = [
   '临汾',
   '吕梁',
 ] as const;
+// ── SX-ORG-MIRROR-END ──
 
 /**
  * branchCode → 该分公司机构列表。新增省份上线时须在此登记，否则该省
  * branch_admin 的前端机构下拉会回落到默认（SC）。镜像
- * server/src/services/permission.ts 的 BRANCH_ORGANIZATIONS。
+ * server/src/services/permission.ts 的 BRANCH_ORGANIZATIONS。governance「省份映射前后端镜像」锚点对账。
  */
+// ── BRANCH-ORG-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
 export const BRANCH_ORGANIZATIONS: Record<string, readonly string[]> = {
   SC: ORGANIZATIONS,
   SX: SX_ORGANIZATIONS,
 };
+// ── BRANCH-ORG-MIRROR-END ──
 
 /**
  * 机构类型

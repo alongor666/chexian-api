@@ -61,6 +61,7 @@ import { scanEntries as scanAutomationEntries, verifyMechanisms as verifyAutomat
 import { buildPatternChecks } from './governance/pattern-engine.mjs';
 import { PATTERN_RULES } from './governance/pattern-rules.mjs';
 import { checkUploadSizeLimitConsistency as runUploadSizeCheck } from './governance/upload-size-consistency.mjs';
+import { checkDualLockConsistency as runDualLockConsistencyCheck, checkBranchMappingMirror as runBranchMappingMirrorCheck } from './governance/dual-lock-and-branch-mirror-checks.mjs';
 import { governanceCheckChunkInvariants } from './check-chunk-invariants.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2327,7 +2328,7 @@ function checkStateDbDependencyIsolation() {
   return true;
 }
 
-// （已迁移）checkFilterParamsBypass → scripts/governance/pattern-rules.mjs 规则 filter-params-bypass（奥卡姆批次二，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs）
+// （已迁移）checkFilterParamsBypass → pattern-rules.mjs；双锁一致性/省份映射镜像 → governance/dual-lock-and-branch-mirror-checks.mjs（H5 棘轮 ≤4000，仿 upload-size-consistency.mjs）
 
 /**
  * 能力矩阵两端一致检查（治理计划 Phase 3，✅D5 = TS 常量起步）
@@ -3525,6 +3526,8 @@ const CODE_GOVERNANCE_CHECKS = [
   patternCheck('业务员聚合键口径'),
   patternCheck('筛选参数绕过'),
   { name: '能力矩阵镜像', fn: checkFilterCapabilityMirror },
+  { name: '双锁一致性', fn: () => runDualLockConsistencyCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
+  { name: '省份映射前后端镜像', fn: () => runBranchMappingMirrorCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   patternCheck('Bundle路由开关合规'),
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
   { name: '非query路由域对账', fn: checkNonQueryRoutesConsistency },

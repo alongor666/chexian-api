@@ -16,10 +16,12 @@
  *   - 不在此文件硬编码业务规则（如"非营业车口径"等）— 仅做名称映射
  */
 
-/** 分公司编码 → 省份中文名 */
+/** 分公司编码 → 省份中文名（山西 2026-06-26 cutover 上线）。governance「省份映射前后端镜像」锚点对账值域，与前端 BRANCH_LABELS 逐字一致。 */
 export const BRANCH_NAMES: Record<string, string> = {
+  // ── BRANCH-NAME-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
   SC: '四川',
-  SX: '山西', // 山西 2026-06-26 cutover 上线
+  SX: '山西',
+  // ── BRANCH-NAME-MIRROR-END ──
 };
 
 /**

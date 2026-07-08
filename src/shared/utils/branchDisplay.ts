@@ -12,10 +12,12 @@
  * isBranchSummaryRow）全为纯函数，可脱离 React Context 直接单测；BranchContext 仅做 wiring。
  */
 
-/** 省份码 → 中文省名（与后端 BRANCH_NAMES 一致；新省两处同步） */
+/** 省份码 → 中文省名（与后端 BRANCH_NAMES 一致；新省两处同步）。governance「省份映射前后端镜像」锚点对账值域。 */
 export const BRANCH_LABELS: Record<string, string> = {
+  // ── BRANCH-NAME-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
   SC: '四川',
   SX: '山西',
+  // ── BRANCH-NAME-MIRROR-END ──
 };
 
 /** 通用汇总行关键字（与省份无关，全国统一） */
