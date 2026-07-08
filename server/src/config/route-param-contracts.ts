@@ -16,6 +16,7 @@
  */
 import { z } from 'zod';
 import { commonFilterSchema } from '../utils/filter-params.js';
+import { alwaysExcludedCommonFields } from '../utils/domain-filter-sanitizer.js';
 import { trendExtraSchema } from '../routes/query/trend.js';
 import { growthExtraSchema } from '../routes/query/growth.js';
 import { costExtraSchema } from '../routes/query/cost.js';
@@ -46,11 +47,32 @@ export interface RouteParamContract {
   schemas?: Array<z.ZodObject<z.ZodRawShape>>;
   /** 是否叠加 commonFilterSchema（parseFiltersAndBuild* / commonFilterSchema.safeParse 路由） */
   useCommon?: boolean;
+  /**
+   * 叠加 commonFilterSchema 但排除这些顶层字段名（仅在 useCommon=true 时生效）。
+   *
+   * 覆盖"域视图不支持某些维度列，路由层用净化副本剥离"的场景（BACKLOG 2026-06-27-claude-6d1dfe，
+   * 8f71c0 architect 闸 P1-2）：cross-sell（agg 路径）/ quote-conversion / customer-flow 三域
+   * 的 handler 实际消费的是 commonFilterSchema 的一个"净化子集"，不是全量。排除清单来源于
+   * server/src/utils/domain-filter-sanitizer.ts 的 alwaysExcludedCommonFields()（与运行时
+   * filterByDomainColumns() 净化逻辑共享同一份 DOMAIN_SUPPORTED_COLUMNS 数据源，不再手写重复列表）。
+   *
+   * 注意：这是"字段名"级静态声明，不区分取值——vehicleQuickFilter / fuelCategory 这类值相关
+   * 字段只有在其全部取值都不受支持时才会出现在此列表（本项目现有 3 个域均不属此情况）。
+   */
+  useCommonExcept?: string[];
   /** zod 之外的散读 req.query 字段或手写解析字段（人工声明，注明来源） */
   extraKeys?: string[];
   /** path 模板参数（如 :domain） */
   pathParams?: string[];
 }
+
+/**
+ * quote-conversion / customer-flow 域 useCommonExcept 静态声明——从
+ * domain-filter-sanitizer.ts 的 DOMAIN_SUPPORTED_COLUMNS 单一数据源计算，
+ * 与运行时 filterByDomainColumns() 净化行为保持同源，不再手写重复列表。
+ */
+const QUOTE_UNSUPPORTED_COMMON_EXCEPT = alwaysExcludedCommonFields('quoteConversion');
+const FLOW_UNSUPPORTED_COMMON_EXCEPT = alwaysExcludedCommonFields('customerFlow');
 
 /** claims-detail.ts parseFilters() 手写解析的全部字段（含 coverageCombinations 别名） */
 const CLAIMS_DETAIL_FILTER_KEYS = [
@@ -106,21 +128,25 @@ export const ROUTE_PARAM_CONTRACTS: Record<string, RouteParamContract> = {
   // ── 仪表盘聚合 ──────────────────────────────────
   '/dashboard-bundle': { useCommon: true, schemas: [dashboardBundleSchema] },
 
-  // ── 报价转化（quoteFilterSchema + 各自散读） ─────────────
-  '/quote-conversion/kpi': { schemas: [quoteFilterSchema] },
-  '/quote-conversion/funnel': { schemas: [quoteFilterSchema] },
-  '/quote-conversion/drilldown': { schemas: [quoteFilterSchema], extraKeys: ['level'] },
-  '/quote-conversion/heatmap': { schemas: [quoteFilterSchema], extraKeys: ['colDimension'] },
-  '/quote-conversion/price': { schemas: [quoteFilterSchema] },
-  '/quote-conversion/ranking': { schemas: [quoteFilterSchema], extraKeys: ['dimension'] },
-  '/quote-conversion/trend': { schemas: [quoteFilterSchema], extraKeys: ['granularity'] },
+  // ── 报价转化（quoteFilterSchema + 各自散读 + commonFilterSchema 净化子集） ─────────────
+  // handler 均经 buildQuoteEffectiveQuery() 把 commonFilterSchema 净化子集叠加进 whereClause
+  // （quote-conversion.ts），QUOTE_UNSUPPORTED_COMMON_EXCEPT 是该净化的字段名级镜像。
+  '/quote-conversion/kpi': { useCommon: true, useCommonExcept: QUOTE_UNSUPPORTED_COMMON_EXCEPT, schemas: [quoteFilterSchema] },
+  '/quote-conversion/funnel': { useCommon: true, useCommonExcept: QUOTE_UNSUPPORTED_COMMON_EXCEPT, schemas: [quoteFilterSchema] },
+  '/quote-conversion/drilldown': { useCommon: true, useCommonExcept: QUOTE_UNSUPPORTED_COMMON_EXCEPT, schemas: [quoteFilterSchema], extraKeys: ['level'] },
+  '/quote-conversion/heatmap': { useCommon: true, useCommonExcept: QUOTE_UNSUPPORTED_COMMON_EXCEPT, schemas: [quoteFilterSchema], extraKeys: ['colDimension'] },
+  '/quote-conversion/price': { useCommon: true, useCommonExcept: QUOTE_UNSUPPORTED_COMMON_EXCEPT, schemas: [quoteFilterSchema] },
+  '/quote-conversion/ranking': { useCommon: true, useCommonExcept: QUOTE_UNSUPPORTED_COMMON_EXCEPT, schemas: [quoteFilterSchema], extraKeys: ['dimension'] },
+  '/quote-conversion/trend': { useCommon: true, useCommonExcept: QUOTE_UNSUPPORTED_COMMON_EXCEPT, schemas: [quoteFilterSchema], extraKeys: ['granularity'] },
 
-  // ── 客户来源去向 ────────────────────────────────
-  '/customer-flow/summary': { schemas: [customerFlowFilterSchema] },
-  '/customer-flow/inflow': { schemas: [customerFlowFilterSchema] },
-  '/customer-flow/outflow': { schemas: [customerFlowFilterSchema] },
-  '/customer-flow/trend': { schemas: [customerFlowFilterSchema] },
-  '/customer-flow/metadata': {},
+  // ── 客户来源去向（customerFlowFilterSchema + commonFilterSchema 净化子集） ────────────
+  // handler 均经 sanitizeFlowQuery() 把 commonFilterSchema 净化子集叠加进 whereClause
+  // （customer-flow.ts，含 /metadata），FLOW_UNSUPPORTED_COMMON_EXCEPT 是该净化的字段名级镜像。
+  '/customer-flow/summary': { useCommon: true, useCommonExcept: FLOW_UNSUPPORTED_COMMON_EXCEPT, schemas: [customerFlowFilterSchema] },
+  '/customer-flow/inflow': { useCommon: true, useCommonExcept: FLOW_UNSUPPORTED_COMMON_EXCEPT, schemas: [customerFlowFilterSchema] },
+  '/customer-flow/outflow': { useCommon: true, useCommonExcept: FLOW_UNSUPPORTED_COMMON_EXCEPT, schemas: [customerFlowFilterSchema] },
+  '/customer-flow/trend': { useCommon: true, useCommonExcept: FLOW_UNSUPPORTED_COMMON_EXCEPT, schemas: [customerFlowFilterSchema] },
+  '/customer-flow/metadata': { useCommon: true, useCommonExcept: FLOW_UNSUPPORTED_COMMON_EXCEPT },
 
   // ── 维修资源 v1 ─────────────────────────────────
   '/repair/overview': { schemas: [repairFilterSchema] },
@@ -184,7 +210,10 @@ export const ROUTE_PARAM_CONTRACTS: Record<string, RouteParamContract> = {
 export function contractAllowedKeys(contract: RouteParamContract): Set<string> {
   const keys = new Set<string>();
   if (contract.useCommon) {
-    for (const k of Object.keys(commonFilterSchema.shape)) keys.add(k);
+    const excluded = new Set(contract.useCommonExcept ?? []);
+    for (const k of Object.keys(commonFilterSchema.shape)) {
+      if (!excluded.has(k)) keys.add(k);
+    }
   }
   for (const schema of contract.schemas ?? []) {
     for (const k of Object.keys(schema.shape)) keys.add(k);
@@ -226,7 +255,13 @@ export function contractZodEnums(contract: RouteParamContract): Map<string, stri
       for (const v of values) result.get(name)!.add(v);
     }
   };
-  if (contract.useCommon) collect(commonFilterSchema.shape);
+  if (contract.useCommon) {
+    const excluded = new Set(contract.useCommonExcept ?? []);
+    const filteredShape = Object.fromEntries(
+      Object.entries(commonFilterSchema.shape).filter(([k]) => !excluded.has(k))
+    ) as z.ZodRawShape;
+    collect(filteredShape);
+  }
   for (const schema of contract.schemas ?? []) collect(schema.shape);
   return new Map([...result.entries()].map(([k, set]) => [k, [...set].sort()]));
 }
