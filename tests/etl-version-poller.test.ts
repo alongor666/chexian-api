@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
-import { startEtlVersionPolling, ETL_DATE_STORAGE_KEY } from '../src/app/etlVersionPoller';
+import { startEtlVersionPolling, composeVersionBaseline, ETL_DATE_STORAGE_KEY } from '../src/app/etlVersionPoller';
 
 function makeMemoryStorage(seed?: Record<string, string>) {
   const store = new Map(Object.entries(seed ?? {}));
@@ -116,5 +116,33 @@ describe('startEtlVersionPolling', () => {
     cleanup = null;
     await vi.advanceTimersByTimeAsync(5000);
     expect(fetchEtlDate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('composeVersionBaseline（数据版本基线组合，2026-07-07 山西页面停更治理）', () => {
+  it('etlDate + 内容指纹 + 服务启动时间 组合为基线串', () => {
+    expect(composeVersionBaseline({
+      etlDate: '2026-07-05', contentVersion: 'abcd1234', serverStartTime: '2026-07-07T02:00:00.000Z',
+    })).toBe('2026-07-05|abcd1234|2026-07-07T02:00:00.000Z');
+  });
+
+  it('🔴 仅山西保单刷新（etlDate 不变、指纹变）→ 基线变化，能触发缓存失效', () => {
+    const before = composeVersionBaseline({ etlDate: '2026-07-05', contentVersion: 'aaaa0000', serverStartTime: 't1' });
+    const after = composeVersionBaseline({ etlDate: '2026-07-05', contentVersion: 'bbbb1111', serverStartTime: 't1' });
+    expect(before).not.toBe(after);
+  });
+
+  it('🔴 仅派生域更新（etlDate/指纹不变、服务重载）→ 基线变化', () => {
+    const before = composeVersionBaseline({ etlDate: '2026-07-05', contentVersion: 'aaaa0000', serverStartTime: 't1' });
+    const after = composeVersionBaseline({ etlDate: '2026-07-05', contentVersion: 'aaaa0000', serverStartTime: 't2' });
+    expect(before).not.toBe(after);
+  });
+
+  it('旧版服务端无 contentVersion/serverStartTime → 基线退化为 etlDate（向后兼容）', () => {
+    expect(composeVersionBaseline({ etlDate: '2026-07-05' })).toBe('2026-07-05');
+  });
+
+  it('etlDate 缺失 → undefined（静默跳过本轮）', () => {
+    expect(composeVersionBaseline({ contentVersion: 'abcd1234' })).toBeUndefined();
   });
 });

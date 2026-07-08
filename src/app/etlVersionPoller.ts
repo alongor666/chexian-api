@@ -19,7 +19,7 @@ export const ETL_DATE_STORAGE_KEY = 'chexian:last-etl-date';
 
 export interface EtlVersionPollerOptions {
   queryClient: QueryClient;
-  /** 拉取当前 ETL 日期；失败（未登录 401/网络异常）返回 undefined 静默跳过本轮 */
+  /** 拉取当前数据版本基线；失败（未登录 401/网络异常）返回 undefined 静默跳过本轮 */
   fetchEtlDate?: () => Promise<string | undefined>;
   intervalMs?: number;
   storage?: Pick<Storage, 'getItem' | 'setItem'>;
@@ -27,10 +27,30 @@ export interface EtlVersionPollerOptions {
   notifySw?: () => void;
 }
 
+/**
+ * 数据版本基线 = etlDate + 内容指纹 + 服务启动时间 的组合串（2026-07-07 山西页面停更治理）。
+ *
+ * 单看 etlDate（全局 MAX(policy_date)，仅保单域）有两个盲区：
+ *  1. 仅山西保单刷新而全局最大签单日不变（四川已在同日）→ etlDate 不变 → 缓存不失效；
+ *     contentVersion（保单 Parquet 文件集+修改时间指纹）覆盖此场景。
+ *  2. 仅理赔/报价等派生域更新（不动保单文件）→ 两者都不变；生产上派生域更新必经
+ *     服务重载，serverStartTime 变化兜底（代价：无数据变化的重启也会触发一次缓存清理，
+ *     频率低、影响仅一次额外刷新，可接受）。
+ * 旧版服务端无 contentVersion 字段 → 基线退化为 etlDate（向后兼容）；升级首轮基线格式
+ * 变化触发一次额外失效，属预期的一次性行为。
+ */
+export function composeVersionBaseline(v: {
+  etlDate?: string;
+  contentVersion?: string;
+  serverStartTime?: string;
+}): string | undefined {
+  if (!v.etlDate) return undefined;
+  return [v.etlDate, v.contentVersion ?? '', v.serverStartTime ?? ''].filter(Boolean).join('|');
+}
+
 async function defaultFetchEtlDate(): Promise<string | undefined> {
   try {
-    const v = await apiClient.data.version();
-    return v.etlDate || undefined;
+    return composeVersionBaseline(await apiClient.data.version());
   } catch {
     // 未登录（401）或网络异常：不打扰用户，等下一轮
     return undefined;

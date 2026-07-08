@@ -1432,58 +1432,92 @@ function safeConvertDomain(python, scriptPath, inputPath, outputPath, archivePre
 // ── 派生域：renewal_tracker（依赖 policy + quotes_conversion + salesman，非 Excel） ──
 
 function runRenewalTracker(python, scriptDir) {
-  log('cyan', '\n═══ renewal_tracker 派生域：续保追踪（JOIN policy + quotes_conversion + salesman）═══\n');
+  // 多省分省化（2026-07-07 owner 授权「治理到位」）：BRANCH_CODE 路由输入/输出——
+  // SC 默认链路所有路径与原实现逐字节一致；非 SC 省依赖与产物均在 warehouse/validation/<省>
+  // （convert_renewal_tracker.py 自身已按 --branch-code 经 renewal_common.branch_paths 路由
+  // policy glob / quotes 路径 / 报价窗口，本函数只负责依赖检查 + 输出落位 + 归档）。
+  // 此前非 SC 被 __branchReadyDomains 白名单阻断 → 山西续保追踪停在 6 月底一次性产物。
+  const BRANCH_CODE = resolveEnvBranchCode('runRenewalTracker');
+  const isBranch = BRANCH_CODE !== 'SC';
+  log('cyan', `\n═══ renewal_tracker 派生域：续保追踪（JOIN policy + quotes_conversion + salesman）${isBranch ? ` [${BRANCH_CODE}]` : ''}═══\n`);
 
-  // 依赖检查
-  const policyDir = join(scriptDir, 'warehouse/fact/policy/current');
-  const quotesPath = join(scriptDir, 'warehouse/fact/quotes_conversion/latest.parquet');
-  const salesmanPath = join(scriptDir, 'warehouse/dim/salesman/latest.parquet');
+  // 依赖检查（按省路由）
+  const branchRoot = isBranch ? branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE) : null;
+  const quotesPath = isBranch
+    ? join(branchRoot, 'quotes_conversion/latest.parquet')
+    : join(scriptDir, 'warehouse/fact/quotes_conversion/latest.parquet');
+  // 业务员维度：非 SC 省优先本省隔离副本（validation/<省>/dim/salesman），缺失时回落共享 dim
+  // （与 convert_renewal_tracker.py DEFAULT_SALESMAN_PATH 语义一致：dim 多省策略待 Phase B）。
+  const branchSalesmanPath = isBranch ? join(branchRoot, 'dim/salesman/latest.parquet') : null;
+  const salesmanPath = (isBranch && existsSync(branchSalesmanPath))
+    ? branchSalesmanPath
+    : join(scriptDir, 'warehouse/dim/salesman/latest.parquet');
   const missing = [];
-  // B2：续保消费者 convert_renewal_tracker.py 仍读顶层扁平 glob（DEFAULT_POLICY_GLOB=current/*.parquet，
-  // 延后随 B3/cutover 升级），故 readiness 保持 flat 对齐消费者；但「子目录独占」态（顶层空 + current/<省>/ 有）
-  // 下消费者会读 0 行静默产空续保 → fail-closed BLOCK（非静默 return）防同步陈旧 renewal_tracker。
-  const policyLayout = inspectPolicyCurrentLayout(policyDir);
-  if (policyLayout.subdirOnly) {
-    log('red', `❌ renewal_tracker 中止：policy/current 仅含省份子目录 [${policyLayout.branches.join(',')}]，` +
-      `但续保消费者 convert_renewal_tracker.py 仍读顶层扁平 glob（current/*.parquet）→ 会静默产出空续保。` +
-      `子目录消费须等 cutover 给 convert 传 --policy-glob current/**/*.parquet（B3/cutover 范围）。`);
-    process.exit(1);
+  if (isBranch) {
+    // 非 SC 省保单源 = validation/<省>/*.parquet（converter branch_paths 同源）
+    const hasBranchPolicy = existsSync(branchRoot) &&
+      readdirSync(branchRoot).some(f => f.endsWith('.parquet'));
+    if (!hasBranchPolicy) missing.push(`validation/${BRANCH_CODE}/*.parquet (保单)`);
+  } else {
+    const policyDir = join(scriptDir, 'warehouse/fact/policy/current');
+    // B2：续保消费者 convert_renewal_tracker.py 仍读顶层扁平 glob（DEFAULT_POLICY_GLOB=current/*.parquet，
+    // 延后随 B3/cutover 升级），故 readiness 保持 flat 对齐消费者；但「子目录独占」态（顶层空 + current/<省>/ 有）
+    // 下消费者会读 0 行静默产空续保 → fail-closed BLOCK（非静默 return）防同步陈旧 renewal_tracker。
+    const policyLayout = inspectPolicyCurrentLayout(policyDir);
+    if (policyLayout.subdirOnly) {
+      log('red', `❌ renewal_tracker 中止：policy/current 仅含省份子目录 [${policyLayout.branches.join(',')}]，` +
+        `但续保消费者 convert_renewal_tracker.py 仍读顶层扁平 glob（current/*.parquet）→ 会静默产出空续保。` +
+        `子目录消费须等 cutover 给 convert 传 --policy-glob current/**/*.parquet（B3/cutover 范围）。`);
+      process.exit(1);
+    }
+    if (policyLayout.flatCount === 0) missing.push('policy/current/*.parquet');
   }
-  if (policyLayout.flatCount === 0) missing.push('policy/current/*.parquet');
-  if (!existsSync(quotesPath)) missing.push('quotes_conversion/latest.parquet');
+  if (!existsSync(quotesPath)) missing.push(isBranch ? `validation/${BRANCH_CODE}/quotes_conversion/latest.parquet` : 'quotes_conversion/latest.parquet');
   if (!existsSync(salesmanPath)) missing.push('salesman/latest.parquet');
   if (missing.length > 0) {
-    log('red', `❌ 依赖缺失，跳过 renewal_tracker: ${missing.join(', ')}`);
+    // 分省编排（BRANCH_PUBLISH=1）下某省依赖缺失 → graceful skip 不中断其他省/域（对齐 runStandardDomain）；
+    // 非 SC 显式单域调用 → exit 1，避免假阳性"绿字完成"误导运维。SC 保持原"跳过"语义。
+    if (isBranch && process.env.BRANCH_PUBLISH !== '1') {
+      log('red', `❌ [${BRANCH_CODE}] 依赖缺失，renewal_tracker 失败: ${missing.join(', ')}`);
+      process.exit(1);
+    }
+    log(isBranch ? 'yellow' : 'red', `${isBranch ? '⚠' : '❌'} ${isBranch ? `[${BRANCH_CODE}] ` : ''}依赖缺失，跳过 renewal_tracker: ${missing.join(', ')}`);
     return;
   }
 
-  const outputDir = join(scriptDir, 'warehouse/fact/renewal_tracker');
+  const outputDir = isBranch
+    ? join(branchRoot, 'renewal_tracker')
+    : join(scriptDir, 'warehouse/fact/renewal_tracker');
   const outputPath = join(outputDir, 'latest.parquet');
   const tmpPath = outputPath + '.tmp';
   ensureDir(outputDir);
 
   const scriptPath = join(scriptDir, 'pipelines/convert_renewal_tracker.py');
-  // P3-C 2026-06-23：透传 BRANCH_CODE 触发 assertDeclaredBranch + strictNonNull guard
-  // SC 默认链路（无显式 env）→ 'SC'，确保派生 branch_code 全 SC 零 NULL。
-  // 注：非 SC 路由（branchSourceDir/branchOutputRoot）留 Phase B；renewal_tracker
-  // 未纳入 __branchReadyDomains 白名单，BRANCH_CODE=SX 单域跑仍被阻断。
-  const BRANCH_CODE = resolveEnvBranchCode('runRenewalTracker');
-  runPythonScript(python, scriptPath, ['-o', `"${tmpPath}"`, '--branch-code', BRANCH_CODE]);
+  // P3-C 2026-06-23：透传 BRANCH_CODE 触发 assertDeclaredBranch + strictNonNull guard；
+  // converter 据 --branch-code 自行路由 policy glob / quotes 路径 / 报价窗口（renewal_common SSOT）。
+  // 非 SC 省有本省 salesman dim 副本时显式传入，否则用 converter 默认共享 dim。
+  const converterArgs = ['-o', `"${tmpPath}"`, '--branch-code', BRANCH_CODE];
+  if (isBranch && salesmanPath === branchSalesmanPath) {
+    converterArgs.push('--salesman-path', `"${salesmanPath}"`);
+  }
+  runPythonScript(python, scriptPath, converterArgs);
 
-  // 归档旧文件（成功转换后才归档）
+  // 归档旧文件（成功转换后才归档；非 SC 省归档进本省隔离目录，不污染共享 .archive）
   if (existsSync(outputPath)) {
-    const archiveDir = join(__dirname, '.archive');
+    const archiveDir = isBranch ? join(outputDir, '.archive') : join(__dirname, '.archive');
     ensureDir(archiveDir);
     renameSync(outputPath, join(archiveDir, `renewal_tracker_latest_${formatDateTime()}.parquet`));
     log('yellow', '  归档旧 latest.parquet → archive/');
   }
   renameSync(tmpPath, outputPath);
 
-  // 回写 data-sources.json
+  // 回写 data-sources.json（多省 0a：非 SC 省跳过，隔离省不污染 SC 唯一事实源）
   const rowCount = getParquetRowCount(python, outputPath);
   const fieldCount = getParquetColumnCount(python, outputPath);
-  updateDataSources('renewal_tracker', { rowCount, fieldCount });
-  log('green', '✅ renewal_tracker 派生域完成');
+  if (!isBranch) {
+    updateDataSources('renewal_tracker', { rowCount, fieldCount });
+  }
+  log('green', `✅ renewal_tracker 派生域完成${isBranch ? ` → 隔离目录 ${outputDir}（${rowCount.toLocaleString()} 行 × ${fieldCount} 列）` : ''}`);
 }
 
 // ── 主流程 ──
@@ -1579,9 +1613,9 @@ async function main() {
     // runStandardDomain/runRenewalTracker 尚未省份化，非 SC 运行会写入 SC 路径 → 硬拦截。
     // 每 branch 化一个域，把它加进 __branchReadyDomains（与 ALL_DOMAINS 同名）。
     const __branchSub = resolveEnvBranchCode('subcommand路由');
-    const __branchReadyDomains = new Set(['claims_detail', 'quotes', 'repair', 'brand', 'cross_sell', 'customer_flow']);
+    const __branchReadyDomains = new Set(['claims_detail', 'quotes', 'repair', 'brand', 'cross_sell', 'customer_flow', 'renewal_tracker']);
     if (__branchSub !== 'SC' && !__branchReadyDomains.has(subcommand)) {
-      log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail / quotes / repair / brand / cross_sell / customer_flow`);
+      log('red', `❌ [${__branchSub}] 域 '${subcommand}' 尚未 branch-aware，禁止非 SC 运行（会写入 SC 路径）。当前多省支持：premium / claims_detail / quotes / repair / brand / cross_sell / customer_flow / renewal_tracker`);
       process.exit(1);
     }
     switch (subcommand) {

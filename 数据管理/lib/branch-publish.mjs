@@ -20,9 +20,12 @@ import { registeredBranchCodesFromPrefixMap } from './source-file-routing.mjs';
 // 非 SC 省日常发布的核心全量域，对应上游 BI 编号 01签单(premium)/05理赔(claims_detail)/
 // 02报价(quotes)/03维修(repair)。quotes 于 2026-07-04 加入：VPS auto_loadbi 上游开始每日导出
 // 02 报价单日文件（scripts/pull-bi-exports.mjs 分发到 staging/<省>，逐日累积多文件输入）。
+// renewal_tracker 于 2026-07-07 加入（owner 授权「治理到位」）：派生域（JOIN 本省 policy +
+// quotes_conversion），须排在 premium/quotes 之后，否则用旧输入重算；此前不在编排内 →
+// 山西续保追踪停在 6 月底一次性产物。
 // 这是「域」列表（固定 ETL 域）非省份硬编码；daily.mjs 在 BRANCH_PUBLISH=1 下对无源域
 // graceful skip（warn 不中断），故列表含某省暂无的域也安全（自动跳过，不阻断其他域）。
-export const BRANCH_PUBLISH_DOMAINS = Object.freeze(['premium', 'claims_detail', 'quotes', 'repair']);
+export const BRANCH_PUBLISH_DOMAINS = Object.freeze(['premium', 'claims_detail', 'quotes', 'repair', 'renewal_tracker']);
 
 /** 非 SC 注册省份（从拼音 map 单一来源派生，过滤掉 SC；SC 走 sync-and-reload 原默认链路）。 */
 export function nonScBranchCodes() {
@@ -48,4 +51,31 @@ export function buildBranchEtlSteps(branchCodes = nonScBranchCodes(), coreDomain
     }
   }
   return steps;
+}
+
+/**
+ * release:daily Stage 3 是否为 sync-vps 显式携带 SYNC_VALIDATION_BRANCHES=1
+ * （同步非 SC 省 validation 派生域到生产）。
+ *
+ * 背景（2026-07-07 山西页面停更）：Stage 1.1 分省 ETL 每日重算非 SC 省派生域到
+ * warehouse/validation/<省>，但 sync-vps 的 validation 同步总开关默认 off（cutover 期防
+ * 行级隔离未开启时跨省污染的一次性人工步）→ 山西理赔明细/报价转化/续保追踪等页面
+ * 停在最后一次手工推送的日期。生产行级隔离已常态开启（2026-06-25 山西上线），
+ * owner 授权（2026-07-07「治理到位」）后改为由发布链显式携带该开关，让派生域与
+ * 保单域同节奏更新。
+ *
+ * 判定（纯函数，供 vitest 直测）：
+ *  - 操作者已显式设置 SYNC_VALIDATION_BRANCHES（任意非空值，含 '0'）→ 尊重显式值，
+ *    发布链不注入（保留人工关闭出口）
+ *  - full_snapshot 单域模式 → 不携带（该模式不跑分省 ETL，validation 产物未必新鲜）
+ *  - 分省 ETL 步骤为空（无注册非 SC 省）→ 不携带（单省时代行为逐字节一致）
+ *  - 其余 → 携带
+ *
+ * @param {{explicitEnv: string|undefined, branchStepCount: number, fullSnapshotDomainCount: number}} input
+ * @returns {boolean}
+ */
+export function shouldEnableValidationBranchSync({ explicitEnv, branchStepCount, fullSnapshotDomainCount }) {
+  if (explicitEnv !== undefined && String(explicitEnv).trim() !== '') return false;
+  if (fullSnapshotDomainCount > 0) return false;
+  return branchStepCount > 0;
 }
