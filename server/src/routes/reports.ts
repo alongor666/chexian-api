@@ -33,6 +33,7 @@ import {
   validatePathWithinDirectory,
 } from '../utils/security.js';
 import { getReportsDir, getStaticReportsRoot } from '../config/paths.js';
+import { getDeploymentBranchCode } from '../config/sql-federation-policy.js';
 import { dbEnv } from '../config/env.js';
 
 const router = Router();
@@ -46,10 +47,14 @@ const ALLOWED_REPORT_IDS = new Set<string>([
 ]);
 
 // 静态报告门户（/api/reports/portal/:slug/:file）的 slug 白名单。
-// 目录布局：<staticReportsRoot>/<slug>/{<file>, orgs/<branch>/<org>/<file>}
+// 目录布局：<staticReportsRoot>/<slug>/{<file>, branches/<branch>/<file>, orgs/<branch>/<org>/<file>}
 const STATIC_REPORT_SLUGS = new Set<string>([
   'diagnose-period-trend',
 ]);
+
+// 部署省（env BRANCH_CODE 驱动，缺省 'SC' 且打 WARN）。模块级取一次：
+// resolveBranchCode 每次调用都会 WARN，逐请求调用会刷日志；env 在进程生命周期内不变。
+const PORTAL_DEPLOYMENT_BRANCH = getDeploymentBranchCode();
 
 /**
  * 报告的机构归属（行级安全的可信归属源）。
@@ -349,6 +354,11 @@ const REPORT_HTML_CSP = [
   "frame-ancestors 'self'",
 ].join('; ');
 
+/** 门户可见范围：分公司管理员按省份取分公司级报告；机构用户取本机构报告 */
+export type PortalScope =
+  | { kind: 'branch'; branch: string | null; fullEntitlement: boolean }
+  | { kind: 'org'; branch: string; org: string };
+
 /**
  * 门户路由的用户可见范围（B346 彻底治理：同一 URL 随用户产出不同机构报告）。
  *
@@ -358,14 +368,27 @@ const REPORT_HTML_CSP = [
  * 由服务端派生），故门户无跨机构存在性侧信道，404 可以保留精确语义
  * （org_user 拿到 404 = 本机构该期报告未生成，供前端明示）。
  *
+ * branch_admin 也按省份区分（多省平台，禁硬编码省份）：
+ *   - branch = 本人 branchCode（无 branchCode 的系统级超管 → null）
+ *   - fullEntitlement = 全国超管（visibleBranches 非空，不变量保证覆盖所有已注册省）
+ *     或系统级超管（无 branchCode）——只有他们可回退读根目录 legacy 省级报告
+ *
  * fail-closed：org_user 缺 organization / branchCode 非 ^[A-Z]{2}$ / org 含路径字符
- * → 403；telemarketing / 未知角色 → 403（assertReportRoleAllowed 前置）。
+ * → 403；branch_admin 的 branchCode 存在但格式非法 → 403；telemarketing / 未知角色
+ * → 403（assertReportRoleAllowed 前置）。
  */
-export function resolvePortalScope(
-  req: Request
-): { kind: 'branch' } | { kind: 'org'; branch: string; org: string } {
+export function resolvePortalScope(req: Request): PortalScope {
   const role = req.user?.role as UserRole | undefined;
-  if (role === UserRole.BRANCH_ADMIN) return { kind: 'branch' };
+  if (role === UserRole.BRANCH_ADMIN) {
+    const rawBranch = req.user?.branchCode;
+    if (rawBranch !== undefined && !/^[A-Z]{2}$/.test(rawBranch)) {
+      throw new AppError(403, '无权访问报告'); // 坏 branchCode fail-closed
+    }
+    const visible = req.user?.visibleBranches;
+    const fullEntitlement =
+      (Array.isArray(visible) && visible.length > 0) || rawBranch === undefined;
+    return { kind: 'branch', branch: rawBranch ?? null, fullEntitlement };
+  }
   if (role === UserRole.ORG_USER) {
     const org = req.user?.organization?.trim();
     const branch = req.user?.branchCode;
@@ -381,6 +404,33 @@ export function resolvePortalScope(
     throw new AppError(403, '无权访问报告');
   }
   throw new AppError(403, '无权访问报告');
+}
+
+/**
+ * 门户取数候选目录（有序，先命中先服务；纯函数便于测试）。
+ *
+ * - org_user：唯一候选 <slug>/orgs/<branch>/<org>/
+ * - branch_admin：先 <slug>/branches/<branch>/（daily.mjs 按部署省镜像 + 未来各省
+ *   自产），未命中时**仅当**全国超管（fullEntitlement）或本人省份 === 部署省
+ *   （deploymentBranch，env BRANCH_CODE 驱动、缺省 SC）才回退根目录 legacy 省级
+ *   报告——根目录产物按构造属于部署省，单省他省管理员（如山西 sxAdmin）不得回退
+ *   读到部署省（四川）数据，fail-closed 404。
+ */
+export function portalCandidateDirs(
+  scope: PortalScope,
+  slug: string,
+  root: string,
+  deploymentBranch: string
+): string[] {
+  if (scope.kind === 'org') {
+    return [path.join(root, slug, 'orgs', scope.branch, scope.org)];
+  }
+  const dirs: string[] = [];
+  if (scope.branch) dirs.push(path.join(root, slug, 'branches', scope.branch));
+  if (scope.fullEntitlement || scope.branch === deploymentBranch) {
+    dirs.push(path.join(root, slug));
+  }
+  return dirs;
 }
 
 /**
@@ -412,9 +462,11 @@ function serveReportFile(res: Response, fullPath: string): void {
 }
 
 // 静态报告门户（B346 彻底治理）：GET /api/reports/portal/:slug/:file
-// 同一 URL 随登录用户产出不同报告：branch_admin → 省级 <slug>/<file>；
-// org_user → 本机构 <slug>/orgs/<branch>/<org>/<file>。授权与文件选取全在 Express，
-// 不依赖 Nginx auth_request / X-Original-URI 透传（那条静态链路保留为纵深防御）。
+// 同一 URL 随登录用户产出不同报告（多省数据驱动，禁硬编码省份）：
+//   branch_admin → 本省 <slug>/branches/<branchCode>/<file>（全国超管/部署省管理员可回退根目录 legacy）；
+//   org_user     → 本机构 <slug>/orgs/<branch>/<org>/<file>。
+// 授权与文件选取全在 Express，不依赖 Nginx auth_request / X-Original-URI 透传
+// （那条静态链路保留为纵深防御）。
 // ⚠ 必须先于 '/:reportId/:snapshot/*' 注册，否则 portal/<slug>/<file> 会被其吞掉。
 router.get(
   '/portal/:slug/:file',
@@ -431,19 +483,24 @@ router.get(
     const safeFile = validatePortalFile(file);
 
     const root = getStaticReportsRoot();
-    const baseDir =
-      scope.kind === 'org'
-        ? path.join(root, slug, 'orgs', scope.branch, scope.org)
-        : path.join(root, slug);
-    // baseDir 与最终路径都必须真实落在静态报告根内（防 symlink / 拼接逃逸）
-    validatePathWithinDirectory(baseDir, root);
-    const fullPath = path.join(baseDir, safeFile);
-    validatePathWithinDirectory(fullPath, baseDir);
+    // 候选目录按优先级尝试（branch_admin：branches/<本省>/ → 有权者回退根目录 legacy）
+    const candidates = portalCandidateDirs(scope, slug, root, PORTAL_DEPLOYMENT_BRANCH);
+    let fullPath: string | null = null;
+    for (const baseDir of candidates) {
+      // baseDir 与最终路径都必须真实落在静态报告根内（防 symlink / 拼接逃逸）
+      validatePathWithinDirectory(baseDir, root);
+      const candidate = path.join(baseDir, safeFile);
+      validatePathWithinDirectory(candidate, baseDir);
+      if (fs.existsSync(candidate)) {
+        fullPath = candidate;
+        break;
+      }
+    }
 
-    if (!fs.existsSync(fullPath)) {
+    if (!fullPath) {
       throw new AppError(
         404,
-        scope.kind === 'org' ? '本机构报告暂未生成' : '报告不存在或已过期'
+        scope.kind === 'org' ? '本机构报告暂未生成' : '本分公司报告暂未生成或已过期'
       );
     }
     if (safeFile === 'manifest.json') {

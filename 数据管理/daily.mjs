@@ -61,7 +61,7 @@ import {
 } from './lib/source-file-routing.mjs';
 // 多省 Bug 1：merge_parquet.py 参数构造纯函数（branchCode 经 ctx 透传，锁死 --declared-branch）
 import { buildMergeParquetArgs } from './lib/merge-parquet-args.mjs';
-import { readBranchOrgUnits, skillSupportsOrgFlag } from './lib/period-trend-orgs.mjs';
+import { readBranchOrgUnits, skillSupportsOrgFlag, listBranchOrgMappingCodes, planProvinceMirror } from './lib/period-trend-orgs.mjs';
 // 多省 B3 防重复：区间覆盖归档纯函数（被新全量区间完全覆盖的旧文件归档，仅同品类互斥）
 import {
   parseRangePrefix,
@@ -1043,21 +1043,32 @@ function runPeriodTrendReport(scriptDir, python) {
     return true;
   };
 
+  const slugDir = join(projectRoot, 'public/reports/diagnose-period-trend');
   if (runOnce([], '省级')) {
     log('green', '✅ 短中长期对照报告（省级）已生成');
+    // 根目录 legacy 布局不携带省份身份：把最新一期省级产物镜像到 branches/<部署省>/，
+    // 门户（/api/reports/portal）按 branch_admin 的省份从 branches/ 取数
+    // （B346：单省山西管理员不得读到四川省级报告）。镜像失败不阻塞。
+    try {
+      const deployBranch = resolveEnvBranchCode('runPeriodTrendReport');
+      const plan = planProvinceMirror(existsSync(slugDir) ? readdirSync(slugDir) : []);
+      if (plan) {
+        const destDir = join(slugDir, 'branches', deployBranch);
+        mkdirSync(destDir, { recursive: true });
+        for (const f of plan.files) copyFileSync(join(slugDir, f), join(destDir, f));
+        log('green', `✅ 省级报告已镜像到 branches/${deployBranch}/（${plan.date}，${plan.files.length} 个文件）`);
+      }
+    } catch (e) {
+      console.warn(`[ETL] 省级报告 branches/ 镜像失败（不阻塞）：${e.message}`);
+    }
   }
 
-  // B004 机构级：按 branch-org-mapping/<branch>.json units 循环产出 orgs/<branch>/<org>/
-  const branchCode = resolveEnvBranchCode('runPeriodTrendReport');
-  let units;
-  try {
-    units = readBranchOrgUnits(join(scriptDir, 'config'), branchCode);
-  } catch (e) {
-    console.warn(`[ETL] 机构级短中长期报告跳过：机构清单 SSOT 异常 — ${e.message}`);
-    return;
-  }
-  if (units === null) {
-    console.warn(`[ETL] 机构级短中长期报告跳过：机构清单 SSOT 不存在（数据管理/config/branch-org-mapping/${branchCode}.json）`);
+  // B004/B346 机构级：数据驱动遍历**所有已注册省份**（branch-org-mapping/*.json，
+  // 当前 SC + SX），山西/四川一视同仁——新省上线只需新增 <branch>.json，零代码改动，
+  // 禁止硬编码省份。单机构/单省失败仅告警，不阻塞其余机构与 ETL。
+  const branchCodes = listBranchOrgMappingCodes(join(scriptDir, 'config'));
+  if (branchCodes.length === 0) {
+    console.warn('[ETL] 机构级短中长期报告跳过：数据管理/config/branch-org-mapping/ 下无任何 <branch>.json');
     return;
   }
   // B346 治理：skill --org 能力预检（fail-loud）。skill 版本落后（< v2.3.0，无 --org）时，
@@ -1074,13 +1085,23 @@ function runPeriodTrendReport(scriptDir, python) {
     log('red', '   然后补跑: node 数据管理/daily.mjs report   （只重生成报告并同步 VPS，不重跑 ETL）');
     return;
   }
-  log('cyan', `[ETL] 机构级短中长期报告：${branchCode} 共 ${units.length} 个机构（orgs/${branchCode}/<机构>/）`);
-  let orgOk = 0;
-  for (const org of units) {
-    if (runOnce(['--org', org, '--branch', branchCode], `机构 ${org}`)) orgOk++;
+  for (const branchCode of branchCodes) {
+    let units;
+    try {
+      units = readBranchOrgUnits(join(scriptDir, 'config'), branchCode);
+    } catch (e) {
+      console.warn(`[ETL] [${branchCode}] 机构级报告跳过：机构清单 SSOT 异常 — ${e.message}`);
+      continue;
+    }
+    if (units === null) continue; // 枚举来源即文件本身，理论不可达；防御性跳过
+    log('cyan', `[ETL] [${branchCode}] 机构级短中长期报告：共 ${units.length} 个机构（orgs/${branchCode}/<机构>/）`);
+    let orgOk = 0;
+    for (const org of units) {
+      if (runOnce(['--org', org, '--branch', branchCode], `机构 ${branchCode}/${org}`)) orgOk++;
+    }
+    const level = orgOk === units.length ? 'green' : 'yellow';
+    log(level, `${orgOk === units.length ? '✅' : '⚠'} [${branchCode}] 机构级短中长期对照报告：${orgOk}/${units.length} 个机构成功`);
   }
-  const level = orgOk === units.length ? 'green' : 'yellow';
-  log(level, `${orgOk === units.length ? '✅' : '⚠'} 机构级短中长期对照报告：${orgOk}/${units.length} 个机构成功`);
 }
 
 async function syncToVps(scriptDir) {
@@ -1649,14 +1670,10 @@ async function main() {
   }
 
   // B346 治理：report 子命令——报告独立补跑入口（不在 ALL_DOMAINS，同 freshness 提前拦截）。
-  // 不重跑 ETL，仅重生成短中长期报告（省级 + 机构级 orgs/<branch>/<org>/）并同步 VPS，
-  // 是「补产当期机构版报告」的最短路径（此前必须整轮 ETL 才会触发第 9 步）。
+  // 不重跑 ETL，仅重生成短中长期报告（省级 + branches/ 镜像 + 各注册省机构级 orgs/）并
+  // 同步 VPS，是「补产当期机构版报告」的最短路径（此前必须整轮 ETL 才会触发第 9 步）。
+  // 省份不硬编码：机构级循环覆盖 branch-org-mapping/ 全部注册省（当前 SC + SX）。
   if (process.argv.includes('report')) {
-    const __branchRep = resolveEnvBranchCode('report子命令');
-    if (__branchRep !== 'SC') {
-      log('red', `❌ [${__branchRep}] report 子命令当前仅支持 SC（diagnose-period-trend skill 读共享 current/ 仓，非 SC 会产出错省报告）`);
-      process.exit(1);
-    }
     runPeriodTrendReport(scriptDir, findPython());
     if (noSync) {
       log('yellow', '已跳过 VPS 同步（--no-sync）');

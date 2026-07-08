@@ -12,7 +12,7 @@
  * 告警跳过机构级、不臆造清单）；units 缺失/为空/含非法值（非字符串、空串、
  * 路径字符）抛错——SSOT 坏了要响，不静默吞。
  */
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 /** branch 段 schema，与 parseStaticReportOwner / gen-reports-manifest 三方对齐 */
@@ -29,6 +29,46 @@ export const BRANCH_CODE_RE = /^[A-Z]{2}$/;
 export function skillSupportsOrgFlag(helpText) {
   // (?![\w-]) 拒绝 --organization / --org-x 等相似 flag 误判
   return typeof helpText === 'string' && /(^|[\s[])--org(?![\w-])/.test(helpText);
+}
+
+/**
+ * 枚举已注册省份（数据驱动，禁硬编码 SC/SX）：扫描 branch-org-mapping/ 下
+ * 形如 <两位大写>.json 的文件名。新省上线只需落一份 <branch>.json，
+ * daily.mjs 机构级报告循环即自动覆盖，零代码改动。
+ * @param {string} configDir - 数据管理/config 目录绝对路径
+ * @returns {string[]} 已排序省份码；目录不存在 → []
+ */
+export function listBranchOrgMappingCodes(configDir) {
+  const dir = join(configDir, 'branch-org-mapping');
+  if (!existsSync(dir)) return [];
+  const codes = [];
+  for (const name of readdirSync(dir)) {
+    const m = /^([A-Z]{2})\.json$/.exec(name);
+    if (m) codes.push(m[1]);
+  }
+  return codes.sort();
+}
+
+/**
+ * 从省级产物文件名中选出「最新一期 cutoff」的文件组（纯函数）。
+ * daily.mjs 据此把根目录省级报告镜像到 branches/<部署省>/ ——
+ * 根目录 legacy 布局不携带省份身份，镜像后门户可按 branch_admin 的省份取数
+ * （B346：单省山西管理员不得读到四川省级报告）。
+ * @param {string[]} fileNames - slug 根目录文件名列表
+ * @returns {{ date: string, files: string[] } | null} 无匹配 → null
+ */
+export function planProvinceMirror(fileNames) {
+  const byDate = new Map();
+  for (const name of fileNames ?? []) {
+    const m = /^(\d{4}-\d{2}-\d{2})(-.*)?\.html?$/i.exec(name);
+    if (!m) continue;
+    const arr = byDate.get(m[1]) ?? [];
+    arr.push(name);
+    byDate.set(m[1], arr);
+  }
+  if (byDate.size === 0) return null;
+  const date = [...byDate.keys()].sort().at(-1);
+  return { date, files: [...byDate.get(date)].sort() };
 }
 
 /**
