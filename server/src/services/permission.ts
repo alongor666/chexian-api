@@ -9,8 +9,11 @@ import { JwtPayload } from '../middleware/auth.js';
 import { UserRole } from '../middleware/permission.js';
 
 /**
- * 四川（SC）机构列表（从前端复用）
+ * 四川（SC）机构列表（从前端复用）。
+ * 与 src/shared/config/organizations.ts 的 ORGANIZATIONS 镜像一致
+ * （前后端独立编译域，禁止 import，逐条对齐）。governance「省份映射前后端镜像」锚点对账。
  */
+// ── SC-ORG-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
 export const ORGANIZATIONS = [
   '乐山',
   '天府',
@@ -25,6 +28,7 @@ export const ORGANIZATIONS = [
   '青羊',
   '高新',
 ] as const;
+// ── SC-ORG-MIRROR-END ──
 
 /**
  * 山西（SX）经营单元列表（11）。

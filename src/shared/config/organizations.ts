@@ -6,8 +6,11 @@
 
 /**
  * 三级机构列表（12个，四川 SC）
- * 对应 salesman_organization_mapping.json 中的 organizations
+ * 对应 salesman_organization_mapping.json 中的 organizations。
+ * 与 server/src/services/permission.ts 的 ORGANIZATIONS 镜像一致
+ * （前后端独立编译域，禁止 import，逐条对齐）。governance「省份映射前后端镜像」锚点对账。
  */
+// ── SC-ORG-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
 export const ORGANIZATIONS = [
   '乐山',
   '天府',
@@ -22,6 +25,7 @@ export const ORGANIZATIONS = [
   '青羊',
   '高新',
 ] as const;
+// ── SC-ORG-MIRROR-END ──
 
 /**
  * 山西（SX）经营单元列表（11个）。

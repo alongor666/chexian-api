@@ -19,11 +19,14 @@
  * 多省平台（四川 SC / 山西 SX）前后端各自维护省份相关映射常量，此前仅靠人工核对：
  *   - src/shared/utils/branchDisplay.ts 的 BRANCH_LABELS
  *     ↔ server/src/config/branch-names.ts 的 BRANCH_NAMES
- *   - src/shared/config/organizations.ts 的 SX_ORGANIZATIONS / BRANCH_ORGANIZATIONS
+ *   - src/shared/config/organizations.ts 的 ORGANIZATIONS / SX_ORGANIZATIONS / BRANCH_ORGANIZATIONS
  *     ↔ server/src/services/permission.ts 的同名常量
- * 仿 checkFilterCapabilityMirror 的 BEGIN/END 锚点模式，4 处常量定义处各自加了锚点注释
+ * 仿 checkFilterCapabilityMirror 的 BEGIN/END 锚点模式，4 组共 5 处常量定义处各自加了锚点注释
  * （BRANCH_LABELS/BRANCH_NAMES 变量名不同、周边文档注释也可能两端不同，故锚点只框住
- * 纯值域/常量体，不含差异化的文档注释），逐字比对锚点区文本。
+ * 纯值域/常量体，不含差异化的文档注释），逐字比对锚点区文本。ORGANIZATIONS（四川 12 机构）
+ * 与 SX_ORGANIZATIONS/BRANCH_ORGANIZATIONS 同属「前后端独立编译域重复声明的省份常量」，
+ * 起初漏加锚点——实测验证：仅改前端 ORGANIZATIONS（如新增一个机构）不改后端，检查仍报通过，
+ * 是一处静默漏检；补齐 SC-ORG-MIRROR 锚点后此路径可被捕获。
  *
  * 从 check-governance.mjs 单体抽出（H5 行数棘轮，仿 upload-size-consistency.mjs 先例），
  * 依赖以 { rootDir, io } 注入。
@@ -32,9 +35,20 @@
 import fs from 'fs';
 import path from 'path';
 
+/**
+ * 解析一个"干净"的三元组版本号（可选 v 前缀 + 可选 prerelease/build 后缀）。
+ *
+ * 正则**锚定到字符串末尾**（而非仅匹配前缀）：早期实现只匹配前缀，导致复合 range
+ * 如 `>=1.0.0 <2.0.0` 被静默截断成 `>=1.0.0`（`<2.0.0` 上界被丢弃、不报错），
+ * 是一处"误判为满足"的静默漏检（比"不认识就报错拦 CI"更危险的方向）。锚定后，
+ * 复合 range / x-range（`1.x`）/ `workspace:*` / `npm:` 别名等本比较器不支持的语法，
+ * 一律 base=null → satisfiesSemverRange 返回 false → 治理检查报错拦截，而不是悄悄放行。
+ * 已用仓库实际 server/package-lock.json 全部 345 个锁定版本验证：均能被此锚定正则匹配
+ * （无需再放宽）。
+ */
 function parseSemverTriple(versionStr) {
   if (typeof versionStr !== 'string') return null;
-  const m = versionStr.trim().match(/^v?(\d+)\.(\d+)\.(\d+)/);
+  const m = versionStr.trim().match(/^v?(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.+-]*)?$/);
   if (!m) return null;
   return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
@@ -191,7 +205,7 @@ function compareAnchoredMirror(label, frontPath, backPath, beginMarker, endMarke
 
 export function checkBranchMappingMirror({ rootDir, io }) {
   const { info, success } = io;
-  info('检查省份映射两端一致（BRANCH_LABELS/BRANCH_NAMES + SX_ORGANIZATIONS/BRANCH_ORGANIZATIONS 前后端镜像）...');
+  info('检查省份映射两端一致（BRANCH_LABELS/BRANCH_NAMES + ORGANIZATIONS + SX_ORGANIZATIONS/BRANCH_ORGANIZATIONS 前后端镜像）...');
 
   const labelsFrontPath = path.join(rootDir, 'src/shared/utils/branchDisplay.ts');
   const labelsBackPath = path.join(rootDir, 'server/src/config/branch-names.ts');
@@ -205,6 +219,11 @@ export function checkBranchMappingMirror({ rootDir, io }) {
     'BRANCH-NAME-MIRROR-BEGIN', 'BRANCH-NAME-MIRROR-END', io,
   ) && ok;
   ok = compareAnchoredMirror(
+    '四川机构列表（ORGANIZATIONS）',
+    orgFrontPath, orgBackPath,
+    'SC-ORG-MIRROR-BEGIN', 'SC-ORG-MIRROR-END', io,
+  ) && ok;
+  ok = compareAnchoredMirror(
     '山西经营单元列表（SX_ORGANIZATIONS）',
     orgFrontPath, orgBackPath,
     'SX-ORG-MIRROR-BEGIN', 'SX-ORG-MIRROR-END', io,
@@ -216,7 +235,7 @@ export function checkBranchMappingMirror({ rootDir, io }) {
   ) && ok;
 
   if (ok) {
-    success('省份映射前后端镜像一致（3 组锚点）');
+    success('省份映射前后端镜像一致（4 组锚点）');
   }
   return ok;
 }
