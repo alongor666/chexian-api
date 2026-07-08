@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, QUERY_CACHE, withRouteCache, resolveBranchRlsCode } from './shared.js';
+import { asyncHandler, AppError, duckdbService, parseFiltersAndBuildWhere, isValidDateFormat, QUERY_CACHE, withRouteCache, resolveBranchRlsCode, resolveLatestPlanYear } from './shared.js';
 import { generateOrgHolidayReportQuery, generateSalesmanHolidayDetailQuery, generateHolidayFreeDrilldownQuery, type HolidayDrillDimension, type HolidayDrillStep } from '../../sql/marketing-report.js';
 import { generateOrgPremiumReportQuery, generateSalesmanPremiumReportQuery } from '../../sql/premium-report.js';
 
@@ -107,7 +107,8 @@ router.get(
 
 export const premiumReportExtraSchema = z.object({
   reportType: z.enum(['org', 'salesman']).default('org'),
-  planYear: z.coerce.number().default(2026),
+  // 缺省时按 SalesmanPlanFact 最新计划年解析（见 handler），禁止硬编码年份默认值
+  planYear: z.coerce.number().optional(),
 });
 
 router.get(
@@ -128,9 +129,10 @@ router.get(
     if (reportType === 'org') {
       sql = generateOrgPremiumReportQuery(finalWhereClause, dateField);
     } else {
+      const resolvedPlanYear = planYear ?? await resolveLatestPlanYear('SalesmanPlanFact');
       // 分省 RLS（ADR G4 GATED 多省）：SalesmanPlanFact 子查询按省过滤（双门控）
       const premiumPlanBranchCode = await resolveBranchRlsCode(req, 'SalesmanPlanFact');
-      sql = generateSalesmanPremiumReportQuery(finalWhereClause, planYear, premiumPlanBranchCode);
+      sql = generateSalesmanPremiumReportQuery(finalWhereClause, resolvedPlanYear, premiumPlanBranchCode);
     }
 
     const result = await duckdbService.query(sql, QUERY_CACHE.hotspotShort);
