@@ -7,11 +7,13 @@
  *   - stale       → 数据已更新但报告未刷新：醒目提醒「数据未更新」，仍可打开上一期
  *   - unavailable → 一期报告都没有 / manifest 拉不到：禁用，提示「报告暂未生成」
  */
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Card } from '../../../shared/ui/Card'
 import { badgeStyles, cn, colorClasses } from '../../../shared/styles'
+import { usePermission } from '../../../shared/contexts/PermissionContext'
 import { getReportUrl, type ReportEntry } from '../data/reportEntries'
+import { resolveReportScope } from '../data/reportScope'
 import { resolveReport } from '../data/resolveReport'
 import { useReportManifest } from '../hooks/useReportManifest'
 
@@ -26,13 +28,19 @@ export const ReportEntryCard = memo(function ReportEntryCard({
   etlDate,
   loading = false,
 }: ReportEntryCardProps) {
-  const { data: manifest, isLoading: manifestLoading } = useReportManifest(entry)
+  // B346：报告随用户可见范围而不同 —— 分公司管理员看省级全量，
+  // 三级机构用户看本机构版（orgs/<branch>/<org>/），其他角色无权限。
+  const { userPermission } = usePermission()
+  const scope = useMemo(() => resolveReportScope(userPermission), [userPermission])
+
+  const { data: manifest, isLoading: manifestLoading } = useReportManifest(entry, scope)
 
   const resolution = resolveReport(manifest ?? null, etlDate)
 
-  const reportUrl = resolution.reportFile
-    ? getReportUrl(entry.slug, resolution.reportFile)
-    : null
+  const reportUrl =
+    scope.kind !== 'forbidden' && resolution.reportFile
+      ? getReportUrl(entry.slug, resolution.reportFile, scope)
+      : null
 
   const isBusy = loading || manifestLoading
   const isClickable = !isBusy && reportUrl !== null
@@ -81,6 +89,8 @@ export const ReportEntryCard = memo(function ReportEntryCard({
 
       <ReportStatusFooter
         busy={isBusy}
+        forbidden={scope.kind === 'forbidden'}
+        orgScoped={scope.kind === 'org'}
         status={resolution.status}
         reportDate={resolution.reportDate}
         etlDate={etlDate}
@@ -91,15 +101,27 @@ export const ReportEntryCard = memo(function ReportEntryCard({
 
 function ReportStatusFooter({
   busy,
+  forbidden,
+  orgScoped,
   status,
   reportDate,
   etlDate,
 }: {
   busy: boolean
+  forbidden: boolean
+  orgScoped: boolean
   status: ReturnType<typeof resolveReport>['status']
   reportDate: string | null
   etlDate: string | null
 }) {
+  if (forbidden) {
+    return (
+      <div className={cn('mt-4 text-sm', colorClasses.text.neutralMuted)}>
+        当前账号暂无报告查看权限
+      </div>
+    )
+  }
+
   if (busy) {
     return <div className={cn('mt-4 text-sm', colorClasses.text.neutralMuted)}>加载中…</div>
   }
@@ -129,7 +151,8 @@ function ReportStatusFooter({
   if (status === 'unavailable') {
     return (
       <div className={cn('mt-4 text-sm', colorClasses.text.neutralMuted)}>
-        报告暂未生成{etlDate ? `（数据已就绪至 ${etlDate}）` : ''}
+        {orgScoped ? '本机构报告暂未生成' : '报告暂未生成'}
+        {etlDate ? `（数据已就绪至 ${etlDate}）` : ''}
       </div>
     )
   }

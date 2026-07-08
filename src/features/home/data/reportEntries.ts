@@ -9,6 +9,7 @@
  * （那正是 PR 441 想根除的「空白 SPA 页」行为）。
  */
 import { BarChart3, type LucideIcon } from 'lucide-react'
+import type { ReportScope } from './reportScope'
 
 export interface ReportEntry {
   /** 路由稳定 id，用于 React key */
@@ -27,14 +28,25 @@ export interface ReportEntry {
   accent?: 'primary' | 'success'
 }
 
-/** manifest 静态文件 URL */
-export function getManifestUrl(slug: string): string {
-  return `/reports/${slug}/manifest.json`
+/**
+ * 报告目录基址：省级 = `/reports/<slug>/`；机构级 = `/reports/<slug>/orgs/<branch>/<org>/`
+ * （B346 授权路径约定，中文机构名需 encodeURIComponent）。forbidden 不应走到这里。
+ */
+function getReportBase(slug: string, scope: ReportScope): string {
+  if (scope.kind === 'org') {
+    return `/reports/${slug}/orgs/${encodeURIComponent(scope.branch)}/${encodeURIComponent(scope.org)}`
+  }
+  return `/reports/${slug}`
 }
 
-/** 由 slug + 文件名拼出报告 URL */
-export function getReportUrl(slug: string, file: string): string {
-  return `/reports/${slug}/${file}`
+/** manifest 静态文件 URL（按用户可见范围取省级或机构级 manifest） */
+export function getManifestUrl(slug: string, scope: ReportScope): string {
+  return `${getReportBase(slug, scope)}/manifest.json`
+}
+
+/** 由 slug + 文件名拼出报告 URL（按用户可见范围取省级或机构级文件） */
+export function getReportUrl(slug: string, file: string, scope: ReportScope): string {
+  return `${getReportBase(slug, scope)}/${file}`
 }
 
 export const reportEntries: ReportEntry[] = [

@@ -168,6 +168,8 @@ export const AUTH_ROUTES = {
   REFRESH: '/refresh',
   LOGOUT: '/logout',
   ME: '/me',
+  /** Nginx 静态 /reports/* auth_request 细闸（B346 机构级授权），非前端直调 */
+  REPORT_ACCESS: '/report-access',
 
   USERS: '/users',
   USER_BY_ID: '/users/:id',

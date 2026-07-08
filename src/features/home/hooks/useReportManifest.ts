@@ -9,12 +9,13 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { getManifestUrl, type ReportEntry } from '../data/reportEntries'
+import type { ReportScope } from '../data/reportScope'
 import type { ReportManifest } from '../data/resolveReport'
 
-async function fetchManifest(slug: string): Promise<ReportManifest | null> {
+async function fetchManifest(slug: string, scope: ReportScope): Promise<ReportManifest | null> {
   let res: Response
   try {
-    res = await fetch(getManifestUrl(slug), {
+    res = await fetch(getManifestUrl(slug, scope), {
       credentials: 'include',
       headers: { Accept: 'application/json' },
     })
@@ -44,10 +45,18 @@ async function fetchManifest(slug: string): Promise<ReportManifest | null> {
   }
 }
 
-export function useReportManifest(entry: ReportEntry) {
+export function useReportManifest(entry: ReportEntry, scope: ReportScope) {
   return useQuery({
-    queryKey: ['report-manifest', entry.slug],
-    queryFn: () => fetchManifest(entry.slug),
+    // scope 进 queryKey：切换用户（分公司管理员 ↔ 机构用户）不得复用彼此的 manifest 缓存
+    queryKey: [
+      'report-manifest',
+      entry.slug,
+      scope.kind,
+      scope.kind === 'org' ? `${scope.branch}/${scope.org}` : null,
+    ],
+    queryFn: () => fetchManifest(entry.slug, scope),
+    // forbidden：不发请求（后端也会 403），卡片显示无权限
+    enabled: scope.kind !== 'forbidden',
     staleTime: 60 * 60 * 1000, // 1 小时，与 data-version 对齐
   })
 }

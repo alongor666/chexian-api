@@ -104,3 +104,74 @@ describe('generateReportsManifests', () => {
     expect(entries).toEqual([{ date: '2026-05-29', file: '2026-05-29-dashboard.html' }]);
   });
 });
+
+describe('generateReportsManifests: 机构级子目录（B346）', () => {
+  it('orgs/<branch>/<org>/ 生成机构级 manifest（带 scope），省级 manifest 不受影响', () => {
+    const root = makeRoot();
+    const d = slugDir(root);
+    mkdirSync(d, { recursive: true });
+    touch(d, '2026-07-06-dashboard.html');
+    const orgDir = join(d, 'orgs', 'SC', '乐山');
+    mkdirSync(orgDir, { recursive: true });
+    touch(orgDir, '2026-07-06-dashboard.html');
+    touch(orgDir, '2026-07-01-dashboard.html');
+
+    const summaries = generateReportsManifests(root);
+
+    const province = readManifest(root);
+    expect(province.entries).toHaveLength(1);
+    expect(province.scope).toBeUndefined();
+
+    const orgManifest = JSON.parse(readFileSync(join(orgDir, 'manifest.json'), 'utf8'));
+    expect(orgManifest.slug).toBe('diagnose-period-trend');
+    expect(orgManifest.scope).toEqual({ branch: 'SC', org: '乐山' });
+    expect(orgManifest.entries.map((e) => e.date)).toEqual(['2026-07-06', '2026-07-01']);
+    expect(orgManifest.latestFile).toBe('2026-07-06-dashboard.html');
+
+    const s = summaries.find((x) => x.slug === 'diagnose-period-trend');
+    expect(s.orgs).toEqual([
+      { branch: 'SC', org: '乐山', latest: '2026-07-06', count: 2 },
+    ]);
+  });
+
+  it('branch 段非两位大写 → 跳过（与后端授权 schema 对齐）', () => {
+    const root = makeRoot();
+    const d = slugDir(root);
+    const badDir = join(d, 'orgs', 'sc', '乐山');
+    mkdirSync(badDir, { recursive: true });
+    touch(badDir, '2026-07-06-dashboard.html');
+
+    generateReportsManifests(root);
+    expect(existsSync(join(badDir, 'manifest.json'))).toBe(false);
+  });
+
+  it('省级无文件但机构目录有文件 → 机构 manifest 照常生成', () => {
+    const root = makeRoot();
+    const d = slugDir(root);
+    const orgDir = join(d, 'orgs', 'SX', '太原一部');
+    mkdirSync(orgDir, { recursive: true });
+    touch(orgDir, '2026-07-06-dashboard.html');
+
+    const summaries = generateReportsManifests(root);
+    expect(existsSync(join(d, 'manifest.json'))).toBe(false); // 省级跳过不写空
+    expect(existsSync(join(orgDir, 'manifest.json'))).toBe(true);
+    const s = summaries.find((x) => x.slug === 'diagnose-period-trend');
+    expect(s.skipped).toBe(true);
+    expect(s.orgs).toHaveLength(1);
+  });
+
+  it('机构 manifest 与既有记录合并（append-only 语义与省级一致）', () => {
+    const root = makeRoot();
+    const orgDir = join(slugDir(root), 'orgs', 'SC', '乐山');
+    mkdirSync(orgDir, { recursive: true });
+    touch(orgDir, '2026-07-01-dashboard.html');
+    touch(orgDir, '2026-07-06-dashboard.html');
+    generateReportsManifests(root);
+
+    rmSync(join(orgDir, '2026-07-01-dashboard.html'));
+    generateReportsManifests(root);
+
+    const m = JSON.parse(readFileSync(join(orgDir, 'manifest.json'), 'utf8'));
+    expect(m.entries.map((e) => e.date).sort()).toEqual(['2026-07-01', '2026-07-06']);
+  });
+});
