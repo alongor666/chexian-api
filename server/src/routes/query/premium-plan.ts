@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, AppError, duckdbService, withRouteCache, parseFiltersAndBuildWhere, resolveBranchRlsCode } from './shared.js';
+import { asyncHandler, AppError, duckdbService, withRouteCache, parseFiltersAndBuildWhere, resolveBranchRlsCode, resolveLatestPlanYear } from './shared.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../../sql/premiumPlan.js';
 
 const router = Router();
 
 export const premiumPlanSchema = z.object({
   queryType: z.enum(['drilldown', 'kpi', 'distribution']).default('drilldown'),
-  planYear: z.coerce.number().default(2026),
+  // 缺省时按 achievement_cache 最新计划年解析（见 handler），禁止硬编码年份默认值
+  planYear: z.coerce.number().optional(),
   level: z.enum(['company', 'org', 'team', 'salesman', 'customer_category', 'coverage']).default('company'),
   orgFilter: z.string().max(255).optional(),
   teamFilter: z.string().max(255).optional(),
@@ -30,11 +31,12 @@ router.get(
     }
 
     const {
-      queryType, planYear, level,
+      queryType, planYear: requestedPlanYear, level,
       orgFilter, teamFilter, salesmanFilter, customerCategoryFilter,
       sortField, sortOrder,
       rankingEnabled, topN, bottomN,
     } = parseResult.data;
+    const planYear = requestedPlanYear ?? await resolveLatestPlanYear('achievement_cache');
 
     // RLS：通过 permissionFilter 统一注入（覆盖 org_user / telemarketing_user / branchCode 三态）
     const { whereClause } = parseFiltersAndBuildWhere(req);
@@ -97,7 +99,8 @@ router.get(
 );
 
 export const planAchievementSchema = z.object({
-  planYear: z.coerce.number().default(2026),
+  // 缺省时按 achievement_cache 最新计划年解析（见 handler），禁止硬编码年份默认值
+  planYear: z.coerce.number().optional(),
   level: z.enum(['company', 'org', 'team', 'salesman', 'customer_category', 'coverage']).default('org'),
   orgFilter: z.string().max(255).optional(),
   teamFilter: z.string().max(255).optional(),
@@ -116,7 +119,8 @@ router.get(
       throw new AppError(400, parseResult.error.issues[0].message);
     }
 
-    const { planYear, level, orgFilter, teamFilter, salesmanFilter, customerCategoryFilter, sortField, sortOrder } = parseResult.data;
+    const { planYear: requestedPlanYear, level, orgFilter, teamFilter, salesmanFilter, customerCategoryFilter, sortField, sortOrder } = parseResult.data;
+    const planYear = requestedPlanYear ?? await resolveLatestPlanYear('achievement_cache');
 
     // RLS：通过 permissionFilter 统一注入（覆盖 org_user / telemarketing_user / branchCode 三态）
     const { whereClause } = parseFiltersAndBuildWhere(req);

@@ -9,6 +9,7 @@ import { getDataVersion } from './data-version.js';
 import { authConfig } from '../config/auth.js';
 import { serverEnv, dbEnv } from '../config/env.js';
 import { getAllBranchCodes } from '../config/preset-users.js';
+import { ORGANIZATIONS } from './permission.js';
 
 /**
  * 0B 预热变体：flag off → 兼容期单变体（1=1）；flag on → 按 branchCode 循环。
@@ -181,23 +182,12 @@ const COMMON_WARM_ROUTES: ReadonlyArray<RouteWarmConfig> = [
 ];
 
 /**
- * 机构维度：全公司 + 12 机构验收集。
+ * 机构维度：全公司 + 全部机构验收集。
  * P2 验收会并发打这些 org_level_3；预热必须覆盖同一组 key，且 KPI 按单并发小批量执行。
+ * 名单从 services/permission.ts 机构 SSOT 派生（原为第三份硬编码 12 机构副本，
+ * 新增/裁撤机构时会静默漂移导致预热覆盖缺口）。
  */
-const TOP_ORG_NAMES: ReadonlyArray<string> = [
-    '天府',
-    '宜宾',
-    '高新',
-    '青羊',
-    '泸州',
-    '新都',
-    '武侯',
-    '乐山',
-    '德阳',
-    '自贡',
-    '资阳',
-    '达州',
-];
+const TOP_ORG_NAMES: ReadonlyArray<string> = ORGANIZATIONS;
 
 const WARM_ALL_COMPANY_CONCURRENCY = 1;
 const WARM_HEAVY_ORG_CONCURRENCY = 1;

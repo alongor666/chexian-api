@@ -29,6 +29,7 @@ import {
   type ClaimsDateField,
   type HeatmapGroupDimension,
 } from '../../sql/claims-heatmap.js';
+import { parseCohortYears } from '../../utils/cohort-years.js';
 
 const router = Router();
 
@@ -226,10 +227,8 @@ router.get(
   withRouteCache('claims-detail-loss-ratio-development'),
   asyncHandler(async (req, res) => {
     const filters = parseFilters(req.query);
-    const cohortYearsStr = req.query.cohortYears;
-    const cohortYears = typeof cohortYearsStr === 'string'
-      ? cohortYearsStr.split(',').map(Number).filter(n => !isNaN(n) && n >= 2020 && n <= 2030)
-      : [2023, 2024, 2025, 2026];
+    // 默认最近 4 个起保年份（动态派生，防跨年硬编码），解析口径见 utils/cohort-years.ts
+    const cohortYears = parseCohortYears(req.query.cohortYears);
     const { whereClause } = parseFiltersAndBuildWhere(req);
     // 多省截止日隔离：RLS 开启的分省用户 → cutoff 只看本省 MAX(policy_date)；
     // RLS 关闭 / 全国合并视图 → undefined → SQL 与历史逐字节一致
