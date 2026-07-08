@@ -1919,3 +1919,15 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （同类失败首次；若再现「并行卡改同一 workflow 文件合并后红」则按进化铁律升级为 dispatch 前的自动交集检查——扩展现有 push 前 fetch 闸对 `.github/workflows/**` 的文件交集告警。）
+
+---
+
+## 2026-07-08 · #977 硬编码专项：SQL 常量收口的「字节级等价」验证模式
+
+- **场景**：远程执行环境无 Parquet 数据/运行时服务，CLAUDE.md §6「修改 SQL → curl 对账」不可执行；而本 PR 需把已赚保费 α 系数（0.82/0.94/0.90，3 文件 8 处）收口到 `server/src/config/earned-premium-factors.ts`。
+- **等价验证**：`git worktree add <scratch>/head HEAD` 取改动前代码，用同一 dump 脚本分别调用改动前/后**全部 11 个生成器**输出 SQL 全文 → `diff` 零差异，即证明「重构不改行为」，无需运行时。比只跑断言片段的单测（`toContain("THEN 0.82")`）强一个数量级。
+- **陷阱记录**：数值常量插值会漂移文本——`${0.90}` 退化为 `'0.9'`，SQL 语义不变但文本变，会击穿 route-cache 键与黄金基线对账。**SQL 模板内的常量 SSOT 一律存字符串字面量**（`'0.90'`），本次 `earned-premium-factors.ts` 头注释已写明。
+- **复用价值**：任何「硬编码→常量收口」类重构（行为必须零变化）都适用此模式；harness 命令模式 = dump 全生成器 → HEAD worktree 对照 diff。
+
+### needs_automation: false
+（一次性重构验证模式，登记备查；若同类收口频繁可考虑把 dump-diff 泛化为 scripts/ 工具。）
