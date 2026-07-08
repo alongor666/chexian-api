@@ -24,6 +24,8 @@ import {
   assertStaticReportAccess,
   parseStaticReportOwner,
   shouldEnforceStaticReportPolicy,
+  resolvePortalScope,
+  validatePortalFile,
 } from '../reports.js';
 import { UserRole } from '../../middleware/permission.js';
 import { AppError } from '../../middleware/error.js';
@@ -494,5 +496,87 @@ describe('assertStaticReportAccess: 访问矩阵', () => {
       assertStaticReportAccess(makeReq({ role: UserRole.TELEMARKETING_USER }), PROVINCE_URI)
     );
     expectThrows403(() => assertStaticReportAccess(makeReq(undefined), PROVINCE_URI));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// B346 彻底治理：门户路由（/api/reports/portal/:slug/:file）——同一 URL 随用户
+// 服务端按登录身份选文件，org_user 无任何参数可指到他机构路径（无侧信道）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('resolvePortalScope: 门户可见范围（服务端派生，客户端不可控）', () => {
+  it('branch_admin → 省级 scope', () => {
+    expect(resolvePortalScope(makeReq({ role: UserRole.BRANCH_ADMIN }))).toEqual({
+      kind: 'branch',
+    });
+  });
+
+  it('org_user（organization + branchCode 齐全）→ 本机构 scope', () => {
+    expect(
+      resolvePortalScope(
+        makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' })
+      )
+    ).toEqual({ kind: 'org', branch: 'SC', org: '乐山' });
+  });
+
+  it('org_user 缺 organization / 缺 branchCode → 403（fail-closed）', () => {
+    expectThrows403(() =>
+      resolvePortalScope(makeReq({ role: UserRole.ORG_USER, branchCode: 'SC' }))
+    );
+    expectThrows403(() =>
+      resolvePortalScope(makeReq({ role: UserRole.ORG_USER, organization: '乐山' }))
+    );
+  });
+
+  it('org_user branchCode 非 ^[A-Z]{2}$ → 403', () => {
+    for (const bad of ['sc', 'S', 'SCX', 'S1', '..']) {
+      expectThrows403(() =>
+        resolvePortalScope(
+          makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: bad })
+        )
+      );
+    }
+  });
+
+  it('org_user organization 含路径字符（/ \\ .. null byte）→ 403', () => {
+    for (const bad of ['a/b', 'a\\b', '..', '天府..', 'x\x00y']) {
+      expectThrows403(() =>
+        resolvePortalScope(
+          makeReq({ role: UserRole.ORG_USER, organization: bad, branchCode: 'SC' })
+        )
+      );
+    }
+  });
+
+  it('telemarketing / 未知角色 / 未认证 → 403', () => {
+    expectThrows403(() => resolvePortalScope(makeReq({ role: UserRole.TELEMARKETING_USER })));
+    expectThrows403(() => resolvePortalScope(makeReq({ role: 'hacker' })));
+    expectThrows403(() => resolvePortalScope(makeReq(undefined)));
+  });
+});
+
+describe('validatePortalFile: 门户文件名校验', () => {
+  it('manifest.json / *.html / *.htm → 放行', () => {
+    expect(validatePortalFile('manifest.json')).toBe('manifest.json');
+    expect(validatePortalFile('2026-07-06-dashboard.html')).toBe('2026-07-06-dashboard.html');
+    expect(validatePortalFile('2026-07-06.htm')).toBe('2026-07-06.htm');
+  });
+
+  it('非 html/manifest 后缀 → 400', () => {
+    for (const bad of ['foo.txt', 'foo.json', 'manifest.json.bak', 'x.html.exe']) {
+      try {
+        validatePortalFile(bad);
+        throw new Error(`期望 ${bad} 抛出 AppError(400)`);
+      } catch (e) {
+        expect(e).toBeInstanceOf(AppError);
+        expect((e as AppError).statusCode).toBe(400);
+      }
+    }
+  });
+
+  it('路径遍历 / 分隔符 / 编码变体 → 拒绝（sanitizeFilename 同源防线）', () => {
+    for (const bad of ['../x.html', 'a/b.html', 'a\\b.html', '%2e%2e%2fx.html', '.hidden.html']) {
+      expect(() => validatePortalFile(bad)).toThrow(AppError);
+    }
   });
 });

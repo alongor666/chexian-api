@@ -3,7 +3,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // @ts-expect-error — 纯 JS 模块，无类型声明（仅在 ETL 内部使用）
-import { BRANCH_CODE_RE, readBranchOrgUnits } from '../数据管理/lib/period-trend-orgs.mjs';
+import { BRANCH_CODE_RE, readBranchOrgUnits, skillSupportsOrgFlag } from '../数据管理/lib/period-trend-orgs.mjs';
 
 /** B004 机构级报告的机构清单读取 — SSOT = config/branch-org-mapping/<branch>.json units */
 describe('readBranchOrgUnits', () => {
@@ -67,5 +67,25 @@ describe('BRANCH_CODE_RE', () => {
     expect(BRANCH_CODE_RE.test('SX')).toBe(true);
     expect(BRANCH_CODE_RE.test('sc')).toBe(false);
     expect(BRANCH_CODE_RE.test('SCX')).toBe(false);
+  });
+});
+
+/** B346 治理：skill --org 能力预检（版本落后时 fail-loud，不再逐机构静默失败） */
+describe('skillSupportsOrgFlag', () => {
+  it('argparse --help 含 --org（v2.3.0+ 各常见排版）→ true', () => {
+    expect(skillSupportsOrgFlag('usage: cli.py [--view V] [--org ORG] [--branch BRANCH]')).toBe(true);
+    expect(skillSupportsOrgFlag('options:\n  --org ORG        机构过滤\n  --branch BRANCH')).toBe(true);
+  });
+
+  it('无 --org（旧版 skill）→ false', () => {
+    expect(skillSupportsOrgFlag('usage: cli.py [--view V] [--project-root DIR]')).toBe(false);
+    // 相似但不同的 flag 不得误判
+    expect(skillSupportsOrgFlag('  --organization X\n  --org-x Y')).toBe(false);
+  });
+
+  it('探测失败（空输出 / 非字符串）→ false（fail-closed）', () => {
+    expect(skillSupportsOrgFlag('')).toBe(false);
+    expect(skillSupportsOrgFlag(undefined)).toBe(false);
+    expect(skillSupportsOrgFlag(null)).toBe(false);
   });
 });

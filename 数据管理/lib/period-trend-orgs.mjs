@@ -19,6 +19,19 @@ import { join } from 'path';
 export const BRANCH_CODE_RE = /^[A-Z]{2}$/;
 
 /**
+ * 判定 diagnose-period-trend skill CLI 是否支持机构级参数（`--org`，v2.3.0+）。
+ * 输入是 `cli.py --help` 的输出文本；不支持时 daily.mjs 须**显式红字告警**并跳过
+ * 机构级循环——B346 治理教训：skill 版本落后时逐机构 spawn 静默失败（仅黄字
+ * 每机构一条 warn），机构版 HTML 长期缺席却无人察觉。
+ * @param {string} helpText - `cli.py --help` 的 stdout+stderr
+ * @returns {boolean}
+ */
+export function skillSupportsOrgFlag(helpText) {
+  // (?![\w-]) 拒绝 --organization / --org-x 等相似 flag 误判
+  return typeof helpText === 'string' && /(^|[\s[])--org(?![\w-])/.test(helpText);
+}
+
+/**
  * 读取机构清单。
  * @param {string} configDir - 数据管理/config 目录绝对路径
  * @param {string} branchCode - 两位大写分公司码（SC/SX）

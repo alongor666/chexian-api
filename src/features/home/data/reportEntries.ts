@@ -9,7 +9,6 @@
  * （那正是 PR 441 想根除的「空白 SPA 页」行为）。
  */
 import { BarChart3, type LucideIcon } from 'lucide-react'
-import type { ReportScope } from './reportScope'
 
 export interface ReportEntry {
   /** 路由稳定 id，用于 React key */
@@ -29,24 +28,23 @@ export interface ReportEntry {
 }
 
 /**
- * 报告目录基址：省级 = `/reports/<slug>/`；机构级 = `/reports/<slug>/orgs/<branch>/<org>/`
- * （B346 授权路径约定，中文机构名需 encodeURIComponent）。forbidden 不应走到这里。
+ * 报告目录基址（B346 彻底治理）：统一走后端门户 `/api/reports/portal/<slug>/`。
+ * 同一 URL 对所有用户成立——**服务端**按登录身份解析省级（branch_admin）或
+ * 本机构（org_user → orgs/<branch>/<org>/）文件，前端不再按 scope 拼不同 URL
+ * （旧 Nginx 静态直链 `/reports/<slug>/...` 保留为纵深防御，403 拦越权直链）。
  */
-function getReportBase(slug: string, scope: ReportScope): string {
-  if (scope.kind === 'org') {
-    return `/reports/${slug}/orgs/${encodeURIComponent(scope.branch)}/${encodeURIComponent(scope.org)}`
-  }
-  return `/reports/${slug}`
+function getReportBase(slug: string): string {
+  return `/api/reports/portal/${slug}`
 }
 
-/** manifest 静态文件 URL（按用户可见范围取省级或机构级 manifest） */
-export function getManifestUrl(slug: string, scope: ReportScope): string {
-  return `${getReportBase(slug, scope)}/manifest.json`
+/** manifest URL（服务端按用户可见范围返回省级或机构级 manifest） */
+export function getManifestUrl(slug: string): string {
+  return `${getReportBase(slug)}/manifest.json`
 }
 
-/** 由 slug + 文件名拼出报告 URL（按用户可见范围取省级或机构级文件） */
-export function getReportUrl(slug: string, file: string, scope: ReportScope): string {
-  return `${getReportBase(slug, scope)}/${file}`
+/** 由 slug + 文件名拼出报告 URL（服务端按用户可见范围选文件） */
+export function getReportUrl(slug: string, file: string): string {
+  return `${getReportBase(slug)}/${file}`
 }
 
 export const reportEntries: ReportEntry[] = [

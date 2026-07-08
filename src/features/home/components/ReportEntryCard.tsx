@@ -39,7 +39,7 @@ export const ReportEntryCard = memo(function ReportEntryCard({
 
   const reportUrl =
     scope.kind !== 'forbidden' && resolution.reportFile
-      ? getReportUrl(entry.slug, resolution.reportFile, scope)
+      ? getReportUrl(entry.slug, resolution.reportFile)
       : null
 
   const isBusy = loading || manifestLoading

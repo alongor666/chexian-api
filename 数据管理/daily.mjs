@@ -25,6 +25,7 @@
  *   node daily.mjs new_energy_claims # 新能源出险信息每日全量快照
  *   node daily.mjs renewal_tracker # 续保追踪派生域（JOIN policy+quotes+salesman）
  *   node daily.mjs all            # 全部域（含派生域）
+ *   node daily.mjs report         # 只重生成短中长期报告（省级+机构级）并同步 VPS，不跑 ETL
  *   node daily.mjs --no-sync      # 跳过 VPS 同步
  *   node daily.mjs --skip-report  # 跳过短中长期 HTML 报告生成
  */
@@ -60,7 +61,7 @@ import {
 } from './lib/source-file-routing.mjs';
 // 多省 Bug 1：merge_parquet.py 参数构造纯函数（branchCode 经 ctx 透传，锁死 --declared-branch）
 import { buildMergeParquetArgs } from './lib/merge-parquet-args.mjs';
-import { readBranchOrgUnits } from './lib/period-trend-orgs.mjs';
+import { readBranchOrgUnits, skillSupportsOrgFlag } from './lib/period-trend-orgs.mjs';
 // 多省 B3 防重复：区间覆盖归档纯函数（被新全量区间完全覆盖的旧文件归档，仅同品类互斥）
 import {
   parseRangePrefix,
@@ -1059,6 +1060,20 @@ function runPeriodTrendReport(scriptDir, python) {
     console.warn(`[ETL] 机构级短中长期报告跳过：机构清单 SSOT 不存在（数据管理/config/branch-org-mapping/${branchCode}.json）`);
     return;
   }
+  // B346 治理：skill --org 能力预检（fail-loud）。skill 版本落后（< v2.3.0，无 --org）时，
+  // 逐机构 spawn 会静默失败（每机构一条黄字 warn 淹没在 ETL 日志里），机构版 HTML 长期
+  // 缺席 → org_user 永远「本机构报告暂未生成」。这里一次性探测并红字给出确切修复动作。
+  const helpProbe = spawnSync(python, [skillCli, '--help'], {
+    encoding: 'utf-8',
+    timeout: 30 * 1000,
+    windowsHide: true,
+  });
+  if (!skillSupportsOrgFlag(`${helpProbe.stdout || ''}${helpProbe.stderr || ''}`)) {
+    log('red', '❌ 机构级短中长期报告跳过：本机 diagnose-period-trend skill 不支持 --org/--branch（需 v2.3.0+）');
+    log('red', '   修复：更新 ~/.claude/skills/diagnose-period-trend（alongor666-skills 仓，走 chexian-crystallize-skill 安装），');
+    log('red', '   然后补跑: node 数据管理/daily.mjs report   （只重生成报告并同步 VPS，不重跑 ETL）');
+    return;
+  }
   log('cyan', `[ETL] 机构级短中长期报告：${branchCode} 共 ${units.length} 个机构（orgs/${branchCode}/<机构>/）`);
   let orgOk = 0;
   for (const org of units) {
@@ -1630,6 +1645,25 @@ async function main() {
   if (process.argv.includes('freshness')) {
     // runClaimsFreshnessPatrol 是同步函数（巡检用 spawnSync 取数），有意不 await；若未来改 async 须补 await（闸-2 LOW-1）。
     runClaimsFreshnessPatrol(findPython(), scriptDir);
+    return;
+  }
+
+  // B346 治理：report 子命令——报告独立补跑入口（不在 ALL_DOMAINS，同 freshness 提前拦截）。
+  // 不重跑 ETL，仅重生成短中长期报告（省级 + 机构级 orgs/<branch>/<org>/）并同步 VPS，
+  // 是「补产当期机构版报告」的最短路径（此前必须整轮 ETL 才会触发第 9 步）。
+  if (process.argv.includes('report')) {
+    const __branchRep = resolveEnvBranchCode('report子命令');
+    if (__branchRep !== 'SC') {
+      log('red', `❌ [${__branchRep}] report 子命令当前仅支持 SC（diagnose-period-trend skill 读共享 current/ 仓，非 SC 会产出错省报告）`);
+      process.exit(1);
+    }
+    runPeriodTrendReport(scriptDir, findPython());
+    if (noSync) {
+      log('yellow', '已跳过 VPS 同步（--no-sync）');
+    } else {
+      const synced = await syncToVps(scriptDir);
+      if (!synced) process.exit(1);
+    }
     return;
   }
 

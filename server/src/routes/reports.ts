@@ -32,7 +32,7 @@ import {
   sanitizeFilename,
   validatePathWithinDirectory,
 } from '../utils/security.js';
-import { getReportsDir } from '../config/paths.js';
+import { getReportsDir, getStaticReportsRoot } from '../config/paths.js';
 import { dbEnv } from '../config/env.js';
 
 const router = Router();
@@ -43,6 +43,12 @@ const REPORTS_DIR = getReportsDir();
 // 新增报告类型时只需在此追加；目录布局：REPORTS_DIR/{reportId}/{snapshot}/...
 const ALLOWED_REPORT_IDS = new Set<string>([
   'diagnose-loss-development',
+]);
+
+// 静态报告门户（/api/reports/portal/:slug/:file）的 slug 白名单。
+// 目录布局：<staticReportsRoot>/<slug>/{<file>, orgs/<branch>/<org>/<file>}
+const STATIC_REPORT_SLUGS = new Set<string>([
+  'diagnose-period-trend',
 ]);
 
 /**
@@ -343,6 +349,52 @@ const REPORT_HTML_CSP = [
   "frame-ancestors 'self'",
 ].join('; ');
 
+/**
+ * 门户路由的用户可见范围（B346 彻底治理：同一 URL 随用户产出不同机构报告）。
+ *
+ * 与 Nginx 静态路径闸（assertStaticReportAccess）授权矩阵语义一致，但方向相反：
+ * 静态闸是「客户端选 URL → 服务端裁决放行/拒绝」，门户是「客户端只报 slug+file →
+ * **服务端**按登录身份选文件」。org_user 无法通过任何参数读到他机构文件（路径完全
+ * 由服务端派生），故门户无跨机构存在性侧信道，404 可以保留精确语义
+ * （org_user 拿到 404 = 本机构该期报告未生成，供前端明示）。
+ *
+ * fail-closed：org_user 缺 organization / branchCode 非 ^[A-Z]{2}$ / org 含路径字符
+ * → 403；telemarketing / 未知角色 → 403（assertReportRoleAllowed 前置）。
+ */
+export function resolvePortalScope(
+  req: Request
+): { kind: 'branch' } | { kind: 'org'; branch: string; org: string } {
+  const role = req.user?.role as UserRole | undefined;
+  if (role === UserRole.BRANCH_ADMIN) return { kind: 'branch' };
+  if (role === UserRole.ORG_USER) {
+    const org = req.user?.organization?.trim();
+    const branch = req.user?.branchCode;
+    if (
+      org &&
+      branch &&
+      /^[A-Z]{2}$/.test(branch) &&
+      !/[/\\\x00]/.test(org) &&
+      !org.includes('..')
+    ) {
+      return { kind: 'org', branch, org };
+    }
+    throw new AppError(403, '无权访问报告');
+  }
+  throw new AppError(403, '无权访问报告');
+}
+
+/**
+ * 门户文件名校验：单段文件名，仅允许 manifest.json 或 .html/.htm。
+ * sanitizeFilename 先拒路径遍历/特殊字符（与 /:filename 路由同源）。
+ */
+export function validatePortalFile(file: string): string {
+  const safe = sanitizeFilename(file);
+  if (safe !== 'manifest.json' && !/\.html?$/i.test(safe)) {
+    throw new AppError(400, '仅支持 manifest.json 或 .html / .htm 文件');
+  }
+  return safe;
+}
+
 if (!fs.existsSync(REPORTS_DIR)) {
   fs.mkdirSync(REPORTS_DIR, { recursive: true });
 }
@@ -358,6 +410,52 @@ function serveReportFile(res: Response, fullPath: string): void {
   res.set('Referrer-Policy', 'no-referrer');
   fs.createReadStream(fullPath).pipe(res);
 }
+
+// 静态报告门户（B346 彻底治理）：GET /api/reports/portal/:slug/:file
+// 同一 URL 随登录用户产出不同报告：branch_admin → 省级 <slug>/<file>；
+// org_user → 本机构 <slug>/orgs/<branch>/<org>/<file>。授权与文件选取全在 Express，
+// 不依赖 Nginx auth_request / X-Original-URI 透传（那条静态链路保留为纵深防御）。
+// ⚠ 必须先于 '/:reportId/:snapshot/*' 注册，否则 portal/<slug>/<file> 会被其吞掉。
+router.get(
+  '/portal/:slug/:file',
+  authMiddleware,
+  asyncHandler(async (req: Request, res: Response) => {
+    // 粗粒度角色闸前置（telemarketing/未知角色 403，防枚举），再按身份解析可见范围
+    assertReportRoleAllowed(req);
+    const scope = resolvePortalScope(req);
+
+    const { slug, file } = req.params;
+    if (!STATIC_REPORT_SLUGS.has(slug)) {
+      throw new AppError(404, '报告类型不存在');
+    }
+    const safeFile = validatePortalFile(file);
+
+    const root = getStaticReportsRoot();
+    const baseDir =
+      scope.kind === 'org'
+        ? path.join(root, slug, 'orgs', scope.branch, scope.org)
+        : path.join(root, slug);
+    // baseDir 与最终路径都必须真实落在静态报告根内（防 symlink / 拼接逃逸）
+    validatePathWithinDirectory(baseDir, root);
+    const fullPath = path.join(baseDir, safeFile);
+    validatePathWithinDirectory(fullPath, baseDir);
+
+    if (!fs.existsSync(fullPath)) {
+      throw new AppError(
+        404,
+        scope.kind === 'org' ? '本机构报告暂未生成' : '报告不存在或已过期'
+      );
+    }
+    if (safeFile === 'manifest.json') {
+      res.set('Content-Type', 'application/json; charset=utf-8');
+      res.set('Cache-Control', 'private, max-age=0, must-revalidate');
+      res.set('X-Content-Type-Options', 'nosniff');
+      fs.createReadStream(fullPath).pipe(res);
+      return;
+    }
+    serveReportFile(res, fullPath);
+  })
+);
 
 // 多文件报告（v2.1+）：GET /api/reports/:reportId/:snapshot/path/to/file.html
 // 注意：Express 路由顺序敏感——更具体的多段路径必须在 /:filename 之前注册

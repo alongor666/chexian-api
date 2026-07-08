@@ -44,25 +44,13 @@ describe('resolveReportScope', () => {
   })
 })
 
-describe('范围化报告 URL', () => {
+describe('门户报告 URL（同一 URL 随用户，服务端解析范围）', () => {
   const slug = 'diagnose-period-trend'
 
-  it('省级：维持原 URL 形态（向后兼容）', () => {
-    expect(getManifestUrl(slug, { kind: 'branch' })).toBe(
-      '/reports/diagnose-period-trend/manifest.json'
-    )
-    expect(getReportUrl(slug, '2026-07-06-dashboard.html', { kind: 'branch' })).toBe(
-      '/reports/diagnose-period-trend/2026-07-06-dashboard.html'
-    )
-  })
-
-  it('机构级：orgs/<branch>/<org>/ 前缀 + 中文机构名 URL 编码', () => {
-    const scope = { kind: 'org', branch: 'SC', org: '乐山' } as const
-    expect(getManifestUrl(slug, scope)).toBe(
-      `/reports/diagnose-period-trend/orgs/SC/${encodeURIComponent('乐山')}/manifest.json`
-    )
-    expect(getReportUrl(slug, '2026-07-06-dashboard.html', scope)).toBe(
-      `/reports/diagnose-period-trend/orgs/SC/${encodeURIComponent('乐山')}/2026-07-06-dashboard.html`
+  it('manifest 与报告 URL 统一走 /api/reports/portal/<slug>/，不含任何机构段', () => {
+    expect(getManifestUrl(slug)).toBe('/api/reports/portal/diagnose-period-trend/manifest.json')
+    expect(getReportUrl(slug, '2026-07-06-dashboard.html')).toBe(
+      '/api/reports/portal/diagnose-period-trend/2026-07-06-dashboard.html'
     )
   })
 })
