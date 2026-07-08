@@ -71,6 +71,14 @@ async function createFixtures(db: DuckDBService): Promise<void> {
     UNION ALL
     SELECT '${SALESMAN_B}' AS full_name, '精英团队' AS team_name
   `);
+
+  // SalesmanDim — groupBy=salesman 时 generateCrossSellQuery 必 JOIN 取归属机构（PR #832 follow-up）
+  await db.query(`
+    CREATE TABLE SalesmanDim AS
+    SELECT '${SALESMAN_A}' AS full_name, '${ORG}' AS organization
+    UNION ALL
+    SELECT '${SALESMAN_B}' AS full_name, '${ORG}' AS organization
+  `);
 }
 
 // ============================================================
