@@ -10,6 +10,7 @@ import { Router } from 'express';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { asyncHandler, AppError, duckdbService, createDomainMiddleware, withRouteCache, parseFiltersAndBuildWhere } from './shared.js';
+import { filterByDomainColumns } from '../../utils/domain-filter-sanitizer.js';
 import {
   generateInflowQuery,
   generateOutflowQuery,
@@ -35,17 +36,8 @@ export const filterSchema = z.object({
  * 不含 policy_date/salesman_name/renewal_mode/tonnage_segment/insurance_grade 及
  * is_renewal 等 PolicyFact 其余列，共享 parser 按这些参数注入 WHERE 会触发
  * DuckDB Binder Error → HTTP 400「列不存在：policy_date」（duckdb-error-classifier）。
- */
-const FLOW_UNSUPPORTED_COMMON_PARAMS = [
-  'salesmanNames', 'salesmanName',
-  'renewalModes', 'tonnageSegments', 'insuranceGrades',
-  'isRenewal', 'isNewCar', 'isTransfer', 'isNev',
-  'isRenewable', 'isCrossSell', 'isCommercialInsure',
-  'fuelCategory', // 三个取值均依赖 is_nev/fuel_type 列（本视图无）
-] as const;
-
-/**
- * 净化副本（与 cross-sell sanitizeAggQuery 同款模式，不修改 req.query）：
+ *
+ * 净化副本（不修改 req.query）：
  *   - startDate/endDate 保留，dateField 强制 'insurance_start_date'（本视图唯一日期列，
  *     与本域 year 筛选同口径）—— 保留调用方「时间窗」意图，不静默丢弃，同时杜绝共享
  *     parser 默认 policy_date 口径造成的 Binder Error；
@@ -53,24 +45,17 @@ const FLOW_UNSUPPORTED_COMMON_PARAMS = [
  *   - vehicleQuickFilter 仅保留只用 customer_category 的取值（home_car/motorcycle/rental），
  *     其余取值依赖 tonnage_segment/vehicle_model（本视图无）→ 剥离。
  *
+ * 净化剥离清单已中央化到 domain-filter-sanitizer.ts 的 DOMAIN_SUPPORTED_COLUMNS
+ * （BACKLOG 2026-07-07-claude-dce69c，8f71c0 architect 闸 P1-1）：本函数保留导出名以
+ * 兼容既有测试调用方，内部改为委托共享的 filterByDomainColumns('customerFlow')。
+ *
  * 🔒 RLS 不变量：净化只作用于用户 query 参数维度，不触碰 permissionFilter 通道——
  * buildWhereFromFilterParams 把 requirePermissionFilter(req.permissionFilter) 独立 AND 到
  * WHERE 尾部（filter-params.ts），org_level_3/branch_code/is_telemarketing 三个 RLS 列
  * 本视图均真实存在且不在剥离清单内，权限隔离不受净化影响。
  */
 export function sanitizeFlowQuery(query: Request['query']): Request['query'] {
-  const out = { ...query };
-  for (const key of FLOW_UNSUPPORTED_COMMON_PARAMS) {
-    delete out[key];
-  }
-  if (out.startDate !== undefined || out.endDate !== undefined || out.dateField !== undefined) {
-    out.dateField = 'insurance_start_date';
-  }
-  const vqf = out.vehicleQuickFilter;
-  if (vqf !== undefined && vqf !== 'home_car' && vqf !== 'motorcycle' && vqf !== 'rental') {
-    delete out.vehicleQuickFilter;
-  }
-  return out;
+  return filterByDomainColumns(query, 'customerFlow');
 }
 
 function parseFilters(query: Record<string, unknown>): CustomerFlowFilters {
