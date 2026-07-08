@@ -1,0 +1,20 @@
+{
+  "branch_code": "SC",
+  "description": "四川三级机构清单（org_level_3 规范值，同城 7 + 异地 7，分组权威定义见 src/shared/config/org-groups.ts ORG_GROUPS_BY_BRANCH.SC）。注意：SC 不做 ETL 机构归一化——transform.py normalize_branch_org 对 BRANCH_CODE=SC 在读本文件前即原样返回（四川字节级安全），故本文件无 rules/org_to_unit；units 仅作机构清单 SSOT，供机构级报告生成（daily.mjs 第 9 步循环 diagnose-period-trend --org，缺口 B004）与 org_user 归属对账（preset-users org_user.organization ⊆ units）使用。",
+  "units": [
+    "天府",
+    "高新",
+    "新都",
+    "青羊",
+    "武侯",
+    "重客",
+    "本部",
+    "宜宾",
+    "德阳",
+    "资阳",
+    "泸州",
+    "自贡",
+    "乐山",
+    "达州"
+  ]
+}
