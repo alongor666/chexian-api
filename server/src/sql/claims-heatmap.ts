@@ -212,6 +212,9 @@ function getDimensionExpr(
  * @param policyYear 保单年度（insurance_start_date 年份）；undefined 时取 max_date 所在年
  * @param customCutoffs 自定义 cutoff 列表（YYYY-MM-DD）；提供时跳过自动 cutoff 生成（月末+周六）
  *                      用于精确双时点对比、月末同比等诊断场景，最多 24 个
+ * @param cutoffBranchCode 分省截止日范围（CHAR(2)，来自路由层 resolveBranchRlsCode）；
+ *                         多省时数据截止日按本省 MAX(policy_date) 取值，防止两省数据进度
+ *                         不一致时截止日被对方省"带跑"。未传 → SQL 与历史逐字节一致。
  */
 export function generateClaimsHeatmapQuery(
   filters: ClaimsHeatmapFilters,
@@ -221,6 +224,7 @@ export function generateClaimsHeatmapQuery(
   policyYear?: number,
   customCutoffs?: string[],
   whereClause: string = '1=1',
+  cutoffBranchCode?: string,
 ): string {
   // 白名单校验，防止 SQL 注入
   // dateField 参数保留兼容，但累计口径下 cohort 必须锚定 insurance_start_date
@@ -319,11 +323,14 @@ export function generateClaimsHeatmapQuery(
       GROUP BY cutoff
     ),`;
 
+  // 多省截止日隔离（2026-07-07）：见 cutoffBranchCode 参数注释
+  const cutoffScope = cutoffBranchCode ? ` WHERE branch_code = '${escapeSqlValue(cutoffBranchCode)}'` : '';
+
   const sql = `
     WITH
-    -- 1. 数据截止日
+    -- 1. 数据截止日（多省时限定本省范围）
     ref_date AS (
-      SELECT MAX(CAST(policy_date AS DATE)) AS max_date FROM PolicyFact
+      SELECT MAX(CAST(policy_date AS DATE)) AS max_date FROM PolicyFact${cutoffScope}
     ),
 
     -- 2. 所选保单年度的累计区间

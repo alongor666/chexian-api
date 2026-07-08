@@ -4,6 +4,7 @@ import {
   BRANCH_PUBLISH_DOMAINS,
   nonScBranchCodes,
   buildBranchEtlSteps,
+  shouldEnableValidationBranchSync,
 } from '../数据管理/lib/branch-publish.mjs';
 
 describe('nonScBranchCodes（非 SC 注册省·数据驱动单一来源）', () => {
@@ -15,8 +16,13 @@ describe('nonScBranchCodes（非 SC 注册省·数据驱动单一来源）', () 
 });
 
 describe('BRANCH_PUBLISH_DOMAINS', () => {
-  it('含 premium / claims_detail / quotes / repair（对应上游 01签单/05理赔/02报价/03维修）', () => {
-    expect([...BRANCH_PUBLISH_DOMAINS]).toEqual(['premium', 'claims_detail', 'quotes', 'repair']);
+  it('含 premium / claims_detail / quotes / repair / renewal_tracker（01签单/05理赔/02报价/03维修 + 续保追踪派生域）', () => {
+    expect([...BRANCH_PUBLISH_DOMAINS]).toEqual(['premium', 'claims_detail', 'quotes', 'repair', 'renewal_tracker']);
+  });
+  it('🔴 renewal_tracker 必须排在 premium 与 quotes 之后（派生域依赖本省 policy + quotes_conversion 当日产物）', () => {
+    const order = [...BRANCH_PUBLISH_DOMAINS];
+    expect(order.indexOf('renewal_tracker')).toBeGreaterThan(order.indexOf('premium'));
+    expect(order.indexOf('renewal_tracker')).toBeGreaterThan(order.indexOf('quotes'));
   });
 });
 
@@ -49,5 +55,35 @@ describe('buildBranchEtlSteps（分省逐域命令生成，闸-1 B2）', () => {
     expect(steps.map((s) => s.label)).toEqual([
       'ETL:SX:premium', 'ETL:SX:claims_detail', 'ETL:GD:premium', 'ETL:GD:claims_detail',
     ]);
+  });
+});
+
+describe('shouldEnableValidationBranchSync（release:daily 携带山西派生域同步的判定，2026-07-07）', () => {
+  it('分省 ETL 在编排内 + 未显式设 env → 携带（山西派生域随日常发布同步，不再停更）', () => {
+    expect(shouldEnableValidationBranchSync({
+      explicitEnv: undefined, branchStepCount: 4, fullSnapshotDomainCount: 0,
+    })).toBe(true);
+  });
+  it('操作者显式设置 env（含 "0"）→ 尊重显式值，发布链不注入（人工关闭出口）', () => {
+    for (const v of ['0', '1', 'false', 'yes']) {
+      expect(shouldEnableValidationBranchSync({
+        explicitEnv: v, branchStepCount: 4, fullSnapshotDomainCount: 0,
+      })).toBe(false);
+    }
+  });
+  it('空字符串 env 视同未设置 → 携带', () => {
+    expect(shouldEnableValidationBranchSync({
+      explicitEnv: '', branchStepCount: 4, fullSnapshotDomainCount: 0,
+    })).toBe(true);
+  });
+  it('full_snapshot 单域模式 → 不携带（该模式不跑分省 ETL，validation 产物未必新鲜）', () => {
+    expect(shouldEnableValidationBranchSync({
+      explicitEnv: undefined, branchStepCount: 4, fullSnapshotDomainCount: 1,
+    })).toBe(false);
+  });
+  it('🔴 无注册非 SC 省（分省步骤为空）→ 不携带（单省时代行为逐字节一致）', () => {
+    expect(shouldEnableValidationBranchSync({
+      explicitEnv: undefined, branchStepCount: 0, fullSnapshotDomainCount: 0,
+    })).toBe(false);
   });
 });
