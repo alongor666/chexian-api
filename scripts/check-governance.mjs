@@ -2203,6 +2203,39 @@ function checkClaudeMdNoStaleCounts() {
   return true;
 }
 
+/**
+ * 独立脚本 scripts/check-doc-drift.mjs 的 governance 挂载点（与 checkPhantomFields 同种
+ * execFileSync + --quiet-pass 包装风格）。把 ARCHITECTURE.md + CODE_INDEX.md 声称的事实
+ * 与文件系统对账：路径存在性 / 计数对账 / 反向完整性（代码新增模块必须登记）。与
+ * checkClaudeMdNoStaleCounts 是姊妹检查——那边警告「不要写会漂的数字」（启发式、不阻断），
+ * 这边阻断「写了的必须为真」（事实对账）。识别范围、豁免规则见独立脚本头部注释。
+ * 起因：PR #978 事实核对发现两份架构文档累计 20+ 处漂移且此前无任何机器闸。
+ */
+function checkArchDocDrift() {
+  info('检查架构文档防漂移（ARCHITECTURE.md + CODE_INDEX.md vs 文件系统对账）...');
+
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(ROOT_DIR, 'scripts/check-doc-drift.mjs'), '--quiet-pass'],
+      {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+    success('架构文档无漂移（路径存在性 + 计数对账 + 反向完整性）');
+    return true;
+  } catch (cause) {
+    error('架构文档漂移检查失败');
+    const stdout = cause?.stdout?.toString().trim();
+    const stderr = cause?.stderr?.toString().trim();
+    if (stdout) console.log(stdout);
+    if (stderr) console.log(stderr);
+    return false;
+  }
+}
+
 // （已迁移）checkEtlMultiSheetCompliance → scripts/governance/pattern-rules.mjs 规则 etl-multisheet（奥卡姆批次二，红绿 fixture 见 scripts/__tests__/pattern-engine.test.mjs）
 
 // ============================================================
@@ -3519,6 +3552,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'CLAUDE.md预算', fn: checkClaudeMdBudget },
   { name: 'rules eager-load 预算', fn: checkRulesEagerLoadBudget },
   { name: 'CLAUDE.md计数防漂移', fn: checkClaudeMdNoStaleCounts },
+  { name: '架构文档防漂移', fn: checkArchDocDrift },
   patternCheck('ETL多sheet规范'),
   { name: 'state-db依赖隔离', fn: checkStateDbDependencyIsolation },
   patternCheck('空catch禁令'),
