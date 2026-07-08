@@ -152,7 +152,14 @@ export async function loadDimParquet(
   console.log('[DuckDB] SalesmanPlanFact (compat) view created — multi-year support');
 
   // 5. 预构建达成分析缓存表（multiProvince 时携带 branch_code 供 typed 路由分省 RLS）
-  await buildAchievementView(db, 2026, multiProvince);
+  //    计划年动态取 PlanFact 内最新年（与上方 SalesmanTeamMapping 同口径；原硬编码 2026
+  //    是跨年时间炸弹：2027 年新计划入库后缓存仍停在旧年）。PlanFact 为空时回落当前自然年。
+  const latestPlanYearRows = await db.query<{ latest_plan_year: number | null }>(
+    'SELECT MAX(plan_year) AS latest_plan_year FROM PlanFact'
+  );
+  const latestPlanYear =
+    Number(latestPlanYearRows[0]?.latest_plan_year) || new Date().getFullYear();
+  await buildAchievementView(db, latestPlanYear, multiProvince);
 }
 
 /**
@@ -246,7 +253,9 @@ export async function loadTeamMapping(db: DuckDBQueryable, jsonFilePath: string)
   console.log(`[DuckDB] Team mapping loaded: ${rows.length} records, from ${jsonFilePath}`);
   console.log(`[DuckDB] SalesmanPlanFact view created`);
 
-  // 预构建达成分析缓存表（数据加载完成后立即计算，后续查询直接读缓存）
+  // 预构建达成分析缓存表（数据加载完成后立即计算，后续查询直接读缓存）。
+  // 本 JSON 降级路径无 PlanFact 多年计划，计划列语义绑定源字段 car_insurance_plan_2026
+  // （上方视图亦硬编码 2026 AS plan_year），故计划年固定 2026 而非动态派生。
   await buildAchievementView(db, 2026);
 }
 
@@ -267,7 +276,9 @@ export async function loadTeamMapping(db: DuckDBQueryable, jsonFilePath: string)
  */
 export async function buildAchievementView(
   db: DuckDBQueryable,
-  planYear: number = 2026,
+  // 无默认值：计划年必须由调用方显式解析（Parquet 主路径取 PlanFact MAX(plan_year)，
+  // JSON 降级路径取字段语义年），防再引入跨年硬编码。
+  planYear: number,
   multiProvince: boolean = false,
 ): Promise<void> {
   const prevYear = planYear - 1;

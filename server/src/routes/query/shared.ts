@@ -45,6 +45,32 @@ export const QUERY_CACHE = {
 } as const;
 
 /**
+ * 计划年默认值解析（数据驱动，消除路由层 .default(2026) 跨年硬编码时间炸弹）。
+ *
+ * 请求未显式传 planYear 时，取目标计划表内最新 plan_year（与 comprehensive.ts
+ * resolvedPlanYear、duckdb-domain-loaders SalesmanTeamMapping 的 MAX(plan_year)
+ * 同一派生思路）；表空/未加载时回落当前自然年。表名走白名单，不接受任意字符串。
+ */
+const PLAN_YEAR_SOURCE_TABLES = ['achievement_cache', 'SalesmanPlanFact'] as const;
+export type PlanYearSourceTable = (typeof PLAN_YEAR_SOURCE_TABLES)[number];
+
+export async function resolveLatestPlanYear(table: PlanYearSourceTable): Promise<number> {
+  if (!PLAN_YEAR_SOURCE_TABLES.includes(table)) {
+    return new Date().getFullYear();
+  }
+  try {
+    const rows = await duckdbService.query<{ latest_plan_year: number | null }>(
+      `SELECT MAX(plan_year) AS latest_plan_year FROM ${table}`,
+      QUERY_CACHE.hotspotMedium
+    );
+    return Number(rows[0]?.latest_plan_year) || new Date().getFullYear();
+  } catch {
+    // 表未加载（惰性域未预热等）时不阻断请求，退回当前自然年
+    return new Date().getFullYear();
+  }
+}
+
+/**
  * HTTP Cache-Control max-age（秒）
  *
  * 数据日更，浏览器无需每次都问服务器。配合 stale-while-revalidate=3600，
