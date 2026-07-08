@@ -43,6 +43,7 @@ import {
   type TtlDays,
 } from '../services/personal-access-token.js';
 import { QUERY_ROUTE_METADATA } from '../config/query-routes-metadata.js';
+import { assertStaticReportAccess, shouldEnforceStaticReportPolicy } from './reports.js';
 
 const router = Router();
 
@@ -563,15 +564,47 @@ router.get(
 );
 
 /**
+ * GET /api/auth/report-access — Nginx auth_request 专用（B346 静态报告机构级授权）。
+ *
+ * Nginx `location /reports/` 的 auth_request 子请求打到这里，携带
+ * X-Original-URI（$request_uri）。按静态报告路径约定做角色 + 机构归属授权：
+ *   - 省级全量报告（/reports/<slug>/<file>）→ 仅 branch_admin
+ *   - 机构级报告（/reports/<slug>/orgs/<branch>/<org>/<file>）→ org_user 本机构放行
+ * 缺 X-Original-URI（Nginx 配置漂移）→ fail-closed 403，禁止静默放行。
+ * 通过返回 204（auth_request 只认 2xx=放行、401/403=拒绝）。
+ */
+router.get(
+  '/report-access',
+  authMiddleware,
+  asyncHandler(async (req: Request, res: Response) => {
+    const originalUri = req.header('x-original-uri');
+    if (!originalUri) throw new AppError(403, '无权访问报告');
+    assertStaticReportAccess(req, originalUri);
+    res.status(204).end();
+  })
+);
+
+/**
  * GET /api/auth/me
  * 返回当前登录用户（基于 access cookie / JWT bearer / PAT bearer）
  * tokenType: 'session' 来自 cookie/JWT, 'pat' 来自 PAT。
+ *
+ * B346 过渡强化：现网 Nginx 的 /reports/* auth_request 指向本端点（B336 模板），
+ * 并透传 X-Original-URI。在 Nginx conf 切换到 /api/auth/report-access 之前，
+ * 这里检测到 auth_request 子请求语境（携带指向 /reports/ 的 X-Original-URI）时
+ * 执行同一套机构级授权 —— 后端一部署即封住「org_user 看全省报告」的洞，
+ * 不依赖 Nginx 变更。普通前端调用不带该头，行为不变。
  */
 router.get(
   '/me',
   authMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw new AppError(401, 'No token provided');
+
+    const originalUri = req.header('x-original-uri');
+    if (originalUri && shouldEnforceStaticReportPolicy(originalUri)) {
+      assertStaticReportAccess(req, originalUri);
+    }
     const { username, role, organization, visibleBranches } = req.user;
     const tokenType = req.pat ? 'pat' : 'session';
 

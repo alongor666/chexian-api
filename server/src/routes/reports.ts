@@ -179,6 +179,94 @@ export function resolveReportOwner(metaPath: string, baseDir: string): ReportOwn
 }
 
 /**
+ * B346：Nginx 静态托管 `/reports/*` 的机构级授权（auth_request 细闸）。
+ *
+ * 背景（本次治理的根因）：B336 只把静态 /reports/* 的 auth_request 接到「登录态」校验，
+ * 任何已登录用户（含 org_user / telemarketing）都能读**全省**诊断报告
+ * （如 /reports/diagnose-period-trend/<cutoff>-dashboard.html，含全部二三级机构的
+ * 保费/赔付/出险敏感数据）——报告没有随用户所属机构而不同。
+ *
+ * 路径约定（授权粒度的唯一依据，生成端/manifest/前端共同遵守）：
+ *   - 省级全量报告：/reports/<slug>/<file>                        → 仅 branch_admin
+ *   - 机构级报告：  /reports/<slug>/orgs/<branch>/<org>/<file>    → org 归属校验
+ *     （owner = { org: <org>, branch: <branch> }，语义与 sidecar 版 assertReportAccess 完全一致）
+ *
+ * fail-closed：URI 缺失/解码失败/含遍历或残留编码/branch 段非法 → 一律按「省级」处理
+ * （org_user 403，branch_admin 放行——branch_admin 本就全放行，不构成放大）。
+ *
+ * @param originalUri Nginx auth_request 透传的 X-Original-URI（$request_uri，含 query、未解码）
+ */
+export function assertStaticReportAccess(req: Request, originalUri: string): void {
+  // 粗粒度角色闸先行（与 /api/reports 两个 handler 同序：先拒 telemarketing/未知角色，防枚举）
+  assertReportRoleAllowed(req);
+  // branch_admin 全放行（与 assertReportAccess 一致），无需解析路径
+  if ((req.user?.role as UserRole | undefined) === UserRole.BRANCH_ADMIN) return;
+
+  const owner = parseStaticReportOwner(originalUri);
+  // org_user：owner=null（省级/坏路径）fail-closed 403；机构路径走既有归属矩阵
+  assertReportAccess(req, owner);
+}
+
+/**
+ * 判定 X-Original-URI 是否应执行静态报告授权策略（/me 过渡强化用）。
+ * - 单次解码 + 多重斜杠归一后以 /reports/ 开头 → true（percent-encoding / `//reports`
+ *   变体无法绕过：Nginx location 按解码归一后的 $uri 匹配，这里对齐同一语义）
+ * - 解码失败 → true（fail-closed，交给 assertStaticReportAccess 按坏路径拒绝）
+ */
+export function shouldEnforceStaticReportPolicy(originalUri: string): boolean {
+  if (!originalUri || typeof originalUri !== 'string') return false;
+  const pathOnly = originalUri.split(/[?#]/, 1)[0];
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathOnly);
+  } catch {
+    return true; // 非法编码 → 按报告策略 fail-closed 处理
+  }
+  return decoded.replace(/\/{2,}/g, '/').startsWith('/reports/');
+}
+
+/**
+ * 从静态报告 URI 解析机构归属。仅识别 /reports/<slug>/orgs/<branch>/<org>/... 形态；
+ * 其余（省级文件 / manifest.json / 坏路径 / 解码失败 / 遍历字符）一律返回 null（fail-closed）。
+ *
+ * 解码语义对齐 Nginx：$request_uri 是原始未解码 URI，Nginx 伺服前对 $uri 做**单次**解码 +
+ * 路径归一。这里同样单次 decodeURIComponent；解码后若仍残留 %2e/%2f/%5c 编码（双重编码
+ * 探测）或包含 `..`/`\`/null byte → null。
+ */
+export function parseStaticReportOwner(originalUri: string): ReportOwner | null {
+  if (!originalUri || typeof originalUri !== 'string') return null;
+  // 去 query / fragment（$request_uri 带 query）
+  const pathOnly = originalUri.split(/[?#]/, 1)[0];
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathOnly);
+  } catch {
+    return null; // 非法编码 → fail-closed
+  }
+  // 归一多重斜杠（Nginx merge_slashes 语义），去 null byte
+  decoded = decoded.replace(/\/{2,}/g, '/').replace(/\x00/g, '');
+  if (
+    decoded.includes('..') ||
+    decoded.includes('\\') ||
+    /%2e|%2f|%5c/i.test(decoded) // 双重编码残留
+  ) {
+    return null;
+  }
+  if (!decoded.startsWith('/reports/')) return null;
+
+  // 形态：/reports/<slug>/orgs/<branch>/<org>/<file...>（file 至少一段）
+  const segments = decoded.split('/').filter((s) => s.length > 0);
+  // segments[0]='reports'，机构路径至少 6 段：reports/<slug>/orgs/<branch>/<org>/<file>
+  if (segments.length < 6 || segments[2] !== 'orgs') return null;
+  const branch = segments[3];
+  const org = segments[4].trim();
+  // branch 段 schema 与 sidecar ownerBranch 同：^[A-Z]{2}$，非法即 fail-closed
+  if (!/^[A-Z]{2}$/.test(branch)) return null;
+  if (!org) return null;
+  return { org, branch };
+}
+
+/**
  * 校验多文件报告的相对子路径（不能用 sanitizeFilename，因为它拒绝 `/`）
  * - 解码 URL 编码 + 去 null byte
  * - 拒绝 `..` `\` 和绝对路径前缀

@@ -85,9 +85,52 @@ export function scanSlugDir(slugDir) {
     .map(({ date, file }) => ({ date, file }));
 }
 
+/** 列出目录下的子目录名（容错，非目录/不存在返回 []）。 */
+function listSubdirs(dir) {
+  if (!existsSync(dir)) return [];
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    try {
+      if (statSync(join(dir, name)).isDirectory()) out.push(name);
+    } catch {
+      /* 忽略瞬时消失的条目 */
+    }
+  }
+  return out;
+}
+
+/**
+ * 为单个报告目录（slug 根或机构子目录）写 manifest.json。
+ * 空 entries 时跳过写入（绝不用空 manifest 覆盖既有非空 manifest —— codex P2）。
+ * @returns {{ latest: string|null, count: number, skipped?: boolean }}
+ */
+function writeDirManifest(dir, slug, scope) {
+  const entries = scanSlugDir(dir);
+  if (entries.length === 0) {
+    return { latest: null, count: 0, skipped: true };
+  }
+  const latest = entries[0] ?? null;
+  const manifest = {
+    slug,
+    // 机构级 manifest 标注归属（branch + org），省级 manifest 无 scope 字段（向后兼容）
+    ...(scope ? { scope } : {}),
+    latest: latest ? latest.date : null,
+    latestFile: latest ? latest.file : null,
+    entries,
+    generatedAt: new Date().toISOString(),
+  };
+  writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+  return { latest: manifest.latest, count: entries.length };
+}
+
 /**
  * 为 reportsRoot 下每个 slug 目录生成 manifest.json。
- * @returns {{ slug: string, latest: string|null, count: number }[]} 摘要
+ *
+ * B346 机构级报告：slug 目录下若存在 `orgs/<branch>/<org>/` 子目录（生成端按机构产出的
+ * 报告，branch = 两位大写分公司码），为每个机构目录单独生成 manifest.json
+ * （schema 同省级，另带 scope: { branch, org }）。省级 manifest 只统计 slug 根目录文件。
+ *
+ * @returns {{ slug: string, latest: string|null, count: number, orgs?: object[] }[]} 摘要
  */
 export function generateReportsManifests(reportsRoot = DEFAULT_REPORTS_ROOT) {
   if (!existsSync(reportsRoot)) {
@@ -104,25 +147,27 @@ export function generateReportsManifests(reportsRoot = DEFAULT_REPORTS_ROOT) {
     }
     if (!isDir) continue;
 
-    const entries = scanSlugDir(slugDir);
+    const provinceResult = writeDirManifest(slugDir, slug, null);
 
-    // 防御：绝不用「空 manifest」覆盖已存在的非空 manifest（codex P2）。
-    // 从无历史文件的 host 误跑时，宁可保持远端/既有 manifest 不动，也不要清空。
-    if (entries.length === 0) {
-      summaries.push({ slug, latest: null, count: 0, skipped: true });
-      continue;
+    // 机构级 manifest：orgs/<branch>/<org>/（branch 段非 ^[A-Z]{2}$ 的目录跳过，
+    // 与 server/src/routes/reports.ts parseStaticReportOwner 的授权 schema 对齐）
+    const orgSummaries = [];
+    for (const branch of listSubdirs(join(slugDir, 'orgs'))) {
+      if (!/^[A-Z]{2}$/.test(branch)) continue;
+      for (const org of listSubdirs(join(slugDir, 'orgs', branch))) {
+        const orgDir = join(slugDir, 'orgs', branch, org);
+        const r = writeDirManifest(orgDir, slug, { branch, org });
+        if (!r.skipped) orgSummaries.push({ branch, org, latest: r.latest, count: r.count });
+      }
     }
 
-    const latest = entries[0] ?? null;
-    const manifest = {
+    summaries.push({
       slug,
-      latest: latest ? latest.date : null,
-      latestFile: latest ? latest.file : null,
-      entries,
-      generatedAt: new Date().toISOString(),
-    };
-    writeFileSync(join(slugDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-    summaries.push({ slug, latest: manifest.latest, count: entries.length });
+      latest: provinceResult.latest,
+      count: provinceResult.count,
+      ...(provinceResult.skipped ? { skipped: true } : {}),
+      ...(orgSummaries.length > 0 ? { orgs: orgSummaries } : {}),
+    });
   }
   return summaries;
 }
@@ -137,9 +182,12 @@ if (isMain || process.argv[1]?.endsWith('gen-reports-manifest.mjs')) {
   } else {
     for (const s of summaries) {
       if (s.skipped) {
-        console.log(`[reports-manifest] ${s.slug}: 本地无报告文件，跳过（保留既有 manifest）`);
+        console.log(`[reports-manifest] ${s.slug}: 本地无省级报告文件，跳过（保留既有 manifest）`);
       } else {
         console.log(`[reports-manifest] ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
+      }
+      for (const o of s.orgs ?? []) {
+        console.log(`[reports-manifest]   └ ${o.branch}/${o.org}: ${o.count} 期，最新 ${o.latest ?? '（无）'}`);
       }
     }
   }

@@ -21,6 +21,9 @@ import {
   assertReportRoleAllowed,
   resolveReportOwner,
   normalizeReportError,
+  assertStaticReportAccess,
+  parseStaticReportOwner,
+  shouldEnforceStaticReportPolicy,
 } from '../reports.js';
 import { UserRole } from '../../middleware/permission.js';
 import { AppError } from '../../middleware/error.js';
@@ -317,5 +320,179 @@ describe('resolveReportOwner: sidecar 归属解析（fail-closed）', () => {
 
   it('metaPath 逃逸 baseDir → null', () => {
     expect(resolveReportOwner(path.join(tmpDir, '../evil.meta.json'), tmpDir)).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// B346：Nginx 静态 /reports/* 机构级授权（auth_request 细闸）
+// ─────────────────────────────────────────────────────────────
+
+const PROVINCE_URI = '/reports/diagnose-period-trend/2026-07-06-dashboard.html';
+const ORG_URI = (branch: string, org: string, file = '2026-07-06-dashboard.html') =>
+  `/reports/diagnose-period-trend/orgs/${branch}/${encodeURIComponent(org)}/${file}`;
+
+describe('parseStaticReportOwner: 静态报告 URI → 机构归属', () => {
+  it('省级文件 → null（无机构归属）', () => {
+    expect(parseStaticReportOwner(PROVINCE_URI)).toBeNull();
+  });
+
+  it('省级 manifest.json → null', () => {
+    expect(parseStaticReportOwner('/reports/diagnose-period-trend/manifest.json')).toBeNull();
+  });
+
+  it('机构路径（URL 编码中文机构名）→ { org, branch }', () => {
+    expect(parseStaticReportOwner(ORG_URI('SC', '乐山'))).toEqual({ org: '乐山', branch: 'SC' });
+  });
+
+  it('机构路径未编码中文（内部直传）→ 同样解析', () => {
+    expect(
+      parseStaticReportOwner('/reports/diagnose-period-trend/orgs/SC/乐山/2026-07-06-dashboard.html')
+    ).toEqual({ org: '乐山', branch: 'SC' });
+  });
+
+  it('机构目录下 manifest.json → 同一归属', () => {
+    expect(parseStaticReportOwner(ORG_URI('SX', '太原一部', 'manifest.json'))).toEqual({
+      org: '太原一部',
+      branch: 'SX',
+    });
+  });
+
+  it('带 query/fragment → 归属不受影响', () => {
+    expect(parseStaticReportOwner(`${ORG_URI('SC', '乐山')}?t=1#top`)).toEqual({
+      org: '乐山',
+      branch: 'SC',
+    });
+  });
+
+  it('branch 段非法（小写/超长/中文）→ null（fail-closed）', () => {
+    expect(parseStaticReportOwner(ORG_URI('sc', '乐山'))).toBeNull();
+    expect(parseStaticReportOwner(ORG_URI('SCX', '乐山'))).toBeNull();
+    expect(parseStaticReportOwner(ORG_URI('川分', '乐山'))).toBeNull();
+  });
+
+  it('orgs 下缺文件段（只有 org 目录）→ null', () => {
+    expect(parseStaticReportOwner('/reports/diagnose-period-trend/orgs/SC/乐山/')).toBeNull();
+  });
+
+  it('路径遍历（.. / 反斜杠 / 双重编码残留）→ null（fail-closed）', () => {
+    expect(parseStaticReportOwner('/reports/x/orgs/SC/../乐山/a.html')).toBeNull();
+    expect(parseStaticReportOwner('/reports/x/orgs/SC/%2e%2e/乐山/a.html')).toBeNull();
+    expect(parseStaticReportOwner('/reports/x/orgs/SC/a\\b/a.html')).toBeNull();
+    expect(parseStaticReportOwner('/reports/x/orgs/SC/%252e%252e/x/a.html')).toBeNull();
+  });
+
+  it('非 /reports/ 前缀 / 非法编码 / 空值 → null', () => {
+    expect(parseStaticReportOwner('/api/query/kpi')).toBeNull();
+    expect(parseStaticReportOwner('/reports/%zz/orgs/SC/乐山/a.html')).toBeNull();
+    expect(parseStaticReportOwner('')).toBeNull();
+  });
+
+  it('多重斜杠归一后仍解析（对齐 Nginx merge_slashes）', () => {
+    expect(
+      parseStaticReportOwner('/reports//diagnose-period-trend/orgs//SC/乐山/a.html')
+    ).toEqual({ org: '乐山', branch: 'SC' });
+  });
+});
+
+describe('shouldEnforceStaticReportPolicy: /me 过渡强化的触发判定', () => {
+  it('普通 /reports/ 路径 → true', () => {
+    expect(shouldEnforceStaticReportPolicy(PROVINCE_URI)).toBe(true);
+  });
+
+  it('percent-encoding 变体（/%72eports/）→ true（无法绕过）', () => {
+    expect(shouldEnforceStaticReportPolicy('/%72eports/diagnose-period-trend/x.html')).toBe(true);
+  });
+
+  it('双斜杠变体（//reports/）→ true', () => {
+    expect(shouldEnforceStaticReportPolicy('//reports/diagnose-period-trend/x.html')).toBe(true);
+  });
+
+  it('解码失败 → true（fail-closed 交给策略拒绝）', () => {
+    expect(shouldEnforceStaticReportPolicy('/reports/%zz')).toBe(true);
+  });
+
+  it('非报告路径 → false（/me 正常行为不受影响）', () => {
+    expect(shouldEnforceStaticReportPolicy('/api/query/kpi')).toBe(false);
+    expect(shouldEnforceStaticReportPolicy('')).toBe(false);
+  });
+});
+
+describe('assertStaticReportAccess: 访问矩阵', () => {
+  it('branch_admin：省级/机构级/坏路径 全放行', () => {
+    const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: 'SC' });
+    expect(() => assertStaticReportAccess(req, PROVINCE_URI)).not.toThrow();
+    expect(() => assertStaticReportAccess(req, ORG_URI('SX', '太原一部'))).not.toThrow();
+    expect(() => assertStaticReportAccess(req, '/reports/%zz')).not.toThrow();
+  });
+
+  it('org_user：省级全量报告 → 403（本次治理的核心断言）', () => {
+    expectThrows403(() =>
+      assertStaticReportAccess(
+        makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' }),
+        PROVINCE_URI
+      )
+    );
+  });
+
+  it('org_user：本机构报告 → 放行（RLS 关：org 等值 + branch 一致）', () => {
+    setBranchRls('false');
+    expect(() =>
+      assertStaticReportAccess(
+        makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' }),
+        ORG_URI('SC', '乐山')
+      )
+    ).not.toThrow();
+  });
+
+  it('org_user：本机构 manifest.json → 放行', () => {
+    setBranchRls('false');
+    expect(() =>
+      assertStaticReportAccess(
+        makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' }),
+        ORG_URI('SC', '乐山', 'manifest.json')
+      )
+    ).not.toThrow();
+  });
+
+  it('org_user：跨机构报告 → 403', () => {
+    expectThrows403(() =>
+      assertStaticReportAccess(
+        makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' }),
+        ORG_URI('SC', '天府')
+      )
+    );
+  });
+
+  it('org_user：同名机构跨 branch（RLS 开）→ 403', () => {
+    setBranchRls('true');
+    expectThrows403(() =>
+      assertStaticReportAccess(
+        makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SX' }),
+        ORG_URI('SC', '乐山')
+      )
+    );
+  });
+
+  it('org_user：RLS 开 + branch 匹配 → 放行', () => {
+    setBranchRls('true');
+    expect(() =>
+      assertStaticReportAccess(
+        makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' }),
+        ORG_URI('SC', '乐山')
+      )
+    ).not.toThrow();
+  });
+
+  it('org_user：坏路径（遍历/编码）→ 403（fail-closed）', () => {
+    const req = makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' });
+    expectThrows403(() => assertStaticReportAccess(req, '/reports/x/orgs/SC/../乐山/a.html'));
+    expectThrows403(() => assertStaticReportAccess(req, '/reports/%zz'));
+  });
+
+  it('telemarketing / 未认证 → 403（粗闸拦截）', () => {
+    expectThrows403(() =>
+      assertStaticReportAccess(makeReq({ role: UserRole.TELEMARKETING_USER }), PROVINCE_URI)
+    );
+    expectThrows403(() => assertStaticReportAccess(makeReq(undefined), PROVINCE_URI));
   });
 });
