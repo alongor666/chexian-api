@@ -694,12 +694,17 @@ const VALIDATION_SYNCED_DOMAINS = ['claims_detail', 'quotes_conversion', 'renewa
 /**
  * validation 分省同步总开关（codex 闸-2 CRITICAL 修复）。
  *
- * 把非 SC 省 validation 派生域推到生产是 GATED cutover **显式数据发布步**（类比 #790），**绝不**
- * 随日常 sync 自动发生：RLS-off 时若 SX validation 进生产，bootstrapper resolveBranch*Extras 不检查
- * BRANCH_RLS_ENABLED、loader 无条件 UNION ALL BY NAME → SX 数据进派生关系。PR-1 仅对 claims 经
- * PolicyFact JOIN 丢弃验证过字节安全，quotes_conversion/renewal_tracker 等直接聚合域未必丢弃 SX 行
- * → 违反「RLS-on 前 SX 绝不进生产」。故默认 off：日常 sync 逐字节等价历史。操作者在 cutover 数据
- * 发布步显式设 SYNC_VALIDATION_BRANCHES=1 才推。
+ * 把非 SC 省 validation 派生域推到生产曾是 GATED cutover **显式数据发布步**（类比 #790）：RLS-off
+ * 时若 SX validation 进生产，bootstrapper resolveBranch*Extras 不检查 BRANCH_RLS_ENABLED、loader
+ * 无条件 UNION ALL BY NAME → SX 数据进派生关系（跨省污染）。PR-1 仅对 claims 经 PolicyFact JOIN
+ * 丢弃验证过字节安全，quotes_conversion/renewal_tracker 等直接聚合域未必丢弃 SX 行。故本脚本
+ * 默认 off——裸跑 `node scripts/sync-vps.mjs` 行为逐字节等价历史。
+ *
+ * 2026-07-07 起（owner 授权「治理到位」，生产行级隔离已于 2026-06-25 常态开启）：
+ * `release:daily`（sync-and-reload.mjs Stage 3）在分省 ETL 在编排内时**显式携带**
+ * SYNC_VALIDATION_BRANCHES=1，让山西等非 SC 省派生域随日常发布同步、不再停更
+ * （判定纯函数 = 数据管理/lib/branch-publish.mjs shouldEnableValidationBranchSync；
+ * 操作者显式设值——含 '0'——时发布链不注入，人工出口保留）。本开关自身语义不变。
  */
 function validationBranchSyncEnabled() {
   const v = (process.env.SYNC_VALIDATION_BRANCHES ?? '').trim().toLowerCase();

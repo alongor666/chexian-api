@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
-import { canAccessRoute, canAccessMotoCost, canAccessCost, canAccessExpenseDevelopment, UserRole } from '../../shared/config/organizations';
+import { canAccessRoute, canAccessMotoCost, canAccessExpenseDevelopment, UserRole } from '../../shared/config/organizations';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { useRBAC } from '../../shared/hooks/useRBAC';
 import { buildFilterParams } from '../../shared/utils/filterParams';
@@ -262,13 +262,7 @@ export const SidebarNavigation: React.FC = () => {
       {/* 导航菜单 */}
       <div className="flex-1 overflow-y-auto overflow-x-visible">
         <nav className={`${isMobile ? 'px-3 py-4' : 'px-2 py-3'} space-y-1`}>
-          {renderSection(
-            '数据分析',
-            dataNavItems.filter(item => {
-              if (item.path === '/cost') return canAccessCost(userPermission?.username, userPermission?.specialFeatures);
-              return true;
-            })
-          )}
+          {renderSection('数据分析', dataNavItems)}
 
           {renderSection(
             '工具',

@@ -31,8 +31,11 @@ const ALL_ROUTES = [
   { path: '/comparison', label: '数据对比' },
 ];
 
+/**
+ * 成本分析（'cost'）已对全员开放，用户面权限开关已下掉（2026-07-06-claude-286f55）。
+ * 此处不再列出 'cost'，仅保留仍有效的特殊功能开关。
+ */
 const ALL_SPECIAL_FEATURES = [
-  { key: 'cost', label: '成本分析', path: '/cost' },
   { key: 'moto_cost', label: '摩意模型', path: '/moto-cost' },
 ];
 

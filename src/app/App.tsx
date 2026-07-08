@@ -12,7 +12,7 @@ import { ThemeProvider } from '../shared/theme';
 import { ExportProvider } from '../shared/export/ExportContext';
 import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
-import { canAccessCost, canAccessExpenseDevelopment, canAccessMotoCost } from '../shared/config/organizations';
+import { canAccessExpenseDevelopment, canAccessMotoCost } from '../shared/config/organizations';
 import { registerAuthCacheClearing } from './authCacheLifecycle';
 import { startEtlVersionPolling } from './etlVersionPoller';
 
@@ -232,11 +232,9 @@ function App() {
                     path="cost"
                     element={
                       <RouteAccessGuard routePath="/cost">
-                        <FeatureGuard check={canAccessCost}>
-                          <DataGuard>
-                            <LazyRoute><CostPage /></LazyRoute>
-                          </DataGuard>
-                        </FeatureGuard>
+                        <DataGuard>
+                          <LazyRoute><CostPage /></LazyRoute>
+                        </DataGuard>
                       </RouteAccessGuard>
                     }
                   />

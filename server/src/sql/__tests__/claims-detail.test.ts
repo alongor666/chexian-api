@@ -655,6 +655,17 @@ describe('generateLossRatioDevelopmentQuery', () => {
     expect(sql).toContain('claims_cutoff FROM claims_cutoff_cte');
   });
 
+  it('多省截止日隔离（2026-07-07）：传 cutoffBranchCode → cutoff CTE 限定本省 branch_code', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS, [2025, 2026], 24, '1=1', 'SX');
+    expect(sql).toContain(`claims_cutoff FROM PolicyFact WHERE branch_code = 'SX'`);
+  });
+
+  it('多省截止日隔离：不传 cutoffBranchCode → cutoff CTE 不加分省过滤（与历史逐字节一致）', () => {
+    const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
+    const cutoffCte = sql.slice(sql.indexOf('claims_cutoff_cte AS ('), sql.indexOf('raw_policies AS ('));
+    expect(cutoffCte).not.toContain('branch_code');
+  });
+
   it('NULLIF 防除以零（已赚保费 + 已赚暴露）', () => {
     const sql = generateLossRatioDevelopmentQuery(EMPTY_FILTERS);
     expect(sql).toContain('NULLIF(e.earned_premium, 0)');

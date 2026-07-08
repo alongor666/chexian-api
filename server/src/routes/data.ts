@@ -26,7 +26,7 @@ import { readonlyMiddleware } from '../middleware/readonly.js';
 import { permissionMiddleware, requireRole, UserRole } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
-import { onDataVersionChange } from '../services/data-version.js';
+import { onDataVersionChange, getDataVersion } from '../services/data-version.js';
 import { createPolicyFactView, dropAllDerivedTables } from '../services/duckdb-materialization.js';
 import {
   escapeSqlValue,
@@ -897,6 +897,11 @@ router.get(
         etlDate: latestEtlDate,
         buildTime: new Date().toISOString(),
         serverStartTime,
+        // 内容指纹（保单 Parquet 文件集 + mtime 派生，见 data-version.ts）：
+        // 覆盖「仅山西保单刷新而全局 MAX(policy_date) 不变」的场景——etlDate 不变但
+        // 指纹变，前端 etlVersionPoller 据此仍能触发缓存失效（2026-07-07 山西页面停更治理）。
+        // 理赔/报价等派生域更新必经服务重载，由 serverStartTime 变化兜底。
+        contentVersion: getDataVersion(),
       },
     });
   })

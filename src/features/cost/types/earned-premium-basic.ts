@@ -3,41 +3,31 @@
  * 从 costTypes.ts 拆分而来
  */
 
+import { getLastDayOfMonth } from '../../../shared/utils/date';
+
 // ==================== 已赚保费相关 ====================
 
-/** 2026年12个月末选项 */
-export const MONTH_END_OPTIONS: { value: string; label: string }[] = [
-  { value: '2026-01-31', label: '2026年1月末' },
-  { value: '2026-02-28', label: '2026年2月末' },
-  { value: '2026-03-31', label: '2026年3月末' },
-  { value: '2026-04-30', label: '2026年4月末' },
-  { value: '2026-05-31', label: '2026年5月末' },
-  { value: '2026-06-30', label: '2026年6月末' },
-  { value: '2026-07-31', label: '2026年7月末' },
-  { value: '2026-08-31', label: '2026年8月末' },
-  { value: '2026-09-30', label: '2026年9月末' },
-  { value: '2026-10-31', label: '2026年10月末' },
-  { value: '2026-11-30', label: '2026年11月末' },
-  { value: '2026-12-31', label: '2026年12月末' },
-];
+/**
+ * 生成某一年 12 个月末选项（YYYY-MM-DD → 「YYYY年M月末」）。
+ * 原为写死 2026 年的静态数组（跨年即过期），2026-07-07 硬编码专项改为按年动态生成。
+ */
+export function buildYearMonthEndOptions(year: number): { value: string; label: string }[] {
+  return Array.from({ length: 12 }, (_, i) => {
+    const month = i + 1;
+    const lastDay = getLastDayOfMonth(year, i);
+    return {
+      value: `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
+      label: `${year}年${month}月末`,
+    };
+  });
+}
 
-/** 保单年月选项（用于明细表筛选） */
-export const POLICY_MONTH_OPTIONS: { value: string; label: string }[] = [
-  { value: 'all', label: '全部月份' },
-  { value: '2025-01', label: '2025年1月' },
-  { value: '2025-02', label: '2025年2月' },
-  { value: '2025-03', label: '2025年3月' },
-  { value: '2025-04', label: '2025年4月' },
-  { value: '2025-05', label: '2025年5月' },
-  { value: '2025-06', label: '2025年6月' },
-  { value: '2025-07', label: '2025年7月' },
-  { value: '2025-08', label: '2025年8月' },
-  { value: '2025-09', label: '2025年9月' },
-  { value: '2025-10', label: '2025年10月' },
-  { value: '2025-11', label: '2025年11月' },
-  { value: '2025-12', label: '2025年12月' },
-  { value: '2026-01', label: '2026年1月' },
-];
+/**
+ * 当年 12 个月末选项 —— 仅作 CostAnalysisControlPanel 未传入动态 monthEndOptions 时的兜底；
+ * 常规路径由 CostAnalysisPanel 依据数据最大日期动态生成。
+ */
+export const MONTH_END_OPTIONS: { value: string; label: string }[] =
+  buildYearMonthEndOptions(new Date().getFullYear());
 
 /** 地区分类（用于汇总表合计） */
 export type RegionType = '四川' | '同城' | '异地' | '合计';
