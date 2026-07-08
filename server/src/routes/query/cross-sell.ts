@@ -6,6 +6,7 @@ import {
   logger, QUERY_CACHE, createDomainMiddleware, withRouteCache,
   type Request,
 } from './shared.js';
+import { filterByDomainColumns } from '../../utils/domain-filter-sanitizer.js';
 import { generateCrossSellQuery, type CrossSellDimension, type DrilldownStep } from '../../sql/cross-sell.js';
 import { getBranchCompanyName } from '../../config/branch-names.js';
 import { generateCrossSellTimePeriodQuery, getVehicleCategoryFilter, type VehicleCategory } from '../../sql/cross-sell-summary.js';
@@ -67,18 +68,14 @@ export function buildCrossSellAggInsuranceClause(raw: unknown): string {
  * gas/oil（依赖 fuel_type）与 dump/tractor/general（依赖 vehicle_model）
  * 为防御性剥离（防直接 API 调用 400），不做语义映射；前端已隐藏对应 chip。
  * electric 不剥离：parser 对其产出 is_nev = true，agg 有该列，与 SSOT 严格等价。
+ *
+ * 净化剥离清单已中央化到 domain-filter-sanitizer.ts 的 DOMAIN_SUPPORTED_COLUMNS
+ * （BACKLOG 2026-07-07-claude-dce69c，8f71c0 architect 闸 P1-1）：本函数保留导出名
+ * 以兼容既有测试 / bundles/cross-sell.ts 调用方，内部改为委托共享的
+ * filterByDomainColumns('crossSellAgg')，不再本地硬编码剥离清单。
  */
 export function sanitizeAggQuery(query: Request['query']): Request['query'] {
-  const out = { ...query };
-  delete out.insuranceType; // 由 buildCrossSellAggInsuranceClause（premium>0 口径）处理
-  if (out.fuelCategory === 'gas' || out.fuelCategory === 'oil') {
-    delete out.fuelCategory;
-  }
-  const vqf = out.vehicleQuickFilter;
-  if (vqf === 'dump' || vqf === 'tractor' || vqf === 'general') {
-    delete out.vehicleQuickFilter;
-  }
-  return out;
+  return filterByDomainColumns(query, 'crossSellAgg');
 }
 
 export async function ensureCrossSellAggregateTablesReady(): Promise<void> {

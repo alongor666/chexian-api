@@ -9,6 +9,7 @@ import { Router } from 'express';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { asyncHandler, AppError, duckdbService, isValidDateFormat, createDomainMiddleware, withRouteCache, parseFiltersAndBuildWhere } from './shared.js';
+import { filterByDomainColumns } from '../../utils/domain-filter-sanitizer.js';
 import {
   generateQuoteKpiQuery,
   generateQuoteFunnelQuery,
@@ -83,17 +84,16 @@ function parseFilters(query: Record<string, unknown>): QuoteConversionFilters {
  *     共享 parser 注入 `is_nev = true` 等 BOOLEAN 比较会类型冲突 → 剥离；新能源/过户
  *     筛选走本域自有 isNewEnergy/isTransferred 参数（parseFilters 从原始 query 消费）。
  *
+ * 净化剥离清单已中央化到 domain-filter-sanitizer.ts 的 DOMAIN_SUPPORTED_COLUMNS
+ * （BACKLOG 2026-07-07-claude-dce69c，8f71c0 architect 闸 P1-1）：commonQuery 的剥离
+ * 逻辑（含上述所有字段 + vehicleQuickFilter dump/tractor/general 的取值级剥离）改为
+ * 委托共享的 filterByDomainColumns('quoteConversion')，不再本地硬编码剥离清单。
+ *
  * 🔒 RLS 不变量：净化只作用于用户 query 参数维度，不触碰 permissionFilter 通道——
  * buildWhereFromFilterParams 把 requirePermissionFilter(req.permissionFilter) 独立 AND 到
  * WHERE 尾部（filter-params.ts），org_level_3/branch_code/is_telemarketing 三个 RLS 列
  * 本视图均真实存在且不在剥离清单内，权限隔离不受净化影响。
  */
-const QUOTE_UNSUPPORTED_COMMON_PARAMS = [
-  'startDate', 'endDate', 'dateField',
-  'renewalModes',
-  'isRenewal', 'isNewCar', 'isRenewable', 'isCrossSell', 'isCommercialInsure',
-  'isNev', 'isTransfer', 'fuelCategory',
-] as const;
 
 /**
  * 构造本域生效查询（净化副本模式，不修改 req.query）：
@@ -115,16 +115,7 @@ export function buildQuoteEffectiveQuery(query: Request['query']): {
   if (typeof query.endDate === 'string' && query.endDate !== '' && dateEndAbsent) {
     domainQuery.dateEnd = query.endDate;
   }
-  const commonQuery = { ...domainQuery };
-  for (const key of QUOTE_UNSUPPORTED_COMMON_PARAMS) {
-    delete commonQuery[key];
-  }
-  // vehicleQuickFilter：dump/tractor/general 依赖 vehicle_model 列（本视图无）→ 剥离；
-  // 其余取值仅用 customer_category/tonnage_segment（本视图均有）→ 透传
-  const vqf = commonQuery.vehicleQuickFilter;
-  if (vqf === 'dump' || vqf === 'tractor' || vqf === 'general') {
-    delete commonQuery.vehicleQuickFilter;
-  }
+  const commonQuery = filterByDomainColumns(domainQuery, 'quoteConversion');
   return { domainQuery, commonQuery };
 }
 
