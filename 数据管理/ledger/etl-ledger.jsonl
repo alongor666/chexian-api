@@ -219,3 +219,14 @@
 {"ts":"2026-07-06T17:23:19.595+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"etl","step":"premium_transform","domain":"premium","row_count":5093283,"field_count":42,"date_range":"2021-01-01 ~ 2026-05-16"}
 {"ts":"2026-07-06T17:24:04.934+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"etl","step":"premium_transform","domain":"premium","row_count":4464114,"field_count":42,"date_range":"2021-01-01 ~ 2026-05-16"}
 {"ts":"2026-07-07T16:13:36.400+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"vps_sync","step":"rsync_all"}
+{"ts":"2026-07-08T08:39:06.037+08:00","run_id":"20260708-003837","status":"success","backfilled":false,"stage":"etl","step":"premium_transform","domain":"premium","row_count":2630892}
+{"ts":"2026-07-08T08:39:18.060+08:00","run_id":"20260708-003837","status":"success","backfilled":false,"stage":"etl","step":"claims_detail_transform","domain":"claims_detail","row_count":291363,"field_count":41}
+{"ts":"2026-07-08T08:39:47.208+08:00","run_id":"20260708-003837","status":"success","backfilled":false,"stage":"etl","step":"quotes_conversion_transform","domain":"quotes_conversion","row_count":927373,"field_count":33}
+{"ts":"2026-07-08T08:39:53.146+08:00","run_id":"20260708-003837","status":"success","backfilled":false,"stage":"etl","step":"brand_transform","domain":"brand","row_count":371359,"field_count":15}
+{"ts":"2026-07-08T08:40:08.133+08:00","run_id":"20260708-003837","status":"success","backfilled":false,"stage":"etl","step":"repair_resource_transform","domain":"repair_resource","row_count":6780,"field_count":14}
+{"ts":"2026-07-08T08:40:10.318+08:00","run_id":"20260708-003837","status":"success","backfilled":false,"stage":"validate","step":"new_energy_claims_validate","domain":"new_energy_claims","row_count":901}
+{"ts":"2026-07-08T08:40:10.483+08:00","run_id":"20260708-003837","status":"success","backfilled":false,"stage":"etl","step":"new_energy_claims_transform","domain":"new_energy_claims","row_count":901,"field_count":11}
+{"ts":"2026-07-08T08:55:35.075+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"etl","step":"premium_transform","domain":"premium","row_count":2630892}
+{"ts":"2026-07-08T08:55:58.180+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"vps_sync","step":"rsync_all"}
+{"ts":"2026-07-08T08:56:51.398+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"etl","step":"premium_transform","domain":"premium","row_count":2630892}
+{"ts":"2026-07-08T08:56:57.495+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"vps_sync","step":"rsync_all"}
