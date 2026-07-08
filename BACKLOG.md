@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（40 项 · 数据截至 2026-07-08 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（38 项 · 数据截至 2026-07-08 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -28,7 +28,7 @@
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-07-07-claude-85e57c — 山西页面停更治理落地（本 PR）
 
-**P2（20 项）**
+**P2（19 项）**
 
 - B304 `PARTIAL` — earned-premium 双口径未文档化
 - B306 — DuckDB 性能高危三件套
@@ -45,13 +45,12 @@
 - 2026-07-03-claude-05dff4 — 前端审查中危债打包（2026-07-03四维审查）
 - 2026-07-03-claude-131dd8 — 后端审查
 - 2026-07-03-claude-6c23b3 — 后端审查
-- 2026-07-06-claude-151236 — governance 增加双锁一致性闸
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-07-claude-6d1dfe — route-param-contracts 对 /quote-conversion/* 
 - 2026-07-07-claude-dce69c — 净化剥离中央化
 - 2026-07-08-claude-fd244c — [硬编码专项遗留]已赚保费月度明细模块年份深度耦合
 
-**P3（16 项）**
+**P3（15 项）**
 
 - B247 — 图表 hex 色值审计
 - B254 — wecom_smartsheet state 生命周期管理（missing_vins T
@@ -67,7 +66,6 @@
 - 2026-07-07-claude-beb706 — 热重载（同进程 ETL）后 CrossSellDailyAgg 物化表不自动重建
 - 2026-07-07-claude-ca822c — KPI 卡归一到 widgets/kpi/EnhancedKpiCard
 - 2026-07-07-claude-cfaf91 — 企微续保同步脚本 数据管理/integrations/wecom_smartsheet/
-- 2026-07-07-claude-e80304 — 前后端 BRANCH 映射镜像目前仅靠人工核对一致，无自动化 governance 闸
 - 2026-07-07-claude-f23ffc — SC 车牌归属地判定统一改造为 JOIN PlateRegionMap（与 SX 同路径
 
 ---
@@ -104,7 +102,6 @@
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/health无脚本,故实际无功能影响。收紧到nonce/hash策略是纯纵深加固,需先确认无Express服务的内联脚本依赖。来源:2026-07-03安全审计 | P3 | PROPOSED | N/A | server/src/config/csp.ts | 架构价值审计冻结（2026-07-04）：Express csp.ts 的 unsafe-inline 实测无功能影响（唯一 HTML 响应 reports.ts 有独立 REPORT_HTML_CSP；SPA 的 CSP 基线已由 PR #874 下发 nginx 模板，生产应用由 6ef9cd 追踪）；unsafe-inline→nonce 需重构全部内联脚本，成本高当前收益零。触发条件=SPA CSP 生产落地后仍有内联脚本注入实证 |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功能对等覆盖 v1 场景，再切 daily.mjs 调度并删 v1。承接 B253 弃置结论。【账】做完删 v1 脚本+DEFAULT_SCHEMA 硬编码/加 0 新机制/触发条件=确认 v2 功能对等 | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ | 评估完成（严格对等矩阵）：①推送引擎职责 v2 完全对等且严格更优——v1 DEFAULT_SCHEMA 18 个 field_id 在 field_registry.yaml 全部有声明且实例 fields_enabled 全启用；state 同名同构（v2 records 增 payload_hash 为超集，接管旧 state 只触发 update 不触发 add，无行级重复风险）；40058/update 失败降级、missing_vins 只记不删、限流语义均对等；v2 另有 branch_code fail-closed+出口断言/幂等 hash 跳过/重复投保审计/跨批排他。②调度证据：仓库与运行目录均无 config.*.json（v1 兼容段扫描恒为空），463 个历史日志全为 v2 家族 → daily.mjs 8b v1 兼容段已删（行为逐字节不变），并消除治理盲区（v1 不在 governance 企微隔离闸引擎清单、无省份隔离，留着调度入口=混省推送地雷）。③v1 文件不删（差距）：create_renewal_tracker.py 与 test_dryrun_validation_sql.py 依赖其 SyncConfig+build_source_rows 的「止期窗口」(insurance_end_date_from/to) 取数能力，v2 引擎只支持起期窗口，非 drop-in 替代；且该消费方正被 cutover 前置A卡改动。删除条件：create_renewal_tracker 取数迁移到带省份隔离的独立查询层，或 v2 补齐止期窗口过滤（届时连同 test_sync_renewal.py 一并删）。 |
 | 2026-07-06-claude-0e26ba | 2026-07-06 | 安全治理 | @claude | session 级 IP 绑定评估:allowedIps 目前只在登录时校验一次(JWT 签发后不再比对,PAT 侧已于权限治理 PR 补齐每次校验)。若要 JWT 会话也绑 IP,需评估移动网络/办公网出口 IP 漂移导致正常用户会话中断的可用性代价,可选折中=仅对显式配置 allowedIps 的账号启用。属较大改造,先决策再动手 | P3 | PROPOSED | N/A | server/src/middleware/auth.ts,server/src/services/auth.ts:136 | check-merged-drift 命中 c59a5058/37a3c234(PR #943) 系误报：#943 只补了 PAT 侧每次 IP 校验（事项文本自述），JWT session 侧未动——origin/main 核实 middleware/auth.ts 零 allowedIps 引用，无每请求比对。保持 PROPOSED（先决策再动手） |
-| 2026-07-06-claude-151236 | 2026-07-06 | 部署链 | @claude | governance 增加双锁一致性闸:server/package.json 的语义范围必须被 server/package-lock.json 锁定版本满足(npm ci 的锁漂移在 CI 早于部署暴露)。根因:#942 重建 bun.lock/server/bun.lock 但漏 npm 锁,main 部署连败三次全靠回滚兜底(runs 28784860923/28785804360/c59a5058)。双锁体系(bun 本地/CI + npm VPS 部署)任一侧重建必须联动另一侧 | P2 | PROPOSED | N/A | server/package-lock.json,scripts/check-governance.mjs |  |
 | 2026-07-06-claude-de1e40 | 2026-07-06 | 安全治理 | @claude | org_user 路由白名单扩展到非 query 域(/api/data、/api/ai、/api/agent、/api/copilot 等)需改为按域显式声明是否纳管,替代 mountedOutsideQuery 一刀切跳过。⚠️ 242c07 曾因盲目套白名单致 agent 诊断路由误伤 403,扩域必须逐域回归。现状数据层 RLS 仍生效,仅功能边界缺失,非紧急 | P2 | PROPOSED | N/A | server/src/middleware/permission.ts:186-201 | check-merged-drift 命中 c59a5058/37a3c234(PR #943) 系误报：本项是 #943 会话立的 follow-up（按域显式声明纳管），origin/main 核实 permission.ts mountedOutsideQuery 一刀切跳过仍在（2 处命中），扩域未实施。保持 PROPOSED |
 | 2026-07-07-claude-322e6e | 2026-07-07 | 前端重构 follow-up | @claude | 矩阵热力图抽共享组件：业绩机构热力图V2(8组件族)、交叉销售指标热力图、赔案热力图、报价转化维度热力图四套并存，抽「行×期矩阵+打灯+下钻回调」共享件，各页保留取数与口径。侦察证据见 开发文档/架构设计/前端极简架构规划_2026-07-07.md §四B-3 | P3 | PROPOSED | 开发文档/架构设计/前端极简架构规划_2026-07-07.md | N/A |  |
 | 2026-07-07-claude-6d1dfe | 2026-07-07 | 架构治理/契约 | @claude | route-param-contracts 对 /quote-conversion/* 与 /customer-flow/* 未声明 useCommon 但 handler 实际消费 commonFilterSchema（净化子集），契约与运行时偏差且 governance 对账单向不拦（8f71c0 architect 闸 P1-2）。需扩展契约表达「useCommon 但排除某些 key」语义并补齐两域声明，否则 MCP/CLI tool description 失真。 | P2 | PROPOSED | N/A | server/src/config/route-param-contracts.ts |  |
@@ -113,6 +110,5 @@
 | 2026-07-07-claude-ca822c | 2026-07-07 | 前端重构 follow-up | @claude | KPI 卡归一到 widgets/kpi/EnhancedKpiCard：GrowthKpiCards、CrossSellSummaryKpiBoard、VariableCostKpiBoard、quote-conversion KpiCards 四套特性层自实现逐页替换为共享基座。侦察证据见 开发文档/架构设计/前端极简架构规划_2026-07-07.md §四B-2 | P3 | PROPOSED | 开发文档/架构设计/前端极简架构规划_2026-07-07.md | N/A |  |
 | 2026-07-07-claude-cfaf91 | 2026-07-07 | 架构治理/多省 | @claude | 企微续保同步脚本 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py 的 ORG_SLUGS 常量写死四川12机构中文名→拼音slug映射（高新→gaoxin等），prime_state_from_wecom.py/cleanup_org_renewal_dup.py 复用同一常量。这是 2026-06-27-claude-e96d85「治理工程二」原始问题描述里点名的4处硬编码位置之一，但不属于该条目已完成的UI层四阶段（PR #953/#956/#959/#963）范围——本条目是后端 Python 数据集成脚本，非终端用户可感知UI，独立登记跟进。若山西续保企微同步需要走这套脚本，需仿照前端 BRANCH_ORGANIZATIONS 模式补充 SX 11机构→slug映射（山西现有独立的 sync_renewal_v2.py + instances/*.yaml 按省实例化架构，需先确认这套 xlsx 同步脚本是否仍在用、是否与 v2 实例架构重叠，避免重复建设） | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py |  |
 | 2026-07-07-claude-dce69c | 2026-07-07 | 架构治理/多省 | @claude | 净化剥离中央化：域→支持列白名单上收 route-param-contracts.ts，共享 parser 按白名单自动过滤（8f71c0 architect 闸 P1-1）。现 cross-sell/quote-conversion/customer-flow 三处路由层各自维护剥离清单，与视图定义（duckdb-domain-loaders.ts）无编译期关联，第四个域出现同类 Binder Error 会重演人肉排查。 | P2 | PROPOSED | N/A | server/src/config/route-param-contracts.ts |  |
-| 2026-07-07-claude-e80304 | 2026-07-07 | 架构治理/多省 | @claude | 前后端 BRANCH 映射镜像目前仅靠人工核对一致，无自动化 governance 闸：src/shared/utils/branchDisplay.ts 的 BRANCH_LABELS ↔ server/src/config/branch-names.ts 的 BRANCH_NAMES；src/shared/config/organizations.ts 的 SX_ORGANIZATIONS/BRANCH_ORGANIZATIONS ↔ server/src/services/permission.ts 的同名常量。当前（2026-07-07，工程二阶段2/3/4 收尾核实）两组常量逐字节一致，无漂移。建议参照既有『能力矩阵镜像』闸（checkFilterCapabilityMirror，用 BEGIN/END 锚点比对两文件文本）的模式，给这两组 BRANCH 映射也加锚点+governance 检查，防止未来任一端修改（如新增第三省）漏改另一端。工作量：4 个文件加锚点注释 + 新增 1 个 governance 检查函数，中等规模，独立 PR 更合适 | P3 | PROPOSED | N/A | scripts/check-governance.mjs |  |
 | 2026-07-07-claude-f23ffc | 2026-07-07 | 数据口径/理赔地理 | @claude | SC 车牌归属地判定统一改造为 JOIN PlateRegionMap（与 SX 同路径），消除维护两份车牌前缀映射（SC_PLATE_CITY_CASE/SC_PLATE_HOME_CITY_CASE 硬编码 CASE + PlateRegionMap 权威维表）的漂移风险。PR #971（d3ef27）修复错位缺陷时已评估该方案：JOIN 路径对自治州名做 regexp_replace(city,'(市\|自治州\|地区\|盟)$','') 只剥离行政区划后缀，会把「阿坝藏族羌族自治州」等输出为「阿坝藏族羌族」（保留民族全称），与现有硬编码 CASE 的短名输出「阿坝」不一致——这是超出错位修复范围的格式变更，需先与业务确认统一后的自治州显示格式（保留短名 or 采用长名），确认后再将 SC 从 PLATE_GEO_PROVINCES_BY_BRANCH 的 branchCode !== 'SC' 特判中移除、统一走 JOIN。 | P3 | PROPOSED | N/A | server/src/sql/claims-detail.ts |  |
 | 2026-07-08-claude-fd244c | 2026-07-08 | 指标口径 | @claude | [硬编码专项遗留]已赚保费月度明细模块年份深度耦合：后端 earned-premium-detail.ts 写死 2025/2026/2027（generatePolicy2025/2026EarnedPremiumQuery、滚动汇总 UNION 12 个月锚定 2026），前端 transformData.ts/cost-summary-calc.ts 依赖 earned_2025_MM/earned_2026_MM 字段族与 Policy2025In2025Data 等年份命名类型——跨年需改代码。sql-builder.ts 已有参数化 generateEarnedPremiumPeriodQuery(policyYear/earnedYear) 可作重构基座，但涉及 API 字段契约变更（earned_YYYY_MM → 相对年 key）与前端类型重写，须 Parquet 直查对账后独立 PR。另：驾意险单均保费阈值（主全 333/300/260、交三 288/200/150）注册表无对应原子指标可挂靠 thresholds，已在 crossSellRateStatus.ts 集中命名常量，注册表化待此缺口补齐。 | P2 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts,src/features/cost/utils/transformData.ts,src/features/cost/utils/cost-summary-calc.ts,src/features/dashboard/crossSellRateStatus.ts |  |

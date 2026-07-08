@@ -30,7 +30,9 @@ export const ORGANIZATIONS = [
  * 山西（SX）经营单元列表（11）。
  * SSOT：数据管理/config/branch-org-mapping/SX.json 的 "units"（= ETL 规范化后的 org_level_3 值），
  * 与 preset-users.ts 的 11 个 SX org_user `organization` 字段一致。漂移由 permission.test.ts 对账 PRESET_USERS 锁定。
+ * governance「省份映射前后端镜像」锚点对账。
  */
+// ── SX-ORG-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
 export const SX_ORGANIZATIONS = [
   '太原一部',
   '太原二部',
@@ -44,16 +46,20 @@ export const SX_ORGANIZATIONS = [
   '临汾',
   '吕梁',
 ] as const;
+// ── SX-ORG-MIRROR-END ──
 
 /**
  * branchCode → 该分公司机构列表。新增省份上线时须在此登记，否则该省 branch_admin 的机构下拉会回落到默认（SC）。
  * 多省 RLS-on 后，branch_admin 的可见机构必须按本人 branchCode 取，禁止再硬编码单省常量
  * （历史 bug：getVisibleOrganizations 对所有 branch_admin 返回静态 SC 列表 → 山西管理员下拉泄漏四川机构名且缺山西机构）。
+ * governance「省份映射前后端镜像」锚点对账。
  */
+// ── BRANCH-ORG-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
 export const BRANCH_ORGANIZATIONS: Record<string, readonly string[]> = {
   SC: ORGANIZATIONS,
   SX: SX_ORGANIZATIONS,
 };
+// ── BRANCH-ORG-MIRROR-END ──
 
 /**
  * 权限服务类
