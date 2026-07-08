@@ -25,18 +25,18 @@
 chexian-api/
 ├── src/                    # 前端源码（React + TS + Vite）
 │   ├── app/                #   应用入口（App.tsx / main.tsx）
-│   ├── features/           #   21 个业务功能模块（前端主体）
+│   ├── features/           #   业务功能模块集（前端主体，模块数以目录为准）
 │   ├── shared/             #   共享层（api / contexts / hooks / ui / 设计系统）
 │   ├── widgets/            #   通用 UI 组件库（charts / kpi / table）
 │   ├── components/         #   全局布局组件（layout/）
 │   ├── charts/ services/   #   特化图表 / 前端服务（PdfExport）
-│   └── core/ types/ shims/ #   历史遗留区（core/types 待归档）+ 类型垫片
+│   └── shims/              #   第三方模块类型垫片（历史遗留区 core/types 已清退）
 │
 ├── server/                 # 后端 API 服务（Express + DuckDB native）
 │   └── src/
-│       ├── routes/         #   API 路由层（12 顶层 + query/ 23 子路由）
-│       ├── sql/            #   SQL 生成器（31 顶层 + 8 子目录，共 55 文件）
-│       ├── services/       #   服务层（28 文件：DuckDB 簇 / 认证 / 权限 / 缓存）
+│       ├── routes/         #   API 路由层（顶层路由 + query/ 子路由，数量以目录为准）
+│       ├── sql/            #   SQL 生成器（顶层生成器 + 8 业务子目录，文件数以目录为准）
+│       ├── services/       #   服务层（DuckDB 簇 / 立方体 / 认证 / 权限 / 缓存，文件数以目录为准）
 │       ├── config/         #   配置注册表（字段 / 指标 / 客户类别 / 环境）
 │       ├── agent/          #   AI Agent 系统（诊断 / 解释 / 预测 / 审计）
 │       ├── skills/         #   后端技能编排（技能 + 工作流）
@@ -54,7 +54,7 @@ chexian-api/
 │   ├── knowledge/          #   业务规则字典 + Parquet schema 知识
 │   ├── config/             #   固定成本参数 / shard-config
 │   ├── integrations/       #   外部集成（wecom_smartsheet 等）
-│   ├── patrol/ validation/ #   续保巡检引擎 / 数据校验
+│   ├── validation/ ledger/ #   数据校验 / 数据台账（patrol 续保巡检已于 2026-07 整链退役）
 │   ├── lib/ tools/ scripts/ staging/ release-manifests/ archive/ logs/
 │   ├── daily.mjs run.mjs   #   ETL 入口（智能检测 / 强制域）
 │   └── data-sources.json   #   数据域注册表（ETL 自动派生）
@@ -171,12 +171,16 @@ L2 → L2（子项目之间不能直接import）
 | 日志文件 | 操作_时间戳.log | match_20260201_1430.log |
 
 ### 4.3 Git分支
+
+实际采用「主干 + 短生命周期 PR 分支」模型（无长期 develop 分支）：
+
 ```
-main                    # 稳定版本
-develop                 # 开发主线
-feature/数据管理/xxx    # 功能域前缀
-hotfix/xxx              # 紧急修复
+main                    # 唯一长期分支（push main 自动触发 CI 部署，见 deploy.yml）
+claude/<任务描述>       # AI 会话工作分支（远程执行环境自动创建）
+codex/<任务描述>        # Codex 工作分支
 ```
+
+所有变更经 PR 合入 main，PR 前须 `git fetch origin main && git rebase origin/main && bun run governance`（见 CLAUDE.md §8）。
 
 ---
 
@@ -193,7 +197,7 @@ hotfix/xxx              # 紧急修复
 │              数据管理/warehouse/  Parquet 数据仓库            │
 │  - fact/（事实表：保费/赔案/报价/交叉销售/客户流转）          │
 │  - dim/（维度表：业务员/机构/计划）                          │
-│  - data-sources.json（9 域元数据，ETL 自动派生）             │
+│  - data-sources.json（数据域元数据，域数以该文件为准，ETL 自动派生）│
 └─────────────────────────────────────────────────────────────┘
                               │  scripts/sync-vps.mjs（rsync 同步）
                               ▼
@@ -245,10 +249,11 @@ hotfix/xxx              # 紧急修复
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
+| v1.3 | 2026-07-08 | 事实核对修订：易腐硬编码计数（features/routes/sql/services 文件数、数据域数）统一改为「以目录/注册表文件为准」；移除已清退的 `src/core`、`src/types` 历史遗留区与已退役的 `数据管理/patrol/`（2026-07 patrol 域整链退役），补登 `ledger/`；§4.3 分支模型由未采用的 develop/feature 模型修正为实际的「main 主干 + claude/codex 短生命周期 PR 分支」 |
 | v1.2 | 2026-06-05 | 目录结构总览补全 src/、server/src/ 一级目录与真实 `数据管理/` 仓库结构（含 cli/mcp/public）；数据流向图重构为 warehouse + ETL 管道 + API 服务模型；标注早期"输入/输出 Python 子项目"模型为历史约定 |
 | v1.1 | 2026-02-13 | 更新为 chexian-api（API 版），移除 chexianYJFX 引用，补充 server/ 后端 API 层 |
 | v1.0 | 2026-02-01 | 初始版本，定义基本架构规范 |
 
 ---
 
-*维护者：alongor | 最后更新：2026-06-05*
+*维护者：alongor | 最后更新：2026-07-08*
