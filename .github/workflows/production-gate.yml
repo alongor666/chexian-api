@@ -124,6 +124,19 @@ jobs:
         if: needs.changes.outputs.skip != 'true'
         run: bun run test --run
 
+      # 集成测试（DuckDB 原生绑定 @duckdb/node-api，node 环境）— backlog 2026-07-03-claude-131dd8。
+      # 此前 CI 从不执行这套用例，最活跃的分省 RLS 隔离口径（duckdb-branch-* / duckdb-repair-*-rls，
+      # PR #997 团队维度 JOIN 消歧闸守护的对象）+ 7 个立方体影子对账（duckdb-cube-*）回归只能靠本地人肉。
+      # 它们从 jsdom 单测 config 排除（jsdom 环境无法加载 .node 原生模块），改由 node 环境的
+      # vitest.integration.config.ts 运行 —— 与上方 `bun run test --run`（jsdom）互不污染。
+      # 全部用例自带合成数据（tmp parquet via COPY / 内存 VALUES），不依赖 gitignored warehouse parquet，
+      # 故 CI 无数据也全绿、无静默 skip。所需依赖均已就绪：@duckdb/node-api 由上方 `cd server && bun install`
+      # 构建，DuckDB CLI + python/pandas 由上方「Install DuckDB (CLI + Python)」步骤备好
+      # （tests/duckdb-claims-dedup-gate 与 parquet-processing 的 skipIf 探针据此判定不 skip）。
+      - name: Integration Tests (DuckDB native binding)
+        if: needs.changes.outputs.skip != 'true'
+        run: bun run test:integration
+
       - name: Backend Typecheck
         if: needs.changes.outputs.skip != 'true'
         run: cd server && bun run build

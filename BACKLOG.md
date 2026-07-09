@@ -45,6 +45,8 @@
 - 2026-07-03-claude-05dff4 — 前端审查中危债打包（2026-07-03四维审查）
 - 2026-07-03-claude-131dd8 — 后端审查
 - 2026-07-03-claude-6c23b3 `IN_PROGRESS` — 后端审查
+- 2026-07-03-claude-131dd8 `IN_PROGRESS` — 后端审查
+- 2026-07-03-claude-6c23b3 — 后端审查
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-08-claude-fd244c — [硬编码专项遗留]已赚保费月度明细模块年份深度耦合
 - 2026-07-09-claude-78cc23 — sync-vps
@@ -100,6 +102,8 @@
 | 2026-07-03-claude-05dff4 | 2026-07-03 | 前端 | @claude | 前端审查中危债打包（2026-07-03四维审查）：①copilot/forecast手写fetch绕过apiClient(useForecastBaseline.ts:421等4处) ②业务阈值硬编码无SSOT(comprehensive… | P2 | PROPOSED | N/A | src/features/copilot,src/shared/api/client-core.ts,src/app/App.tsx | 架构价值审计拆分处置（2026-07-04）：①手写fetch统一入口③403/429全局拦截④staleTime双态bug⑥Panel错误态→立即做；②阈值SSOT（归入既有注册表，禁新建第9个）⑧E2E补齐→按需排期；⑤9hook与Re… |
 | 2026-07-03-claude-131dd8 | 2026-07-03 | CI/测试 | @claude | 后端审查：CI 完全不跑 DuckDB 原生绑定集成测试(vite.config.ts exclude 22个 duckdb-*.test.ts + 立方体影子对账7个)，含当前最活跃的多省 RLS 隔离测试(duckdb-branch-r… | P2 | PROPOSED | N/A | vite.config.ts |  |
 | 2026-07-03-claude-6c23b3 | 2026-07-03 | 生产可靠性 | @claude | 后端审查：核心数据目录 policy/current(critical) 走普通 rsync --delete 非原子，覆盖期间与意外重启/reload 重叠会 glob 到半份数据(仅 customer_flow/new_energy_c… | P2 | IN_PROGRESS | N/A | scripts/sync-vps.mjs |  |
+| 2026-07-03-claude-131dd8 | 2026-07-03 | CI/测试 | @claude | 后端审查：CI 完全不跑 DuckDB 原生绑定集成测试(vite.config.ts exclude 22个 duckdb-*.test.ts + 立方体影子对账7个)，含当前最活跃的多省 RLS 隔离测试(duckdb-branch-r… | P2 | IN_PROGRESS | N/A | vite.config.ts |  |
+| 2026-07-03-claude-6c23b3 | 2026-07-03 | 生产可靠性 | @claude | 后端审查：核心数据目录 policy/current(critical) 走普通 rsync --delete 非原子，覆盖期间与意外重启/reload 重叠会 glob 到半份数据(仅 customer_flow/new_energy_c… | P2 | PROPOSED | N/A | scripts/sync-vps.mjs |  |
 | 2026-07-03-claude-b714a7 | 2026-07-03 | 安全 | @claude | 安全审计L5：诊断报告(diagnose-*skills)生成HTML时,数据字段(机构名/业务员名)的转义依赖skill层;配合报告CSP的script-src 'unsafe-inline',存在理论性数据驱动XSS(数据来自内部BI字… | P3 | PROPOSED | N/A | N/A | 5 条 note，最新：check-merged-drift 命中 d6ad418e/40092939(PR #944) 系误报：#944 是漂移误报压制机制本身（其账本改动引用本 uid 作先例），未动 diagnose-* skills HTML 转义。保持 … |
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/hea… | P3 | PROPOSED | N/A | server/src/config/csp.ts | 架构价值审计冻结（2026-07-04）：Express csp.ts 的 unsafe-inline 实测无功能影响（唯一 HTML 响应 reports.ts 有独立 REPORT_HTML_CSP；SPA 的 CSP 基线已由 PR … |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功… | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ | 评估完成（严格对等矩阵）：①推送引擎职责 v2 完全对等且严格更优——v1 DEFAULT_SCHEMA 18 个 field_id 在 field_registry.yaml 全部有声明且实例 fields_enabled 全启用；sta… |
