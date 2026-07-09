@@ -110,9 +110,16 @@ describe('buildCostCubeSql / buildCostCubeProbeSql', () => {
 
   it('探针对起保日 + 每个维度列做跨格检测（NULL 哨兵参与）', () => {
     const sql = buildCostCubeProbeSql(false);
-    expect(sql).toContain("COUNT(DISTINCT CAST(insurance_start_date AS DATE)) > 1");
-    expect(sql).toContain("COALESCE(CAST(org_level_3 AS VARCHAR), '__NULL__')");
-    expect(sql).toContain("COALESCE(CAST(tonnage_segment AS VARCHAR), '__NULL__')");
+    // MIN<>MAX 与 COUNT(DISTINCT)>1 逐组等价（COALESCE 哨兵后全非 NULL），
+    // 内存降一个量级（多省数据 OOM 根因修复，勿改回 COUNT(DISTINCT)）
+    expect(sql).toContain('MIN(CAST(insurance_start_date AS DATE)) <> MAX(CAST(insurance_start_date AS DATE))');
+    expect(sql).not.toMatch(/COUNT\(DISTINCT/i);
+    expect(sql).toContain("MIN(COALESCE(CAST(org_level_3 AS VARCHAR), '__NULL__')) <> MAX(COALESCE(CAST(org_level_3 AS VARCHAR), '__NULL__'))");
+    expect(sql).toContain("MIN(COALESCE(CAST(tonnage_segment AS VARCHAR), '__NULL__')) <> MAX(COALESCE(CAST(tonnage_segment AS VARCHAR), '__NULL__'))");
+    // 每个维度列都进入 HAVING 变异检测
+    for (const dim of ['customer_category', 'coverage_combination', 'insurance_type', 'is_renewal', 'is_nev']) {
+      expect(sql).toContain(`CAST(${dim} AS VARCHAR)`);
+    }
   });
 });
 

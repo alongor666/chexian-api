@@ -77,3 +77,40 @@ export function classifyDuckDbError(rawMessage: string): string | null {
 
   return null;
 }
+
+// ── OOM 结构化标记（2026-07-09 后端查询性能审计修复）─────────────────────────────
+//
+// 背景：duckdb-cube.ts 的 OOM 降级判定靠 `/Out of Memory|OOM|memory_limit/i` 匹配
+// error.message，但生产环境 duckdb.ts 在抛出前已把原始消息脱敏为「查询执行失败 [uuid]」
+// —— 正则在生产**永远不命中**，OOM 降级路径成为死代码：cost 立方体构建 OOM 后不标
+// degraded，每个可服务请求都重新触发注定失败的重型构建（哨兵 issue #608，2026-06-25 起
+// 持续 CRITICAL）。修复：脱敏前由 duckdb.ts 用 markDuckDbOom 在错误对象上打结构化标记，
+// 判定方改用 isOutOfMemoryError（标记优先，消息正则兜底——兼容非 duckdb.ts 来源的错误）。
+
+/** DuckDB OOM 错误消息模式（唯一事实源，勿在他处复制正则） */
+export const DUCKDB_OOM_PATTERN = /Out of Memory|OOM|memory_limit/i;
+
+/** 原始消息是否 OOM 类（仅对未脱敏消息有效） */
+export function isDuckDbOomMessage(rawMessage: string): boolean {
+  return DUCKDB_OOM_PATTERN.test(rawMessage);
+}
+
+/** 在（即将被脱敏的）错误对象上打 OOM 结构化标记；非对象输入静默忽略 */
+export function markDuckDbOom(err: unknown): void {
+  if (typeof err === 'object' && err !== null) {
+    (err as Record<string, unknown>).duckdbOom = true;
+  }
+}
+
+/**
+ * 判定任意错误是否 DuckDB OOM：
+ *   1. 结构化标记优先（生产脱敏后消息里没有 OOM 字样，只能靠标记）
+ *   2. 消息正则兜底（本地开发未脱敏 / mock 测试直接抛裸 Error 的场景）
+ */
+export function isOutOfMemoryError(err: unknown): boolean {
+  if (typeof err === 'object' && err !== null && (err as Record<string, unknown>).duckdbOom === true) {
+    return true;
+  }
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  return isDuckDbOomMessage(message);
+}

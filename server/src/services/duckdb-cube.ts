@@ -14,6 +14,7 @@
 
 import type { DuckDBQueryable } from './duckdb-types.js';
 import { getDataVersion } from './data-version.js';
+import { isOutOfMemoryError } from './duckdb-error-classifier.js';
 import { buildTrendCubeSql, TREND_CUBE_TABLE } from '../sql/cube/trend-cube.js';
 import { buildCostCubeSql, buildCostCubeProbeSql, COST_CUBE_TABLE } from '../sql/cube/cost-cube.js';
 import { buildSalesmanCubeSql, SALESMAN_CUBE_TABLE } from '../sql/cube/salesman-cube.js';
@@ -33,6 +34,37 @@ interface CubeState {
   lastBuildMs: number | null;
   /** 最近一次构建失败信息（观测用；成功后清空） */
   lastError: string | null;
+  /** 同一 dataVersion 内连续构建失败次数（成功 / 版本翻新时清零） */
+  failCount: number;
+  /** failCount 归属的 dataVersion（版本翻新后计数不跨版本累积） */
+  failVersion: string | null;
+}
+
+/**
+ * 同一 dataVersion 内构建失败重试上限。达到上限后本版本不再自动重建
+ * （下次 ETL 版本翻新自动恢复重试资格）。
+ *
+ * 背景（2026-07-09 审计）：构建失败仅记 lastError、builtVersion 保持 null，
+ * 每个命中请求都会重新触发注定失败的重型构建（探针/物化对 260万+ 行全扫）——
+ * cost 立方体在生产自 2026-06-25 起如此空转两周（哨兵 issue #608 持续 CRITICAL），
+ * 2 线程 VPS 的 DuckDB 资源被反复无效消耗。上限=3 保留瞬时故障（连接抖动等）
+ * 的自愈机会，同时终结确定性失败的无限重试。
+ */
+const MAX_BUILD_FAILURES_PER_VERSION = 3;
+
+/** 记录一次构建失败（版本翻新则重新计数），返回累计后的失败次数 */
+function recordBuildFailure(state: CubeState, version: string): number {
+  if (state.failVersion !== version) {
+    state.failVersion = version;
+    state.failCount = 0;
+  }
+  state.failCount += 1;
+  return state.failCount;
+}
+
+/** 当前 dataVersion 是否已达失败重试上限（触发端判定，禁止再自动重建） */
+function isBuildRetryExhausted(state: CubeState): boolean {
+  return state.failVersion === getDataVersion() && state.failCount >= MAX_BUILD_FAILURES_PER_VERSION;
 }
 
 const trendCubeState: CubeState = {
@@ -40,6 +72,8 @@ const trendCubeState: CubeState = {
   building: null,
   lastBuildMs: null,
   lastError: null,
+  failCount: 0,
+  failVersion: null,
 };
 
 /** 观测快照（/health 或日志用） */
@@ -53,6 +87,8 @@ export function resetTrendCubeStateForTest(): void {
   trendCubeState.building = null;
   trendCubeState.lastBuildMs = null;
   trendCubeState.lastError = null;
+  trendCubeState.failCount = 0;
+  trendCubeState.failVersion = null;
 }
 
 /** 立方体是否与当前数据版本一致（可安全用于查询） */
@@ -85,6 +121,8 @@ export async function materializeTrendCube(db: DuckDBQueryable): Promise<void> {
   trendCubeState.builtVersion = versionAtStart;
   trendCubeState.lastBuildMs = elapsed;
   trendCubeState.lastError = null;
+  trendCubeState.failCount = 0;
+  trendCubeState.failVersion = null;
   console.log(`[TrendCube] ${TREND_CUBE_TABLE} ready: ${Number(n).toLocaleString()} rows in ${elapsed}ms (branch_code=${hasBranchCode}, policy_date_ts=${policyDateIsTimestamp})`);
 }
 
@@ -98,12 +136,16 @@ export async function materializeTrendCube(db: DuckDBQueryable): Promise<void> {
  */
 export function ensureTrendCubeFresh(db: DuckDBQueryable): 'ready' | 'building' {
   if (isTrendCubeFresh()) return 'ready';
+  // 失败退避：同版本连续失败达上限后不再自动重建（版本翻新自动恢复）
+  if (isBuildRetryExhausted(trendCubeState)) return 'building';
   if (!trendCubeState.building) {
+    const versionAtTrigger = getDataVersion();
     trendCubeState.building = materializeTrendCube(db)
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         trendCubeState.lastError = message;
-        console.error(`[TrendCube] Materialization failed (route will keep falling back): ${message}`);
+        const fails = recordBuildFailure(trendCubeState, versionAtTrigger);
+        console.error(`[TrendCube] Materialization failed (${fails}/${MAX_BUILD_FAILURES_PER_VERSION}, route will keep falling back): ${message}`);
       })
       .finally(() => {
         trendCubeState.building = null;
@@ -128,6 +170,8 @@ const costCubeState: CostCubeState = {
   building: null,
   lastBuildMs: null,
   lastError: null,
+  failCount: 0,
+  failVersion: null,
   exact: null,
 };
 
@@ -142,6 +186,8 @@ export function resetCostCubeStateForTest(): void {
   costCubeState.building = null;
   costCubeState.lastBuildMs = null;
   costCubeState.lastError = null;
+  costCubeState.failCount = 0;
+  costCubeState.failVersion = null;
   costCubeState.exact = null;
 }
 
@@ -170,16 +216,36 @@ export async function materializeCostCube(db: DuckDBQueryable): Promise<void> {
   const schema = await db.getTableSchema('PolicyFact');
   const hasBranchCode = schema.some((c: { column_name?: string }) => c.column_name === 'branch_code');
 
-  const [{ impure_policies }] = await db.query<{ impure_policies: number | bigint }>(
-    buildCostCubeProbeSql(hasBranchCode)
-  );
-  if (Number(impure_policies) > 0) {
+  // 探针与建表同享 OOM 降级保护：探针本身是 260万+ 行的重型 GROUP BY，
+  // 多省数据下也可能 OOM——OOM 即降级本版本，不再让每个请求重复触发注定失败的探针。
+  let impurePolicies: number;
+  try {
+    const [{ impure_policies }] = await db.query<{ impure_policies: number | bigint }>(
+      buildCostCubeProbeSql(hasBranchCode)
+    );
+    impurePolicies = Number(impure_policies);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (isOutOfMemoryError(err)) {
+      costCubeState.builtVersion = versionAtStart;
+      costCubeState.exact = false;
+      costCubeState.lastError = message;
+      costCubeState.lastBuildMs = Date.now() - t0;
+      console.warn(
+        `[CostCube] 探针 OOM，标记 degraded（exact=false, builtVersion=${versionAtStart}）。` +
+        `本数据版本不再重试，cost 路由回退原 SQL。下次 ETL 更新后自动重试。`
+      );
+      return;
+    }
+    throw err; // 非 OOM 探针错误由外层 catch 记录（含失败退避计数）
+  }
+  if (impurePolicies > 0) {
     costCubeState.builtVersion = versionAtStart;
     costCubeState.exact = false;
     costCubeState.lastBuildMs = Date.now() - t0;
     costCubeState.lastError = null;
     console.warn(
-      `[CostCube] 探针发现 ${Number(impure_policies)} 张跨格保单（行间起保日/维度值不一致），` +
+      `[CostCube] 探针发现 ${impurePolicies} 张跨格保单（行间起保日/维度值不一致），` +
       `本数据版本降级：cost 路由保持原路径（等值前提不成立，详见 sql/cube/cost-cube.ts）`
     );
     return;
@@ -197,7 +263,9 @@ export async function materializeCostCube(db: DuckDBQueryable): Promise<void> {
     // 新版本无辜标 degraded（新版本可能不会 OOM，应留给后续 ensureCostCubeFresh
     // 重新尝试构建的机会）。
     const message = err instanceof Error ? err.message : String(err);
-    if (/Out of Memory|OOM|memory_limit/i.test(message)) {
+    // isOutOfMemoryError：结构化标记优先——生产 duckdb.ts 抛错前已脱敏消息，
+    // 纯消息正则在生产永远不命中（2026-07-09 审计发现的死代码根因）
+    if (isOutOfMemoryError(err)) {
       costCubeState.builtVersion = versionAtStart;
       costCubeState.exact = false;
       costCubeState.lastError = message;
@@ -223,6 +291,8 @@ export async function materializeCostCube(db: DuckDBQueryable): Promise<void> {
   costCubeState.exact = true;
   costCubeState.lastBuildMs = elapsed;
   costCubeState.lastError = null;
+  costCubeState.failCount = 0;
+  costCubeState.failVersion = null;
   console.log(`[CostCube] ${COST_CUBE_TABLE} ready: ${Number(n).toLocaleString()} rows in ${elapsed}ms (branch_code=${hasBranchCode})`);
 }
 
@@ -237,15 +307,19 @@ export function ensureCostCubeFresh(db: DuckDBQueryable): 'ready' | 'building' |
   if (costCubeState.builtVersion === getDataVersion() && costCubeState.exact === false) {
     return 'degraded';
   }
+  // 失败退避：同版本非 OOM 失败达上限后转正式 degraded（版本翻新自动恢复）
+  if (isBuildRetryExhausted(costCubeState)) return 'degraded';
   if (!costCubeState.building) {
+    const versionAtTrigger = getDataVersion();
     costCubeState.building = materializeCostCube(db)
       .catch((err: unknown) => {
         // OOM 已在 materializeCostCube 内部用 versionAtStart 处理（PR #645 review fix）；
         // 这里只处理非 OOM 错误（Binder/语法/连接错），记录后保持 builtVersion=null
-        // 允许下次重试。
+        // 允许下次重试；同版本连续失败达上限则停止自动重建（失败退避）。
         const message = err instanceof Error ? err.message : String(err);
         costCubeState.lastError = message;
-        console.error(`[CostCube] 物化失败（路由持续回退原路径）: ${message}`);
+        const fails = recordBuildFailure(costCubeState, versionAtTrigger);
+        console.error(`[CostCube] 物化失败（${fails}/${MAX_BUILD_FAILURES_PER_VERSION}，路由持续回退原路径）: ${message}`);
       })
       .finally(() => {
         costCubeState.building = null;
@@ -262,6 +336,8 @@ const salesmanCubeState: CubeState = {
   building: null,
   lastBuildMs: null,
   lastError: null,
+  failCount: 0,
+  failVersion: null,
 };
 
 /** 观测快照（/health 或日志用） */
@@ -275,6 +351,8 @@ export function resetSalesmanCubeStateForTest(): void {
   salesmanCubeState.building = null;
   salesmanCubeState.lastBuildMs = null;
   salesmanCubeState.lastError = null;
+  salesmanCubeState.failCount = 0;
+  salesmanCubeState.failVersion = null;
 }
 
 /** 业务员立方体是否与当前数据版本一致（可安全用于查询） */
@@ -303,6 +381,8 @@ export async function materializeSalesmanCube(db: DuckDBQueryable): Promise<void
   salesmanCubeState.builtVersion = versionAtStart;
   salesmanCubeState.lastBuildMs = elapsed;
   salesmanCubeState.lastError = null;
+  salesmanCubeState.failCount = 0;
+  salesmanCubeState.failVersion = null;
   console.log(`[SalesmanCube] ${SALESMAN_CUBE_TABLE} ready: ${Number(n).toLocaleString()} rows in ${elapsed}ms (branch_code=${hasBranchCode}, policy_date_ts=${policyDateIsTimestamp})`);
 }
 
@@ -313,12 +393,16 @@ export async function materializeSalesmanCube(db: DuckDBQueryable): Promise<void
  */
 export function ensureSalesmanCubeFresh(db: DuckDBQueryable): 'ready' | 'building' {
   if (isSalesmanCubeFresh()) return 'ready';
+  // 失败退避：同版本连续失败达上限后不再自动重建（版本翻新自动恢复）
+  if (isBuildRetryExhausted(salesmanCubeState)) return 'building';
   if (!salesmanCubeState.building) {
+    const versionAtTrigger = getDataVersion();
     salesmanCubeState.building = materializeSalesmanCube(db)
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         salesmanCubeState.lastError = message;
-        console.error(`[SalesmanCube] Materialization failed (route will keep falling back): ${message}`);
+        const fails = recordBuildFailure(salesmanCubeState, versionAtTrigger);
+        console.error(`[SalesmanCube] Materialization failed (${fails}/${MAX_BUILD_FAILURES_PER_VERSION}, route will keep falling back): ${message}`);
       })
       .finally(() => {
         salesmanCubeState.building = null;
