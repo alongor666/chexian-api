@@ -161,3 +161,56 @@ export function findPolicyCurrentSyncGateViolations(currentDir, { allowedBranche
 
   return violations;
 }
+
+/**
+ * 非 SC 省维度隔离副本枚举（warehouse/validation/<省>/dim/<域>/ 下全部 *.parquet）。
+ *
+ * 与 sync-vps.mjs:buildValidationDimSyncTasks 同一套省/子域发现规则（同 DIM_SUBDOMAINS、同 key
+ * 前缀 `validation/<省>/dim/<域>/`），供 governance checkDataDrift 复用——避免各消费者各自维护一份
+ * 省/子域清单导致漂移（2026-07-08 实测：check-governance.mjs 静态 dirMappings 未收录该路径，误报
+ * SX dim/salesman、dim/plan「已删除」，阻断 release:daily）。
+ *
+ * 枚举整个子域目录下的全部 .parquet（而非只认 latest.parquet 单一文件名）：与
+ * sync-vps.mjs:writeSyncManifest 对该目录 `readdirSync(...).filter(f => f.endsWith('.parquet'))`
+ * 同一发现规则——若该目录未来出现 latest.parquet 之外的产物（如按快照归档），两侧仍逐字节一致，
+ * 不会因为本 helper 只认单一文件名而漏检/误报「已删除」（2026-07-09 codex 对抗性评审发现）。
+ *
+ * @param {string} validationRoot 通常为 数据管理/warehouse/validation 绝对路径
+ * @returns {Array<{key:string, path:string}>}
+ */
+export function listValidationDimShards(validationRoot) {
+  if (!existsSync(validationRoot)) return [];
+  const DIM_SUBDOMAINS = ['salesman', 'plan', 'repair'];
+  const shards = [];
+  const provinces = readdirSync(validationRoot)
+    .filter((entry) => entry !== 'SC' && /^[A-Z]{2}$/.test(entry));
+  for (const province of provinces) {
+    const dimDir = join(validationRoot, province, 'dim');
+    if (!existsSync(dimDir) || !statSync(dimDir).isDirectory()) continue;
+    for (const subdomain of DIM_SUBDOMAINS) {
+      const subDir = join(dimDir, subdomain);
+      if (!existsSync(subDir) || !statSync(subDir).isDirectory()) continue;
+      for (const f of readdirSync(subDir).filter((name) => name.endsWith('.parquet'))) {
+        shards.push({ key: `validation/${province}/dim/${subdomain}/${f}`, path: join(subDir, f) });
+      }
+    }
+  }
+  return shards;
+}
+
+/**
+ * governance checkDataDrift 用：枚举 validation 维度副本并组装成 {key: {size, mtimeMs}} 条目，
+ * 供 Object.assign 并入 currentFiles。抽出本 helper 是为避免 check-governance.mjs 内联循环
+ * 膨胀单体（H5 体积棘轮 4000 行）——新检查进独立模块，不回流主脚本。
+ *
+ * @param {string} validationRoot 通常为 数据管理/warehouse/validation 绝对路径
+ * @returns {Record<string, {size:number, mtimeMs:number}>}
+ */
+export function collectValidationDimFileEntries(validationRoot) {
+  const entries = {};
+  for (const shard of listValidationDimShards(validationRoot)) {
+    const stat = statSync(shard.path);
+    entries[shard.key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
+  }
+  return entries;
+}
