@@ -1945,3 +1945,15 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （同类失败首次。若再现「置终态后 CI 报归档视图陈旧」→ 按进化铁律升级：在 `backlog.mjs status` 置终态时自动调用 curate 折叠，或把 pre-push 钩子对齐到全量 governance 的 backlog 视图一致闸。）
+
+---
+
+## 2026-07-09 · #1015 性能审计：脱敏边界杀死消息正则判定 + 远程环境生产取证路径
+
+- **场景**：审计"为何百倍加速（立方体）从未生效"。远程执行环境无 SSH/无 warehouse 数据，取证全靠两个公开 oracle：`GET /health`（立方体新鲜度 + 影子计数快照）+ 哨兵追踪 issue #608 的历史评论时间线（跨月趋势：cost 立方体 6-25 起 lastError uuid 每次不同 = 无限重试铁证；影子 match 每日归零 = 样本死锁铁证）。**无生产访问权限也能把三个根因钉死到代码行**。
+- **模式沉淀（跨模块契约陷阱）**：`duckdb.ts` 生产脱敏（错误消息 → 「查询执行失败 [uuid]」）与 `duckdb-cube.ts` 的 OOM 降级判定（对 error.message 跑 `/Out of Memory/i`）各自正确、组合致死——**任何"对 error.message 做正则分支"的代码，跨越脱敏/包装边界后都是死代码**。根治 = 抛错方在错误对象上打结构化标记（`markDuckDbOom`），判定方标记优先、消息正则只作兜底（`isOutOfMemoryError`，SSOT 在 duckdb-error-classifier.ts）。
+- **等价改写模式**：`COUNT(DISTINCT x) > 1` ⟺ `MIN(x) <> MAX(x)`（COALESCE 哨兵归一 NULL 后逐组等价）——去重哈希集 → 2 个标量，多列大分组探针内存降一个量级。等价性禁止口头声称：靠既有 31 项真实 DuckDB 数据级测试锁定。
+- **灰度机制审计要点**：晋级门槛（match ≥ 1000/路由）必须对照**实测流量 × 计数器生命周期**做可达性演算——内存计数器 + 每日 reload + 缓存吸收重复请求 = 25/天上限，1000 永不可达。灰度机制上线时应同步验证"验收条件在当前流量下多久可达"。
+
+### needs_automation: false
+（消息正则判定反模式若再现（grep `\.message\)?\s*\)?\.test\(|test\(.*message` 于 services/**）可考虑 governance 闸；首例先登记。）
