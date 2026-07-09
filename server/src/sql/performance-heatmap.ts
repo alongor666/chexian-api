@@ -9,6 +9,7 @@
 
 import { logger } from '../utils/logger.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { qualifyBranchCodeColumn } from '../utils/branch-rls-qualify.js';
 import {
   truthyExpr,
   normalizeSqlTableAliasPrefix,
@@ -239,6 +240,9 @@ export function generatePerformanceOrgHeatmapQuery(
   const supportsAnnualPlan = heatmapSupportsAnnualPlan(groupByDimension);
   const planDimExpr = getHeatmapPlanDimensionExpr(groupByDimension);
   const needsTeamJoin = groupByDimension === 'team' || drillFilter.some((s) => s.dimension === 'team');
+  // 主 PolicyFact 查询按团队维度会 JOIN SalesmanTeamMapping（多省时同带 branch_code 列）——
+  // 把 whereWithoutDate 里 permissionFilter 的裸 branch_code 绑定到事实表 p.，消歧（2026-07-09 生产 Binder Error）。
+  const pfWhere = qualifyBranchCodeColumn(whereWithoutDate, tableAlias);
   const drillWhereClause = heatmapDrillToWhere(drillFilter);
   const drillAnd = drillWhereClause ? `AND ${drillWhereClause}` : '';
   const mappingDrillWhereClause = supportsAnnualPlan ? heatmapDrillToMappingWhere(drillFilter) : '';
@@ -360,7 +364,7 @@ export function generatePerformanceOrgHeatmapQuery(
         p.commercial_pricing_factor AS cpf
       FROM PolicyFact p
       ${needsTeamJoin ? "LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))" : ''}
-      WHERE ${whereWithoutDate}
+      WHERE ${pfWhere}
         AND ${segmentFilter}
         ${drillAnd}
     ),
