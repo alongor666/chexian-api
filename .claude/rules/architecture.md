@@ -1,5 +1,5 @@
 ---
-paths: ["src/widgets/**/*.ts", "src/widgets/**/*.tsx", "src/shared/**/*.ts", "src/shared/**/*.tsx", "src/features/**/*.ts", "src/features/**/*.tsx", "scripts/check-governance.mjs"]
+paths: ["src/widgets/**/*.ts", "src/widgets/**/*.tsx", "src/shared/**/*.ts", "src/shared/**/*.tsx", "src/features/**/*.ts", "src/features/**/*.tsx", "src/components/**/*.ts", "src/components/**/*.tsx", "scripts/check-governance.mjs"]
 ---
 
 # 前端分层依赖边界（B330 防回归 · RED LINE）
@@ -12,9 +12,9 @@ paths: ["src/widgets/**/*.ts", "src/widgets/**/*.tsx", "src/shared/**/*.ts", "sr
 
 | 层 | 目录 | 说明 |
 |----|------|------|
-| L1 共享层 | `src/shared/`、`src/widgets/` | 通用 hook / 组件 / 类型 / 工具，**不得依赖任何业务特性** |
+| L1 共享层 | `src/shared/`、`src/widgets/`、`src/components/`（全局布局） | 通用 hook / 组件 / 类型 / 工具 / 全局布局，**不得依赖任何业务特性**（layout 需要业务 Modal/Panel 时由上层 slot 注入，或把本属某特性域的组件迁入该 `features/<域>/`） |
 | L2 特性层 | `src/features/*` | 各业务域（dashboard / growth / quote-conversion / filters / ...），架构原则是各域自治、不横向互引（本闸目前只硬拦 B330 已修复的 2 条横向边界，见 §2 (d)(e)，非全量 L2 隔离） |
-| 后端 | `server/src/` | 前端（features / shared / widgets）**禁实值/类型 import server/src**；需要共享的契约在 `src/shared/` 维护镜像类型 |
+| 后端 | `server/src/` | 前端（features / shared / widgets / components）**禁实值/类型 import server/src**；需要共享的契约在 `src/shared/` 维护镜像类型 |
 
 ## 2. 边界禁令（governance 闸 `分层依赖边界` 自动拦截）
 
@@ -26,6 +26,7 @@ paths: ["src/widgets/**/*.ts", "src/widgets/**/*.tsx", "src/shared/**/*.ts", "sr
 |------|------|------|-------------|
 | (a) | `src/widgets/**` 引用 `src/features/**` | 依赖倒置 | `EnhancedKpiCard` → `features/dashboard/utils/kpiStatus` |
 | (b) | `src/shared/**` 引用 `src/features/**` | 依赖倒置 | `FilterContext` → `features/dashboard/orgSalesman` |
+| (f) | `src/components/**`（layout） 引用 `src/features/**` | 依赖倒置 | `TopNavigation`→`features/file`、`PageFilterPanel`→`features/filters`、`SidebarLayout`→`features/copilot`（edbd61 已修复） |
 | (c) | `src/features/**`、`src/shared/**`、`src/widgets/**` 引用 `server/src/**` | 前后端越界 | `useCrossSellTopSalesman` → `server/src/sql/*` |
 | (d) | `src/features/growth/**` 引用 `src/features/dashboard/**` | L2→L2 横向 | `GrowthAnalysisPanel` → `dashboard` 的 `usePerspective` |
 | (e) | `src/features/quote-conversion/**` 引用 `src/features/filters/**` | L2→L2 横向 | `GlobalFilters` → `filters` 的 `CollapsibleFilterSection` |
@@ -33,14 +34,20 @@ paths: ["src/widgets/**/*.ts", "src/widgets/**/*.tsx", "src/shared/**/*.ts", "sr
 > 别名 `@/features`、`@/...`、相对路径 `../../features`、`server/src` 与无插值模板字符串
 > （`import(\`...\`)` / `require(\`...\`)`）均归一识别，无法靠改写 import 形式绕过。
 > (d)(e) 只是 B330 已修复的两条横向边界的定向 denylist，**不是**全量 L2 域隔离；其余 L2→L2
-> 互引（如 growth→quote-conversion）本闸当前放行。`components/layout → features` 的依赖倒置属
-> 更深的 shell+slot 重构（follow-up `2026-06-15-claude-edbd61`），不在本闸守护范围内。
+> 互引（如 growth→quote-conversion）本闸当前放行。`components/layout → features` 的依赖倒置
+> 已由 (f) 闭合（follow-up `2026-06-15-claude-edbd61`：文件菜单 / 副驾抽屉改上层 slot 注入、
+> `PageFilterPanel` 迁入 `features/filters/`）。
 
 ## 3. 修复方向（命中后怎么改）
 
 - 被横向/倒置引用的 hook/组件/类型，**上提到 `src/shared/`**（B330 主体做法：`usePerspective` →
   `shared/hooks/`、`kpiStatus`/`orgSalesman` → `shared/utils/`、`CollapsibleFilterSection` →
   `shared/components/filters/`）。
+- `components/layout → features`（layout 反向依赖业务组件）：业务 Modal/Panel 由上层（`App.tsx`）
+  以 **slot / props 注入**（edbd61：文件菜单抽 `features/file/FileMenu`、副驾抽屉 `features/copilot`
+  改 App 注入 `SidebarLayout` slot），或把本就属于某特性域的组件**迁入该 `features/<域>/`**
+  （edbd61：`PageFilterPanel` 迁 `features/filters/`，其反引用的 `AdvancedFilterPanel`/`PageHeaderBar`
+  就地变为域内引用）。通用 UI 原语（如 `DropdownMenu`）留在 `components/layout/`，由 features 正向引用。
 - 前端需要后端类型，在 `src/shared/types/` 维护**镜像类型**（如 `shared/types/cross-sell.ts`），
   禁直接 `import type ... from 'server/src/...'`。
 
@@ -59,5 +66,5 @@ paths: ["src/widgets/**/*.ts", "src/widgets/**/*.tsx", "src/shared/**/*.ts", "sr
 
 - 分层语义权威：根目录 `ARCHITECTURE.md §2.2`
 - B330 主体修复：PR #641 / #642 / #643
-- follow-up：`2026-06-15-claude-edbd61`（layout→features shell+slot 重构，独立 PR）
+- follow-up（已闭合）：`2026-06-15-claude-edbd61`（layout→features shell+slot 重构 + 闸规则 (f)）
 - 闸实现：`scripts/check-governance.mjs` `checkArchLayerBoundaries`

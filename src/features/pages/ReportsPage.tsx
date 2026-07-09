@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { PremiumReportPanel } from '../premium-report';
-import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '../filters/PageFilterPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
 import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { CrossSellAnalysisPanel, CrossSellHeaderControls } from '../dashboard/CrossSellAnalysisPanel';
 import { TruckAnalysisPanel } from '../dashboard/TruckAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '../filters/PageFilterPanel';
 import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
 import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 import { Tabs } from '../../shared/ui';

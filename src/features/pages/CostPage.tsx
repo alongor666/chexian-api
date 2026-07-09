@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CostAnalysisPanel } from '../cost/components/CostAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '../filters/PageFilterPanel';
 import { buttonStyles, cn } from '@/shared/styles';
 import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
 import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';

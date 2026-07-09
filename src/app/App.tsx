@@ -12,6 +12,7 @@ import { ThemeProvider } from '../shared/theme';
 import { ExportProvider } from '../shared/export/ExportContext';
 import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
+import { FileMenu } from '../features/file';
 import { canAccessExpenseDevelopment, canAccessMotoCost } from '../shared/config/organizations';
 import { registerAuthCacheClearing } from './authCacheLifecycle';
 import { startEtlVersionPolling } from './etlVersionPoller';
@@ -117,6 +118,12 @@ const ChartLedgerPage = lazy(() =>
   import('../features/chart-ledger').then((m) => ({ default: m.ChartLedgerPage }))
 );
 
+// AI 副驾抽屉：携带 AI 相关重依赖且默认关闭，lazy 加载以剥离出首屏 bundle。
+// 经 SidebarLayout 的 copilot slot 注入（layout ↛ features 依赖倒置，B330 follow-up edbd61）。
+const CopilotDrawer = lazy(() =>
+  import('../features/copilot').then((m) => ({ default: m.CopilotDrawer }))
+);
+
 // Loading fallback — content-aware skeleton screen
 const PageLoader = () => (
   <div className="p-6 space-y-6 animate-pulse">
@@ -158,7 +165,7 @@ function App() {
                 {/* 主应用 - 需要认证 */}
                 <Route path="/" element={
                   <AuthGuard>
-                    <SidebarLayout />
+                    <SidebarLayout fileMenu={<FileMenu />} copilot={<CopilotDrawer />} />
                   </AuthGuard>
                 }>
                   {/* 首页 → 门户 */}

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '@/features/filters/PageFilterPanel';
 import { Tabs, Button } from '@/shared/ui';
 import { cardStyles, cn, colorClasses, textStyles, buttonStyles } from '@/shared/styles';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';

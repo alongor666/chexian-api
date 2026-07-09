@@ -7,7 +7,7 @@ vi.mock('@/shared/theme', () => ({
   useTheme: () => ({ resolvedTheme: 'light' }),
 }));
 
-vi.mock('@/components/layout/PageFilterPanel', () => ({
+vi.mock('@/features/filters/PageFilterPanel', () => ({
   PageFilterPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 

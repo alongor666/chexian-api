@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countActiveFilters } from '../src/components/layout/PageFilterPanel';
+import { countActiveFilters } from '../src/features/filters/PageFilterPanel';
 import {
   CROSS_SELL_HEATMAP_PERIOD_COUNT,
   getAvailableHeatmapDrillDimensions,

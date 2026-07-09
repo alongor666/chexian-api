@@ -1,7 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { GrowthAnalysisPanel } from '../growth/components/GrowthAnalysisPanel';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '../filters/PageFilterPanel';
 import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
 import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 

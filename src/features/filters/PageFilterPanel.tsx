@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Filter, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
-import { AdvancedFilterPanel } from '../../features/filters/AdvancedFilterPanel';
-import { PageHeaderBar } from '../../features/filters/PageHeaderBar';
+import { AdvancedFilterPanel } from './AdvancedFilterPanel';
+import { PageHeaderBar } from './PageHeaderBar';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
 import type {
   FilterFieldsConfig,
@@ -10,8 +10,8 @@ import type {
 import { FILTER_PRESETS } from '../../shared/types/filters';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import { buttonStyles, textStyles, cn } from '../../shared/styles';
-import { DashboardAnchorNav, type DashboardAnchorSection } from './DashboardAnchorNav';
-import { Footer } from './Footer';
+import { DashboardAnchorNav, type DashboardAnchorSection } from '../../components/layout/DashboardAnchorNav';
+import { Footer } from '../../components/layout/Footer';
 
 interface PageFilterPanelProps {
   preset: FilterPresetName;

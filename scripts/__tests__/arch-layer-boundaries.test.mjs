@@ -42,7 +42,7 @@ describe('normalizeArchTarget — 别名/相对路径归一', () => {
   });
 });
 
-describe('classifyArchViolations — 7 条边界规则', () => {
+describe('classifyArchViolations — 8 条边界规则', () => {
   it('(a) widgets → features 命中', () => {
     expect(classifyArchViolations('src/widgets/kpi/x.ts', 'features/dashboard/utils/kpiStatus'))
       .toHaveLength(1);
@@ -50,6 +50,11 @@ describe('classifyArchViolations — 7 条边界规则', () => {
 
   it('(b) shared → features 命中', () => {
     expect(classifyArchViolations('src/shared/contexts/FilterContext.tsx', 'features/dashboard/orgSalesman'))
+      .toHaveLength(1);
+  });
+
+  it('(f) components(layout) → features 命中（依赖倒置，follow-up edbd61）', () => {
+    expect(classifyArchViolations('src/components/layout/TopNavigation.tsx', 'features/file'))
       .toHaveLength(1);
   });
 
@@ -85,6 +90,21 @@ describe('classifyArchViolations — 7 条边界规则', () => {
 
   it('合法：widgets 引用 shared 不命中', () => {
     expect(classifyArchViolations('src/widgets/kpi/x.ts', 'shared/utils/kpiStatus'))
+      .toEqual([]);
+  });
+
+  it('合法：components 引用 shared 不命中', () => {
+    expect(classifyArchViolations('src/components/layout/SidebarLayout.tsx', 'shared/contexts/FilterContext'))
+      .toEqual([]);
+  });
+
+  it('合法：components 引用 components（同层）不命中', () => {
+    expect(classifyArchViolations('src/components/layout/SidebarLayout.tsx', 'components/layout/Footer'))
+      .toEqual([]);
+  });
+
+  it('合法：features 引用 components（features→layout 正确方向）不命中', () => {
+    expect(classifyArchViolations('src/features/filters/PageFilterPanel.tsx', 'components/layout/Footer'))
       .toEqual([]);
   });
 
@@ -183,6 +203,7 @@ describe('端到端：违规 import 被链路捕获', () => {
     { file: 'src/features/dashboard/hooks/h.ts', spec: 'server/src/sql/cross-sell' },
     { file: 'src/features/growth/components/Panel.tsx', spec: '@/features/dashboard/usePerspective' },
     { file: 'src/features/quote-conversion/components/GlobalFilters.tsx', spec: '@/features/filters/CollapsibleFilterSection' },
+    { file: 'src/components/layout/TopNavigation.tsx', spec: '../../features/file' },
   ];
   for (const { file, spec } of cases) {
     it(`${file} import '${spec}' → 违规`, () => {

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { PageFilterPanel, FilterQuickActions } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '../filters/PageFilterPanel';
 import { PremiumDashboard } from '../dashboard/PremiumDashboard';
 import { PdfExportService } from '../../services/PdfExportService';
 import { useDataStatus } from '../../shared/contexts/DataContext';
