@@ -273,7 +273,7 @@ export function buildDashboard(activeTasks, calDate) {
 function backlogHeader(dashboard) {
   return `# 需求账本 (BACKLOG)
 
-**唯一真理来源**：所有需求登记在事件日志 [\`BACKLOG_LOG.jsonl\`](./BACKLOG_LOG.jsonl)（append-only 真相）。本文件是其**派生视图，禁止手工编辑**。
+**唯一真理来源**：所有需求登记在事件日志 [\`BACKLOG_LOG.jsonl\`](./BACKLOG_LOG.jsonl)（append-only 真相）。本文件是其**派生视图（本地渲染、已 gitignored、不进 git），禁止手工编辑**。
 
 **模型（event-log）**：写入 = 向 \`BACKLOG_LOG.jsonl\` **追加事件**（永不原地改行、永不挑编号）；本看板与归档由 \`governance-backlog-curate.mjs\` 折叠日志渲染。多分支并发写因此**结构性地不再碰号、不再产生重复行**（\`.gitattributes\` 对日志设 merge=union，追加天然可交换）。
 
@@ -282,11 +282,11 @@ function backlogHeader(dashboard) {
 - 状态流转：\`bun scripts/backlog.mjs status <id> IN_PROGRESS\`；完成：\`bun scripts/backlog.mjs status <id> DONE --evidence "PR/commit/测试证据"\`（DONE 必须带证据）
 - 弃置：\`bun scripts/backlog.mjs status <id> CANCELLED|WONTFIX --evidence "弃置理由"\`（终态，移出活跃看板进归档，必须带理由 —— 与 DONE 同一机制）
 - 补充信息：\`bun scripts/backlog.mjs note <id> "..."\`；修订字段：\`bun scripts/backlog.mjs amend <id> --priority P1\`
-- 重新渲染：\`bun scripts/governance-backlog-curate.mjs --apply\`（折叠日志 → 刷新本文件 + 归档 + 看板）
+- 重新渲染（本地看板）：\`bun run backlog:render\`（= \`bun scripts/governance-backlog-curate.mjs --apply\`；折叠日志 → 刷新本文件 + 归档 + 看板）
 
 **编号**：历史曾用号（B234…）对迁移任务保留显示以兼容旧引用；新任务用 uid（如 \`2026-06-07-claude-a3f\`，稳定身份，引用以 uid 为准）。
 
-**校验**：\`bun run scripts/check-governance.mjs\` 校验日志完整性（事件字段 / 孤儿事件 / uid·曾用号唯一）+ 终态（DONE/CANCELLED/WONTFIX）证据链 +「视图 == 折叠(日志)」陈旧守卫。
+**校验**：\`bun run scripts/check-governance.mjs\` 校验日志完整性（事件字段 / 孤儿事件 / uid·曾用号唯一）+ 终态（DONE/CANCELLED/WONTFIX）证据链（直接折叠日志查证据）。视图已 gitignored、不进 git，故无「陈旧守卫」。
 
 ---
 

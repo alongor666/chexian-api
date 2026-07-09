@@ -5,7 +5,7 @@
  *
  * 校验规则：
  * 1. 必需文件与核心索引：根目录治理文件、三大索引、核心层 INDEX.md（原 1/2 两项同构合并，2026-07-04 奥卡姆批次一）
- * 3. BACKLOG.md 证据链：终态任务（DONE 完成 / CANCELLED·WONTFIX 弃置）必须有关联文档、关联代码、验收证据或弃置理由
+ * 3. BACKLOG 证据链（折叠日志直查）：终态任务（DONE 完成 / CANCELLED·WONTFIX 弃置）必须有关联文档、关联代码、验收证据或弃置理由
  * 4. GEMINI.md 引用正确性（已移除 — GEMINI.md 不再维护）
  * 5. CLAUDE.md 关键章节：必须包含验证协议、工作流集成、数据准备章节
  * 6. DC-002 合规性（B106+B107）：
@@ -13,11 +13,11 @@
  *    - 禁止使用||运算符判断filters字段（B107增强：日期字段报错，其他字段警告）
  *    - 禁止函数签名包含可选日期参数
  * 7. BACKLOG 事件日志校验（event-log 模型，2026-06 治本后取代「任务ID分配」）：
- *    - 真相 = BACKLOG_LOG.jsonl（append-only）；BACKLOG.md/ARCHIVE 是其派生视图
+ *    - 真相 = BACKLOG_LOG.jsonl（append-only，唯一进 git 的账本）；BACKLOG.md/ARCHIVE 是本地渲染的派生视图（gitignored，不进 git）
  *    - 校验事件结构 / 无孤儿事件 / create uid 唯一 / 曾用号唯一（禁复用）
- *    - 陈旧守卫：视图必须 == 折叠(日志) 的渲染（手改/漏渲染即报错，提示重新渲染）
+ *    - 视图不进 git ⇒ 无被提交视图可陈旧 ⇒ 陈旧守卫已删除（2026-07-09 根治，见 .claude/rules/backlog-eventlog.md §10）
  * 8. Merge conflict 标记扫描：
- *    - 扫描 BACKLOG.md / BACKLOG_LOG.jsonl / PROGRESS.md 中是否残留 <<<<<<< / ======= / >>>>>>> 冲突标记
+ *    - 扫描 BACKLOG_LOG.jsonl / PROGRESS.md 等治理文件中是否残留 <<<<<<< / ======= / >>>>>>> 冲突标记
  *    - 残留冲突标记 → 阻断提交
  * 9. 暂存区调试产物阻断：
  *    - 阻止日志/Playwright 报告等调试产物进入提交
@@ -53,7 +53,7 @@ import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
 import { listPolicyCurrentShards, collectValidationDimFileEntries } from './lib/policy-current-shards.mjs';
 import {
-  parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow, TERMINAL_STATUSES,
+  parseLog, loadLog, fold, validateLog, displayId, TERMINAL_STATUSES,
 } from './backlog/lib.mjs';
 import { SHADOW_KEYS, MAIN_CUBES, CUBE_STATE_NAMES } from './shared/cube-routes.mjs';
 import { parseLedger as parseLoopLedger, normalizeVerdict as normalizeLoopVerdict } from './loop/quality-report.mjs';
@@ -108,9 +108,10 @@ function checkRequiredFiles() {
 
   const requiredFiles = [
     // 根目录治理文件
+    //（BACKLOG.md / BACKLOG_ARCHIVE.md 已改为 gitignored 本地派生视图，不再要求存在——
+    //  真相 BACKLOG_LOG.jsonl 由下方「BACKLOG 事件日志」检查守护；见 backlog-eventlog.md §10）
     'CLAUDE.md',
-    'BACKLOG.md',
-    'BACKLOG_ARCHIVE.md',
+    'BACKLOG_LOG.jsonl',
     'PROGRESS.md',
     // 三大索引
     '开发文档/00_index/DOC_INDEX.md',
@@ -145,87 +146,30 @@ function checkRequiredFiles() {
 }
 
 // ============================================================
-// 3. BACKLOG.md 证据链检查
+// 3. BACKLOG 证据链检查（折叠日志直查，不依赖派生视图）
+//    视图 BACKLOG.md/ARCHIVE 已 gitignored（2026-07-09 根治），故直接折叠真相日志、
+//    在内存任务模型上查终态任务证据——比解析渲染表格更正确。见 backlog-eventlog.md §10。
 // ============================================================
 
-function parseBacklogTable(content) {
-  const lines = content.split('\n');
-  const tasks = [];
-
-  // 找到任务列表表格（以 "| ID |" 开头的行）
-  let inTable = false;
-  let headerPassed = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-
-    // 跳过空行
-    if (!line) continue;
-
-    // 检测表格开始（标题行）
-    if (line.startsWith('| ID |')) {
-      inTable = true;
-      continue;
-    }
-
-    // 跳过分隔符行
-    if (inTable && !headerPassed && line.startsWith('|---')) {
-      headerPassed = true;
-      continue;
-    }
-
-    // 解析数据行
-    if (inTable && headerPassed && line.startsWith('|')) {
-      // 用转义感知的 splitRow（SSOT），正确处理 desc/evidence 内的 \| ，避免按列错位
-      const cells = splitRow(line);
-
-      // 表格格式：ID | 提出时间 | 板块 | 归属对象 | 需求描述 | 优先级 | 状态 | 关联文档 | 关联代码 | 验收/证据
-      if (cells.length >= 10) {
-        const task = {
-          id: cells[0],
-          submitTime: cells[1],
-          category: cells[2],
-          owner: cells[3],
-          description: cells[4],
-          priority: cells[5],
-          status: cells[6],
-          relatedDocs: cells[7],
-          relatedCode: cells[8],
-          evidence: cells[9],
-          lineNumber: i + 1,
-        };
-        tasks.push(task);
-      }
-    }
-
-    // 检测表格结束（遇到非表格行）
-    if (inTable && headerPassed && !line.startsWith('|')) {
-      break;
-    }
-  }
-
-  return tasks;
-}
-
 function checkBacklogEvidence() {
-  info('检查 BACKLOG.md 证据链...');
+  info('检查 BACKLOG 证据链（折叠日志）...');
 
-  const backlogPath = path.join(ROOT_DIR, 'BACKLOG.md');
-
-  if (!fs.existsSync(backlogPath)) {
-    error('BACKLOG.md 不存在，跳过证据链检查');
+  const logPath = path.join(ROOT_DIR, 'BACKLOG_LOG.jsonl');
+  if (!fs.existsSync(logPath)) {
+    error('BACKLOG_LOG.jsonl 不存在，跳过证据链检查');
     return false;
   }
 
-  // DONE 任务已归档到 BACKLOG_ARCHIVE.md，证据链需合并两文件一起校验
-  const archivePath = path.join(ROOT_DIR, 'BACKLOG_ARCHIVE.md');
-  let tasks = parseBacklogTable(fs.readFileSync(backlogPath, 'utf-8'));
-  if (fs.existsSync(archivePath)) {
-    tasks = tasks.concat(parseBacklogTable(fs.readFileSync(archivePath, 'utf-8')));
+  let tasks;
+  try {
+    tasks = [...fold(loadLog(logPath)).values()];
+  } catch (e) {
+    error(`折叠 BACKLOG_LOG.jsonl 失败：${e.message}`);
+    return false;
   }
 
   if (tasks.length === 0) {
-    warning('BACKLOG.md 中未找到任务表格');
+    warning('BACKLOG_LOG.jsonl 中未找到任务');
     return true; // 没有任务不算失败
   }
 
@@ -233,7 +177,7 @@ function checkBacklogEvidence() {
   const terminalTasks = tasks.filter(task => TERMINAL_STATUSES.includes(task.status));
 
   if (terminalTasks.length === 0) {
-    info(`BACKLOG.md 中有 ${tasks.length} 个任务，其中 0 个终态（DONE/CANCELLED/WONTFIX），无需检查证据链`);
+    info(`BACKLOG 共 ${tasks.length} 个任务，其中 0 个终态（DONE/CANCELLED/WONTFIX），无需检查证据链`);
     return true;
   }
 
@@ -245,18 +189,21 @@ function checkBacklogEvidence() {
     const isDiscard = task.status === 'CANCELLED' || task.status === 'WONTFIX';
     const evidenceLabel = isDiscard ? '弃置理由' : '验收/证据';
 
-    // 检查关联文档
-    if (!task.relatedDocs || task.relatedDocs === '' || task.relatedDocs === '-') {
+    // 关联文档 / 关联代码：fold 缺省为 'N/A'（视为已声明），仅空串 / '-' 判缺失
+    if (!task.docs || task.docs === '' || task.docs === '-') {
       issues.push('关联文档为空（应填写文档路径或 N/A）');
     }
-
-    // 检查关联代码
-    if (!task.relatedCode || task.relatedCode === '' || task.relatedCode === '-') {
+    if (!task.code || task.code === '' || task.code === '-') {
       issues.push('关联代码为空（应填写代码路径或 N/A）');
     }
 
-    // 检查验收/证据（DONE=完成证据，CANCELLED/WONTFIX=弃置理由，均须非空）
-    if (!task.evidence || task.evidence === '' || task.evidence === '-' || task.evidence === 'N/A') {
+    // 验收/证据：与旧渲染列同口径——status 证据 + note 链任一非空即可
+    // （DONE=完成证据，CANCELLED/WONTFIX=弃置理由；均须非空且非 N/A/-）
+    const evidenceText = [task.evidence, ...(task.notes || [])]
+      .filter(s => s && String(s).trim())
+      .join(' ')
+      .trim();
+    if (!evidenceText || evidenceText === '-' || evidenceText === 'N/A') {
       issues.push(isDiscard
         ? `${evidenceLabel}为空（弃置任务必须填写弃置理由）`
         : `${evidenceLabel}为空（必须填写 PR链接/Commit/测试报告等）`);
@@ -264,23 +211,19 @@ function checkBacklogEvidence() {
 
     if (issues.length > 0) {
       hasErrors = true;
-      errors.push({
-        id: task.id,
-        lineNumber: task.lineNumber,
-        issues,
-      });
+      errors.push({ id: displayId(task), issues });
     }
   }
 
   if (hasErrors) {
-    error(`BACKLOG.md 证据链检查失败，共 ${terminalTasks.length} 个终态任务，${errors.length} 个有问题：`);
-    errors.forEach(({ id, lineNumber, issues }) => {
-      console.log(`    - ${id} (行 ${lineNumber}):`);
+    error(`BACKLOG 证据链检查失败，共 ${terminalTasks.length} 个终态任务，${errors.length} 个有问题：`);
+    errors.forEach(({ id, issues }) => {
+      console.log(`    - ${id}：`);
       issues.forEach(issue => console.log(`        • ${issue}`));
     });
     return false;
   } else {
-    success(`BACKLOG.md 证据链检查通过（${terminalTasks.length} 个终态任务：DONE/CANCELLED/WONTFIX）`);
+    success(`BACKLOG 证据链检查通过（${terminalTasks.length} 个终态任务：DONE/CANCELLED/WONTFIX）`);
     return true;
   }
 }
@@ -337,8 +280,8 @@ function checkClaudeMdSections() {
  * BACKLOG 事件日志校验（event-log 模型，2026-06 治本后取代「任务ID分配」）：
  *  1. 日志结构完整：每条事件 kind/uid/ts 合规；create uid 唯一；曾用号唯一（禁复用）
  *  2. 无孤儿事件：status/note/amend 必须引用已存在的 create
- *  3. 陈旧守卫：BACKLOG.md / BACKLOG_ARCHIVE.md 必须 == 折叠(日志) 的渲染结果
- *     —— 视图是日志的纯函数，任何手改/漏渲染都会被此守卫抓出，提示重新渲染
+ *  （陈旧守卫已删除：视图 BACKLOG.md/ARCHIVE 已 gitignored、不进 git，无被提交视图可陈旧。
+ *    2026-07-09 根治——结构性消除 > 检查性防御，见 backlog-eventlog.md §10）
  */
 function checkBacklogLog() {
   const logPath = path.join(ROOT_DIR, 'BACKLOG_LOG.jsonl');
@@ -363,28 +306,12 @@ function checkBacklogLog() {
     return false;
   }
 
-  // 3. 陈旧守卫：视图必须等于折叠(日志) 的渲染
-  const tasks = [...fold(events).values()];
-  const expectBacklog = renderBacklog(tasks);
-  const expectArchive = renderArchive(tasks);
-  const drift = [];
-  const cmp = (rel, expect) => {
-    const p = path.join(ROOT_DIR, rel);
-    const cur = fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : '';
-    if (cur !== expect) drift.push(rel);
-  };
-  cmp('BACKLOG.md', expectBacklog);
-  cmp('BACKLOG_ARCHIVE.md', expectArchive);
-
-  if (drift.length > 0) {
-    error(`BACKLOG 派生视图已陈旧/被手改：${drift.join(', ')}`);
-    console.log('    视图必须 == 折叠(日志)。请重新渲染：bun scripts/governance-backlog-curate.mjs --apply');
-    console.log('    （切勿手工编辑 BACKLOG.md / BACKLOG_ARCHIVE.md；它们是 BACKLOG_LOG.jsonl 的派生物）');
-    return false;
-  }
+  // 陈旧守卫已删除：视图 BACKLOG.md/ARCHIVE 已 gitignored、不进 git → 无被提交视图可陈旧
+  //（2026-07-09 根治：结构性消除 > 检查性防御，见 backlog-eventlog.md §10）。
+  // 看板按需本地渲染：bun run backlog:render（= governance-backlog-curate.mjs --apply）。
 
   const warnNote = warnings.length ? `，${warnings.length} 处提示` : '';
-  success(`BACKLOG 事件日志校验通过（${stats.events} 事件 / ${stats.tasks} 任务，视图与日志一致${warnNote}）`);
+  success(`BACKLOG 事件日志校验通过（${stats.events} 事件 / ${stats.tasks} 任务${warnNote}）`);
   return true;
 }
 
@@ -400,8 +327,7 @@ function checkMergeConflictMarkers() {
   info('检查 merge conflict 标记...');
 
   const filesToCheck = [
-    'BACKLOG.md',
-    'BACKLOG_ARCHIVE.md',
+    // BACKLOG.md / BACKLOG_ARCHIVE.md 已 gitignored、不进 git，不再扫描（真相 BACKLOG_LOG.jsonl 仍扫）
     'BACKLOG_LOG.jsonl',
     'PROGRESS.md',
     'CLAUDE.md',

@@ -37,7 +37,7 @@
 
 **必读文档**：`ARCHITECTURE.md`（模块层级）· `开发文档/TECH_STACK.md`（技术栈）· `开发文档/DEVELOPER_CONVENTIONS.md`（DC-001 三要素）· `数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md`（Parquet 字段定义）· `开发文档/缺口清单.md`（信息缺口追踪）· `AGENTS.md`（§8.2 rules 文件 append-only、§8.3 shared-memory user-only 等 policy 分层，动 `.claude/rules/**` 或 shared-memory 前必读）
 
-**两本账**：[BACKLOG.md](./BACKLOG.md)（需求）· [PROGRESS.md](./PROGRESS.md)（进展）
+**两本账**：[BACKLOG_LOG.jsonl](./BACKLOG_LOG.jsonl)（需求·真相日志；本地看板 `bun run backlog:render`，视图已 gitignored）· [PROGRESS.md](./PROGRESS.md)（进展）
 
 **数据知识协议**：数据处理任务必读 [.claude/data-knowledge-protocol.md](./.claude/data-knowledge-protocol.md)。唯一事实源：`数据管理/knowledge/rules/车险数据业务规则字典.md`
 

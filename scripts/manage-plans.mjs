@@ -3,6 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { loadLog, fold, renderBacklog, renderArchive } from './backlog/lib.mjs';
 
 /**
  * 解析命令行参数并返回运行选项。
@@ -97,9 +98,26 @@ function listPlanMarkdownFiles(plansDir) {
 }
 
 /**
+ * BACKLOG.md / BACKLOG_ARCHIVE.md 自 2026-07-09 起 gitignored（真相 = BACKLOG_LOG.jsonl）。
+ * 本工具按 Bxxx 读渲染视图，故读前若视图缺失即从日志惰性渲染，避免拿到静默空索引。
+ * 见 .claude/rules/backlog-eventlog.md §10。
+ */
+function ensureBacklogViews(rootDir) {
+  const backlogPath = path.join(rootDir, 'BACKLOG.md');
+  const archivePath = path.join(rootDir, 'BACKLOG_ARCHIVE.md');
+  const logPath = path.join(rootDir, 'BACKLOG_LOG.jsonl');
+  if (isFile(backlogPath) && isFile(archivePath)) return;
+  if (!isFile(logPath)) return; // 无日志则无从渲染，交由既有 isFile 守卫降级
+  const tasks = [...fold(loadLog(logPath)).values()];
+  if (!isFile(backlogPath)) fs.writeFileSync(backlogPath, renderBacklog(tasks), 'utf-8');
+  if (!isFile(archivePath)) fs.writeFileSync(archivePath, renderArchive(tasks), 'utf-8');
+}
+
+/**
  * 从 BACKLOG.md 与 BACKLOG_ARCHIVE.md 构建任务状态索引（Bxxx -> 状态）。
  */
 function buildBacklogStatusIndex(rootDir) {
+  ensureBacklogViews(rootDir);
   const index = new Map();
 
   const backlogPath = path.join(rootDir, 'BACKLOG.md');
