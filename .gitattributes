@@ -4,14 +4,11 @@
 # 每行一个 JSON 事件、按内容唯一 → merge=union 把多分支的新增事件自动并入，
 # 且因「写入方永不挑号 + 状态变更=追加事件」，结构性地不再碰号、不再产生重复行。
 BACKLOG_LOG.jsonl merge=union
-# BACKLOG.md / BACKLOG_ARCHIVE.md 是日志的「派生视图」（由 governance-backlog-curate.mjs 折叠渲染）。
-# 设 union 仅作合并安全网：若两分支各自重渲染产生差异，union 不阻塞合并，
-# 随后任一次 curate --apply 即把视图重新对齐到日志（视图=纯函数(日志)，冲突「重新渲染而非手解」）。
-# governance「BACKLOG事件日志」检查含陈旧守卫：视图 != 折叠(日志) 即报错。
-# 注意：union 仅适合上述「追加/可重生成」文本。JSON/结构化派生文件（data-sources.json / 转换质量报告.json）
-# 禁用 union（会产生非法结构），它们冲突时同样走"重新生成而非手解"，见 .claude/rules/worktree-setup.md。
-BACKLOG.md merge=union
-BACKLOG_ARCHIVE.md merge=union
+# BACKLOG.md / BACKLOG_ARCHIVE.md 是日志的「派生视图」，2026-07-09 起 gitignored、不进 git
+#（本地按需渲染：bun run backlog:render）。因此它们不再需要任何 merge 策略——PR 只碰真相日志，
+# 结构上零冲突/零陈旧、合并顺序无关紧要。根治原委见 .claude/rules/backlog-eventlog.md §10。
+# 注意：union 仅适合「追加/可重生成」文本。JSON/结构化派生文件（data-sources.json / 转换质量报告.json）
+# 禁用 union（会产生非法结构），它们冲突时走"重新生成而非手解"，见 .claude/rules/worktree-setup.md。
 # pr-evolution.md 是 append-only 自进化复盘日志（每轮追加一个 R 区块到文末）。多会话并行 loop
 # 各自追加不同区块 → 文末同区域 3-way 合并会冲突。设 merge=union：纯追加场景自动保留各方新增区块、
 # 不产生冲突标记（与 BACKLOG_LOG.jsonl 同理）。本文件只追加、不改写历史区块，故 union 安全。

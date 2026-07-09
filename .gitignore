@@ -1,4 +1,10 @@
 
+# BACKLOG 派生视图（2026-07-09 根治：真相 = BACKLOG_LOG.jsonl，这两份是本地渲染的看板，
+# 不进 git——彻底消除多分支并发在视图上的冲突/陈旧。按需生成：bun run backlog:render。
+# 原委见 .claude/rules/backlog-eventlog.md §10）
+/BACKLOG.md
+/BACKLOG_ARCHIVE.md
+
 # Claude Code worktrees（本地临时目录，禁止提交为 gitlink）
 .claude/worktrees/
 

@@ -50,6 +50,7 @@
     "deploy:check": "node scripts/check-deploy-readiness.mjs",
     "deploy:check:health": "node scripts/check-deploy-readiness.mjs --require-health",
     "plans:manage": "node scripts/manage-plans.mjs",
+    "backlog:render": "bun scripts/governance-backlog-curate.mjs --apply",
     "loop:dispatch": "node scripts/loop/dispatch.mjs",
     "loop:quality": "node scripts/loop/quality-report.mjs",
     "loop:automation-due": "node scripts/loop/automation-due.mjs",
