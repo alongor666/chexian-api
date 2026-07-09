@@ -17,17 +17,16 @@
 
 ---
 
-## 📋 活跃任务速查（39 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（38 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P1（5 项）**
+**P1（4 项）**
 
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
 - 2026-06-23-claude-801409 `IN_PROGRESS` — Phase B 隔离层根治(承接 Phase A 检测层 bc36e8 已完成 P0-P
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-07-08-claude-4210ab `IN_PROGRESS` — B346 续作·GATED（生成端在仓外）
-- 2026-07-09-claude-9692f9 — 全国超管在 UI 切省(如切到山西)后，报告门户 /api/reports/portal
 
 **P2（17 项）**
 
@@ -113,4 +112,3 @@
 | 2026-07-08-claude-a28f3d | 2026-07-08 | 架构治理/硬编码 | @claude | 后端硬编码专项残留（需契约/业务拍板，未随批次一 2026-07-08-claude-773784 改动）：①/api/query/cost?type=earned-new 保单年度已赚保费 API 契约把年份烧进函数名与响应键（gener… | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts；server/src/routes/query/cost.ts；src/features/premium-report/ |  |
 | 2026-07-08-claude-fd244c | 2026-07-08 | 指标口径 | @claude | [硬编码专项遗留]已赚保费月度明细模块年份深度耦合：后端 earned-premium-detail.ts 写死 2025/2026/2027（generatePolicy2025/2026EarnedPremiumQuery、滚动汇总 U… | P2 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts,src/features/cost/utils/transformData.ts,src/features/cost/utils/cost-summary-calc.ts,src/features/dashboard/crossSellRateStatus.ts |  |
 | 2026-07-09-claude-50d62e | 2026-07-09 | 数据/ETL·多省债 | @claude | 非daily手动工具省份轴收窄（branch=None取全省）：agent_diagnose_report.py/sync_may_renewal_fields.py/tools/analyze_flow.py/scripts/ad-hoc… | P3 | PROPOSED | 开发文档/reviews/2026-07-08-B5子目录cutover残留glob排查.md | N/A |  |
-| 2026-07-09-claude-9692f9 | 2026-07-09 | 安全/权限·报告门户(B346 续作) | @claude | 全国超管在 UI 切省(如切到山西)后，报告门户 /api/reports/portal/:slug/:file 返回的仍是切省前的省份报告(用户实测：切山西仍看四川)。根因：server/src/routes/reports.ts:380… | P1 | PROPOSED | N/A | server/src/routes/reports.ts,src/shared/contexts/BranchContext.tsx |  |

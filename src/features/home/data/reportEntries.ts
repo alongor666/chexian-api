@@ -37,14 +37,28 @@ function getReportBase(slug: string): string {
   return `/api/reports/portal/${slug}`
 }
 
-/** manifest URL（服务端按用户可见范围返回省级或机构级 manifest） */
-export function getManifestUrl(slug: string): string {
-  return `${getReportBase(slug)}/manifest.json`
+/**
+ * 追加全国超管切省信号 `?targetBranch=XX`（2026-07-09-claude-9692f9，B346 续作）。
+ *
+ * 门户 manifest 走裸 fetch()、报告 HTML 由浏览器直接导航打开，都**不经** apiClient，
+ * 故 client-core 的 injectTargetBranch 注入对门户无效——切省信号必须直接拼进门户 URL。
+ * 仅全国超管切省时由调用方（ReportEntryCard / useReportManifest）传入 effectiveBranch；
+ * 普通单省用户传 null/undefined → 不追加，零行为变化（天然灰度）。服务端仍按 token 的
+ * visibleBranches 白名单校验，绝不信任此原值（见 reports.ts resolvePortalScope）。
+ */
+function withTargetBranch(url: string, targetBranch?: string | null): string {
+  if (!targetBranch) return url
+  return `${url}?targetBranch=${encodeURIComponent(targetBranch)}`
 }
 
-/** 由 slug + 文件名拼出报告 URL（服务端按用户可见范围选文件） */
-export function getReportUrl(slug: string, file: string): string {
-  return `${getReportBase(slug)}/${file}`
+/** manifest URL（服务端按用户可见范围返回省级或机构级 manifest；全国超管切省时带 targetBranch） */
+export function getManifestUrl(slug: string, targetBranch?: string | null): string {
+  return withTargetBranch(`${getReportBase(slug)}/manifest.json`, targetBranch)
+}
+
+/** 由 slug + 文件名拼出报告 URL（服务端按用户可见范围选文件；全国超管切省时带 targetBranch） */
+export function getReportUrl(slug: string, file: string, targetBranch?: string | null): string {
+  return withTargetBranch(`${getReportBase(slug)}/${file}`, targetBranch)
 }
 
 export const reportEntries: ReportEntry[] = [

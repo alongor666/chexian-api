@@ -12,6 +12,7 @@ import { AlertTriangle } from 'lucide-react'
 import { Card } from '../../../shared/ui/Card'
 import { badgeStyles, cn, colorClasses } from '../../../shared/styles'
 import { usePermission } from '../../../shared/contexts/PermissionContext'
+import { useBranch } from '../../../shared/contexts/BranchContext'
 import { getReportUrl, type ReportEntry } from '../data/reportEntries'
 import { resolveReportScope } from '../data/reportScope'
 import { resolveReport } from '../data/resolveReport'
@@ -33,13 +34,18 @@ export const ReportEntryCard = memo(function ReportEntryCard({
   const { userPermission } = usePermission()
   const scope = useMemo(() => resolveReportScope(userPermission), [userPermission])
 
-  const { data: manifest, isLoading: manifestLoading } = useReportManifest(entry, scope)
+  // 全国超管切省信号：仅多省超管把「有效省」透出给门户 URL（普通单省用户 → null，零变化）。
+  // 门户 manifest / 报告 HTML 都不经 apiClient，故切省信号必须直接拼进 URL（见 reportEntries.ts）。
+  const { isMultiBranch, effectiveBranch } = useBranch()
+  const targetBranch = isMultiBranch ? effectiveBranch : null
+
+  const { data: manifest, isLoading: manifestLoading } = useReportManifest(entry, scope, targetBranch)
 
   const resolution = resolveReport(manifest ?? null, etlDate)
 
   const reportUrl =
     scope.kind !== 'forbidden' && resolution.reportFile
-      ? getReportUrl(entry.slug, resolution.reportFile)
+      ? getReportUrl(entry.slug, resolution.reportFile, targetBranch)
       : null
 
   const isBusy = loading || manifestLoading
