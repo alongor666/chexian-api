@@ -11,6 +11,11 @@ instance_name: sichuan_leshan_2025_may_jul
 
 webhook_env: WECOM_SMARTSHEET_WEBHOOK_LESHAN
 
+# 省份隔离键（RED LINE data-pipeline.md）：current/ 物理混放 SC+SX，引擎据此注入所有
+# policy 读的 WHERE branch_code='SC'（fail-closed：缺省即中止，防他省保单混入本省企微表）。
+# org_level_3 机构名仅偶然隔离（山西无同名机构），属正交维度不可替代 branch_code。
+branch_code: SC
+
 # 机构表字段类型与 H1/H2 不同（select/bool 全改为 text），用独立 registry
 field_registry_path: field_registry_orgsheet.yaml
 
