@@ -1931,3 +1931,17 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （一次性重构验证模式，登记备查；若同类收口频繁可考虑把 dump-diff 泛化为 scripts/ 工具。）
+
+---
+
+## 2026-07-08 · #993 backlog `status DONE` 后 CI governance 红（BACKLOG_ARCHIVE.md 派生视图陈旧）
+
+- **场景**：落地 2026-07-07-claude-f23ffc（SC 车牌归属地统一走 JOIN）。`node scripts/backlog.mjs status <uid> DONE` 提交后，CI「Governance Check」在该 docs 提交上失败：`BACKLOG 派生视图已陈旧/被手改：BACKLOG_ARCHIVE.md 视图必须 == 折叠(日志)`。
+- **根因**：`backlog.mjs status DONE` 只重渲**活跃视图** BACKLOG.md，**不把 DONE 任务折叠进归档视图** BACKLOG_ARCHIVE.md（折叠归 `governance-backlog-curate.mjs`）。而 pre-push git 钩子只跑轻量 `harness.mjs`（H2-H6），**不含**全量 `bun run governance` 的「BACKLOG 派生视图一致」闸——故本地 pre-push 全绿、CI 全量 governance 才红。
+- **修复**：`bun scripts/governance-backlog-curate.mjs --apply` 重渲两个派生视图（活跃 40 / 归档 335），提交 BACKLOG_ARCHIVE.md（仅本任务折叠入档），本地 `bun run governance` 恢复 54/54。
+- **预防**：
+  1. 凡跑 `backlog.mjs status <uid>` 置**终态**（DONE/CANCELLED/WONTFIX），**紧接着必跑** `bun scripts/governance-backlog-curate.mjs --apply` 再提交；别只信 status 命令的「视图已刷新」（那只刷活跃视图）。
+  2. 改动涉及 BACKLOG 台账时，push 前须**显式补跑全量 `bun run governance`**（54 项）——pre-push 钩子的 harness 是子集，不等于 CI 门禁。
+
+### needs_automation: false
+（同类失败首次。若再现「置终态后 CI 报归档视图陈旧」→ 按进化铁律升级：在 `backlog.mjs status` 置终态时自动调用 curate 折叠，或把 pre-push 钩子对齐到全量 governance 的 backlog 视图一致闸。）
