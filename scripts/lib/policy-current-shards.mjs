@@ -161,3 +161,49 @@ export function findPolicyCurrentSyncGateViolations(currentDir, { allowedBranche
 
   return violations;
 }
+
+/**
+ * 非 SC 省维度隔离副本枚举（warehouse/validation/<省>/dim/<域>/latest.parquet）。
+ *
+ * 与 sync-vps.mjs:buildValidationDimSyncTasks 同一套发现规则（同 DIM_SUBDOMAINS、同 key 规则
+ * `validation/<省>/dim/<域>/latest.parquet`），供 governance checkDataDrift 复用——避免各消费者
+ * 各自维护一份省/子域清单导致漂移（2026-07-08 实测：check-governance.mjs 静态 dirMappings 未收录
+ * 该路径，误报 SX dim/salesman、dim/plan「已删除」，阻断 release:daily）。
+ *
+ * @param {string} validationRoot 通常为 数据管理/warehouse/validation 绝对路径
+ * @returns {Array<{key:string, path:string}>}
+ */
+export function listValidationDimShards(validationRoot) {
+  if (!existsSync(validationRoot)) return [];
+  const DIM_SUBDOMAINS = ['salesman', 'plan', 'repair'];
+  const shards = [];
+  const provinces = readdirSync(validationRoot)
+    .filter((entry) => entry !== 'SC' && /^[A-Z]{2}$/.test(entry));
+  for (const province of provinces) {
+    const dimDir = join(validationRoot, province, 'dim');
+    if (!existsSync(dimDir) || !statSync(dimDir).isDirectory()) continue;
+    for (const subdomain of DIM_SUBDOMAINS) {
+      const latestPath = join(dimDir, subdomain, 'latest.parquet');
+      if (!existsSync(latestPath)) continue;
+      shards.push({ key: `validation/${province}/dim/${subdomain}/latest.parquet`, path: latestPath });
+    }
+  }
+  return shards;
+}
+
+/**
+ * governance checkDataDrift 用：枚举 validation 维度副本并组装成 {key: {size, mtimeMs}} 条目，
+ * 供 Object.assign 并入 currentFiles。抽出本 helper 是为避免 check-governance.mjs 内联循环
+ * 膨胀单体（H5 体积棘轮 4000 行）——新检查进独立模块，不回流主脚本。
+ *
+ * @param {string} validationRoot 通常为 数据管理/warehouse/validation 绝对路径
+ * @returns {Record<string, {size:number, mtimeMs:number}>}
+ */
+export function collectValidationDimFileEntries(validationRoot) {
+  const entries = {};
+  for (const shard of listValidationDimShards(validationRoot)) {
+    const stat = statSync(shard.path);
+    entries[shard.key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
+  }
+  return entries;
+}

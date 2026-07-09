@@ -51,7 +51,7 @@ import {
 } from '../数据管理/pipelines/quick_reference.mjs';
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
-import { listPolicyCurrentShards } from './lib/policy-current-shards.mjs';
+import { listPolicyCurrentShards, collectValidationDimFileEntries } from './lib/policy-current-shards.mjs';
 import {
   parseLog, fold, validateLog, renderBacklog, renderArchive, splitRow, TERMINAL_STATUSES,
 } from './backlog/lib.mjs';
@@ -1957,9 +1957,7 @@ function checkDataDrift() {
   for (const dir of dirMappings) {
     const absPath = path.join(ROOT_DIR, dir.rel);
     if (!fs.existsSync(absPath)) continue;
-    // B3：policy/current 用共享 helper 枚举（顶层扁平 + 省份子目录 current/<省>/），key 随子目录成
-    // `policy/current/<省>/<f>` 形态——与 sync-vps.mjs:writeSyncManifest 完全同 key 规则（codex 闸-1 P1-1），
-    // 否则 manifest 子目录 key 会被本闸误报「已删除」+ 漏检子目录漂移。其余目录维持扁平 readdir。
+    // B3：policy/current 用共享 helper 枚举子目录，key 规则与 writeSyncManifest 同源（codex 闸-1 P1-1）。
     if (dir.label === 'policy/current') {
       for (const shard of listPolicyCurrentShards(absPath)) {
         const key = shard.branch ? `${dir.label}/${shard.branch}/${shard.name}` : `${dir.label}/${shard.name}`;
@@ -1975,6 +1973,8 @@ function checkDataDrift() {
       currentFiles[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
     }
   }
+
+  Object.assign(currentFiles, collectValidationDimFileEntries(path.join(ROOT_DIR, '数据管理/warehouse/validation')));
 
   const manifestFiles = manifest.files || {};
   const diffs = [];

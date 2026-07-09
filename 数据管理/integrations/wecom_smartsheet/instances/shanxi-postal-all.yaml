@@ -7,8 +7,9 @@
 #   两者全名都含「邮政」，故 agent_name LIKE '%邮政%' 一并命中，无需 OR。
 #   经代名简称由引擎 SQL 派生列 agent_short_name 给出（先判「储蓄」再判「邮政」）。
 #
-# 省份隔离（RED LINE data-pipeline.md）：policy_glob 仅取 SX_*.parquet + extra_where
-#   branch_code='SX' 双保险，杜绝裸 glob 混入四川行。
+# 省份隔离（RED LINE data-pipeline.md）：policy_glob 仅扫 current/SX/ 子目录 + extra_where
+#   branch_code='SX' 双保险，杜绝裸 glob 混入四川行（2026-07-08 随 B5 cutover 由旧 SX_*.parquet
+#   前缀写法改为子目录路径；旧写法在子目录布局下匹配 0 个文件，曾阻断 release:daily 企微同步）。
 #
 # 去重：复合主键 = 保单号 + 车架号；同组源行聚合为一条，保费组内求和（add-only + state）。
 # 字段：对齐四川邮政表 12 字段 + 新增「经代名(简称)」fi6BsM。
@@ -21,7 +22,7 @@ script: sync_filtered_policies.py        # daily.mjs 据此路由到非续保引
 webhook_env: WECOM_SMARTSHEET_WEBHOOK_SX_POSTAL
 
 # 仅扫描山西分片（性能辅助），branch_code 过滤才是隔离保证
-policy_glob: 数据管理/warehouse/fact/policy/current/SX_*.parquet
+policy_glob: 数据管理/warehouse/fact/policy/current/SX/*.parquet
 
 batch_size: 100
 sheet_records_per_minute_limit: 3000

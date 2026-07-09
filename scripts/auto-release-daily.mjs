@@ -14,6 +14,8 @@
  *     → 当天成功后写状态幂等跳过；失败重试至上限；窗口结束未成即告警 missed
  *
  * 告警通道：结构化日志（数据管理/logs/auto-release.log）+ macOS 系统通知（osascript）
+ * + 飞书机器人（lark-cli bot 身份，默认推「AI 赋能车险经营」群，AUTO_RELEASE_LARK_CHAT_ID 可覆盖；
+ * 2026-07-08 起默认开启——此前只有本地日志/桌面通知，人不在电脑前会错过 missed 告警）
  * + 可选企微群机器人 webhook（AUTO_RELEASE_WEBHOOK_URL，群机器人不受 IP 白名单限制）。
  *
  * 用法：
@@ -27,7 +29,8 @@
  * 环境变量：
  *   AUTO_RELEASE_WINDOW_START / AUTO_RELEASE_WINDOW_END  发布窗口，北京时间（默认 10:35 / 14:00）
  *   AUTO_RELEASE_MAX_ATTEMPTS                            当日失败重试上限（默认 2）
- *   AUTO_RELEASE_WEBHOOK_URL                             企微群机器人 webhook（可选）
+ *   AUTO_RELEASE_LARK_CHAT_ID                            飞书告警群 chat_id（默认「AI 赋能车险经营」群，lark-cli bot 已入群免配）
+ *   AUTO_RELEASE_WEBHOOK_URL                             企微群机器人 webhook（可选，与飞书并行发）
  *   AUTO_RELEASE_INTERVAL_SEC                            安装时写入 launchd 的轮询间隔（默认 900）
  *   PULL_BI_SSH_ALIAS / PULL_BI_REMOTE_DIR               复用拉取脚本的上游定位（默认 myvps / auto_loadbi）
  *
@@ -128,12 +131,27 @@ function resolveWindow() {
   return { start, end };
 }
 
-// ── 告警（日志 + macOS 通知 + 可选企微群机器人）──
+// ── 告警（日志 + macOS 通知 + 可选企微群机器人 + 可选飞书机器人）──
+
+// 「AI 赋能车险经营」群（bot 已入群，lark-cli auth 已配好，无需额外 env 也能推）；
+// 2026-07-08 用户要求把自动发布状态接进飞书报告机制后固定使用此群，可用
+// AUTO_RELEASE_LARK_CHAT_ID 覆盖。
+const DEFAULT_LARK_CHAT_ID = 'oc_07c20f22eb5828000452a2be8ae26df0';
 
 async function notify(title, body) {
   log('yellow', `🔔 ${title}：${body}`);
   const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   spawnSync('osascript', ['-e', `display notification "${esc(body)}" with title "${esc(title)}"`], { stdio: 'ignore' });
+
+  const chatId = process.env.AUTO_RELEASE_LARK_CHAT_ID || DEFAULT_LARK_CHAT_ID;
+  const larkResult = spawnSync('lark-cli', [
+    'im', '+messages-send', '--as', 'bot', '--chat-id', chatId,
+    '--text', `[chexian 自动发布] ${title}\n${body}`, '--json',
+  ], { encoding: 'utf-8', timeout: 30_000 });
+  if (larkResult.error || larkResult.status !== 0) {
+    log('yellow', `⚠ 飞书通知失败：${larkResult.error?.message || (larkResult.stderr || '').trim().slice(0, 300)}`);
+  }
+
   const url = process.env.AUTO_RELEASE_WEBHOOK_URL;
   if (!url) return;
   try {

@@ -1527,17 +1527,12 @@ function runRenewalTracker(python, scriptDir) {
     if (!hasBranchPolicy) missing.push(`validation/${BRANCH_CODE}/*.parquet (保单)`);
   } else {
     const policyDir = join(scriptDir, 'warehouse/fact/policy/current');
-    // B2：续保消费者 convert_renewal_tracker.py 仍读顶层扁平 glob（DEFAULT_POLICY_GLOB=current/*.parquet，
-    // 延后随 B3/cutover 升级），故 readiness 保持 flat 对齐消费者；但「子目录独占」态（顶层空 + current/<省>/ 有）
-    // 下消费者会读 0 行静默产空续保 → fail-closed BLOCK（非静默 return）防同步陈旧 renewal_tracker。
+    // 续保消费者 convert_renewal_tracker.py 的 policy_glob 经 renewal_common → branch_paths.policy_current_glob()
+    // 双布局自适应解析（非硬编码扁平 glob）：子目录独占态（current/SC/、current/SX/）下正确解析出
+    // current/SC/*.parquet，产出非空 renewal_tracker。故不再 fail-closed BLOCK 子目录独占态——B2 阶段
+    // 「消费者仍读死扁平 glob、子目录态静默产空续保」的假设已随 branch_paths.py 的 B3/cutover 升级过期。
     const policyLayout = inspectPolicyCurrentLayout(policyDir);
-    if (policyLayout.subdirOnly) {
-      log('red', `❌ renewal_tracker 中止：policy/current 仅含省份子目录 [${policyLayout.branches.join(',')}]，` +
-        `但续保消费者 convert_renewal_tracker.py 仍读顶层扁平 glob（current/*.parquet）→ 会静默产出空续保。` +
-        `子目录消费须等 cutover 给 convert 传 --policy-glob current/**/*.parquet（B3/cutover 范围）。`);
-      process.exit(1);
-    }
-    if (policyLayout.flatCount === 0) missing.push('policy/current/*.parquet');
+    if (policyLayout.flatCount === 0 && policyLayout.subdirCount === 0) missing.push('policy/current/*.parquet');
   }
   if (!existsSync(quotesPath)) missing.push(isBranch ? `validation/${BRANCH_CODE}/quotes_conversion/latest.parquet` : 'quotes_conversion/latest.parquet');
   if (!existsSync(salesmanPath)) missing.push('salesman/latest.parquet');
