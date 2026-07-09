@@ -281,9 +281,10 @@ export function generateGeoRiskByAccidentQuery(filters: ClaimsDetailFilters, whe
 // ── 6. 地理风险分析（车牌归属地）──
 
 /**
- * branchCode → 车牌归属地面板纳入的省份全称集合（PlateRegionMap.province 值）。
+ * branchCode → 板块6「车牌归属地分布」纳入的省份全称集合（PlateRegionMap.province 值）。
  *
- * SC 保留原历史口径「四川 + 重庆」（成渝间车辆流动频繁，既有业务口径，非本次新增）。
+ * SC 保留原历史口径「四川 + 重庆」（成渝间车辆流动频繁，既有业务口径，非本次新增）：
+ * 渝牌作为「重庆」归属地桶正常展示（与硬编码 CASE `WHEN 渝% THEN '重庆'` 一致）。
  * 新省默认仅纳入本省，禁猜测邻省——如需纳入邻省，走业务确认后再登记本表。
  */
 const PLATE_GEO_PROVINCES_BY_BRANCH: Record<string, readonly string[]> = {
@@ -292,7 +293,26 @@ const PLATE_GEO_PROVINCES_BY_BRANCH: Record<string, readonly string[]> = {
 };
 
 /**
+ * branchCode → 板块7「出险地 vs 车牌归属地跨区对比」纳入的省份全称集合。
+ *
+ * 与板块6 的差异：SC 仅纳入「四川」本省（不含重庆）。原因是沿用历史硬编码
+ * `SC_PLATE_HOME_CITY_CASE` 口径——渝牌不判定跨区（归非跨区），因 accident_city 对重庆的
+ * 值域为「500100市辖区」而非「重庆市」，无法与 PlateRegionMap.city 直接比对。
+ * 该「渝牌非跨区」为既有限制而非本次改动引入；已用 duckdb 直查真实理赔逐记录对账，
+ * JOIN 派生的 is_cross_region 与硬编码逐字零差异。如未来要把渝牌纳入跨区判定，
+ * 属业务口径变更，须走业务确认后再改。
+ */
+const PLATE_CROSS_REGION_PROVINCES_BY_BRANCH: Record<string, readonly string[]> = {
+  SC: ['四川'],
+  SX: ['山西'],
+};
+
+/**
  * SC 车牌归属地 CASE（legacy 字面量结构保留，值已修正）。
+ *
+ * ⚙️ 现仅作「branchCode 未登记 / 缺省（全国合并视图）」的字节安全兜底——SC 生产路径
+ * （branchCode='SC'）已改走 JOIN PlateRegionMap 权威维表（BACKLOG 2026-07-07-claude-f23ffc，
+ * duckdb 直查逐前缀短名对账零差异），消除本硬编码短名与维表的漂移风险。
  *
  * 🔧 已修复（BACKLOG 2026-07-07-claude-d3ef27）：对照
  * 数据管理/warehouse/dim/plate_region/latest.parquet 权威值域直查结果，原 CASE 存在
@@ -331,9 +351,11 @@ const SC_PLATE_CITY_CASE = `CASE
 /**
  * 生成地理风险分析（车牌归属地）查询。
  *
- * @param branchCode 部署省（'SC'/'SX'）。SC/未知/缺省 → 沿用硬编码 CASE（结构保留，
- *   映射值已按权威值域修正，见 SC_PLATE_CITY_CASE 注释）；已在 PLATE_GEO_PROVINCES_BY_BRANCH
- *   登记的其他省（如 SX）→ JOIN PlateRegionMap 维表派生（权威值域，非猜测）。
+ * @param branchCode 部署省。已在 PLATE_GEO_PROVINCES_BY_BRANCH 登记的省（SC/SX）→ JOIN
+ *   PlateRegionMap 权威维表派生；SC 额外用 override CASE 把三处民族自治州剥成短名
+ *   （阿坝/甘孜/凉山），与旧硬编码短名逐字一致（duckdb 直查对账零差异，
+ *   BACKLOG 2026-07-07-claude-f23ffc）。未登记 / 缺省（全国合并视图）→ 回落硬编码
+ *   SC_PLATE_CITY_CASE 兜底（见其注释）。
  */
 export function generateGeoRiskByPlateQuery(
   filters: ClaimsDetailFilters,
@@ -342,7 +364,7 @@ export function generateGeoRiskByPlateQuery(
 ): string {
   const where = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
-  const includedProvinces = branchCode && branchCode !== 'SC' ? PLATE_GEO_PROVINCES_BY_BRANCH[branchCode] : undefined;
+  const includedProvinces = branchCode ? PLATE_GEO_PROVINCES_BY_BRANCH[branchCode] : undefined;
 
   if (includedProvinces) {
     const provinceList = includedProvinces.map((v) => `'${escapeSqlValue(v)}'`).join(', ');
@@ -355,6 +377,14 @@ export function generateGeoRiskByPlateQuery(
         p.customer_category,
         CASE
           WHEN prm.city IS NULL THEN '其他'
+          -- 自治州短名覆盖：regexp 仅剥「自治州」后缀会残留民族全称（阿坝藏族羌族），
+          -- 与硬编码短名不一致；三处民族自治州显式映射为短名（duckdb 直查逐字对账零差异）。
+          WHEN prm.city = '阿坝藏族羌族自治州' THEN '阿坝'
+          WHEN prm.city = '甘孜藏族自治州' THEN '甘孜'
+          WHEN prm.city = '凉山彝族自治州' THEN '凉山'
+          -- 省级兜底前缀（川I/川N/川川…→四川省）在硬编码 CASE 归 ELSE '其他' 被过滤，此处对齐；
+          -- 对 SX 为 no-op（山西维表无「山西省」兜底行，实测命中 0 行）。
+          WHEN prm.city LIKE '%省' THEN '其他'
           ELSE regexp_replace(prm.city, '(市|自治州|地区|盟)$', '')
         END AS plate_city
       FROM ClaimsDetail c
@@ -409,6 +439,10 @@ export function generateGeoRiskByPlateQuery(
 /**
  * SC 跨区判定 plate_home_city CASE（legacy 字面量结构保留，值已修正）。
  *
+ * ⚙️ 现仅作「branchCode 未登记 / 缺省（全国合并视图）」的字节安全兜底——SC 生产路径
+ * （branchCode='SC'）已改走 JOIN PlateRegionMap（BACKLOG 2026-07-07-claude-f23ffc，
+ * duckdb 直查真实理赔逐记录对账 is_cross_region 零差异），消除本硬编码与维表的漂移风险。
+ *
  * 🔧 与 SC_PLATE_CITY_CASE 同源同缺陷，已一并修复（详见 SC_PLATE_CITY_CASE 上方注释，
  * BACKLOG 2026-07-07-claude-d3ef27）：H/J/K/L/M/R/S/T/Z 九个前缀（区划码+城市名整体
  * 一对）按权威值域重新归位到正确前缀键；补齐此前完全缺失的「川G→510100成都市」。
@@ -443,9 +477,11 @@ const SC_PLATE_HOME_CITY_CASE = `CASE
 /**
  * 生成地理风险对比（出险地 vs 车牌归属地）查询。
  *
- * @param branchCode 部署省。SC/未知/缺省 → 沿用硬编码 CASE（结构保留，映射值已按
- *   权威值域修正，见 SC_PLATE_HOME_CITY_CASE 注释）；已登记的其他省（如 SX）→ JOIN
- *   PlateRegionMap 派生，JOIN 不到（未知前缀）与 #939 语义一致，归非跨区。
+ * @param branchCode 部署省。已在 PLATE_CROSS_REGION_PROVINCES_BY_BRANCH 登记的省（SC/SX）→
+ *   JOIN PlateRegionMap 派生 plate_home_city；SC 仅纳入「四川」本省以保留渝牌非跨区口径，
+ *   省级兜底（'%省'）与未知前缀均归非跨区，与旧硬编码 SC_PLATE_HOME_CITY_CASE 逐记录零差异
+ *   （duckdb 直查真实理赔对账，BACKLOG 2026-07-07-claude-f23ffc）。未登记 / 缺省（全国合并
+ *   视图）→ 回落硬编码 SC_PLATE_HOME_CITY_CASE 兜底，JOIN 不到（未知前缀）与 #939 语义一致。
  */
 export function generateGeoComparisonQuery(
   filters: ClaimsDetailFilters,
@@ -454,7 +490,7 @@ export function generateGeoComparisonQuery(
 ): string {
   const where = buildWhere(filters);
   const policyWhere = buildPolicyWhere(filters);
-  const includedProvinces = branchCode && branchCode !== 'SC' ? PLATE_GEO_PROVINCES_BY_BRANCH[branchCode] : undefined;
+  const includedProvinces = branchCode ? PLATE_CROSS_REGION_PROVINCES_BY_BRANCH[branchCode] : undefined;
 
   if (includedProvinces) {
     const provinceList = includedProvinces.map((v) => `'${escapeSqlValue(v)}'`).join(', ');
@@ -466,7 +502,9 @@ export function generateGeoComparisonQuery(
         -- 与 PlateRegionMap.city（如 成都市）同格式，可直接比较（duckdb 直查验证过）。
         regexp_replace(c.accident_city, '^[0-9]+', '') AS accident_city_norm,
         -- JOIN 不到（未知前缀）→ NULL，与 #939 语义一致：视为与保单归属一致，归非跨区。
-        prm.city AS plate_home_city,
+        -- 省级兜底前缀（川I/川N…→四川省）同样归非跨区，逐字对齐硬编码 SC_PLATE_HOME_CITY_CASE
+        -- 的 ELSE NULL（duckdb 直查真实理赔逐记录对账，is_cross_region 零差异）；SX 无此类行 → no-op。
+        CASE WHEN prm.city LIKE '%省' THEN NULL ELSE prm.city END AS plate_home_city,
         c.reserve_amount,
         c.is_bodily_injury
       FROM ClaimsDetail c
