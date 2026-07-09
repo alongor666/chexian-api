@@ -3,7 +3,19 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // @ts-expect-error — 纯 JS 模块，无类型声明（仅在 ETL 内部使用）
-import { BRANCH_CODE_RE, readBranchOrgUnits } from '../数据管理/lib/period-trend-orgs.mjs';
+import {
+  BRANCH_CODE_RE,
+  readBranchOrgUnits,
+  skillSupportsOrgFlag,
+  listBranchOrgMappingCodes,
+  planProvinceMirror,
+} from '../数据管理/lib/period-trend-orgs.mjs';
+import { BRANCH_ORGANIZATIONS } from '../src/shared/config/organizations';
+import { ORG_GROUPS_BY_BRANCH } from '../src/shared/config/org-groups';
+import { PRESET_USERS } from '../server/src/config/preset-users.js';
+
+/** 真仓 config 目录（对账用，非 tmp fixture；vitest 以仓库根为 cwd，同 customer-flow-etl-contract） */
+const REAL_CONFIG_DIR = join(process.cwd(), '数据管理', 'config');
 
 /** B004 机构级报告的机构清单读取 — SSOT = config/branch-org-mapping/<branch>.json units */
 describe('readBranchOrgUnits', () => {
@@ -67,5 +79,130 @@ describe('BRANCH_CODE_RE', () => {
     expect(BRANCH_CODE_RE.test('SX')).toBe(true);
     expect(BRANCH_CODE_RE.test('sc')).toBe(false);
     expect(BRANCH_CODE_RE.test('SCX')).toBe(false);
+  });
+});
+
+/** B346 治理：skill --org 能力预检（版本落后时 fail-loud，不再逐机构静默失败） */
+describe('skillSupportsOrgFlag', () => {
+  it('argparse --help 含 --org（v2.3.0+ 各常见排版）→ true', () => {
+    expect(skillSupportsOrgFlag('usage: cli.py [--view V] [--org ORG] [--branch BRANCH]')).toBe(true);
+    expect(skillSupportsOrgFlag('options:\n  --org ORG        机构过滤\n  --branch BRANCH')).toBe(true);
+  });
+
+  it('无 --org（旧版 skill）→ false', () => {
+    expect(skillSupportsOrgFlag('usage: cli.py [--view V] [--project-root DIR]')).toBe(false);
+    // 相似但不同的 flag 不得误判
+    expect(skillSupportsOrgFlag('  --organization X\n  --org-x Y')).toBe(false);
+  });
+
+  it('探测失败（空输出 / 非字符串）→ false（fail-closed）', () => {
+    expect(skillSupportsOrgFlag('')).toBe(false);
+    expect(skillSupportsOrgFlag(undefined)).toBe(false);
+    expect(skillSupportsOrgFlag(null)).toBe(false);
+  });
+});
+
+/** B346 治理：省份枚举数据驱动（新省 = 落一份 <branch>.json，禁硬编码 SC/SX） */
+describe('listBranchOrgMappingCodes', () => {
+  let configDir: string;
+
+  beforeEach(() => {
+    configDir = mkdtempSync(join(tmpdir(), 'pt-codes-'));
+    mkdirSync(join(configDir, 'branch-org-mapping'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it('仅识别 <两位大写>.json，排序返回', () => {
+    for (const f of ['SX.json', 'SC.json', 'readme.md', 'sc.json', 'SCX.json', 'GD.json']) {
+      writeFileSync(join(configDir, 'branch-org-mapping', f), '{}', 'utf-8');
+    }
+    expect(listBranchOrgMappingCodes(configDir)).toEqual(['GD', 'SC', 'SX']);
+  });
+
+  it('目录不存在 → []', () => {
+    expect(listBranchOrgMappingCodes(join(configDir, 'nope'))).toEqual([]);
+  });
+});
+
+/** B346 治理：省级产物镜像到 branches/<部署省>/ 的选组逻辑 */
+describe('planProvinceMirror', () => {
+  it('取最新 cutoff 的一组文件（含多视图），忽略非报告文件', () => {
+    expect(
+      planProvinceMirror([
+        '2026-07-06-dashboard.html',
+        '2026-07-06-narrative.html',
+        '2026-06-29-dashboard.html',
+        'manifest.json',
+        'orgs',
+        'branches',
+      ])
+    ).toEqual({
+      date: '2026-07-06',
+      files: ['2026-07-06-dashboard.html', '2026-07-06-narrative.html'],
+    });
+  });
+
+  it('裸日期文件名（旧版 <cutoff>.html）也识别', () => {
+    expect(planProvinceMirror(['2026-07-06.html'])).toEqual({
+      date: '2026-07-06',
+      files: ['2026-07-06.html'],
+    });
+  });
+
+  it('无匹配 → null', () => {
+    expect(planProvinceMirror([])).toBeNull();
+    expect(planProvinceMirror(['manifest.json'])).toBeNull();
+  });
+});
+
+/**
+ * 真仓 SSOT 对账（山西 SX / 四川 SC 双省，禁硬编码漂移）：
+ * 机构清单 JSON（生成端 SSOT）↔ ORG_GROUPS_BY_BRANCH（分组权威定义）
+ * ↔ BRANCH_ORGANIZATIONS（权限侧机构注册表）↔ PRESET_USERS（预置账号）。
+ * 任一方增删机构/省份而未同步，此处变红。
+ */
+describe('真仓对账：branch-org-mapping ↔ 注册表 ↔ 预置账号', () => {
+  const registeredBranches = Object.keys(BRANCH_ORGANIZATIONS);
+
+  it('每个已注册省份都有 branch-org-mapping/<省>.json（机构级报告生成覆盖所有省）', () => {
+    const codes = listBranchOrgMappingCodes(REAL_CONFIG_DIR);
+    for (const b of registeredBranches) {
+      expect(codes, `缺 数据管理/config/branch-org-mapping/${b}.json`).toContain(b);
+    }
+  });
+
+  it('各省 units ≡ ORG_GROUPS_BY_BRANCH 同城∪异地（分组权威定义零漂移）', () => {
+    for (const b of registeredBranches) {
+      const units = readBranchOrgUnits(REAL_CONFIG_DIR, b) as string[];
+      const groups = ORG_GROUPS_BY_BRANCH[b];
+      expect(groups, `ORG_GROUPS_BY_BRANCH 缺省份 ${b}`).toBeDefined();
+      expect([...units].sort(), `省 ${b} units 与分组定义不一致`).toEqual(
+        [...groups.SAME_CITY, ...groups.REMOTE].sort()
+      );
+    }
+  });
+
+  it('权限侧机构注册表 ⊆ units（每个可开账号的机构都有报告生成单元）', () => {
+    for (const b of registeredBranches) {
+      const units = new Set(readBranchOrgUnits(REAL_CONFIG_DIR, b) as string[]);
+      for (const org of BRANCH_ORGANIZATIONS[b]) {
+        expect(units.has(org), `省 ${b} 机构「${org}」不在 units（该机构账号将永无机构级报告）`).toBe(true);
+      }
+    }
+  });
+
+  it('每个预置 org_user 的 organization ∈ 本省 units（账号必有对应机构级报告目录）', () => {
+    const orgUsers = Object.values(PRESET_USERS).filter((u) => u.role === 'org_user');
+    expect(orgUsers.length).toBeGreaterThan(0);
+    for (const u of orgUsers) {
+      expect(u.branchCode, `org_user ${u.username} 缺 branchCode`).toMatch(/^[A-Z]{2}$/);
+      const units = readBranchOrgUnits(REAL_CONFIG_DIR, u.branchCode as string) as string[];
+      expect(units, `${u.username}（${u.branchCode}/${u.organization}）不在机构清单`).toContain(
+        u.organization
+      );
+    }
   });
 });

@@ -264,6 +264,26 @@ export function getReportsDir(): string {
   return path.resolve(getDataDir(), 'reports');
 }
 
+/**
+ * 静态报告根目录候选（B346 门户路由 /api/reports/portal/* 的取数源）。
+ * - 候选 0：本地开发 `<repo>/public/reports`（diagnose-* skill 产物落此，Vite dev 同源）。
+ * - 候选 1：VPS 运行时 `/var/www/chexian/frontend/dist/reports`（sync-vps 把 public/reports
+ *   推到 frontendDist/reports 供 Nginx 静态托管；SERVER_ROOT=/var/www/chexian/server，
+ *   故相对定位 `../frontend/dist/reports`，与 getCandidateDataDirs 同一「本地优先、VPS 回退」约定）。
+ */
+export function getStaticReportsRootDirs(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../public/reports'),
+    path.resolve(SERVER_ROOT, '../frontend/dist/reports'),
+  ];
+}
+
+/** 静态报告根目录：首个存在的候选；均不存在 → 候选 0（调用方 existsSync 兜 404）。 */
+export function getStaticReportsRoot(): string {
+  const candidates = getStaticReportsRootDirs();
+  return candidates.find((d) => existsSync(d)) ?? candidates[0];
+}
+
 export function getSalesmanMappingPaths(): string[] {
   const warehousePath = path.resolve(
     SERVER_ROOT,

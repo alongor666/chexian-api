@@ -24,6 +24,9 @@ import {
   assertStaticReportAccess,
   parseStaticReportOwner,
   shouldEnforceStaticReportPolicy,
+  resolvePortalScope,
+  portalCandidateDirs,
+  validatePortalFile,
 } from '../reports.js';
 import { UserRole } from '../../middleware/permission.js';
 import { AppError } from '../../middleware/error.js';
@@ -494,5 +497,157 @@ describe('assertStaticReportAccess: 访问矩阵', () => {
       assertStaticReportAccess(makeReq({ role: UserRole.TELEMARKETING_USER }), PROVINCE_URI)
     );
     expectThrows403(() => assertStaticReportAccess(makeReq(undefined), PROVINCE_URI));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// B346 彻底治理：门户路由（/api/reports/portal/:slug/:file）——同一 URL 随用户
+// 服务端按登录身份选文件，org_user 无任何参数可指到他机构路径（无侧信道）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('resolvePortalScope: 门户可见范围（服务端派生，客户端不可控）', () => {
+  it('branch_admin 无 branchCode（系统级超管）→ branch=null + fullEntitlement', () => {
+    expect(resolvePortalScope(makeReq({ role: UserRole.BRANCH_ADMIN }))).toEqual({
+      kind: 'branch',
+      branch: null,
+      fullEntitlement: true,
+    });
+  });
+
+  it('单省 branch_admin（如 sxAdmin：branchCode=SX、无 visibleBranches）→ 本省 scope、非全国', () => {
+    expect(
+      resolvePortalScope(makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: 'SX' }))
+    ).toEqual({ kind: 'branch', branch: 'SX', fullEntitlement: false });
+  });
+
+  it('全国超管（visibleBranches 非空）→ fullEntitlement', () => {
+    expect(
+      resolvePortalScope(
+        makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: 'SC', visibleBranches: ['SC', 'SX'] })
+      )
+    ).toEqual({ kind: 'branch', branch: 'SC', fullEntitlement: true });
+  });
+
+  it('branch_admin branchCode 存在但格式非法 → 403（fail-closed）', () => {
+    for (const bad of ['sc', 'SCX', 'S1']) {
+      expectThrows403(() =>
+        resolvePortalScope(makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: bad }))
+      );
+    }
+  });
+
+  it('org_user（organization + branchCode 齐全）→ 本机构 scope', () => {
+    expect(
+      resolvePortalScope(
+        makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: 'SC' })
+      )
+    ).toEqual({ kind: 'org', branch: 'SC', org: '乐山' });
+  });
+
+  it('org_user 缺 organization / 缺 branchCode → 403（fail-closed）', () => {
+    expectThrows403(() =>
+      resolvePortalScope(makeReq({ role: UserRole.ORG_USER, branchCode: 'SC' }))
+    );
+    expectThrows403(() =>
+      resolvePortalScope(makeReq({ role: UserRole.ORG_USER, organization: '乐山' }))
+    );
+  });
+
+  it('org_user branchCode 非 ^[A-Z]{2}$ → 403', () => {
+    for (const bad of ['sc', 'S', 'SCX', 'S1', '..']) {
+      expectThrows403(() =>
+        resolvePortalScope(
+          makeReq({ role: UserRole.ORG_USER, organization: '乐山', branchCode: bad })
+        )
+      );
+    }
+  });
+
+  it('org_user organization 含路径字符（/ \\ .. null byte）→ 403', () => {
+    for (const bad of ['a/b', 'a\\b', '..', '天府..', 'x\x00y']) {
+      expectThrows403(() =>
+        resolvePortalScope(
+          makeReq({ role: UserRole.ORG_USER, organization: bad, branchCode: 'SC' })
+        )
+      );
+    }
+  });
+
+  it('telemarketing / 未知角色 / 未认证 → 403', () => {
+    expectThrows403(() => resolvePortalScope(makeReq({ role: UserRole.TELEMARKETING_USER })));
+    expectThrows403(() => resolvePortalScope(makeReq({ role: 'hacker' })));
+    expectThrows403(() => resolvePortalScope(makeReq(undefined)));
+  });
+});
+
+describe('validatePortalFile: 门户文件名校验', () => {
+  it('manifest.json / *.html / *.htm → 放行', () => {
+    expect(validatePortalFile('manifest.json')).toBe('manifest.json');
+    expect(validatePortalFile('2026-07-06-dashboard.html')).toBe('2026-07-06-dashboard.html');
+    expect(validatePortalFile('2026-07-06.htm')).toBe('2026-07-06.htm');
+  });
+
+  it('非 html/manifest 后缀 → 400', () => {
+    for (const bad of ['foo.txt', 'foo.json', 'manifest.json.bak', 'x.html.exe']) {
+      try {
+        validatePortalFile(bad);
+        throw new Error(`期望 ${bad} 抛出 AppError(400)`);
+      } catch (e) {
+        expect(e).toBeInstanceOf(AppError);
+        expect((e as AppError).statusCode).toBe(400);
+      }
+    }
+  });
+
+  it('路径遍历 / 分隔符 / 编码变体 → 拒绝（sanitizeFilename 同源防线）', () => {
+    for (const bad of ['../x.html', 'a/b.html', 'a\\b.html', '%2e%2e%2fx.html', '.hidden.html']) {
+      expect(() => validatePortalFile(bad)).toThrow(AppError);
+    }
+  });
+});
+
+describe('portalCandidateDirs: 门户取数候选（多省，禁硬编码省份）', () => {
+  const ROOT = '/srv/reports';
+  const SLUG = 'diagnose-period-trend';
+  const dirs = (scope: Parameters<typeof portalCandidateDirs>[0], deploy = 'SC') =>
+    portalCandidateDirs(scope, SLUG, ROOT, deploy);
+
+  it('org_user → 唯一候选 orgs/<branch>/<org>/（绝无根目录回退）', () => {
+    expect(dirs({ kind: 'org', branch: 'SX', org: '太原一部' })).toEqual([
+      `${ROOT}/${SLUG}/orgs/SX/太原一部`,
+    ]);
+  });
+
+  it('部署省 branch_admin（SC，非全国）→ branches/SC/ 优先，根目录 legacy 兜底', () => {
+    expect(dirs({ kind: 'branch', branch: 'SC', fullEntitlement: false })).toEqual([
+      `${ROOT}/${SLUG}/branches/SC`,
+      `${ROOT}/${SLUG}`,
+    ]);
+  });
+
+  it('单省他省 branch_admin（sxAdmin，部署省 SC）→ 仅 branches/SX/，不得回退根目录（四川数据不泄）', () => {
+    expect(dirs({ kind: 'branch', branch: 'SX', fullEntitlement: false })).toEqual([
+      `${ROOT}/${SLUG}/branches/SX`,
+    ]);
+  });
+
+  it('全国超管（fullEntitlement）→ 本省优先 + 根目录兜底；系统级超管（branch=null）→ 仅根目录', () => {
+    expect(dirs({ kind: 'branch', branch: 'SX', fullEntitlement: true })).toEqual([
+      `${ROOT}/${SLUG}/branches/SX`,
+      `${ROOT}/${SLUG}`,
+    ]);
+    expect(dirs({ kind: 'branch', branch: null, fullEntitlement: true })).toEqual([
+      `${ROOT}/${SLUG}`,
+    ]);
+  });
+
+  it('部署省随 env 变化（SX 部署时 SX 管理员可回退根目录）——语义数据驱动，非写死 SC', () => {
+    expect(dirs({ kind: 'branch', branch: 'SX', fullEntitlement: false }, 'SX')).toEqual([
+      `${ROOT}/${SLUG}/branches/SX`,
+      `${ROOT}/${SLUG}`,
+    ]);
+    expect(dirs({ kind: 'branch', branch: 'SC', fullEntitlement: false }, 'SX')).toEqual([
+      `${ROOT}/${SLUG}/branches/SC`,
+    ]);
   });
 });

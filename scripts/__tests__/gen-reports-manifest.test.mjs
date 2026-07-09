@@ -160,6 +160,29 @@ describe('generateReportsManifests: 机构级子目录（B346）', () => {
     expect(s.orgs).toHaveLength(1);
   });
 
+  it('分公司级 branches/<branch>/ 目录 → 独立 manifest（scope 只带 branch，B346 门户按省取数）', () => {
+    const root = makeRoot();
+    const d = slugDir(root);
+    const scBranchDir = join(d, 'branches', 'SC');
+    const sxBranchDir = join(d, 'branches', 'SX');
+    const badBranchDir = join(d, 'branches', 'sc1');
+    mkdirSync(scBranchDir, { recursive: true });
+    mkdirSync(sxBranchDir, { recursive: true });
+    mkdirSync(badBranchDir, { recursive: true });
+    touch(d, '2026-07-06-dashboard.html');
+    touch(scBranchDir, '2026-07-06-dashboard.html');
+    touch(sxBranchDir, '2026-07-06-dashboard.html');
+    touch(badBranchDir, '2026-07-06-dashboard.html');
+
+    const summaries = generateReportsManifests(root);
+    const s = summaries.find((x) => x.slug === 'diagnose-period-trend');
+    expect(s.branches).toHaveLength(2); // 非 ^[A-Z]{2}$ 的 branch 段跳过
+    const m = JSON.parse(readFileSync(join(scBranchDir, 'manifest.json'), 'utf8'));
+    expect(m.scope).toEqual({ branch: 'SC' });
+    expect(m.latest).toBe('2026-07-06');
+    expect(existsSync(join(badBranchDir, 'manifest.json'))).toBe(false);
+  });
+
   it('机构 manifest 与既有记录合并（append-only 语义与省级一致）', () => {
     const root = makeRoot();
     const orgDir = join(slugDir(root), 'orgs', 'SC', '乐山');

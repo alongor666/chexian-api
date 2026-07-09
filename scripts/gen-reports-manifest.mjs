@@ -149,6 +149,16 @@ export function generateReportsManifests(reportsRoot = DEFAULT_REPORTS_ROOT) {
 
     const provinceResult = writeDirManifest(slugDir, slug, null);
 
+    // 分公司级 manifest：branches/<branch>/（daily.mjs 把省级产物镜像到部署省子目录，
+    // 门户按 branch_admin 的省份取数；branch 段 schema 与机构级一致）
+    const branchSummaries = [];
+    for (const branch of listSubdirs(join(slugDir, 'branches'))) {
+      if (!/^[A-Z]{2}$/.test(branch)) continue;
+      const branchDir = join(slugDir, 'branches', branch);
+      const r = writeDirManifest(branchDir, slug, { branch });
+      if (!r.skipped) branchSummaries.push({ branch, latest: r.latest, count: r.count });
+    }
+
     // 机构级 manifest：orgs/<branch>/<org>/（branch 段非 ^[A-Z]{2}$ 的目录跳过，
     // 与 server/src/routes/reports.ts parseStaticReportOwner 的授权 schema 对齐）
     const orgSummaries = [];
@@ -166,6 +176,7 @@ export function generateReportsManifests(reportsRoot = DEFAULT_REPORTS_ROOT) {
       latest: provinceResult.latest,
       count: provinceResult.count,
       ...(provinceResult.skipped ? { skipped: true } : {}),
+      ...(branchSummaries.length > 0 ? { branches: branchSummaries } : {}),
       ...(orgSummaries.length > 0 ? { orgs: orgSummaries } : {}),
     });
   }
@@ -185,6 +196,9 @@ if (isMain || process.argv[1]?.endsWith('gen-reports-manifest.mjs')) {
         console.log(`[reports-manifest] ${s.slug}: 本地无省级报告文件，跳过（保留既有 manifest）`);
       } else {
         console.log(`[reports-manifest] ${s.slug}: ${s.count} 期，最新 ${s.latest ?? '（无）'}`);
+      }
+      for (const b of s.branches ?? []) {
+        console.log(`[reports-manifest]   └ branches/${b.branch}: ${b.count} 期，最新 ${b.latest ?? '（无）'}`);
       }
       for (const o of s.orgs ?? []) {
         console.log(`[reports-manifest]   └ ${o.branch}/${o.org}: ${o.count} 期，最新 ${o.latest ?? '（无）'}`);
