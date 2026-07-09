@@ -1347,3 +1347,4 @@
 {"uid":"2026-07-07-claude-cfaf91","kind":"status","ts":"2026-07-09","actor":"@claude","status":"IN_PROGRESS","evidence":"","at":"2026-07-09T06:54:00.813Z","eid":"942b104a"}
 {"uid":"2026-07-07-claude-cfaf91","kind":"note","ts":"2026-07-09","actor":"@claude","text":"实现完成，PR #1002（ready，未 auto-merge）：slug 抽到省份化 SSOT org-slugs.json；CI Governance+Production Gate 双绿；合并后置 DONE。","at":"2026-07-09T07:06:34.665Z","eid":"26ac6dc5"}
 {"uid":"2026-07-03-claude-131dd8","kind":"status","ts":"2026-07-09","actor":"@claude","status":"IN_PROGRESS","evidence":"","at":"2026-07-09T06:45:55.483Z","eid":"a58e5fe2"}
+{"uid":"2026-07-03-claude-131dd8","kind":"status","ts":"2026-07-09","actor":"@claude","status":"DONE","evidence":"PR #1001 merged (squash e2e0a74c) · Production Gate run 29001144836 Integration Tests (DuckDB native binding) step 28/28 全绿 · production-gate.yml 新增 step 已在 main","at":"2026-07-09T08:03:59.745Z","eid":"1dfd3ffa"}
