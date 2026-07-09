@@ -266,7 +266,10 @@ def main():
             b.expiry_month,
             b.expected_expiry_date,
             b.org_level_3,
-            COALESCE(s.team, '直管') AS team_name,
+            -- CAST team→VARCHAR：SX 业务员维表 team 列可能全空被推断为 INTEGER，
+            -- 直接 COALESCE(int, '直管') 会让 DuckDB 把中文默认值强转 INT32 而崩溃。
+            -- 显式 CAST 钉死为 VARCHAR，对 SC（已是 VARCHAR）为恒等，对 SX 空列安全。
+            COALESCE(CAST(s.team AS VARCHAR), '直管') AS team_name,
             b.salesman_name,
             b.customer_category,
             b.coverage_combination,
