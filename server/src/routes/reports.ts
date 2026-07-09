@@ -26,7 +26,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { authMiddleware } from '../middleware/auth.js';
-import { UserRole } from '../middleware/permission.js';
+import { UserRole, isValidBranchCode } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import {
   sanitizeFilename,
@@ -373,6 +373,17 @@ export type PortalScope =
  *   - fullEntitlement = 全国超管（visibleBranches 非空，不变量保证覆盖所有已注册省）
  *     或系统级超管（无 branchCode）——只有他们可回退读根目录 legacy 省级报告
  *
+ * 全国超管切省（2026-07-09-claude-9692f9，B346 续作）：UI 切省信号是 query 参数
+ * `?targetBranch=XX`（同一份信号，与 /api/query 的 permissionMiddleware 同源）。仅全国
+ * 超管（可切省）消费它，并**精确 mirror** permission.ts 白名单逻辑（§262-296）：
+ *   - targetBranch 用户可控，**绝不信任请求原值**——必须 ∈ 服务端 token 的 visibleBranches
+ *     （经 isValidBranchCode 过滤）才采用，否则忽略、回落本人默认省，严防越权读他省报告；
+ *   - 采用后 scope.branch = targetBranch，且 fullEntitlement 置 false——切他省绝不回退读根目录
+ *     legacy（部署省数据），仅当切到部署省时由 portalCandidateDirs 的 branch===deploymentBranch
+ *     判定放行根目录（否则重蹈"切山西仍看四川"泄漏）；
+ *   - 'ALL'（全国合并视图）门户不适用（门户按目录取单省文件）→ 回落默认省，不落坏路径。
+ * org_user / 单省 branch_admin：忽略 targetBranch（scope 完全由服务端派生，无任何切省口子）。
+ *
  * fail-closed：org_user 缺 organization / branchCode 非 ^[A-Z]{2}$ / org 含路径字符
  * → 403；branch_admin 的 branchCode 存在但格式非法 → 403；telemarketing / 未知角色
  * → 403（assertReportRoleAllowed 前置）。
@@ -381,21 +392,34 @@ export function resolvePortalScope(req: Request): PortalScope {
   const role = req.user?.role as UserRole | undefined;
   if (role === UserRole.BRANCH_ADMIN) {
     const rawBranch = req.user?.branchCode;
-    if (rawBranch !== undefined && !/^[A-Z]{2}$/.test(rawBranch)) {
+    if (rawBranch !== undefined && !isValidBranchCode(rawBranch)) {
       throw new AppError(403, '无权访问报告'); // 坏 branchCode fail-closed
     }
     const visible = req.user?.visibleBranches;
-    const fullEntitlement =
-      (Array.isArray(visible) && visible.length > 0) || rawBranch === undefined;
+    // 可切省（全国超管）：与 permission.ts canSwitchBranch 同源（role 已限定 BRANCH_ADMIN）。
+    const canSwitchBranch = Array.isArray(visible) && visible.length > 0;
+    const fullEntitlement = canSwitchBranch || rawBranch === undefined;
+
+    if (canSwitchBranch) {
+      // 仅保留形态合法的可见省（每个值过 ^[A-Z]{2}$ 才可能进路径），再比对请求原值。
+      const allowedBranches = (visible as string[]).filter(isValidBranchCode);
+      const requested =
+        typeof req.query?.targetBranch === 'string' ? req.query.targetBranch : undefined;
+      // requested 必须命中白名单才采用；'ALL' / 无参 / 非法 / 未授权省 → 回落默认省（保守，绝不越权）。
+      if (requested && requested !== 'ALL' && allowedBranches.includes(requested)) {
+        return { kind: 'branch', branch: requested, fullEntitlement: false };
+      }
+    }
     return { kind: 'branch', branch: rawBranch ?? null, fullEntitlement };
   }
   if (role === UserRole.ORG_USER) {
+    // org_user：scope 完全由服务端派生，忽略 targetBranch（无任何越权他机构/他省口子）。
     const org = req.user?.organization?.trim();
     const branch = req.user?.branchCode;
     if (
       org &&
       branch &&
-      /^[A-Z]{2}$/.test(branch) &&
+      isValidBranchCode(branch) &&
       !/[/\\\x00]/.test(org) &&
       !org.includes('..')
     ) {

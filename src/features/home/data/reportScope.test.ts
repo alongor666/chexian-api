@@ -54,3 +54,31 @@ describe('门户报告 URL（同一 URL 随用户，服务端解析范围）', (
     )
   })
 })
+
+describe('门户 URL 追加切省 targetBranch（全国超管切省 · 2026-07-09-claude-9692f9）', () => {
+  const slug = 'diagnose-period-trend'
+
+  it('传入 targetBranch → 追加 ?targetBranch=（门户按此选省，服务端仍按 token 白名单校验）', () => {
+    expect(getManifestUrl(slug, 'SX')).toBe(
+      '/api/reports/portal/diagnose-period-trend/manifest.json?targetBranch=SX'
+    )
+    expect(getReportUrl(slug, '2026-07-06-dashboard.html', 'SX')).toBe(
+      '/api/reports/portal/diagnose-period-trend/2026-07-06-dashboard.html?targetBranch=SX'
+    )
+  })
+
+  it('targetBranch 为 null / undefined（普通单省用户）→ 不追加（零行为变化·天然灰度）', () => {
+    expect(getManifestUrl(slug, null)).toBe(
+      '/api/reports/portal/diagnose-period-trend/manifest.json'
+    )
+    expect(getReportUrl(slug, 'x.html', undefined)).toBe(
+      '/api/reports/portal/diagnose-period-trend/x.html'
+    )
+  })
+
+  it('targetBranch 含特殊字符 → encodeURIComponent 编码（防 URL 注入）', () => {
+    expect(getManifestUrl(slug, 'A B')).toBe(
+      '/api/reports/portal/diagnose-period-trend/manifest.json?targetBranch=A%20B'
+    )
+  })
+})
