@@ -51,35 +51,34 @@ from sync_renewal_v2 import (  # noqa: E402
 )
 
 
-ORG_SLUGS = {
-    "高新": "gaoxin",
-    "自贡": "zigong",
-    "青羊": "qingyang",
-    "宜宾": "yibin",
-    "天府": "tianfu",
-    "达州": "dazhou",
-    "德阳": "deyang",
-    "武侯": "wuhou",
-    "新都": "xindu",
-    "泸州": "luzhou",
-    "乐山": "leshan",
-    "资阳": "ziyang",
-}
+BRANCH_CODE = "SC"  # 本脚本同步「四川」续保追踪表；slug 映射见 org-slugs.json 同名 branch_code 键
+ORG_SLUG_CONFIG = HERE / "org-slugs.json"
 
-ORG_ENVS = {
-    "高新": "GAOXIN",
-    "自贡": "ZIGONG",
-    "青羊": "QINGYANG",
-    "宜宾": "YIBIN",
-    "天府": "TIANFU",
-    "达州": "DAZHOU",
-    "德阳": "DEYANG",
-    "武侯": "WUHOU",
-    "新都": "XINDU",
-    "泸州": "LUZHOU",
-    "乐山": "LESHAN",
-    "资阳": "ZIYANG",
-}
+
+def _load_org_slugs(branch_code: str) -> dict[str, str]:
+    """从省份化 SSOT（org-slugs.json）读取指定省份的「机构中文名→拼音 slug」映射。
+
+    多省硬编码债治理（BACKLOG 2026-07-07-claude-cfaf91）：slug 曾以两份平行 dict
+    硬编码在本文件，山西 / 新省份上线时零复用。抽到数据后，新省份只需在 JSON 加一个
+    branch_code 顶层键，脚本零改动。fail-closed：配置缺失 / 省份无映射 / 空表一律报错
+    中止，禁止静默回落空映射（空映射会让每个机构都命中「未配置机构」误报，掩盖真因）。
+    """
+    if not ORG_SLUG_CONFIG.exists():
+        raise RuntimeError(f"缺少机构 slug 配置文件：{ORG_SLUG_CONFIG}")
+    data = json.loads(ORG_SLUG_CONFIG.read_text(encoding="utf-8"))
+    slugs = data.get(branch_code)
+    if not slugs:
+        raise RuntimeError(
+            f"org-slugs.json 缺少省份 {branch_code!r} 的机构 slug 映射（fail-closed，禁止静默空表）"
+        )
+    return dict(slugs)
+
+
+# 机构中文名 → 拼音 slug（续保实例 YAML 文件名用，如 sichuan_gaoxin_2025_may_jul.yaml）
+ORG_SLUGS = _load_org_slugs(BRANCH_CODE)
+# 机构中文名 → webhook 环境变量后缀（WECOM_SMARTSHEET_WEBHOOK_<后缀>）。恒等于 slug 的
+# 大写形态，故由 slug 单一来源派生，消除两份 dict 手工同步的漂移风险（不变量由单测锁死）。
+ORG_ENVS = {org: slug.upper() for org, slug in ORG_SLUGS.items()}
 
 
 def parse_args() -> argparse.Namespace:
