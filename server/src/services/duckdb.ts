@@ -10,7 +10,7 @@ import { initDuckDBTables } from './duckdb-init-tables.js';
 import { convertBigIntToNumber, SLOW_QUERY_THRESHOLD_MS } from './duckdb-type-converter.js';
 import { loadMultipleParquet, computeParquetFingerprint } from './duckdb-parquet-loader.js';
 import { setDataVersion, bumpDataVersionFromTimestamp } from './data-version.js';
-import { classifyDuckDbError } from './duckdb-error-classifier.js';
+import { classifyDuckDbError, isDuckDbOomMessage, markDuckDbOom } from './duckdb-error-classifier.js';
 
 /** 构造参数（省略字段从 databaseConfig / DUCKDB_INIT_OPTIONS 回退；测试传 `{ path: ':memory:' }`） */
 export interface DuckDBServiceConfig {
@@ -132,13 +132,21 @@ export class DuckDBService implements DuckDBQueryable {
       const ctx = getRequestContext();
       const errorId = ctx?.requestId ?? Math.random().toString(36).slice(2, 10);
       console.error(`[DuckDB] [${errorId}] Query error (${duration}ms):`, message);
+      // OOM 结构化标记：脱敏后消息里没有 OOM 字样，duckdb-cube 的降级判定
+      // （isOutOfMemoryError）只能靠此标记识别——修复「生产脱敏杀死 OOM 降级」死代码
+      // （哨兵 issue #608，cost 立方体 2026-06-25 起无限重试构建）。
+      const oom = isDuckDbOomMessage(message);
       if (process.env.NODE_ENV === 'production') {
         // 生产仍屏蔽原始消息（防泄露），但叠加白名单安全分类，让 cx sql 用户可自助 debug。
         // classifyDuckDbError 只回传固定分类 + 用户自己引用的 schema 标识符，绝不带原始消息/数据值/完整 SQL。
         const category = classifyDuckDbError(message);
-        throw new AppError(400, category ? `查询执行失败 [${errorId}]：${category}` : `查询执行失败 [${errorId}]`);
+        const appError = new AppError(400, category ? `查询执行失败 [${errorId}]：${category}` : `查询执行失败 [${errorId}]`);
+        if (oom) markDuckDbOom(appError);
+        throw appError;
       }
-      throw new AppError(400, `查询执行失败: ${message}`);
+      const devError = new AppError(400, `查询执行失败: ${message}`);
+      if (oom) markDuckDbOom(devError);
+      throw devError;
     } finally {
       pool.release(conn);
     }

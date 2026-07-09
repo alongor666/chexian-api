@@ -172,7 +172,7 @@ export function renderSummary({ ranAt, dataVersion, healthBody, anomalies, check
   }
   md += `\n`;
 
-  md += `## 影子对账计数（本进程累计，PM2 reload 重置）\n\n`;
+  md += `## 影子对账计数（跨 reload 持久化累计，落盘 server/data/cube-shadow-stats.json；人工清零 = 删文件 + reload）\n\n`;
   if (Object.keys(shadow).length === 0) {
     md += `_暂无路由触发过影子对账。这可能是正常的：影子对账只在请求满足"可服务 + 立方体就绪"时才双跑；进程刚启动 / 流量极低时为空属预期。_\n\n`;
   } else {

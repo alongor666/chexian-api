@@ -171,13 +171,23 @@ export function buildCostCubeSql(hasBranchCode: boolean): [string, string, strin
 /**
  * 跨格保单探针：任一 policy_no 的行在（起保日 或 任一维度列）上取值不唯一即"跨格"。
  * 返回 SQL 的结果列 impure_policies > 0 时立方体必须降级（见文件头等值前提）。
- * NULL 与非 NULL 视为不同取值（COALESCE 哨兵参与 DISTINCT 计数）。
+ * NULL 与非 NULL 视为不同取值（COALESCE 哨兵参与比较）。
+ *
+ * 判定用 MIN(x) <> MAX(x)，与 COUNT(DISTINCT x) > 1 逐组等价（COALESCE 哨兵后
+ * 全部非 NULL）：DISTINCT 计数需要每组每列各维护一个去重哈希集，多省数据翻倍
+ * （SC+SX ≈ 440 万行 × 12 列）后在 4G VPS（1.5GB DuckDB 上限）上构建期 OOM ——
+ * 这是 cost 立方体 2026-06-25 起生产构建持续失败的根因（哨兵 issue #608）；
+ * MIN/MAX 每组每列只保留 2 个标量，内存降一个量级，语义逐组不变。
  */
 export function buildCostCubeProbeSql(hasBranchCode: boolean): string {
   const dims = [
     ...COST_CUBE_DIMENSIONS,
     ...(hasBranchCode ? COST_CUBE_OPTIONAL_DIMENSIONS : []),
   ];
+  const dimVariance = (d: string) => {
+    const v = `COALESCE(CAST(${d} AS VARCHAR), '__NULL__')`;
+    return `OR MIN(${v}) <> MAX(${v})`;
+  };
   return `
     SELECT COUNT(*) AS impure_policies
     FROM (
@@ -185,8 +195,8 @@ export function buildCostCubeProbeSql(hasBranchCode: boolean): string {
       FROM PolicyFact
       WHERE insurance_start_date IS NOT NULL
       GROUP BY policy_no
-      HAVING COUNT(DISTINCT CAST(insurance_start_date AS DATE)) > 1
-        ${dims.map((d) => `OR COUNT(DISTINCT COALESCE(CAST(${d} AS VARCHAR), '__NULL__')) > 1`).join('\n        ')}
+      HAVING MIN(CAST(insurance_start_date AS DATE)) <> MAX(CAST(insurance_start_date AS DATE))
+        ${dims.map(dimVariance).join('\n        ')}
     ) t
   `;
 }
