@@ -1,13 +1,8 @@
-import React, { useState, createContext, useContext, useEffect, useMemo, lazy, Suspense } from 'react';
+import React, { useState, createContext, useContext, useEffect, useMemo, Suspense, type ReactNode } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { SidebarNavigation } from './SidebarNavigation';
 import { TopNavigation } from './TopNavigation';
 import { Watermark } from './Watermark';
-
-// CopilotDrawer 携带 AI 相关重依赖且默认关闭，lazy 加载以剥离出首屏 bundle。
-const CopilotDrawer = lazy(() =>
-  import('../../features/copilot').then((m) => ({ default: m.CopilotDrawer })),
-);
 
 interface SidebarContextValue {
   collapsed: boolean;
@@ -50,7 +45,14 @@ export const useSidebar = () => useContext(SidebarContext);
  * │      │                                              │
  * └──────┴─────────────────────────────────────────────┘
  */
-export const SidebarLayout: React.FC = () => {
+interface SidebarLayoutProps {
+  /** 文件菜单 slot（features/file 的 FileMenu），由 App 注入，避免 layout 反向依赖 features */
+  fileMenu?: ReactNode;
+  /** AI 副驾抽屉 slot（features/copilot 的 CopilotDrawer，lazy），同上依赖倒置注入 */
+  copilot?: ReactNode;
+}
+
+export const SidebarLayout: React.FC<SidebarLayoutProps> = ({ fileMenu, copilot }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const location = useLocation();
@@ -106,7 +108,7 @@ export const SidebarLayout: React.FC = () => {
     <SidebarContext.Provider value={sidebarContextValue}>
       <div className="h-screen overflow-hidden bg-neutral-50 dark:bg-neutral-900 flex flex-col">
         {/* 顶部导航栏 */}
-        <TopNavigation />
+        <TopNavigation fileMenu={fileMenu} />
 
         {/* 主体区域：侧边栏 + 内容，pt-14 为固定顶部导航栏留出空间 */}
         <div className="flex flex-1 overflow-hidden pt-14">
@@ -136,7 +138,7 @@ export const SidebarLayout: React.FC = () => {
           </main>
         </div>
         <Suspense fallback={null}>
-          <CopilotDrawer />
+          {copilot}
         </Suspense>
       </div>
     </SidebarContext.Provider>

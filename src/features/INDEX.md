@@ -8,7 +8,7 @@
 
 - 入口路由：`src/app/App.tsx`（HashRouter，路由 × 权限守卫 × 懒加载）
 - 页面容器：`src/features/pages/*Page.tsx`（筛选 preset + 面板装配）
-- 统一筛选：`src/components/layout/PageFilterPanel.tsx` + `src/features/filters/AdvancedFilterPanel.tsx`
+- 统一筛选：`src/features/filters/PageFilterPanel.tsx` + `src/features/filters/AdvancedFilterPanel.tsx`
 - 数据入口：`src/shared/api/client.ts`（`apiClient.*`，详见 CODE_INDEX.md）
 
 ## 模块清单（按决策五问归位）
@@ -60,11 +60,11 @@
 | 模块 | 职责 | 关键入口 |
 |------|------|---------|
 | `pages/` | 页面容器装配（筛选 preset + 面板 + 锚点骨架） | `PremiumDashboardPage` / `PerformanceAnalysisPage` / `GrowthPage` / `CostPage` / `ReportsPage` / `SpecialtyPage` / `ClaimsDetailPage` / `ComprehensiveAnalysisPage` |
-| `filters/` | 筛选面板（高级筛选/日期口径/页面标题栏） | `AdvancedFilterPanel.tsx` · `FilterLayoutV2.tsx` · `PageHeaderBar.tsx` |
+| `filters/` | 筛选面板（页面容器/高级筛选/日期口径/页面标题栏） | `PageFilterPanel.tsx` · `AdvancedFilterPanel.tsx` · `FilterLayoutV2.tsx` · `PageHeaderBar.tsx` |
 | `auth/` | 登录 + 会话 + 路由权限守卫 | `LoginPage` · `AuthGuard` · `RouteAccessGuard` |
 | `admin/` | 权限管理（分公司管理员专属） | `AccessControlPage.tsx` |
-| `copilot/` | 经营副驾抽屉（预测基线/情景推演） | `CopilotDrawer.tsx`（挂载于 `SidebarLayout`） |
-| `file/` | 文件菜单弹窗（导入/导出/报表模板） | `DataImportModal` / `ExportModal` / `ReportTemplatesModal`（挂载于 `TopNavigation`） |
+| `copilot/` | 经营副驾抽屉（预测基线/情景推演） | `CopilotDrawer.tsx`（经 `copilot` slot 由 App 注入 `SidebarLayout`） |
+| `file/` | 文件菜单弹窗（导入/导出/报表模板） | `FileMenu.tsx` · `DataImportModal` / `ExportModal` / `ReportTemplatesModal`（经 `fileMenu` slot 由 App 注入顶栏） |
 
 ## 数据流（当前 API-only 架构）
 

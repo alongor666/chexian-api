@@ -11,7 +11,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { cn, colorClasses } from '@/shared/styles';
 import { buildFilterParams } from '@/shared/utils/filterParams';
-import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '@/features/filters/PageFilterPanel';
 import { useClaimsDetail } from '../claims-detail/hooks/useClaimsDetail';
 import { PendingClaimsPanel } from '../claims-detail/components/PendingClaimsPanel';
 import { GeoRiskPanel } from '../claims-detail/components/GeoRiskPanel';

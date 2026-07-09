@@ -3029,29 +3029,26 @@ function walkDir(dir, cb) {
 }
 
 // ============================================================
-// 前端分层依赖边界（B330 防回归 · follow-up 2026-06-15-claude-2e017d）
+// 前端分层依赖边界（B330 防回归 · 2026-06-15-claude-2e017d；layout↛features 由 edbd61 补全）
 // ============================================================
 //
-// B330（架构依赖违规修复，PR #641/#642/#643 已修复合并）守的是 ARCHITECTURE.md §2.2
-// 分层：L1 共享层（shared/widgets）不得依赖 L2 特性层（features/*），各 L2 域禁横向互引，
-// 前端禁 import 后端 server/src。已修复但无闸 → 会静默回退（CLAUDE.md「规则必须自动化执行」）。
+// 守 ARCHITECTURE.md §2.2：L1 共享层（shared/widgets/components）不依赖 L2 特性层（features/*），
+// 各 L2 域禁横向互引，前端禁 import 后端 server/src。已修复但无闸 → 静默回退
+// （CLAUDE.md「规则必须自动化执行」）。规则 SSOT：.claude/rules/architecture.md（path-scoped）。
 //
-// 与既有 codex 审查（gate-1）对齐的设计要点：
-//   - 用 TypeScript AST 解析模块说明符，覆盖 import / import type / export...from /
-//     动态 import() / require()，不靠脆弱的 `from '...features...'` 文本正则（漏 export from、
-//     多行 import，且易被别名/相对路径绕过）。
-//   - 别名 @/features、@/、相对路径 ../../features、server/src 归一识别。
-//   - 7 条边界（含 feature→feature 定向 denylist，守 B330 原始 growth→dashboard /
-//     quote-conversion→filters 两处横向违规）。
-//   - 逃生阀 marker 必须带 backlog/PR 引用，裸 marker 无效（防回归后门）。
-// 规则 SSOT 文档：.claude/rules/architecture.md（path-scoped，引用 ARCHITECTURE.md §2.2）。
+// 设计要点（与 codex gate-1/gate-2 对齐）：用 TS AST 解析模块说明符（import / import type /
+// export...from / 动态 import() / require() / 无插值模板串），归一 @/features、相对路径、server/src，
+// 无法靠改写 import 形式绕过；逃生阀 marker 必须带 backlog/PR 引用，裸 marker 无效（防后门）。
+// 8 条边界：依赖倒置（widgets/shared/components↛features）+ 前后端越界（前端三层↛server）+
+// feature→feature 定向 denylist（B330 原始 growth→dashboard / quote-conversion→filters）。
 
 const ARCH_BOUNDARY_RULES = [
   // from = 文件所在层（前缀，POSIX 路径）；to = 禁止解析到的目标层；desc 报错文案
   { from: 'src/widgets/', to: 'features', desc: 'src/widgets 禁依赖 features（依赖倒置）' },
   { from: 'src/shared/', to: 'features', desc: 'src/shared 禁依赖 features（依赖倒置）' },
-  // 前后端越界：全前端（features/shared/widgets）禁实值/类型 import server/src
-  // （codex gate-2 P1：原仅守 features，与 architecture.md「前端禁 server」口径不符 → 收齐三层）
+  // components(layout) ↛ features：业务 Modal/Panel 由上层 slot 注入或迁入所属特性域（edbd61）
+  { from: 'src/components/', to: 'features', desc: 'src/components(layout) 禁依赖 features（依赖倒置）' },
+  // 前后端越界：全前端（features/shared/widgets）禁实值/类型 import server/src（codex gate-2 P1 收齐三层）
   { from: 'src/features/', to: 'server', desc: 'src/features 禁依赖 server/src（前后端越界）' },
   { from: 'src/shared/', to: 'server', desc: 'src/shared 禁依赖 server/src（前后端越界）' },
   { from: 'src/widgets/', to: 'server', desc: 'src/widgets 禁依赖 server/src（前后端越界）' },
@@ -3147,7 +3144,7 @@ export function extractModuleSpecifiers(ts, sourceText, fileName) {
 }
 
 function checkArchLayerBoundaries() {
-  info('检查前端分层依赖边界（B330 防回归：shared/widgets↛features、features↛server、L2 横向）...');
+  info('检查前端分层依赖边界（B330 防回归：shared/widgets/components↛features、features↛server、L2 横向）...');
 
   const require = createRequire(import.meta.url);
   let ts;

@@ -5,3 +5,4 @@
 export { DataImportModal } from './DataImportModal';
 export { ExportModal } from './ExportModal';
 export { ReportTemplatesModal } from './ReportTemplatesModal';
+export { FileMenu } from './FileMenu';

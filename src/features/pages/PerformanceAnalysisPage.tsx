@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useGlobalFilters } from '../../shared/contexts/FilterContext';
-import { PageFilterPanel } from '../../components/layout/PageFilterPanel';
+import { PageFilterPanel } from '../filters/PageFilterPanel';
 import { PerformanceAnalysisPanel, PerformanceHeaderActions } from '../dashboard/PerformanceAnalysisPanel';
 import { PerformanceFocusStrip } from '../dashboard/PerformanceFocusStrip';
 import { QuickFilterBar } from '@/shared/components/QuickFilterBar';

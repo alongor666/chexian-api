@@ -10,7 +10,7 @@ import React, { useMemo, useCallback } from 'react';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { cn, colorClasses } from '@/shared/styles';
 import { buildFilterParams } from '@/shared/utils/filterParams';
-import { PageFilterPanel, FilterQuickActions } from '@/components/layout/PageFilterPanel';
+import { PageFilterPanel, FilterQuickActions } from '@/features/filters/PageFilterPanel';
 import { QuickFilterBar } from '@/shared/components/QuickFilterBar';
 import { deriveQuickFilters, applyQuickFiltersToGlobal, buildFilterLabel } from '@/shared/utils/quickFilterHelpers';
 import { useExpenseDevelopment } from './hooks/useExpenseDevelopment';
