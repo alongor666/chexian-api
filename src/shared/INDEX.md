@@ -35,7 +35,7 @@
 
 ### Contexts
 
-- **`contexts/DataContext.tsx`**：数据加载状态（`isDataLoaded` / `refreshFiles` Promise 级合并）
+- **`contexts/DataContext.tsx`**：数据加载状态。全局 `isDataLoaded` 由 `refreshDataReadiness()` 走**角色无关**的 `/data/metadata`（200=后端已加载数据）派生——不用 `/data/files`（`requireRole(BRANCH_ADMIN)`，org_user 恒 403）避免三级机构用户全站被重定向；`refreshFiles`（Promise 级合并）仅供数据导入页拉文件列表
 - **`contexts/FilterContext.tsx`**：全局筛选状态（跨页面共享，`useGlobalFilters`）
 - **`contexts/PermissionContext.tsx`**：用户权限（分公司管理员/三级机构用户，`usePermission`）
 

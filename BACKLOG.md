@@ -17,13 +17,9 @@
 
 ---
 
-## 📋 活跃任务速查（40 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（39 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
-
-**P0（1 项）**
-
-- 2026-07-09-claude-00954e — 三级机构用户(org_user)登录后除首页外全部功能页打不开——2026-06-04 
 
 **P1（5 项）**
 
@@ -116,6 +112,5 @@
 | 2026-07-08-claude-4210ab | 2026-07-08 | 安全 | @claude | B346 续作·GATED（生成端在仓外）：diagnose-period-trend 按机构产出报告。skill（alongor666-skills 仓 ~/.claude/skills/diagnose-period-trend）当前只… | P1 | IN_PROGRESS | 开发文档/缺口清单.md | 数据管理/daily.mjs | 3 条 note，最新：第二轮（用户指令：不要硬编码，山西/四川及对应账号三级机构都要更新）：机构级生成循环数据驱动遍历 branch-org-mapping/*.json 全部注册省（SC+SX，新省零代码）；省级产物镜像 branches/<部署省>/；门户 … |
 | 2026-07-08-claude-a28f3d | 2026-07-08 | 架构治理/硬编码 | @claude | 后端硬编码专项残留（需契约/业务拍板，未随批次一 2026-07-08-claude-773784 改动）：①/api/query/cost?type=earned-new 保单年度已赚保费 API 契约把年份烧进函数名与响应键（gener… | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts；server/src/routes/query/cost.ts；src/features/premium-report/ |  |
 | 2026-07-08-claude-fd244c | 2026-07-08 | 指标口径 | @claude | [硬编码专项遗留]已赚保费月度明细模块年份深度耦合：后端 earned-premium-detail.ts 写死 2025/2026/2027（generatePolicy2025/2026EarnedPremiumQuery、滚动汇总 U… | P2 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts,src/features/cost/utils/transformData.ts,src/features/cost/utils/cost-summary-calc.ts,src/features/dashboard/crossSellRateStatus.ts |  |
-| 2026-07-09-claude-00954e | 2026-07-09 | 安全/权限·前端路由 | @claude | 三级机构用户(org_user)登录后除首页外全部功能页打不开——2026-06-04 安全修复 f1683517(#Phase 0A)给 GET /api/data/files 加了 requireRole(BRANCH_ADMIN)，但… | P0 | PROPOSED | N/A | src/shared/contexts/DataContext.tsx,src/components/layout/DataGuard.tsx,server/src/routes/data.ts | 修复方向已定(用户 2026-07-09 拍板)=前端派生就绪信号：DataContext 改用角色无关的 GET /api/data/metadata(无 requireRole,仅行级过滤,org_user 恒 200)推导 isDat… |
 | 2026-07-09-claude-50d62e | 2026-07-09 | 数据/ETL·多省债 | @claude | 非daily手动工具省份轴收窄（branch=None取全省）：agent_diagnose_report.py/sync_may_renewal_fields.py/tools/analyze_flow.py/scripts/ad-hoc… | P3 | PROPOSED | 开发文档/reviews/2026-07-08-B5子目录cutover残留glob排查.md | N/A |  |
 | 2026-07-09-claude-9692f9 | 2026-07-09 | 安全/权限·报告门户(B346 续作) | @claude | 全国超管在 UI 切省(如切到山西)后，报告门户 /api/reports/portal/:slug/:file 返回的仍是切省前的省份报告(用户实测：切山西仍看四川)。根因：server/src/routes/reports.ts:380… | P1 | PROPOSED | N/A | server/src/routes/reports.ts,src/shared/contexts/BranchContext.tsx |  |

@@ -76,6 +76,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const refreshFilesPromiseRef = useRef<Promise<void> | null>(null);
+  const refreshReadinessPromiseRef = useRef<Promise<void> | null>(null);
   const loadingCounterRef = useRef(0);
 
   const beginLoading = useCallback(() => {
@@ -133,6 +134,57 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     return task;
   }, [beginLoading, endLoading]);
 
+  // 探测后端数据就绪状态（角色无关）
+  //
+  // 用 GET /data/metadata 派生全局 isDataLoaded：该接口无 requireRole，仅经
+  // permissionMiddleware 行级过滤，三级机构用户（org_user）也返回 200（PolicyFact
+  // 存在即可）。判据 = "metadata 返回 200"，不看行级过滤后的 rowCount（org_user
+  // 某机构可能 0 行仍算"后端已加载数据"）。
+  //
+  // 对比 refreshFiles()：后者调 GET /data/files（requireRole=BRANCH_ADMIN），
+  // org_user 恒 403 → 被 catch 吞掉 → isDataLoaded 永为 false → 除首页外全部功能页
+  // 被 DataGuard 重定向到 /data-import。这是本次修复的根因（backlog
+  // 2026-07-09-claude-00954e / PR #988）。后端 /data/files 的 requireRole
+  // 安全收敛（f1683517）保持不动，不给 org_user 开任何跨机构文件名/数据口子。
+  const refreshDataReadiness = useCallback(async () => {
+    if (!apiClient.isAuthenticated()) {
+      return;
+    }
+    if (refreshReadinessPromiseRef.current) {
+      return refreshReadinessPromiseRef.current;
+    }
+
+    beginLoading();
+    const task = (async () => {
+      try {
+        const meta = await apiClient.data.metadata();
+        // metadata 200 即代表后端已加载数据（PolicyFact 存在）
+        setIsDataLoaded(true);
+        setCurrentFile(prev => {
+          if (prev) return prev; // 已有文件信息，保持不变
+          return {
+            filename: meta.file.filename,
+            rowCount: meta.file.rowCount,
+            fileSizeMB: meta.file.fileSizeMB ?? 0,
+          };
+        });
+        // 日志放在 setState 外部，避免 Strict Mode 双调用副作用
+        logger.info('[DataContext] 后端数据已就绪（metadata 200）:', meta.file.filename);
+      } catch (err) {
+        // 404（未加载数据）/ 网络错误等：保持未就绪，由 DataGuard 引导到数据导入页。
+        if (!isRequestAbortError(err)) {
+          logger.error('[DataContext] 数据就绪探测失败:', err);
+        }
+      } finally {
+        refreshReadinessPromiseRef.current = null;
+        endLoading();
+      }
+    })();
+
+    refreshReadinessPromiseRef.current = task;
+    return task;
+  }, [beginLoading, endLoading]);
+
   // 加载文件
   const loadFile = useCallback(async (filename: string) => {
     beginLoading();
@@ -180,25 +232,25 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   }, []);
 
   const refreshDataStatus = useCallback(() => {
-    refreshFiles();
-  }, [refreshFiles]);
+    refreshDataReadiness();
+  }, [refreshDataReadiness]);
 
-  // 认证后自动刷新文件列表
+  // 认证后自动探测数据就绪状态（角色无关，走 /data/metadata，非 /data/files）
   useEffect(() => {
     if (apiClient.isAuthenticated()) {
-      refreshFiles();
+      refreshDataReadiness();
     }
-  }, [refreshFiles]);
+  }, [refreshDataReadiness]);
 
   // 监听登录事件
   useEffect(() => {
     const handleLogin = () => {
-      refreshFiles();
-      logger.debug('[DataContext] 登录成功，刷新文件列表');
+      refreshDataReadiness();
+      logger.debug('[DataContext] 登录成功，探测数据就绪状态');
     };
     window.addEventListener('auth-login', handleLogin);
     return () => window.removeEventListener('auth-login', handleLogin);
-  }, [refreshFiles]);
+  }, [refreshDataReadiness]);
 
   const contextValue = useMemo(
     () => ({
