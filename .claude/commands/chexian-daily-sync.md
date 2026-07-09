@@ -11,6 +11,24 @@ scope: project
 
 用户说"XX 文件已更新，请 ETL 到 VPS"或类似，立即进入此 SOP。
 
+## 一键入口（断了 / 不确定状态，先跑体检）
+
+**① 只读体检**（零副作用，一眼看清 6 层边界 + watcher 失败时自动挖出真实崩溃栈）：
+
+```bash
+bun run daily:doctor      # 必须在主仓跑（worktree 无 warehouse 数据）
+```
+
+输出示例：`① 上游 myvps / ② 本地→VPS 同步 / ③ 自动发布 watcher / ④ 生产 chexian-vps / ⑤ 企微推送` 逐层 🟢/🔴，红灯附真实错误与「下一步」。`daily:doctor` 会区分「数据其实已鲜、只是 watcher 状态未回写」与「真的没发布」，不虚惊。
+
+**② 跑 / 补发全流程**（拉取→ETL→推 VPS→reload→企微一条龙）：
+
+```bash
+bun run release:daily
+```
+
+> **血的教训（2026-07-09 事故）**：watcher 报 `exit=1` 时，**真实崩溃栈在 `数据管理/logs/auto-release.launchd.log`**（release:daily 的 stdout/stderr），**不在** `数据管理/logs/auto-release.log`（后者只写 "exit=1" 症状）。`daily:doctor` 已自动挖出真实栈，别再手动逐层猜。
+
 ## 0. 源文件获取（主链路：VPS auto_loadbi 自动拉取，2026-07-04 起替代 iCloud 手动源）
 
 **主链路（默认）**：上游五张表由 VPS 定时导出到 `myvps:/root/workspace/auto_loadbi/exports/`，
@@ -243,6 +261,8 @@ wait
 
 | 症状 | 根因 | 修复 |
 |------|------|------|
+| **watcher 报 `exit=1` 但不知错在哪** | 症状日志 `auto-release.log` 只记 "exit=1"，无错误正文 | 读 `数据管理/logs/auto-release.launchd.log` 拿真实崩溃栈；或 `bun run daily:doctor` 自动挖出 + 逐层定位（2026-07-09 事故沉淀） |
+| `kex_exchange_identification: Connection reset by <VPS>` / rsync CRITICAL | 并行 rsync 突发 SSH 连接触发 sshd `MaxStartups` 节流（**非 VPS 挂**） | 重跑幂等 `node scripts/sync-vps.mjs`（内建抖动重试即收敛）；单 / 连 5 次 `ssh chexian-vps-deploy true` 能过 = VPS 没挂 |
 | rsync 单目录失败（红色 CRITICAL） | 并行 rsync 网络抖动 | 手动重跑 `node scripts/sync-vps.mjs` 或单独 `rsync -azv --delete -e ssh <local>/ chexian-vps-deploy:<remote>/` |
 | PM2 `errored` 状态 | 进程崩溃 | 先 `describe` 看日志，再 `reload`（非 `restart`） |
 | 本地 max 日期 ≠ 文件名日期 | 上游导出时点问题（非 ETL bug） | 例：`20210101-20260416_05_理赔明细.xlsx`（旧 `02_理赔明细_报案时间20260416.xlsx`）实际 max(report_time)=20260415 — 需跟用户确认 |
