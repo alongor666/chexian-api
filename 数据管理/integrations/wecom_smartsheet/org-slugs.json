@@ -1,0 +1,17 @@
+{
+  "_note": "机构中文名 → 拼音 slug 的省份化 SSOT（wecom 续保追踪专用，消费方见 sync_org_renewal_from_xlsx.py::_load_org_slugs）。slug 两处用途：(1) 续保追踪实例 YAML 文件名 <省份拼音>_<slug>_...yaml（如 sichuan_gaoxin_2025_may_jul.yaml）；(2) webhook 环境变量名 WECOM_SMARTSHEET_WEBHOOK_<slug 大写>——脚本按 slug.upper() 派生，故 slug 只需在此登记一次。新省份上线：在本文件新增一个 branch_code 顶层键即可，脚本零改动（fail-closed：缺省份段即报错，不静默回落空映射）。顶层键 = branch_code（SC=四川 / SX=山西），与全平台省份隔离键一致（见 .claude/rules/data-pipeline.md「省份数据隔离」）。机构须 ⊆ 同省 branch-org-mapping/<branch_code>.json 的 units 花名册（单测 test_org_slugs.py 锁死）。以 _ 开头的键为注释，加载时忽略。",
+  "SC": {
+    "高新": "gaoxin",
+    "自贡": "zigong",
+    "青羊": "qingyang",
+    "宜宾": "yibin",
+    "天府": "tianfu",
+    "达州": "dazhou",
+    "德阳": "deyang",
+    "武侯": "wuhou",
+    "新都": "xindu",
+    "泸州": "luzhou",
+    "乐山": "leshan",
+    "资阳": "ziyang"
+  }
+}
