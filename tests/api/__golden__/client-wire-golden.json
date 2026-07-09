@@ -313,6 +313,14 @@
     "auth": true,
     "dedupe": ""
   },
+  "data.metadata": {
+    "verb": "GET",
+    "path": "/data/metadata",
+    "params": [],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/data/metadata"
+  },
   "data.upload": {
     "verb": "POST",
     "path": "/data/upload",

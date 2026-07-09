@@ -19,12 +19,40 @@ import { DATA_ROUTES } from './routes';
 import { API_BASE, type ApiTransport } from './client-core';
 import type { ApiResponse, FileInfo, LoadResult } from './types';
 
+/**
+ * 数据元信息（GET /data/metadata 返回体的前端消费子集）
+ *
+ * 本客户端仅消费 `file`（用于派生"后端数据已就绪"）；schema/dateRange/
+ * organizations/summaryStats 等字段后端会返回但此处不建模，避免过度耦合。
+ */
+export interface DataMetadataResult {
+  file: {
+    filename: string;
+    originalName?: string;
+    uploadTime?: string;
+    /** 行级过滤后的可见行数（org_user 为本机构行数，可能为 0，不用于就绪判定） */
+    rowCount: number;
+    fileSizeMB: number | null;
+  };
+}
+
 export class DataApi {
   constructor(private readonly t: ApiTransport) {}
 
-  /** 获取文件列表 */
+  /** 获取文件列表（后端 requireRole(BRANCH_ADMIN)，org_user 调用恒 403） */
   files(): Promise<FileInfo[]> {
     return this.t.request<FileInfo[]>(`/data/${DATA_ROUTES.FILES}`);
+  }
+
+  /**
+   * 获取当前数据元信息（角色无关的就绪探测）
+   *
+   * 与 files() 不同：/data/metadata 无 requireRole，仅经 router 级 permissionMiddleware
+   * 做行级过滤。PolicyFact 存在即返回 200（org_user 亦然），表不存在才抛 404。
+   * 因此可用"metadata 返回 200"派生全局 isDataLoaded，而不泄漏跨机构文件名/数据。
+   */
+  metadata(): Promise<DataMetadataResult> {
+    return this.t.request<DataMetadataResult>(`/data/${DATA_ROUTES.METADATA}`);
   }
 
   /** 加载数据文件 */
