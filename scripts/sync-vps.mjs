@@ -599,10 +599,33 @@ async function queryVpsPolicyFingerprint(config) {
 }
 
 /**
+ * 解析 /internal/data-fingerprint 端点的原始 curl stdout，判定 BRANCH_RLS_ENABLED 运行时取值。
+ * 抽成纯函数（PR #1014 对抗性评审 MEDIUM 发现：原先真正做判定的逻辑内联在
+ * queryVpsSecurityStatus() 里，被 SSH 网络调用包裹，从未有测试直接执行过这段判定本体，
+ * 只测过它的调用方——调用方测试靠 mock 整个函数绕过了它）。
+ *
+ * 严格类型检查（非 `??`/宽松真值判断）：`branchRlsEnabled` 必须是**布尔** true/false 才采信；
+ * 缺字段、非布尔（如字符串 "true"）、`success:false`、JSON 解析失败均视为「核实失败」。
+ *
+ * @param {string} stdout curl 原始输出（可能为空/非 JSON/JSON 但字段缺失或类型不符）
+ * @returns {boolean|null} true=已核实开启 / false=已核实关闭 / null=核实失败（不可采信）
+ */
+function parseSecurityStatusResponse(stdout) {
+  try {
+    const parsed = JSON.parse((stdout || '').trim());
+    if (!parsed?.success || typeof parsed?.data?.security?.branchRlsEnabled !== 'boolean') return null;
+    return parsed.data.security.branchRlsEnabled;
+  } catch {
+    return null; // 空 stdout / 非 JSON（如端点未部署返回 404 HTML）→ 核实失败
+  }
+}
+
+/**
  * SX 自动晋升安全闸 — 真实查询生产 BRANCH_RLS_ENABLED 运行时取值（2026-07-09）。
  *
  * 复用同一 /internal/data-fingerprint 端点（server/src/app.ts 已扩展 data.security.branchRlsEnabled）
  * 与 queryVpsPolicyFingerprint 相同的 SSH+curl 连接方式，避免重复造一条 SSH 通道。
+ * 判定逻辑见上方 parseSecurityStatusResponse()（可脱离网络单独测试）。
  *
  * @param {object} config SSH 配置
  * @returns {Promise<boolean|null>} true=已核实开启 / false=已核实关闭 / null=查询失败（网络/端点/解析异常）
@@ -614,11 +637,9 @@ async function queryVpsSecurityStatus(config) {
       silent: true,
       allowFailure: true,
     });
-    const parsed = JSON.parse((stdout || '').trim());
-    if (!parsed?.success || typeof parsed?.data?.security?.branchRlsEnabled !== 'boolean') return null;
-    return parsed.data.security.branchRlsEnabled;
+    return parseSecurityStatusResponse(stdout);
   } catch {
-    return null; // 404（端点未部署，如旧版生产尚未部署本次改动）/ 网络失败 / JSON 解析失败 → 查询失败
+    return null; // SSH 连接本身失败（非 curl 返回的错误 stdout）→ 查询失败
   }
 }
 
@@ -1338,7 +1359,7 @@ async function main(argv = process.argv.slice(2)) {
   if (!runConfig.checkMode && willSyncPolicy) {
     const sxReadiness = await runSxAutoPromote(sshConfig);
     if (sxReadiness.verdict === 'block') {
-      log('red', '  SX 数据本次不会晋升/同步；SC 与其余域不受影响，可用 --domain 单独重试非 SX 相关同步。');
+      log('red', '  SX 核实未通过：本次运行整体中止（fail-safe，不会用陈旧/未核实数据覆盖生产）——SC 与其余域本次也不会被同步，需用 --domain 单独重试非 SX 相关同步来补上。');
       recordEvent({ stage: 'vps_sync', step: 'sx_auto_promote', status: 'failure', error: sxReadiness.reason });
       process.exit(1);
     }
@@ -1415,6 +1436,7 @@ export {
   rsyncLatestAtomically,
   evaluateFreshness,
   queryVpsSecurityStatus,
+  parseSecurityStatusResponse,
   runSxAutoPromote,
 };
 

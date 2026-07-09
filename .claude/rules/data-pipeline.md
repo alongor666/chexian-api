@@ -251,10 +251,13 @@ scripts/*.mjs scripts/release/*.mjs` 除脚本自身零引用）——2026-07-09
    `tests/sx-promote-gate.test.ts` 覆盖 skip/promote/block 三态）——本地无 `validation/SX/`
    （纯 SC 部署）→ `skip`，零行为变化；核实通过 → `promote`；核实为 `false` 或查询失败 →
    `block`，安全默认拒绝（fail-closed，宁可不晋升也不能在 RLS 状态不明时晋升新数据）。
-3. **拒绝即响亮失败**：`block` 时 `sync-vps.mjs` 以非零退出码中止（不静默跳过继续用陈旧
-   SX 数据同步），复用既有「CRITICAL 目录同步失败」严重度语义；SC 与其余域不受影响，
-   可用 `--domain` 单独重试。`auto-release-daily.mjs` 既有 2 次重试 + missed 告警机制吸收
-   偶发网络抖动，不需要另建告警通道。
+3. **拒绝即响亮失败，且是整批中止而非局部跳过**：`block` 时 `sync-vps.mjs` 在 `runStandardMode()`
+   （真正执行 SC/claims/quotes/dim 等全部域 rsync 的函数）**之前**以非零退出码中止——准确语义是
+   「fail-safe：不会用陈旧/未核实数据覆盖生产」，**不是**「fail-independent：SC 与其余域本次照常
+   同步」。SX 核实的瞬时抖动（SSH 超时等）会让**这一次运行**里 SC/claims/quotes/dim 全部不被同步，
+   需要 operator 用 `--domain` 单独重试补上非 SX 域。这与既有的完整性闸门（`assertLocalNotStale
+   VsVps`）行为模式一致，不是本机制独有的缺陷；`auto-release-daily.mjs` 既有 2 次重试 + missed
+   告警机制吸收偶发网络抖动，不需要另建告警通道，但排查时不要误以为"SX 出问题那次 SC 仍照常发布了"。
 4. **自动化通过后**，`sync-vps.mjs` 代为调用 `sx-promote.mjs --apply --auto-verified-rls
    --rls-verification-note "<核实详情>"`（新增旗标，与人工 `--rls-confirmed` 二选一即可通过
    P2-10 闸；`--auto-verified-rls` 必须配合非空 note，落盘进 `.sx-promote-manifest.json` 的
