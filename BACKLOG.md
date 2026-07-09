@@ -43,7 +43,7 @@
 - 2026-06-22-16ab1c-b842bc `PARTIAL` — 报告托管 phase-2 GATED 续作
 - 2026-06-27-claude-4b1de1 — 主查询限流回落per-IP
 - 2026-07-03-claude-05dff4 — 前端审查中危债打包（2026-07-03四维审查）
-- 2026-07-03-claude-131dd8 — 后端审查
+- 2026-07-03-claude-131dd8 `IN_PROGRESS` — 后端审查
 - 2026-07-03-claude-6c23b3 `IN_PROGRESS` — 后端审查
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-08-claude-fd244c — [硬编码专项遗留]已赚保费月度明细模块年份深度耦合
@@ -98,7 +98,7 @@
 | 2026-06-27-claude-4b1de1 | 2026-06-27 | 限流/中间件 | @claude | 主查询限流回落per-IP：限流中间件在authMiddleware之前执行(rateLimiter.ts:21注释)，req.user未注入→keyByPatOrUser回落到IP。NAT后同机构多用户共享100/60s桶,高频操作互相挤… | P2 | PROPOSED | N/A | server/src/middleware/rateLimiter.ts | 架构价值审计冻结（2026-07-04）：触发条件=真实业务场景限流误伤（非一次性并发测试触发）。届时先试最简修法：提高已认证用户桶容量（一行常量），不上 auth 后二次限流中间件 |
 | 2026-06-29-claude-a5aa03 | 2026-06-29 | 架构治理/多省 | @claude | 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物理混放current/+靠记得加WHERE branch_code的fail-open默认混省）：①统一取数入口SSOT(三运行时JS/诊断Python… | P1 | PARTIAL | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | 数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py | 4 条 note，最新：架构价值审计（2026-07-04）：P4 子目录化并入 801409 主线（owner 已拍板 B3 终局）；P1 出口零信任断言保留——与路径方案正交的纵深第二层，子目录化后仍有价值；P0/P2/P3 待子目录落地后重估（checkPo… |
 | 2026-07-03-claude-05dff4 | 2026-07-03 | 前端 | @claude | 前端审查中危债打包（2026-07-03四维审查）：①copilot/forecast手写fetch绕过apiClient(useForecastBaseline.ts:421等4处) ②业务阈值硬编码无SSOT(comprehensive… | P2 | PROPOSED | N/A | src/features/copilot,src/shared/api/client-core.ts,src/app/App.tsx | 架构价值审计拆分处置（2026-07-04）：①手写fetch统一入口③403/429全局拦截④staleTime双态bug⑥Panel错误态→立即做；②阈值SSOT（归入既有注册表，禁新建第9个）⑧E2E补齐→按需排期；⑤9hook与Re… |
-| 2026-07-03-claude-131dd8 | 2026-07-03 | CI/测试 | @claude | 后端审查：CI 完全不跑 DuckDB 原生绑定集成测试(vite.config.ts exclude 22个 duckdb-*.test.ts + 立方体影子对账7个)，含当前最活跃的多省 RLS 隔离测试(duckdb-branch-r… | P2 | PROPOSED | N/A | vite.config.ts |  |
+| 2026-07-03-claude-131dd8 | 2026-07-03 | CI/测试 | @claude | 后端审查：CI 完全不跑 DuckDB 原生绑定集成测试(vite.config.ts exclude 22个 duckdb-*.test.ts + 立方体影子对账7个)，含当前最活跃的多省 RLS 隔离测试(duckdb-branch-r… | P2 | IN_PROGRESS | N/A | vite.config.ts |  |
 | 2026-07-03-claude-6c23b3 | 2026-07-03 | 生产可靠性 | @claude | 后端审查：核心数据目录 policy/current(critical) 走普通 rsync --delete 非原子，覆盖期间与意外重启/reload 重叠会 glob 到半份数据(仅 customer_flow/new_energy_c… | P2 | IN_PROGRESS | N/A | scripts/sync-vps.mjs |  |
 | 2026-07-03-claude-b714a7 | 2026-07-03 | 安全 | @claude | 安全审计L5：诊断报告(diagnose-*skills)生成HTML时,数据字段(机构名/业务员名)的转义依赖skill层;配合报告CSP的script-src 'unsafe-inline',存在理论性数据驱动XSS(数据来自内部BI字… | P3 | PROPOSED | N/A | N/A | 5 条 note，最新：check-merged-drift 命中 d6ad418e/40092939(PR #944) 系误报：#944 是漂移误报压制机制本身（其账本改动引用本 uid 作先例），未动 diagnose-* skills HTML 转义。保持 … |
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/hea… | P3 | PROPOSED | N/A | server/src/config/csp.ts | 架构价值审计冻结（2026-07-04）：Express csp.ts 的 unsafe-inline 实测无功能影响（唯一 HTML 响应 reports.ts 有独立 REPORT_HTML_CSP；SPA 的 CSP 基线已由 PR … |

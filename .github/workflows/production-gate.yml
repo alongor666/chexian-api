@@ -113,16 +113,35 @@ jobs:
           unzip -o /tmp/duckdb_cli.zip -d "$HOME/.duckdb/bin"
           echo "$HOME/.duckdb/bin" >> "$GITHUB_PATH"
           "$HOME/.duckdb/bin/duckdb" --version
-          # pandas 不设上界：与 requirements-test.txt（pandas>=2.0.0，实际解析 3.x）同源。
-          # 本步 pip 落 user-site，在 sys.path 中优先于后续 Setup Python 的 site-packages——
-          # 若在此锁 pandas<3 会遮蔽 pytest 步骤的 pandas 3，致 customer_flow '<NA>' 断言失败
+          # 装完整 ETL 依赖（数据管理/requirements.txt：pandas/pyarrow/openpyxl/numpy/python-calamine）——
+          # 集成测试 tests/parquet-processing.test.ts 的 beforeAll 调 数据管理/pipelines/transform.py 生成 parquet
+          # （engine='calamine' 读 xlsx + pyarrow 写 parquet），缺任一即 ModuleNotFoundError → 整套 integration 红
+          # （backlog 2026-07-03-claude-131dd8 首跑实证：仅装 pandas 时 parquet-processing 因缺 pyarrow 挂）。
+          # 用 requirements SSOT（== requirements-test.txt 的 `-r` 源）而非手列，避免 dep 清单漂移——该文件注释
+          # 记录过 2026-07-05 python-calamine 漏登记致 7 个 ETL 测试 CI ImportError 的同类事故。
+          # duckdb 显式 ==${DUCKDB_MINOR}.* 与 requirements 的 >=1.4.0 在同一 pip 调用内求交 → 锁定 Neo 绑定 minor（CLAUDE.md §5）。
+          # pandas 不设上界：与 requirements（pandas>=2.0.0，实际解析 3.x）同源；本步 pip 落 user-site，在 sys.path 中
+          # 优先于后续 Setup Python 的 site-packages，若锁 pandas<3 会遮蔽 pytest 步骤 pandas 3
           # （2026-07-05 #928×#929 集成冲突实证，main 红过一轮）。
-          python3 -m pip install --quiet "duckdb==${DUCKDB_MINOR}.*" pandas
-          python3 -c "import duckdb, pandas; print('python duckdb', duckdb.__version__, '/ pandas', pandas.__version__)"
+          python3 -m pip install --quiet -r 数据管理/requirements.txt "duckdb==${DUCKDB_MINOR}.*"
+          python3 -c "import duckdb, pandas, pyarrow, python_calamine; print('duckdb', duckdb.__version__, '/ pandas', pandas.__version__, '/ pyarrow', pyarrow.__version__, '/ calamine OK')"
 
       - name: Unit Tests
         if: needs.changes.outputs.skip != 'true'
         run: bun run test --run
+
+      # 集成测试（DuckDB 原生绑定 @duckdb/node-api，node 环境）— backlog 2026-07-03-claude-131dd8。
+      # 此前 CI 从不执行这套用例，最活跃的分省 RLS 隔离口径（duckdb-branch-* / duckdb-repair-*-rls，
+      # PR #997 团队维度 JOIN 消歧闸守护的对象）+ 7 个立方体影子对账（duckdb-cube-*）回归只能靠本地人肉。
+      # 它们从 jsdom 单测 config 排除（jsdom 环境无法加载 .node 原生模块），改由 node 环境的
+      # vitest.integration.config.ts 运行 —— 与上方 `bun run test --run`（jsdom）互不污染。
+      # 全部用例自带合成数据（tmp parquet via COPY / 内存 VALUES），不依赖 gitignored warehouse parquet，
+      # 故 CI 无数据也全绿、无静默 skip。所需依赖均已就绪：@duckdb/node-api 由上方 `cd server && bun install`
+      # 构建，DuckDB CLI + python/pandas 由上方「Install DuckDB (CLI + Python)」步骤备好
+      # （tests/duckdb-claims-dedup-gate 与 parquet-processing 的 skipIf 探针据此判定不 skip）。
+      - name: Integration Tests (DuckDB native binding)
+        if: needs.changes.outputs.skip != 'true'
+        run: bun run test:integration
 
       - name: Backend Typecheck
         if: needs.changes.outputs.skip != 'true'
