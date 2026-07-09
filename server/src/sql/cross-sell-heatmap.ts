@@ -10,6 +10,7 @@
 import { logger } from '../utils/logger.js';
 import { getVehicleCategoryFilter, type VehicleCategory, crossSellTruthyExpr } from './cross-sell/shared.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { qualifyBranchCodeColumn } from '../utils/branch-rls-qualify.js';
 
 export interface CrossSellHeatmapDrillStep {
   dimension: CrossSellHeatmapGroupDimension;
@@ -223,6 +224,10 @@ export function generateCrossSellHeatmapQuery(
   const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
   const seatClause = seatCoverageClause ? `AND ${seatCoverageClause}` : '';
   const usePF = needsPolicyFact(groupByDimension, drillFilter);
+  // usePF 路径 JOIN SalesmanTeamMapping tm（多省时同带 branch_code 列）——把 baseWhereClause 里
+  // permissionFilter 的裸 branch_code 绑定到事实表 p.，消歧（2026-07-09 生产 Binder Error）。
+  // Agg 路径（!usePF）FROM CrossSellDailyAgg 无别名、无 tm JOIN，保持裸 branch_code（字节安全）。
+  const pfWhere = qualifyBranchCodeColumn(baseWhereClause, 'p.');
   const drillAnd = (() => {
     const clause = usePF ? crossSellDrillToWherePF(drillFilter) : crossSellDrillToWhereAgg(drillFilter);
     return clause ? `AND ${clause}` : '';
@@ -291,7 +296,7 @@ export function generateCrossSellHeatmapQuery(
         END AS compulsory_premium
       FROM PolicyFact p
       LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))
-      WHERE ${baseWhereClause}
+      WHERE ${pfWhere}
         AND ${vehicleFilter}
         ${seatClause}
         ${drillAnd}
