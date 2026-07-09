@@ -13,6 +13,7 @@
  */
 
 import { logger } from '../../utils/logger.js';
+import { qualifyBranchCodeColumn } from '../../utils/branch-rls-qualify.js';
 import {
   QUADRANT_GROWTH_THRESHOLD,
   QUADRANT_ACHIEVEMENT_THRESHOLD,
@@ -58,6 +59,9 @@ export function generatePerformanceDrilldownQuery(
 ): string {
   const segmentFilterNoAlias = getPerformanceSegmentFilter(segmentTag);
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
+  // all_rows 恒 JOIN SalesmanTeamMapping tm（多省时同带 branch_code 列）——把 whereWithoutDate 里
+  // permissionFilter 的裸 branch_code 绑定到事实表 p.，消歧（2026-07-09 生产 Binder Error）。
+  const pfWhere = qualifyBranchCodeColumn(whereWithoutDate, 'p.');
   const periodBounds = periodBoundsOverride
     ? buildStaticPeriodBoundsCte(periodBoundsOverride)
     : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode, dateField);
@@ -151,7 +155,7 @@ export function generatePerformanceDrilldownQuery(
         CASE WHEN ${truthyExpr('p.is_transfer')} THEN true ELSE false END AS is_transfer
       FROM PolicyFact p
       LEFT JOIN SalesmanTeamMapping tm ON p.salesman_name = tm.full_name
-      WHERE ${whereWithoutDate}
+      WHERE ${pfWhere}
         AND ${segmentFilter}
         ${drillWhere}
     ),

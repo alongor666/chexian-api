@@ -17,6 +17,7 @@
 
 import { logger } from '../utils/logger.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { qualifyBranchCodeColumn } from '../utils/branch-rls-qualify.js';
 
 /**
  * 支持的下钻维度
@@ -193,7 +194,10 @@ export function generateCrossSellQuery(
     : '';
 
   // 构建 WHERE：基础条件 + 下钻路径的每一步过滤
-  const whereParts = [baseWhereClause];
+  // useJoin（团队/业务员维度）时 JOIN SalesmanTeamMapping tm，与 CrossSellDailyAgg c 同带 branch_code 列——
+  // 把 baseWhereClause 里 permissionFilter 的裸 branch_code 绑定到事实表 colPrefix（c.），消歧
+  // （2026-07-09 生产 Binder Error）。!useJoin 时 colPrefix='' → 原样返回、无 tm JOIN、裸列不歧义。
+  const whereParts = [qualifyBranchCodeColumn(baseWhereClause, colPrefix)];
   for (const step of drillPath) {
     whereParts.push(drillStepToWhere(step, colPrefix));
   }
