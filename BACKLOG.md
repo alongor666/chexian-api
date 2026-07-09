@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（38 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（39 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -28,7 +28,7 @@
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-07-08-claude-4210ab `IN_PROGRESS` — B346 续作·GATED（生成端在仓外）
 
-**P2（18 项）**
+**P2（19 项）**
 
 - B304 `PARTIAL` — earned-premium 双口径未文档化
 - B306 — DuckDB 性能高危三件套
@@ -48,6 +48,7 @@
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-08-claude-fd244c — [硬编码专项遗留]已赚保费月度明细模块年份深度耦合
 - 2026-07-09-claude-c2c219 — 4210ab 续作·SX 机构级报告生成端（41205d9 交付 SC-only）
+- 2026-07-09-claude-e17707 `PARTIAL` — diagnose-period-trend 技能省份化
 
 **P3（16 项）**
 
@@ -88,7 +89,7 @@
 | 2026-06-12-claude-055a12 | 2026-06-12 | 性能/灰度收尾 | @claude | 立方体灰度哨兵降频里程碑：现在每小时一次；待 CUBE_ROUTING_ENABLED='true' 切流稳定 1 个月后（mismatch 持续 0、cost.exact 稳定）改 .github/workflows/cube-grays… | P3 | BLOCKED | N/A | .github/workflows/cube-grayscale-sentinel.yml,scripts/sentinel/README.md | 3 条 note，最新：架构价值审计（2026-07-04）：成本/KPI 立方体已 owner 拍板退役（65f495 CANCELLED），哨兵此后仅服务趋势/增长/业务员立方体（f1c991）；触发条件不变=切流后 30 天降频；若 f1c991 时间盒（2… |
 | 2026-06-15-claude-edbd61 | 2026-06-15 | Refactor/Frontend | @claude | B330 follow-up：components/layout → features 依赖倒置（TopNavigation/PageFilterPanel）。当前 TopNavigation 直接 import features/file… | P2 | PROPOSED | ARCHITECTURE.md §2.2 | src/components/layout/TopNavigation.tsx;src/components/layout/PageFilterPanel.tsx;src/App.tsx | PR #643 同时关闭了 shared→features 第 6 处（orgSalesman），但 layout→features 倒置（TopNavigation 用 features/file 的 3 个 Modal、PageFilt… |
 | 2026-06-19-claude-35998a | 2026-06-19 | Enhancement/Architecture | @claude | cx-cli 全面能力升级（5 阶段，对齐 dbt/Cube 级语义层 CLI）。背景：实测 cx-cli 分析内核是「单表牢笼 + 黑箱路由 + 零自省 + 错误不透明」，派生域分析既算不了也验不了（续保率无法在工具内独立验算）。计划见 … | P2 | PARTIAL | .claude/plans/cx-cli-swift-pudding.md | server/src/config/sql-federation-policy.ts,server/src/utils/sql-validator.ts,server/src/utils/sql-permission-injector.ts | 3 条 note，最新：架构价值审计冻结 P2/P3（2026-07-04）：P0-P1.5 每步对应已发生的真实故障，P2 语义层/P3 --explain 对应的是「对标 dbt/Cube」抽象目标（防假想敌）；触发条件=出现第二个真实场景证明 /pivot … |
-| 2026-06-20-claude-2eccfa | 2026-06-20 | 数据/ETL · 多省机构口径(G5/G6) | @claude | 山西机构规范化映射 (61 原始机构 → 11 经营单元)。用户 2026-06-19 已定: 02=太原一部, 10=太原二部, 01=经代/车商/重客(合并为一单元，需按业务员人员进一步细分，后续补充); 地理类区域码清晰(03大同/0… | P2 | PARTIAL | 开发文档/multi-branch/口径对齐_山西.md | 数据管理/pipelines/transform.py | 3 条 note，最新：stale-scan核查(2026-06-21)：机构规范化主体已实现(SX.json 61→11经营单元,行数1830603/保费15.28亿零差异)；剩余(01经代车商重客按业务员人员细分+按签单日期时序清分)需山西分公司营销管理部外部… |
+| 2026-06-20-claude-2eccfa | 2026-06-20 | 数据/ETL · 多省机构口径(G5/G6) | @claude | 山西机构规范化映射 (61 原始机构 → 11 经营单元)。用户 2026-06-19 已定: 02=太原一部, 10=太原二部, 01=经代/车商/重客(合并为一单元，需按业务员人员进一步细分，后续补充); 地理类区域码清晰(03大同/0… | P2 | PARTIAL | 开发文档/multi-branch/口径对齐_山西.md | 数据管理/pipelines/transform.py | 4 条 note，最新：下游依赖发现（2026-07-09，来自 e17707 SX period-trend 报告省份化）：SX 近月(2026)保单 org_level_3 仍全为『其他』——未清分到 11 经营单元；仅历史(定稿 2021~2025-05)已… |
 | 2026-06-20-claude-f1c991 | 2026-06-20 | 立方体加速 | @claude | 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214MB/任意签单日窗命中；cost/kpi 已搁置见 65f495）。前置：CUBE_SHADOW_COMPARE=true 影子期已启动。晋级门槛(cub… | P1 | PROPOSED | 开发文档/架构设计/通用立方体查询加速方案.md | ecosystem.config.cjs server/src/services/cube-routing.ts scripts/release/cube-promote.mjs | 2026-06-22 门槛核验(cube-promote+/health+哨兵issue#608)：切流未就绪——①影子样本 trend/salesman-ranking 仅 12~14≪门槛1000(PM2 reload 重置+并发部署频… <br>架构价值审计（2026-07-04）：趋势/增长/业务员立方体为活资产（与已退役的成本/KPI 立方体独立）；样本积累被 PM2 reload 重置打断是门槛打不满的根因——先修 294022（冷启动 502）间接解锁。时间盒：2026-0… |
 | 2026-06-22-16ab1c-b842bc | 2026-06-22 | Enhancement/Backend | 16ab1c | 报告托管 phase-2 GATED 续作：生产方 emit 机构归属 sidecar。B328 phase-2 已在 reports.ts 实现 sidecar 解析+org 行级安全（36 单测+live 验证），但生产方未写 .met… | P2 | PARTIAL | 开发文档/缺口清单.md | 数据管理/integrations/wecom_bot/push_html.py |  |
 | 2026-06-22-claude-03f6f0 | 2026-06-22 | 前端重构 follow-up | @claude | PerformanceAnalysisPanel 主组件(~900行)抽 usePerformancePanelController hook —— b331 拆分后续。codex 闸-1 判此项需先补行为测试再动(主组件 10+ 耦合 s… | P3 | PROPOSED | N/A | src/features/dashboard/PerformanceAnalysisPanel.tsx | 3 条 note，最新：check-merged-drift 命中 1e19b486(b331 拆分主提交,已在 main)系误报：该提交正是事项描述中『codex 闸判需先补行为测试、b331 本轮不做』的那次拆分，未实现 usePerformancePanel… |
@@ -112,3 +113,4 @@
 | 2026-07-08-claude-fd244c | 2026-07-08 | 指标口径 | @claude | [硬编码专项遗留]已赚保费月度明细模块年份深度耦合：后端 earned-premium-detail.ts 写死 2025/2026/2027（generatePolicy2025/2026EarnedPremiumQuery、滚动汇总 U… | P2 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts,src/features/cost/utils/transformData.ts,src/features/cost/utils/cost-summary-calc.ts,src/features/dashboard/crossSellRateStatus.ts |  |
 | 2026-07-09-claude-50d62e | 2026-07-09 | 数据/ETL·多省债 | @claude | 非daily手动工具省份轴收窄（branch=None取全省）：agent_diagnose_report.py/sync_may_renewal_fields.py/tools/analyze_flow.py/scripts/ad-hoc… | P3 | PROPOSED | 开发文档/reviews/2026-07-08-B5子目录cutover残留glob排查.md | N/A |  |
 | 2026-07-09-claude-c2c219 | 2026-07-09 | 安全 | @claude | 4210ab 续作·SX 机构级报告生成端（41205d9 交付 SC-only）：SC 机构 org_user 本级报告已解锁，但 SX 机构 org_user 仍『本机构报告暂未生成』。根因两处：(L2) diagnose-period… | P2 | PROPOSED | 开发文档/缺口清单.md | alongor666-skills/skills/diagnose-period-trend/lib/query.py |  |
+| 2026-07-09-claude-e17707 | 2026-07-09 | 技能层 · 多省报告省份化（4210ab SX follow-up） | @claude | diagnose-period-trend 技能省份化：SX 三级机构 org_user 首页卡打开本级「短中长期对照」报告（当前恒显示「本机构报告暂未生成」）。根因=skill lib/query.py policy_glob/claim… | P2 | PARTIAL | 开发文档/缺口清单.md | alongor666-skills/skills/diagnose-period-trend/lib/query.py | 4 条 note，最新：PUSH BLOCKED（用户侧网络/鉴权，非代码问题）：skills 仓改动已本地提交 f5f6418（分支 claude/dpt-sx-province-e17707，含 1d84f50+75adcc7+本 SX 提交，待一并 PR 到… |
