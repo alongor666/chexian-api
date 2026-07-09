@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（37 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（38 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -28,7 +28,7 @@
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-07-08-claude-4210ab `IN_PROGRESS` — B346 续作·GATED（生成端在仓外）
 
-**P2（17 项）**
+**P2（18 项）**
 
 - B304 `PARTIAL` — earned-premium 双口径未文档化
 - B306 — DuckDB 性能高危三件套
@@ -47,6 +47,7 @@
 - 2026-07-03-claude-6c23b3 — 后端审查
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-08-claude-fd244c — [硬编码专项遗留]已赚保费月度明细模块年份深度耦合
+- 2026-07-09-claude-c2c219 — 4210ab 续作·SX 机构级报告生成端（41205d9 交付 SC-only）
 
 **P3（16 项）**
 
@@ -106,7 +107,8 @@
 | 2026-07-07-claude-beb706 | 2026-07-07 | 数据管道 | @claude | 热重载（同进程 ETL）后 CrossSellDailyAgg 物化表不自动重建：LazyDomainRegistry 对已 loaded 域 no-op，invalidateCache 只清 SQL 缓存不重建物化表——交叉销售数据可能滞… | P3 | PROPOSED | N/A | server/src/services/lazy-domain-registry.ts,server/src/services/data-bootstrapper.ts |  |
 | 2026-07-07-claude-ca822c | 2026-07-07 | 前端重构 follow-up | @claude | KPI 卡归一到 widgets/kpi/EnhancedKpiCard：GrowthKpiCards、CrossSellSummaryKpiBoard、VariableCostKpiBoard、quote-conversion KpiCa… | P3 | PROPOSED | 开发文档/架构设计/前端极简架构规划_2026-07-07.md | N/A |  |
 | 2026-07-07-claude-cfaf91 | 2026-07-07 | 架构治理/多省 | @claude | 企微续保同步脚本 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py 的 ORG_SLUGS 常量写死四川12机构中文名→拼音slug映射（高新→gaoxin等）… | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py |  |
-| 2026-07-08-claude-4210ab | 2026-07-08 | 安全 | @claude | B346 续作·GATED（生成端在仓外）：diagnose-period-trend 按机构产出报告。skill（alongor666-skills 仓 ~/.claude/skills/diagnose-period-trend）当前只… | P1 | IN_PROGRESS | 开发文档/缺口清单.md | 数据管理/daily.mjs | 3 条 note，最新：第二轮（用户指令：不要硬编码，山西/四川及对应账号三级机构都要更新）：机构级生成循环数据驱动遍历 branch-org-mapping/*.json 全部注册省（SC+SX，新省零代码）；省级产物镜像 branches/<部署省>/；门户 … |
+| 2026-07-08-claude-4210ab | 2026-07-08 | 安全 | @claude | B346 续作·GATED（生成端在仓外）：diagnose-period-trend 按机构产出报告。skill（alongor666-skills 仓 ~/.claude/skills/diagnose-period-trend）当前只… | P1 | IN_PROGRESS | 开发文档/缺口清单.md | 数据管理/daily.mjs | 4 条 note，最新：生成端 skill --org 采用落地（非重建）：远端未合并分支 origin/claude/diagnose-period-trend-org-reports（41205d9 v2.3.0）审查干净（SQL注入单引号双写转义/率值赔案半… |
 | 2026-07-08-claude-a28f3d | 2026-07-08 | 架构治理/硬编码 | @claude | 后端硬编码专项残留（需契约/业务拍板，未随批次一 2026-07-08-claude-773784 改动）：①/api/query/cost?type=earned-new 保单年度已赚保费 API 契约把年份烧进函数名与响应键（gener… | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts；server/src/routes/query/cost.ts；src/features/premium-report/ |  |
 | 2026-07-08-claude-fd244c | 2026-07-08 | 指标口径 | @claude | [硬编码专项遗留]已赚保费月度明细模块年份深度耦合：后端 earned-premium-detail.ts 写死 2025/2026/2027（generatePolicy2025/2026EarnedPremiumQuery、滚动汇总 U… | P2 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts,src/features/cost/utils/transformData.ts,src/features/cost/utils/cost-summary-calc.ts,src/features/dashboard/crossSellRateStatus.ts |  |
 | 2026-07-09-claude-50d62e | 2026-07-09 | 数据/ETL·多省债 | @claude | 非daily手动工具省份轴收窄（branch=None取全省）：agent_diagnose_report.py/sync_may_renewal_fields.py/tools/analyze_flow.py/scripts/ad-hoc… | P3 | PROPOSED | 开发文档/reviews/2026-07-08-B5子目录cutover残留glob排查.md | N/A |  |
+| 2026-07-09-claude-c2c219 | 2026-07-09 | 安全 | @claude | 4210ab 续作·SX 机构级报告生成端（41205d9 交付 SC-only）：SC 机构 org_user 本级报告已解锁，但 SX 机构 org_user 仍『本机构报告暂未生成』。根因两处：(L2) diagnose-period… | P2 | PROPOSED | 开发文档/缺口清单.md | alongor666-skills/skills/diagnose-period-trend/lib/query.py |  |

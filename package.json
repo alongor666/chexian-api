@@ -36,6 +36,7 @@
     "auto-release:status": "node scripts/auto-release-daily.mjs --status",
     "auto-release:once": "node scripts/auto-release-daily.mjs --once",
     "release:daily:dry": "node scripts/sync-and-reload.mjs --wecom-dry-run --dry-run",
+    "daily:doctor": "node scripts/daily-doctor.mjs",
     "release:vps:heatmap": "node scripts/release-vps-heatmap.mjs",
     "benchmark:key-routes": "node scripts/benchmark-key-routes.mjs",
     "benchmark:key-routes:soak": "node scripts/benchmark-key-routes-soak.mjs",
