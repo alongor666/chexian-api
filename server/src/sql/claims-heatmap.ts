@@ -245,6 +245,8 @@ export function generateClaimsHeatmapQuery(
   const needsTeamJoin = dimension === 'team';
   const policyWhere = buildPolicyWhere(filters, 'p.');
 
+  // governance-allow: rls-team-join #997 tm-join 作用在 eligible_policies CTE（只投影计算列、不含 branch_code；
+  // 分省隔离由 CTE 内 cutoffScope `WHERE branch_code=...` 单表扫描完成），tm-join 处 where 不引用裸 branch_code，无二义。
   const teamJoin = needsTeamJoin
     ? `LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))`
     : '';

@@ -62,6 +62,7 @@ import { buildPatternChecks } from './governance/pattern-engine.mjs';
 import { PATTERN_RULES } from './governance/pattern-rules.mjs';
 import { checkUploadSizeLimitConsistency as runUploadSizeCheck } from './governance/upload-size-consistency.mjs';
 import { checkDualLockConsistency as runDualLockConsistencyCheck, checkBranchMappingMirror as runBranchMappingMirrorCheck } from './governance/dual-lock-and-branch-mirror-checks.mjs';
+import { checkRlsTeamJoinQualify as runRlsTeamJoinQualifyCheck } from './governance/rls-team-join-qualify.mjs';
 import { governanceCheckChunkInvariants } from './check-chunk-invariants.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -3476,6 +3477,7 @@ const CODE_GOVERNANCE_CHECKS = [
     retireWhen: 'B3 子目录隔离落地后随前缀防线退役（BACKLOG 2026-06-23-claude-801409 退役清单）',
   },
   { name: '企微引擎省份隔离', fn: checkWecomEngineBranchIsolation },
+  { name: 'RLS团队JOIN消歧', fn: () => runRlsTeamJoinQualifyCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   { name: '上传上限对齐', fn: checkUploadSizeLimitConsistency },
   { name: 'Loop自进化闭环完整性', fn: checkLoopSelfEvolutionIntegrity },
   // vite chunk 图不变式（PR #904 防回归，7f984d）：实现在独立模块，无 dist 跳过、有 dist 真检
