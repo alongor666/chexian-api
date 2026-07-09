@@ -80,6 +80,35 @@ export function findCoveredKeys(items) {
   return losers;
 }
 
+// 旧格式周更 parquet 命名（下划线分隔日期）：每日数据_20250601_20260707.parquet
+// 与 RANGE_QUALIFIER_RE（连字符分隔）不同源，parseRangePrefix 对此类文件名返回 null，
+// 故被覆盖判定需要单独实现（2026-07-09 山西数据晋升事故：该判定此前用全局
+// shard-config.json 的 weekly_start 硬编码比较起点，实际滚动窗口起点与配置不符，
+// 导致同起点旧文件从未被判定为「同起点」，归档从未触发）。
+const OLD_WEEKLY_RE = /^每日数据_(\d{8})_(\d{8})\.parquet$/;
+
+/**
+ * 找出被本次转换文件完全覆盖（含端点相等）的旧格式周更 parquet（应归档者）。
+ * 覆盖判定用本次转换文件的**实际**日期区间，不依赖任何全局配置值——避免配置漂移
+ * 导致误判「不同起点」而漏归档（2026-07-09 山西/四川实证：旧逻辑靠 shard-config.json
+ * 的 weekly_start 与文件名日期比较，两者早已不一致，归档静默失效数日）。
+ * @param {string[]} existingFilenames  currentDir 下现有 .parquet 文件名（含本次输出文件名）
+ * @param {{start:string,end:string}} incoming  本次转换文件的实际日期区间
+ * @param {string} outputName  本次转换文件的输出文件名（排除自身，防自归档）
+ * @returns {string[]} 应归档的旧文件名（保持传入顺序）
+ */
+export function findSupersededOldWeeklyFiles(existingFilenames, incoming, outputName) {
+  const superseded = [];
+  for (const f of existingFilenames) {
+    if (f === outputName) continue;
+    const m = f.match(OLD_WEEKLY_RE);
+    if (!m) continue;
+    const old = { start: m[1], end: m[2] };
+    if (isRangeCovered(old, incoming)) superseded.push(f);
+  }
+  return superseded;
+}
+
 /**
  * 找出「同品类但仅部分重叠——谁都不完全包含谁」的区间对。
  *
