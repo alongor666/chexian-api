@@ -160,7 +160,42 @@ export function legacyNum(t) {
   return m ? parseInt(m[1], 10) : Infinity;
 }
 
-/** 证据列：status 证据 + 各 note（按时序，用 <br> 连接） */
+/**
+ * 活跃视图紧凑渲染阈值（SSOT，单测引用避免魔数漂移）。
+ * 活跃视图整读曾爆 25K token（40 任务 × 完整 desc + 全 note 链 + evidence，
+ * 见 BACKLOG uid 2026-07-09-claude-e1c892）。归档视图不受影响，保留完整历史，
+ * 被截断的 desc/note 全文永在 BACKLOG_LOG.jsonl，`bun scripts/backlog.mjs list <uid>` 可取。
+ */
+export const ACTIVE_DESC_MAX = 120;   // 活跃行 desc 截断字符数（按 Unicode 码点，中文安全）
+export const ACTIVE_NOTE_MAX = 120;   // 活跃行单条 note 截断字符数
+export const ACTIVE_NOTE_INLINE = 2;  // 活跃行内联展示的最近 note 条数上限，超出折叠为计数
+
+/** 按 Unicode 码点截断到 max（中文安全），超长去尾部悬垂反斜杠后加省略号。纯函数、不改入参 */
+function truncateChars(s, max) {
+  const str = String(s ?? '');
+  const chars = [...str];
+  if (chars.length <= max) return str;
+  // 去尾部悬垂 `\`，避免恰在 `\|` 转义中间截断留下打断表格分隔符的悬垂反斜杠
+  return chars.slice(0, max).join('').replace(/\\+$/, '') + '…';
+}
+
+/**
+ * 活跃视图末列：**不铺 evidence**（evidence 仅终态/归档渲染），note 链折叠——
+ *  - 0 条 → 空
+ *  - ≤ ACTIVE_NOTE_INLINE 条 → 各条截断后 <br> 连接（保留最近 1~2 条上下文）
+ *  - 更多 → 折叠为「N 条 note，最新：<截断的最新一条>」（真相全文在 JSONL，list <uid> 可取）
+ */
+function activeNotesCell(t) {
+  const notes = t.notes || [];
+  if (notes.length === 0) return '';
+  if (notes.length <= ACTIVE_NOTE_INLINE) {
+    return notes.map(n => truncateChars(n, ACTIVE_NOTE_MAX)).join(' <br>');
+  }
+  const latest = truncateChars(notes[notes.length - 1], ACTIVE_NOTE_MAX);
+  return `${notes.length} 条 note，最新：${latest}`;
+}
+
+/** 证据列：status 证据 + 各 note（按时序，用 <br> 连接）—— 完整视图（归档）用 */
 function evidenceCell(t) {
   const parts = [];
   if (t.evidence) parts.push(t.evidence);
@@ -168,9 +203,18 @@ function evidenceCell(t) {
   return parts.join(' <br>');
 }
 
-/** 渲染一行 10 列 */
-export function renderRow(t) {
-  return `| ${displayId(t)} | ${t.created} | ${t.section} | ${t.owner} | ${t.desc} | ${t.priority} | ${t.status} | ${t.docs} | ${t.code} | ${evidenceCell(t)} |`;
+/**
+ * 渲染一行 10 列。
+ * 默认（opts 缺省，含旧 `.map(renderRow)` 把 index 当第二参的调用）= **完整渲染**，
+ *   归档视图与 migrate.mjs 逐列等价校验依赖此默认不变。
+ * `opts.compact === true` = 活跃视图紧凑行：desc 截断 + note 链折叠 + 不铺 evidence。
+ * 检索键（displayId/created/section/owner/priority/status/docs/code）恒完整保留，只压 desc 正文与末列。
+ */
+export function renderRow(t, opts = {}) {
+  const compact = opts && opts.compact === true;
+  const desc = compact ? truncateChars(t.desc, ACTIVE_DESC_MAX) : t.desc;
+  const lastCol = compact ? activeNotesCell(t) : evidenceCell(t);
+  return `| ${displayId(t)} | ${t.created} | ${t.section} | ${t.owner} | ${desc} | ${t.priority} | ${t.status} | ${t.docs} | ${t.code} | ${lastCol} |`;
 }
 
 /** 活跃排序：(created, uid) 升序 —— 确定性，使「视图 == 折叠(日志)」字节稳定 */
@@ -280,7 +324,7 @@ export function renderBacklog(tasksAll) {
   const active = sortActive(list.filter(isActive));
   const calDate = latestTs(list);
   const dashboard = buildDashboard(active, calDate);
-  const body = active.map(renderRow).join('\n');
+  const body = active.map(t => renderRow(t, { compact: true })).join('\n');
   return `${backlogHeader(dashboard)}\n${body}\n`;
 }
 
@@ -303,7 +347,8 @@ export function renderArchive(tasksAll) {
   const doneCount = terminal.filter(t => !isDiscarded(t)).length;
   const discardedCount = terminal.filter(isDiscarded).length;
   const ordered = sortArchiveGrouped(terminal);
-  const body = ordered.map(renderRow).join('\n');
+  // 显式单参调用：归档保留完整渲染，避免 .map(renderRow) 把 index 当 opts 的脚滑
+  const body = ordered.map(t => renderRow(t)).join('\n');
   return `${archiveHeader(doneCount, discardedCount)}\n${body}\n`;
 }
 
