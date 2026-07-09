@@ -12,9 +12,21 @@
  *   开推送通道，会触发装载层扁平/子目录并存互斥闸拒启。
  *
  * ⚠️  诚实边界：本脚本是 cutover SOP 序列里的「一步」，**不负责**：
- *   - 开启 BRANCH_RLS_ENABLED（服务端安全闸，须 operator 独立核实后手动切换）
+ *   - 开启 BRANCH_RLS_ENABLED（服务端安全闸，须 operator 独立核实后手动切换，或由自动化经
+ *     真实查询核实——见下方「自动化接入」）
  *   - sync-vps（同步到 VPS 须另跑 `node scripts/sync-vps.mjs --dry-run` 先验）
  *   - 发放山西账号
+ *
+ * 自动化接入（2026-07-09 起，修复「晋升从未自动化 → SX 生产数据连续多日滞后 2 天且零告警」缺口）：
+ *   `scripts/sync-vps.mjs` 的 `runSxAutoPromote()` 在每次 `node scripts/sync-vps.mjs` 运行时，
+ *   若检测到本地存在 `validation/SX/` 目录，会先 SSH 到生产 VPS 真实查询
+ *   `GET /internal/data-fingerprint` 的 `security.branchRlsEnabled`（服务端运行时取值，
+ *   不是本地静态声明），确认为 `true` 后才代为调用：
+ *     `node scripts/release/sx-promote.mjs --apply --auto-verified-rls --rls-verification-note "<核实详情>"`
+ *   查询失败（网络/端点异常）或明确查到 `false` → **拒绝晋升**，`sync-vps.mjs` 以非零退出码
+ *   响亮失败（不静默跳过、不用陈旧 SX 数据继续同步）；细节见该函数与
+ *   `数据管理/lib/sx-promote-gate.mjs` 的 `evaluateSxAutoPromoteReadiness()`（纯函数，单测覆盖
+ *   promote/block/skip 三态）。`--rls-confirmed`（人工声明）路径完全不变，仍可独立手动调用。
  *
  * ⚠️  崩溃原子性声明（请勿在此处声称"atomic"）：
  *   本脚本的 Phase E（staging → final 批量 rename）**非跨进程崩溃原子**。
@@ -29,9 +41,11 @@
  *   彻底的崩溃原子（无中间态）需子目录单次 swap 或 sync/bootstrap 共守
  *   文件系统级 lock，超出本脚本范围，已登记为 follow-up。
  *
- * 调用时机：BRANCH_RLS_ENABLED=true 已在服务端核实生效（用 --rls-confirmed 声明）、
+ * 调用时机：BRANCH_RLS_ENABLED=true 已在服务端核实生效（人工用 --rls-confirmed 声明，或由
+ * scripts/sync-vps.mjs 自动化经真实查询核实后传 --auto-verified-rls，见上方「自动化接入」）、
  * SX parquet 在 validation/ 通过 ETL 质量校验、**且本地 current/ 已完成子目录布局迁移**
- * （cutover SOP T-1；布局中间态守卫会拦截扁平未迁移场景）后，由 operator 手动触发（非自动化推送）。
+ * （cutover SOP T-1；布局中间态守卫会拦截扁平未迁移场景）后触发——2026-07-09 起日常发布默认
+ * 走自动化路径；operator 手动触发（--rls-confirmed）仍保留，用于应急/首次 cutover/调试。
  *
  * 硬化要点（双闸 P0/P1/P0-2 缓解）：
  *   P0-1. 源省份 fail-fast：每文件 duckdb CLI 查 branch_code='SX' 全行一致，任一不满足 exit 1
@@ -87,6 +101,8 @@
  *   node scripts/release/sx-promote.mjs --source-dir /custom/path              # 覆盖源目录（测试/测试用，需 --unsafe-source-dir）
  *   node scripts/release/sx-promote.mjs --source-dir /custom --unsafe-source-dir  # 非默认源目录（测试用，打 ERROR 警告）
  *   node scripts/release/sx-promote.mjs --run-id 20260623T120000  # 指定 run-id 用于 backup 命名
+ *   node scripts/release/sx-promote.mjs --apply --auto-verified-rls --rls-verification-note "..."
+ *     # 自动化专用（由 scripts/sync-vps.mjs 代为调用，operator 不应手动传此组合——见「自动化接入」）
  *
  * 退出码：
  *   0 — 成功（dry-run 打印完毕 / apply 校验全通过）
@@ -133,6 +149,8 @@ const args = {
   force: false,
   allowEmpty: false,
   rlsConfirmed: false,
+  autoVerifiedRls: false,       // 自动化专用：由调用方（sync-vps.mjs）在真实查询生产 RLS 状态通过后传入
+  rlsVerificationNote: null,    // 配合 --auto-verified-rls：核实方式说明，落盘进 manifest 供审计追溯
   unsafeSourceDir: false,
   resume: false,  // 跳过 leftover preflight，由 operator 显式声明可安全幂等恢复
   sourceDir: null,
@@ -147,13 +165,15 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--force') args.force = true;
   else if (a === '--allow-empty') args.allowEmpty = true;
   else if (a === '--rls-confirmed') args.rlsConfirmed = true;
+  else if (a === '--auto-verified-rls') args.autoVerifiedRls = true;
+  else if (a === '--rls-verification-note') args.rlsVerificationNote = eat();
   else if (a === '--unsafe-source-dir') args.unsafeSourceDir = true;
   else if (a === '--resume') args.resume = true;
   else if (a === '--source-dir') args.sourceDir = resolve(eat());
   else if (a === '--target-dir') args.targetDir = resolve(eat());
   else if (a === '--run-id') args.runId = eat();
   else if (a === '--help' || a === '-h') {
-    console.log('见文件头注释。用法：node scripts/release/sx-promote.mjs [--apply] [--rls-confirmed] [--force] [--allow-empty] [--target-dir <dir>] [--source-dir <dir> --unsafe-source-dir] [--run-id <id>]');
+    console.log('见文件头注释。用法：node scripts/release/sx-promote.mjs [--apply] [--rls-confirmed | --auto-verified-rls --rls-verification-note "<说明>"] [--force] [--allow-empty] [--target-dir <dir>] [--source-dir <dir> --unsafe-source-dir] [--run-id <id>]');
     process.exit(0);
   } else {
     console.error(`❌ 未知参数: ${a}（见 --help）`);
@@ -660,6 +680,10 @@ export async function applyPromote(files) {
     runId: RUN_ID,
     sourceDir,
     targetDir,
+    // 审计追溯：这次 promote 的 RLS 安全闸是人工声明还是自动化真实核实（+ 核实方式说明）。
+    rlsVerification: args.rlsConfirmed
+      ? { source: 'manual', note: 'operator 手动声明 --rls-confirmed' }
+      : { source: 'automated', note: args.rlsVerificationNote },
     files: [],
     summary: null,
   };
@@ -993,16 +1017,24 @@ async function main() {
   console.log('');
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('  SX Premium 晋升 — validation/SX → current/SX/（分省子目录布局 · B5）');
-  console.log(`  模式: ${args.apply ? '【APPLY】' : '【DRY-RUN（默认）】'}${args.force ? ' [--force]' : ''}${args.rlsConfirmed ? ' [--rls-confirmed]' : ''}`);
+  const rlsFlagLabel = args.rlsConfirmed ? ' [--rls-confirmed]' : (args.autoVerifiedRls ? ' [--auto-verified-rls]' : '');
+  console.log(`  模式: ${args.apply ? '【APPLY】' : '【DRY-RUN（默认）】'}${args.force ? ' [--force]' : ''}${rlsFlagLabel}`);
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('');
 
-  // P2-10：--apply 必须携带 --rls-confirmed（operator 声明已核实生产 RLS-on）
-  if (args.apply && !args.rlsConfirmed) {
-    log('error', `[sx-promote] --apply 拒绝执行：缺少 --rls-confirmed 旗标。`);
+  // P2-10：--apply 必须携带 --rls-confirmed（operator 手动声明）或 --auto-verified-rls（自动化
+  // 已对生产做过真实查询核实，见 scripts/sync-vps.mjs runSxAutoPromote() + queryVpsSecurityStatus()）。
+  // 二者二选一即可，缺一律拒绝——不接受"既非人工声明也非自动核实"的裸 --apply。
+  if (args.apply && !args.rlsConfirmed && !args.autoVerifiedRls) {
+    log('error', `[sx-promote] --apply 拒绝执行：缺少 --rls-confirmed 或 --auto-verified-rls 旗标。`);
     log('error', `  本脚本是跨省数据 cutover 步骤，须在生产 BRANCH_RLS_ENABLED=true 已核实后调用。`);
     log('error', `  operator 核实生产 RLS-on 后，传 --rls-confirmed 声明，再运行：`);
     log('error', `  node scripts/release/sx-promote.mjs --apply --rls-confirmed`);
+    log('error', `  （自动化调用方须改用 --auto-verified-rls，且必须在真实查询到 RLS=true 后才传，见文件头注释）`);
+    process.exit(1);
+  }
+  if (args.apply && args.autoVerifiedRls && !args.rlsVerificationNote) {
+    log('error', `[sx-promote] --auto-verified-rls 必须配合 --rls-verification-note "<核实方式说明>"（审计追溯用，不可留空）。`);
     process.exit(1);
   }
 

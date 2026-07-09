@@ -56,6 +56,8 @@ import {
   toDuckdbReadParquetList,
   findPolicyCurrentSyncGateViolations,
 } from './lib/policy-current-shards.mjs';
+// SX 自动晋升安全闸纯函数（2026-07-09，见文件头及 runSxAutoPromote() 注释）
+import { evaluateSxAutoPromoteReadiness } from '../数据管理/lib/sx-promote-gate.mjs';
 
 /**
  * B5 cutover · sync 生产多省白名单（GATED 闸 + 任务构建用）——显式常量 ['SC','SX']。
@@ -593,6 +595,105 @@ async function queryVpsPolicyFingerprint(config) {
     return { maxDate: p.maxDate ?? null, rowCount: Number(p.rowCount ?? 0) };
   } catch {
     return null; // 404 / 网络失败 / JSON 解析失败 → 降级
+  }
+}
+
+/**
+ * 解析 /internal/data-fingerprint 端点的原始 curl stdout，判定 BRANCH_RLS_ENABLED 运行时取值。
+ * 抽成纯函数（PR #1014 对抗性评审 MEDIUM 发现：原先真正做判定的逻辑内联在
+ * queryVpsSecurityStatus() 里，被 SSH 网络调用包裹，从未有测试直接执行过这段判定本体，
+ * 只测过它的调用方——调用方测试靠 mock 整个函数绕过了它）。
+ *
+ * 严格类型检查（非 `??`/宽松真值判断）：`branchRlsEnabled` 必须是**布尔** true/false 才采信；
+ * 缺字段、非布尔（如字符串 "true"）、`success:false`、JSON 解析失败均视为「核实失败」。
+ *
+ * @param {string} stdout curl 原始输出（可能为空/非 JSON/JSON 但字段缺失或类型不符）
+ * @returns {boolean|null} true=已核实开启 / false=已核实关闭 / null=核实失败（不可采信）
+ */
+function parseSecurityStatusResponse(stdout) {
+  try {
+    const parsed = JSON.parse((stdout || '').trim());
+    if (!parsed?.success || typeof parsed?.data?.security?.branchRlsEnabled !== 'boolean') return null;
+    return parsed.data.security.branchRlsEnabled;
+  } catch {
+    return null; // 空 stdout / 非 JSON（如端点未部署返回 404 HTML）→ 核实失败
+  }
+}
+
+/**
+ * SX 自动晋升安全闸 — 真实查询生产 BRANCH_RLS_ENABLED 运行时取值（2026-07-09）。
+ *
+ * 复用同一 /internal/data-fingerprint 端点（server/src/app.ts 已扩展 data.security.branchRlsEnabled）
+ * 与 queryVpsPolicyFingerprint 相同的 SSH+curl 连接方式，避免重复造一条 SSH 通道。
+ * 判定逻辑见上方 parseSecurityStatusResponse()（可脱离网络单独测试）。
+ *
+ * @param {object} config SSH 配置
+ * @returns {Promise<boolean|null>} true=已核实开启 / false=已核实关闭 / null=查询失败（网络/端点/解析异常）
+ */
+async function queryVpsSecurityStatus(config) {
+  const url = 'http://localhost:3000/internal/data-fingerprint';
+  try {
+    const { stdout } = await execRemote(config, `curl -s -m 5 ${quoteForSingle(url)}`, {
+      silent: true,
+      allowFailure: true,
+    });
+    return parseSecurityStatusResponse(stdout);
+  } catch {
+    return null; // SSH 连接本身失败（非 curl 返回的错误 stdout）→ 查询失败
+  }
+}
+
+/**
+ * SX 自动晋升主入口（2026-07-09，修复 sx-promote.mjs 此前从未接入自动化链路导致
+ * SX 生产数据连续多日滞后且零告警的缺口）。
+ *
+ * 纯本地检测（数据管理/warehouse/validation/SX/ 是否存在）+ 真实远程 RLS 核实 +
+ * 按 evaluateSxAutoPromoteReadiness() 判定结果决定是否 spawn sx-promote.mjs --apply。
+ * 不改变 sx-promote.mjs 本身的安全内核（sha256/branch_code/staging-then-rename/leftover
+ * preflight 全部不变），只是把"谁来触发 + 谁来核实 RLS"从人工换成自动化。
+ *
+ * 语义：'skip'（非 SX 部署，静默跳过，日志仅告知）/ 'promote'（核实通过，执行晋升，
+ * 晋升子进程失败视为 block）/ 'block'（RLS 未核实或已核实为关闭，拒绝，调用方应让整个
+ * sync-vps.mjs 非零退出——响亮失败，不静默用陈旧 SX 数据继续同步）。
+ *
+ * @param {object} sshConfig
+ * @param {{ validationSxDir?: string, log?: Function }} [options] 供测试覆盖路径/日志钩子
+ * @returns {Promise<{ verdict: 'skip'|'promote'|'block', reason: string }>}
+ */
+async function runSxAutoPromote(sshConfig, options = {}) {
+  const validationSxDir = options.validationSxDir
+    ?? join(ROOT_DIR, '数据管理/warehouse/validation/SX');
+  const logFn = options.log || log;
+  // 依赖注入点（单测用）：默认走真实实现，测试传 mock 覆盖，不需要 vi.mock 整个模块。
+  const queryRls = options.queryRls || queryVpsSecurityStatus;
+  const runPromoteSubprocess = options.runPromoteSubprocess
+    || ((note) => runLocal('node', [
+      'scripts/release/sx-promote.mjs', '--apply', '--auto-verified-rls', '--rls-verification-note', note,
+    ]));
+  const validationSxExists = existsSync(validationSxDir);
+
+  if (!validationSxExists) {
+    return { verdict: 'skip', reason: 'validation/SX 目录不存在（非 SX 部署），跳过自动晋升检测' };
+  }
+
+  logFn('yellow', '▶ SX 自动晋升前置核实：查询生产 BRANCH_RLS_ENABLED 运行时取值...');
+  const rlsEnabled = await queryRls(sshConfig);
+  const readiness = evaluateSxAutoPromoteReadiness({ validationSxExists, rlsEnabled });
+
+  if (readiness.verdict === 'block') {
+    logFn('red', `❌ SX 自动晋升拒绝: ${readiness.reason}`);
+    return readiness;
+  }
+
+  logFn('green', `✓ SX 晋升前置核实通过: ${readiness.reason}`);
+  logFn('cyan', '▶ 执行 SX 自动晋升: node scripts/release/sx-promote.mjs --apply --auto-verified-rls ...');
+  try {
+    const note = `sync-vps.mjs runSxAutoPromote() 于 ${new Date().toISOString()} 经 GET /internal/data-fingerprint 实时核实 branchRlsEnabled=true`;
+    await runPromoteSubprocess(note);
+    return { verdict: 'promote', reason: readiness.reason };
+  } catch (e) {
+    logFn('red', `❌ SX 自动晋升子进程失败: ${e.message}`);
+    return { verdict: 'block', reason: `sx-promote.mjs 子进程失败: ${e.message}` };
   }
 }
 
@@ -1247,6 +1348,26 @@ async function main(argv = process.argv.slice(2)) {
     process.exit(1);
   }
 
+  // B3（codex 闸-1 P0-2）：用 kind:'policy-current' 跨「扁平 policy/current」与「子目录 policy/current/<省>」
+  // 两种 label 统一识别，防子目录布局下精确 label 比对漏判 → 绕过 freshness 完整性闸/SX 自动晋升闸。
+  const willSyncPolicy = buildSyncTasks(runConfig).some((t) => t.kind === 'policy-current');
+
+  // SX 自动晋升（2026-07-09）：置于 overlap 检测之前，使晋升后的 current/SX/ 也受下方
+  // overlap 门禁保护（若晋升留下与既有文件重叠的滚动分片，会被下面这道闸拦下，而非
+  // 直接推上生产）。仅在本次确实会同步 policy/current 时触发——--domain / --check 不该
+  // 触发晋升副作用（与下方完整性闸门同一豁免条件）。
+  if (!runConfig.checkMode && willSyncPolicy) {
+    const sxReadiness = await runSxAutoPromote(sshConfig);
+    if (sxReadiness.verdict === 'block') {
+      log('red', '  SX 核实未通过：本次运行整体中止（fail-safe，不会用陈旧/未核实数据覆盖生产）——SC 与其余域本次也不会被同步，需用 --domain 单独重试非 SX 相关同步来补上。');
+      recordEvent({ stage: 'vps_sync', step: 'sx_auto_promote', status: 'failure', error: sxReadiness.reason });
+      process.exit(1);
+    }
+    if (sxReadiness.verdict === 'promote') {
+      recordEvent({ stage: 'vps_sync', step: 'sx_auto_promote', status: 'success' });
+    }
+  }
+
   // policy/current 重叠门禁：拒绝把翻倍数据推上 VPS
   // 共享逻辑 → scripts/lib/parquet-overlap-check.mjs（与 check-governance + daily.mjs 同源）
   const overlapOk = assertNoPolicyCurrentOverlap(LOCAL_CURRENT_DIR, {
@@ -1258,9 +1379,6 @@ async function main(argv = process.argv.slice(2)) {
   // 完整性闸门：本地 policy 数据若比 VPS 现役更旧/更少则拒绝，防残缺数据覆盖生产。
   // 仅在本次确实会同步 policy/current 时执行——--domain（只传对应 fact 域 latest.parquet，
   // 不含 policy）和 --check（仅预检）不该被 policy 新鲜度阻断。
-  // B3（codex 闸-1 P0-2）：用 kind:'policy-current' 跨「扁平 policy/current」与「子目录 policy/current/<省>」
-  // 两种 label 统一识别，防子目录布局下精确 label 比对漏判 → 绕过 freshness 完整性闸。
-  const willSyncPolicy = buildSyncTasks(runConfig).some((t) => t.kind === 'policy-current');
   if (!runConfig.checkMode && willSyncPolicy) {
     const freshnessOk = await assertLocalNotStaleVsVps(sshConfig, LOCAL_CURRENT_DIR, {
       onPass: (msg) => log('green', `✓ 完整性闸门: ${msg}`),
@@ -1317,6 +1435,9 @@ export {
   buildSyncTasks,
   rsyncLatestAtomically,
   evaluateFreshness,
+  queryVpsSecurityStatus,
+  parseSecurityStatusResponse,
+  runSxAutoPromote,
 };
 
 const isMain = process.env.RUN_MAIN || (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]));

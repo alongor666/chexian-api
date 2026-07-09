@@ -193,6 +193,13 @@ app.get('/health', (req, res) => {
  * 供 scripts/sync-vps.mjs 的完整性闸门对比"本地 vs VPS 现役"的 policy maxDate + rowCount，
  * 防止某台 parquet 不全的机器把残缺数据 rsync 覆盖到生产。
  *
+ * 2026-07-09 起还供 scripts/sync-vps.mjs 的 runSxAutoPromote() 真实核实生产
+ * BRANCH_RLS_ENABLED 运行时取值（见 data.security.branchRlsEnabled）——SX premium
+ * 数据从 validation/SX/ 自动晋升到 current/SX/ 前的安全闸，取代此前"人工每次手动
+ * 声明 --rls-confirmed、没人记得做就悄悄用陈旧数据"的单点故障（详见
+ * scripts/release/sx-promote.mjs 文件头「自动化接入」）。复用本端点而非新增，
+ * 因为两者共享同一条"localhost-only 内部状态回显"防线，无需重复造安全检查。
+ *
  * 安全：仅直连 PM2(localhost:3000) 可访问——经 Nginx 的外部请求会带 X-Forwarded-For /
  * X-Real-IP 头，一律 403。故意不放 /api/* 路径以遵守"所有 /api/* 必须鉴权"红线
  * （见 .claude/rules/api-routes.md）。数据已在内存连接池，毫秒级。
@@ -220,6 +227,10 @@ app.get('/internal/data-fingerprint', async (req, res) => {
         policy: {
           maxDate: rows[0]?.max_date ?? null,
           rowCount: Number(rows[0]?.row_count ?? 0),
+        },
+        // 运行时真实取值（非静态声明）：permission.ts 判定 RLS 是否生效用的同一严格字符串比较。
+        security: {
+          branchRlsEnabled: dbEnv.BRANCH_RLS_ENABLED === 'true',
         },
       },
     });
