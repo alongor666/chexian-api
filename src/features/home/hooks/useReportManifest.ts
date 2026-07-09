@@ -13,10 +13,13 @@ import { getManifestUrl, type ReportEntry } from '../data/reportEntries'
 import type { ReportScope } from '../data/reportScope'
 import type { ReportManifest } from '../data/resolveReport'
 
-async function fetchManifest(slug: string): Promise<ReportManifest | null> {
+async function fetchManifest(
+  slug: string,
+  targetBranch?: string | null
+): Promise<ReportManifest | null> {
   let res: Response
   try {
-    res = await fetch(getManifestUrl(slug), {
+    res = await fetch(getManifestUrl(slug, targetBranch), {
       credentials: 'include',
       headers: { Accept: 'application/json' },
     })
@@ -46,16 +49,22 @@ async function fetchManifest(slug: string): Promise<ReportManifest | null> {
   }
 }
 
-export function useReportManifest(entry: ReportEntry, scope: ReportScope) {
+export function useReportManifest(
+  entry: ReportEntry,
+  scope: ReportScope,
+  targetBranch?: string | null
+) {
   return useQuery({
-    // scope 进 queryKey：切换用户（分公司管理员 ↔ 机构用户）不得复用彼此的 manifest 缓存
+    // scope 进 queryKey：切换用户（分公司管理员 ↔ 机构用户）不得复用彼此的 manifest 缓存。
+    // targetBranch 进 queryKey：全国超管切省后不得复用旧省 manifest 缓存（跨省串读，B346 续作）。
     queryKey: [
       'report-manifest',
       entry.slug,
       scope.kind,
       scope.kind === 'org' ? `${scope.branch}/${scope.org}` : null,
+      targetBranch ?? null,
     ],
-    queryFn: () => fetchManifest(entry.slug),
+    queryFn: () => fetchManifest(entry.slug, targetBranch),
     // forbidden：不发请求（后端也会 403），卡片显示无权限
     enabled: scope.kind !== 'forbidden',
     staleTime: 60 * 60 * 1000, // 1 小时，与 data-version 对齐
