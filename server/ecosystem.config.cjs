@@ -40,12 +40,24 @@ module.exports = {
         // 'true' = 全员开放（生产现状，后端 cost 闸旁路）；改 'false' 全关；
         // 删除本行 = 按用户 specialFeatures 'cost' 强制（届时前端构建变量须同步撤）。
         ENABLE_COMPREHENSIVE_ANALYSIS: 'true',
-        // 通用立方体灰度阶段 1（BACKLOG uid=2026-06-11-claude-90a92c，PR #595/#600-#603）：
-        // 影子对账 —— 对外仍返回原路径结果，后台双跑立方体逐字段比对。
-        // 观测面：GET /health 的 cubes + cubeShadow；差异明细在 PM2 日志 [CubeShadow]。
-        // 验收（设计文档 §4 阶段 1）：连续 7 天 mismatch=0 → 改 CUBE_ROUTING_ENABLED: 'true' 切流。
-        // 回滚：删除本行 revert PR，或 VPS 上改 'false' + sudo /usr/local/bin/deploy-chexian-api reload。
+        // 通用立方体灰度阶段 2 · 部分切流（BACKLOG uid=2026-06-11-claude-90a92c；
+        // 用户 2026-07-09 拍板切流，审计报告：开发文档/reviews/2026-07-09-后端查询性能审计.md）：
+        // - CUBE_ROUTING_ROUTES 白名单内三路由（自 2026-06-12 影子对账至今 mismatch=0）
+        //   对外直返立方体结果——缓存未命中的冷路径从秒级降至毫秒级；不可服务的筛选组合自动回退原路径。
+        // - cost / kpi 不在白名单：留在影子期继续验证（探针 OOM 修复后 cost 立方体需先在生产证明
+        //   exact=true + 影子零差异，再扩入白名单）。
+        // - CUBE_SHADOW_COMPARE 保留 'true'：对未切流路由（cost/kpi）继续影子对账；
+        //   对已切流路由自动互斥失效（cube-routing.ts RED LINE），不会双跑。
+        // - CUBE_SHADOW_SAMPLE_RATE=0.05：已切流路由按 5% 采样后台对账 legacy（R3 缺口闭环，
+        //   BACKLOG bf2c4e）——切流后语义漂移仍有生产 oracle，不伤请求时延。
+        // 观测面：GET /health 的 cubes + cubeShadow（计数器已落盘跨 reload 累计）；晋级判定
+        // node scripts/release/cube-promote.mjs。
+        // 回滚：node scripts/cube-rollback.mjs，或 VPS 上改 CUBE_ROUTING_ENABLED='false' +
+        // sudo /usr/local/bin/deploy-chexian-api reload（回到纯影子期，与多分公司 RLS 回滚同套路）。
         CUBE_SHADOW_COMPARE: 'true',
+        CUBE_ROUTING_ENABLED: 'true',
+        CUBE_ROUTING_ROUTES: 'trend,growth,salesman-ranking',
+        CUBE_SHADOW_SAMPLE_RATE: '0.05',
         // cx sql 派生域联邦切流（PR #676 P0 + #677 P0.5，计划 .claude/plans/cx-cli-swift-pudding.md）：
         // 'true' = cx sql 准入从单一 PolicyFact 扩展为已实证权限列的派生视图（RenewalTrackerFact/
         // QuoteConversion/CrossSellFact/NewEnergyClaims direct + BrandDim/PlateRegionMap exempt），
