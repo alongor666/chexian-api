@@ -69,6 +69,7 @@ import {
   isCoveredBySameQualifier,
   findCoveredKeys,
   findPartialOverlapPairs,
+  findSupersededOldWeeklyFiles,
 } from './lib/range-coverage.mjs';
 // 2026-07-06：上游导出窗口起点前移（四川实测）时，新旧全量文件呈"部分重叠、谁都不
 // 完全包含谁"关系，findCoveredKeys 覆盖不到，需要按"不重复不遗漏"原则合并
@@ -1982,7 +1983,6 @@ async function main() {
   // 4. 处理周更分片（每次重新转换）
   // 新格式（01_签单清单_*）：每个文件独立命名，多文件共存（剔摩+限摩）
   // 旧格式（每日数据_*）：按日期范围命名，归档旧版本
-  const weeklyStart = config.weekly_start.replace(/-/g, '');
   let weeklyArchiveDone = false;  // 旧格式归档只做一次
 
   const OLD_WEEKLY_RE = /^每日数据_(\d{8})_(\d{8})\.parquet$/;
@@ -2023,11 +2023,16 @@ async function main() {
       continue;
     }
 
-    // 旧格式归档旧的周更 parquet（仅限同为旧格式的文件，不归档新格式）
+    // 旧格式归档旧的周更 parquet（仅限同为旧格式的文件，不归档新格式）。
+    // 2026-07-09 山西数据晋升事故：此前用全局 shard-config.json 的 weeklyStart
+    // 与文件名日期比较「是否同起点」，但实际滚动窗口起点（如 SX/SC 均为 20250601）
+    // 早已与该配置值（20240101）不一致，导致判定永远不匹配、归档静默从未触发——
+    // 旧文件在 currentDir（validation/SX 或 fact/policy/current/SC）持续累积，
+    // 若被误一并晋升到生产会导致重叠区间保费双倍计入。改用本次转换文件的**实际**
+    // 区间（range）判定覆盖关系，不依赖可能漂移的全局配置。
     if (!isNewFormat && !weeklyArchiveDone) {
-      const existingOldWeekly = readdirSync(currentDir)
-        .filter(f => f.endsWith('.parquet') && f.startsWith('每日数据_') && f !== outputName
-                && extractDateRange(f)?.start === weeklyStart);
+      const existingParquet = readdirSync(currentDir).filter(f => f.endsWith('.parquet'));
+      const existingOldWeekly = findSupersededOldWeeklyFiles(existingParquet, range, outputName);
       for (const old of existingOldWeekly) {
         const archivedName = `${old.replace('.parquet', '')}_${formatDateTime()}.parquet`;
         renameSync(join(currentDir, old), join(archiveDir, archivedName));
