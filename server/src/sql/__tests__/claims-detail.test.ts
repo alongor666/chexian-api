@@ -398,12 +398,26 @@ describe('generateGeoRiskByPlateQuery', () => {
     expect(sql).toContain('p.plate_no');
   });
 
-  it('branchCode 未传/传 SC → 沿用历史硬编码 CASE（字节安全，四川行为不变）', () => {
+  it('branchCode 未传/缺省（全国合并视图）→ 回落硬编码 CASE 兜底', () => {
     const sqlNoParam = generateGeoRiskByPlateQuery(EMPTY_FILTERS, '1=1');
-    const sqlSC = generateGeoRiskByPlateQuery(EMPTY_FILTERS, '1=1', 'SC');
-    expect(sqlNoParam).toBe(sqlSC);
-    expect(sqlSC).toContain("WHEN p.plate_no LIKE '川A%' THEN '成都'");
-    expect(sqlSC).not.toContain('PlateRegionMap');
+    expect(sqlNoParam).toContain("WHEN p.plate_no LIKE '川A%' THEN '成都'");
+    expect(sqlNoParam).not.toContain('PlateRegionMap');
+  });
+
+  it('BACKLOG 2026-07-07-claude-f23ffc：branchCode=SC → 改走 JOIN PlateRegionMap（自治州短名 override，与旧硬编码短名逐字一致）', () => {
+    // SC 生产路径已从硬编码 CASE 统一到 JOIN 权威维表（消除两份映射漂移风险）。
+    // JOIN 输出与旧硬编码短名的逐前缀零差异已由 duckdb 直查真实 SC 保单对账证明。
+    const sql = generateGeoRiskByPlateQuery(EMPTY_FILTERS, '1=1', 'SC');
+    expect(sql).toContain('LEFT JOIN PlateRegionMap prm');
+    expect(sql).toContain("prm.province IN ('四川', '重庆')");
+    expect(sql).not.toContain("WHEN p.plate_no LIKE '川A%' THEN '成都'");
+    // 三处民族自治州显式剥成短名，逐字对齐旧硬编码短名
+    expect(sql).toContain("WHEN prm.city = '阿坝藏族羌族自治州' THEN '阿坝'");
+    expect(sql).toContain("WHEN prm.city = '甘孜藏族自治州' THEN '甘孜'");
+    expect(sql).toContain("WHEN prm.city = '凉山彝族自治州' THEN '凉山'");
+    // 省级兜底（%省）归其他，对齐旧硬编码 ELSE '其他' 被过滤
+    expect(sql).toContain("WHEN prm.city LIKE '%省' THEN '其他'");
+    expect(sql).toContain("WHERE plate_city != '其他'");
   });
 
   it('branchCode=SX → JOIN PlateRegionMap 派生，不含四川硬编码 CASE（阶段4）', () => {
@@ -502,19 +516,30 @@ describe('generateGeoComparisonQuery', () => {
     expect(sql).toContain('CASE WHEN NOT is_cross_region THEN reserve_amount END');
   });
 
-  it('branchCode 未传/传 SC → 沿用历史硬编码 CASE（字节安全，四川行为不变）', () => {
+  it('branchCode 未传/缺省（全国合并视图）→ 回落硬编码 CASE 兜底', () => {
     const sqlNoParam = generateGeoComparisonQuery(EMPTY_FILTERS, '1=1');
-    const sqlSC = generateGeoComparisonQuery(EMPTY_FILTERS, '1=1', 'SC');
-    expect(sqlNoParam).toBe(sqlSC);
-    expect(sqlSC).toContain("WHEN p.plate_no LIKE '川A%' THEN '510100成都市'");
-    expect(sqlSC).not.toContain('PlateRegionMap');
+    expect(sqlNoParam).toContain("WHEN p.plate_no LIKE '川A%' THEN '510100成都市'");
+    expect(sqlNoParam).not.toContain('PlateRegionMap');
+  });
+
+  it('BACKLOG 2026-07-07-claude-f23ffc：branchCode=SC → 改走 JOIN PlateRegionMap（仅四川本省，保留渝牌非跨区口径）', () => {
+    // SC 生产路径统一到 JOIN；is_cross_region 与旧硬编码逐记录零差异已由 duckdb 直查真实理赔对账证明。
+    const sql = generateGeoComparisonQuery(EMPTY_FILTERS, '1=1', 'SC');
+    expect(sql).toContain('LEFT JOIN PlateRegionMap prm');
+    // 板块7 SC 仅纳入四川本省（不含重庆），保留渝牌不判定跨区的历史口径
+    expect(sql).toContain("prm.province IN ('四川')");
+    expect(sql).not.toContain("prm.province IN ('四川', '重庆')");
+    expect(sql).not.toContain("WHEN p.plate_no LIKE '川A%' THEN '510100成都市'");
+    // 省级兜底（%省）归 NULL → 非跨区，对齐旧硬编码 ELSE NULL
+    expect(sql).toContain("CASE WHEN prm.city LIKE '%省' THEN NULL ELSE prm.city END AS plate_home_city");
+    expect(sql).toContain('WHEN plate_home_city IS NULL THEN FALSE');
   });
 
   it('branchCode=SX → JOIN PlateRegionMap 派生 plate_home_city，未知前缀仍归非跨区（阶段4，兼容 #939）', () => {
     const sql = generateGeoComparisonQuery(EMPTY_FILTERS, '1=1', 'SX');
     expect(sql).toContain('LEFT JOIN PlateRegionMap prm');
     expect(sql).toContain("prm.province IN ('山西')");
-    expect(sql).toContain('prm.city AS plate_home_city');
+    expect(sql).toContain("CASE WHEN prm.city LIKE '%省' THEN NULL ELSE prm.city END AS plate_home_city");
     expect(sql).toContain("regexp_replace(c.accident_city, '^[0-9]+', '') AS accident_city_norm");
     expect(sql).toContain('WHEN plate_home_city IS NULL THEN FALSE');
     expect(sql).toContain('WHEN accident_city_norm != plate_home_city THEN TRUE');
