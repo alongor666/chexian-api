@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { buildRsyncArgs, buildPolicyCurrentTasks } from '../sync-vps.mjs';
+import { buildRsyncArgs, buildPolicyCurrentTasks, buildStandardSyncTasks } from '../sync-vps.mjs';
 
 // ============================================================
 // buildRsyncArgs：rsync 参数纯函数（rsyncDir + printDryRun 单一来源，防命令串漂移）
@@ -93,6 +93,63 @@ describe('buildPolicyCurrentTasks — critical policy-current 任务标记 atomi
       const tasks = buildPolicyCurrentTasks(dir, '/remote/current', ['SC', 'SX']);
       expect(tasks).toHaveLength(2);
       for (const t of tasks) expect(t.atomic).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ============================================================
+// buildStandardSyncTasks：原子同步须覆盖服务端 glob 读的 critical fact 域
+// （BACKLOG 2026-07-09-claude-78cc23 · 承接 policy/current 的 2026-07-03-claude-6c23b3）。
+// fact/claims_detail 与 policy/current 同为 critical:true 且同被 loadMultipleParquet() 的
+// `claims_*.parquet` / `current/*.parquet` glob 读，有完全相同的半份数据风险，故须同享原子同步。
+// 反向锁定：原子性只授予 glob 读的 critical fact 域，不 blanket 应用到所有 critical（dim/* 保持非原子）。
+// ============================================================
+describe('buildStandardSyncTasks — critical glob-读 fact 目录标记 atomic:true', () => {
+  const findTask = (tasks, label) => tasks.find((t) => t.label === label);
+
+  // 注入扁平 current 临时目录 → policy/current 解析为单任务，不依赖 worktree 内 warehouse 实数据。
+  function makeFlatCurrent() {
+    const dir = mkdtempSync(join(tmpdir(), 'atomic-std-current-'));
+    writeFileSync(join(dir, '每日数据_20260101.parquet'), '');
+    return dir;
+  }
+
+  it('fact/claims_detail 任务带 atomic:true（与 policy/current 同为服务端 glob 读的 critical 年度分区）', () => {
+    const dir = makeFlatCurrent();
+    try {
+      const tasks = buildStandardSyncTasks('/remote', '/frontend/dist', { localCurrentDir: dir });
+      const claims = findTask(tasks, 'fact/claims_detail');
+      expect(claims, 'fact/claims_detail 任务应存在').toBeDefined();
+      expect(claims.critical).toBe(true);
+      expect(claims.atomic).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('policy/current 任务保持 atomic:true（2026-07-03-claude-6c23b3 不回归）', () => {
+    const dir = makeFlatCurrent();
+    try {
+      const tasks = buildStandardSyncTasks('/remote', '/frontend/dist', { localCurrentDir: dir });
+      const policy = findTask(tasks, 'policy/current');
+      expect(policy, 'policy/current 任务应存在').toBeDefined();
+      expect(policy.atomic).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('非目标目录（dim/salesman、dim/plan 虽 critical、fact/renewal_tracker、fact/cross_sell）保持非 atomic（字节安全基线）', () => {
+    const dir = makeFlatCurrent();
+    try {
+      const tasks = buildStandardSyncTasks('/remote', '/frontend/dist', { localCurrentDir: dir });
+      for (const label of ['dim/salesman', 'dim/plan', 'fact/renewal_tracker', 'fact/cross_sell']) {
+        const t = findTask(tasks, label);
+        expect(t, `任务 ${label} 应存在`).toBeDefined();
+        expect(t.atomic, `任务 ${label} 不应带 atomic`).toBeFalsy();
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
