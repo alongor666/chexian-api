@@ -69,6 +69,7 @@ const SUB_CLIENT_FILES = [
 const POST_SPLIT_ADDITIONS = [
   // 例：{ name: 'premium.forecast', pr: 'PR #560' },
   { name: 'getPivot', pr: 'PR #876' }, // 图表账本页 /chart-ledger：维度×指标 pivot 只读查询
+  { name: 'data.metadata', pr: 'backlog 2026-07-09-claude-00954e / PR #988' }, // org_user 就绪探测（角色无关 /data/metadata）
 ];
 
 /**

@@ -141,8 +141,9 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: 'ai', method: 'capabilities', args: NO_ARGS },
   { ns: 'ai', method: 'quickSuggestions', args: NO_ARGS },
 
-  // ── data（4）──
+  // ── data（5）──
   { ns: 'data', method: 'files', args: NO_ARGS },
+  { ns: 'data', method: 'metadata', args: NO_ARGS },
   { ns: 'data', method: 'load', args: () => ['f.parquet'] },
   { ns: 'data', method: 'upload', args: () => [new File(['x'], 'f.parquet')] },
   { ns: 'data', method: 'version', args: NO_ARGS },

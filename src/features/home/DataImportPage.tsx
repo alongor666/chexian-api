@@ -30,6 +30,15 @@ export const DataImportPage: React.FC = () => {
   // 获取原始路径（从路由守卫重定向过来时携带）
   const fromPath = resolveRedirectPath(location.state, '/dashboard');
 
+  // 挂载时拉取后端文件列表。
+  // DataContext 的全局就绪探测已改用 /data/metadata（角色无关，修复 org_user 全站
+  // 重定向 backlog 2026-07-09-claude-00954e），不再全局自动拉 /data/files。文件列表
+  // 仅本数据管理页需要，而本页受 RouteAccessGuard 仅放行给分公司管理员，故在此按需
+  // 拉取——org_user 到不了本页，也就不会触发 /data/files 的 403。
+  useEffect(() => {
+    refreshFiles();
+  }, [refreshFiles]);
+
   // 后端已加载数据时自动跳转到仪表盘
   useEffect(() => {
     if (isDataLoaded && currentFile && !dataLoading) {
