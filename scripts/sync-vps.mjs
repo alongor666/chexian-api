@@ -389,6 +389,38 @@ const RSYNC_EXCLUDES = ['_incoming.parquet', '*.tmp', '_tmp/', '.DS_Store'];
 const RSYNC_EXCLUDE_ARGS = RSYNC_EXCLUDES.flatMap((p) => ['--exclude', p]);
 
 /**
+ * 构造一次 rsync 目录同步的参数数组。rsyncDir（执行）与 printDryRun（展示）共用此单一来源，
+ * 避免手工另拼命令串导致「实际执行 ≠ dry-run 打印」漂移。
+ *
+ * @param {object} o
+ * @param {string} o.src 本地源目录（须已以 / 结尾，rsync 语义：同步目录内容而非目录本身）
+ * @param {string} o.remote 远端目标（形如 `alias:/remote/dir/`，须已以 / 结尾）
+ * @param {boolean} [o.deleteRemote=true] 是否 --delete（false = 累积目录，如 reports，不删远端历史）
+ * @param {boolean} [o.atomic=false] 是否原子同步（policy/current 等 critical 目录，BACKLOG 2026-07-03-claude-6c23b3）：
+ *   - `--delay-updates`：新/改分片先落目标目录下 `.~tmp~/`，传输末尾快速接连重命名就位——
+ *     传输全程现役分片不动，服务端 `current/*.parquet` 非递归 glob 看不到 `.~tmp~/`，
+ *     危险窗口从「整个传输时长」收窄到「一次亚秒级重命名突发」。
+ *   - 带删除时用 `--delete-after` 取代裸 `--delete`（= --delete-during）：删除也延后到末尾，
+ *     并发读取者绝不遇「分片已删、替换未就位」中间态。
+ *   非原子路径（atomic=false）参数逐字节等价历史（仍 `--delete`，无 `--delay-updates`），字节安全基线不破。
+ *   注：`--delay-updates`/`--delete-after` 属接收端（VPS rsync）行为，须 VPS rsync 支持（GNU rsync ≥ 2.6.4，Linux 普遍具备）。
+ * @returns {string[]}
+ */
+export function buildRsyncArgs({ src, remote, deleteRemote = true, atomic = false }) {
+  const deleteArgs = deleteRemote === false ? [] : (atomic ? ['--delete-after'] : ['--delete']);
+  const atomicArgs = atomic ? ['--delay-updates'] : [];
+  return [
+    '-azv',
+    ...atomicArgs,
+    ...deleteArgs,
+    ...RSYNC_EXCLUDE_ARGS,
+    '-e', 'ssh',
+    src,
+    remote,
+  ];
+}
+
+/**
  * 多省 Phase B B3 · policy/current 同步任务构建（**退役 #753 前缀方案**，改分省子目录 current/<省>/）。
  *
  * 设计（codex 闸-1 P0-1/P0-2 收紧）：
@@ -425,6 +457,7 @@ function buildPolicyCurrentTasks(localCurrentDir, remoteCurrent, allowedBranches
         local: join(localCurrentDir, branch),
         remote: `${remoteCurrent}/${branch}`,
         critical: true,
+        atomic: true, // 原子同步：--delay-updates + --delete-after 收窄半份数据窗口（BACKLOG 2026-07-03-claude-6c23b3）
       }));
   }
   // 扁平 / 空 / 并存 → 单任务（字节等价历史；扁平+子目录并存交 GATED 预检 fail-closed）
@@ -434,6 +467,7 @@ function buildPolicyCurrentTasks(localCurrentDir, remoteCurrent, allowedBranches
     local: localCurrentDir,
     remote: remoteCurrent,
     critical: true,
+    atomic: true, // 原子同步：--delay-updates + --delete-after 收窄半份数据窗口（BACKLOG 2026-07-03-claude-6c23b3）
   }];
 }
 
@@ -442,22 +476,17 @@ async function rsyncDir(alias, localDir, remoteDir, label, options = {}) {
   const src = localDir.endsWith('/') ? localDir : `${localDir}/`;
   const dst = remoteDir.endsWith('/') ? remoteDir : `${remoteDir}/`;
   const deleteRemote = options.deleteRemote !== false;
-  const deleteArgs = deleteRemote ? ['--delete'] : [];
+  const atomic = options.atomic === true;
 
   // B3：退役 #753 前缀 filter——分省隔离改由「每省独立 current/<省>/ → data/current/<省>/」
   // 提供（--delete 作用域天然限子目录）。此处回归纯 rsync，与退役前单省短路（branchCode=null）逐字节等价。
-  log('yellow', `  rsync ${label}${deleteRemote ? '' : ' (no --delete)'}: ${src} → ${alias}:${dst}`);
+  // atomic=true（policy/current 等 critical）：--delay-updates + --delete-after 收窄半份数据窗口，见 buildRsyncArgs。
+  const suffix = atomic ? ' (atomic: --delay-updates)' : (deleteRemote ? '' : ' (no --delete)');
+  log('yellow', `  rsync ${label}${suffix}: ${src} → ${alias}:${dst}`);
 
   try {
     await runLocal('ssh', [alias, `mkdir -p ${quoteForSingle(remoteDir)}`], { silent: true });
-    await runLocal('rsync', [
-      '-azv',
-      ...deleteArgs,
-      ...RSYNC_EXCLUDE_ARGS,
-      '-e', 'ssh',
-      src,
-      `${alias}:${dst}`,
-    ]);
+    await runLocal('rsync', buildRsyncArgs({ src, remote: `${alias}:${dst}`, deleteRemote, atomic }));
     log('green', `  ✓ ${label} 同步完成`);
     return { ok: true, label };
   } catch (err) {
@@ -893,13 +922,18 @@ function printDryRun(sshConfig, runConfig) {
     const exists = existsSync(task.local);
     const tag = task.critical ? '[CRITICAL]' : '[optional]';
     const suffix = exists ? '' : '  （本地目录不存在，跳过）';
-    const excludeStr = RSYNC_EXCLUDES.map((p) => `--exclude '${p}'`).join(' ');
-    const deleteArg = task.deleteRemote === false ? '' : '--delete ';
     // B3：退役 #753 前缀 filter——分省隔离改由每省独立 current/<省>/ 目标目录提供（task.remote 已带省份后缀）。
     if (task.atomicLatest) {
       console.log(`  ${tag} rsync -azv -e ssh ${task.local}/latest.parquet ${sshConfig.alias}:${task.remote}/latest.parquet.uploading && mv latest.parquet.uploading latest.parquet${suffix}`);
     } else {
-      console.log(`  ${tag} rsync -azv ${deleteArg}${excludeStr} -e ssh ${task.local}/ ${sshConfig.alias}:${task.remote}/${suffix}`);
+      // 与实际执行同源（buildRsyncArgs）：policy/current 带 --delay-updates + --delete-after，其余目录不变
+      const rsyncArgs = buildRsyncArgs({
+        src: `${task.local}/`,
+        remote: `${sshConfig.alias}:${task.remote}/`,
+        deleteRemote: task.deleteRemote,
+        atomic: task.atomic,
+      });
+      console.log(`  ${tag} rsync ${rsyncArgs.join(' ')}${suffix}`);
     }
   }
 }
@@ -989,6 +1023,7 @@ async function runStandardMode(sshConfig, runConfig) {
         ? rsyncLatestAtomically(sshConfig, task.local, task.remote, task.label)
         : rsyncDir(alias, task.local, task.remote, task.label, {
             deleteRemote: task.deleteRemote,
+            atomic: task.atomic,
           })
     ))
   );
@@ -1006,6 +1041,7 @@ async function runStandardMode(sshConfig, runConfig) {
         ? await rsyncLatestAtomically(sshConfig, task.local, task.remote, task.label)
         : await rsyncDir(alias, task.local, task.remote, task.label, {
             deleteRemote: task.deleteRemote,
+            atomic: task.atomic,
           });
     }
     if (!rsyncResult.ok) {

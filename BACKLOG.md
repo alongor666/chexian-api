@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 活跃任务速查（39 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
+## 📋 活跃任务速查（40 项 · 数据截至 2026-07-09 · 由日志折叠自动生成，请勿手工编辑）
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
@@ -28,7 +28,7 @@
 - 2026-06-29-claude-a5aa03 `PARTIAL` — 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物
 - 2026-07-08-claude-4210ab `IN_PROGRESS` — B346 续作·GATED（生成端在仓外）
 
-**P2（19 项）**
+**P2（20 项）**
 
 - B304 `PARTIAL` — earned-premium 双口径未文档化
 - B306 — DuckDB 性能高危三件套
@@ -44,9 +44,10 @@
 - 2026-06-27-claude-4b1de1 — 主查询限流回落per-IP
 - 2026-07-03-claude-05dff4 — 前端审查中危债打包（2026-07-03四维审查）
 - 2026-07-03-claude-131dd8 — 后端审查
-- 2026-07-03-claude-6c23b3 — 后端审查
+- 2026-07-03-claude-6c23b3 `IN_PROGRESS` — 后端审查
 - 2026-07-06-claude-de1e40 — org_user 路由白名单扩展到非 query 域(/api/data、/api/ai
 - 2026-07-08-claude-fd244c — [硬编码专项遗留]已赚保费月度明细模块年份深度耦合
+- 2026-07-09-claude-78cc23 — sync-vps
 - 2026-07-09-claude-c2c219 — 4210ab 续作·SX 机构级报告生成端（41205d9 交付 SC-only）
 - 2026-07-09-claude-e17707 `PARTIAL` — diagnose-period-trend 技能省份化
 
@@ -98,7 +99,7 @@
 | 2026-06-29-claude-a5aa03 | 2026-06-29 | 架构治理/多省 | @claude | 分省隔离四道纵深防线根治（任何情况下 SC/SX 不混·fail-closed，根因=物理混放current/+靠记得加WHERE branch_code的fail-open默认混省）：①统一取数入口SSOT(三运行时JS/诊断Python… | P1 | PARTIAL | 开发文档/multi-branch/省份派生化与子目录方案_2026-06-23.md | 数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py | 4 条 note，最新：架构价值审计（2026-07-04）：P4 子目录化并入 801409 主线（owner 已拍板 B3 终局）；P1 出口零信任断言保留——与路径方案正交的纵深第二层，子目录化后仍有价值；P0/P2/P3 待子目录落地后重估（checkPo… |
 | 2026-07-03-claude-05dff4 | 2026-07-03 | 前端 | @claude | 前端审查中危债打包（2026-07-03四维审查）：①copilot/forecast手写fetch绕过apiClient(useForecastBaseline.ts:421等4处) ②业务阈值硬编码无SSOT(comprehensive… | P2 | PROPOSED | N/A | src/features/copilot,src/shared/api/client-core.ts,src/app/App.tsx | 架构价值审计拆分处置（2026-07-04）：①手写fetch统一入口③403/429全局拦截④staleTime双态bug⑥Panel错误态→立即做；②阈值SSOT（归入既有注册表，禁新建第9个）⑧E2E补齐→按需排期；⑤9hook与Re… |
 | 2026-07-03-claude-131dd8 | 2026-07-03 | CI/测试 | @claude | 后端审查：CI 完全不跑 DuckDB 原生绑定集成测试(vite.config.ts exclude 22个 duckdb-*.test.ts + 立方体影子对账7个)，含当前最活跃的多省 RLS 隔离测试(duckdb-branch-r… | P2 | PROPOSED | N/A | vite.config.ts |  |
-| 2026-07-03-claude-6c23b3 | 2026-07-03 | 生产可靠性 | @claude | 后端审查：核心数据目录 policy/current(critical) 走普通 rsync --delete 非原子，覆盖期间与意外重启/reload 重叠会 glob 到半份数据(仅 customer_flow/new_energy_c… | P2 | PROPOSED | N/A | scripts/sync-vps.mjs |  |
+| 2026-07-03-claude-6c23b3 | 2026-07-03 | 生产可靠性 | @claude | 后端审查：核心数据目录 policy/current(critical) 走普通 rsync --delete 非原子，覆盖期间与意外重启/reload 重叠会 glob 到半份数据(仅 customer_flow/new_energy_c… | P2 | IN_PROGRESS | N/A | scripts/sync-vps.mjs |  |
 | 2026-07-03-claude-b714a7 | 2026-07-03 | 安全 | @claude | 安全审计L5：诊断报告(diagnose-*skills)生成HTML时,数据字段(机构名/业务员名)的转义依赖skill层;配合报告CSP的script-src 'unsafe-inline',存在理论性数据驱动XSS(数据来自内部BI字… | P3 | PROPOSED | N/A | N/A | 5 条 note，最新：check-merged-drift 命中 d6ad418e/40092939(PR #944) 系误报：#944 是漂移误报压制机制本身（其账本改动引用本 uid 作先例），未动 diagnose-* skills HTML 转义。保持 … |
 | 2026-07-03-claude-fdaa10 | 2026-07-03 | 安全 | @claude | 安全审计L2：Express全局CSP scriptSrc保留'unsafe-inline'(csp.ts:29)。当前Express唯一HTML响应是报告(reports.ts自设REPORT_HTML_CSP覆盖全局),JSON/hea… | P3 | PROPOSED | N/A | server/src/config/csp.ts | 架构价值审计冻结（2026-07-04）：Express csp.ts 的 unsafe-inline 实测无功能影响（唯一 HTML 响应 reports.ts 有独立 REPORT_HTML_CSP；SPA 的 CSP 基线已由 PR … |
 | 2026-07-05-claude-fed2b1 | 2026-07-05 | 数据管道/企微 | @claude | 评估 wecom_smartsheet 续保推送 v1（sync_renewal.py，daily.mjs 现役调度）退役并统一到 v2（sync_renewal_v2.py + field_registry*.yaml）：先确认 v2 功… | P3 | PROPOSED | N/A | 数据管理/integrations/wecom_smartsheet/ | 评估完成（严格对等矩阵）：①推送引擎职责 v2 完全对等且严格更优——v1 DEFAULT_SCHEMA 18 个 field_id 在 field_registry.yaml 全部有声明且实例 fields_enabled 全启用；sta… |
@@ -112,5 +113,6 @@
 | 2026-07-08-claude-a28f3d | 2026-07-08 | 架构治理/硬编码 | @claude | 后端硬编码专项残留（需契约/业务拍板，未随批次一 2026-07-08-claude-773784 改动）：①/api/query/cost?type=earned-new 保单年度已赚保费 API 契约把年份烧进函数名与响应键（gener… | P3 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts；server/src/routes/query/cost.ts；src/features/premium-report/ |  |
 | 2026-07-08-claude-fd244c | 2026-07-08 | 指标口径 | @claude | [硬编码专项遗留]已赚保费月度明细模块年份深度耦合：后端 earned-premium-detail.ts 写死 2025/2026/2027（generatePolicy2025/2026EarnedPremiumQuery、滚动汇总 U… | P2 | PROPOSED | N/A | server/src/sql/cost/earned-premium-detail.ts,src/features/cost/utils/transformData.ts,src/features/cost/utils/cost-summary-calc.ts,src/features/dashboard/crossSellRateStatus.ts |  |
 | 2026-07-09-claude-50d62e | 2026-07-09 | 数据/ETL·多省债 | @claude | 非daily手动工具省份轴收窄（branch=None取全省）：agent_diagnose_report.py/sync_may_renewal_fields.py/tools/analyze_flow.py/scripts/ad-hoc… | P3 | PROPOSED | 开发文档/reviews/2026-07-08-B5子目录cutover残留glob排查.md | N/A |  |
+| 2026-07-09-claude-78cc23 | 2026-07-09 | 生产可靠性 | @claude | sync-vps: claims_detail 原子同步（承接 2026-07-03-claude-6c23b3 范围拆分）。claims_detail 与 policy/current 同为 critical:true 且同被 loadM… | P2 | PROPOSED | N/A | scripts/sync-vps.mjs |  |
 | 2026-07-09-claude-c2c219 | 2026-07-09 | 安全 | @claude | 4210ab 续作·SX 机构级报告生成端（41205d9 交付 SC-only）：SC 机构 org_user 本级报告已解锁，但 SX 机构 org_user 仍『本机构报告暂未生成』。根因两处：(L2) diagnose-period… | P2 | PROPOSED | 开发文档/缺口清单.md | alongor666-skills/skills/diagnose-period-trend/lib/query.py |  |
 | 2026-07-09-claude-e17707 | 2026-07-09 | 技能层 · 多省报告省份化（4210ab SX follow-up） | @claude | diagnose-period-trend 技能省份化：SX 三级机构 org_user 首页卡打开本级「短中长期对照」报告（当前恒显示「本机构报告暂未生成」）。根因=skill lib/query.py policy_glob/claim… | P2 | PARTIAL | 开发文档/缺口清单.md | alongor666-skills/skills/diagnose-period-trend/lib/query.py | 4 条 note，最新：PUSH BLOCKED（用户侧网络/鉴权，非代码问题）：skills 仓改动已本地提交 f5f6418（分支 claude/dpt-sx-province-e17707，含 1d84f50+75adcc7+本 SX 提交，待一并 PR 到… |
