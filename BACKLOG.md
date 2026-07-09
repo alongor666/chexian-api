@@ -21,10 +21,6 @@
 
 > 已完成任务见 [BACKLOG_ARCHIVE.md](./BACKLOG_ARCHIVE.md)。重新生成：`bun scripts/governance-backlog-curate.mjs --apply`
 
-**P0（1 项）**
-
-- 2026-07-09-claude-00954e `IN_PROGRESS` — 三级机构用户(org_user)登录后除首页外全部功能页打不开——2026-06-04 
-
 **P1（5 项）**
 
 - 2026-06-20-claude-f1c991 — 趋势/增长/业务员立方体首批切流（行级可加，T1 证明构建稳~0.5s/累积内存214M
