@@ -64,6 +64,72 @@ REQUIRED_COLUMNS = ['车架号', '报价时间']
 STR_FORCE_COLS = {'车架号': str, '保单号': str, '车牌号': str}
 
 
+def resolve_org_column_variant(df: 'pd.DataFrame') -> 'pd.DataFrame':
+    """多省源列名变体（B006，对齐 transform.py NEW_FORMAT_RENAMES['机构']='三级机构'）：
+    山西报价清单切到正确卡后机构列为裸「机构」（值为编码全称），四川源为「三级机构」。
+    仅当「三级机构」不存在时才改名——两列并存时保留「三级机构」并告警，
+    「机构」列走未映射列丢弃路径（不静默二义）。"""
+    if '机构' not in df.columns:
+        return df
+    if '三级机构' in df.columns:
+        print("   ⚠ 源同时含「机构」与「三级机构」列，保留「三级机构」（「机构」按未映射列丢弃）")
+        return df
+    print("   🔄 源列名变体: 机构 → 三级机构（山西正确卡格式）")
+    return df.rename(columns={'机构': '三级机构'})
+
+
+def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None) -> 'pd.DataFrame':
+    """多省机构值规范化 + 塌缩守卫（B006，对齐 transform.py normalize_branch_org G5 语义）。
+
+    branch != 'SC' 时按 config/branch-org-mapping/<branch>.json 的 org_to_unit 把
+    org_level_3 原始值（编码全称）映射到经营单元短名；SC → 原样返回（四川字节级安全）；
+    无映射文件 → 保留原始值。未在映射表中的机构保留原始值并告警（不静默丢数据）。
+
+    出口守卫（B005/B006 同款）：非 SC 省归一化后若 org_level_3 坍缩成占位值
+    （其他/NULL/空 合计 ≥ 阈值）即红字告警，ORG_COLLAPSE_FAIL=1 时抛错中止——
+    堵住上游报价卡导出退化（山西旧卡「三级机构」恒为「其他」）静默产出。
+    判定纯函数见 pipelines/org_collapse.py；env 可注入 dict 便于单测。"""
+    if branch == 'SC' or 'org_level_3' not in df.columns:
+        return df
+    mapping_path = Path(__file__).resolve().parent.parent / 'config' / 'branch-org-mapping' / f'{branch}.json'
+    if mapping_path.exists():
+        cfg = json.loads(mapping_path.read_text(encoding='utf-8'))
+        org_map = cfg.get('org_to_unit', {})
+        src_orgs = set(df['org_level_3'].dropna().unique())
+        unmapped = sorted(src_orgs - set(org_map.keys()))
+        df = df.copy()
+        df['org_level_3'] = df['org_level_3'].map(lambda v: org_map.get(v, v) if pd.notna(v) else v)
+        print(f"   🏢 [{branch}] 机构规范化: {len(src_orgs)} 原始机构 → {df['org_level_3'].nunique()} 经营单元（映射表 {len(org_map)} 条）")
+        if unmapped:
+            print(f"   ⚠️ {len(unmapped)} 个机构未在映射表中，保留原始值（需补 {branch}.json）：{unmapped[:5]}{'...' if len(unmapped) > 5 else ''}")
+    else:
+        print(f"   ⚠️ [{branch}] 机构规范化跳过：无映射文件 {mapping_path}（保留原始机构值）")
+    # 出口守卫：机构维度塌缩检测（覆盖已映射 / 无映射两条非 SC 路径）
+    from pipelines.org_collapse import (
+        OrgDimensionCollapseError,
+        evaluate_org_collapse,
+        org_collapse_should_fail,
+        resolve_org_collapse_threshold,
+    )
+    counts = df['org_level_3'].value_counts(dropna=False).to_dict()
+    threshold = resolve_org_collapse_threshold(env)
+    verdict = evaluate_org_collapse(counts, threshold=threshold)
+    if verdict.collapsed:
+        dom = '（NULL/空）' if verdict.dominant_value is None else repr(verdict.dominant_value)
+        msg = (
+            f"[{branch}] 机构维度塌缩：org_level_3 {verdict.placeholder_share:.1%} 为占位值"
+            f"（主值 {dom} 占 {verdict.dominant_share:.1%}，distinct={verdict.distinct}，"
+            f"总 {verdict.total:,} 行，阈值 {threshold:.0%}）。疑似上游报价卡导出退化"
+            f"（机构列坍缩为单一占位值），org_level_3 分析维度失效（缺口 B006）。"
+        )
+        if org_collapse_should_fail(env):
+            raise OrgDimensionCollapseError(msg)
+        print(f"\n   🔴 {msg}")
+        print("      → 若确为合法机构集中可忽略；设 ORG_COLLAPSE_FAIL=1 升级为中止，"
+              "ORG_COLLAPSE_WARN_THRESHOLD 调整阈值。")
+    return df
+
+
 def find_input_files(search_dir: str = '数据管理') -> list[Path]:
     """自动检测报价清单 xlsx：旧编号 04_报价清单* + 新编号 YYYYMMDD_02_报价清单*（2026-06-10 上游编号 04→02）"""
     base = Path(search_dir)
@@ -250,6 +316,7 @@ def main():
 
     # 3. Schema 契约
     df.columns = df.columns.str.strip()
+    df = resolve_org_column_variant(df)  # B006：山西正确卡机构列为裸「机构」
     missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing_cols:
         print(f"   ❌ 缺少必须列: {missing_cols}")
@@ -270,6 +337,13 @@ def main():
         print(f"   ⚠ 未映射列（已丢弃）: {extra_cols}")
         df = df[[c for c in df.columns if c in CN_TO_EN.values()]]
     print(f"   列名重命名: {len(rename_cols)}/{len(CN_TO_EN)} 列")
+
+    # 5b. 多省机构规范化（B006）：declared_branch 提前解析（CLI --branch-code 优先 →
+    # BRANCH_CODE env → 默认 SC，与 11b derive_branch_code 共用同一解析结果），
+    # 非 SC 省对 org_level_3 做 org_to_unit 映射 + 塌缩守卫。SC 原样（四川字节级安全）。
+    from pipelines.derived_fields import resolve_declared_branch
+    declared_branch = resolve_declared_branch(args) or 'SC'
+    df = normalize_org_level_3(df, declared_branch)
 
     # 6. 风险等级 COALESCE 合并
     grade_cols = ['_grade_1', '_grade_2', '_grade_3']
@@ -374,11 +448,9 @@ def main():
         print(f"   最终报价合计: {total/1e8:.2f} 亿元")
 
     # 11b-多省 P3-D：branch_code 派生（替代 P3 之前的 constant 注入；codex 闸-1 修订）。
-    # 解析顺序：--branch-code CLI 优先 → BRANCH_CODE env → 默认 'SC'（与 daily.mjs:669
-    # process.env.BRANCH_CODE || 'SC' 同语义）。declared_branch 后续同时用于 derive_branch_code
-    # 校验、写后 verify、metadata skip（覆盖 env-only 路径，codex 闸-1 P1.1）。
-    from pipelines.derived_fields import resolve_declared_branch
-    declared_branch = resolve_declared_branch(args) or 'SC'
+    # declared_branch 已在 5b 提前解析（--branch-code CLI 优先 → BRANCH_CODE env → 默认
+    # 'SC'，与 daily.mjs:669 process.env.BRANCH_CODE || 'SC' 同语义），此处复用同一结果
+    # 用于 derive_branch_code 校验、写后 verify、metadata skip（codex 闸-1 P1.1）。
     result = derive_branch_code(result, declared_branch)
 
     # 12. 输出 Parquet
