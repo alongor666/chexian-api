@@ -68,8 +68,9 @@ const KNOWN_GAPS = new Map([
     '报告托管改用 handler 级行级安全（assertReportAccess），非 permissionMiddleware（文件服务无 SQL '
     + 'permissionFilter 可注入），故仍列 known-gap。B328 phase-1 已堵跨机构泄漏（非 branch_admin fail-closed）；'
     + 'phase-2 已让 org_user 读归属本机构报告（sidecar .meta.json 解析 ownerOrg/ownerBranch，按 '
-    + 'org_level_3 等值 + branch_code 校验）。残留：生产方 diagnose-*/push_html.py 尚未 emit sidecar，'
-    + '故生产真实 org_user 200 仍 GATED（见 BACKLOG 缺口登记）。',
+    + 'org_level_3 等值 + branch_code 校验）。生产方 emit 已收敛（2026-07-10）：push_html.py 单文件 '
+    + 'sidecar 已交付+契约测试；机构级报告改走 portal 路径 schema 归属（4210ab）。残留：真实 org_user '
+    + '生产端到端验收（等 owner 凭据，BACKLOG 4210ab）。',
   ],
 ]);
 
