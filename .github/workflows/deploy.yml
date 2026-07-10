@@ -130,14 +130,32 @@ jobs:
             # 降级（首次引入需配合一次手动 chown 打破初始死锁，之后永久自愈）。
             sudo /usr/local/bin/deploy-chexian-api self-update || echo "[self-update@pre-backup] non-fatal"
             sudo /usr/local/bin/deploy-chexian-api fix-deps-owner || echo "[fix-deps-owner] non-fatal (旧 wrapper 未识别)"
+            # frontend 属主归一（2026-07-10 全站 403 事故源头治理）：报告流水线/手工 root
+            # 操作曾在 dist/reports 留下 root-owned 文件，deployer 的 rm -rf 删不净是
+            # 套娃链的第一环。backup 前以 root 统一归还 deployer。
+            sudo /usr/local/bin/deploy-chexian-api fix-frontend-owner || echo "[fix-frontend-owner] non-fatal (旧 wrapper 未识别)"
+
+            # ── 残留预清（2026-07-10 全站 403 事故根治，防套娃第二通道）──
+            # 上次 run 被硬杀（SSH 断连/Runner 回收）时 trap 不执行，*.bak / dist.new
+            # 可能残留；cp/mv 撞上已存在的目标目录会退化成"移入内部"→ 备份层层嵌套。
+            # 清场原则：rm 删不净（root-owned 残留）就 rename 让路——rename 只需父目录
+            # 写权限，不受子树属主影响，绝不留下"目标目录仍存在"的状态。
+            for STALE in frontend/dist.new frontend/dist.bak server/dist.bak server/node_modules.bak; do
+              if [ -e "$STALE" ]; then
+                rm -rf "$STALE" || true
+                if [ -e "$STALE" ]; then
+                  mv "$STALE" "${STALE}.stale.$(date +%Y%m%d%H%M%S)"
+                  echo "[preclean] $STALE 删不净（属主残留？），已改名让路"
+                fi
+              fi
+            done
 
             # ── 备份阶段：原生模块 + 锁文件回滚需要完整快照 ──
             # 仅 dist 回滚不够：npm ci --omit=dev 会重建 node_modules，
             # 若新版本的 better-sqlite3 等原生依赖编译失败或运行时异常，
             # 必须能还原到部署前的 node_modules + lockfile + package.json 状态。
-            # cp -a（保留 mtime）而非 cp -r：下方"旧 hashed 资产保留期"按 mtime 判断 chunk
-            # 年龄，cp -r 会把 mtime 刷成备份时刻 → 每次部署重置时钟，保留期永不到期
-            [ -d frontend/dist ] && cp -a frontend/dist frontend/dist.bak
+            # 前端 dist 不再 cp 备份：下方换轨段用 rename 把整个旧 dist 原子改名为
+            # dist.bak（零拷贝、天然保 mtime、不受 root-owned 残留影响），备份与切换合一。
             [ -d server/dist ] && cp -r server/dist server/dist.bak
             [ -f server/package.json ] && cp server/package.json server/package.json.bak
             [ -f server/package-lock.json ] && cp server/package-lock.json server/package-lock.json.bak
@@ -151,30 +169,37 @@ jobs:
             # 策略：用 ROLLBACK_NEEDED 标志 + trap EXIT，任何非正常退出（含 set -e 中断和
             #       显式 exit 1）都走完整回滚；HEALTHY=true 时清掉标志，trap 不动作。
             ROLLBACK_NEEDED=true
+            # 守卫式还原（2026-07-10 全站 403 事故根治）：rm -rf 因 root-owned 残留
+            # 删不净时，绝不把 .bak mv 进仍存在的目录——mv 撞现存目录=移入内部，正是
+            # dist/dist.bak 套娃、index.html 从 nginx root 消失的根因。删不净就把残骸
+            # rename 让路（rename 只需父目录写权限），确认目标真不存在后才还原。
+            restore_from_bak() {
+              local primary="$1" bak="$2"
+              [ -d "$bak" ] || return 0
+              rm -rf "$primary"
+              if [ -e "$primary" ]; then
+                mv "$primary" "${primary}.broken.$(date +%Y%m%d%H%M%S)" \
+                  || { echo "Rollback: $primary 让路失败，保留 $bak 待人工介入（防套娃，跳过还原）"; return 0; }
+              fi
+              mv "$bak" "$primary"
+            }
             rollback_deploy() {
               local exit_code=$?
               set +e   # 回滚内部禁止单步失败中断，确保 5 个对象都尝试还原
               if [ "$ROLLBACK_NEEDED" = true ]; then
                 echo "Deploy failed (exit_code=$exit_code), rolling back..."
-                # 前端 dist
-                if [ -d /var/www/chexian/frontend/dist.bak ]; then
-                  rm -rf /var/www/chexian/frontend/dist
-                  mv /var/www/chexian/frontend/dist.bak /var/www/chexian/frontend/dist
-                fi
+                # 前端换轨残骸：dist.new 尚未就位即失败时清掉，避免下次撞目标
+                rm -rf /var/www/chexian/frontend/dist.new
+                # 前端 dist（rename 换轨的逆操作）
+                restore_from_bak /var/www/chexian/frontend/dist /var/www/chexian/frontend/dist.bak
                 # 后端 dist
-                if [ -d /var/www/chexian/server/dist.bak ]; then
-                  rm -rf /var/www/chexian/server/dist
-                  mv /var/www/chexian/server/dist.bak /var/www/chexian/server/dist
-                fi
+                restore_from_bak /var/www/chexian/server/dist /var/www/chexian/server/dist.bak
                 # 包描述文件（仅在备份存在时还原）
                 [ -f /var/www/chexian/server/package.json.bak ] && mv -f /var/www/chexian/server/package.json.bak /var/www/chexian/server/package.json
                 [ -f /var/www/chexian/server/package-lock.json.bak ] && mv -f /var/www/chexian/server/package-lock.json.bak /var/www/chexian/server/package-lock.json
                 [ -f /var/www/chexian/server/ecosystem.config.cjs.bak ] && mv -f /var/www/chexian/server/ecosystem.config.cjs.bak /var/www/chexian/server/ecosystem.config.cjs
                 # node_modules（原生模块半升级状态的关键还原点）
-                if [ -d /var/www/chexian/server/node_modules.bak ]; then
-                  rm -rf /var/www/chexian/server/node_modules
-                  mv /var/www/chexian/server/node_modules.bak /var/www/chexian/server/node_modules
-                fi
+                restore_from_bak /var/www/chexian/server/node_modules /var/www/chexian/server/node_modules.bak
                 # 用 reload 而非 restart：确保 PM2 重读还原后的 ecosystem.config.cjs
                 sudo /usr/local/bin/deploy-chexian-api reload || echo "Rollback reload failed, manual intervention required"
               fi
@@ -185,31 +210,45 @@ jobs:
 
             tar -xzf "/tmp/${BUNDLE_NAME}" -C "${STAGING_DIR}"
 
-            rm -rf /var/www/chexian/frontend/dist
-            mv "${STAGING_DIR}/dist" /var/www/chexian/frontend/dist
+            # ── 前端换轨：rename-based 原子切换（2026-07-10 全站 403 事故根治）──
+            # 旧实现 `rm -rf dist && mv staging dist`：dist/reports 内 root-owned 文件
+            # （报告流水线曾以 root 落盘）让 deployer 的 rm 删不净 → set -e 进回滚 →
+            # 回滚里 rm 再次删不净后 `mv dist.bak dist` 撞上仍存在的 dist → 退化成
+            # "移入内部" → 产生 dist/dist.bak 套娃，index.html 从 nginx root 消失 →
+            # 全站 403，且每重试一次多套一层（run 29066674713 实录）。
+            # 新实现全程 rename：mv 只需父目录（deployer 所有）写权限，root-owned
+            # 残留不再能阻塞部署；新产物先在 dist.new 组装完整，就位前活 dist 不动。
+            mv "${STAGING_DIR}/dist" /var/www/chexian/frontend/dist.new
 
             # 保留诊断报告 HTML/manifest 跨 dist 替换存活（B-homepage-report）：
             # /reports/* 由 daily 流程（sync-vps）单独 rsync 到 dist/reports/，是 gitignore 的、
-            # 不在构建产物里（产物 reports/ 仅含 .gitkeep）。不恢复则每次部署都把首页报告
-            # 冲成 916B 空白 SPA。旧报告在上面备份的 dist.bak/reports/ 里（cp -r 整个 dist），
-            # 覆盖回新 dist 的 reports/ 即可。失败不阻断部署（|| true，避免触发回滚）。
-            if [ -d /var/www/chexian/frontend/dist.bak/reports ]; then
-              mkdir -p /var/www/chexian/frontend/dist/reports
-              cp -a /var/www/chexian/frontend/dist.bak/reports/. /var/www/chexian/frontend/dist/reports/ || true
+            # 不在构建产物里（产物 reports/ 仅含 .gitkeep）。不嫁接则每次部署都把首页报告
+            # 冲成空白 SPA。换轨前从"活 dist"拷进 dist.new（cp -a 保 mtime；deployer 拷贝
+            # root-owned 文件的副本归 deployer，顺带自愈属主漂移）。失败不阻断（|| true）。
+            if [ -d /var/www/chexian/frontend/dist/reports ]; then
+              mkdir -p /var/www/chexian/frontend/dist.new/reports
+              cp -a /var/www/chexian/frontend/dist/reports/. /var/www/chexian/frontend/dist.new/reports/ || true
             fi
 
             # ── 旧 hashed 资产保留期（BACKLOG 2026-07-03-claude-0f86cb 白屏链残留环节）──
-            # 长开 tab 的 SPA 在发布后懒加载旧 chunk：上面 rm -rf dist 让旧 chunk 物理消失
+            # 长开 tab 的 SPA 在发布后懒加载旧 chunk：换 dist 让旧 chunk 物理消失
             # → 动态 import 404 白屏。index.html no-cache（PR #865）只救刷新后的新会话，
-            # 救不了发布瞬间已加载的旧 index。修法：旧 assets 并入新 dist（-n 不覆盖新文件，
-            # Vite 产物 content-hash 命名同名即同内容），7 天后按 mtime 出保留窗清理。
-            # 注意 coreutils ≥9.2 的 cp -n 在跳过时以非零退出，|| true 必须保留。
-            # 失败不阻断部署（|| true，避免触发回滚）。
-            if [ -d /var/www/chexian/frontend/dist.bak/assets ]; then
-              mkdir -p /var/www/chexian/frontend/dist/assets
-              cp -an /var/www/chexian/frontend/dist.bak/assets/. /var/www/chexian/frontend/dist/assets/ || true
-              find /var/www/chexian/frontend/dist/assets -type f -mtime +7 -delete || true
+            # 救不了发布瞬间已加载的旧 index。修法：活 dist 的旧 assets 并入 dist.new
+            # （-n 不覆盖新文件，Vite 产物 content-hash 命名同名即同内容），7 天后按 mtime
+            # 出保留窗清理。注意 coreutils ≥9.2 的 cp -n 在跳过时以非零退出，|| true 必须保留。
+            if [ -d /var/www/chexian/frontend/dist/assets ]; then
+              mkdir -p /var/www/chexian/frontend/dist.new/assets
+              cp -an /var/www/chexian/frontend/dist/assets/. /var/www/chexian/frontend/dist.new/assets/ || true
+              find /var/www/chexian/frontend/dist.new/assets -type f -mtime +7 -delete || true
             fi
+
+            # 换轨：老 dist 整体 rename 为 dist.bak（备份=改名，零拷贝），新 dist 就位。
+            # dist.bak 已在预清阶段确保不存在；两次 rename 间隔微秒级，中途被杀也能由
+            # trap 从 dist.bak 守卫式还原。
+            if [ -d /var/www/chexian/frontend/dist ]; then
+              mv /var/www/chexian/frontend/dist /var/www/chexian/frontend/dist.bak
+            fi
+            mv /var/www/chexian/frontend/dist.new /var/www/chexian/frontend/dist
 
             rm -rf /var/www/chexian/server/dist
             mv "${STAGING_DIR}/server/dist" /var/www/chexian/server/dist
@@ -242,12 +281,14 @@ jobs:
             if [ "$HEALTHY" = true ]; then
               echo "Deploy success!"
               ROLLBACK_NEEDED=false   # 关掉回滚标志，trap 仍会触发但不动作
-              rm -rf /var/www/chexian/frontend/dist.bak
-              rm -rf /var/www/chexian/server/dist.bak
+              # || true：备份内若有 root-owned 残留删不净，不能把健康部署标成失败；
+              # 残骸由下次 run 的 preclean（rm 或 rename 让路）+ fix-frontend-owner 收口
+              rm -rf /var/www/chexian/frontend/dist.bak || true
+              rm -rf /var/www/chexian/server/dist.bak || true
               rm -f /var/www/chexian/server/package.json.bak
               rm -f /var/www/chexian/server/package-lock.json.bak
               rm -f /var/www/chexian/server/ecosystem.config.cjs.bak
-              rm -rf /var/www/chexian/server/node_modules.bak
+              rm -rf /var/www/chexian/server/node_modules.bak || true
             else
               echo "Health check failed!"
               exit 1   # 显式失败 → trap 触发 rollback_deploy
