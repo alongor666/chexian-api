@@ -138,6 +138,19 @@ export function mapLegacyVehicleCategoryToSegmentTag(
   }
 }
 
+/**
+ * 业务车种段标签（segment_tag）物理列引用。
+ *
+ * B306/F-03：段口径 CASE（8 层 LIKE + CAST/TRIM）原先在每条业绩分析查询里逐行计算；
+ * 现于 PolicyFactRealtime 物化时预算为 segment_tag 列（duckdb-materialization.ts 引用
+ * 下方 segmentCaseExpr() 作为口径唯一事实源），查询期只做低基数字符串等值比较。
+ * 仅适用于 PolicyFact/PolicyFactRealtime 行（其余表无此列）。
+ */
+export function segmentTagExpr(colPrefix = ''): string {
+  return `${colPrefix}segment_tag`;
+}
+
+/** 段口径 CASE 表达式（口径 SSOT）——仅供物化层预算 segment_tag 列使用；查询层一律走 segmentTagExpr() */
 export function segmentCaseExpr(colPrefix = ''): string {
   const categoryExpr = `COALESCE(TRIM(CAST(${colPrefix}customer_category AS VARCHAR)), '')`;
   return `
@@ -178,9 +191,9 @@ export function getPerformanceSegmentFilter(
 ): string {
   if (segmentTag === 'all') return '1=1';
   if (segmentTag === 'truck') {
-    return `(${segmentCaseExpr(colPrefix)} IN ('business_truck', 'non_business_truck'))`;
+    return `(${segmentTagExpr(colPrefix)} IN ('business_truck', 'non_business_truck'))`;
   }
-  return `(${segmentCaseExpr(colPrefix)} = '${segmentTag}')`;
+  return `(${segmentTagExpr(colPrefix)} = '${segmentTag}')`;
 }
 
 // 兼容旧逻辑（保留给旧测试/调用方）

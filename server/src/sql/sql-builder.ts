@@ -242,10 +242,12 @@ export function buildEarnedMonthlyCase(
   const timePartPrev = prevMonthEnd ? buildTimePartCase(prevMonthEnd) : '0';
   const timePartIncrement = `(${timePartCurrent}) - (${timePartPrev})`;
 
+  // 起保月判定用日期范围替代 EXTRACT(MONTH)=m AND EXTRACT(YEAR)=y（免逐行函数计算）
+  const monthStart = `${statYear}-${String(statMonth).padStart(2, '0')}-01`;
+
   return `
     CASE
-      WHEN EXTRACT(MONTH FROM start_date) = ${statMonth}
-       AND EXTRACT(YEAR FROM start_date) = ${statYear}
+      WHEN start_date BETWEEN DATE '${monthStart}' AND DATE '${currentMonthEnd}'
       THEN premium * fee_rate * line_factor + ${timePartIncrement}
       ELSE ${timePartIncrement}
     END
@@ -339,7 +341,7 @@ WITH policy_base AS (
   FROM PolicyFact
   WHERE ${whereClause}
     AND insurance_start_date IS NOT NULL
-    AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = ${policyYear}
+    AND CAST(insurance_start_date AS DATE) BETWEEN DATE '${policyYear}-01-01' AND DATE '${policyYear}-12-31'
     AND insurance_type IN ('交强险', '商业保险')
 )
 SELECT

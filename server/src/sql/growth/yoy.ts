@@ -66,36 +66,49 @@ export function generateYoYGrowthQuery(
     ? ` AND ${buildDateCondition(dateField, '>=', previousPeriod!.startDate)} AND ${buildDateCondition(dateField, '<=', previousPeriod!.endDate)}`
     : '';
 
+  // B306/F-02 单扫合并：旧版 current_period/previous_period 双 CTE 各全量扫一次
+  // PolicyFact；改为 CROSS JOIN (0,1) 两侧标记后单次扫描 + 单次 GROUP BY，
+  // 再按 side pivot 还原「当期 LEFT JOIN 去年同期」的行集语义：
+  //   - has_current 存在性标志 = 旧版 LEFT JOIN 只保留当期出现过的分组
+  //   - previous_value 缺失补 0、previous=0 时 growth_rate 为 NULL，与旧版一致
+  // paired 模式额外注入仅含日期列的 (当期窗 OR 去年窗) 谓词，可下推到扫描层做 zonemap 剪枝。
+  const scanWindowFilter = hasPairedPeriods
+    ? ` AND ((1=1${currentDateFilter}) OR (1=1${previousDateFilter}))`
+    : '';
+  const groupByCols = groupBy.length > 0 ? `, ${groupBy.join(', ')}` : '';
+
   return `
-    WITH current_period AS (
+    WITH combined AS (
       SELECT
-        ${currentTimeExpr} AS time_period,
-        ${metric} AS current_value${groupByClause}
+        CASE WHEN sides.side = 1 THEN ${previousTimeExpr} ELSE ${currentTimeExpr} END AS time_period,
+        sides.side AS side,
+        ${metric} AS value${groupByClause}
       FROM PolicyFact
-      WHERE ${whereClause}${currentDateFilter}
-      GROUP BY ${currentTimeExpr}${groupByClause}
+      CROSS JOIN (VALUES (0), (1)) AS sides(side)
+      WHERE (${whereClause})${scanWindowFilter}
+        AND ((sides.side = 0${currentDateFilter}) OR (sides.side = 1${previousDateFilter}))
+      GROUP BY 1, 2${groupByCols}
     ),
-    previous_period AS (
+    pivoted AS (
       SELECT
-        ${previousTimeExpr} AS time_period,
-        ${metric} AS previous_value${groupByClause}
-      FROM PolicyFact
-      WHERE ${whereClause}${previousDateFilter}
-      GROUP BY ${previousTimeExpr}${groupByClause}
+        time_period${groupByCols},
+        MAX(CASE WHEN side = 0 THEN 1 ELSE 0 END) AS has_current,
+        MAX(CASE WHEN side = 0 THEN value END) AS current_value,
+        MAX(CASE WHEN side = 1 THEN value END) AS previous_value_raw
+      FROM combined
+      GROUP BY time_period${groupByCols}
     )
     SELECT
-      c.time_period AS time_period,
-      c.current_value AS current_value,
-      COALESCE(p.previous_value, 0) AS previous_value,
+      time_period,
+      current_value,
+      COALESCE(previous_value_raw, 0) AS previous_value,
       CASE
-        WHEN COALESCE(p.previous_value, 0) = 0 THEN NULL
-        ELSE (c.current_value - COALESCE(p.previous_value, 0)) / p.previous_value
+        WHEN COALESCE(previous_value_raw, 0) = 0 THEN NULL
+        ELSE (current_value - COALESCE(previous_value_raw, 0)) / COALESCE(previous_value_raw, 0)
       END AS growth_rate
-      ${groupBy.length > 0 ? `, ${groupBy.map(g => `c.${g} AS ${g}`).join(', ')}` : ''}
-    FROM current_period c
-    LEFT JOIN previous_period p ON
-      c.time_period = p.time_period
-      ${groupBy.length > 0 ? `AND ${groupBy.map(g => `c.${g} = p.${g}`).join(' AND ')}` : ''}
+      ${groupBy.length > 0 ? `, ${groupBy.join(', ')}` : ''}
+    FROM pivoted
+    WHERE has_current = 1
     ORDER BY time_period
   `;
 }

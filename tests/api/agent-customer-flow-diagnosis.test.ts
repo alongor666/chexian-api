@@ -228,7 +228,7 @@ describe('agent customer flow diagnosis workflow', () => {
       expect(body.data.summary.netFlow).toBeNull();
       expect(queryMock).toHaveBeenCalledTimes(4);
       const sqlCalls = queryMock.mock.calls.map(([sql]) => String(sql));
-      expect(sqlCalls.slice(0, 4).join('\n')).toContain('YEAR(CAST(insurance_start_date AS DATE)) = 2026');
+      expect(sqlCalls.slice(0, 4).join('\n')).toContain("CAST(insurance_start_date AS DATE) BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'");
     } finally {
       await closeServer(server);
     }

@@ -89,7 +89,7 @@ export function generateNewEarnedPremiumSummaryQuery(
           FROM PolicyFact
           WHERE ${whereClause}
             AND insurance_start_date IS NOT NULL
-            AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = ${prevYear}
+            AND CAST(insurance_start_date AS DATE) <= DATE '${prevYear}-12-31'
             AND CAST(insurance_start_date AS DATE) >= DATE '${windowStartDate}'
             AND insurance_type IN ('交强险', '商业保险')
         ) AS earned_from_prev,
@@ -112,7 +112,7 @@ export function generateNewEarnedPremiumSummaryQuery(
           FROM PolicyFact
           WHERE ${whereClause}
             AND insurance_start_date IS NOT NULL
-            AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = ${anchorYear}
+            AND CAST(insurance_start_date AS DATE) >= DATE '${anchorYear}-01-01'
             AND CAST(insurance_start_date AS DATE) <= DATE '${statMonthEnd}'
             AND insurance_type IN ('交强险', '商业保险')
         ) AS earned_from_curr
@@ -164,7 +164,7 @@ SELECT
 FROM PolicyFact
 WHERE ${whereClause}
   AND insurance_start_date IS NOT NULL
-  AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) IN (${anchorYear - 1}, ${anchorYear})
+  AND CAST(insurance_start_date AS DATE) BETWEEN DATE '${anchorYear - 1}-01-01' AND DATE '${anchorYear}-12-31'
 GROUP BY STRFTIME(CAST(insurance_start_date AS DATE), '%Y-%m')
 ORDER BY policy_month
   `.trim();

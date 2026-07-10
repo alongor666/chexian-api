@@ -7,7 +7,7 @@
 
 import { logger } from '../../utils/logger.js';
 import {
-  segmentCaseExpr,
+  segmentTagExpr,
   getPerformanceSegmentFilter,
   trendTimeGroupExpr,
   getTrendLineSourceSql,
@@ -37,7 +37,7 @@ export function generatePerformanceTrendQuery(
         COALESCE(premium, 0) / 10000.0 AS premium_wan,
         COALESCE(TRIM(CAST(customer_category AS VARCHAR)), '') AS customer_category,
         COALESCE(NULLIF(TRIM(CAST(tonnage_segment AS VARCHAR)), ''), '未知') AS norm_tonnage,
-        ${segmentCaseExpr()} AS segment_tag
+        ${segmentTagExpr()} AS segment_tag
       FROM PolicyFact
       WHERE ${whereWithDate}
     ),
