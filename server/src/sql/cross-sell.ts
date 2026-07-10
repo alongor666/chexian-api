@@ -17,7 +17,6 @@
 
 import { logger } from '../utils/logger.js';
 import { escapeSqlValue } from '../utils/security.js';
-import { qualifyBranchCodeColumn } from '../utils/branch-rls-qualify.js';
 
 /**
  * 支持的下钻维度
@@ -185,19 +184,27 @@ export function generateCrossSellQuery(
   const useJoin = needsTeamJoin(drillPath, groupBy);
   const colPrefix = useJoin ? 'c.' : '';
   const tableRef = useJoin ? 'CrossSellDailyAgg c' : 'CrossSellDailyAgg';
+  // 团队/业务员维度 JOIN team_mapping（剥列 CTE：只投影 full_name+team_name，不含 branch_code）
   const teamJoin = useJoin
-    ? `LEFT JOIN SalesmanTeamMapping tm ON ${colPrefix}salesman_name = tm.full_name`
+    ? `LEFT JOIN team_mapping tm ON ${colPrefix}salesman_name = tm.full_name`
     : '';
-  // 业务员维度下，JOIN SalesmanDim 取归属机构（防跨机构出单人取到非归属机构，PR #832 follow-up）
+  // 业务员维度下，JOIN salesman_dim（剥列 CTE：只投影 full_name+organization，不含 branch_code）取归属机构
+  // （防跨机构出单人取到非归属机构，PR #832 follow-up）
   const salesmanDimJoin = groupBy === 'salesman'
-    ? `LEFT JOIN SalesmanDim sd ON ${colPrefix}salesman_name = sd.full_name`
+    ? `LEFT JOIN salesman_dim sd ON ${colPrefix}salesman_name = sd.full_name`
     : '';
+  // 剥列 CTE：多省时 SalesmanTeamMapping / SalesmanDim 同带 branch_code，与事实表 c 二义（2026-07-09 生产
+  // Binder Error）。只投影 JOIN 实际消费的列（team_name / organization），branch_code 不入作用域 → 结构层根治，
+  // 替代 qualifyBranchCodeColumn；CTE 不去重不按省过滤 → 团队/业务员维度数字与现网一致。
+  const dimCtes = [
+    useJoin ? 'team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping)' : '',
+    salesmanDimJoin ? 'salesman_dim AS (SELECT full_name, organization FROM SalesmanDim)' : '',
+  ].filter(Boolean).join(',\n    ');
+  const withPrefix = dimCtes ? `${dimCtes},\n    ` : '';
 
-  // 构建 WHERE：基础条件 + 下钻路径的每一步过滤
-  // useJoin（团队/业务员维度）时 JOIN SalesmanTeamMapping tm，与 CrossSellDailyAgg c 同带 branch_code 列——
-  // 把 baseWhereClause 里 permissionFilter 的裸 branch_code 绑定到事实表 colPrefix（c.），消歧
-  // （2026-07-09 生产 Binder Error）。!useJoin 时 colPrefix='' → 原样返回、无 tm JOIN、裸列不歧义。
-  const whereParts = [qualifyBranchCodeColumn(baseWhereClause, colPrefix)];
+  // 构建 WHERE：基础条件 + 下钻路径的每一步过滤。dim CTE 已剥掉 branch_code，故裸 baseWhereClause
+  // 里 permissionFilter 的 branch_code 天然只解析到事实表，无二义（见上 dimCtes 注释）。
+  const whereParts = [baseWhereClause];
   for (const step of drillPath) {
     whereParts.push(drillStepToWhere(step, colPrefix));
   }
@@ -241,7 +248,7 @@ export function generateCrossSellQuery(
     : `group_name AS display_name`;
 
   const sql = `
-    WITH cross_sell_base AS (
+    WITH ${withPrefix}cross_sell_base AS (
       SELECT
         ${config.selectExpr},
         ${hierarchySelect}
@@ -306,8 +313,10 @@ function generateSummaryOnly(
   summaryGroupName: string = '四川分公司'
 ): string {
   const escapedName = escapeSqlValue(summaryGroupName);
+  // teamJoin 非空（下钻含团队维度）时引用 team_mapping 剥列 CTE，须同步定义（与分组路径一致）
+  const teamMappingCte = teamJoin ? 'team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping),\n    ' : '';
   return `
-    WITH summary AS (
+    WITH ${teamMappingCte}summary AS (
       SELECT
         '${escapedName}' AS group_name,
         COALESCE(SUM(CASE WHEN ${colPrefix}coverage_combination IN ('主全', '交三') THEN ${colPrefix}auto_count ELSE 0 END), 0) AS total_auto_count,

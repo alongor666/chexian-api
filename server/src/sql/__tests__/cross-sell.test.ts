@@ -137,7 +137,8 @@ describe('generateCrossSellQuery — 补充覆盖', () => {
   // ── 1-G2: groupBy=salesman 时注入 SalesmanDim JOIN 用归属机构 ──────────────
   it('1-G2: groupBy=salesman 时注入 SalesmanDim JOIN 取归属机构', () => {
     const sql = generateCrossSellQuery(BASE_WHERE, [], 'salesman');
-    expect(sql).toContain('LEFT JOIN SalesmanDim sd ON c.salesman_name = sd.full_name');
+    expect(sql).toContain('LEFT JOIN salesman_dim sd ON c.salesman_name = sd.full_name'); // 剥列 CTE（2026-07-09 Binder Error 根治）
+    expect(sql).toContain('salesman_dim AS (SELECT full_name, organization FROM SalesmanDim)');
     expect(sql).toContain('COALESCE(sd.organization');
   });
 
@@ -150,7 +151,8 @@ describe('generateCrossSellQuery — 补充覆盖', () => {
   it('1-H: drillPath 含 team 步骤时即使 groupBy≠team 也触发 SalesmanTeamMapping JOIN', () => {
     const steps: DrilldownStep[] = [{ dimension: 'team', value: '天府一队' }];
     const sql = generateCrossSellQuery(BASE_WHERE, steps, 'salesman');
-    expect(sql).toContain('LEFT JOIN SalesmanTeamMapping');
+    expect(sql).toContain('LEFT JOIN team_mapping'); // 剥列 CTE（2026-07-09 Binder Error 根治，替代裸 SalesmanTeamMapping JOIN）
+    expect(sql).toContain('team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping)');
   });
 
   // ── 1-I: 多步下钻路径 WHERE 子句叠加 ────────────────────────────────────────
@@ -361,7 +363,8 @@ describe('generateCrossSellHeatmapQuery — 热力图查询', () => {
   it('3-D: team 分组维度切换到 PolicyFact + SalesmanTeamMapping JOIN', () => {
     const sql = generateCrossSellHeatmapQuery(BASE_WHERE, 'all', undefined, 'day', 'team');
     expect(sql).toContain('FROM PolicyFact p');
-    expect(sql).toContain('LEFT JOIN SalesmanTeamMapping tm');
+    expect(sql).toContain('LEFT JOIN team_mapping tm'); // 剥列 CTE（2026-07-09 Binder Error 根治）
+    expect(sql).toContain('team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping)');
   });
 
   it('3-E: salesman 分组维度切换到 PolicyFact', () => {
