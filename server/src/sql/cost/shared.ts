@@ -44,6 +44,23 @@ export interface NewEarnedPremiumConfig {
   whereClause?: string;
 }
 
+/**
+ * 解析成本分析锚定年（当前分析年度 Y）。
+ *
+ * 已赚保费月度明细模块围绕「保单年度 Y-1 / Y × 已赚年度 Y-1 / Y / Y+1」矩阵展开，
+ * 锚定年默认取北京时间（业务时区 UTC+8）当前年份，跨年自动滚动；
+ * 可用环境变量 COST_ANCHOR_YEAR 固定（回看历史年度或跨年初期数据未跟上时）。
+ */
+export function resolveCostAnchorYear(): number {
+  const fromEnv = Number(process.env.COST_ANCHOR_YEAR);
+  if (Number.isInteger(fromEnv) && fromEnv >= 2000 && fromEnv <= 2100) {
+    return fromEnv;
+  }
+  return Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', year: 'numeric' }).format(new Date())
+  );
+}
+
 // ==================== 维度映射 ====================
 
 /** 维度到SQL字段的映射 */

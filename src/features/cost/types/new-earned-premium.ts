@@ -1,128 +1,70 @@
 /**
- * 新口径已赚保费类型（V3 + V2 兼容 + 滚动 12 月）
- * 从 costTypes.ts 拆分而来
+ * 新口径已赚保费类型（相对年契约）
+ *
+ * 后端 /api/query/cost?type=earned-new 返回「保单年度 × 已赚年度」四象限矩阵，
+ * 行字段为相对年 key（earned_01..earned_12 / earned_total），行所属绝对年份
+ * 由响应元数据 anchorYear（锚定年 Y）推导：
+ * - policyPrevInPrev：Y-1 年保单在 Y-1 年的已赚（含 premium / first_day_fee）
+ * - policyPrevInCurr：Y-1 年保单在 Y 年的已赚（仅时间分摊增量）
+ * - policyCurrInCurr：Y 年保单在 Y 年的已赚（含 premium / first_day_fee）
+ * - policyCurrInNext：Y 年保单在 Y+1 年的已赚（仅时间分摊增量）
  */
 
-// ==================== 新口径已赚保费相关类型 ====================
-
-// ========== V3 版本 - 拆分表格（4个子表） ==========
+// ==================== 相对年月度已赚行 ====================
 
 /**
- * 2025年保单在2025年的已赚保费数据行（V3版本）
- * 按起保月统计，每月一行，共12行
+ * 跨年已赚行：某保单年度在「单个已赚年度」的 12 个月当月已赚（时间分摊增量）
  */
-export interface Policy2025In2025Data {
+export interface CrossYearEarnedRow {
   /** 起保月（1-12） */
   policy_month: number;
+  /** 该已赚年度各月当月已赚（earned_01..earned_12） */
+  earned_01: number;
+  earned_02: number;
+  earned_03: number;
+  earned_04: number;
+  earned_05: number;
+  earned_06: number;
+  earned_07: number;
+  earned_08: number;
+  earned_09: number;
+  earned_10: number;
+  earned_11: number;
+  earned_12: number;
+  /** 该已赚年度合计 */
+  earned_total: number;
+}
+
+/**
+ * 同年已赚行：保单年度 == 已赚年度，额外含保费与首日费用
+ */
+export interface SameYearEarnedRow extends CrossYearEarnedRow {
   /** 保费（起保日期口径） */
   premium: number;
   /** 首日费用（P × F × α，在起保年度计入） */
   first_day_fee: number;
-  /** 25年各月当月已赚（时间分摊增量） */
-  earned_2025_01: number;
-  earned_2025_02: number;
-  earned_2025_03: number;
-  earned_2025_04: number;
-  earned_2025_05: number;
-  earned_2025_06: number;
-  earned_2025_07: number;
-  earned_2025_08: number;
-  earned_2025_09: number;
-  earned_2025_10: number;
-  earned_2025_11: number;
-  earned_2025_12: number;
-  /** 25年已赚合计 = 首日费用 + 25年各月时间分摊合计 */
-  earned_2025_total: number;
+}
+
+/** 取某月的相对年已赚字段值（m 为 1-12） */
+export function getEarnedMonthValue(row: CrossYearEarnedRow, m: number): number {
+  const key = `earned_${String(m).padStart(2, '0')}` as keyof CrossYearEarnedRow;
+  return (row[key] as number) || 0;
 }
 
 /**
- * 2025年保单在2026年的已赚保费数据行（V3版本）
- * 按起保月统计，每月一行，共12行
- */
-export interface Policy2025In2026Data {
-  /** 起保月（1-12） */
-  policy_month: number;
-  /** 26年各月当月已赚（时间分摊增量，不含首日费用） */
-  earned_2026_01: number;
-  earned_2026_02: number;
-  earned_2026_03: number;
-  earned_2026_04: number;
-  earned_2026_05: number;
-  earned_2026_06: number;
-  earned_2026_07: number;
-  earned_2026_08: number;
-  earned_2026_09: number;
-  earned_2026_10: number;
-  earned_2026_11: number;
-  earned_2026_12: number;
-  /** 26年已赚合计 = 26年各月时间分摊合计 */
-  earned_2026_total: number;
-}
-
-/**
- * 2026年保单在2026年的已赚保费数据行（V3版本）
- * 按起保月统计，每月一行，共12行
- */
-export interface Policy2026In2026Data {
-  /** 起保月（1-12） */
-  policy_month: number;
-  /** 保费（起保日期口径） */
-  premium: number;
-  /** 首日费用（P × F × α，在起保年度计入） */
-  first_day_fee: number;
-  /** 26年各月当月已赚（时间分摊增量） */
-  earned_2026_01: number;
-  earned_2026_02: number;
-  earned_2026_03: number;
-  earned_2026_04: number;
-  earned_2026_05: number;
-  earned_2026_06: number;
-  earned_2026_07: number;
-  earned_2026_08: number;
-  earned_2026_09: number;
-  earned_2026_10: number;
-  earned_2026_11: number;
-  earned_2026_12: number;
-  /** 26年已赚合计 = 首日费用 + 26年各月时间分摊合计 */
-  earned_2026_total: number;
-}
-
-/**
- * 2026年保单在2027年的已赚保费数据行（V3版本）
- * 按起保月统计，每月一行，共12行
- */
-export interface Policy2026In2027Data {
-  /** 起保月（1-12） */
-  policy_month: number;
-  /** 27年各月当月已赚（时间分摊增量，不含首日费用） */
-  earned_2027_01: number;
-  earned_2027_02: number;
-  earned_2027_03: number;
-  earned_2027_04: number;
-  earned_2027_05: number;
-  earned_2027_06: number;
-  earned_2027_07: number;
-  earned_2027_08: number;
-  earned_2027_09: number;
-  earned_2027_10: number;
-  earned_2027_11: number;
-  earned_2027_12: number;
-  /** 27年已赚合计 = 27年各月时间分摊合计 */
-  earned_2027_total: number;
-}
-
-/**
- * 新口径已赚保费Hook结果（V3版本）
+ * 新口径已赚保费Hook结果（四象限矩阵 + 锚定年）
  */
 export interface NewEarnedPremiumResultV3 {
-  /** 2025年保单在2025年的已赚数据 */
-  policy2025In2025Data: Policy2025In2025Data[];
-  /** 2025年保单在2026年的已赚数据 */
-  policy2025In2026Data: Policy2025In2026Data[];
-  /** 2026年保单在2026年的已赚数据 */
-  policy2026In2026Data: Policy2026In2026Data[];
-  /** 2026年保单在2027年的已赚数据 */
-  policy2026In2027Data: Policy2026In2027Data[];
+  /** 锚定年 Y（后端解析，缺省回退当前年） */
+  anchorYear: number;
+  /** Y-1 年保单在 Y-1 年的已赚数据 */
+  policyPrevInPrevData: SameYearEarnedRow[];
+  /** Y-1 年保单在 Y 年的已赚数据 */
+  policyPrevInCurrData: CrossYearEarnedRow[];
+  /** Y 年保单在 Y 年的已赚数据 */
+  policyCurrInCurrData: SameYearEarnedRow[];
+  /** Y 年保单在 Y+1 年的已赚数据 */
+  policyCurrInNextData: CrossYearEarnedRow[];
   /** 汇总数据 */
   summaryData: NewEarnedPremiumSummaryData[];
   /** 加载状态 */
@@ -131,143 +73,23 @@ export interface NewEarnedPremiumResultV3 {
   error: string | null;
 }
 
-// ========== 滚动12个月已赚保费 ==========
-
-/**
- * 滚动12个月数据行
- * 每个统计月一行，展示该月的滚动12个月窗口数据
- */
-export interface Rolling12MonthData {
-  /** 统计月，格式 YYYY-MM */
-  statMonth: string;
-  /** 滚动12个月保费（窗口内起保保单的保费之和） */
-  rollingPremium: number;
-  /** 滚动12个月首日费用（窗口内起保保单的首日费用之和） */
-  rollingFirstDayFee: number;
-  /** 滚动12个月时间分摊（窗口内各月的时间分摊增量之和） */
-  rollingTimePart: number;
-  /** 滚动12个月已赚保费（首日费用 + 时间分摊） */
-  rollingEarnedPremium: number;
-  /** 已赚率（已赚保费 / 保费） */
-  earnedRatio: number;
-}
-
-/**
- * 起保月详情数据（用于滚动计算的中间结构）
- */
-export interface PolicyMonthDetail {
-  /** 保单年度 */
-  policyYear: number;
-  /** 起保月 */
-  policyMonth: number;
-  /** 保费 */
-  premium: number;
-  /** 首日费用 */
-  firstDayFee: number;
-  /** 各统计月的时间分摊增量，key格式 YYYY-MM */
-  earnedIncrements: Map<string, number>;
-}
-
-// ========== V2 版本（保留向后兼容） ==========
-
-/**
- * 2025年保单已赚保费数据行
- * 按起保月统计，每月一行，共12行
- */
-export interface Policy2025EarnedPremiumData {
-  /** 起保月（1-12） */
-  policy_month: number;
-  /** 保费（起保日期口径） */
-  premium: number;
-  /** 截至25年末已赚保费 */
-  earned_2025_12: number;
-  /** 截至26年各月末已赚保费 */
-  earned_2026_01: number;
-  earned_2026_02: number;
-  earned_2026_03: number;
-  earned_2026_04: number;
-  earned_2026_05: number;
-  earned_2026_06: number;
-  earned_2026_07: number;
-  earned_2026_08: number;
-  earned_2026_09: number;
-  earned_2026_10: number;
-  earned_2026_11: number;
-  earned_2026_12: number;
-  /** 验证列：13个已赚保费字段之和（应等于保费） */
-  earned_total: number;
-  /** 验证差异（保费 - 已赚合计） */
-  validation_diff: number;
-}
-
-/**
- * 2026年保单已赚保费数据行
- * 按起保月统计，每月一行，共12行
- */
-export interface Policy2026EarnedPremiumData {
-  /** 起保月（1-12） */
-  policy_month: number;
-  /** 保费（起保日期口径） */
-  premium: number;
-  /** 截至26年各月末已赚保费（含首日费用率） */
-  earned_2026_01: number;
-  earned_2026_02: number;
-  earned_2026_03: number;
-  earned_2026_04: number;
-  earned_2026_05: number;
-  earned_2026_06: number;
-  earned_2026_07: number;
-  earned_2026_08: number;
-  earned_2026_09: number;
-  earned_2026_10: number;
-  earned_2026_11: number;
-  earned_2026_12: number;
-  /** 截至27年各月末已赚保费 */
-  earned_2027_01: number;
-  earned_2027_02: number;
-  earned_2027_03: number;
-  earned_2027_04: number;
-  earned_2027_05: number;
-  earned_2027_06: number;
-  earned_2027_07: number;
-  earned_2027_08: number;
-  earned_2027_09: number;
-  earned_2027_10: number;
-  earned_2027_11: number;
-  earned_2027_12: number;
-}
+// ==================== 滚动12个月汇总 ====================
 
 /**
  * 新口径已赚保费汇总数据行
- * 按统计年月汇总，2026年12个月末各一行
+ * 按统计年月汇总，锚定年 Y 的 12 个月末各一行
  */
 export interface NewEarnedPremiumSummaryData {
-  /** 统计年月（2026-01 ~ 2026-12） */
+  /** 统计年月（Y-01 ~ Y-12） */
   stat_month: string;
   /** 滚动12个月保费收入（起保日期口径） */
   rolling_12m_premium: number;
-  /** 2025年保单已赚保费 */
-  earned_from_2025: number;
-  /** 2026年保单已赚保费 */
-  earned_from_2026: number;
+  /** 上一保单年度（Y-1）保单已赚保费 */
+  earned_from_prev: number;
+  /** 锚定年（Y）保单已赚保费 */
+  earned_from_curr: number;
   /** 合计已赚保费 */
   total_earned_premium: number;
   /** 已赚率 = 合计已赚保费 / 滚动12个月保费 */
   earned_ratio: number;
-}
-
-/**
- * 新口径已赚保费Hook结果
- */
-export interface NewEarnedPremiumResult {
-  /** 2025年保单数据 */
-  policy2025Data: Policy2025EarnedPremiumData[];
-  /** 2026年保单数据 */
-  policy2026Data: Policy2026EarnedPremiumData[];
-  /** 汇总数据 */
-  summaryData: NewEarnedPremiumSummaryData[];
-  /** 加载状态 */
-  loading: boolean;
-  /** 错误信息 */
-  error: string | null;
 }

@@ -173,9 +173,8 @@ WITH policy_exposure AS (
 /**
  * 已赚保费期间查询配置
  *
- * 用于将 generatePolicy2025In2025Query / generatePolicy2025In2026Query /
- * generatePolicy2026In2026Query / generatePolicy2026In2027Query
- * 四个近乎相同的函数合并为一个参数化函数。
+ * 「保单年度 × 已赚年度」矩阵的参数化配置，由
+ * generateEarnedPremiumMatrixQueries（cost/earned-premium.ts）按锚定年展开四象限。
  */
 export interface EarnedPremiumPeriodConfig {
   /** 保单年份（保单起保年份筛选条件） */
@@ -254,40 +253,10 @@ export function buildEarnedMonthlyCase(
 }
 
 /**
- * 计算某保单在指定统计月末的已赚保费（首日费用 + 时间分摊）
- * 已赚保费 = P × F × α + P × (1-F) × min(有效天数, policy_term) / policy_term
- * 分母改为 policy_term = DATEDIFF(起期, 起期+1年)，闰年感知（365/366）。
- *
- * 与 buildTimePartCase 的区别：本函数包含首日费用部分。
- *
- * @param statMonthEnd - 统计月末日期，格式 YYYY-MM-DD
- */
-export function buildEarnedPremiumCase(statMonthEnd: string): string {
-  return `
-    CASE
-      WHEN CAST(insurance_start_date AS DATE) <= DATE '${statMonthEnd}'
-      THEN
-        -- 首日费用部分 = P × F × α
-        premium * fee_rate * line_factor +
-        -- 时间分摊部分 = P × (1-F) × min(有效天数, policy_term) / policy_term
-        premium * (1 - fee_rate) * LEAST(
-          GREATEST(
-            DATEDIFF('day', CAST(insurance_start_date AS DATE), DATE '${statMonthEnd}') + 1,
-            0
-          ),
-          DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
-        ) * 1.0 / DATEDIFF('day', CAST(insurance_start_date AS DATE), CAST(insurance_start_date AS DATE) + INTERVAL 1 YEAR)
-      ELSE 0
-    END
-  `;
-}
-
-/**
  * 生成已赚保费期间查询SQL（参数化版本）
  *
- * 将 generatePolicy2025In2025Query / generatePolicy2025In2026Query /
- * generatePolicy2026In2026Query / generatePolicy2026In2027Query
- * 四个近乎相同的函数统一为一个参数化函数。
+ * 「保单年度 × 已赚年度」矩阵的统一实现，字段为相对年 key
+ * （earned_01..earned_12 / earned_total）。
  *
  * - isSameYear=true（保单年==已赚年）：包含 premium、first_day_fee 列，
  *   月度字段使用 buildEarnedMonthlyCase（含首日费用）
@@ -302,13 +271,15 @@ export function generateEarnedPremiumPeriodQuery(config: EarnedPremiumPeriodConf
 
   const earnedMonthlyFields: string[] = [];
 
+  // 相对年字段契约：earned_01..earned_12 表示 earnedYear 年 1-12 月的当月已赚，
+  // earned_total 为该已赚年度合计。行所属的绝对年份由响应元数据 anchorYear 推导，跨年零改代码。
   if (isSameYear) {
     // 同年：月度字段含首日费用（buildEarnedMonthlyCase）
     for (let m = 1; m <= 12; m++) {
       const currentMonthEnd = getMonthEndDate(earnedYear, m);
       const prevMonthEnd = m === 1 ? null : getMonthEndDate(earnedYear, m - 1);
       earnedMonthlyFields.push(
-        `ROUND(SUM(${buildEarnedMonthlyCase(m, earnedYear, prevMonthEnd, currentMonthEnd).trim()}), 2) AS earned_${earnedYear}_${String(m).padStart(2, '0')}`
+        `ROUND(SUM(${buildEarnedMonthlyCase(m, earnedYear, prevMonthEnd, currentMonthEnd).trim()}), 2) AS earned_${String(m).padStart(2, '0')}`
       );
     }
   } else {
@@ -318,7 +289,7 @@ export function generateEarnedPremiumPeriodQuery(config: EarnedPremiumPeriodConf
       const currentMonthEnd = getMonthEndDate(earnedYear, m);
       const prevMonthEnd = m === 1 ? getMonthEndDate(prevYear, 12) : getMonthEndDate(earnedYear, m - 1);
       earnedMonthlyFields.push(
-        `ROUND(SUM(${buildTimePartCase(currentMonthEnd).trim()}) - SUM(${buildTimePartCase(prevMonthEnd).trim()}), 2) AS earned_${earnedYear}_${String(m).padStart(2, '0')}`
+        `ROUND(SUM(${buildTimePartCase(currentMonthEnd).trim()}) - SUM(${buildTimePartCase(prevMonthEnd).trim()}), 2) AS earned_${String(m).padStart(2, '0')}`
       );
     }
   }
@@ -330,14 +301,14 @@ export function generateEarnedPremiumPeriodQuery(config: EarnedPremiumPeriodConf
     SUM(premium * fee_rate * line_factor) +
     SUM(${buildTimePartCase(getMonthEndDate(earnedYear, 12)).trim()}),
     2
-  ) AS earned_${earnedYear}_total`;
+  ) AS earned_total`;
   } else {
     const prevYear = earnedYear - 1;
     totalField = `ROUND(
     SUM(${buildTimePartCase(getMonthEndDate(earnedYear, 12)).trim()}) -
     SUM(${buildTimePartCase(getMonthEndDate(prevYear, 12)).trim()}),
     2
-  ) AS earned_${earnedYear}_total`;
+  ) AS earned_total`;
   }
 
   // 额外同年列（premium, first_day_fee）
