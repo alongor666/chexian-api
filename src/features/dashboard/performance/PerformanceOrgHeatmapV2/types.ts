@@ -2,6 +2,7 @@
  * Heatmap V2 — Type definitions
  */
 
+import type { HeatmapThresholdTier, HeatmapTier } from '@/shared/styles';
 import type { PerformanceOrgHeatmapRow } from '../../hooks/usePerformanceOrgHeatmap';
 import type { HeatmapDimension } from '../../hooks/usePerformanceOrgHeatmap';
 import type { PerformanceGrowthMode, PerformanceTimePeriod } from '../../hooks/usePerformanceSummary';
@@ -10,36 +11,10 @@ import type { PerformanceGrowthMode, PerformanceTimePeriod } from '../../hooks/u
 
 export type HeatmapMetric = 'growth' | 'achievement' | 'premium' | 'coefficient' | 'share' | 'per_policy';
 
-/** 7级发散分段 + unknown */
-export type HeatmapTier =
-  | 'critical'   // L1 明显低于基准
-  | 'weak'       // L2 低于基准
-  | 'below'      // L3 略低于基准
-  | 'normal'     // L4 正常波动带
-  | 'above'      // L5 略高于基准
-  | 'strong'     // L6 明显超越
-  | 'excellent'  // L7 持续超越
-  | 'unknown';   // 缺失值
-
-// ==================== Color Scale ====================
-
-export interface HeatmapColorEntry {
-  readonly bg: string;
-  readonly text: string;
-}
-
-export interface HeatmapColorScale {
-  readonly light: Record<HeatmapTier, HeatmapColorEntry>;
-  readonly dark: Record<HeatmapTier, HeatmapColorEntry>;
-}
+// 档位/色值/阈值档类型收拢至 SSOT src/shared/styles/heatmap-scale.ts，此处 re-export 保持目录内引用不变
+export type { HeatmapTier, HeatmapColorEntry, HeatmapColorScale, HeatmapThresholdTier } from '@/shared/styles';
 
 // ==================== Threshold Config ====================
-
-export interface HeatmapThresholdTier {
-  readonly tier: HeatmapTier;
-  /** value >= min 则匹配此档（从高到低遍历，第一个匹配即停） */
-  readonly min?: number;
-}
 
 export interface HeatmapThresholdConfig {
   readonly metric: HeatmapMetric;

@@ -20,7 +20,12 @@ import {
 import { Tabs } from '../../shared/ui/Tabs';
 import type { TabItem } from '../../shared/ui/Tabs';
 import { StickyTableFrame } from '../../shared/ui';
-import { textStyles, cardStyles, colorClasses, stickyTableStyles, cn } from '../../shared/styles';
+import {
+  textStyles, cardStyles, colorClasses, stickyTableStyles, cn,
+  HEATMAP_COLOR_SCALE, HEATMAP_TIER_LABELS, HEATMAP_LEGEND_TIERS,
+  resolveTierByThresholds, resolveTierByQuantile,
+} from '../../shared/styles';
+import type { HeatmapColorEntry, HeatmapThresholdTier, HeatmapTier } from '../../shared/styles';
 import { formatPercent } from '../../shared/utils/formatters';
 import { useDataStatus } from '../../shared/contexts/DataContext';
 import { useTheme } from '../../shared/theme';
@@ -28,7 +33,6 @@ import { useTheme } from '../../shared/theme';
 // ==================== Types ====================
 
 type MetricType = 'rate' | 'penetration' | 'achievement' | 'driver_count' | 'auto_count' | 'avg_premium';
-type HeatmapTier = 'critical' | 'weak' | 'below' | 'normal' | 'above' | 'strong' | 'excellent' | 'unknown';
 
 const BRANCH_SUMMARY_ROW_LABEL = '分公司';
 
@@ -50,45 +54,13 @@ const METRIC_LABELS: Record<MetricType, string> = {
   avg_premium: '驾意件均',
 };
 
-// ==================== 7级发散色带 ====================
-
-interface ColorEntry { readonly bg: string; readonly text: string }
-
-const COLORS_LIGHT: Record<HeatmapTier, ColorEntry> = {
-  critical:  { bg: '#fef2f2', text: '#991b1b' },
-  weak:      { bg: '#fffbeb', text: '#92400e' },
-  below:     { bg: '#fefce8', text: '#a16207' },
-  normal:    { bg: '#f9fafb', text: '#6b7280' },
-  above:     { bg: '#f0f9ff', text: '#075985' },
-  strong:    { bg: '#e0f2fe', text: '#0c4a6e' },
-  excellent: { bg: '#f0fdfa', text: '#134e4a' },
-  unknown:   { bg: '#f3f4f6', text: '#9ca3af' },
-};
-
-const COLORS_DARK: Record<HeatmapTier, ColorEntry> = {
-  critical:  { bg: 'rgba(220,80,60,0.30)',  text: '#fca5a5' },
-  weak:      { bg: 'rgba(217,119,6,0.20)',  text: '#fcd34d' },
-  below:     { bg: 'rgba(217,119,6,0.09)',  text: '#d4a574' },
-  normal:    { bg: 'rgba(255,255,255,0.04)', text: '#6b7280' },
-  above:     { bg: 'rgba(14,165,233,0.09)', text: '#7dd3fc' },
-  strong:    { bg: 'rgba(14,165,233,0.20)', text: '#38bdf8' },
-  excellent: { bg: 'rgba(20,184,166,0.26)', text: '#5eead4' },
-  unknown:   { bg: 'rgba(255,255,255,0.02)', text: '#4b5563' },
-};
-
-const TIER_LABELS: Record<HeatmapTier, string> = {
-  critical: '危险', weak: '偏弱', below: '轻弱', normal: '正常',
-  above: '轻强', strong: '偏强', excellent: '优秀', unknown: '无数据',
-};
-
-const LEGEND_TIERS: readonly HeatmapTier[] = ['critical', 'weak', 'below', 'normal', 'above', 'strong', 'excellent'];
+// 7级发散色带/档位标签/图例序/分档函数收拢至 SSOT src/shared/styles/heatmap-scale.ts；
+// 以下阈值表为交叉销售业务口径，保留在本组件
 
 // ==================== 阈值配置 ====================
 
-interface ThresholdEntry { readonly tier: HeatmapTier; readonly min?: number }
-
 /** 推介率阈值（基准75%） */
-const RATE_THRESHOLDS: readonly ThresholdEntry[] = [
+const RATE_THRESHOLDS: readonly HeatmapThresholdTier[] = [
   { tier: 'excellent', min: 85 },
   { tier: 'strong',    min: 80 },
   { tier: 'above',     min: 75 },
@@ -99,7 +71,7 @@ const RATE_THRESHOLDS: readonly ThresholdEntry[] = [
 ];
 
 /** 渗透率阈值 */
-const PENETRATION_THRESHOLDS: readonly ThresholdEntry[] = [
+const PENETRATION_THRESHOLDS: readonly HeatmapThresholdTier[] = [
   { tier: 'excellent', min: 12 },
   { tier: 'strong',    min: 10 },
   { tier: 'above',     min: 8 },
@@ -110,7 +82,7 @@ const PENETRATION_THRESHOLDS: readonly ThresholdEntry[] = [
 ];
 
 /** 达成率阈值（基准100%） */
-const ACHIEVEMENT_THRESHOLDS: readonly ThresholdEntry[] = [
+const ACHIEVEMENT_THRESHOLDS: readonly HeatmapThresholdTier[] = [
   { tier: 'excellent', min: 110 },
   { tier: 'strong',    min: 100 },
   { tier: 'above',     min: 90 },
@@ -121,7 +93,7 @@ const ACHIEVEMENT_THRESHOLDS: readonly ThresholdEntry[] = [
 ];
 
 /** 件均保费阈值（基准300元） */
-const AVG_PREMIUM_THRESHOLDS: readonly ThresholdEntry[] = [
+const AVG_PREMIUM_THRESHOLDS: readonly HeatmapThresholdTier[] = [
   { tier: 'excellent', min: 360 },
   { tier: 'strong',    min: 333 },
   { tier: 'above',     min: 300 },
@@ -130,31 +102,6 @@ const AVG_PREMIUM_THRESHOLDS: readonly ThresholdEntry[] = [
   { tier: 'weak',      min: 200 },
   { tier: 'critical' },
 ];
-
-function resolveTierByThresholds(value: number, thresholds: readonly ThresholdEntry[]): HeatmapTier {
-  for (const { tier, min } of thresholds) {
-    if (min === undefined || value >= min) return tier;
-  }
-  return 'critical';
-}
-
-/** 件数类指标：动态分位数分7段 */
-function resolveTierByQuantile(value: number, sorted: readonly number[]): HeatmapTier {
-  if (sorted.length === 0) return 'normal';
-  const quantiles = [0.05, 0.20, 0.40, 0.60, 0.80, 0.95];
-  const cuts = quantiles.map((q) => {
-    const pos = q * (sorted.length - 1);
-    const lo = Math.floor(pos);
-    const hi = Math.ceil(pos);
-    return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
-  });
-  const tiers: HeatmapTier[] = ['critical', 'weak', 'below', 'normal', 'above', 'strong', 'excellent'];
-  let idx = 0;
-  for (let i = 0; i < cuts.length; i++) {
-    if (value >= cuts[i]) idx = i + 1;
-  }
-  return tiers[Math.min(idx, tiers.length - 1)];
-}
 
 // ==================== Helpers ====================
 
@@ -331,8 +278,8 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
 
   // 颜色解析
   const resolveColor = useCallback(
-    (metric: MetricType, value: number | null): ColorEntry & { tier: HeatmapTier } => {
-      const scale = isDark ? COLORS_DARK : COLORS_LIGHT;
+    (metric: MetricType, value: number | null): HeatmapColorEntry & { tier: HeatmapTier } => {
+      const scale = isDark ? HEATMAP_COLOR_SCALE.dark : HEATMAP_COLOR_SCALE.light;
       if (value === null || !Number.isFinite(value)) {
         return { ...scale.unknown, tier: 'unknown' };
       }
@@ -426,7 +373,7 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
           isBranchSummaryRow ? 'font-semibold' : '',
         )}
         style={{ backgroundColor: bg, color: text }}
-        title={`${org} | ${formatDateFull(date)}\n${METRIC_LABELS[activeMetric]}: ${formatValue(activeMetric, value)}\n档位: ${TIER_LABELS[tier]}\n车险件数: ${row.auto_count} | 驾意件数: ${row.driver_count}`}
+        title={`${org} | ${formatDateFull(date)}\n${METRIC_LABELS[activeMetric]}: ${formatValue(activeMetric, value)}\n档位: ${HEATMAP_TIER_LABELS[tier]}\n车险件数: ${row.auto_count} | 驾意件数: ${row.driver_count}`}
       >
         {displayValue}
       </div>
@@ -461,9 +408,9 @@ export const CrossSellMetricsHeatmap: React.FC<CrossSellMetricsHeatmapProps> = (
   }
 
   // 图例渐变
-  const scale = isDark ? COLORS_DARK : COLORS_LIGHT;
-  const gradientStops = LEGEND_TIERS.map((tier, i) => {
-    const pct = (i / (LEGEND_TIERS.length - 1)) * 100;
+  const scale = isDark ? HEATMAP_COLOR_SCALE.dark : HEATMAP_COLOR_SCALE.light;
+  const gradientStops = HEATMAP_LEGEND_TIERS.map((tier, i) => {
+    const pct = (i / (HEATMAP_LEGEND_TIERS.length - 1)) * 100;
     return `${scale[tier].bg} ${pct}%`;
   }).join(', ');
 
