@@ -11,6 +11,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EChartsOption } from 'echarts';
 import { EChartContainer } from '../../widgets/charts/EChartContainer';
 import { formatCount, formatPercent, formatTrendDailyXAxis, TREND_DAILY_XAXIS_RICH } from '../../shared/utils/formatters';
+import { escapeCSVField, downloadFile } from '../../shared/utils/export';
 import { buttonStyles, cardStyles, colors, cn, tableStyles, textStyles } from '../../shared/styles';
 import { useTheme } from '../../shared/theme';
 import { ORG_GROUPS_BY_BRANCH } from '../../shared/config/org-groups';
@@ -166,23 +167,9 @@ function exportRowsToCsv(rows: OrgTrendPoint[], filename: string): void {
     String(Math.round(row.avg_premium)),
   ]);
 
-  const escapeCsv = (field: string) => {
-    if (field.includes(',') || field.includes('"') || field.includes('\n')) {
-      return `"${field.replace(/"/g, '""')}"`;
-    }
-    return field;
-  };
-
-  const csvText = '\uFEFF' + [headers, ...dataRows].map((line) => line.map(escapeCsv).join(',')).join('\n');
-  const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // 转义/BOM/Blob 下载收拢至 shared/utils/export.ts 唯一实现
+  const csvText = [headers, ...dataRows].map((line) => line.map(escapeCSVField).join(',')).join('\n');
+  downloadFile(csvText, filename, 'text/csv;charset=utf-8;');
 }
 
 export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({

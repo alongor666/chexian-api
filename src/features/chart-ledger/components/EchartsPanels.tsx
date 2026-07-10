@@ -7,8 +7,7 @@
  * 复用项目 echarts 单例（Bar/Line/Scatter + 组件）与 getChartTheme 明暗主题。
  */
 import React, { useMemo } from 'react';
-import ReactEChartsCore from 'echarts-for-react/lib/core';
-import { echarts } from '@/shared/utils/echarts';
+import { EChartContainer } from '../../../widgets/charts/EChartContainer';
 import { getChartTheme } from '@/shared/config/chartStyles';
 import { useTheme } from '@/shared/theme';
 import { cn, colorClasses, fontStyles } from '@/shared/styles';
@@ -165,7 +164,7 @@ export const ChannelMatrixChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({
   }, [r.data, theme]);
   return (
     <ChartFrame s={r}>
-      <ReactEChartsCore echarts={echarts} option={option} style={{ height: H }} notMerge />
+      <EChartContainer option={option} height={H} />
     </ChartFrame>
   );
 };
@@ -224,7 +223,7 @@ export const FeeOutlierChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({ r 
   }, [r.data, theme]);
   return (
     <ChartFrame s={r}>
-      <ReactEChartsCore echarts={echarts} option={option} style={{ height: H }} notMerge />
+      <EChartContainer option={option} height={H} />
     </ChartFrame>
   );
 };
@@ -267,7 +266,7 @@ export const FrequencyTrendChart: React.FC<{ r: ChartResult<{ labels: string[]; 
   );
   return (
     <ChartFrame s={r}>
-      <ReactEChartsCore echarts={echarts} option={option} style={{ height: H }} notMerge />
+      <EChartContainer option={option} height={H} />
     </ChartFrame>
   );
 };
@@ -335,7 +334,7 @@ export const ProfitWaterfallChart: React.FC<{
   }, [r.data, theme]);
   return (
     <ChartFrame s={r}>
-      <ReactEChartsCore echarts={echarts} option={option} style={{ height: H }} notMerge />
+      <EChartContainer option={option} height={H} />
     </ChartFrame>
   );
 };
@@ -387,7 +386,7 @@ export const LossParetoChart: React.FC<{ r: ChartResult<ParetoBar[]> }> = ({ r }
   );
   return (
     <ChartFrame s={r}>
-      <ReactEChartsCore echarts={echarts} option={option} style={{ height: H }} notMerge />
+      <EChartContainer option={option} height={H} />
     </ChartFrame>
   );
 };
@@ -430,7 +429,7 @@ export const ControlChart: React.FC<{
   }, [r.data, theme]);
   return (
     <ChartFrame s={r}>
-      <ReactEChartsCore echarts={echarts} option={option} style={{ height: H }} notMerge />
+      <EChartContainer option={option} height={H} />
     </ChartFrame>
   );
 };
@@ -478,7 +477,7 @@ export const QuadrantChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({ r })
   }, [r.data, theme]);
   return (
     <ChartFrame s={r}>
-      <ReactEChartsCore echarts={echarts} option={option} style={{ height: H }} notMerge />
+      <EChartContainer option={option} height={H} />
     </ChartFrame>
   );
 };

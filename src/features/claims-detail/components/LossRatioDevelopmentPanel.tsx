@@ -15,8 +15,7 @@
  */
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import ReactEChartsCore from 'echarts-for-react/lib/core';
-import { echarts } from '@/shared/utils/echarts';
+import { EChartContainer } from '../../../widgets/charts/EChartContainer';
 import {
   cardStyles,
   colorClasses,
@@ -404,11 +403,7 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
       {/* 4. 折线图 */}
       {hasData && (
         <div className={cn(cardStyles.standard, 'p-4')}>
-          <ReactEChartsCore
-            echarts={echarts}
-            option={chartOption}
-            style={{ height: 360 }}
-          />
+          <EChartContainer option={chartOption} height={360} notMerge={false} />
         </div>
       )}
 
