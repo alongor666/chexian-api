@@ -172,7 +172,7 @@ export const AUTH_ROUTES = {
 
   ROUTE_CATALOG: 'auth/route-catalog',
 
-  WECOM_CONFIG: 'auth/wecom/config',
+  FEISHU_CONFIG: 'auth/feishu/config',
 } as const;
 
 // ─────────────────────────────────────────────

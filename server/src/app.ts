@@ -5,7 +5,8 @@
  * 车险业绩分析系统 - 后端服务（前后端分离架构）
  */
 
-import 'dotenv/config';
+// 必须是第一条 import：ESM import 静态提升，env 加载须先于任何读 process.env 的模块执行
+import './config/load-env.js';
 import express, { Application } from 'express';
 import compression from 'compression';
 import { brotliMiddleware } from './middleware/brotli.js';
@@ -267,7 +268,7 @@ app.get('/api/health/detail', authMiddleware, (req, res) => {
  * 6. API路由
  */
 import authRoutes from './routes/auth.js';
-import wecomAuthRoutes from './routes/wecom-auth.js';
+import feishuAuthRoutes from './routes/feishu-auth.js';
 import queryRoutes from './routes/query.js';
 import discoverRoutes from './routes/discover.js';
 import filtersRoutes from './routes/filters.js';
@@ -283,7 +284,7 @@ import copilotRoutes from './routes/copilot.js';
 import reportsRoutes from './routes/reports.js';
 import adminRoutes from './routes/admin.js';
 
-app.use('/api/auth/wecom', wecomAuthRoutes); // 放前面避免 loginLimiter 影响
+app.use('/api/auth/feishu', feishuAuthRoutes); // 放前面避免 loginLimiter 影响（扫码登录回调必须未登录可访问）
 app.use('/api/auth', authRoutes);
 app.use('/api/query', queryRoutes);
 app.use('/api/discover', discoverRoutes);

@@ -1969,3 +1969,15 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （同类失败首次。若再现"新增护栏被评审/事故证实 fail-open" → 升级为 pr-checklist 红线行固化。）
+
+---
+
+## 2026-07-10 · #1030 飞书角色映射增强：本地 dev server 从未加载根目录 `.env.local`
+
+- **场景**：给 `feishu.ts` 的 `resolvePermission` 加按人 `branchCode`/`username`/`deny` 兜底三项增强后，用 `bun run dev:full` 起本地服务实测，`GET /api/auth/feishu/config` 一直返回 "Feishu login not configured"，尽管 `.env.local` 里已正确填了 `FEISHU_APP_ID`/`FEISHU_APP_SECRET`。
+- **根因**：`server/src/app.ts` 首行 `import 'dotenv/config'` 只会在 **cwd** 下找 `.env`；本地 `dev:full`/`tsx watch` 的 cwd 是 `server/`，该目录既无 `.env` 也无 `.env.local`。根目录（仓库根）的 `.env.local`——本地开发者实际填凭据的地方——**从未被后端进程读取过**。这不是本次改动引入的新 bug，是既有 `dotenv/config` 用法一直存在的盲区，只是这次通过飞书登录实测意外撞见。生产环境不受影响（PM2 ecosystem 显式注入 env，不依赖 dotenv 文件加载）。
+- **修复**：新增 `server/src/config/load-env.ts`，在 `app.ts` 顶部第一条 import 中依次加载 `dotenv.config()`（cwd）→ 仓库根 `.env.local` → 仓库根 `.env`（dotenv 默认不覆盖已设变量，故加载顺序即优先级：进程注入 > cwd .env > 根 .env.local > 根 .env）。`curl /api/auth/feishu/config` 从 `success:false` 变为返回真实 `appId`，验证生效。
+- **预防**：任何新增「本地 env 变量在 dev server 里读不到」的报告，先检查是否命中此坑（cwd 与仓库根不一致时 `dotenv/config` 默认行为），而非怀疑变量名拼写或 env.ts 读取逻辑。`server/src/config/load-env.ts` 是唯一事实源，不要在其他文件里再补一份 `dotenv.config({path:...})`。
+
+### needs_automation: false
+（一次性基础设施修复，已在 `load-env.ts` 落地为代码，无需额外自动化钩子；本地 dev server 的 env 加载路径已固定为该文件的职责。）

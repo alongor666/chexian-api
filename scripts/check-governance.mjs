@@ -2544,7 +2544,7 @@ function checkNonQueryRoutesConsistency() {
     'reports.ts': '路径含 :reportId/:snapshot/* 通配符文件服务路由，非结构化 API，常量表意义有限',
     'skills.ts': '本地技能编排路由（/api/skills/*），面向内部 skill 运行时而非前端类型安全引用',
     'discover.ts': 'Agent 自解释发现端点（/fields /metrics /presets /schema /legend），无前端常量消费方',
-    'wecom-auth.ts': '挂载前缀 /api/auth/wecom 与 AUTH_ROUTES.WECOM_CONFIG(/wecom/config) 路径段拼接口径不同，需专项对齐后再纳入对账',
+    'feishu-auth.ts': '挂载前缀 /api/auth/feishu 与 AUTH_ROUTES.FEISHU_CONFIG(/feishu/config) 路径段拼接口径不同，需专项对齐后再纳入对账',
   };
 
   function extractMountedRoutes(filePath) {

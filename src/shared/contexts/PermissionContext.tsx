@@ -33,8 +33,6 @@ interface PermissionContextValue {
   login: (username: string) => void;
   /** 密码登录（内网认证） */
   loginWithPassword: (username: string, password: string, remember?: boolean) => Promise<boolean>;
-  /** 企微/会话恢复登录 */
-  loginWithWecomToken: (token?: string) => Promise<boolean>;
   /** 基于 cookie 会话恢复当前用户 */
   restoreSession: () => Promise<boolean>;
   /** 登出 */
@@ -54,7 +52,6 @@ const PermissionContext = createContext<PermissionContextValue>({
   setUserPermission: () => { },
   login: () => { },
   loginWithPassword: async () => false,
-  loginWithWecomToken: async () => false,
   restoreSession: async () => false,
   logout: () => { },
   canView: () => true,
@@ -192,22 +189,6 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     }
   }, [buildPermission, setUserPermission]);
 
-  /** 企微 token 解析登录（兼容）/ 基于 cookie 会话恢复 */
-  const loginWithWecomToken = useCallback(async (token?: string): Promise<boolean> => {
-    try {
-      if (token) {
-        apiClient.setToken(token);
-      }
-      const ok = await restoreSession();
-      if (!ok) return false;
-      window.dispatchEvent(new Event('auth-login'));
-      return true;
-    } catch (e) {
-      logger.error('WeCom token 校验或解析失败:', e);
-      return false;
-    }
-  }, [restoreSession]);
-
   /** 登出 */
   const logout = useCallback(() => {
     setUserPermission(null);
@@ -245,7 +226,6 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       setUserPermission,
       login,
       loginWithPassword,
-      loginWithWecomToken,
       restoreSession,
       logout,
       canView,
@@ -261,7 +241,6 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       setUserPermission,
       login,
       loginWithPassword,
-      loginWithWecomToken,
       restoreSession,
       logout,
       canView,

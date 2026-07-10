@@ -378,7 +378,7 @@ describe('namespaced sub-client URL contracts', () => {
     { name: 'auth.createRole POST', path: '/auth/roles', run: (c) => c.auth.createRole({ role: 'r', name: 'R', dataScope: 'all' }), expectMethod: 'POST' },
     { name: 'auth.updateRole PUT', path: '/auth/roles/r1', run: (c) => c.auth.updateRole('r1', { name: 'R', dataScope: 'all' }), expectMethod: 'PUT' },
     { name: 'auth.deleteRole DELETE', path: '/auth/roles/r1', run: (c) => c.auth.deleteRole('r1'), expectMethod: 'DELETE' },
-    { name: 'auth.getWeComConfig', path: '/auth/wecom/config', run: (c) => c.auth.getWeComConfig() },
+    { name: 'auth.getFeishuConfig', path: '/auth/feishu/config', run: (c) => c.auth.getFeishuConfig() },
     // ── premium（本 PR 残渣域归并）──
     { name: 'premium.report', path: '/query/premium-report?', run: (c) => c.premium.report({ org: '乐山' }), expectParam: true },
     { name: 'premium.plan', path: '/query/premium-plan?', run: (c) => c.premium.plan({ org: '乐山' }), expectParam: true },

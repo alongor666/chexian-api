@@ -167,7 +167,7 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: 'auth', method: 'createRole', args: () => [{}] },
   { ns: 'auth', method: 'updateRole', args: () => ['r', {}] },
   { ns: 'auth', method: 'deleteRole', args: () => ['r'] },
-  { ns: 'auth', method: 'getWeComConfig', args: NO_ARGS },
+  { ns: 'auth', method: 'getFeishuConfig', args: NO_ARGS },
 
   // ── premium（3）──
   { ns: 'premium', method: 'report', args: NO_ARGS },

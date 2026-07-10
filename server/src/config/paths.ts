@@ -146,6 +146,17 @@ export function getUserStorePath(): string {
 }
 
 /**
+ * 飞书角色映射文件路径（飞书用户 → 角色/机构分层授权，扫码登录时消费）。
+ * 优先级：FEISHU_ROLE_MAPPING_PATH 环境变量 > server/data/feishu_role_mapping.json
+ * 文件由通讯录侧生成（含权限分配），gitignored，随部署单独下发。
+ */
+export function getFeishuRoleMappingPath(): string {
+  return process.env.FEISHU_ROLE_MAPPING_PATH
+    ? path.resolve(process.env.FEISHU_ROLE_MAPPING_PATH)
+    : path.resolve(getDataDir(), 'feishu_role_mapping.json');
+}
+
+/**
  * PAT 持久层文件路径。DuckDB ApiToken 表是 :memory: 表，
  * PM2 reload 后必须从此文件重建，否则用户 token 全部失效。
  */

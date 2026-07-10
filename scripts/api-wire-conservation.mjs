@@ -70,6 +70,7 @@ const POST_SPLIT_ADDITIONS = [
   // 例：{ name: 'premium.forecast', pr: 'PR #560' },
   { name: 'getPivot', pr: 'PR #876' }, // 图表账本页 /chart-ledger：维度×指标 pivot 只读查询
   { name: 'data.metadata', pr: 'backlog 2026-07-09-claude-00954e / PR #988' }, // org_user 就绪探测（角色无关 /data/metadata）
+  { name: 'auth.getFeishuConfig', pr: 'branch claude/feishu-qr-login-84daa7' }, // 飞书扫码登录：获取 appId/callbackUrl/state
 ];
 
 /**
@@ -108,6 +109,12 @@ const POST_SPLIT_REMOVALS = [
     name: 'patrol.narrative',
     backlogUid: '2026-07-05-claude-da5ac0',
     note: '同 patrol.report（整链退役，共用 QUERY_ROUTES.PATROL 令牌豁免）。',
+  },
+  {
+    name: 'auth.getWeComConfig',
+    pr: 'branch claude/feishu-qr-login-84daa7',
+    note: '用户指令删除企微扫码登录，由飞书扫码登录（auth.getFeishuConfig，本分支新增）替代。整链退役：后端 wecom.ts 服务 + wecom-auth.ts 路由 + wecomEnv 配置 + 前端按钮/回调/loginWithWecomToken 全部同步删除。grep 全前端/CLI/MCP 确认 getWeComConfig 仅 LoginPage 单一调用点，随链删除。',
+    routeToken: 'AUTH_ROUTES.WECOM_CONFIG',
   },
 ];
 

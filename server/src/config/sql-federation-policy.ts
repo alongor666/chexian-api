@@ -168,6 +168,15 @@ export function isPolicyCurrentSubdirLayout(env: NodeJS.ProcessEnv = process.env
 const BRANCH_CODE_RE = /^[A-Z]{2}$/;
 
 /**
+ * 校验省份编码格式（CHAR(2) 大写字母）。
+ * 供外部输入（如飞书角色映射文件的条目级 branchCode）做 fail-closed 校验，
+ * 避免走 resolveBranchCode 的「非法回退 SC」语义把错误配置静默导向四川数据。
+ */
+export function isValidBranchCodeFormat(raw: string): boolean {
+  return BRANCH_CODE_RE.test(raw);
+}
+
+/**
  * fail-closed 省份编码解析器（数据路径专用）。
  *
  * 行为语义：
