@@ -9,6 +9,7 @@ import {
   cn,
 } from '@/shared/styles';
 import { formatPremiumWan, formatCount } from '@/shared/utils/formatters';
+import { ErrorState } from '@/shared/ui';
 import { RepairScatter, type ScatterShopPoint } from './components/RepairScatter';
 import { RepairShopDrawer } from './components/RepairShopDrawer';
 import { RepairDiversionList } from './components/RepairDiversionList';
@@ -56,17 +57,17 @@ export const RepairPage: React.FC = () => {
     queryFn: () => apiClient.repair.metadata() as Promise<RepairMetadata>,
   });
 
-  const { data: coopTierData } = useQuery({
+  const coopTierQuery = useQuery({
     queryKey: ['repair-coop-tier', params],
     queryFn: () => apiClient.repair.coopTier(params) as Promise<CoopTierRow[]>,
   });
 
-  const { data: scatterData, isLoading: scatterLoading } = useQuery({
+  const scatterQuery = useQuery({
     queryKey: ['repair-scatter', params],
     queryFn: () => apiClient.repair.scatter(params) as Promise<ScatterShopPoint[]>,
   });
 
-  const { data: toPremiumAll } = useQuery({
+  const toPremiumQuery = useQuery({
     queryKey: ['repair-to-premium-all', params],
     queryFn: () =>
       apiClient.repair.toPremium(params) as Promise<
@@ -77,6 +78,13 @@ export const RepairPage: React.FC = () => {
         }>
       >,
   });
+  const { data: coopTierData } = coopTierQuery;
+  const { data: scatterData, isLoading: scatterLoading } = scatterQuery;
+  const { data: toPremiumAll } = toPremiumQuery;
+
+  // 页面级错误态（05dff4 ⑥）：三个数据查询任一失败即提示 + 重试（此前失败静默显示全 0）
+  const dataQueries = [coopTierQuery, scatterQuery, toPremiumQuery];
+  const firstError = dataQueries.find((q) => q.isError)?.error;
 
   // KPI 计算
   const tierRows = coopTierData ?? [];
@@ -132,6 +140,16 @@ export const RepairPage: React.FC = () => {
         </div>
       </div>
 
+      {firstError ? (
+        <div className={cardStyles.base}>
+          <ErrorState
+            title="维修资源数据加载失败"
+            message={firstError instanceof Error ? firstError.message : String(firstError)}
+            onRetry={() => dataQueries.forEach((q) => q.isError && void q.refetch())}
+          />
+        </div>
+      ) : (
+      <>
       {/* KPI 区（三态网点 + 修保比） */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
         <KpiCell
@@ -192,6 +210,8 @@ export const RepairPage: React.FC = () => {
 
       {/* 导流清单 */}
       <RepairDiversionList orgName={orgFilter || undefined} timeWindow={timeWindow} />
+      </>
+      )}
 
       {/* 网点详情抽屉 */}
       <RepairShopDrawer

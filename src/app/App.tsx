@@ -14,24 +14,48 @@ import { DataImportPage } from '../features/home/DataImportPage';
 import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
 import { FileMenu } from '../features/file';
 import { canAccessExpenseDevelopment, canAccessMotoCost } from '../shared/config/organizations';
+import { isForbiddenError, isRateLimitError } from '../shared/api/client';
 import { registerAuthCacheClearing } from './authCacheLifecycle';
 import { startEtlVersionPolling } from './etlVersionPoller';
 
 // SW 活跃时让 SW 管理新鲜度（避免双重缓存），否则保持 5min staleTime
-const swActive = typeof navigator !== 'undefined'
-  && 'serviceWorker' in navigator
-  && navigator.serviceWorker.controller !== null;
+const DEFAULT_STALE_TIME = 5 * 60 * 1000;
+
+function isSwControllerActive(): boolean {
+  return typeof navigator !== 'undefined'
+    && 'serviceWorker' in navigator
+    && navigator.serviceWorker.controller !== null;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: swActive ? Infinity : 5 * 60 * 1000,
+      staleTime: isSwControllerActive() ? Infinity : DEFAULT_STALE_TIME,
       gcTime: 30 * 60 * 1000,         // 30 分钟后垃圾回收
       refetchOnWindowFocus: false,     // 车险数据非实时，关闭窗口聚焦刷新
-      retry: 1,                        // 失败重试 1 次
+      // 失败重试 1 次；403（权限不足）/429（限流）重试无意义且会放大限流，直接失败（05dff4 ③）
+      retry: (failureCount, error) =>
+        failureCount < 1 && !isForbiddenError(error) && !isRateLimitError(error),
     },
   },
 });
+
+// staleTime 双态 bug 修复（05dff4 ④）：SW 接管是运行时事件——首次加载/SW 刚更新时，
+// 模块加载瞬间 navigator.serviceWorker.controller 必为 null（sw.js activate 里
+// clients.claim() 之后才非空），上面的初始判定只对「二次访问且 SW 已接管」成立。
+// 监听 controllerchange 在 SW 真正接管的瞬间把默认 staleTime 动态切到 Infinity
+// （只影响之后创建的查询观察者；已挂载查询保持 5min，SW 层缓存兜底，无正确性风险）。
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    queryClient.setDefaultOptions({
+      ...queryClient.getDefaultOptions(),
+      queries: {
+        ...queryClient.getDefaultOptions().queries,
+        staleTime: isSwControllerActive() ? Infinity : DEFAULT_STALE_TIME,
+      },
+    });
+  });
+}
 
 // SW 通知 ETL 数据更新时，清空 React Query 缓存让 UI 刷新
 if (typeof window !== 'undefined') {

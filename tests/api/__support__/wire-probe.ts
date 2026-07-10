@@ -178,6 +178,27 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: 'geo', method: 'province', args: NO_ARGS },
   { ns: 'geo', method: 'city', args: NO_ARGS },
 
+  // ── copilot（4）：backlog 2026-07-03-claude-05dff4 ① features/copilot 手写 fetch 收编 ──
+  { ns: 'copilot', method: 'createRun', args: () => [{ workflowId: 'w', input: {} }] },
+  { ns: 'copilot', method: 'report', args: () => ['r1', true] },
+  {
+    ns: 'copilot',
+    method: 'forecastBaseline',
+    args: () => [{ cutoffDate: '2026-01-01', filters: {}, historyWindowYears: 3, recentExpenseMonths: 6 }],
+  },
+  {
+    ns: 'copilot',
+    method: 'profitScenario',
+    args: () => [{
+      scenarioName: 's',
+      premium: 1,
+      ultimateVariableCostRatio: 0,
+      ultimateFixedCostRatio: 0,
+      earningSchedule: [],
+      assumptionSource: 'caller_provided',
+    }],
+  },
+
 ];
 
 /** 把一次 fetch(url, options) 归一化成稳定线缆签名 */
