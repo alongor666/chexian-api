@@ -9,6 +9,7 @@
 
 import { logger } from '../utils/logger.js';
 import { getVehicleCategoryFilter, type VehicleCategory, crossSellTruthyExpr } from './cross-sell/shared.js';
+import { buildTeamMappingCte } from './stripped-dim-cte.js';
 import { escapeSqlValue } from '../utils/security.js';
 
 export interface CrossSellHeatmapDrillStep {
@@ -216,7 +217,8 @@ export function generateCrossSellHeatmapQuery(
   timePeriod: CrossSellHeatmapTimePeriod = 'day',
   groupByDimension: CrossSellHeatmapGroupDimension = 'org_level_3',
   drillFilter: CrossSellHeatmapDrillStep[] = [],
-  dateField: string = 'policy_date'
+  dateField: string = 'policy_date',
+  rlsBranchCode?: string
 ): string {
   logger.debug('Generating cross-sell heatmap query', { vehicleCategory, hasSeatClause: !!seatCoverageClause, timePeriod, groupByDimension, drillFilterCount: drillFilter.length });
 
@@ -270,7 +272,7 @@ export function generateCrossSellHeatmapQuery(
   const isCrossSelltruthy = crossSellTruthyExpr('p.is_cross_sell');
 
   const filteredCte = usePF ? `
-    WITH team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping),
+    WITH ${buildTeamMappingCte(rlsBranchCode)},
     normalized AS (
       SELECT
         CAST(p.${dateField} AS DATE) AS pd,

@@ -11,7 +11,7 @@ import {
   isBundleRoutesEnabled, buildRouteCacheKey,
   getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
-  createDomainMiddleware,
+  createDomainMiddleware, resolveBranchRlsCode,
 } from '../shared.js';
 import {
   CROSS_SELL_DIMENSIONS,
@@ -114,13 +114,18 @@ router.get(
       normalizedVehicleCategory
     );
 
+    // 分省 RLS：团队/业务员维度剥列 CTE 按省过滤，免同名业务员跨省保费扇出
+    // （summaryGroupName 传 undefined 沿用默认 '四川分公司'，与现网逐字节一致）
+    const rlsBranchCode = await resolveBranchRlsCode(req, 'SalesmanTeamMapping');
     const drillSummarySql = generateCrossSellQuery(
       withDateWhere,
       drillPath,
-      null
+      null,
+      undefined,
+      rlsBranchCode
     );
     const drillRowsSql = groupBy
-      ? generateCrossSellQuery(withDateWhere, drillPath, groupBy as CrossSellDimension)
+      ? generateCrossSellQuery(withDateWhere, drillPath, groupBy as CrossSellDimension, undefined, rlsBranchCode)
       : null;
 
     const zhuquanTopSalesmanSql = generateCrossSellTopSalesmanQuery(

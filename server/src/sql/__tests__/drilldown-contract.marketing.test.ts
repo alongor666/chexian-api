@@ -112,10 +112,13 @@ describe('假日营销自由维度下钻 — SQL 语义不变式', () => {
     expect(sql).toContain('MAX(hp.org_level_3) AS org_level_3');
   });
 
-  // M-11b: groupBy=salesman 时注入 SalesmanDim JOIN 用归属机构
-  it('M-11b: groupBy=salesman 时注入 SalesmanDim JOIN 取归属机构', () => {
+  // M-11b: groupBy=salesman 时注入 salesman_dim 剥列 CTE JOIN 用归属机构（免同名跨省扇出）
+  it('M-11b: groupBy=salesman 时注入 salesman_dim 剥列 CTE JOIN 取归属机构', () => {
     const sql = gen('salesman');
-    expect(sql).toContain('LEFT JOIN SalesmanDim sd ON h.group_name = sd.full_name');
+    // 单省（未传 rlsBranchCode）：CTE 无省过滤，逐字节兼容；JOIN 指向 CTE 而非裸实体表
+    expect(sql).toContain('salesman_dim AS (SELECT full_name, organization FROM SalesmanDim)');
+    expect(sql).toContain('LEFT JOIN salesman_dim sd ON h.group_name = sd.full_name');
+    expect(sql).not.toContain('LEFT JOIN SalesmanDim sd');
     expect(sql).toContain('COALESCE(sd.organization');
   });
 

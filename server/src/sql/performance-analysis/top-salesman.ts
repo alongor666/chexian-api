@@ -12,6 +12,7 @@
  */
 
 import { logger } from '../../utils/logger.js';
+import { buildSalesmanDimCte } from '../stripped-dim-cte.js';
 import {
   QUADRANT_GROWTH_THRESHOLD,
   QUADRANT_ACHIEVEMENT_THRESHOLD,
@@ -37,7 +38,8 @@ export function generatePerformanceTopSalesmanQuery(
   limit = 20,
   periodBoundsOverride?: PerformancePeriodBounds,
   dateField: string = 'policy_date',
-  planScope?: PerformancePlanScope
+  planScope?: PerformancePlanScope,
+  rlsBranchCode?: string
 ): string {
   const segmentFilterNoAlias = getPerformanceSegmentFilter(segmentTag);
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
@@ -107,6 +109,9 @@ export function generatePerformanceTopSalesmanQuery(
       ${planWhere}
       GROUP BY full_name
     ),
+    -- 归属机构剥列 CTE：SalesmanDim 多省同带 branch_code，同名业务员跨省各一行 → 裸 JOIN 会让
+    -- current_group 的单省业务员行按机构翻倍（同名在排名里出现两次/premium 重复）。按省过滤根治。
+    ${buildSalesmanDimCte(rlsBranchCode)},
     current_group AS (
       SELECT
         dimension_name,
@@ -158,7 +163,7 @@ export function generatePerformanceTopSalesmanQuery(
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.new_car_count * 100.0 / c.auto_count, 2) END AS new_car_rate,
         CASE WHEN c.auto_count = 0 THEN 0 ELSE ROUND(c.transfer_count * 100.0 / c.auto_count, 2) END AS transfer_rate
       FROM current_group c
-      LEFT JOIN SalesmanDim sd ON c.dimension_name = sd.full_name
+      LEFT JOIN salesman_dim sd ON c.dimension_name = sd.full_name
       LEFT JOIN prev_group p ON c.dimension_name = p.dimension_name
       LEFT JOIN ytd_group y ON c.dimension_name = y.dimension_name
       LEFT JOIN plan_group pl ON c.dimension_name = pl.dimension_name

@@ -162,9 +162,17 @@ describe('generateClaimsHeatmapQuery — 维度切片', () => {
     expect(sql).toContain('AS dimension_value');
   });
 
-  it('team 维度触发 SalesmanTeamMapping LEFT JOIN', () => {
+  it('team 维度触发 team_mapping 剥列 CTE JOIN（扇出根治，替代裸 SalesmanTeamMapping JOIN）', () => {
     const sql = generateClaimsHeatmapQuery(EMPTY, 'team');
-    expect(sql).toContain('LEFT JOIN SalesmanTeamMapping tm');
+    // 单省（未传 cutoffBranchCode）→ CTE 无省过滤，逐字节兼容；JOIN 指向 CTE 而非裸实体表
+    expect(sql).toContain('team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping)');
+    expect(sql).toContain('LEFT JOIN team_mapping tm');
+    expect(sql).not.toContain('LEFT JOIN SalesmanTeamMapping tm');
+  });
+
+  it('team 维度 + cutoffBranchCode=SX → team_mapping 按省过滤（免同名跨省赔案扇出）', () => {
+    const sql = generateClaimsHeatmapQuery(EMPTY, 'team', 'insurance_start_date', 'report_time', undefined, undefined, '1=1', 'SX');
+    expect(sql).toContain("team_mapping AS (SELECT DISTINCT full_name, team_name FROM SalesmanTeamMapping WHERE branch_code = 'SX')");
   });
 
   it('FULL 筛选器全部注入', () => {

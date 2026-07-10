@@ -184,6 +184,8 @@ router.get(
       // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 年计划按省过滤（双门控；flag off / 单省无列 → 不注入）
       branchCode: await resolveBranchRlsCode(req, 'achievement_cache'),
     };
+    // 分省 RLS：团队维度 all_rows JOIN 的剥列 CTE 按省过滤，免同名业务员跨省保费扇出
+    const drilldownRlsBranchCode = await resolveBranchRlsCode(req, 'SalesmanTeamMapping');
     const trendGranularity = (granularity || mapPerformanceTimeToGranularity(timePeriod as PerformanceTimePeriod)) as PerformanceTrendGranularity;
     const periodBoundsSql = generatePerformancePeriodBoundsQuery(
       whereWithDate,
@@ -233,7 +235,8 @@ router.get(
       null,
       periodBounds,
       dateField,
-      planScope
+      planScope,
+      drilldownRlsBranchCode
     );
     const drillRowsSql = groupBy
       ? generatePerformanceDrilldownQuery(
@@ -246,9 +249,12 @@ router.get(
         groupBy as PerformanceDimension,
         periodBounds,
         dateField,
-        planScope
+        planScope,
+        drilldownRlsBranchCode
       )
       : null;
+    // 分省 RLS：归属机构 JOIN 的 salesman_dim 剥列 CTE 按省过滤，免同名业务员跨省排名扇出
+    const topSalesmanRlsBranchCode = await resolveBranchRlsCode(req, 'SalesmanDim');
     const topSalesmanSql = generatePerformanceTopSalesmanQuery(
       whereWithDate,
       whereWithoutDate,
@@ -258,7 +264,8 @@ router.get(
       limit,
       periodBounds,
       dateField,
-      planScope
+      planScope,
+      topSalesmanRlsBranchCode
     );
 
     const {

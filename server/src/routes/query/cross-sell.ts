@@ -4,6 +4,7 @@ import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere,
   logger, QUERY_CACHE, createDomainMiddleware, withRouteCache,
+  resolveBranchRlsCode,
   type Request,
 } from './shared.js';
 import { filterByDomainColumns } from '../../utils/domain-filter-sanitizer.js';
@@ -133,10 +134,12 @@ router.get('/cross-sell', withRouteCache('cross-sell'), asyncHandler(async (req,
 
   // 0E：分公司汇总标签按当前用户的 branchCode 派生（兼容期 admin 落 'SC' → '四川分公司'）
   const summaryGroupName = getBranchCompanyName(req.user?.branchCode);
+  // 分省 RLS：团队/业务员维度 JOIN 的剥列 CTE 按省过滤，免同名业务员跨省保费扇出
+  const rlsBranchCode = await resolveBranchRlsCode(req, 'SalesmanTeamMapping');
   const [summaryResult, drilldownResult] = await Promise.all([
-    duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, null, summaryGroupName), QUERY_CACHE.hotspotShort),
+    duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, null, summaryGroupName, rlsBranchCode), QUERY_CACHE.hotspotShort),
     groupBy
-      ? duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, groupBy, summaryGroupName), QUERY_CACHE.hotspotShort)
+      ? duckdbService.query(generateCrossSellQuery(finalWhereClause, drillPath, groupBy, summaryGroupName, rlsBranchCode), QUERY_CACHE.hotspotShort)
       : Promise.resolve([]),
   ]);
 
@@ -349,6 +352,7 @@ router.get('/cross-sell-heatmap', withRouteCache('cross-sell-heatmap'), asyncHan
     : buildCrossSellAggInsuranceClause(req.query.insuranceType);
   const finalWhereClause = insuranceClause ? `${whereClause} AND ${insuranceClause}` : whereClause;
 
+  const heatmapRlsBranchCode = await resolveBranchRlsCode(req, 'SalesmanTeamMapping');
   const sql = generateCrossSellHeatmapQuery(
     finalWhereClause,
     normalizedVehicleCategory,
@@ -356,7 +360,8 @@ router.get('/cross-sell-heatmap', withRouteCache('cross-sell-heatmap'), asyncHan
     timePeriod as 'day' | 'week' | 'month' | 'quarter',
     groupByDimension as CrossSellHeatmapGroupDimension,
     crossSellDrillFilter,
-    dateField
+    dateField,
+    heatmapRlsBranchCode
   );
 
   logger.debug('[cross-sell-heatmap] Generated SQL', { sqlLength: sql.length });

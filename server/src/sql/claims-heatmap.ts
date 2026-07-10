@@ -24,6 +24,7 @@
 
 import { logger } from '../utils/logger.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { buildTeamMappingCte } from './stripped-dim-cte.js';
 import { pushVehicleQuickFilterConditions } from '../utils/filter-params.js';
 import {
   truthyExpr,
@@ -245,9 +246,15 @@ export function generateClaimsHeatmapQuery(
   const needsTeamJoin = dimension === 'team';
   const policyWhere = buildPolicyWhere(filters, 'p.');
 
+  // 团队维度走 team_mapping 剥列 CTE（只投影 full_name+team_name，不含 branch_code）——
+  // eligible_policies 已消除 branch_code 二义，但对**扇出**不免疫：裸 JOIN SalesmanTeamMapping
+  // 时同名业务员跨 SC/SX 各一行 → 单省赔案被两省团队各记一次。剥列 CTE 按 cutoffBranchCode
+  // 省过滤根治扇出（实证：rls=SX 团队维度原产出 teamA+teamB 并存）。见 memory
+  // rls-branch-code-ambiguous-team-join。
   const teamJoin = needsTeamJoin
-    ? `LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))`
+    ? `LEFT JOIN team_mapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))`
     : '';
+  const teamMappingCte = needsTeamJoin ? `${buildTeamMappingCte(cutoffBranchCode)},\n    ` : '';
 
   // policyYearExpr：子查询或字面量 — 供 CTE 反复引用
   const policyYearExpr = safePolicyYear !== null
@@ -328,7 +335,7 @@ export function generateClaimsHeatmapQuery(
 
   const sql = `
     WITH
-    -- 1. 数据截止日（多省时限定本省范围）
+    ${teamMappingCte}-- 1. 数据截止日（多省时限定本省范围）
     ref_date AS (
       SELECT MAX(CAST(policy_date AS DATE)) AS max_date FROM PolicyFact${cutoffScope}
     ),

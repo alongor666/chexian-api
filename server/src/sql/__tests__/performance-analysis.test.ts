@@ -213,12 +213,22 @@ describe('generatePerformanceTopSalesmanQuery', () => {
     expect(sql).not.toContain('CASE WHEN p.premium > 0 THEN p.premium / 10000.0 ELSE 0 END');
   });
 
-  it('SalesmanDim JOIN 归属机构（防跨机构出单取到非归属机构）', () => {
+  it('salesman_dim 剥列 CTE JOIN 归属机构（防跨机构出单取到非归属机构 + 免同名跨省扇出）', () => {
     const sql = generatePerformanceTopSalesmanQuery(
       WHERE_WITH_DATE, WHERE_WITHOUT_DATE, SEGMENT, TIME_PERIOD, GROWTH_MODE
     );
-    expect(sql).toContain('LEFT JOIN SalesmanDim sd ON c.dimension_name = sd.full_name');
+    // 单省（未传 rlsBranchCode）：CTE 无省过滤，逐字节兼容；JOIN 指向 CTE 而非裸实体表
+    expect(sql).toContain('salesman_dim AS (SELECT full_name, organization FROM SalesmanDim)');
+    expect(sql).toContain('LEFT JOIN salesman_dim sd ON c.dimension_name = sd.full_name');
+    expect(sql).not.toContain('LEFT JOIN SalesmanDim sd');
     expect(sql).toContain('COALESCE(sd.organization');
+  });
+
+  it('top-salesman + rlsBranchCode=SX → salesman_dim 按省过滤（免同名业务员跨省排名重复）', () => {
+    const sql = generatePerformanceTopSalesmanQuery(
+      WHERE_WITH_DATE, WHERE_WITHOUT_DATE, SEGMENT, TIME_PERIOD, GROWTH_MODE, 20, undefined, 'policy_date', undefined, 'SX'
+    );
+    expect(sql).toContain("salesman_dim AS (SELECT DISTINCT full_name, organization FROM SalesmanDim WHERE branch_code = 'SX')");
   });
 });
 
