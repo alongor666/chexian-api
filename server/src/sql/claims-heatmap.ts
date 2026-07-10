@@ -213,9 +213,15 @@ function getDimensionExpr(
  * @param policyYear 保单年度（insurance_start_date 年份）；undefined 时取 max_date 所在年
  * @param customCutoffs 自定义 cutoff 列表（YYYY-MM-DD）；提供时跳过自动 cutoff 生成（月末+周六）
  *                      用于精确双时点对比、月末同比等诊断场景，最多 24 个
- * @param cutoffBranchCode 分省截止日范围（CHAR(2)，来自路由层 resolveBranchRlsCode）；
+ * @param cutoffBranchCode 分省截止日范围（CHAR(2)，来自路由层 resolveBranchRlsCode(req, 'PolicyFact')）；
  *                         多省时数据截止日按本省 MAX(policy_date) 取值，防止两省数据进度
  *                         不一致时截止日被对方省"带跑"。未传 → SQL 与历史逐字节一致。
+ * @param teamMappingBranchCode 团队维度映射表分省码（来自 resolveBranchRlsCode(req, 'SalesmanTeamMapping')）；
+ *                         **必须独立于 cutoffBranchCode**：加载器支持"PolicyFact 已多省、SX 业务员维表未加载"
+ *                         的降级形态（duckdb-domain-loaders.ts），此时 SalesmanTeamMapping 无 branch_code 列。
+ *                         若复用 PolicyFact 解析的 cutoffBranchCode 过滤团队 CTE，会生成 `WHERE branch_code='SX'`
+ *                         打在无该列的表上 → Binder Error。故团队 CTE 的省过滤只认按该表 gate b 解析的本参数
+ *                         （降级态返回 undefined → 团队 CTE 不注入省过滤 → 安全）。
  */
 export function generateClaimsHeatmapQuery(
   filters: ClaimsHeatmapFilters,
@@ -226,6 +232,7 @@ export function generateClaimsHeatmapQuery(
   customCutoffs?: string[],
   whereClause: string = '1=1',
   cutoffBranchCode?: string,
+  teamMappingBranchCode?: string,
 ): string {
   // 白名单校验，防止 SQL 注入
   // dateField 参数保留兼容，但累计口径下 cohort 必须锚定 insurance_start_date
@@ -254,7 +261,9 @@ export function generateClaimsHeatmapQuery(
   const teamJoin = needsTeamJoin
     ? `LEFT JOIN team_mapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))`
     : '';
-  const teamMappingCte = needsTeamJoin ? `${buildTeamMappingCte(cutoffBranchCode)},\n    ` : '';
+  // 省过滤只认 teamMappingBranchCode（按 SalesmanTeamMapping gate b 解析），不复用 cutoffBranchCode
+  // （PolicyFact gate）——见签名注释：降级态两表 branch_code 列存在性可不一致，复用会 Binder Error。
+  const teamMappingCte = needsTeamJoin ? `${buildTeamMappingCte(teamMappingBranchCode)},\n    ` : '';
 
   // policyYearExpr：子查询或字面量 — 供 CTE 反复引用
   const policyYearExpr = safePolicyYear !== null

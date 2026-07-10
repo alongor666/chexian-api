@@ -307,9 +307,12 @@ router.get(
     }
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
-    // 多省截止日隔离：同 loss-ratio-development，cutoff 按本省范围取
+    // 多省截止日隔离：同 loss-ratio-development，cutoff 按本省范围取（gate b = PolicyFact）
     const cutoffBranchCode = await resolveBranchRlsCode(req, 'PolicyFact');
-    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField, policyYear, customCutoffs, whereClause, cutoffBranchCode);
+    // 团队维度 CTE 省过滤独立按 SalesmanTeamMapping gate b 解析：降级态（PolicyFact 已多省、SX 业务员维表未加载）
+    // 该表无 branch_code 列 → 返回 undefined → 团队 CTE 不注入省过滤，避免打在无列表上触发 Binder Error（500）。
+    const teamMappingBranchCode = await resolveBranchRlsCode(req, 'SalesmanTeamMapping');
+    const sql = generateClaimsHeatmapQuery(heatmapFilters, dimension, dateField, claimsDateField, policyYear, customCutoffs, whereClause, cutoffBranchCode, teamMappingBranchCode);
     const data = await duckdbService.query(sql);
     res.json({ success: true, data });
   })
