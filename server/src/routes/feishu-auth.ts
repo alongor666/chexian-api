@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { feishuService } from '../services/feishu.js';
 import { authService } from '../services/auth.js';
-import { authEnv } from '../config/env.js';
+import { authEnv, feishuEnv } from '../config/env.js';
 
 const router = Router();
 
@@ -37,6 +37,17 @@ function buildCallbackUrl(req: Request): string {
     const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
     const host = req.get('host');
     return `${protocol}://${host}/api/auth/feishu/callback`;
+}
+
+/**
+ * 回调后浏览器回跳的前端地址。
+ * 生产：同源部署（nginx 托管 SPA），用相对路径；
+ * 开发：后端(3000)不托管 SPA，相对重定向会落在 404 页（cookie 已种但观感像登录失败），
+ *       故回跳 FEISHU_DEV_FRONTEND_ORIGIN（默认 vite dev server 5173）。
+ */
+function buildFrontendRedirect(hashPath: string): string {
+    const base = process.env.NODE_ENV === 'production' ? '' : feishuEnv.FEISHU_DEV_FRONTEND_ORIGIN;
+    return `${base}${hashPath}`;
 }
 
 /**
@@ -82,7 +93,7 @@ router.get('/callback', async (req: Request, res: Response) => {
     const state = req.query.state as string;
 
     if (!code) {
-        return res.redirect('/#/?error=missing_feishu_code');
+        return res.redirect(buildFrontendRedirect('/#/login?error=missing_feishu_code'));
     }
 
     // state 防 CSRF：必须与 /config 下发的 cookie 一致
@@ -90,7 +101,7 @@ router.get('/callback', async (req: Request, res: Response) => {
     res.clearCookie(STATE_COOKIE, { path: '/api/auth/feishu' });
     if (!expectedState || !state || state !== expectedState) {
         console.warn('[Feishu Auth] State mismatch, possible CSRF or expired state cookie');
-        return res.redirect('/#/?error=feishu_state_mismatch');
+        return res.redirect(buildFrontendRedirect('/#/login?error=feishu_state_mismatch'));
     }
 
     try {
@@ -101,7 +112,7 @@ router.get('/callback', async (req: Request, res: Response) => {
         // 2. 组织（租户）门禁：仅授权组织成员可登录，其他人一律拒绝（fail-closed）
         if (!feishuService.isTenantAllowed(userInfo.tenant_key)) {
             console.warn(`[Feishu Auth] Tenant denied: tenant_key=${userInfo.tenant_key ?? 'unknown'}`);
-            return res.redirect('/#/?error=feishu_org_denied');
+            return res.redirect(buildFrontendRedirect('/#/login?error=feishu_org_denied'));
         }
 
         // 3. 解析权限（管理员白名单 + 业务员映射表，均不命中则拒绝）
@@ -109,7 +120,7 @@ router.get('/callback', async (req: Request, res: Response) => {
 
         if (!userCredential) {
             console.warn('[Feishu Auth] User not in admin list or salesman mapping.');
-            return res.redirect('/#/?error=feishu_auth_denied');
+            return res.redirect(buildFrontendRedirect('/#/login?error=feishu_auth_denied'));
         }
 
         // 4. 签发 cookie 会话（access+refresh）
@@ -134,11 +145,11 @@ router.get('/callback', async (req: Request, res: Response) => {
         });
 
         // 5. 重定向回前端页面（不在 URL 暴露 token）
-        res.redirect('/#/?feishu=success');
+        res.redirect(buildFrontendRedirect('/#/login?feishu=success'));
 
     } catch (error: any) {
         console.error('[Feishu Auth] Callback error occurred');
-        res.redirect('/#/?error=feishu_auth_failed');
+        res.redirect(buildFrontendRedirect('/#/login?error=feishu_auth_failed'));
     }
 });
 
