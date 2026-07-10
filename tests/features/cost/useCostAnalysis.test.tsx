@@ -78,10 +78,10 @@ describe('useCostAnalysis', () => {
       });
       expect(result.current.earnedPremiumState.data).toEqual([]);
       expect(result.current.earnedPremiumState.summaryData).toEqual([]);
-      expect(result.current.newEarnedPremiumState.policy2025In2025Data).toEqual([]);
-      expect(result.current.newEarnedPremiumState.policy2025In2026Data).toEqual([]);
-      expect(result.current.newEarnedPremiumState.policy2026In2026Data).toEqual([]);
-      expect(result.current.newEarnedPremiumState.policy2026In2027Data).toEqual([]);
+      expect(result.current.newEarnedPremiumState.policyPrevInPrevData).toEqual([]);
+      expect(result.current.newEarnedPremiumState.policyPrevInCurrData).toEqual([]);
+      expect(result.current.newEarnedPremiumState.policyCurrInCurrData).toEqual([]);
+      expect(result.current.newEarnedPremiumState.policyCurrInNextData).toEqual([]);
       expect(result.current.expenseRatioForecastState.forecastData).toEqual([]);
       expect(result.current.expenseRatioForecastState.monthlyExpenseData).toEqual([]);
     });
@@ -322,23 +322,27 @@ describe('useCostAnalysis', () => {
   });
 
   describe('fetchNewEarnedPremiumData', () => {
-    it('成功：4 个年度 dataset 落位 + 前端 summaryData 不为 null', async () => {
+    it('成功：anchorYear + 四象限 dataset 落位 + 前端 summaryData 不为 null', async () => {
       mockApi.mockResolvedValueOnce({
-        policy2025In2025: [{ policy_month: '2025-01', earned_from_2025: 100 }],
-        policy2025In2026: [{ policy_month: '2026-01', earned_from_2025: 50 }],
-        policy2026In2026: [{ policy_month: '2026-01', earned_from_2026: 30 }],
-        policy2026In2027: [{ policy_month: '2027-01', earned_from_2026: 20 }],
+        anchorYear: 2026,
+        policyPrevInPrev: [{ policy_month: 1, premium: 100, earned_01: 10 }],
+        policyPrevInCurr: [{ policy_month: 1, earned_01: 5 }],
+        policyCurrInCurr: [{ policy_month: 1, premium: 30, earned_01: 3 }],
+        policyCurrInNext: [{ policy_month: 1, earned_01: 2 }],
       });
       const { result } = renderHook(() => useCostAnalysis());
       await act(async () => {
         await result.current.fetchNewEarnedPremiumData();
       });
-      expect(result.current.newEarnedPremiumState.policy2025In2025Data).toHaveLength(1);
-      expect(result.current.newEarnedPremiumState.policy2025In2026Data).toHaveLength(1);
-      expect(result.current.newEarnedPremiumState.policy2026In2026Data).toHaveLength(1);
-      expect(result.current.newEarnedPremiumState.policy2026In2027Data).toHaveLength(1);
+      expect(result.current.newEarnedPremiumState.anchorYear).toBe(2026);
+      expect(result.current.newEarnedPremiumState.policyPrevInPrevData).toHaveLength(1);
+      expect(result.current.newEarnedPremiumState.policyPrevInCurrData).toHaveLength(1);
+      expect(result.current.newEarnedPremiumState.policyCurrInCurrData).toHaveLength(1);
+      expect(result.current.newEarnedPremiumState.policyCurrInNextData).toHaveLength(1);
       expect(result.current.newEarnedPremiumState.summaryData).toBeDefined();
       expect(Array.isArray(result.current.newEarnedPremiumState.summaryData)).toBe(true);
+      // summaryData 的统计月锚定 anchorYear
+      expect(result.current.newEarnedPremiumState.summaryData[0].stat_month).toBe('2026-01');
     });
 
     it('请求体含 type:"earned-new" + filterParams', async () => {
@@ -359,32 +363,33 @@ describe('useCostAnalysis', () => {
       await act(async () => {
         await result.current.fetchNewEarnedPremiumData();
       });
-      expect(result.current.newEarnedPremiumState.policy2025In2025Data).toEqual([]);
-      expect(result.current.newEarnedPremiumState.policy2025In2026Data).toEqual([]);
-      expect(result.current.newEarnedPremiumState.policy2026In2026Data).toEqual([]);
-      expect(result.current.newEarnedPremiumState.policy2026In2027Data).toEqual([]);
+      expect(result.current.newEarnedPremiumState.policyPrevInPrevData).toEqual([]);
+      expect(result.current.newEarnedPremiumState.policyPrevInCurrData).toEqual([]);
+      expect(result.current.newEarnedPremiumState.policyCurrInCurrData).toEqual([]);
+      expect(result.current.newEarnedPremiumState.policyCurrInNextData).toEqual([]);
     });
 
     it('错误 → error 设置 + 返回兜底', async () => {
       mockApi.mockRejectedValueOnce(new Error('new earned fail'));
       const { result } = renderHook(() => useCostAnalysis());
-      let ret: { policy2025In2025Data: unknown[] } | undefined;
+      let ret: { policyPrevInPrevData: unknown[] } | undefined;
       await act(async () => {
         ret = (await result.current.fetchNewEarnedPremiumData()) as typeof ret;
       });
       expect(result.current.newEarnedPremiumState.error).toBe('new earned fail');
-      expect(ret?.policy2025In2025Data).toEqual([]);
+      expect(ret?.policyPrevInPrevData).toEqual([]);
     });
   });
 
   describe('fetchExpenseRatioForecastData', () => {
     it('成功：前端计算 operating_cost + window filter + comprehensive_expense_ratio', async () => {
       mockApi.mockResolvedValueOnce({
+        anchorYear: 2026,
         summaryData: [
           {
             stat_month: '2026-04',
-            earned_from_2025: 1000,
-            earned_from_2026: 2000,
+            earned_from_prev: 1000,
+            earned_from_curr: 2000,
             total_earned_premium: 3000,
           },
         ],
@@ -412,11 +417,12 @@ describe('useCostAnalysis', () => {
 
     it('total_earned_premium=0 → comprehensive_expense_ratio=0', async () => {
       mockApi.mockResolvedValueOnce({
+        anchorYear: 2026,
         summaryData: [
           {
             stat_month: '2026-04',
-            earned_from_2025: 0,
-            earned_from_2026: 0,
+            earned_from_prev: 0,
+            earned_from_curr: 0,
             total_earned_premium: 0,
           },
         ],
@@ -529,10 +535,11 @@ describe('useCostAnalysis', () => {
       mockApi.mockResolvedValueOnce([makeClaimRow()]);
       mockApi.mockResolvedValueOnce([makeExpenseRow()]);
       mockApi.mockResolvedValueOnce({
-        policy2025In2025: [{ policy_month: '2025-01' }],
-        policy2025In2026: [],
-        policy2026In2026: [],
-        policy2026In2027: [],
+        anchorYear: 2026,
+        policyPrevInPrev: [{ policy_month: 1 }],
+        policyPrevInCurr: [],
+        policyCurrInCurr: [],
+        policyCurrInNext: [],
       });
 
       const { result } = renderHook(() => useCostAnalysis());
@@ -548,7 +555,7 @@ describe('useCostAnalysis', () => {
 
       expect(result.current.claimRatioState.data).toHaveLength(1);
       expect(result.current.expenseRatioState.data).toHaveLength(1);
-      expect(result.current.newEarnedPremiumState.policy2025In2025Data).toHaveLength(1);
+      expect(result.current.newEarnedPremiumState.policyPrevInPrevData).toHaveLength(1);
 
       act(() => {
         result.current.reset();
@@ -560,7 +567,7 @@ describe('useCostAnalysis', () => {
       expect(result.current.variableCostState.data).toEqual([]);
       expect(result.current.variableCostKpiState.data).toEqual([]);
       expect(result.current.earnedPremiumState.data).toEqual([]);
-      expect(result.current.newEarnedPremiumState.policy2025In2025Data).toEqual([]);
+      expect(result.current.newEarnedPremiumState.policyPrevInPrevData).toEqual([]);
       expect(result.current.expenseRatioForecastState.forecastData).toEqual([]);
     });
   });

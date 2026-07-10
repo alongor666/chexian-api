@@ -16,13 +16,13 @@ import type {
   ComprehensiveCostData,
   VariableCostData,
   CostSummary,
-  Policy2025In2025Data,
-  Policy2025In2026Data,
-  Policy2026In2026Data,
+  SameYearEarnedRow,
+  CrossYearEarnedRow,
   NewEarnedPremiumSummaryData,
   MonthlyExpenseData,
   ExpenseRatioForecastData,
 } from '../types/costTypes';
+import { getEarnedMonthValue } from '../types/new-earned-premium';
 
 // ==================== 常量 ====================
 
@@ -97,73 +97,71 @@ export function buildFullSummary(
 /**
  * 前端计算滚动12个月汇总（纯内存，~1ms vs SQL ~3000ms）。
  *
- * 核心逻辑：从 4 个已计算好的表数据做简单加法
- * - 例：统计月 26 年 3 月，滚动窗口 = [25 年 4 月, 26 年 3 月]
- * - 滚动 12 月保费 = 25 年保单(起保月 4-12)保费 + 26 年保单(起保月 1-3)保费
+ * 核心逻辑：从四象限矩阵数据做简单加法（锚定年 Y = anchorYear）
+ * - 例：统计月 Y 年 3 月，滚动窗口 = [Y-1 年 4 月, Y 年 3 月]
+ * - 滚动 12 月保费 = Y-1 年保单(起保月 4-12)保费 + Y 年保单(起保月 1-3)保费
  * - 滚动 12 月已赚 = 对应窗口内各月 earned 字段之和
  *
- * v3 简化（首日费用已并入起保月）：earned_YYYY_MM 字段已含首日费用，
+ * v3 简化（首日费用已并入起保月）：earned_MM 字段已含首日费用，
  * 累加窗口内各月 earned 即可（自然截断：起保日不在窗口外 → 自动排除）。
  */
 export function calculateRolling12MonthSummary(
-  policy2025In2025: Policy2025In2025Data[],
-  policy2025In2026: Policy2025In2026Data[],
-  policy2026In2026: Policy2026In2026Data[]
+  policyPrevInPrev: SameYearEarnedRow[],
+  policyPrevInCurr: CrossYearEarnedRow[],
+  policyCurrInCurr: SameYearEarnedRow[],
+  anchorYear: number
 ): NewEarnedPremiumSummaryData[] {
   const result: NewEarnedPremiumSummaryData[] = [];
 
   for (let statMonth = 1; statMonth <= 12; statMonth++) {
-    const windowStartMonth2025 = statMonth + 1;
+    const windowStartMonthPrev = statMonth + 1;
 
-    const premium2025 =
-      windowStartMonth2025 <= 12
-        ? policy2025In2025
-            .filter((p) => p.policy_month >= windowStartMonth2025)
+    const premiumPrev =
+      windowStartMonthPrev <= 12
+        ? policyPrevInPrev
+            .filter((p) => p.policy_month >= windowStartMonthPrev)
             .reduce((sum, p) => sum + p.premium, 0)
         : 0;
 
-    const premium2026 = policy2026In2026
+    const premiumCurr = policyCurrInCurr
       .filter((p) => p.policy_month <= statMonth)
       .reduce((sum, p) => sum + p.premium, 0);
 
-    const rollingPremium = premium2025 + premium2026;
+    const rollingPremium = premiumPrev + premiumCurr;
 
-    let earned2025 = 0;
+    let earnedFromPrev = 0;
 
-    if (windowStartMonth2025 <= 12) {
-      for (const p of policy2025In2025) {
-        for (let m = windowStartMonth2025; m <= 12; m++) {
-          const key = `earned_2025_${m.toString().padStart(2, '0')}` as keyof Policy2025In2025Data;
-          earned2025 += (p[key] as number) || 0;
+    if (windowStartMonthPrev <= 12) {
+      for (const p of policyPrevInPrev) {
+        for (let m = windowStartMonthPrev; m <= 12; m++) {
+          earnedFromPrev += getEarnedMonthValue(p, m);
         }
       }
     }
 
-    for (const p of policy2025In2026) {
+    for (const p of policyPrevInCurr) {
       for (let m = 1; m <= statMonth; m++) {
-        const key = `earned_2026_${m.toString().padStart(2, '0')}` as keyof Policy2025In2026Data;
-        earned2025 += (p[key] as number) || 0;
+        earnedFromPrev += getEarnedMonthValue(p, m);
       }
     }
 
-    let earned2026 = 0;
+    let earnedFromCurr = 0;
 
-    for (const p of policy2026In2026) {
+    for (const p of policyCurrInCurr) {
       for (let m = 1; m <= statMonth; m++) {
-        const key = `earned_2026_${m.toString().padStart(2, '0')}` as keyof Policy2026In2026Data;
-        earned2026 += (p[key] as number) || 0;
+        earnedFromCurr += getEarnedMonthValue(p, m);
       }
     }
 
-    const totalEarned = earned2025 + earned2026;
+    const totalEarned = earnedFromPrev + earnedFromCurr;
     const earnedRatio =
       rollingPremium > 0 ? Math.round((totalEarned / rollingPremium) * 10000) / 100 : 0;
 
     result.push({
-      stat_month: `2026-${statMonth.toString().padStart(2, '0')}`,
+      stat_month: `${anchorYear}-${statMonth.toString().padStart(2, '0')}`,
       rolling_12m_premium: Math.round(rollingPremium * 100) / 100,
-      earned_from_2025: Math.round(earned2025 * 100) / 100,
-      earned_from_2026: Math.round(earned2026 * 100) / 100,
+      earned_from_prev: Math.round(earnedFromPrev * 100) / 100,
+      earned_from_curr: Math.round(earnedFromCurr * 100) / 100,
       total_earned_premium: Math.round(totalEarned * 100) / 100,
       earned_ratio: earnedRatio,
     });
@@ -216,8 +214,8 @@ export function calculateExpenseRatioForecast(
 
     return {
       stat_month: summary.stat_month,
-      earned_from_2025: summary.earned_from_2025,
-      earned_from_2026: summary.earned_from_2026,
+      earned_from_prev: summary.earned_from_prev,
+      earned_from_curr: summary.earned_from_curr,
       total_earned_premium: totalEarnedPremium,
       expense_window_start: expenseWindowStartStr,
       expense_window_end: expenseWindowEndStr,

@@ -384,10 +384,11 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
       case 'earned-new':
         return (
           <NewEarnedPremiumTable
-            policy2025In2025Data={newEarnedPremiumState.policy2025In2025Data}
-            policy2025In2026Data={newEarnedPremiumState.policy2025In2026Data}
-            policy2026In2026Data={newEarnedPremiumState.policy2026In2026Data}
-            policy2026In2027Data={newEarnedPremiumState.policy2026In2027Data}
+            anchorYear={newEarnedPremiumState.anchorYear}
+            policyPrevInPrevData={newEarnedPremiumState.policyPrevInPrevData}
+            policyPrevInCurrData={newEarnedPremiumState.policyPrevInCurrData}
+            policyCurrInCurrData={newEarnedPremiumState.policyCurrInCurrData}
+            policyCurrInNextData={newEarnedPremiumState.policyCurrInNextData}
             summaryData={newEarnedPremiumState.summaryData}
             loading={newEarnedPremiumState.loading}
             onExportCSV={() => getCurrentExportHandler('csv')()}
@@ -398,6 +399,7 @@ export const CostAnalysisPanel: React.FC<CostAnalysisPanelProps> = ({
       case 'expense-forecast':
         return (
           <ExpenseRatioForecastPanel
+            anchorYear={expenseRatioForecastState.anchorYear}
             forecastData={expenseRatioForecastState.forecastData}
             loading={expenseRatioForecastState.loading}
             error={expenseRatioForecastState.error}

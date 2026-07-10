@@ -18,6 +18,7 @@ import {
   fetchEarnedPremium,
   fetchNewEarnedPremium,
   fetchExpenseRatioForecast,
+  fallbackAnchorYear,
 } from './cost-fetchers';
 import type {
   ClaimRatioData,
@@ -125,10 +126,11 @@ export function useCostAnalysis() {
   });
 
   const [newEarnedPremiumState, setNewEarnedPremiumState] = useState<NewEarnedPremiumResultV3>({
-    policy2025In2025Data: [],
-    policy2025In2026Data: [],
-    policy2026In2026Data: [],
-    policy2026In2027Data: [],
+    anchorYear: fallbackAnchorYear(),
+    policyPrevInPrevData: [],
+    policyPrevInCurrData: [],
+    policyCurrInCurrData: [],
+    policyCurrInNextData: [],
     summaryData: [],
     loading: false,
     error: null,
@@ -136,6 +138,7 @@ export function useCostAnalysis() {
 
   const [expenseRatioForecastState, setExpenseRatioForecastState] =
     useState<ExpenseRatioForecastResult>({
+      anchorYear: fallbackAnchorYear(),
       forecastData: [],
       monthlyExpenseData: [],
       loading: false,
@@ -269,10 +272,11 @@ export function useCostAnalysis() {
         logger.error('[CostAnalysis] New Earned Premium Error:', errorMessage);
         setNewEarnedPremiumState((prev) => ({ ...prev, loading: false, error: errorMessage }));
         return {
-          policy2025In2025Data: [],
-          policy2025In2026Data: [],
-          policy2026In2026Data: [],
-          policy2026In2027Data: [],
+          anchorYear: fallbackAnchorYear(),
+          policyPrevInPrevData: [],
+          policyPrevInCurrData: [],
+          policyCurrInCurrData: [],
+          policyCurrInNextData: [],
           summaryData: [],
         };
       }
@@ -285,11 +289,12 @@ export function useCostAnalysis() {
       setExpenseRatioForecastState((prev) => ({ ...prev, loading: true, error: null }));
       try {
         logger.info('成本分析 API 查询执行（费用率预测）');
-        const { forecastData, monthlyExpenseData } = await fetchExpenseRatioForecast(
+        const { anchorYear, forecastData, monthlyExpenseData } = await fetchExpenseRatioForecast(
           filterParams,
           operatingCostRate
         );
         setExpenseRatioForecastState({
+          anchorYear,
           forecastData,
           monthlyExpenseData,
           loading: false,
@@ -353,15 +358,17 @@ export function useCostAnalysis() {
     setVariableCostKpiState(ratioInit);
     setEarnedPremiumState({ data: [], summaryData: [], loading: false, error: null });
     setNewEarnedPremiumState({
-      policy2025In2025Data: [],
-      policy2025In2026Data: [],
-      policy2026In2026Data: [],
-      policy2026In2027Data: [],
+      anchorYear: fallbackAnchorYear(),
+      policyPrevInPrevData: [],
+      policyPrevInCurrData: [],
+      policyCurrInCurrData: [],
+      policyCurrInNextData: [],
       summaryData: [],
       loading: false,
       error: null,
     });
     setExpenseRatioForecastState({
+      anchorYear: fallbackAnchorYear(),
       forecastData: [],
       monthlyExpenseData: [],
       loading: false,
