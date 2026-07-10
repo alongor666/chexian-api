@@ -209,6 +209,55 @@
     "auth": true,
     "dedupe": "GET:/query/claims-detail/pending-overview"
   },
+  "copilot.createRun": {
+    "verb": "POST",
+    "path": "/copilot/runs",
+    "params": [],
+    "bodyKeys": [
+      "input",
+      "workflowId"
+    ],
+    "auth": true,
+    "dedupe": ""
+  },
+  "copilot.forecastBaseline": {
+    "verb": "POST",
+    "path": "/agent/forecast/baseline",
+    "params": [],
+    "bodyKeys": [
+      "cutoffDate",
+      "filters",
+      "historyWindowYears",
+      "recentExpenseMonths"
+    ],
+    "auth": true,
+    "dedupe": ""
+  },
+  "copilot.profitScenario": {
+    "verb": "POST",
+    "path": "/agent/forecast/profit-scenario",
+    "params": [],
+    "bodyKeys": [
+      "assumptionSource",
+      "earningSchedule",
+      "premium",
+      "scenarioName",
+      "ultimateFixedCostRatio",
+      "ultimateVariableCostRatio"
+    ],
+    "auth": true,
+    "dedupe": ""
+  },
+  "copilot.report": {
+    "verb": "GET",
+    "path": "/copilot/runs/r1/report",
+    "params": [
+      "includeNarrative"
+    ],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/copilot/runs/r1/report?includeNarrative=1"
+  },
   "crossSell.analysis": {
     "verb": "GET",
     "path": "/query/cross-sell",

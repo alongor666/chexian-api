@@ -9,6 +9,7 @@ import { getPerspectiveConfig } from '../../shared/types';
 import { formatCount, formatPremiumWan } from '../../shared/utils/formatters';
 import { useTruckAnalysis } from './hooks/useTruckAnalysis';
 import { cardStyles, textStyles, cn } from '../../shared/styles';
+import { ErrorState } from '../../shared/ui';
 
 interface TruckAnalysisPanelProps {
   filters: AdvancedFilterState;
@@ -40,12 +41,23 @@ export const TruckAnalysisPanel: React.FC<TruckAnalysisPanelProps> = ({
     tonnageByOrgData,
     orgPremiumData,
     loading,
+    error,
+    refresh,
   } = useTruckAnalysis({ filters, perspective });
 
   const perspectiveConfig = getPerspectiveConfig(perspective);
   const valueFormatter =
     perspectiveConfig.valueFormatter === 'premium' ? formatPremiumWan : formatCount;
   const valueLabel = perspectiveConfig.valueFormatter === 'premium' ? '保费' : '件数';
+
+  // Panel 级错误态（05dff4 ⑥）：hook 一直暴露 error/refresh 但此前未消费，请求失败时页面静默空白
+  if (error) {
+    return (
+      <div className={cn(cardStyles.standard)}>
+        <ErrorState title="营业货车分析加载失败" message={error} onRetry={() => void refresh()} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

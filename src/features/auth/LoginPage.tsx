@@ -64,9 +64,19 @@ export const LoginPage: React.FC = () => {
 
   // 处理飞书扫码登录回调
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const handleFeishuCallbackParams = () => {
+    // 回调参数可能在 search（/?feishu=success#/）或 hash 内查询串（/#/?feishu=success，
+    // 后端 HashRouter 回跳即此形态；此时 window.location.search 恒为空）——两处都要读
+    const hashQueryIndex = window.location.hash.indexOf('?');
+    const hashQuery = hashQueryIndex >= 0 ? window.location.hash.slice(hashQueryIndex + 1) : '';
+    const params = new URLSearchParams(window.location.search || hashQuery);
     const feishuSuccess = params.get('feishu');
     const callbackError = params.get('error');
+    // 清参数时保留 hash 路由本体（原先 replaceState 到 pathname 会连路由一起清掉）
+    const clearCallbackParams = () => {
+      const cleanHash = hashQueryIndex >= 0 ? window.location.hash.slice(0, hashQueryIndex) : window.location.hash;
+      window.history.replaceState({}, '', window.location.pathname + cleanHash);
+    };
 
     if (callbackError) {
       const errorMap: Record<string, string> = {
@@ -78,14 +88,21 @@ export const LoginPage: React.FC = () => {
       };
       setError(errorMap[callbackError] || '扫码登录失败');
       // 清除 URL 中的错误参数
-      window.history.replaceState({}, '', window.location.pathname);
+      clearCallbackParams();
     } else if (feishuSuccess === 'success') {
       restoreSession().then((success) => {
         if (!success) setError('扫码会话恢复失败，请重新扫码登录');
       });
       // 清除 URL 中的回调参数
-      window.history.replaceState({}, '', window.location.pathname);
+      clearCallbackParams();
     }
+    };
+
+    handleFeishuCallbackParams();
+    // 已打开的登录页上仅 hash 变化（如手动粘贴回调地址回车）不会重新加载页面，
+    // 组件不重挂载——监听 hashchange 补上这条路径
+    window.addEventListener('hashchange', handleFeishuCallbackParams);
+    return () => window.removeEventListener('hashchange', handleFeishuCallbackParams);
   }, [restoreSession]);
 
   const handleFeishuLogin = useCallback(async () => {
