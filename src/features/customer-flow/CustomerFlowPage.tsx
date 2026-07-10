@@ -4,6 +4,7 @@ import { apiClient } from '@/shared/api/client';
 import { cardStyles, textStyles, colorClasses, tableStyles } from '@/shared/styles';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import { cn } from '@/shared/styles';
+import { ErrorState } from '@/shared/ui';
 import { ensureArray, buildFlowParams } from './utils/customerFlow';
 
 interface FlowSummary {
@@ -32,15 +33,15 @@ export const CustomerFlowPage: React.FC = () => {
   const [year, setYear] = useState<string>('');
   const params = useMemo(() => buildFlowParams(year), [year]);
 
-  const { data: summary } = useQuery({
+  const summaryQuery = useQuery({
     queryKey: ['customer-flow-summary', params],
     queryFn: () => apiClient.customerFlow.summary(params) as Promise<FlowSummary>,
   });
-  const { data: outflow } = useQuery({
+  const outflowQuery = useQuery({
     queryKey: ['customer-flow-outflow', params],
     queryFn: () => apiClient.customerFlow.outflow(params) as Promise<FlowRow[]>,
   });
-  const { data: trend } = useQuery({
+  const trendQuery = useQuery({
     queryKey: ['customer-flow-trend', params],
     queryFn: () => apiClient.customerFlow.trend(params) as Promise<FlowTrend[]>,
   });
@@ -48,6 +49,13 @@ export const CustomerFlowPage: React.FC = () => {
     queryKey: ['customer-flow-metadata'],
     queryFn: () => apiClient.customerFlow.metadata() as Promise<{ years: number[]; total_rows: number }>,
   });
+  const { data: summary } = summaryQuery;
+  const { data: outflow } = outflowQuery;
+  const { data: trend } = trendQuery;
+
+  // 页面级错误态（05dff4 ⑥）：三个数据查询任一失败即提示 + 重试（此前失败静默显示全 0）
+  const dataQueries = [summaryQuery, outflowQuery, trendQuery];
+  const firstError = dataQueries.find((q) => q.isError)?.error;
 
   const renderTable = (_title: string, rawData: FlowRow[] | undefined) => {
     const data = ensureArray<FlowRow>(rawData);
@@ -105,6 +113,16 @@ export const CustomerFlowPage: React.FC = () => {
         </select>
       </div>
 
+      {firstError ? (
+        <div className={cardStyles.base}>
+          <ErrorState
+            title="客户来源去向数据加载失败"
+            message={firstError instanceof Error ? firstError.message : String(firstError)}
+            onRetry={() => dataQueries.forEach((q) => q.isError && void q.refetch())}
+          />
+        </div>
+      ) : (
+      <>
       {/* KPI 卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -148,6 +166,8 @@ export const CustomerFlowPage: React.FC = () => {
           </table>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };

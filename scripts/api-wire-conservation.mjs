@@ -55,7 +55,7 @@ const TRANSPORT_METHODS = [
 const SUB_CLIENT_FILES = [
   'quote-conversion', 'claims-detail', 'repair', 'cross-sell', 'performance',
   'customer-flow', 'ai', 'data', 'workflows', 'auth',
-  'premium', 'geo',
+  'premium', 'geo', 'copilot',
 ];
 
 /**
@@ -71,6 +71,11 @@ const POST_SPLIT_ADDITIONS = [
   { name: 'getPivot', pr: 'PR #876' }, // 图表账本页 /chart-ledger：维度×指标 pivot 只读查询
   { name: 'data.metadata', pr: 'backlog 2026-07-09-claude-00954e / PR #988' }, // org_user 就绪探测（角色无关 /data/metadata）
   { name: 'auth.getFeishuConfig', pr: 'branch claude/feishu-qr-login-84daa7' }, // 飞书扫码登录：获取 appId/callbackUrl/state
+  // backlog 2026-07-03-claude-05dff4 ①：features/copilot 手写 fetch 收编（新 copilot 域，非新端点——4 个后端路由此前就存在，只是前端绕过 apiClient 直连）
+  { name: 'copilot.createRun', pr: 'backlog 2026-07-03-claude-05dff4' },
+  { name: 'copilot.report', pr: 'backlog 2026-07-03-claude-05dff4' },
+  { name: 'copilot.forecastBaseline', pr: 'backlog 2026-07-03-claude-05dff4' },
+  { name: 'copilot.profitScenario', pr: 'backlog 2026-07-03-claude-05dff4' },
 ];
 
 /**

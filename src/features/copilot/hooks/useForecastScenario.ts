@@ -13,8 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE, apiClient } from '../../../shared/api/client';
-import { AGENT_FORECAST_ROUTES } from '../../../shared/api';
+import { apiClient } from '../../../shared/api/client';
 
 const DRAFT_STORAGE_KEY = 'copilot.forecastScenario.draft';
 
@@ -181,12 +180,6 @@ export function isInputSubmittable(input: ForecastScenarioInput): boolean {
   return isEarningScheduleSumValid(input.earningSchedule);
 }
 
-interface ForecastScenarioApiResponse {
-  success: boolean;
-  data?: ForecastScenarioResult;
-  error?: { message?: string; statusCode?: number } | string;
-}
-
 export interface UseForecastScenarioReturn {
   input: ForecastScenarioInput;
   state: ForecastScenarioState;
@@ -266,41 +259,14 @@ export function useForecastScenario(): UseForecastScenarioReturn {
       assumptionSource: current.assumptionSource,
     };
 
-    const token = apiClient.getToken();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
     try {
-      const res = await fetch(`${API_BASE}/${AGENT_FORECAST_ROUTES.PROFIT_SCENARIO}`, {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        const message = text ? text.slice(0, 200) : `HTTP ${res.status}`;
-        setState({ status: 'error', result: null, error: `测算失败：${message}` });
-        return;
-      }
-
-      const json = (await res.json()) as ForecastScenarioApiResponse;
-      if (!json.success || !json.data) {
-        const message =
-          typeof json.error === 'string'
-            ? json.error
-            : json.error?.message ?? '响应缺少 data';
-        setState({ status: 'error', result: null, error: `测算失败：${message}` });
-        return;
-      }
-
-      setState({ status: 'success', result: json.data, error: null });
+      const result = await apiClient.copilot.profitScenario<ForecastScenarioResult>(body);
+      setState({ status: 'success', result, error: null });
     } catch (err) {
       setState({
         status: 'error',
         result: null,
-        error: err instanceof Error ? err.message : String(err),
+        error: `测算失败：${err instanceof Error ? err.message : String(err)}`,
       });
     }
   }, []);

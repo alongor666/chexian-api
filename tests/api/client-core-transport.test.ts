@@ -10,7 +10,7 @@
  * 全程 spy 掉 fetch，断言"实际发出的请求/重试/合并行为"。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiClientCore, RequestAbortError } from '../../src/shared/api/client-core';
+import { ApiClientCore, ForbiddenError, RateLimitError, RequestAbortError } from '../../src/shared/api/client-core';
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
@@ -140,6 +140,89 @@ describe('client-core 传输内核特征化', () => {
       await core.callGet('/query/kpi?a=1');
       await core.callGet('/query/kpi?a=1');
       expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('403/429 全局拦截（05dff4 ③：类型化错误 + 全局事件 + 不触发会话刷新）', () => {
+    it('403 → 抛 ForbiddenError（透传服务端 message）且不打 /auth/refresh', async () => {
+      const core = new TestCore();
+      core.setToken('a.b.c');
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ success: false, error: { message: '无该省份数据权限', statusCode: 403 } }),
+      });
+      await expect(core.callGet('/query/kpi')).rejects.toThrowError(ForbiddenError);
+      expect(mockFetch).toHaveBeenCalledTimes(1); // 403 ≠ 401，不应触发刷新
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ success: false, error: { message: '无该省份数据权限', statusCode: 403 } }),
+      });
+      await expect(core.callGet('/query/kpi?again=1')).rejects.toThrow('无该省份数据权限');
+    });
+
+    it('403 非 JSON 响应体 → 用默认中文提示', async () => {
+      const core = new TestCore();
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => { throw new SyntaxError('not json'); },
+      });
+      await expect(core.callGet('/query/kpi')).rejects.toThrow('没有访问该资源的权限');
+    });
+
+    it('403 → 广播 api-forbidden 全局事件（供 UI toast/引导；node 环境用 stubGlobal 模拟 window）', async () => {
+      const dispatchEvent = vi.fn();
+      vi.stubGlobal('window', { dispatchEvent });
+      try {
+        const core = new TestCore();
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+          json: async () => ({ success: false, error: { message: 'x', statusCode: 403 } }),
+        });
+        await expect(core.callGet('/query/kpi')).rejects.toThrowError(ForbiddenError);
+        expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'api-forbidden' }));
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('429 → 抛 RateLimitError 并解析 Retry-After 头（退避提示）', async () => {
+      const core = new TestCore();
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: { get: (name: string) => (name === 'Retry-After' ? '30' : null) },
+        json: async () => ({ success: false, error: { message: 'rate limited', statusCode: 429 } }),
+      });
+      const pending = core.callGet('/query/kpi');
+      await expect(pending).rejects.toThrowError(RateLimitError);
+      await pending.catch((err: RateLimitError) => {
+        expect(err.retryAfterSeconds).toBe(30);
+        expect(err.message).toContain('30 秒后重试');
+      });
+    });
+
+    it('429 无 Retry-After 头（含 mock 无 headers 对象）→ 通用限流提示，不崩', async () => {
+      const core = new TestCore();
+      mockFetch.mockResolvedValueOnce(failJson(429)); // failJson 无 headers 字段
+      await expect(core.callGet('/query/kpi')).rejects.toThrow('请求过于频繁');
+      expect(mockFetch).toHaveBeenCalledTimes(1); // 传输层不自动重试限流请求
+    });
+
+    it('429 → 广播 api-rate-limited 全局事件（node 环境用 stubGlobal 模拟 window）', async () => {
+      const dispatchEvent = vi.fn();
+      vi.stubGlobal('window', { dispatchEvent });
+      try {
+        const core = new TestCore();
+        mockFetch.mockResolvedValueOnce(failJson(429));
+        await expect(core.callGet('/query/kpi')).rejects.toThrowError(RateLimitError);
+        expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'api-rate-limited' }));
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
   });
 

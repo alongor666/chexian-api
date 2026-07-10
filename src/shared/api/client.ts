@@ -46,9 +46,15 @@ import { WorkflowsApi } from './workflows-api';
 import { AuthApi } from './auth-api';
 import { PremiumApi } from './premium-api';
 import { GeoApi } from './geo-api';
+import { CopilotApi } from './copilot-api';
 
 // 传输层常量与错误类型从 client-core 统一导出，保持对外导入面不变
-export { API_BASE, ENABLE_BUNDLE_ROUTES, RequestAbortError, isRequestAbortError } from './client-core';
+export {
+  API_BASE, ENABLE_BUNDLE_ROUTES,
+  RequestAbortError, isRequestAbortError,
+  ForbiddenError, isForbiddenError,
+  RateLimitError, isRateLimitError,
+} from './client-core';
 
 /**
  * API 客户端类（业务域方法层）
@@ -87,6 +93,8 @@ class ApiClient extends ApiClientCore {
   readonly premium = new PremiumApi(this.transport);
   /** 承保地理分布：apiClient.geo.{province,city} */
   readonly geo = new GeoApi(this.transport);
+  /** AI 副驾：apiClient.copilot.{createRun,report,forecastBaseline,profitScenario}（05dff4 ① 收编 features/copilot 手写 fetch；SSE 订阅仍走 EventSource） */
+  readonly copilot = new CopilotApi(this.transport);
 
   // ============================================
   // 认证 API
