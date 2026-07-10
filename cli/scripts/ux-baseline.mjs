@@ -21,13 +21,15 @@
  *
  * 确定性：固定 NO_COLOR=1 + 隔离空 HOME（无 PAT → 鉴权路径恒定 exit 2）+ 剥离 tsx dev 噪声。
  * 优先用 dist/cx 编译产物（=生产用户真正所见，无 DEP 噪声），缺失则回退 tsx；
- * env CX_UX_RUNNER=tsx|bin 可强制 runner（基线与 CI 同 runner=tsx，本地重建基线务必带 CX_UX_RUNNER=tsx）。
+ * env CX_UX_RUNNER=tsx|bin 可强制 runner（非法值直接报错退出，fail-closed）。
+ * runner 约束 fail-closed：--check 时基线 runner 与当前 runner 不一致 → 直接失败
+ * （跨 runner 的快照对比无效；基线与 CI 同 runner=tsx，本地重建基线务必带 CX_UX_RUNNER=tsx）。
  * 子命令清单运行时从 `cx --help` 发现（SSOT=commander 注册），新命令自动纳入快照与 lint。
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, realpathSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { performance } from 'node:perf_hooks';
@@ -107,21 +109,42 @@ function normalize(s) {
 }
 
 /**
- * runner 选择：默认有 dist/cx 用编译产物、否则 tsx；env CX_UX_RUNNER=tsx|bin 强制指定。
- * 基线与 CI（cli-ux-sentinel，tsx）必须同 runner，本地重建基线用 CX_UX_RUNNER=tsx 免受
- * 本地残留 dist/cx 干扰。
+ * runner 解析（纯函数，导出供单测）：默认有编译产物用 compiled-bin、否则 tsx；
+ * forced（env CX_UX_RUNNER）只接受 tsx|bin，**非法值抛错而非静默回退**（fail-closed：
+ * 静默回退会让"以为在强制 tsx"的调用实际跑了 dist/cx，重新引入 runner 漂移）。
  */
-function runnerKind() {
-  const forced = process.env.CX_UX_RUNNER;
+export function resolveRunner(forced, binExists) {
   if (forced === 'tsx') return 'tsx';
   if (forced === 'bin') {
-    if (!existsSync(BIN_PATH)) {
-      console.error(`✘ CX_UX_RUNNER=bin 但编译产物不存在: ${BIN_PATH}（先 bun run build:bin）`);
-      process.exit(1);
-    }
+    if (!binExists) throw new Error(`CX_UX_RUNNER=bin 但编译产物不存在: ${BIN_PATH}（先 bun run build:bin）`);
     return 'compiled-bin';
   }
-  return existsSync(BIN_PATH) ? 'compiled-bin' : 'tsx';
+  if (forced !== undefined && forced !== '') {
+    throw new Error(`CX_UX_RUNNER 仅支持 tsx 或 bin，收到: ${JSON.stringify(forced)}`);
+  }
+  return binExists ? 'compiled-bin' : 'tsx';
+}
+
+/**
+ * runner 一致性判定（纯函数，导出供单测）：--check 时基线与当前 runner 不一致
+ * 必须失败——tsx 与编译产物的帮助渲染可能不同，跨 runner 的快照对比无效，
+ * "提示后照过"等于允许基线在错误 runner 下被验证通过。返回 null=一致，否则错误说明。
+ */
+export function checkRunnerConsistency(baselineRunner, currentRunner) {
+  if (!baselineRunner || baselineRunner === currentRunner) return null;
+  return `基线 runner=${baselineRunner} 当前=${currentRunner} — 跨 runner 快照对比无效；`
+    + `用 CX_UX_RUNNER=${baselineRunner === 'compiled-bin' ? 'bin' : baselineRunner} 对齐后重跑，`
+    + `或有意切换 runner 则 --write 重建基线`;
+}
+
+/** 基线与 CI（cli-ux-sentinel，tsx）必须同 runner，本地重建基线用 CX_UX_RUNNER=tsx 免受残留 dist/cx 干扰 */
+function runnerKind() {
+  try {
+    return resolveRunner(process.env.CX_UX_RUNNER, existsSync(BIN_PATH));
+  } catch (err) {
+    console.error(`✘ ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
 }
 
 function runCx(argv) {
@@ -357,7 +380,20 @@ function printReport(m) {
   }
 }
 
-// ---- 主流程 ----
+// ---- 主流程（仅作为 CLI 入口执行时运行；被测试 import 时不产生副作用） ----
+// 守卫必须走 realpathSync + pathToFileURL：中文路径下裸比较 import.meta.url 与
+// `file://${argv[1]}` 会因百分号编码不一致而静默不执行（见 memory chinese-path-import-meta-url-cli-guard）
+function isCliEntry() {
+  try {
+    if (!process.argv[1]) return false;
+    return pathToFileURL(realpathSync(process.argv[1])).href
+      === pathToFileURL(realpathSync(fileURLToPath(import.meta.url))).href;
+  } catch {
+    return false;
+  }
+}
+
+function main() {
 if (flags.write) {
   const m = measure();
   const baseline = buildBaseline(m);
@@ -377,9 +413,11 @@ if (flags.check) {
   const m = measure();
   let failed = false;
 
-  // 0) runner 一致性：tsx↔编译产物切换可能改变帮助渲染，快照对比前先提示
-  if (baseline.runner && baseline.runner !== m.runner) {
-    console.log(`ℹ️  [runner] 基线 runner=${baseline.runner} 当前=${m.runner} — 渲染差异会在快照对比中暴露；如有意切换请 --write 重建基线`);
+  // 0) runner 一致性（fail-closed）：跨 runner 快照对比无效，不一致即失败而非提示
+  const runnerErr = checkRunnerConsistency(baseline.runner, m.runner);
+  if (runnerErr) {
+    console.error(`✘ [runner] ${runnerErr}`);
+    failed = true;
   }
 
   // 1) 渲染快照漂移
@@ -428,3 +466,6 @@ const m = measure();
 if (flags.json) console.log(JSON.stringify(m, null, 2));
 else printReport(m);
 process.exit(0);
+}
+
+if (isCliEntry()) main();
