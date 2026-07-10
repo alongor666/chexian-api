@@ -47,7 +47,7 @@ export function exportArrayToCSV(data: ExportDataRow[], filename: string = 'data
 /**
  * Escape CSV field (handle commas, quotes, newlines)
  */
-function escapeCSVField(value: ExportDataRow[string]): string {
+export function escapeCSVField(value: ExportDataRow[string]): string {
   if (value === null || value === undefined) {
     return '';
   }
@@ -63,9 +63,9 @@ function escapeCSVField(value: ExportDataRow[string]): string {
 }
 
 /**
- * Trigger browser download of file
+ * Trigger browser download of file (prepends UTF-8 BOM for Excel compatibility)
  */
-function downloadFile(content: string, filename: string, mimeType: string): void {
+export function downloadFile(content: string, filename: string, mimeType: string): void {
   // Add BOM for UTF-8 to ensure proper encoding in Excel
   const BOM = '\uFEFF';
   const blob = new Blob([BOM + content], { type: mimeType });

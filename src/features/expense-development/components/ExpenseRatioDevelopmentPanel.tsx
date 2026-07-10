@@ -5,8 +5,7 @@
  * 指标切换 + 规则驱动洞察 + 折线图 + 横向数据表（年份行 × M1~M12 列）
  */
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
-import ReactEChartsCore from 'echarts-for-react/lib/core';
-import { echarts } from '@/shared/utils/echarts';
+import { EChartContainer } from '../../../widgets/charts/EChartContainer';
 import { cardStyles, colorClasses, cn, fontStyles, getYearChartColor } from '@/shared/styles';
 import { generateExpenseDevInsights, type ExpenseMetricKey } from '../utils/expenseDevInsightRules';
 import { useTheme } from '@/shared/theme';
@@ -205,7 +204,7 @@ export const ExpenseRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) 
         {isLoading ? (
           <div className="h-[400px] flex items-center justify-center">加载中...</div>
         ) : (
-          <ReactEChartsCore echarts={echarts} option={chartOption} style={{ height: 360 }} />
+          <EChartContainer option={chartOption} height={360} notMerge={false} />
         )}
 
         {/* 横向数据表 */}

@@ -12,7 +12,7 @@
  * 业务洞察规则与阈值集中在 ./geo/insights.ts（待业务校准）。
  */
 import React, { useEffect, useCallback, useMemo, useState } from 'react';
-import ReactEChartsCore from 'echarts-for-react/lib/core';
+import { EChartContainer } from '../../../widgets/charts/EChartContainer';
 import {
   AlertTriangle,
   ArrowDown,
@@ -21,7 +21,6 @@ import {
   ArrowUpFromLine,
   Info,
 } from 'lucide-react';
-import { echarts } from '@/shared/utils/echarts';
 import {
   cardStyles,
   colorClasses,
@@ -727,12 +726,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
             {mapLoading ? '地图加载中...' : '加载中...'}
           </div>
         ) : (
-          <ReactEChartsCore
-            echarts={echarts}
-            option={mapOption}
-            style={{ height: 500 }}
-            onEvents={onMapEvents}
-          />
+          <EChartContainer option={mapOption} height={500} notMerge={false} onEvents={onMapEvents} />
         )}
       </div>
 
@@ -962,11 +956,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
         {frequencyYoy.loading ? (
           <div className="h-64 flex items-center justify-center">加载中...</div>
         ) : yoyChartOption ? (
-          <ReactEChartsCore
-            echarts={echarts}
-            option={yoyChartOption}
-            style={{ height: 300 }}
-          />
+          <EChartContainer option={yoyChartOption} height={300} notMerge={false} />
         ) : (
           <div className={cn(colorClasses.text.neutralMuted, 'text-center py-8')}>
             暂无数据

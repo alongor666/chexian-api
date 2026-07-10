@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import ReactEChartsCore from 'echarts-for-react/lib/core';
+import { EChartContainer } from '@/widgets/charts/EChartContainer';
 import type { EChartsOption, SeriesOption, YAXisComponentOption } from 'echarts';
 import { format, parseISO, isValid } from 'date-fns';
 import { colors } from '@/shared/styles';
@@ -365,13 +365,7 @@ export const ScissorsTrendChart: React.FC<ScissorsTrendChartProps> = ({
         </div>
       </div>
 
-      <ReactEChartsCore
-        echarts={echarts}
-        option={option}
-        style={{ height, minHeight: 280 }}
-        notMerge
-        lazyUpdate
-      />
+      <EChartContainer option={option} height={height} style={{ minHeight: 280 }} lazyUpdate />
     </div>
   );
 };

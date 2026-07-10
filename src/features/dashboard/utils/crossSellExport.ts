@@ -5,6 +5,7 @@
 
 import type { TopSalesmanRow } from '../hooks/useCrossSellTopSalesman';
 import { classifySalesmanQuadrant, QUADRANT_CATEGORY_LABELS, type QuadrantCategory } from '../CrossSellAIAnalysisPanel';
+import { escapeCSVField, downloadFile } from '../../../shared/utils/export';
 
 export interface ExportDataRow extends TopSalesmanRow {
     coverage: '主全' | '交三';
@@ -124,41 +125,18 @@ export function exportToCSV(data: ExportDataRow[]): string {
         QUADRANT_CATEGORY_LABELS[row.quadrantCategory],
     ]);
     
-    // CSV转义：如果字段包含逗号、引号或换行，需要用引号包裹
-    const escapeCSV = (field: string | number) => {
-        const str = String(field);
-        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-            return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-    };
-    
-    const csvContent = [
-        headers.map(escapeCSV).join(','),
-        ...rows.map(row => row.map(escapeCSV).join(',')),
+    // 转义收拢至 shared/utils/export.ts 唯一实现；BOM 由 downloadFile 统一前置
+    return [
+        headers.map(escapeCSVField).join(','),
+        ...rows.map(row => row.map(escapeCSVField).join(',')),
     ].join('\n');
-    
-    // 添加BOM以支持Excel中文显示
-    return '\uFEFF' + csvContent;
 }
 
 /**
- * 下载CSV文件
+ * 下载CSV文件（委托 shared downloadFile，自动加 UTF-8 BOM）
  */
 export function downloadCSV(csvContent: string, filename: string): void {
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    URL.revokeObjectURL(url);
+    downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
 }
 
 /**
