@@ -8,6 +8,7 @@
 
 import { createLogger } from '../utils/logger.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { buildSalesmanDimCte } from './stripped-dim-cte.js';
 
 const logger = createLogger('MarketingReportSQL');
 
@@ -298,6 +299,11 @@ export function generateHolidayFreeDrilldownQuery(
     ? 'LEFT JOIN team_mapping tm ON p.salesman_name = tm.salesman_name'
     : '';
 
+  // salesman 维度取归属机构（sd.organization）：SalesmanDim 多省同带 branch_code，同名业务员
+  // 跨 SC/SX 各一行 → 裸 JOIN 会让 holiday_stats 的单省行按机构翻倍（扇出）。剥列 CTE 按省过滤根治。
+  // CTE 无条件定义（对齐原无条件 LEFT JOIN；非 salesman 维度 h.group_name≠full_name 天然不匹配、不扇出）。
+  const salesmanDimCte = `${buildSalesmanDimCte(rlsBranchCode)},\n    `;
+
   // display_name：salesman 维度用短名（去工号）显示，两级判重消歧——短名唯一→短名；
   // 同短名跨机构→短名·机构；同机构同名→短名·机构#工号（绝对区分）；admin→直接个代。
   // group_name 始终保留带工号原值（人唯一键）供下钻精确传参。机构后缀取 SalesmanDim.organization
@@ -319,7 +325,7 @@ export function generateHolidayFreeDrilldownQuery(
       FROM (VALUES ${holidayValues}) AS t(col0)
     ),
     ${teamJoinCte}
-    holiday_policies AS (
+    ${salesmanDimCte}holiday_policies AS (
       SELECT p.*${needsTeamJoin ? ", COALESCE(tm.team_name, p.org_level_3 || '未归属团队') AS team_name" : ''}
       FROM PolicyFact p
       ${teamJoinClause}
@@ -366,7 +372,7 @@ export function generateHolidayFreeDrilldownQuery(
         ELSE h.commercial_active_salesman * 1.0 / t.total_salesman
       END AS commercial_active_rate
     FROM holiday_stats h
-    LEFT JOIN SalesmanDim sd ON h.group_name = sd.full_name
+    LEFT JOIN salesman_dim sd ON h.group_name = sd.full_name
     LEFT JOIN total_by_group t ON h.group_name = t.group_key
     ORDER BY h.premium_wan DESC
   `;

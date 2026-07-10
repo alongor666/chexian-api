@@ -9,6 +9,7 @@
 
 import { logger } from '../utils/logger.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { buildTeamMappingCte } from './stripped-dim-cte.js';
 import {
   truthyExpr,
   normalizeSqlTableAliasPrefix,
@@ -349,7 +350,7 @@ export function generatePerformanceOrgHeatmapQuery(
     : '';
 
   const sql = `
-    WITH ${needsTeamJoin ? 'team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping),\n    ' : ''}filtered AS (
+    WITH ${needsTeamJoin ? `${buildTeamMappingCte(rlsBranchCode)},\n    ` : ''}filtered AS (
       SELECT
         CAST(p.${dateField} AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},

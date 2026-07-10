@@ -13,6 +13,7 @@
  */
 
 import { logger } from '../../utils/logger.js';
+import { buildTeamMappingCte } from '../stripped-dim-cte.js';
 import {
   QUADRANT_GROWTH_THRESHOLD,
   QUADRANT_ACHIEVEMENT_THRESHOLD,
@@ -54,7 +55,8 @@ export function generatePerformanceDrilldownQuery(
   groupBy: PerformanceDimension | null = null,
   periodBoundsOverride?: PerformancePeriodBounds,
   dateField: string = 'policy_date',
-  planScope?: PerformancePlanScope
+  planScope?: PerformancePlanScope,
+  rlsBranchCode?: string
 ): string {
   const segmentFilterNoAlias = getPerformanceSegmentFilter(segmentTag);
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, 'p.');
@@ -136,7 +138,7 @@ export function generatePerformanceDrilldownQuery(
     WITH
     ${periodBounds},
     ${ytdProgress},
-    team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping),
+    ${buildTeamMappingCte(rlsBranchCode)},
     all_rows AS (
       SELECT
         ${groupCfg.selectExpr},

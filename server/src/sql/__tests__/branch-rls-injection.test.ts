@@ -152,3 +152,55 @@ describe('主查询 team 维度 branch_code 消歧（2026-07-09 生产 Binder Er
     expect(generateCrossSellQuery('1=1', [], 'team')).not.toContain('branch_code');
   });
 });
+
+/**
+ * 剥列 CTE **按省过滤**（团队维度保费扇出根治 · 依赖 PR #1017 剥列 CTE 基座）。
+ *
+ * PR #1017 的剥列 CTE `SELECT full_name, team_name FROM SalesmanTeamMapping`（无省过滤）
+ * 修了 Binder Error 却保留扇出：多省下同名业务员跨 SC/SX 各留一行，团队维度 JOIN 时
+ * 单省事实保费被两省团队各记一次。真实 parquet 实证（2026-07-09）：SC 域凭空 +123,582 元、
+ * SX 域 +153,326 元。本组断言：传入 rlsBranchCode → CTE 变 `SELECT DISTINCT ... WHERE branch_code='XX'`
+ * → 同名跨省行按省过滤，扇出物理消失。详见 memory rls-branch-code-ambiguous-team-join。
+ */
+describe('剥列 CTE 按省过滤（团队维度保费扇出根治 · rlsBranchCode 注入）', () => {
+  const BRANCH_SX = "branch_code = 'SX'";
+  const TEAM_CTE_SX = "team_mapping AS (SELECT DISTINCT full_name, team_name FROM SalesmanTeamMapping WHERE branch_code = 'SX')";
+  const TEAM_CTE_UNFILTERED = 'team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping)';
+
+  it('performance-heatmap team 维度 + rlsBranchCode=SX → team_mapping 按省过滤', () => {
+    const sql = generatePerformanceOrgHeatmapQuery(BRANCH_SX, 'all', 'day', 15, 'team', [], 'policy_date', 'SX');
+    expect(sql).toContain(TEAM_CTE_SX);
+    expect(sql).not.toContain(TEAM_CTE_UNFILTERED); // 不再是无省过滤形态
+  });
+
+  it('performance drilldown team 维度 + rlsBranchCode=SX → team_mapping 按省过滤', () => {
+    const sql = generatePerformanceDrilldownQuery('1=1', BRANCH_SX, 'all', 'day', 'mom', [], 'team', undefined, 'policy_date', undefined, 'SX');
+    expect(sql).toContain(TEAM_CTE_SX);
+    expect(sql).not.toContain(TEAM_CTE_UNFILTERED);
+  });
+
+  it('cross-sell-heatmap team 维度（usePF）+ rlsBranchCode=SX → team_mapping 按省过滤', () => {
+    const sql = generateCrossSellHeatmapQuery(BRANCH_SX, 'all', undefined, 'day', 'team', [], 'policy_date', 'SX');
+    expect(sql).toContain(TEAM_CTE_SX);
+    expect(sql).not.toContain(TEAM_CTE_UNFILTERED);
+  });
+
+  it('cross-sell team 维度 + rlsBranchCode=SX → team_mapping 按省过滤', () => {
+    const sql = generateCrossSellQuery(BRANCH_SX, [], 'team', undefined, 'SX');
+    expect(sql).toContain(TEAM_CTE_SX);
+    expect(sql).not.toContain(TEAM_CTE_UNFILTERED);
+  });
+
+  it('cross-sell salesman 维度 + rlsBranchCode=SX → salesman_dim 同样按省过滤（SalesmanDim 多省也带 branch_code）', () => {
+    const sql = generateCrossSellQuery(BRANCH_SX, [], 'salesman', undefined, 'SX');
+    expect(sql).toContain("salesman_dim AS (SELECT DISTINCT full_name, organization FROM SalesmanDim WHERE branch_code = 'SX')");
+    expect(sql).not.toContain('salesman_dim AS (SELECT full_name, organization FROM SalesmanDim)');
+  });
+
+  it('单省（rlsBranchCode 未传）→ CTE 保持无省过滤无 DISTINCT（逐字节等价 PR #1017 基线）', () => {
+    // 即使 where 串含 branch_code，未传 rlsBranchCode 时 CTE 不变 → 四川单省零变更
+    expect(generateCrossSellQuery(BRANCH_SX, [], 'team')).toContain(TEAM_CTE_UNFILTERED);
+    expect(generateCrossSellQuery(BRANCH_SX, [], 'salesman')).toContain('salesman_dim AS (SELECT full_name, organization FROM SalesmanDim)');
+    expect(generatePerformanceOrgHeatmapQuery(BRANCH_SX, 'all', 'day', 15, 'team', [], 'policy_date')).toContain(TEAM_CTE_UNFILTERED);
+  });
+});

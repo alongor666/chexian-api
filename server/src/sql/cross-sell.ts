@@ -17,6 +17,7 @@
 
 import { logger } from '../utils/logger.js';
 import { escapeSqlValue } from '../utils/security.js';
+import { buildTeamMappingCte, buildSalesmanDimCte } from './stripped-dim-cte.js';
 
 /**
  * 支持的下钻维度
@@ -177,7 +178,13 @@ export function generateCrossSellQuery(
    * 0E：分公司汇总行的中文标签。默认 '四川分公司' 保持向后兼容；
    * 多分公司启用后由 route handler 传 getBranchCompanyName(req.user.branchCode)。
    */
-  summaryGroupName: string = '四川分公司'
+  summaryGroupName: string = '四川分公司',
+  /**
+   * 分省 RLS 省份码（路由层 resolveBranchRlsCode(req, 'SalesmanTeamMapping') 解析）。
+   * 团队/业务员维度 JOIN 的 team_mapping / salesman_dim 剥列 CTE 据此按省过滤，
+   * 免同名业务员跨省保费扇出。undefined（单省 / flag off）→ 字节安全。
+   */
+  rlsBranchCode?: string
 ): string {
   logger.debug('Generating cross-sell query', { baseWhereClause, drillPath, groupBy, summaryGroupName });
 
@@ -197,8 +204,8 @@ export function generateCrossSellQuery(
   // Binder Error）。只投影 JOIN 实际消费的列（team_name / organization），branch_code 不入作用域 → 结构层根治，
   // 替代 qualifyBranchCodeColumn；CTE 不去重不按省过滤 → 团队/业务员维度数字与现网一致。
   const dimCtes = [
-    useJoin ? 'team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping)' : '',
-    salesmanDimJoin ? 'salesman_dim AS (SELECT full_name, organization FROM SalesmanDim)' : '',
+    useJoin ? buildTeamMappingCte(rlsBranchCode) : '',
+    salesmanDimJoin ? buildSalesmanDimCte(rlsBranchCode) : '',
   ].filter(Boolean).join(',\n    ');
   const withPrefix = dimCtes ? `${dimCtes},\n    ` : '';
 
@@ -212,7 +219,7 @@ export function generateCrossSellQuery(
 
   // 汇总查询（无 GROUP BY）
   if (!groupBy) {
-    return generateSummaryOnly(tableRef, teamJoin, fullWhere, colPrefix, summaryGroupName);
+    return generateSummaryOnly(tableRef, teamJoin, fullWhere, colPrefix, summaryGroupName, rlsBranchCode);
   }
 
   // 分组查询
@@ -310,11 +317,12 @@ function generateSummaryOnly(
   teamJoin: string,
   fullWhere: string,
   colPrefix: string,
-  summaryGroupName: string = '四川分公司'
+  summaryGroupName: string = '四川分公司',
+  rlsBranchCode?: string
 ): string {
   const escapedName = escapeSqlValue(summaryGroupName);
   // teamJoin 非空（下钻含团队维度）时引用 team_mapping 剥列 CTE，须同步定义（与分组路径一致）
-  const teamMappingCte = teamJoin ? 'team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping),\n    ' : '';
+  const teamMappingCte = teamJoin ? `${buildTeamMappingCte(rlsBranchCode)},\n    ` : '';
   return `
     WITH ${teamMappingCte}summary AS (
       SELECT
