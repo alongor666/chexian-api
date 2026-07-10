@@ -4,7 +4,8 @@ name: cli-ux-sentinel
 # 渲染快照零漂移 + 无新增一致性违规 + 报错可操作率不下降 → 否则阻断 merge。
 # 与 cli-perf-sentinel（守"快不快"）对称，本哨兵守"好不好用"。
 # 标准定义见 cli/UX-STANDARD.md，基线 cli/ux-baseline.json，本地 `bun run ux:check`。
-# 注：基线以 runner=tsx 采集，故 CI 不 build:bin，用 tsx 跑以匹配基线、避免渲染漂移。
+# 注：基线以 runner=tsx 采集，CX_UX_RUNNER=tsx 显式钉死（fail-closed：runner 与基线
+# 不一致 ux:check 直接失败，即使未来有人在本 job 先 build:bin 也不会静默漂移）。
 
 on:
   pull_request:
@@ -31,4 +32,6 @@ jobs:
 
       - name: ux:check（渲染快照零漂移 + 无新增一致性违规 + 可发现性不下降）
         working-directory: cli
+        env:
+          CX_UX_RUNNER: tsx
         run: bun run ux:check
