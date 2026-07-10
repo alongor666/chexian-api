@@ -19,6 +19,7 @@ import { useBranch } from '../../shared/contexts/BranchContext';
 import { useCrossSellOrgTrend, type CoverageCombinationFilter, type OrgTrendPoint } from './hooks/useCrossSellOrgTrend';
 import type { TrendGranularity } from './hooks/useCrossSellTrend';
 import type { AdvancedFilterState } from '../../shared/types/data';
+import type { EChartsParam } from '../../shared/types/echarts';
 import type { VehicleCategory, SeatCoverageLevel } from './hooks/useCrossSellTimePeriod';
 
 interface CrossSellOrgTrendChartProps {
@@ -299,9 +300,9 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
         formatter: (params: any) => {
-          const points = Array.isArray(params) ? params : [params];
+          const points = (Array.isArray(params) ? params : [params]) as EChartsParam[];
           const date = points[0]?.axisValue ?? '';
-          const lines = points.map((item: any) => {
+          const lines = points.map((item: EChartsParam) => {
             const val = item.seriesName === '推介率'
               ? `${Number(item.value ?? 0).toFixed(1)}%`
               : item.seriesName === '驾意件均'
@@ -400,7 +401,7 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
           label: {
             show: true,
             position: 'top',
-            formatter: (p: any) => `${Number(p.value ?? 0).toFixed(1)}%`,
+            formatter: (p: any) => `${Number((p as EChartsParam).value ?? 0).toFixed(1)}%`,
             fontSize: 10,
             color: isDark ? '#fcd34d' : colors.warning.dark,
             fontWeight: 600,
@@ -423,9 +424,10 @@ export const CrossSellOrgTrendChart = memo(function CrossSellOrgTrendChart({
             position: 'top',
             distance: 2,
             formatter: (p: any) => {
-              const index = Number(p.dataIndex ?? -1);
+              const safeParam = p as EChartsParam;
+              const index = Number(safeParam.dataIndex ?? -1);
               if (!premiumLabelVisibility[index]) return '';
-              return `${Math.round(Number(p.value ?? 0))}元`;
+              return `${Math.round(Number(safeParam.value ?? 0))}元`;
             },
             fontSize: 10,
             color: isDark ? '#7dd3fc' : colors.primary.dark,

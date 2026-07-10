@@ -37,7 +37,7 @@ export const BarChart: React.FC<BarChartProps> = ({
       },
       tooltip: {
         ...theme.tooltipConfig,
-        formatter: (params: any) => {
+        formatter: (params: EChartsParam | EChartsParam[]) => {
           const safeParams = (Array.isArray(params) ? params : []) as EChartsParam[];
           if (!Array.isArray(safeParams) || safeParams.length === 0) return '';
           const label = safeParams[0].axisValue;
@@ -82,8 +82,8 @@ export const BarChart: React.FC<BarChartProps> = ({
   }, [data, title, valueFormatter, isDark]);
 
   const onEvents = useMemo(() => ({
-    click: (params: any) => {
-      const safeParams = params as EChartsParam;
+    click: (params: EChartsParam) => {
+      const safeParams = params;
       if (onBarClick && safeParams.name) {
         onBarClick(String(safeParams.name));
       }

@@ -236,7 +236,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
             position: 'inside',
             formatter: (params: any) => {
               const safeParams = params as EChartsParam;
-              const val = Number((safeParams.value as any) ?? 0) / 10000;
+              const val = Number((safeParams.value as number) ?? 0) / 10000;
               return val > 0 ? formatWanDirect(val) : '';
             },
             color: '#fff',
@@ -268,7 +268,7 @@ export const QualityBusinessChart: React.FC<QualityBusinessChartProps> = ({
               const rawValue =
                 typeof safeParams.value === 'number'
                   ? safeParams.value
-                  : Number((safeParams.value as any) ?? 0);
+                  : Number((safeParams.value as number) ?? 0);
               return formatPercent(rawValue);
             },
             color: '#F59E0B'

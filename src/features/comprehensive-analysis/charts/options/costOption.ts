@@ -1,5 +1,6 @@
 import type { EChartsOption } from 'echarts';
 import { comprehensiveTheme } from '@/shared/styles';
+import type { EChartsParam } from '@/shared/types/echarts';
 import type { ComprehensiveMetricRow } from '../../types';
 
 export function buildCostOption(rows: ComprehensiveMetricRow[]): EChartsOption {
@@ -12,9 +13,10 @@ export function buildCostOption(rows: ComprehensiveMetricRow[]): EChartsOption {
     grid: { left: '4%', right: '4%', top: 20, bottom: 35, containLabel: true },
     tooltip: {
       trigger: 'item',
-      formatter: (params: any) => {
-        const [premiumShare, costRatio, premiumWan] = params.value as [number, number, number];
-        return `${params.name}<br/>保费贡献度: ${premiumShare.toFixed(1)}%<br/>变动成本率: ${costRatio.toFixed(1)}%<br/>签单保费: ${Math.round(premiumWan)}万`;
+      formatter: (params) => {
+        const p = params as unknown as EChartsParam;
+        const [premiumShare, costRatio, premiumWan] = p.value as [number, number, number];
+        return `${p.name}<br/>保费贡献度: ${premiumShare.toFixed(1)}%<br/>变动成本率: ${costRatio.toFixed(1)}%<br/>签单保费: ${Math.round(premiumWan)}万`;
       },
     },
     xAxis: {

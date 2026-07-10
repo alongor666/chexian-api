@@ -7,6 +7,7 @@ import { useTheme } from '@/shared/theme';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import { cardStyles, cn, colorClasses, colors, textStyles } from '@/shared/styles';
 import type { PerformanceRow } from './hooks/usePerformanceDrilldown';
+import type { EChartsParam } from '@/shared/types/echarts';
 import {
   classifyPerformanceQuadrant,
   getQuadrantLabel,
@@ -97,7 +98,7 @@ export function DistributionChart({
     };
 
     const scatterSymbolSize = (_value: unknown, params: any) => {
-      const data = params?.data;
+      const data = (params as EChartsParam)?.data as { symbolSize?: number } | undefined;
       if (typeof data?.symbolSize === 'number') return data.symbolSize;
       return 16;
     };
@@ -111,15 +112,16 @@ export function DistributionChart({
       tooltip: {
         trigger: 'item',
         formatter: (params: any) => {
-          const value = params?.value || [0, 0, 0];
+          const safeParams = params as EChartsParam;
+          const value = (safeParams?.value as number[] | undefined) || [0, 0, 0];
           const achievement = Number(value[0] || 0);
           const growth = Number(value[1] || 0);
           const count = Number(value[2] || 0);
-          const quadrant = params?.data?.quadrant;
+          const quadrant = (safeParams?.data as { quadrant?: string } | undefined)?.quadrant;
           const quadrantLabel = typeof quadrant === 'string' ? getQuadrantLabel(quadrant as any) : '-';
           return [
             `<div style="font-size:12px;line-height:1.6;">`,
-            `<div style="font-weight:600;">${params?.name || ''}</div>`,
+            `<div style="font-weight:600;">${safeParams?.name || ''}</div>`,
             `<div>达成率：${formatPercent(achievement)}</div>`,
             `<div>增长率：${formatPercent(growth)}</div>`,
             `<div>车险件数：${formatCount(count)}</div>`,

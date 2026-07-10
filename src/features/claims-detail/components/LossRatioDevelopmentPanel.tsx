@@ -25,6 +25,7 @@ import {
 } from '@/shared/styles';
 import { useTheme } from '@/shared/theme';
 import { getChartTheme } from '@/shared/config/chartStyles';
+import type { EChartsParam } from '@/shared/types/echarts';
 
 import { HeroMetric, SectionHeader, StatusPill } from './shared/atoms';
 import {
@@ -171,7 +172,7 @@ export const LossRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) => 
       tooltip: {
         ...chartTheme.tooltipConfig,
         trigger: 'axis' as const,
-        formatter: (params: any[]) => {
+        formatter: (params: EChartsParam[]) => {
           const idx = params[0]?.dataIndex ?? 0;
           const devM = idx + 1;
           let html = `<b>发展月 M${devM}</b><br/>`;

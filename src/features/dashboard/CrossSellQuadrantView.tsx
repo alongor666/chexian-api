@@ -12,6 +12,7 @@ import {
   type QuadrantId,
 } from './crossSellRateStatus';
 import type { CrossSellRow } from './hooks/useCrossSellAnalysis';
+import type { EChartsParam } from '../../shared/types/echarts';
 
 interface QuadrantPoint {
   entity_name: string;
@@ -75,7 +76,7 @@ function buildChartOption(points: QuadrantPoint[], isDark: boolean): EChartsOpti
       trigger: 'item',
       formatter: (params: any) => {
         // params.data is the full data item: { value: [x, y], ...QuadrantPoint }
-        const d = params.data as { value: number[] } & QuadrantPoint;
+        const d = (params as EChartsParam).data as { value: number[] } & QuadrantPoint;
         const meta = QUADRANT_META[d.quadrant];
         return `
           <div style="padding: 6px 8px; line-height: 1.6;">
@@ -146,7 +147,7 @@ function buildChartOption(points: QuadrantPoint[], isDark: boolean): EChartsOpti
           type: 'scatter' as const,
           data: seriesPoints,
           symbolSize: (_val: number[], params: any) => {
-            const d = params?.data as QuadrantPoint | undefined;
+            const d = (params as EChartsParam)?.data as QuadrantPoint | undefined;
             if (!d) return 20;
             return getSymbolSize(d.weight_value, d.isHighWeight, d.isMisaligned);
           },

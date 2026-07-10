@@ -10,6 +10,7 @@ import { cardStyles, colorClasses, cn, fontStyles, getYearChartColor } from '@/s
 import { generateExpenseDevInsights, type ExpenseMetricKey } from '../utils/expenseDevInsightRules';
 import { useTheme } from '@/shared/theme';
 import { getChartTheme } from '@/shared/config/chartStyles';
+import type { EChartsParam } from '@/shared/types/echarts';
 import type { useExpenseDevelopment } from '../hooks/useExpenseDevelopment';
 
 interface Props {
@@ -97,7 +98,7 @@ export const ExpenseRatioDevelopmentPanel: React.FC<Props> = ({ hook, params }) 
       tooltip: {
         ...chartTheme.tooltipConfig,
         trigger: 'axis' as const,
-        formatter: (tooltipParams: any[]) => {
+        formatter: (tooltipParams: EChartsParam[]) => {
           const idx = tooltipParams[0]?.dataIndex ?? 0;
           const devM = idx + 1;
           let html = `<b>发展月 M${devM}</b><br/>`;

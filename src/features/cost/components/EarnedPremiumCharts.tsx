@@ -18,6 +18,7 @@ import { GRID_CONFIG, getChartTheme } from '../../../shared/config/chartStyles';
 import { colorClasses, cn } from '../../../shared/styles';
 import { useTheme } from '../../../shared/theme';
 import type { EarnedPremiumData, EarnedPremiumSummaryData } from '../types/costTypes';
+import type { EChartsParam } from '../../../shared/types/echarts';
 
 // ==================== 类型定义 ====================
 
@@ -193,8 +194,8 @@ const InsuranceTypePie: React.FC<InsuranceTypePieProps> = ({ data, loading }) =>
     return {
       tooltip: {
         trigger: 'item',
-        formatter: (params: any) => {
-          const value = formatYuan(params.value);
+        formatter: (params: EChartsParam) => {
+          const value = formatYuan(params.value as number);
           return `${params.name}<br/>已赚保费: ${value}<br/>占比: ${formatPercent(Number(params.percent))}`;
         },
       },
@@ -274,19 +275,19 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ summaryData, loading 
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
-        formatter: (params: any) => {
+        formatter: (params: EChartsParam | EChartsParam[]) => {
           if (!Array.isArray(params) || params.length === 0) return '';
           const category = params[0].axisValue;
           let result = `<div style="font-weight:bold;margin-bottom:8px">${category}</div>`;
 
           let total = 0;
-          params.forEach((param: any) => {
-            const value = formatYuan(param.value);
+          params.forEach((param: EChartsParam) => {
+            const value = formatYuan(param.value as number);
             result += `<div style="display:flex;align-items:center;margin-top:4px">
               <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${param.color};margin-right:8px"></span>
               <span>${param.seriesName}: <strong>${value}</strong></span>
             </div>`;
-            total += param.value;
+            total += param.value as number;
           });
 
           result += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #eee">
@@ -386,11 +387,11 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
-        formatter: (params: any) => {
+        formatter: (params: EChartsParam | EChartsParam[]) => {
           if (!Array.isArray(params) || params.length === 0) return '';
           const category = params[0].axisValue;
-          const earned = params[0]?.value || 0;
-          const ratio = params[1]?.value || 0;
+          const earned = (params[0]?.value as number) || 0;
+          const ratio = (params[1]?.value as number) || 0;
           return `<div style="font-weight:bold;margin-bottom:8px">${category}</div>
             <div>累计已赚保费: <strong>${formatYuan(earned)}</strong></div>
             <div>已赚保费率: <strong>${formatPercent(Number(ratio))}</strong></div>`;
@@ -454,7 +455,7 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
           label: {
             show: true,
             position: 'right',
-            formatter: (params: any) => formatYuan(params.value),
+            formatter: (params: EChartsParam) => formatYuan(params.value as number),
             ...theme.chartTextStyles.dynamicLabel,
           },
         },

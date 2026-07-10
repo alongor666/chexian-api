@@ -41,6 +41,7 @@ import {
 } from '@/shared/utils/province-abbrev';
 import { useBranch } from '@/shared/contexts/BranchContext';
 import { BRANCH_LABELS } from '@/shared/utils/branchDisplay';
+import type { EChartsParam } from '@/shared/types/echarts';
 import type { useClaimsDetail } from '../hooks/useClaimsDetail';
 import { isGeoRiskEmpty } from './claimsEmptyState';
 
@@ -369,10 +370,16 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
     return {
       tooltip: {
         trigger: 'item' as const,
-        formatter: (p: any) => {
+        formatter: (p: EChartsParam) => {
           if (!p.data) return escapeHtml(p.name ?? '');
-          const d = p.data;
-          const name = isChina ? getProvinceAbbrev(p.name) : getCityAbbrev(p.name);
+          const d = p.data as {
+            cases: number;
+            reserve_wan: number;
+            avg_reserve: number;
+            injury_pct: number;
+            avg_cycle_days?: number;
+          };
+          const name = isChina ? getProvinceAbbrev(p.name as string) : getCityAbbrev(p.name as string);
           return `<b>${escapeHtml(name)}</b><br/>
             赔案: ${formatCount(d.cases)}件<br/>
             立案金额: ${formatCount(d.reserve_wan)}万<br/>
@@ -401,7 +408,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
           label: {
             show: !isChina,
             fontSize: 10,
-            formatter: (p: any) => getCityAbbrev(p.name ?? ''),
+            formatter: (p: EChartsParam) => getCityAbbrev(p.name ?? ''),
           },
           emphasis: {
             label: { show: true, fontSize: 13, fontWeight: 'bold' as const },
@@ -419,9 +426,10 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
 
   const onMapEvents = useMemo(
     () => ({
-      click: (p: any) => {
+      click: (p: unknown) => {
+        const param = p as EChartsParam;
         if (mapLevel !== 'china') return;
-        const provinceName = GEOJSON_TO_PROVINCE[p.name];
+        const provinceName = GEOJSON_TO_PROVINCE[param.name as string];
         if (provinceName) {
           void drillToProvince(provinceName);
         }

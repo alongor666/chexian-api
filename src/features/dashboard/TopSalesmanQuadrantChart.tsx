@@ -11,6 +11,7 @@ import { colors } from '@/shared/styles';
 import { useTheme } from '@/shared/theme';
 import type { TopSalesmanRow } from './hooks/useCrossSellTopSalesman';
 import type { QuadrantCategory } from './CrossSellAIAnalysisPanel';
+import type { EChartsParam } from '@/shared/types/echarts';
 
 interface QuadrantStats {
     category: QuadrantCategory;
@@ -125,7 +126,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
             tooltip: {
                 trigger: 'item',
                 formatter: (params: any) => {
-                    const val = params.value;
+                    const val = (params as EChartsParam).value as [number, number, number, string, string, number];
                     return `
             <div style="font-weight:600;margin-bottom:4px">${val[3]} (${val[4]})</div>
             <div>推介率: <span style="font-weight:600">${formatPercent(val[0])}</span></div>
@@ -209,7 +210,7 @@ export const TopSalesmanQuadrantChart = memo(function TopSalesmanQuadrantChart({
                             show: true,
                             position: 'inside',
                             formatter: (params: any) => {
-                                return params.name;
+                                return (params as EChartsParam).name as string;
                             },
                             color: isDark ? '#a3a3a3' : '#666',
                             fontSize: 10,

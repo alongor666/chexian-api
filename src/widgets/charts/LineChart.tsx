@@ -153,7 +153,8 @@ function buildPrimaryLineChartOption(
       endLabel: {
         show: n > 0,
         formatter: (params: any) => {
-          const v = typeof params.value === 'number' ? params.value : null;
+          const safeParams = params as EChartsParam;
+          const v = typeof safeParams.value === 'number' ? safeParams.value : null;
           if (v === null) return '';
           return formatPremiumWan(v) + '万';
         },
