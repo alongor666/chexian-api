@@ -28,8 +28,8 @@
 `src/shared/api/client.ts` 拆为三层，单例仍是 `apiClient`：
 
 - **`client.ts`** — 业务域方法层 `ApiClient extends ApiClientCore`：会话生命周期（`login`/`logout`/`getCurrentUser`）+ 核心查询（`getKpi`/`getTrend`/`getComprehensiveBundle`/`getPivot`/...）+ 挂载命名空间子客户端。
-- **`client-core.ts`** — 传输内核 `ApiClientCore`（token 生命周期 / `request` / GET 同 key 合并 / 30s 超时 / 401 静默刷新）+ **只读**传输句柄 `ApiTransport`。
-- **`*-api.ts`** — 命名空间子客户端，调用形 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow,premium,geo}.方法()`，各持只读 `ApiTransport`（不能写 token）。
+- **`client-core.ts`** — 传输内核 `ApiClientCore`（token 生命周期 / `request` / GET 同 key 合并 / 30s 超时 / 401 静默刷新 / 403 `ForbiddenError` / 429 `RateLimitError` 全局拦截）+ **只读**传输句柄 `ApiTransport`。
+- **`*-api.ts`** — 命名空间子客户端，调用形 `apiClient.{auth,ai,data,workflows,crossSell,performance,repair,claimsDetail,quoteConversion,customerFlow,premium,geo,copilot}.方法()`，各持只读 `ApiTransport`（不能写 token）。copilot 域（05dff4 ①）收编 `features/copilot` 手写 fetch（createRun/report/forecastBaseline/profitScenario），SSE 订阅仍走 EventSource。
 
 **架构不变量（机器强制）**：`tests/api/sub-client-boundary.test.ts`（禁 token 写 / 禁 new 第二个 core / 禁 import 单例）、`tests/api/client-core-transport.test.ts`（鉴权头 / 401 刷新 / GET 合并 / 超时）、契约门禁 `scripts/check-hotfile-contracts.mjs`。
 

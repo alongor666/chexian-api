@@ -33,6 +33,45 @@ export function isRequestAbortError(error: unknown): error is RequestAbortError 
 }
 
 /**
+ * 403 无权限（backlog 2026-07-03-claude-05dff4 ③ 全局拦截）。
+ * 与 401 不同：会话有效但权限不足，刷新 token 无济于事 → 不触发静默刷新、不应重试。
+ */
+export class ForbiddenError extends Error {
+  readonly statusCode = 403;
+  constructor(message?: string) {
+    super(message || '没有访问该资源的权限，请联系管理员开通');
+    this.name = 'ForbiddenError';
+  }
+}
+
+export function isForbiddenError(error: unknown): error is ForbiddenError {
+  return error instanceof ForbiddenError;
+}
+
+/**
+ * 429 限流（backlog 2026-07-03-claude-05dff4 ③ 全局拦截）。
+ * retryAfterSeconds 取自响应 Retry-After 头（秒），供调用方/提示层做退避；
+ * 自动重试会放大限流，故仅提示退避、不在传输层重试。
+ */
+export class RateLimitError extends Error {
+  readonly statusCode = 429;
+  readonly retryAfterSeconds?: number;
+  constructor(retryAfterSeconds?: number) {
+    super(
+      retryAfterSeconds && Number.isFinite(retryAfterSeconds)
+        ? `请求过于频繁，已被限流，请约 ${Math.ceil(retryAfterSeconds)} 秒后重试`
+        : '请求过于频繁，已被限流，请稍后重试'
+    );
+    this.name = 'RateLimitError';
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+export function isRateLimitError(error: unknown): error is RateLimitError {
+  return error instanceof RateLimitError;
+}
+
+/**
  * 传输句柄：暴露给命名空间子客户端（Phase 2）的最小传输面。
  *
  * 子客户端通过组合（持有同一份句柄）而非继承复用单实例传输状态，
@@ -316,6 +355,33 @@ export class ApiClientCore {
           if (refreshed) {
             return this.request<T>(endpoint, options, true);
           }
+        }
+
+        // 403/429 全局拦截（05dff4 ③）：与 401 不同，刷新会话解决不了权限不足/限流，
+        // 统一在传输层抛类型化错误（带中文提示）+ 广播全局事件，供 UI 层挂 toast/引导。
+        if (response.status === 403) {
+          let serverMessage: string | undefined;
+          try {
+            const body: ApiResponse<unknown> = await response.json();
+            serverMessage = body?.error?.message;
+          } catch {
+            // 非 JSON 响应（如网关直接 403 页面）→ 用默认中文提示
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('api-forbidden', { detail: { endpoint } }));
+          }
+          throw new ForbiddenError(serverMessage);
+        }
+        if (response.status === 429) {
+          const retryAfterRaw = response.headers?.get?.('Retry-After');
+          const retryAfterSeconds = retryAfterRaw ? Number(retryAfterRaw) : NaN;
+          const retryAfter = Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined;
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('api-rate-limited', { detail: { endpoint, retryAfterSeconds: retryAfter } })
+            );
+          }
+          throw new RateLimitError(retryAfter);
         }
 
         const data: ApiResponse<T> = await response.json();

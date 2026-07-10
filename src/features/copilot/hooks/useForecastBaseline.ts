@@ -27,8 +27,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE, apiClient } from '../../../shared/api/client';
-import { AGENT_FORECAST_ROUTES } from '../../../shared/api';
+import { apiClient } from '../../../shared/api/client';
 import type { ForecastScenarioResult, AssumptionSource } from './useForecastScenario';
 
 const BASELINE_DRAFT_STORAGE_KEY = 'copilot.forecastBaseline.draft';
@@ -407,43 +406,16 @@ function clearDraftFromStorage() {
 // API 调用
 // ──────────────────────────────────────────────
 
-async function fetchForecastBaseline(config: BaselineConfigInput): Promise<ForecastBaselineData> {
-  const body = {
+function fetchForecastBaseline(config: BaselineConfigInput): Promise<ForecastBaselineData> {
+  return apiClient.copilot.forecastBaseline<ForecastBaselineData>({
     cutoffDate: config.cutoffDate,
     filters: config.filters,
     historyWindowYears: Number.parseInt(config.historyWindowYears, 10) || 3,
     recentExpenseMonths: Number.parseInt(config.recentExpenseMonths, 10) || 6,
-  };
-  const token = apiClient.getToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(`${API_BASE}/${AGENT_FORECAST_ROUTES.BASELINE}`, {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-    body: JSON.stringify(body),
   });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(text ? text.slice(0, 200) : `HTTP ${res.status}`);
-  }
-
-  const json = (await res.json()) as { success: boolean; data?: ForecastBaselineData; error?: unknown };
-  if (!json.success || !json.data) {
-    const errMsg =
-      typeof json.error === 'string'
-        ? json.error
-        : json.error && typeof json.error === 'object' && 'message' in json.error
-          ? String((json.error as { message?: unknown }).message ?? '响应缺少 data')
-          : '响应缺少 data';
-    throw new Error(errMsg);
-  }
-  return json.data;
 }
 
-async function fetchProfitScenario(input: {
+function fetchProfitScenario(input: {
   premium: number;
   ultimateVariableCostRatio: number;
   ultimateFixedCostRatio: number;
@@ -451,37 +423,7 @@ async function fetchProfitScenario(input: {
   scenarioName: string;
   assumptionSource: AssumptionSource;
 }): Promise<ForecastScenarioResult> {
-  const token = apiClient.getToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(`${API_BASE}/${AGENT_FORECAST_ROUTES.PROFIT_SCENARIO}`, {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-    body: JSON.stringify(input),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(text ? text.slice(0, 200) : `HTTP ${res.status}`);
-  }
-
-  const json = (await res.json()) as {
-    success: boolean;
-    data?: ForecastScenarioResult;
-    error?: unknown;
-  };
-  if (!json.success || !json.data) {
-    const errMsg =
-      typeof json.error === 'string'
-        ? json.error
-        : json.error && typeof json.error === 'object' && 'message' in json.error
-          ? String((json.error as { message?: unknown }).message ?? '响应缺少 data')
-          : '响应缺少 data';
-    throw new Error(errMsg);
-  }
-  return json.data;
+  return apiClient.copilot.profitScenario<ForecastScenarioResult>(input);
 }
 
 // ──────────────────────────────────────────────

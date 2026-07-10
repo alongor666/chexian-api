@@ -233,23 +233,24 @@ describe('时间视图覆盖', () => {
 // ═══════════════════════════════════════════════════
 
 describe('7a2849 同比/YTD 幽灵 -100% 回归', () => {
-  describe('YoY 必须 LEFT JOIN 而非 FULL OUTER JOIN', () => {
-    it('YoY monthly 不再使用 FULL OUTER JOIN', () => {
+  describe('YoY 行集必须锚定当期（B306/F-02 单扫合并后由 has_current 承担旧 LEFT JOIN 语义）', () => {
+    it('YoY monthly 不使用 FULL OUTER JOIN，且只保留当期出现过的分组', () => {
       const sql = generateYoYGrowthQuery({ ...BASE_CONFIG, timeView: 'monthly' });
       expect(sql).not.toMatch(/FULL\s+OUTER\s+JOIN/i);
-      expect(sql).toMatch(/LEFT\s+JOIN/i);
+      expect(sql).toMatch(/WHERE\s+has_current\s*=\s*1/i);
     });
 
-    it('YoY weekly 不再使用 FULL OUTER JOIN', () => {
+    it('YoY weekly 不使用 FULL OUTER JOIN，且只保留当期出现过的分组', () => {
       const sql = generateYoYGrowthQuery({ ...BASE_CONFIG, timeView: 'weekly' });
       expect(sql).not.toMatch(/FULL\s+OUTER\s+JOIN/i);
-      expect(sql).toMatch(/LEFT\s+JOIN/i);
+      expect(sql).toMatch(/WHERE\s+has_current\s*=\s*1/i);
     });
 
     it('YoY 不再 COALESCE(c.time_period, p.time_period)（避免去年时点泄漏）', () => {
       const sql = generateYoYGrowthQuery(BASE_CONFIG);
       expect(sql).not.toMatch(/COALESCE\(c\.time_period,\s*p\.time_period\)/);
-      expect(sql).toMatch(/c\.time_period AS time_period/);
+      // 输出 time_period 只来自 has_current=1 的 pivot 行，去年独有时点被过滤
+      expect(sql).toMatch(/MAX\(CASE WHEN side = 0 THEN 1 ELSE 0 END\) AS has_current/);
     });
   });
 
@@ -288,25 +289,27 @@ describe('7a2849 同比/YTD 幽灵 -100% 回归', () => {
     });
   });
 
-  describe('groupBy 维度场景：c.<g> 直取，不再 COALESCE 去年值', () => {
-    it('YoY + groupBy=org_level_3：SELECT 用 c.org_level_3 直取', () => {
+  describe('groupBy 维度场景：分组列直取，不再 COALESCE 去年值', () => {
+    it('YoY + groupBy=org_level_3：分组列贯穿 pivot 直取', () => {
       const sql = generateYoYGrowthQuery({ ...BASE_CONFIG, groupBy: ['org_level_3'] });
-      expect(sql).toMatch(/c\.org_level_3 AS org_level_3/);
+      expect(sql).toMatch(/GROUP BY time_period, org_level_3/);
       expect(sql).not.toMatch(/COALESCE\(c\.org_level_3,\s*p\.org_level_3\)/);
     });
   });
 
   describe('双窗口路径（owner review 二轮修复）', () => {
-    it('YoY 同时传 currentPeriod/previousPeriod → current/previous CTE 分别拼自己的日期条件', () => {
+    it('YoY 同时传 currentPeriod/previousPeriod → 当期/去年侧分别拼自己的日期条件', () => {
       const sql = generateYoYGrowthQuery({
         ...BASE_CONFIG,
         currentPeriod: { startDate: '2026-01-01', endDate: '2026-01-31' },
         previousPeriod: { startDate: '2025-01-01', endDate: '2025-01-31' },
       });
-      // current_period CTE 包含 2026 窗口
-      expect(sql).toMatch(/current_period[\s\S]*?WHERE[\s\S]*?'2026-01-01'[\s\S]*?'2026-01-31'/);
-      // previous_period CTE 包含 2025 窗口
-      expect(sql).toMatch(/previous_period[\s\S]*?WHERE[\s\S]*?'2025-01-01'[\s\S]*?'2025-01-31'/);
+      // side=0（当期）绑定 2026 窗口
+      expect(sql).toMatch(/sides\.side = 0[\s\S]*?'2026-01-01'[\s\S]*?'2026-01-31'/);
+      // side=1（去年同期）绑定 2025 窗口
+      expect(sql).toMatch(/sides\.side = 1[\s\S]*?'2025-01-01'[\s\S]*?'2025-01-31'/);
+      // 两窗互不交叉：当期侧条件里不得出现 2025 窗、去年侧不得出现 2026 窗
+      expect(sql).not.toMatch(/sides\.side = 0[^)]*'2025-01-01'/);
     });
 
     it('YoY 退化路径（仅传 currentPeriod 缺 previousPeriod）→ 不拼日期，向下兼容旧行为', () => {

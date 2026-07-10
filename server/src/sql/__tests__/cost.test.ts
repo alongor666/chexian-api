@@ -336,25 +336,25 @@ describe('generateEarnedPremiumMatrixQueries', () => {
   const matrix = generateEarnedPremiumMatrixQueries(2026);
 
   it('prevInPrev: 筛选 Y-1 年保单，同年含保费/首日费用列', () => {
-    expect(matrix.prevInPrev).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2025');
+    expect(matrix.prevInPrev).toContain("CAST(insurance_start_date AS DATE) BETWEEN DATE '2025-01-01' AND DATE '2025-12-31'");
     expect(matrix.prevInPrev).toContain('AS premium');
     expect(matrix.prevInPrev).toContain('AS first_day_fee');
     expect(matrix.prevInPrev).toContain('AS earned_total');
   });
 
   it('prevInCurr: 筛选 Y-1 年保单，跨年无保费列', () => {
-    expect(matrix.prevInCurr).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2025');
+    expect(matrix.prevInCurr).toContain("CAST(insurance_start_date AS DATE) BETWEEN DATE '2025-01-01' AND DATE '2025-12-31'");
     expect(matrix.prevInCurr).not.toContain('AS first_day_fee');
     expect(matrix.prevInCurr).toContain("DATE '2026-12-31'");
   });
 
   it('currInCurr: 筛选 Y 年保单，同年含保费/首日费用列', () => {
-    expect(matrix.currInCurr).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026');
+    expect(matrix.currInCurr).toContain("CAST(insurance_start_date AS DATE) BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'");
     expect(matrix.currInCurr).toContain('AS first_day_fee');
   });
 
   it('currInNext: 筛选 Y 年保单，跨年推进到 Y+1 月末', () => {
-    expect(matrix.currInNext).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026');
+    expect(matrix.currInNext).toContain("CAST(insurance_start_date AS DATE) BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'");
     expect(matrix.currInNext).toContain("DATE '2027-12-31'");
   });
 
@@ -369,7 +369,7 @@ describe('generateEarnedPremiumMatrixQueries', () => {
 
   it('锚定年联动：换 2027 → 保单年过滤与月末日期整体平移', () => {
     const m27 = generateEarnedPremiumMatrixQueries(2027);
-    expect(m27.prevInPrev).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026');
+    expect(m27.prevInPrev).toContain("CAST(insurance_start_date AS DATE) BETWEEN DATE '2026-01-01' AND DATE '2026-12-31'");
     expect(m27.currInNext).toContain("DATE '2028-12-31'");
   });
 
@@ -462,8 +462,8 @@ describe('generateMonthlyExpenseQuery', () => {
 
   it('覆盖 Y-1 + Y 两个保单年度', () => {
     const sql = generateMonthlyExpenseQuery(2026);
-    expect(sql).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) IN (2025, 2026)');
-    expect(generateMonthlyExpenseQuery(2027)).toContain('IN (2026, 2027)');
+    expect(sql).toContain("CAST(insurance_start_date AS DATE) BETWEEN DATE '2025-01-01' AND DATE '2026-12-31'");
+    expect(generateMonthlyExpenseQuery(2027)).toContain("BETWEEN DATE '2026-01-01' AND DATE '2027-12-31'");
   });
 
   it('接受 whereClause', () => {

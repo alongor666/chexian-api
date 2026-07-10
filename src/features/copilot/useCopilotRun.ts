@@ -109,39 +109,22 @@ export function useCopilotRun() {
       cleanup();
       setState({ ...INITIAL, status: 'creating' });
 
-      const token = apiClient.getToken();
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      let createRes: Response;
+      let runId: string;
       try {
-        createRes = await fetch(`${API_BASE}/copilot/runs`, {
-          method: 'POST',
-          headers,
-          credentials: 'include',
-          body: JSON.stringify({
-            workflowId: 'auto-risk-control-v1',
-            input: { period: { startDate: input.startDate, endDate: input.endDate } },
-          }),
+        const created = await apiClient.copilot.createRun<NonNullable<CopilotRunCreateResponse['data']>>({
+          workflowId: 'auto-risk-control-v1',
+          input: { period: { startDate: input.startDate, endDate: input.endDate } },
         });
+        if (!created?.runId) {
+          setState((s) => ({ ...s, status: 'error', error: '创建 run 失败：响应缺少 runId' }));
+          return;
+        }
+        runId = created.runId;
       } catch (err) {
-        setState((s) => ({ ...s, status: 'error', error: err instanceof Error ? err.message : String(err) }));
+        setState((s) => ({ ...s, status: 'error', error: `创建 run 失败：${err instanceof Error ? err.message : String(err)}` }));
         return;
       }
 
-      if (!createRes.ok) {
-        const errBody = await createRes.text().catch(() => '');
-        setState((s) => ({ ...s, status: 'error', error: `创建 run 失败 (HTTP ${createRes.status}): ${errBody.slice(0, 200)}` }));
-        return;
-      }
-
-      const createBody = (await createRes.json()) as CopilotRunCreateResponse;
-      if (!createBody.success || !createBody.data) {
-        setState((s) => ({ ...s, status: 'error', error: createBody.error ?? '创建 run 失败' }));
-        return;
-      }
-
-      const { runId } = createBody.data;
       setState((s) => ({ ...s, status: 'running', runId }));
 
       // EventSource — 同源走 cookie；跨域需后端 CORS allow-credentials
@@ -232,26 +215,12 @@ interface FetchReportResult {
 }
 
 async function fetchReport(runId: string, includeNarrative: boolean): Promise<FetchReportResult> {
-  const token = apiClient.getToken();
-  const headers: Record<string, string> = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const url = `${API_BASE}/copilot/runs/${runId}/report${includeNarrative ? '?includeNarrative=1' : ''}`;
-  let res: Response;
   try {
-    res = await fetch(url, { credentials: 'include', headers });
-  } catch (err) {
-    return { ok: false, report: null, error: err instanceof Error ? err.message : String(err) };
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    return { ok: false, report: null, error: `报告 HTTP ${res.status}${text ? `: ${text.slice(0, 160)}` : ''}` };
-  }
-  try {
-    const body = (await res.json()) as CopilotReportResponse;
-    if (!body.success || !body.data) {
-      return { ok: false, report: null, error: body.error ?? '报告响应缺少 data' };
+    const report = await apiClient.copilot.report<NonNullable<CopilotReportResponse['data']>>(runId, includeNarrative);
+    if (!report) {
+      return { ok: false, report: null, error: '报告响应缺少 data' };
     }
-    return { ok: true, report: body.data };
+    return { ok: true, report };
   } catch (err) {
     return { ok: false, report: null, error: err instanceof Error ? err.message : String(err) };
   }

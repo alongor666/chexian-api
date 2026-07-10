@@ -2,10 +2,11 @@
  * @vitest-environment jsdom
  * useCopilotRun 单元测试 — 阶段 3
  *
- * 通过 mock fetch + 假 EventSource 驱动 hook 状态机：
- *  - 创建 run（POST /api/copilot/runs）
+ * 通过 mock apiClient.copilot + 假 EventSource 驱动 hook 状态机
+ * （05dff4 ①：hook 的手写 fetch 已收编到 apiClient.copilot，mock 层随之上移）：
+ *  - 创建 run（apiClient.copilot.createRun）
  *  - 接收 SSE 事件 → 状态机转 running → completed
- *  - 拉取报告（GET /api/copilot/runs/:runId/report）
+ *  - 拉取报告（apiClient.copilot.report）
  */
 
 import React from 'react';
@@ -35,24 +36,29 @@ class MockEventSource {
 
 (globalThis as any).EventSource = MockEventSource;
 
-const fetchMock = vi.fn();
-(globalThis as any).fetch = fetchMock;
-
-// apiClient.getToken 复用（不 mock）
 vi.mock('../../../src/shared/api/client', () => ({
   API_BASE: 'http://localhost:3000/api',
-  apiClient: { getToken: () => 'test-token' },
+  apiClient: {
+    getToken: () => 'test-token',
+    copilot: { createRun: vi.fn(), report: vi.fn() },
+  },
 }));
 
+import { apiClient } from '../../../src/shared/api/client';
 import { useCopilotRun } from '../../../src/features/copilot/useCopilotRun';
 
+const createRunMock = vi.mocked(apiClient.copilot.createRun);
+const reportMock = vi.mocked(apiClient.copilot.report);
+
 beforeEach(() => {
-  fetchMock.mockReset();
+  createRunMock.mockReset();
+  reportMock.mockReset();
   MockEventSource.instances.length = 0;
 });
 
 afterEach(() => {
-  fetchMock.mockReset();
+  createRunMock.mockReset();
+  reportMock.mockReset();
 });
 
 describe('useCopilotRun', () => {
@@ -64,17 +70,11 @@ describe('useCopilotRun', () => {
   });
 
   it('start → 创建 run + 订阅 SSE + 接收 step 事件', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: {
-          runId: 'wr_20260426000000_auto-risk-control-v1_aabbccdd',
-          workflowId: 'auto-risk-control-v1',
-          streamUrl: '/api/copilot/runs/wr_xxx/stream',
-          reportUrl: '/api/copilot/runs/wr_xxx/report',
-        },
-      }),
+    createRunMock.mockResolvedValueOnce({
+      runId: 'wr_20260426000000_auto-risk-control-v1_aabbccdd',
+      workflowId: 'auto-risk-control-v1',
+      streamUrl: '/api/copilot/runs/wr_xxx/stream',
+      reportUrl: '/api/copilot/runs/wr_xxx/report',
     });
 
     const { result } = renderHook(() => useCopilotRun());
@@ -119,34 +119,24 @@ describe('useCopilotRun', () => {
   });
 
   it('workflow-completed → 触发 fetchReport，最终 status=completed', async () => {
-    // 1) POST /runs
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: { runId: 'wr_20260426_x_aabbccdd', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '' },
-      }),
+    // 1) 创建 run
+    createRunMock.mockResolvedValueOnce({
+      runId: 'wr_20260426_x_aabbccdd', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '',
     });
-    // 2) GET /report
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: {
-          runId: 'wr_xxx',
-          workflowId: 'auto-risk-control-v1',
-          workflowStatus: 'success',
-          markdown: '# 报告\n\n本期赔付率 65%',
-          sections: [],
-          redLineWarnings: [],
-          successCount: 5,
-          failedCount: 0,
-          skippedCount: 0,
-          totalElapsedMs: 5000,
-          narrative: null,
-          narrativeMeta: null,
-        },
-      }),
+    // 2) 拉报告
+    reportMock.mockResolvedValueOnce({
+      runId: 'wr_xxx',
+      workflowId: 'auto-risk-control-v1',
+      workflowStatus: 'success',
+      markdown: '# 报告\n\n本期赔付率 65%',
+      sections: [],
+      redLineWarnings: [],
+      successCount: 5,
+      failedCount: 0,
+      skippedCount: 0,
+      totalElapsedMs: 5000,
+      narrative: null,
+      narrativeMeta: null,
     });
 
     const { result } = renderHook(() => useCopilotRun());
@@ -165,12 +155,8 @@ describe('useCopilotRun', () => {
     expect(es.closed).toBe(true);
   });
 
-  it('POST /runs 失败 → state.error', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      text: async () => 'internal',
-    });
+  it('创建 run 失败（传输层抛错）→ state.error', async () => {
+    createRunMock.mockRejectedValueOnce(new Error('HTTP 500'));
     const { result } = renderHook(() => useCopilotRun());
     await act(async () => {
       await result.current.start({ startDate: '2026-04-01', endDate: '2026-04-26' });
@@ -186,18 +172,10 @@ describe('useCopilotRun', () => {
   });
 
   it('workflow-completed 后 /report 返回 500 → status=error，不假装 completed', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: { runId: 'wr_x', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '' },
-      }),
+    createRunMock.mockResolvedValueOnce({
+      runId: 'wr_x', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '',
     });
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      text: async () => 'internal',
-    });
+    reportMock.mockRejectedValueOnce(new Error('HTTP 500'));
 
     const { result } = renderHook(() => useCopilotRun());
     await act(async () => {
@@ -213,18 +191,12 @@ describe('useCopilotRun', () => {
     expect(result.current.state.report).toBeNull();
   });
 
-  it('workflow-completed 后 /report success=false → status=error', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: { runId: 'wr_x', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '' },
-      }),
+  it('workflow-completed 后 /report success=false（传输层抛业务错误）→ status=error', async () => {
+    createRunMock.mockResolvedValueOnce({
+      runId: 'wr_x', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '',
     });
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ success: false, error: '权限失效' }),
-    });
+    // success=false 时传输内核 request() 直接抛 Error(data.error.message)
+    reportMock.mockRejectedValueOnce(new Error('权限失效'));
 
     const { result } = renderHook(() => useCopilotRun());
     await act(async () => {
@@ -239,33 +211,23 @@ describe('useCopilotRun', () => {
     expect(result.current.state.error).toContain('权限失效');
   });
 
-  it('includeNarrative=true → /report?includeNarrative=1', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: { runId: 'wr_x', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '' },
-      }),
+  it('includeNarrative=true → report(runId, true)', async () => {
+    createRunMock.mockResolvedValueOnce({
+      runId: 'wr_x', workflowId: 'auto-risk-control-v1', streamUrl: '', reportUrl: '',
     });
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        success: true,
-        data: {
-          runId: 'wr_x',
-          workflowId: 'auto-risk-control-v1',
-          workflowStatus: 'success',
-          markdown: '# 报告',
-          sections: [],
-          redLineWarnings: [],
-          successCount: 5,
-          failedCount: 0,
-          skippedCount: 0,
-          totalElapsedMs: 100,
-          narrative: '本期经营平稳。',
-          narrativeMeta: { provider: 'mock', blockedBySqlGuard: false },
-        },
-      }),
+    reportMock.mockResolvedValueOnce({
+      runId: 'wr_x',
+      workflowId: 'auto-risk-control-v1',
+      workflowStatus: 'success',
+      markdown: '# 报告',
+      sections: [],
+      redLineWarnings: [],
+      successCount: 5,
+      failedCount: 0,
+      skippedCount: 0,
+      totalElapsedMs: 100,
+      narrative: '本期经营平稳。',
+      narrativeMeta: { provider: 'mock', blockedBySqlGuard: false },
     });
 
     const { result } = renderHook(() => useCopilotRun());
@@ -278,9 +240,8 @@ describe('useCopilotRun', () => {
     });
     await waitFor(() => expect(result.current.state.status).toBe('completed'));
 
-    // 第二次 fetch 调用应是 report URL，含 includeNarrative
-    const reportCall = fetchMock.mock.calls[1];
-    expect(reportCall[0]).toContain('includeNarrative=1');
+    // report 应以 includeNarrative=true 调用（URL 拼接契约由 wire-golden 锁定）
+    expect(reportMock).toHaveBeenCalledWith('wr_x', true);
     expect(result.current.state.report?.narrative).toBe('本期经营平稳。');
   });
 });
