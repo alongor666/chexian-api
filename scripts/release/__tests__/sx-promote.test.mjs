@@ -60,6 +60,7 @@ import {
   discoverSourceFiles,
   sha256File,
   validateBranchCodeSX,
+  parquetDataIdentical,
   runDuckdbCli,
   leftoverPreflight,
   writeReadyMarker,
@@ -402,6 +403,68 @@ describe('sx-promote: validateBranchCodeSX（mock duckdb）', () => {
     const mock = makeMockDuckdb({ cols: ['branch_code', 'premium'], total: 0, sxCount: 0, premiumSum: null });
     const result = await validateBranchCodeSX('/fake/path.parquet', { runDuckdb: mock });
     expect(result.rowCount).toBe(0);
+  });
+});
+
+// ─────────────────────────── 单元测试：parquetDataIdentical（P1-7 回退，mock duckdb） ───────────────────────────
+
+describe('sx-promote: parquetDataIdentical（sha256 冲突的数据级回退，mock duckdb）', () => {
+  /**
+   * mock runDuckdb：第 1 次调用（含 a_rows）返回行数，第 2 次（含 a_minus_b）返回差集。
+   */
+  function makeMock({ aRows, bRows, aMinusB = 0, bMinusA = 0, countEmpty = false, diffEmpty = false }) {
+    return async (sql) => {
+      if (sql.includes('a_rows')) return countEmpty ? [] : [{ a_rows: aRows, b_rows: bRows }];
+      if (sql.includes('a_minus_b')) return diffEmpty ? [] : [{ a_minus_b: aMinusB, b_minus_a: bMinusA }];
+      throw new Error(`unexpected sql: ${sql.slice(0, 60)}`);
+    };
+  }
+
+  it('行数相同 + 双向差集为 0 → true（parquet 非确定性同数据场景）', async () => {
+    const mock = makeMock({ aRows: 274708, bRows: 274708, aMinusB: 0, bMinusA: 0 });
+    expect(await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock })).toBe(true);
+  });
+
+  it('行数不同 → false（短路，不查 EXCEPT）', async () => {
+    let exceptCalled = false;
+    const mock = async (sql) => {
+      if (sql.includes('a_rows')) return [{ a_rows: 100, b_rows: 101 }];
+      if (sql.includes('a_minus_b')) { exceptCalled = true; return [{ a_minus_b: 0, b_minus_a: 0 }]; }
+      throw new Error('unexpected');
+    };
+    expect(await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock })).toBe(false);
+    expect(exceptCalled).toBe(false); // 行数不等应短路，不触发昂贵的 EXCEPT
+  });
+
+  it('行数相同但 a_minus_b > 0 → false（数据确实不同）', async () => {
+    const mock = makeMock({ aRows: 100, bRows: 100, aMinusB: 3, bMinusA: 0 });
+    expect(await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock })).toBe(false);
+  });
+
+  it('行数相同但 b_minus_a > 0 → false（数据确实不同）', async () => {
+    const mock = makeMock({ aRows: 100, bRows: 100, aMinusB: 0, bMinusA: 5 });
+    expect(await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock })).toBe(false);
+  });
+
+  it('行数查询返回空 → false（保守，不误判等价）', async () => {
+    const mock = makeMock({ countEmpty: true });
+    expect(await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock })).toBe(false);
+  });
+
+  it('差集查询返回空 → false（保守，不误判等价）', async () => {
+    const mock = makeMock({ aRows: 100, bRows: 100, diffEmpty: true });
+    expect(await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock })).toBe(false);
+  });
+
+  it('路径含单引号被正确转义（不抛错）', async () => {
+    let seen = '';
+    const mock = async (sql) => {
+      seen = sql;
+      if (sql.includes('a_rows')) return [{ a_rows: 1, b_rows: 1 }];
+      return [{ a_minus_b: 0, b_minus_a: 0 }];
+    };
+    await parquetDataIdentical("/a'b.parquet", '/c.parquet', { runDuckdb: mock });
+    expect(seen).toContain("/a''b.parquet"); // 单引号转义为两个单引号
   });
 });
 

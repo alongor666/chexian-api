@@ -60,7 +60,9 @@
  *   P1-4. 保费字段改 premium + 缺失 fail-fast（不再降级仅校行数）
  *   P1-5. duckdb CLI 替换 Python，任何文件复制前先 preflight 校验 duckdb 可用
  *   P1-6. 空源 --apply 失败（除非 --allow-empty）
- *   P1-7. 目标已存在时比较 sha256 字节一致，不一致 fail-fast
+ *   P1-7. 目标已存在时比较 sha256 字节一致；不一致时回退数据级双向 EXCEPT 复核
+ *         （parquetDataIdentical）：数据相同（parquet 非确定性序列化差异）→ 幂等 skip，
+ *         数据确不同 → fail-fast（--force 才覆盖）
  *   P1-8. sha256 流式计算（createReadStream + hash.update）防大 parquet 整文件进内存（P1 第2轮）
  *   P2-9. assertSxSubdirTarget 在 mkdirSync 之前调用（B5 语义反转：原 assertNoSubdirIntent 防子目录，
  *         现要求目标**必须是** current/SX 省份子目录）
@@ -346,6 +348,45 @@ export async function validateBranchCodeSX(parquetPath, { runDuckdb = runDuckdbC
     rowCount: totalNum,
     premiumSum: premium_sum !== null && premium_sum !== undefined ? Number(premium_sum) : null,
   };
+}
+
+/**
+ * 数据级等价复核（P1-7 sha256 冲突的回退闸）。
+ *
+ * 背景：parquet 非确定性序列化（行组顺序 / 压缩块 / 元数据时间戳）会让**同一份数据**
+ * 两次写出产生不同 sha256，令 P1-7 的 sha256 硬比对把"数据完全相同"误判为"内容冲突"
+ * 而拒绝晋升。本函数在 sha256 不一致时做数据级复核：行数相同 **且** 双向 EXCEPT 差集
+ * 均为 0 → 判定两文件数据等价（可安全视为幂等 skip，无需 --force 覆盖）。
+ *
+ * 只在 sha256 已不一致的罕见分支调用；正常路径（sha256 一致）不触发本查询，零额外开销。
+ *
+ * @param {string} pathA
+ * @param {string} pathB
+ * @param {{ runDuckdb?: Function }} [opts]  注入式，便于单测
+ * @returns {Promise<boolean>}  true = 两文件数据完全相同（行序 / 序列化差异无关）
+ */
+export async function parquetDataIdentical(pathA, pathB, { runDuckdb = runDuckdbCli } = {}) {
+  const a = pathA.replace(/'/g, "''");
+  const b = pathB.replace(/'/g, "''");
+
+  // 先比行数：快速短路（行数不同必不等，省去昂贵的 EXCEPT）
+  const countRows = await runDuckdb(
+    `SELECT (SELECT COUNT(*) FROM read_parquet('${a}')) AS a_rows, ` +
+    `(SELECT COUNT(*) FROM read_parquet('${b}')) AS b_rows`,
+    { timeoutMs: 60_000 },
+  );
+  if (!countRows || countRows.length === 0) return false;
+  if (Number(countRows[0].a_rows) !== Number(countRows[0].b_rows)) return false;
+
+  // 双向 EXCEPT 差集：均为 0 → 两侧互为子集 → 数据完全相同（与行序 / 序列化无关）
+  const diffRows = await runDuckdb(
+    `SELECT ` +
+    `(SELECT COUNT(*) FROM (SELECT * FROM read_parquet('${a}') EXCEPT SELECT * FROM read_parquet('${b}'))) AS a_minus_b, ` +
+    `(SELECT COUNT(*) FROM (SELECT * FROM read_parquet('${b}') EXCEPT SELECT * FROM read_parquet('${a}'))) AS b_minus_a`,
+    { timeoutMs: 120_000 },
+  );
+  if (!diffRows || diffRows.length === 0) return false;
+  return Number(diffRows[0].a_minus_b) === 0 && Number(diffRows[0].b_minus_a) === 0;
 }
 
 // ─────────────────────────── 安全护栏 ───────────────────────────
@@ -723,9 +764,16 @@ export async function applyPromote(files) {
         manifest.files.push({ name: f.name, dstName: f.dstName, status: 'skipped_identical', sha256: srcH });
         continue;
       }
-      // sha256 不一致
+      // sha256 不一致 → 先做数据级复核（P1-7 回退，治 parquet 非确定性序列化误报）
+      const dataIdentical = await parquetDataIdentical(f.srcPath, f.dstPath);
+      if (dataIdentical) {
+        log('ok', `  ${f.dstName}：sha256 不同但数据级双向差集为 0（parquet 非确定性序列化），视为幂等跳过`);
+        manifest.files.push({ name: f.name, dstName: f.dstName, status: 'skipped_data_identical', srcSha256: srcH, dstSha256: dstH });
+        continue;
+      }
+      // 数据级复核确认内容确实不同
       if (!args.force) {
-        log('error', `  目标已存在且内容不一致（sha256 不同），传 --force 才允许覆盖（仅测试用）`);
+        log('error', `  目标已存在且内容不一致（sha256 与数据级比对均不同），传 --force 才允许覆盖（仅测试用）`);
         log('error', `    目标: ${f.dstPath}`);
         log('error', `    源 sha256=${srcH?.slice(0, 16)}... 目标 sha256=${dstH.slice(0, 16)}...`);
         manifest.summary = { status: 'CONFLICT_NOT_FORCE', file: f.dstName };
@@ -734,7 +782,7 @@ export async function applyPromote(files) {
       }
       // --force：只允许覆盖 SX 子目录内文件（护栏，B5 子目录版）
       assertForceOnlyInSxSubdir(f.dstPath);
-      log('warn', `  --force：目标内容不一致，将先 backup 再覆盖：${f.dstName}`);
+      log('warn', `  --force：目标内容不一致（数据级确认不同），将先 backup 再覆盖：${f.dstName}`);
     }
     toProcess.push(f);
   }
@@ -934,7 +982,7 @@ export async function applyPromote(files) {
   }
 
   const okFiles = manifest.files.filter(f => f.status === 'ok');
-  const skippedFiles = manifest.files.filter(f => f.status === 'skipped_identical');
+  const skippedFiles = manifest.files.filter(f => f.status === 'skipped_identical' || f.status === 'skipped_data_identical');
   manifest.summary = {
     status: 'SUCCESS',
     totalPromoted: okFiles.length,
