@@ -359,7 +359,13 @@ async function startServer() {
     // 在 bootstrap await 之后注册，确保启动期 setDataVersion(init0000→real) 不被监听
     // 拦截（已由上方 await 路径处理），消除竞态。bootstrap 失败时 await 路径不执行，
     // 但后续 reload/ETL 触发的 setDataVersion 仍会被监听者捕获并预热（消除 cold cliff）。
-    onDataVersionChange(async (next, previous) => {
+    onDataVersionChange(async (next, previous, scope) => {
+      // B311：辅助域 reload（scope='domains'）不改变 PolicyFact，跳过全量预热风暴——
+      // 版本仍已 bump（route-cache/ETag 正确性），受影响路由缓存按新版本 key 惰性重建。
+      if (scope === 'domains') {
+        console.log(`[Server] dataVersion ${previous}→${next} (domains-scoped reload), skip full re-warm`);
+        return;
+      }
       console.log(`[Server] dataVersion ${previous}→${next}, re-warming cache...`);
       // 数据版本变更意味着数据已（重新）就绪：若启动期 bootstrap 曾失败导致 503，
       // 此处把节点恢复为健康，让负载均衡重新纳入流量（消除"启动失败后永久 503"）。

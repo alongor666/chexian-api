@@ -13,7 +13,7 @@ import { statSync } from 'fs';
 import type { DuckDBQueryable } from './duckdb-types.js';
 import { escapeSqlValue } from '../utils/security.js';
 import { AppError } from '../middleware/error.js';
-import { setDataVersion, bumpDataVersionFromTimestamp } from './data-version.js';
+import { makeTimestampVersionToken } from './data-version.js';
 
 // ============================================
 // Parquet 指纹缓存（按表名存储）
@@ -57,13 +57,19 @@ export function computeParquetFingerprint(filePaths: string[]): FingerprintResul
  * 加载多个 Parquet 文件到 raw_parquet 表。
  * 支持增量追加（仅新增文件）和全量重建（文件变更或首次加载）。
  *
+ * B311 延迟提交：本函数**不再内部调用 setDataVersion**，改为返回 versionToken，
+ * 由编排方（data-bootstrapper / routes/data.ts）在 createPolicyFactView 物化完成后
+ * 统一 setDataVersion(versionToken) 提交——否则版本 bump 会同步唤醒 onDataVersionChange
+ * 监听者去预热查询中间态视图（raw_parquet 已重建、PolicyFact 尚未重建）。
+ *
  * @param db - DuckDB 可查询实例
  * @param filePaths - Parquet 文件路径列表（至少 1 个）
+ * @returns totalRows + versionToken（指纹或时间戳兜底 token；缓存命中时为当前指纹，提交为 no-op）
  */
 export async function loadMultipleParquet(
   db: DuckDBQueryable,
   filePaths: string[],
-): Promise<{ totalRows: number }> {
+): Promise<{ totalRows: number; versionToken: string }> {
   if (filePaths.length === 0) {
     throw new AppError(400, 'No parquet files provided');
   }
@@ -81,7 +87,8 @@ export async function loadMultipleParquet(
       const totalResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
       const totalRows = totalResult[0]?.cnt ?? 0;
       console.log(`[DuckDB] loadMultipleParquet cache HIT — skipping rebuild, ${totalRows} rows (${Date.now() - t0}ms)`);
-      return { totalRows };
+      // 数据未变：token = 当前指纹，编排方提交时 setDataVersion 对相同版本 no-op
+      return { totalRows, versionToken: fpResult!.fingerprint };
     }
     // 表不存在（内部状态异常），清除缓存 fallthrough 到全量重建
     parquetFingerprintCache.delete(TABLE_NAME);
@@ -112,7 +119,6 @@ export async function loadMultipleParquet(
           SELECT * FROM read_parquet([${escapedNew}], union_by_name=true)
         `);
         db.invalidateCache();
-        setDataVersion(fpResult!.fingerprint);
         parquetFingerprintCache.set(TABLE_NAME, {
           fingerprint: fpResult!.fingerprint,
           fileSet: new Set(filePaths),
@@ -121,7 +127,7 @@ export async function loadMultipleParquet(
         const totalResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
         const totalRows = totalResult[0]?.cnt ?? 0;
         console.log(`[DuckDB] loadMultipleParquet incremental INSERT — +${newFiles.length} file(s), ${totalRows} rows (${Date.now() - t0}ms)`);
-        return { totalRows };
+        return { totalRows, versionToken: fpResult!.fingerprint };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn(`[DuckDB] Incremental INSERT failed (${msg}), falling back to full rebuild`);
@@ -150,18 +156,19 @@ export async function loadMultipleParquet(
 
   db.invalidateCache();
 
-  // 更新指纹缓存 + dataVersion
+  // 更新指纹缓存 + 计算待提交的 versionToken（提交由编排方在物化完成后执行）
+  let versionToken: string;
   if (fpResult !== null) {
-    setDataVersion(fpResult.fingerprint);
+    versionToken = fpResult.fingerprint;
     parquetFingerprintCache.set(TABLE_NAME, {
       fingerprint: fpResult.fingerprint,
       fileSet: new Set(filePaths),
       fileMtimes: fpResult.mtimes,
     });
   } else {
-    // stat 失败时拿不到指纹，但表已重建——必须 bump 版本兜底，否则旧 cache key
-    // 仍命中重建前数据。指纹缓存不写入，下次照常走全量重建。
-    bumpDataVersionFromTimestamp();
+    // stat 失败时拿不到指纹，但表已重建——编排方必须用时间戳 token 兜底提交，
+    // 否则旧 cache key 仍命中重建前数据。指纹缓存不写入，下次照常走全量重建。
+    versionToken = makeTimestampVersionToken();
   }
 
   const totalResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM raw_parquet');
@@ -169,5 +176,5 @@ export async function loadMultipleParquet(
   const rebuildReason = cached === undefined ? 'cold start' : 'fingerprint changed';
   console.log(`[DuckDB] loadMultipleParquet full rebuild (${rebuildReason}) — ${filePaths.length} file(s), ${totalRows} rows (${Date.now() - t0}ms)`);
 
-  return { totalRows };
+  return { totalRows, versionToken };
 }
