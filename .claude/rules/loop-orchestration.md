@@ -226,6 +226,13 @@ policy: append-only
   - **遗留登记（到期处置预判，不改历史 meta）**：2026-06-25 登记的「扫 loop PR 出现 code-reviewer/evidence-verifier 作闸源即告警」闸（expires 2026-09-25）——其前提已被 2026-06-29「默认 code review = `/code-reviewer`」反转，若落地会误伤默认流程；到期处置时应**显式撤项**而非落地。
   - **三问复盘**：① 重来更好？E2 回滚反查上线时就该想到「描述回滚功能的提交自身含『回滚』」这一自指案例——自产工具首个受害者常是自己（茧房3 的微缩版）；写关键词启发式时应先拿「实现该启发式的这条 commit」自测。② 复用价值？「squash 语境末尾 (#N) 恒为自身号」对一切从 commit subject 反查 PR 号的工具通用；「审计代理三路并行 + 主会话独立复现」是大型机制审计的高效编排（本次三代理并行 ~10 分钟出 13 条线索，7 条确认 6 条降级/存疑）。③ 自动化？E6 已把核心防回退入 governance 自动跑；`loop:rule-hit-rate` 作为 meta-review 输入依赖会话遵从（与 `loop:quality`/`loop:automation-due` 并列），若后续实证遗忘再立催办项。`needs_automation: false`（本条主体即机制化落地：governance 闸自动执行、rule-hit-rate/mechanism 校验有命令与单测；无新的纯纪律残留点）。
 
+- **meta（2026-07-10 · 本 PR · 用户追问「连续几次 BACKLOG_LOG.jsonl 都有冲突，why」）· 簿记 merge=union 的 GitHub 盲区 + 收口纪律**：
+  - **根因三层**：① `BACKLOG_LOG.jsonl` 是全仓最高并发写竞争点——每张卡收口都往同一文件尾追加；② 卡链「上一卡建 PR 即 spawn 下一卡」使相邻 PR 的基线互不含对方的追加行，两个 PR 都改同一文件尾；③ `.gitattributes` 的 `merge=union` 只在**本地** rebase/merge 生效（自动保两侧行、零手工），**GitHub 服务端计算 PR 可合并性不应用 .gitattributes 的 merge 策略** → PR 页标 CONFLICTING、CI 不入队（memory `ci-zero-workflow-runs-means-pr-conflict` 记录的 total_count=0 即同源现象）。冲突是**表象**，不是簿记设计失效。
+  - **SOP（见到 CONFLICTING 的正确处置）**：**禁手工解冲突、禁重写他人行**——本地 `git fetch origin main && git rebase origin/main`（union 自动并）+ `git push --force-with-lease` 即消。本日实证：#1045 合并致 #1046 DIRTY，rebase 一次静默并入（b335 note 与 3093a3 三行共存）、零手工。
+  - **收口纪律（降低撞窗概率）**：代码改动可并行推进，**backlog jsonl 追加尽量放收口最后一步**，且在**前一卡 PR 合并后**先 rebase 再追加/push（#1046 首推因等 #1044 合并后才追加而零冲突）；spawn 续卡模板须含「确认前卡 PR 已合并；jsonl 尾部冲突按 loop-orchestration §4 2026-07-10 meta SOP 处理」条目。
+  - **结构级根治已登记**：BACKLOG `2026-07-10-claude-637c35`（P3）——事件日志改「每事件一文件」目录（`backlog-events/<eid>.json`，render 聚合），不同 PR 写不同文件，GitHub 层面永不冲突；非紧急，SOP 已把处理成本降到零手工。
+  - **needs_automation: false**（SOP 为两条无分支 git 命令；结构根治由 637c35 另卡跟踪。若后续实证会话仍手工解冲突踩坑，可在 pre-push hook 加「jsonl 落后 origin/main 即自动 rebase」确定性钩子再立项）。
+
 ---
 
 ## 5. 终局闸（GATED cutover）
