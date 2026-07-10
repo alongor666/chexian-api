@@ -4,6 +4,7 @@ import {
   setDataVersion,
   onDataVersionChange,
   bumpDataVersionFromTimestamp,
+  makeTimestampVersionToken,
   _resetDataVersionForTesting,
 } from '../data-version.js';
 
@@ -35,7 +36,7 @@ describe('data-version', () => {
     setDataVersion('aabbccdd99999999'); // 前 8 字符相同
     await new Promise((r) => setImmediate(r));
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith('aabbccdd', 'init0000');
+    expect(listener).toHaveBeenCalledWith('aabbccdd', 'init0000', 'full');
   });
 
   it('监听者异步触发，不阻塞 setDataVersion', async () => {
@@ -81,5 +82,31 @@ describe('data-version', () => {
     bumpDataVersionFromTimestamp();
     const v2 = getDataVersion();
     expect(v2).not.toBe(v1);
+  });
+
+  it('makeTimestampVersionToken 是纯 token 生成器：不改变当前版本（B311 延迟提交）', () => {
+    const token = makeTimestampVersionToken();
+    expect(token.length).toBeGreaterThanOrEqual(8);
+    expect(getDataVersion()).toBe('init0000');
+    // 编排方提交后才生效
+    setDataVersion(token);
+    expect(getDataVersion()).toBe(token.slice(0, 8));
+  });
+
+  it('scope 默认为 full，并透传给监听者', async () => {
+    const listener = vi.fn();
+    onDataVersionChange(listener);
+    setDataVersion('abcdef0123456789');
+    await new Promise((r) => setImmediate(r));
+    expect(listener).toHaveBeenCalledWith('abcdef01', 'init0000', 'full');
+  });
+
+  it('bumpDataVersionFromTimestamp 可指定 scope=domains（辅助域 reload，B311）', async () => {
+    const listener = vi.fn();
+    onDataVersionChange(listener);
+    bumpDataVersionFromTimestamp('domains');
+    await new Promise((r) => setImmediate(r));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][2]).toBe('domains');
   });
 });

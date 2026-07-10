@@ -40,7 +40,7 @@ import { isValidParquetFile } from '../utils/security.js';
 import * as materialization from './duckdb-materialization.js';
 import * as domainLoaders from './duckdb-domain-loaders.js';
 import { type LazyDomainLoadOptions, LazyDomainRegistry } from './lazy-domain-registry.js';
-import { bumpDataVersionFromTimestamp } from './data-version.js';
+import { bumpDataVersionFromTimestamp, setDataVersion } from './data-version.js';
 
 // ============================================
 // Types
@@ -76,8 +76,8 @@ export interface BootstrapResult {
  * 代理方法已删除，bootstrapper 内部直接 import duckdb-materialization / duckdb-domain-loaders。
  */
 export interface BootstrapDuckDB {
-  loadParquet(filePath: string, tableName: string): Promise<void>;
-  loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number }>;
+  loadParquet(filePath: string, tableName: string): Promise<{ versionToken: string }>;
+  loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number; versionToken: string }>;
   query<T = any>(sql: string, cacheTtlMs?: number): Promise<T[]>;
   getTableSchema(tableName: string): Promise<any[]>;
   hasRelation(relationName: string): Promise<boolean>;
@@ -441,12 +441,14 @@ export class DataBootstrapper {
   // ============================================
 
   private async loadCoreData(files: ParquetFileInfo[]): Promise<number> {
-    // Stage 6: 加载 Parquet 到 raw_parquet
+    // Stage 6: 加载 Parquet 到 raw_parquet（B311：加载器只计算 versionToken，不 bump 版本）
+    let versionToken: string;
     if (files.length > 1) {
-      const { totalRows } = await this.db.loadMultipleParquet(files.map(f => f.path));
+      const { totalRows, versionToken: token } = await this.db.loadMultipleParquet(files.map(f => f.path));
+      versionToken = token;
       console.log(`[Bootstrap] Multi-parquet loaded: ${files.length} files, ${totalRows} rows`);
     } else {
-      await this.db.loadParquet(files[0].path, 'raw_parquet');
+      ({ versionToken } = await this.db.loadParquet(files[0].path, 'raw_parquet'));
       console.log('[Bootstrap] Data loaded:', path.basename(files[0].path));
     }
 
@@ -454,6 +456,11 @@ export class DataBootstrapper {
     console.log('[Bootstrap] Creating PolicyFact view...');
     await materialization.createPolicyFactView(this.db, 'raw_parquet');
     console.log('[Bootstrap] PolicyFact view created');
+
+    // Stage 8.5（B311）：物化完成后才提交 dataVersion——版本 bump 会同步唤醒
+    // onDataVersionChange 监听者（cache-warmer 预热），必须保证它们查到的是
+    // 重建完成的 PolicyFact，而非「raw_parquet 已换、视图未重建」的中间态。
+    setDataVersion(versionToken);
 
     // Stage 9: 验证行数
     const countResult = await this.db.query<{ count: number }>('SELECT COUNT(*) as count FROM PolicyFact');
@@ -729,7 +736,11 @@ export class DataBootstrapper {
       });
     }
     this.db.invalidateCache();
-    bumpDataVersionFromTimestamp();
+    // B311：辅助域 reload 的版本 bump 仍必须发生（route-cache key 与 deterministicEtag
+    // 都含全局版本号，不 bump 会让持旧 ETag 的客户端对新数据永久 304），但降为
+    // scope='domains'——app.ts 监听者据此跳过全量预热风暴（立方体/笛卡尔预热），
+    // 受影响路由缓存按新版本 key 惰性重建。
+    bumpDataVersionFromTimestamp('domains');
     return results;
   }
 }

@@ -9,7 +9,7 @@ import type { DuckDBQueryable } from './duckdb-types.js';
 import { initDuckDBTables } from './duckdb-init-tables.js';
 import { convertBigIntToNumber, SLOW_QUERY_THRESHOLD_MS } from './duckdb-type-converter.js';
 import { loadMultipleParquet, computeParquetFingerprint } from './duckdb-parquet-loader.js';
-import { setDataVersion, bumpDataVersionFromTimestamp } from './data-version.js';
+import { makeTimestampVersionToken } from './data-version.js';
 import { classifyDuckDbError, isDuckDbOomMessage, markDuckDbOom } from './duckdb-error-classifier.js';
 
 /** 构造参数（省略字段从 databaseConfig / DUCKDB_INIT_OPTIONS 回退；测试传 `{ path: ':memory:' }`） */
@@ -152,22 +152,21 @@ export class DuckDBService implements DuckDBQueryable {
     }
   }
 
-  async loadParquet(filePath: string, tableName: string = 'raw_parquet'): Promise<void> {
+  async loadParquet(filePath: string, tableName: string = 'raw_parquet'): Promise<{ versionToken: string }> {
     await this.dropRelationIfExists(sanitizeTableName(tableName));
     await this.query(`CREATE OR REPLACE TABLE ${sanitizeTableName(tableName)} AS SELECT * FROM read_parquet('${escapeSqlValue(filePath)}')`);
     this.invalidateCache();
-    // 单文件路径也必须 bump dataVersion，否则旧 cache key 会继续命中重建前的结果。
-    // 优先按文件指纹（mtime+size），stat 失败时退回到时间戳兜底。
+    // 单文件路径也必须让 dataVersion 前进，否则旧 cache key 会继续命中重建前的结果。
+    // B311 延迟提交：这里只计算 token（优先文件指纹，stat 失败退回时间戳兜底），
+    // 由编排方在 createPolicyFactView 物化完成后 setDataVersion(versionToken) 提交，
+    // 避免版本 bump 同步唤醒监听者预热查询中间态视图。
     const fp = computeParquetFingerprint([filePath]);
-    if (fp !== null) {
-      setDataVersion(fp.fingerprint);
-    } else {
-      bumpDataVersionFromTimestamp();
-    }
+    const versionToken = fp !== null ? fp.fingerprint : makeTimestampVersionToken();
     console.log(`[DuckDB] Loaded Parquet file: ${filePath} -> ${sanitizeTableName(tableName)}`);
+    return { versionToken };
   }
 
-  async loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number }> { return loadMultipleParquet(this, filePaths); }
+  async loadMultipleParquet(filePaths: string[]): Promise<{ totalRows: number; versionToken: string }> { return loadMultipleParquet(this, filePaths); }
 
   async hasRelation(name: string): Promise<boolean> { return hasRelation(this, name); }
   async dropRelationIfExists(name: string): Promise<void> { return dropRelationIfExists(this, name); }

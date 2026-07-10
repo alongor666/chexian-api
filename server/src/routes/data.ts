@@ -26,7 +26,7 @@ import { readonlyMiddleware } from '../middleware/readonly.js';
 import { permissionMiddleware, requireRole, UserRole } from '../middleware/permission.js';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { duckdbService } from '../services/duckdb.js';
-import { onDataVersionChange, getDataVersion } from '../services/data-version.js';
+import { onDataVersionChange, getDataVersion, setDataVersion } from '../services/data-version.js';
 import { createPolicyFactView, dropAllDerivedTables } from '../services/duckdb-materialization.js';
 import {
   escapeSqlValue,
@@ -438,16 +438,20 @@ router.post(
             validCandidateFiles.push(candidateFile);
           }
 
+          let versionToken: string;
           if (validCandidateFiles.length > 1) {
-            await duckdbService.loadMultipleParquet(validCandidateFiles);
+            ({ versionToken } = await duckdbService.loadMultipleParquet(validCandidateFiles));
           } else if (validCandidateFiles.length === 1) {
-            await duckdbService.loadParquet(validCandidateFiles[0], 'raw_parquet');
+            ({ versionToken } = await duckdbService.loadParquet(validCandidateFiles[0], 'raw_parquet'));
           } else {
             throw new AppError(400, 'current 目录中没有有效的 Parquet 文件');
           }
 
           // 5. 创建 PolicyFact 视图
           await createPolicyFactView(duckdbService, 'raw_parquet');
+
+          // 5.5（B311）：物化完成后才提交 dataVersion，避免监听者预热查询中间态视图
+          setDataVersion(versionToken);
 
           // 6. 获取数据统计
           const countResult = await duckdbService.query<{ count: number }>(
@@ -723,11 +727,14 @@ router.post(
     safeLog('info', 'Data', `Loading file: ${safeFilename}`);
 
     try {
-      // 6. 加载到 DuckDB
-      await duckdbService.loadParquet(filePath, 'raw_parquet');
+      // 6. 加载到 DuckDB（B311：加载器只计算 versionToken，不 bump 版本）
+      const { versionToken } = await duckdbService.loadParquet(filePath, 'raw_parquet');
 
       // 7. 创建 PolicyFact 视图
       await createPolicyFactView(duckdbService, 'raw_parquet');
+
+      // 7.5（B311）：物化完成后才提交 dataVersion，避免监听者预热查询中间态视图
+      setDataVersion(versionToken);
 
       // 8. 获取数据统计
       const countResult = await duckdbService.query<{ count: number }>(
