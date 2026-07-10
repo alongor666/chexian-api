@@ -197,7 +197,7 @@ bun run verify:full                # verify:quick + 单元测试
 
 **日常数据发布**：优先用 `bun run release:daily:dry`（只看计划）· `bun run release:daily:check`（ETL/VPS/reload/health，企微 dry-run）· `bun run release:daily`（ETL → VPS → reload → health → 企微同步）。细节见 `数据管理/integrations/wecom_smartsheet/README.md` 与 `scripts/sync-and-reload.mjs --help`
 
-**数据 ETL**：`node 数据管理/daily.mjs`（智能检测）· `node 数据管理/daily.mjs premium|claims|quotes|all`（强制）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py`
+**数据 ETL**：`node 数据管理/daily.mjs <域>|all`（域清单见 daily.mjs `ALL_DOMAINS` 常量；⚠️ 无参会跌落 premium 单域 ETL，并非智能检测；claims 域已删除，赔付用 `claims_detail`）· 维度表：`python3 数据管理/warehouse/dim/generate_dim_tables.py`
 
 **数据同步**：`node scripts/sync-vps.mjs`（rsync `policy/current/` + `claims/` + `quotes/` + 维度表 `salesman/` + `plan/`）
 

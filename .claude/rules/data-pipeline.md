@@ -60,11 +60,8 @@ paths: ["数据管理/**", "scripts/sync-vps.mjs", "scripts/**"]
 # 本地开发
 bun run dev:full  # 自动加载 policy/current/ + claims_detail + quotes + dim
 
-# ETL 入口（智能检测，无参数自动判断需更新的域）
-node 数据管理/daily.mjs
-
-# 强制指定域
-node 数据管理/daily.mjs premium|claims_detail|quotes|all
+# ETL 入口（必须显式指定域；⚠️ 无参会跌落 premium 单域 ETL，并非智能检测）
+node 数据管理/daily.mjs premium|claims_detail|quotes|all   # 完整域清单见 daily.mjs 的 ALL_DOMAINS 常量
 
 # 同步到 VPS（rsync policy/current/ + claims_detail/ + quotes/ + dim/）
 node scripts/sync-vps.mjs
@@ -86,7 +83,7 @@ node scripts/sync-vps.mjs
 
 | 场景 | 正确做法 |
 |------|---------|
-| 新增日期数据（如新的 xlsx） | `node 数据管理/daily.mjs` 转换 → `node scripts/sync-vps.mjs` 推送 → PM2 重启 |
+| 新增日期数据（如新的 xlsx） | `node 数据管理/daily.mjs <域>` 转换 → `node scripts/sync-vps.mjs` 推送 → PM2 重启 |
 | 验证数据是否可见 | `curl /api/filters/options` 检查 `availableYears` 和 `dateRange.max_date` |
 
 **前端年份筛选器**：由后端 `GET /api/filters/options` 的 `availableYears`（`SELECT DISTINCT YEAR(policy_date)`）驱动，
