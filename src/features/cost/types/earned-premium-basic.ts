@@ -1,6 +1,12 @@
 /**
  * 已赚保费基础类型与选项
  * 从 costTypes.ts 拆分而来
+ *
+ * ⚠️ 口径标注（B304）：本文件类型对应【财务口径】已赚保费
+ * （/api/query/cost?type=earned，滚动 12 月，含首日费用与险类系数，
+ * 字段 earned_premium_cum / total_earned_premium / earned_ratio）。
+ * 与满期赔付率分母的【时间分摊口径】earned_premium（cost-data.ts 的满期保费）
+ * 公式不同，禁止混用。对照表见 server/src/sql/cost/earned-premium.ts 文件头。
  */
 
 import { getLastDayOfMonth } from '../../../shared/utils/date';

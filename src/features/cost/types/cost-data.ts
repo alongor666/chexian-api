@@ -1,6 +1,12 @@
 /**
  * 成本数据接口（赔付率/费用率/综合/变动/已赚保费数据行）
  * 从 costTypes.ts 拆分而来
+ *
+ * ⚠️ 口径标注（B304）：本文件各行的 `earned_premium` 是【时间分摊口径】满期保费
+ * （满期赔付率分母，与赔款 cohort 同步，无险类系数）。与财务口径的
+ * earned_premium_cum / total_earned_premium（earned-premium-basic.ts /
+ * new-earned-premium.ts，含首日费用与险类系数）公式不同，禁止混用。
+ * 对照表见 server/src/sql/cost/earned-premium.ts 文件头。
  */
 
 // ==================== 数据接口 ====================

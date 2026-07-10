@@ -253,6 +253,12 @@ describe('generateEarnedPremiumQuery', () => {
     expect(sql).toContain("DATE '2026-03-31'"); // cutoffDate
   });
 
+  it('终保日闰年感知：+1 YEAR −1 DAY，禁止 364 DAY 回归（B304 2026-07-10 拍板统一）', () => {
+    const sql = generateEarnedPremiumQuery(config);
+    expect(sql).toContain('+ INTERVAL 1 YEAR - INTERVAL 1 DAY');
+    expect(sql).not.toContain('364 DAY');
+  });
+
   it('明细筛选：policyMonth + orgLevel3', () => {
     const sql = generateEarnedPremiumQuery({
       ...config,
@@ -313,6 +319,12 @@ describe('generateEarnedPremiumSummaryQuery', () => {
     const sql = generateEarnedPremiumSummaryQuery(config);
     expect(sql).toContain("WHEN '四川' THEN 1");
     expect(sql).toContain("WHEN '合计' THEN 4");
+  });
+
+  it('终保日闰年感知：+1 YEAR −1 DAY，禁止 364 DAY 回归（B304 2026-07-10 拍板统一）', () => {
+    const sql = generateEarnedPremiumSummaryQuery(config);
+    expect(sql).toContain('+ INTERVAL 1 YEAR - INTERVAL 1 DAY');
+    expect(sql).not.toContain('364 DAY');
   });
 });
 
