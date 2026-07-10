@@ -61,7 +61,7 @@ import {
 } from './lib/source-file-routing.mjs';
 // 多省 Bug 1：merge_parquet.py 参数构造纯函数（branchCode 经 ctx 透传，锁死 --declared-branch）
 import { buildMergeParquetArgs } from './lib/merge-parquet-args.mjs';
-import { readBranchOrgUnits, skillSupportsOrgFlag, listBranchOrgMappingCodes, planProvinceMirror } from './lib/period-trend-orgs.mjs';
+import { readBranchOrgUnits, skillSupportsOrgFlag, listBranchOrgMappingCodes, planProvinceMirror, parseSkillVersion, skillSupportsBranchOnlyMode, shouldAbortReportSync } from './lib/period-trend-orgs.mjs';
 // 多省 B3 防重复：区间覆盖归档纯函数（被新全量区间完全覆盖的旧文件归档，仅同品类互斥）
 import {
   parseRangePrefix,
@@ -1017,12 +1017,27 @@ function runStrategyMultiMerge(ctx) {
 //   机构级 → …/diagnose-period-trend/orgs/<branch>/<org>/<cutoff>-*.html（B004）
 // 机构清单 SSOT = config/branch-org-mapping/<branch>.json 的 units（缺失则告警跳过机构级）
 function runPeriodTrendReport(scriptDir, python) {
+  // 返回可执行发布契约状态：provinceContractFailed=省级分省能力闸未过（stale skill，
+  // report 子命令据此 exit 1）；provinceGenFailures=能力具备但实际生成失败的省清单。
   const skillCli = join(homedir(), '.claude/skills/diagnose-period-trend/lib/cli.py');
   if (!existsSync(skillCli)) {
     console.warn(`[ETL] 跳过短中长期对照报告：skill cli.py 不存在 (${skillCli})`);
-    return;
+    return { provinceContractFailed: false, provinceGenFailures: [] };
   }
   const projectRoot = dirname(scriptDir);
+  const deployBranch = resolveEnvBranchCode('runPeriodTrendReport');
+  // 省级分省能力（可执行发布契约）：SKILL.md 版本 ≥ v2.5.0 才支持「仅 --branch」省级模式。
+  // 详见 period-trend-orgs.mjs skillSupportsBranchOnlyMode（为何用版本而非 --help 探测）。
+  const skillMdPath = join(homedir(), '.claude/skills/diagnose-period-trend/SKILL.md');
+  const skillVersion = existsSync(skillMdPath)
+    ? parseSkillVersion(readFileSync(skillMdPath, 'utf-8'))
+    : null;
+  const branchOnlySupported = skillSupportsBranchOnlyMode(skillVersion);
+  const skillVersionText = skillVersion
+    ? `${skillVersion.major}.${skillVersion.minor}.${skillVersion.patch}`
+    : '未知';
+  let provinceContractFailed = false;
+  const provinceGenFailures = [];
   log('cyan', '\n═══ 9. 短中长期对照报告（diagnose-period-trend skill）═══\n');
   const runOnce = (extraArgs, label) => {
     const result = spawnSync(
@@ -1051,7 +1066,6 @@ function runPeriodTrendReport(scriptDir, python) {
     // 门户（/api/reports/portal）按 branch_admin 的省份从 branches/ 取数
     // （B346：单省山西管理员不得读到四川省级报告）。镜像失败不阻塞。
     try {
-      const deployBranch = resolveEnvBranchCode('runPeriodTrendReport');
       const plan = planProvinceMirror(existsSync(slugDir) ? readdirSync(slugDir) : []);
       if (plan) {
         const destDir = join(slugDir, 'branches', deployBranch);
@@ -1070,7 +1084,18 @@ function runPeriodTrendReport(scriptDir, python) {
   const branchCodes = listBranchOrgMappingCodes(join(scriptDir, 'config'));
   if (branchCodes.length === 0) {
     console.warn('[ETL] 机构级短中长期报告跳过：数据管理/config/branch-org-mapping/ 下无任何 <branch>.json');
-    return;
+    return { provinceContractFailed, provinceGenFailures };
+  }
+  // 省级分省能力闸（可执行发布契约，B346 SX follow-up P1）：非部署省需「仅 --branch」省级模式
+  // 产出 branches/<省>/。skill < v2.5.0 会在**运行时**拒绝该调用（--org 与 --branch 必须成对），
+  // 而 skillSupportsOrgFlag（--help 有 --org）对 v2.3/v2.4 也通过 → 若不单独核验会静默降级
+  // （branches/<省>/ 恒空、该省分公司管理员持续 404）。这里按 SKILL.md 版本一次性 fail-loud。
+  const nonDeployBranches = branchCodes.filter((b) => b !== deployBranch);
+  if (nonDeployBranches.length > 0 && !branchOnlySupported) {
+    provinceContractFailed = true;
+    log('red', `❌ 省级分省报告能力缺失：本机 diagnose-period-trend skill v${skillVersionText} 不支持「仅 --branch」省级模式（需 v2.5.0+）`);
+    log('red', `   影响：${nonDeployBranches.join('/')} 省级报告 branches/<省>/ 无法产出 → 该省分公司管理员门户持续 404`);
+    log('red', '   修复：更新 ~/.claude/skills/diagnose-period-trend 到 v2.5.0+（走 chexian-crystallize-skill 安装），然后补跑: node 数据管理/daily.mjs report');
   }
   // B346 治理：skill --org 能力预检（fail-loud）。skill 版本落后（< v2.3.0，无 --org）时，
   // 逐机构 spawn 会静默失败（每机构一条黄字 warn 淹没在 ETL 日志里），机构版 HTML 长期
@@ -1084,7 +1109,7 @@ function runPeriodTrendReport(scriptDir, python) {
     log('red', '❌ 机构级短中长期报告跳过：本机 diagnose-period-trend skill 不支持 --org/--branch（需 v2.3.0+）');
     log('red', '   修复：更新 ~/.claude/skills/diagnose-period-trend（alongor666-skills 仓，走 chexian-crystallize-skill 安装），');
     log('red', '   然后补跑: node 数据管理/daily.mjs report   （只重生成报告并同步 VPS，不重跑 ETL）');
-    return;
+    return { provinceContractFailed, provinceGenFailures };
   }
   for (const branchCode of branchCodes) {
     let units;
@@ -1095,6 +1120,19 @@ function runPeriodTrendReport(scriptDir, python) {
       continue;
     }
     if (units === null) continue; // 枚举来源即文件本身，理论不可达；防御性跳过
+    // 省级分省报告（B346 SX follow-up）：非部署省的省级报告落 branches/<code>/，供该省分公司
+    // 管理员（如 SX 的 yangjie0621）门户按省取数。部署省（deployBranch）的省级报告已由上方
+    // root→branches/<deployBranch> 镜像覆盖，此处跳过避免重复生成（SC 老路零回归）。
+    // 仅在能力闸通过（v2.5.0+）时调用「仅 --branch」——否则上面已 fail-loud，此处显式跳过，
+    // 绝不静默 spawn 触发 v2.4 的运行时拒绝（那正是本 P1 要根除的静默降级）。
+    if (branchCode !== deployBranch && branchOnlySupported) {
+      if (runOnce(['--branch', branchCode], `${branchCode} 省级`)) {
+        log('green', `✅ [${branchCode}] 省级短中长期对照报告已生成（branches/${branchCode}/）`);
+      } else {
+        provinceGenFailures.push(branchCode);
+        log('red', `❌ [${branchCode}] 省级报告生成失败（branches/${branchCode}/ 未产出，该省分公司管理员将 404）`);
+      }
+    }
     log('cyan', `[ETL] [${branchCode}] 机构级短中长期报告：共 ${units.length} 个机构（orgs/${branchCode}/<机构>/）`);
     let orgOk = 0;
     for (const org of units) {
@@ -1103,6 +1141,7 @@ function runPeriodTrendReport(scriptDir, python) {
     const level = orgOk === units.length ? 'green' : 'yellow';
     log(level, `${orgOk === units.length ? '✅' : '⚠'} [${branchCode}] 机构级短中长期对照报告：${orgOk}/${units.length} 个机构成功`);
   }
+  return { provinceContractFailed, provinceGenFailures };
 }
 
 async function syncToVps(scriptDir) {
@@ -1670,7 +1709,16 @@ async function main() {
   // 同步 VPS，是「补产当期机构版报告」的最短路径（此前必须整轮 ETL 才会触发第 9 步）。
   // 省份不硬编码：机构级循环覆盖 branch-org-mapping/ 全部注册省（当前 SC + SX）。
   if (process.argv.includes('report')) {
-    runPeriodTrendReport(scriptDir, findPython());
+    // 可执行发布契约（B346 SX follow-up P1）：report 是发布重生成入口，省级分省能力闸未过
+    // （stale skill < v2.5.0）→ branches/<省>/ 无法产出，此处显式 exit 1，不静默把陈旧产物同步上线。
+    const reportResult = runPeriodTrendReport(scriptDir, findPython());
+    if (shouldAbortReportSync(reportResult)) {
+      const reason = reportResult?.provinceContractFailed
+        ? '省级分省报告能力闸未通过（见上方修复指引）。请升级 skill 到 v2.5.0+ 后重跑 report。'
+        : `省级分省报告生成失败：${reportResult?.provinceGenFailures.join('/')}。请修复后重跑 report。`;
+      log('red', `❌ 发布中止：${reason}`);
+      process.exit(1);
+    }
     if (noSync) {
       log('yellow', '已跳过 VPS 同步（--no-sync）');
     } else {

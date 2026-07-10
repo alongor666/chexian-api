@@ -23,6 +23,7 @@ import {
   normalizeReportError,
   assertStaticReportAccess,
   parseStaticReportOwner,
+  parseStaticReportBranch,
   shouldEnforceStaticReportPolicy,
   resolvePortalScope,
   portalCandidateDirs,
@@ -333,6 +334,8 @@ describe('resolveReportOwner: sidecar 归属解析（fail-closed）', () => {
 const PROVINCE_URI = '/reports/diagnose-period-trend/2026-07-06-dashboard.html';
 const ORG_URI = (branch: string, org: string, file = '2026-07-06-dashboard.html') =>
   `/reports/diagnose-period-trend/orgs/${branch}/${encodeURIComponent(org)}/${file}`;
+const BRANCH_URI = (branch: string, file = '2026-07-06-dashboard.html') =>
+  `/reports/diagnose-period-trend/branches/${branch}/${file}`;
 
 describe('parseStaticReportOwner: 静态报告 URI → 机构归属', () => {
   it('省级文件 → null（无机构归属）', () => {
@@ -420,12 +423,54 @@ describe('shouldEnforceStaticReportPolicy: /me 过渡强化的触发判定', () 
   });
 });
 
+describe('parseStaticReportBranch: 静态 URI → 所属省份（B346 leak 修复）', () => {
+  it('机构级 orgs/<branch>/ → 该 branch', () => {
+    expect(parseStaticReportBranch(ORG_URI('SX', '太原一部'), 'SC')).toBe('SX');
+    expect(parseStaticReportBranch(ORG_URI('SC', '乐山'), 'SC')).toBe('SC');
+  });
+  it('分公司级 branches/<branch>/ → 该 branch', () => {
+    expect(parseStaticReportBranch(BRANCH_URI('SX'), 'SC')).toBe('SX');
+  });
+  it('根 legacy 省级 → 部署省', () => {
+    expect(parseStaticReportBranch(PROVINCE_URI, 'SC')).toBe('SC');
+    expect(parseStaticReportBranch('/reports/diagnose-period-trend/manifest.json', 'SC')).toBe('SC');
+  });
+  it('坏路径/遍历/解码失败 → 部署省兜底（fail-closed）', () => {
+    expect(parseStaticReportBranch('/reports/%zz', 'SC')).toBe('SC');
+    expect(parseStaticReportBranch('/reports/x/orgs/SX/../../etc', 'SC')).toBe('SC');
+    expect(parseStaticReportBranch('/api/query/kpi', 'SC')).toBe('SC');
+  });
+});
+
 describe('assertStaticReportAccess: 访问矩阵', () => {
-  it('branch_admin：省级/机构级/坏路径 全放行', () => {
+  it('branch_admin(SC 单省)：本省放行，跨省 → 403（B346 leak 修复）', () => {
     const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: 'SC' });
+    expect(() => assertStaticReportAccess(req, PROVINCE_URI)).not.toThrow();           // 根=部署省 SC
+    expect(() => assertStaticReportAccess(req, ORG_URI('SC', '乐山'))).not.toThrow();   // 本省机构
+    expect(() => assertStaticReportAccess(req, BRANCH_URI('SC'))).not.toThrow();        // 本省分公司级
+    expect(() => assertStaticReportAccess(req, '/reports/%zz')).not.toThrow();          // 坏路径→部署省 SC
+    expectThrows403(() => assertStaticReportAccess(req, ORG_URI('SX', '太原一部')));     // 跨省机构 → 403
+    expectThrows403(() => assertStaticReportAccess(req, BRANCH_URI('SX')));             // 跨省分公司级 → 403
+  });
+
+  it('branch_admin(SX 单省)：四川根 legacy 省级 → 403（历史泄漏点），本省 → 放行', () => {
+    const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: 'SX' });
+    expectThrows403(() => assertStaticReportAccess(req, PROVINCE_URI));                 // 根=SC，SX 管理员拒
+    expect(() => assertStaticReportAccess(req, ORG_URI('SX', '太原一部'))).not.toThrow();
+    expect(() => assertStaticReportAccess(req, BRANCH_URI('SX'))).not.toThrow();
+  });
+
+  it('全国超管(visibleBranches 非空)：跨省全放行', () => {
+    const req = makeReq({ role: UserRole.BRANCH_ADMIN, branchCode: 'SC', visibleBranches: ['SC', 'SX'] });
     expect(() => assertStaticReportAccess(req, PROVINCE_URI)).not.toThrow();
     expect(() => assertStaticReportAccess(req, ORG_URI('SX', '太原一部'))).not.toThrow();
-    expect(() => assertStaticReportAccess(req, '/reports/%zz')).not.toThrow();
+    expect(() => assertStaticReportAccess(req, BRANCH_URI('SX'))).not.toThrow();
+  });
+
+  it('系统级超管(无 branchCode)：全放行', () => {
+    const req = makeReq({ role: UserRole.BRANCH_ADMIN });
+    expect(() => assertStaticReportAccess(req, PROVINCE_URI)).not.toThrow();
+    expect(() => assertStaticReportAccess(req, ORG_URI('SX', '太原一部'))).not.toThrow();
   });
 
   it('org_user：省级全量报告 → 403（本次治理的核心断言）', () => {
