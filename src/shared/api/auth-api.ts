@@ -126,8 +126,8 @@ export class AuthApi {
     });
   }
 
-  // ── 企微登录配置 ──
-  getWeComConfig(): Promise<{ corpId: string; agentId: string; callbackUrl: string }> {
-    return this.t.request(`/${AUTH_ROUTES.WECOM_CONFIG}`);
+  // ── 飞书扫码登录配置（state 为后端下发的防 CSRF 随机串，拼入授权 URL） ──
+  getFeishuConfig(): Promise<{ appId: string; callbackUrl: string; state: string }> {
+    return this.t.request(`/${AUTH_ROUTES.FEISHU_CONFIG}`);
   }
 }

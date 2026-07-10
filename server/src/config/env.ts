@@ -240,17 +240,26 @@ export const corsEnv = {
   CORS_ORIGIN: process.env.CORS_ORIGIN ?? '',
 } as const;
 
-// ─── 企业微信配置 ──────────────────────────────────────────────────────────────
+// ─── 飞书配置 ──────────────────────────────────────────────────────────────────
 
-export const wecomEnv = {
-  /** 企业 ID */
-  WECOM_CORP_ID: process.env.WECOM_CORP_ID ?? '',
-  /** 应用 AgentId */
-  WECOM_AGENT_ID: process.env.WECOM_AGENT_ID ?? '',
-  /** 应用 Secret */
-  WECOM_SECRET: process.env.WECOM_SECRET ?? '',
-  /** 管理员企微 UserId 列表（逗号分隔） */
-  WECOM_ADMIN_USERIDS: process.env.WECOM_ADMIN_USERIDS ?? '',
+export const feishuEnv = {
+  /** 飞书应用 App ID */
+  FEISHU_APP_ID: process.env.FEISHU_APP_ID ?? '',
+  /** 飞书应用 App Secret */
+  FEISHU_APP_SECRET: process.env.FEISHU_APP_SECRET ?? '',
+  /** 授权组织的飞书租户 key（组织门禁：未配置或不匹配一律拒绝登录，fail-closed） */
+  FEISHU_TENANT_KEY: process.env.FEISHU_TENANT_KEY ?? '',
+  /** 管理员飞书标识列表（逗号分隔，可填 user_id / open_id / 手机号 / 邮箱） */
+  FEISHU_ADMIN_USERIDS: process.env.FEISHU_ADMIN_USERIDS ?? '',
+  /** 飞书登录用户分公司编码覆盖（可选；留空时跟随部署省份 BRANCH_CODE，见 feishu.ts 消费点） */
+  FEISHU_DEFAULT_BRANCH: process.env.FEISHU_DEFAULT_BRANCH ?? '',
+  /**
+   * 业务员映射表兜底开关（resolvePermission 第 3 层，按飞书姓名匹配自动发 org_user）。
+   * 默认关闭（fail-closed：不在角色映射/管理员白名单 = 拒绝登录）——
+   * 姓名匹配存在重名误授权风险（如川分财产险部梁彬 vs 业务员 110224246梁彬）。
+   * 显式设 'true' 才启用。
+   */
+  FEISHU_SALESMAN_FALLBACK: process.env.FEISHU_SALESMAN_FALLBACK ?? '',
 } as const;
 
 // ─── 运维配置 ──────────────────────────────────────────────────────────────────

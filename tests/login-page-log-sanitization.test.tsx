@@ -28,7 +28,6 @@ describe('LoginPage log sanitization', () => {
 
     mockUsePermission.mockReturnValue({
       loginWithPassword,
-      loginWithWecomToken: vi.fn().mockResolvedValue(true),
       restoreSession: vi.fn().mockResolvedValue(true),
       isAuthenticated: false,
       userPermission: null,

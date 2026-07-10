@@ -22,7 +22,7 @@ const logger = new Logger('LoginPage');
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loginWithPassword, loginWithWecomToken, restoreSession, isAuthenticated, userPermission } = usePermission();
+  const { loginWithPassword, restoreSession, isAuthenticated, userPermission } = usePermission();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +30,7 @@ export const LoginPage: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isWeComLoading, setIsWeComLoading] = useState(false);
+  const [isFeishuLoading, setIsFeishuLoading] = useState(false);
 
   // 获取重定向目标
   const from = resolveRedirectPath(location.state, '/');
@@ -62,57 +62,49 @@ export const LoginPage: React.FC = () => {
     }
   }, [from, isAuthenticated, navigate, resolveTargetPath]);
 
-  // 处理企微登录回调
+  // 处理飞书扫码登录回调
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const wecomToken = params.get('wecom_token');
-    const wecomSuccess = params.get('wecom');
-    const wecomError = params.get('error');
+    const feishuSuccess = params.get('feishu');
+    const callbackError = params.get('error');
 
-    if (wecomError) {
+    if (callbackError) {
       const errorMap: Record<string, string> = {
-        'missing_wecom_code': '企微授权失败，请重试',
-        'wecom_not_enterprise_user': '非法用户或非企业微信成员',
-        'wecom_auth_denied': '您不在权限白名单/通讯录中，请联系业务管理员',
-        'wecom_auth_failed': '企微登录异常，请稍后重试',
+        'missing_feishu_code': '飞书授权失败，请重试',
+        'feishu_state_mismatch': '飞书登录校验失败，请重新扫码',
+        'feishu_org_denied': '您不属于授权组织，禁止登录',
+        'feishu_auth_denied': '您不在权限白名单/业务员名单中，请联系业务管理员',
+        'feishu_auth_failed': '飞书登录异常，请稍后重试',
       };
-      setError(errorMap[wecomError] || '企微登录失败');
+      setError(errorMap[callbackError] || '扫码登录失败');
       // 清除 URL 中的错误参数
       window.history.replaceState({}, '', window.location.pathname);
-    } else if (wecomToken) {
-      loginWithWecomToken(wecomToken).then((success: boolean) => {
-        if (!success) setError('企微令牌无效或已过期');
-      });
-      // 清除 URL 中的 token
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (wecomSuccess === 'success') {
+    } else if (feishuSuccess === 'success') {
       restoreSession().then((success) => {
-        if (!success) setError('企微会话恢复失败，请重新扫码登录');
+        if (!success) setError('扫码会话恢复失败，请重新扫码登录');
       });
-      // 清除 URL 中的 token
+      // 清除 URL 中的回调参数
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [loginWithWecomToken, restoreSession]);
+  }, [restoreSession]);
 
-  const handleWeComLogin = useCallback(async () => {
-    setIsWeComLoading(true);
+  const handleFeishuLogin = useCallback(async () => {
+    setIsFeishuLoading(true);
     setError('');
     try {
-      const config = await apiClient.auth.getWeComConfig();
+      const config = await apiClient.auth.getFeishuConfig();
       if (config) {
-        const { corpId, agentId, callbackUrl } = config;
-        // Generate State
-        const state = Math.random().toString(36).substring(7);
-        // 跳转到企微扫码授权页面
-        const qrUrl = `https://open.work.weixin.qq.com/wwopen/sso/qrConnect?appid=${corpId}&agentid=${agentId}&redirect_uri=${encodeURIComponent(callbackUrl)}&state=${state}`;
+        const { appId, callbackUrl, state } = config;
+        // 跳转到飞书扫码授权页面（state 由后端下发并经 cookie 双向校验）
+        const qrUrl = `https://accounts.feishu.cn/open-apis/authen/v1/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(callbackUrl)}&state=${state}`;
         window.location.href = qrUrl;
       } else {
-        setError('获取企微配置失败');
-        setIsWeComLoading(false);
+        setError('获取飞书配置失败');
+        setIsFeishuLoading(false);
       }
     } catch (err) {
-      setError('无法连接到服务器');
-      setIsWeComLoading(false);
+      setError('飞书登录暂不可用，请联系系统管理员');
+      setIsFeishuLoading(false);
     }
   }, []);
 
@@ -267,30 +259,30 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* 企微扫码登录分割线 */}
+          {/* 扫码登录分割线 */}
           <div className="mt-6 flex items-center justify-center space-x-4">
             <span className="h-px w-full bg-neutral-200 dark:bg-neutral-700"></span>
             <span className={cn("text-sm whitespace-nowrap", colorClasses.text.neutralMuted)}>或</span>
             <span className="h-px w-full bg-neutral-200 dark:bg-neutral-700"></span>
           </div>
 
-          {/* 企微扫码登录按钮 */}
+          {/* 飞书扫码登录按钮 */}
           <div className="mt-6">
             <button
               type="button"
-              onClick={handleWeComLogin}
-              disabled={isWeComLoading}
+              onClick={handleFeishuLogin}
+              disabled={isFeishuLoading}
               className={cn("w-full flex items-center justify-center py-3 px-4 bg-white dark:bg-neutral-700 border rounded-lg font-medium transition-colors shadow-sm hover:bg-neutral-50 dark:hover:bg-neutral-600 disabled:bg-neutral-100 dark:disabled:bg-neutral-800", colorClasses.border.neutral, colorClasses.text.neutral)}
             >
-              {isWeComLoading ? (
+              {isFeishuLoading ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-2 border-neutral-400 border-t-transparent mr-2" />
                   跳转中...
                 </>
               ) : (
                 <>
-                  <QrCode size={20} className={cn("mr-2", colorClasses.text.success)} />
-                  企微扫码登录
+                  <QrCode size={20} className={cn("mr-2", colorClasses.text.primary)} />
+                  飞书扫码登录
                 </>
               )}
             </button>

@@ -65,13 +65,13 @@
     "auth": true,
     "dedupe": ""
   },
-  "auth.getWeComConfig": {
+  "auth.getFeishuConfig": {
     "verb": "GET",
-    "path": "/auth/wecom/config",
+    "path": "/auth/feishu/config",
     "params": [],
     "bodyKeys": null,
     "auth": true,
-    "dedupe": "GET:/auth/wecom/config"
+    "dedupe": "GET:/auth/feishu/config"
   },
   "auth.listMyTokens": {
     "verb": "GET",

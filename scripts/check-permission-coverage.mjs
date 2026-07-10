@@ -48,7 +48,7 @@ const APP_TS = path.join(REPO_ROOT, 'server/src/app.ts');
 // 类别 A：**免认证 + 免权限**（登录入口本身必须未登录可访问）
 const UNAUTHENTICATED_ROUTES = new Set([
   '/api/auth',           // 登录入口
-  '/api/auth/wecom',     // 企微免密登录回调
+  '/api/auth/feishu',    // 飞书扫码登录回调（登录入口必须未登录可访问）
 ]);
 //
 // 类别 B：**仅免行级权限**（authMiddleware 仍是红线，必须挂；只是不挂 permissionMiddleware）

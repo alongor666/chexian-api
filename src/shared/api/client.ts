@@ -81,7 +81,7 @@ class ApiClient extends ApiClientCore {
   readonly data = new DataApi(this.transport);
   /** 工作流：apiClient.workflows.{run,audit,approve,reject,runsHealth} */
   readonly workflows = new WorkflowsApi(this.transport);
-  /** 鉴权/账号管理（12 个无状态 CRUD；login/logout/getCurrentUser 仍在基类，见 auth-api.ts 文件注释）：apiClient.auth.{listUsers,createUser,updateUser,deleteUser,listMyTokens,createMyToken,revokeMyToken,listRoles,createRole,updateRole,deleteRole,getWeComConfig} */
+  /** 鉴权/账号管理（12 个无状态 CRUD；login/logout/getCurrentUser 仍在基类，见 auth-api.ts 文件注释）：apiClient.auth.{listUsers,createUser,updateUser,deleteUser,listMyTokens,createMyToken,revokeMyToken,listRoles,createRole,updateRole,deleteRole,getFeishuConfig} */
   readonly auth = new AuthApi(this.transport);
   /** 保费分析：apiClient.premium.{report,plan,achievement} */
   readonly premium = new PremiumApi(this.transport);
