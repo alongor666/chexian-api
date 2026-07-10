@@ -62,6 +62,18 @@ export function skillSupportsBranchOnlyMode(version) {
 }
 
 /**
+ * report 独立发布入口是否必须停止 VPS 同步。
+ * 能力闸未通过或任一非部署省省级报告生成失败时，继续同步会把缺失/陈旧的
+ * branches/<省>/ 产物上线，导致该省分公司管理员继续 404。
+ * @param {{provinceContractFailed?: boolean, provinceGenFailures?: string[]}|undefined} result
+ * @returns {boolean}
+ */
+export function shouldAbortReportSync(result) {
+  return result?.provinceContractFailed === true
+    || (Array.isArray(result?.provinceGenFailures) && result.provinceGenFailures.length > 0);
+}
+
+/**
  * 枚举已注册省份（数据驱动，禁硬编码 SC/SX）：扫描 branch-org-mapping/ 下
  * 形如 <两位大写>.json 的文件名。新省上线只需落一份 <branch>.json，
  * daily.mjs 机构级报告循环即自动覆盖，零代码改动。

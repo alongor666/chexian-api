@@ -61,7 +61,7 @@ import {
 } from './lib/source-file-routing.mjs';
 // 多省 Bug 1：merge_parquet.py 参数构造纯函数（branchCode 经 ctx 透传，锁死 --declared-branch）
 import { buildMergeParquetArgs } from './lib/merge-parquet-args.mjs';
-import { readBranchOrgUnits, skillSupportsOrgFlag, listBranchOrgMappingCodes, planProvinceMirror, parseSkillVersion, skillSupportsBranchOnlyMode } from './lib/period-trend-orgs.mjs';
+import { readBranchOrgUnits, skillSupportsOrgFlag, listBranchOrgMappingCodes, planProvinceMirror, parseSkillVersion, skillSupportsBranchOnlyMode, shouldAbortReportSync } from './lib/period-trend-orgs.mjs';
 // 多省 B3 防重复：区间覆盖归档纯函数（被新全量区间完全覆盖的旧文件归档，仅同品类互斥）
 import {
   parseRangePrefix,
@@ -1712,8 +1712,11 @@ async function main() {
     // 可执行发布契约（B346 SX follow-up P1）：report 是发布重生成入口，省级分省能力闸未过
     // （stale skill < v2.5.0）→ branches/<省>/ 无法产出，此处显式 exit 1，不静默把陈旧产物同步上线。
     const reportResult = runPeriodTrendReport(scriptDir, findPython());
-    if (reportResult?.provinceContractFailed) {
-      log('red', '❌ 发布中止：省级分省报告能力闸未通过（见上方修复指引）。请升级 skill 到 v2.5.0+ 后重跑 report。');
+    if (shouldAbortReportSync(reportResult)) {
+      const reason = reportResult?.provinceContractFailed
+        ? '省级分省报告能力闸未通过（见上方修复指引）。请升级 skill 到 v2.5.0+ 后重跑 report。'
+        : `省级分省报告生成失败：${reportResult?.provinceGenFailures.join('/')}。请修复后重跑 report。`;
+      log('red', `❌ 发布中止：${reason}`);
       process.exit(1);
     }
     if (noSync) {
