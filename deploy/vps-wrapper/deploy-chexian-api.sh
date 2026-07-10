@@ -4,7 +4,7 @@
 # 配合 sudoers: deployer ALL=(root) NOPASSWD: /usr/local/bin/deploy-chexian-api
 #
 # 安全设计:
-#   - 子命令白名单，只允许 install/start/restart/reload/stop/status/describe/logs/save/doctor/self-update/fix-deps-owner/verify-natives
+#   - 子命令白名单，只允许 install/start/restart/reload/stop/status/describe/logs/save/doctor/self-update/fix-deps-owner/fix-frontend-owner/verify-natives
 #   - start 仅允许固定 ecosystem 文件路径，防止任意脚本执行
 #   - install 仅在 /var/www/chexian/server 下执行，防止目录逃逸
 #   - self-update 只从固定路径 $APP_DIR/.wrapper-source/ 读取，由 deploy bundle 投放
@@ -241,6 +241,21 @@ case "${1:-help}" in
       echo "[fix-deps-owner] node_modules 不存在，跳过"
     fi
     ;;
+  fix-frontend-owner)
+    # 2026-07-10 全站 403 事故（dist.bak 套娃）源头治理：报告流水线/手工 root 操作会在
+    # frontend/dist 留下 root-owned 文件，deployer 身份的 rm -rf 删不净，曾把部署逼进
+    # "回滚 mv 撞现存目录 → dist.bak 套进 dist 内部 → index.html 消失 → 全站 403"。
+    # deploy.yml 换轨已改 rename-based 不再被属主阻塞；本子命令做源头归一：由 deploy.yml
+    # 在 backup 之前调用，把 frontend 属主统一回 deployer，让 rm 类清理路径恢复可用。
+    # 幂等：目录不存在或已是 deployer 时为 no-op。
+    FRONTEND_DIR="/var/www/chexian/frontend"
+    if [ -d "$FRONTEND_DIR" ]; then
+      chown -R deployer:deployer "$FRONTEND_DIR"
+      echo "[fix-frontend-owner] frontend 属主已归一到 deployer"
+    else
+      echo "[fix-frontend-owner] $FRONTEND_DIR 不存在，跳过"
+    fi
+    ;;
   verify-natives)
     # 只读检测：分别 require 各原生模块，输出 OK/FAIL 但不触发任何修复。
     # 用途：应急诊断（"reload 前先确认原生模块状态"）/ SOP 手动巡检 / 监控脚本探针。
@@ -262,7 +277,7 @@ case "${1:-help}" in
     exit $EXIT_CODE
     ;;
   help|*)
-    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor|self-update|fix-deps-owner|verify-natives}"
+    echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor|self-update|fix-deps-owner|fix-frontend-owner|verify-natives}"
     echo ""
     echo "子命令:"
     echo "  install         在 $APP_DIR 执行 npm ci --omit=dev (要求 package-lock.json)"
@@ -277,6 +292,7 @@ case "${1:-help}" in
     echo "  doctor          输出探测到的 NODE_BIN/NPM_BIN/PM2_BIN + 版本，供外部脚本 eval"
     echo "  self-update     从 deploy bundle 投放的 wrapper 源自我替换 (CI 在 install 前调用)"
     echo "  fix-deps-owner  把 node_modules 所有权归一到 deployer (CI 在 backup 前调用，防死锁)"
+    echo "  fix-frontend-owner  把 frontend 所有权归一到 deployer (CI 在 backup 前调用，防 dist 套娃 403)"
     echo "  verify-natives  只读检测 @duckdb/node-api / bcrypt / better-sqlite3 加载状态 (诊断用)"
     exit 1
     ;;
