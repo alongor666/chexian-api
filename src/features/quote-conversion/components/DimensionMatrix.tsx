@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
-import { cardStyles, colorClasses, fontStyles, getHeatmapColor, toggleButtonStyles, cn } from '../../../shared/styles';
-import { RateCell } from '../../../shared/ui';
-import { formatCount, formatPercent } from '../../../shared/utils/formatters';
+import { useState } from 'react';
+import { cardStyles, colorClasses, fontStyles, toggleButtonStyles, cn } from '../../../shared/styles';
+import { formatPercent } from '../../../shared/utils/formatters';
 import { useQuoteHeatmap, useQuoteRanking } from '../hooks/useQuoteConversion';
 import type { QuoteFilters } from '../types';
+import { QuoteHeatmapMatrixTable } from './QuoteHeatmapMatrixTable';
 
 interface Props {
   filters: QuoteFilters;
@@ -33,22 +33,6 @@ export function DimensionMatrix({ filters }: Props) {
   const { data: rankData, isLoading: rankLoading } = useQuoteRanking(filters, selectedDim);
 
   const visibleDims = showMore ? ALL_DIMENSIONS : ALL_DIMENSIONS.slice(0, PRIMARY_COUNT);
-
-  // 热力矩阵数据
-  const { orgs, dimValues, matrix } = useMemo(() => {
-    if (!heatData) return { orgs: [], dimValues: [], matrix: new Map<string, { rate: number; count: number }>() };
-    const orgSet = new Set<string>();
-    const dimSet = new Set<string>();
-    const m = new Map<string, { rate: number; count: number }>();
-    for (const row of heatData) {
-      const org = row.org ?? '';
-      const dim = String(row.dim_value ?? '');
-      orgSet.add(org);
-      dimSet.add(dim);
-      m.set(`${org}|${dim}`, { rate: row.underwriting_rate ?? 0, count: row.total_quotes ?? 0 });
-    }
-    return { orgs: Array.from(orgSet).sort(), dimValues: Array.from(dimSet).sort(), matrix: m };
-  }, [heatData]);
 
   const isLoading = heatLoading || rankLoading;
 
@@ -94,37 +78,7 @@ export function DimensionMatrix({ filters }: Props) {
         <div className="flex flex-col lg:flex-row gap-4">
           {/* 左侧：热力矩阵 (70%) */}
           <div className="flex-[7] min-w-0 overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr>
-                  <th className="text-left p-2 font-medium text-neutral-500">机构</th>
-                  {dimValues.map(v => (
-                    <th key={v} className="text-center p-2 font-medium text-neutral-500 whitespace-nowrap">{v}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {orgs.map(org => (
-                  <tr key={org}>
-                    <td className="p-2 font-medium text-neutral-700 dark:text-neutral-300 whitespace-nowrap">{org}</td>
-                    {dimValues.map(dim => {
-                      const cell = matrix.get(`${org}|${dim}`);
-                      if (!cell) return <td key={dim} className="p-2 text-center text-neutral-300">-</td>;
-                      return (
-                        <td key={dim} className="p-1">
-                          <div className={cn('rounded-md p-2 text-center', getHeatmapColor(cell.rate))}>
-                            <div className="font-semibold">
-                              <RateCell value={cell.rate} />
-                            </div>
-                            <div className="text-[10px] opacity-75">{formatCount(cell.count)}</div>
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <QuoteHeatmapMatrixTable data={heatData} />
           </div>
 
           {/* 右侧：排行快照 (30%) */}

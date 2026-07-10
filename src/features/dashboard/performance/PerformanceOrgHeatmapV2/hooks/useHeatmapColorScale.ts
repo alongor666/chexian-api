@@ -6,11 +6,11 @@
 
 import { useMemo } from 'react';
 import { useTheme } from '@/shared/theme';
+import { computeQuantiles, resolveTierByThresholds } from '@/shared/styles';
 import type { HeatmapColorEntry, HeatmapMetric, HeatmapTier } from '../types';
 import {
   HEATMAP_COLOR_SCALE,
   PREMIUM_SCALE_COLORS,
-  PREMIUM_QUANTILE_CUTS,
   THRESHOLD_MAP,
   TIER_LABELS,
   TIER_BUSINESS_NOTES,
@@ -25,11 +25,7 @@ export interface ResolvedColor extends HeatmapColorEntry {
 /** 根据阈值配置将数值分到7级 */
 function resolveTier(value: number | null, metric: 'growth' | 'achievement' | 'coefficient' | 'share' | 'per_policy'): HeatmapTier {
   if (value === null || Number.isNaN(value)) return 'unknown';
-  const config = THRESHOLD_MAP[metric];
-  for (const { tier, min } of config.tiers) {
-    if (min === undefined || value >= min) return tier;
-  }
-  return 'critical';
+  return resolveTierByThresholds(value, THRESHOLD_MAP[metric].tiers);
 }
 
 /** 根据 tier + 主题返回颜色 */
@@ -57,19 +53,6 @@ function resolvePremiumColor(
   // 将分位idx映射到tier名（仅用于tooltip显示）
   const tierMap: HeatmapTier[] = ['critical', 'weak', 'below', 'normal', 'above', 'strong', 'excellent'];
   return { ...entry, tier: tierMap[Math.min(idx, tierMap.length - 1)] };
-}
-
-/** 从保费数组计算分位数 */
-function computeQuantiles(values: readonly number[]): readonly number[] {
-  if (values.length === 0) return PREMIUM_QUANTILE_CUTS.map(() => 0);
-  const sorted = [...values].sort((a, b) => a - b);
-  return PREMIUM_QUANTILE_CUTS.map((q) => {
-    const pos = q * (sorted.length - 1);
-    const lo = Math.floor(pos);
-    const hi = Math.ceil(pos);
-    if (lo === hi) return sorted[lo];
-    return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
-  });
 }
 
 export function useHeatmapColorScale(premiumValues?: readonly number[]) {
