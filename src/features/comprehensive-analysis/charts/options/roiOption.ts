@@ -1,5 +1,6 @@
 import type { EChartsOption } from 'echarts';
 import { comprehensiveTheme } from '@/shared/styles';
+import type { EChartsParam } from '@/shared/types/echarts';
 import type { ComprehensiveRoiRow } from '../../types';
 
 export function buildRoiOption(rows: ComprehensiveRoiRow[]): EChartsOption {
@@ -16,9 +17,10 @@ export function buildRoiOption(rows: ComprehensiveRoiRow[]): EChartsOption {
     grid: { left: '4%', right: '4%', top: 20, bottom: 35, containLabel: true },
     tooltip: {
       trigger: 'item',
-      formatter: (params: any) => {
-        const [outputRatio, marginRate, premiumWan] = params.value as [number, number, number];
-        return `${params.name}<br/>费用产出保费比: ${outputRatio.toFixed(1)}<br/>边际贡献率: ${marginRate.toFixed(1)}%<br/>签单保费: ${Math.round(premiumWan)}万`;
+      formatter: (params) => {
+        const p = params as unknown as EChartsParam;
+        const [outputRatio, marginRate, premiumWan] = p.value as [number, number, number];
+        return `${p.name}<br/>费用产出保费比: ${outputRatio.toFixed(1)}<br/>边际贡献率: ${marginRate.toFixed(1)}%<br/>签单保费: ${Math.round(premiumWan)}万`;
       },
     },
     xAxis: {

@@ -25,6 +25,7 @@ import type { PolicyGeoRow } from '../hooks/usePolicyGeo';
 import { useGlobalFilters } from '@/shared/contexts/FilterContext';
 import { useBranch } from '@/shared/contexts/BranchContext';
 import { BRANCH_LABELS } from '@/shared/utils/branchDisplay';
+import type { EChartsParam } from '@/shared/types/echarts';
 
 type MapLevel = 'china' | 'province';
 
@@ -150,10 +151,10 @@ export const GeoSection: React.FC = () => {
     return {
       tooltip: {
         trigger: 'item' as const,
-        formatter: (p: any) => {
+        formatter: (p: EChartsParam) => {
           if (!p.data) return escapeHtml(p.name ?? '');
-          const d = p.data;
-          const name = isChina ? getProvinceAbbrev(p.name) : getCityAbbrev(p.name);
+          const d = p.data as PolicyGeoRow;
+          const name = isChina ? getProvinceAbbrev(p.name as string) : getCityAbbrev(p.name as string);
           return `<b>${escapeHtml(name)}</b><br/>
             车辆数: ${formatCount(d.vehicle_count)}<br/>
             保费: ${formatPremiumLabel(d.premium_wan)}<br/>
@@ -180,12 +181,12 @@ export const GeoSection: React.FC = () => {
         label: {
           show: true,
           fontSize: 10,
-          formatter: (p: any) => {
+          formatter: (p: EChartsParam) => {
             const name = isChina
-              ? (GEOJSON_TO_PROVINCE[p.name] ? (PROVINCE_ABBREV[GEOJSON_TO_PROVINCE[p.name]] ?? p.name) : getProvinceAbbrev(p.name))
-              : getCityAbbrev(p.name);
-            if (top10Set.has(p.name) && p.data?.value > 0) {
-              return `{name|${name}}\n{val|${formatPremiumLabel(p.data.value)}}`;
+              ? (GEOJSON_TO_PROVINCE[p.name as string] ? (PROVINCE_ABBREV[GEOJSON_TO_PROVINCE[p.name as string]] ?? (p.name as string)) : getProvinceAbbrev(p.name as string))
+              : getCityAbbrev(p.name as string);
+            if (top10Set.has(p.name as string) && ((p.data as { value?: number } | undefined)?.value as number) > 0) {
+              return `{name|${name}}\n{val|${formatPremiumLabel((p.data as { value: number }).value)}}`;
             }
             return isChina ? '' : name;
           },
@@ -209,9 +210,9 @@ export const GeoSection: React.FC = () => {
 
   // ── 地图点击：全国模式下点击省份下钻 ──
   const onMapEvents = useMemo(() => ({
-    click: (p: any) => {
+    click: (p: EChartsParam) => {
       if (mapLevel !== 'china') return;
-      const provinceName = GEOJSON_TO_PROVINCE[p.name];
+      const provinceName = GEOJSON_TO_PROVINCE[p.name as string];
       if (provinceName) {
         void drillToProvince(provinceName);
       }

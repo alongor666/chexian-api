@@ -14,6 +14,7 @@ import { cn, colorClasses, fontStyles } from '@/shared/styles';
 import { formatPercent, formatWanDirect, formatCount } from '@/shared/utils/formatters';
 import { LOSS_RATIO_THRESHOLD } from '../ledgerMeta';
 import type { AsyncState, ChartResult, ParetoBar, PointDatum } from '../types';
+import type { EChartsParam } from '../../../shared/types/echarts';
 
 /** 图表账本统一配色（echarts 内联 hex，与既有 widgets 一致，不受 DC-003 className 约束） */
 export const LEDGER_COLORS = {
@@ -132,8 +133,10 @@ export const ChannelMatrixChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({
       tooltip: {
         ...theme.tooltipConfig,
         trigger: 'item',
-        formatter: (p: any) =>
-          `${p.data.name}<br/>保费 ${formatWanDirect(p.data.value[0])}万 · 赔付率 ${formatPercent(p.data.value[1])}<br/>件数 ${formatCount(p.data.value[2])}`,
+        formatter: (p: EChartsParam) => {
+          const d = p.data as { name: string; value: number[] };
+          return `${d.name}<br/>保费 ${formatWanDirect(d.value[0])}万 · 赔付率 ${formatPercent(d.value[1])}<br/>件数 ${formatCount(d.value[2])}`;
+        },
       },
       xAxis: { ...theme.xAxisConfig, type: 'value', name: '保费规模(万元)', nameLocation: 'middle', nameGap: 26, scale: true, nameTextStyle: theme.chartTextStyles.axisName, axisLabel: { ...theme.xAxisConfig.axisLabel, interval: 'auto' as const } },
       yAxis: { ...theme.yAxisConfig, type: 'value', name: '满期赔付率(%)', scale: true, nameTextStyle: theme.chartTextStyles.axisName },
@@ -150,7 +153,7 @@ export const ChannelMatrixChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({
               borderWidth: 1.5,
             },
           })),
-          label: { show: true, formatter: (p: any) => p.data.name, color: theme.textColors.secondary, fontSize: 10, position: 'top' as const },
+          label: { show: true, formatter: (p: EChartsParam) => (p.data as { name: string }).name, color: theme.textColors.secondary, fontSize: 10, position: 'top' as const },
           markLine: {
             silent: true,
             symbol: 'none',
@@ -177,8 +180,10 @@ export const FeeOutlierChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({ r 
     const outliers = r.data.filter((p) => p.outlier);
     const xs = r.data.map((p) => p.x);
     const hi = mean(xs) + 2 * std(xs);
-    const tooltipFmt = (p: any) =>
-      `${p.data.name}<br/>费用率 ${formatPercent(p.data.value[0])} · 保费 ${formatWanDirect(p.data.value[1])}万`;
+    const tooltipFmt = (p: EChartsParam) => {
+      const d = p.data as { name: string; value: number[] };
+      return `${d.name}<br/>费用率 ${formatPercent(d.value[0])} · 保费 ${formatWanDirect(d.value[1])}万`;
+    };
     return {
       grid: LEDGER_GRID,
       tooltip: { ...theme.tooltipConfig, trigger: 'item', formatter: tooltipFmt },
@@ -211,7 +216,10 @@ export const FeeOutlierChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({ r 
           itemStyle: { color: LEDGER_COLORS.coral },
           label: {
             show: true,
-            formatter: (p: any) => `${p.data.name} ${formatPercent(p.data.value[0])}`,
+            formatter: (p: EChartsParam) => {
+              const d = p.data as { name: string; value: number[] };
+              return `${d.name} ${formatPercent(d.value[0])}`;
+            },
             color: LEDGER_COLORS.coral,
             fontSize: 10,
             fontWeight: 600 as const,
@@ -310,7 +318,7 @@ export const ProfitWaterfallChart: React.FC<{
         ...theme.tooltipConfig,
         trigger: 'axis',
         axisPointer: { type: 'shadow' as const },
-        formatter: (ps: any[]) => `${labels[ps[0].dataIndex]}<br/>${signed(ps[0].dataIndex)} 万元`,
+        formatter: (ps: EChartsParam[]) => `${labels[ps[0].dataIndex as number]}<br/>${signed(ps[0].dataIndex as number)} 万元`,
       },
       xAxis: { ...theme.xAxisConfig, type: 'category', data: labels },
       yAxis: { ...theme.yAxisConfig, type: 'value', name: '万元', nameTextStyle: theme.chartTextStyles.axisName },
@@ -326,7 +334,7 @@ export const ProfitWaterfallChart: React.FC<{
             position: 'top' as const,
             color: theme.textColors.secondary,
             fontSize: 11,
-            formatter: (p: any) => signed(p.dataIndex),
+            formatter: (p: EChartsParam) => signed(p.dataIndex as number),
           },
         },
       ],
@@ -349,8 +357,8 @@ export const LossParetoChart: React.FC<{ r: ChartResult<ParetoBar[]> }> = ({ r }
         ...theme.tooltipConfig,
         trigger: 'axis',
         axisPointer: { type: 'shadow' as const },
-        formatter: (ps: any[]) => {
-          const i = ps[0].dataIndex;
+        formatter: (ps: EChartsParam[]) => {
+          const i = ps[0].dataIndex as number;
           const b = r.data[i];
           return b ? `${b.name}<br/>亏损 ${formatWanDirect(b.value)}万 · 累计 ${formatPercent(b.cumPct)}` : '';
         },
@@ -451,7 +459,10 @@ export const QuadrantChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({ r })
       tooltip: {
         ...theme.tooltipConfig,
         trigger: 'item',
-        formatter: (p: any) => `${p.data.name}<br/>增速 ${formatPercent(p.data.value[0])} · 赔付率 ${formatPercent(p.data.value[1])}`,
+        formatter: (p: EChartsParam) => {
+          const d = p.data as { name: string; value: number[] };
+          return `${d.name}<br/>增速 ${formatPercent(d.value[0])} · 赔付率 ${formatPercent(d.value[1])}`;
+        },
       },
       xAxis: { ...theme.xAxisConfig, type: 'value', name: '保费增速(%)', nameLocation: 'middle', nameGap: 26, scale: true, nameTextStyle: theme.chartTextStyles.axisName, axisLabel: { ...theme.xAxisConfig.axisLabel, interval: 'auto' as const } },
       yAxis: { ...theme.yAxisConfig, type: 'value', name: '满期赔付率(%)', scale: true, nameTextStyle: theme.chartTextStyles.axisName },
@@ -460,7 +471,7 @@ export const QuadrantChart: React.FC<{ r: ChartResult<PointDatum[]> }> = ({ r })
           type: 'scatter',
           symbolSize: 13,
           data: r.data.map((p) => ({ name: p.name, value: [p.x, p.y], itemStyle: { color: color(p) } })),
-          label: { show: true, formatter: (p: any) => p.data.name, color: theme.textColors.secondary, fontSize: 10, position: 'top' as const },
+          label: { show: true, formatter: (p: EChartsParam) => (p.data as { name: string }).name, color: theme.textColors.secondary, fontSize: 10, position: 'top' as const },
           markLine: {
             silent: true,
             symbol: 'none',

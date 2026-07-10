@@ -12,6 +12,7 @@ import { cardStyles, colors, textStyles, colorClasses, cn } from '@/shared/style
 import { useTheme } from '@/shared/theme';
 import { TONNAGE_COLORS } from '@/shared/config/chartStyles';
 import type { PerformanceTrendSeries } from './hooks/usePerformanceTrend';
+import type { EChartsParam } from '@/shared/types/echarts';
 
 interface PerformanceTrendChartProps {
   title: string;
@@ -136,10 +137,10 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
-          const list = Array.isArray(params) ? params : [params];
+          const list = (Array.isArray(params) ? params : [params]) as EChartsParam[];
           const first = list[0];
           if (!first) return '';
-          const rows = list.map((item: any) => {
+          const rows = list.map((item: EChartsParam) => {
             const value = Number(item?.value ?? 0);
             const display = metric === 'premium' ? formatWanAdaptive(value) : formatCount(value);
             return `<div>${item.marker}${item.seriesName}: <strong>${display}</strong></div>`;

@@ -138,13 +138,13 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
       label: {
         show: true,
         position: 'inside',
-        formatter: (params: any) => {
-          const safeParams = params as EChartsParam;
+        formatter: (params: EChartsParam) => {
+          const safeParams = params;
           const total = orgTotals.get(String(safeParams.name)) || 0;
           const rawValue =
             typeof safeParams.value === 'number'
               ? safeParams.value
-              : Number((safeParams.value as any) ?? 0);
+              : Number((safeParams.value as number) ?? 0);
           if (total <= 0 || rawValue <= 0) {
             return '';
           }
@@ -167,12 +167,12 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
       label: {
         show: true,
         position: 'top',
-        formatter: (params: any) => {
-          const safeParams = params as EChartsParam;
+        formatter: (params: EChartsParam) => {
+          const safeParams = params;
           const rawValue =
             typeof safeParams.value === 'number'
               ? safeParams.value
-              : Number((safeParams.value as any) ?? 0);
+              : Number((safeParams.value as number) ?? 0);
           if (rawValue <= 0) {
             return '';
           }
@@ -195,7 +195,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
 
           // 计算该机构的总保费
           const totalPremium = safeParams.reduce(
-            (sum: number, p) => sum + Number((p.value as any) ?? 0),
+            (sum: number, p) => sum + Number((p.value as number) ?? 0),
             0
           );
 
@@ -207,7 +207,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
             const rawValue =
               typeof param.value === 'number'
                 ? param.value
-                : Number((param.value as any) ?? 0);
+                : Number((param.value as number) ?? 0);
             if (rawValue > 0) {
               const ratio = rawValue / totalPremium;
               result += `<div style="display:flex;align-items:center;margin-top:4px">
@@ -344,7 +344,7 @@ export const TruckDrillDownChart: React.FC<TruckDrillDownChartProps> = ({
   }, [data, selectedOrg, valueFormatter, valueLabel, isDark]);
 
   // 点击事件：下钻到吨位详情
-  const onChartClick = (params: any) => {
+  const onChartClick = (params: EChartsParam) => {
     if (drillDownLevel === 'org' && params?.componentType === 'series') {
       const org = typeof params?.name === 'string' ? params.name : '';
       if (!org) return;

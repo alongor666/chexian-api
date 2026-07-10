@@ -15,6 +15,7 @@ import { useTheme } from '../../shared/theme';
 import { useCrossSellTrend, type TrendGranularity } from './hooks/useCrossSellTrend';
 import type { AdvancedFilterState } from '../../shared/types/data';
 import type { VehicleCategory, SeatCoverageLevel } from './hooks/useCrossSellTimePeriod';
+import type { EChartsParam } from '../../shared/types/echarts';
 
 export interface CrossSellTrendAnnotation {
   kind: 'max' | 'min';
@@ -176,13 +177,13 @@ export const CrossSellTrendChart = memo(function CrossSellTrendChart({
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
-          const lines = (params as any[]).map((p) => {
+          const lines = (params as EChartsParam[]).map((p) => {
             if (metric === 'rate') {
-              return `<div>${p.marker}${p.seriesName}: <strong>${formatPercent(p.value ?? 0)}</strong></div>`;
+              return `<div>${p.marker}${p.seriesName}: <strong>${formatPercent((p.value as number) ?? 0)}</strong></div>`;
             }
-            return `<div>${p.marker}${p.seriesName}: <strong>${formatCount(p.value ?? 0)}元</strong></div>`;
+            return `<div>${p.marker}${p.seriesName}: <strong>${formatCount((p.value as number) ?? 0)}元</strong></div>`;
           });
-          return `<div style="font-size:12px"><div style="font-weight:600;margin-bottom:4px">${(params as any[])[0]?.axisValue}</div>${lines.join('')}</div>`;
+          return `<div style="font-size:12px"><div style="font-weight:600;margin-bottom:4px">${(params as EChartsParam[])[0]?.axisValue}</div>${lines.join('')}</div>`;
         },
       },
       legend: {

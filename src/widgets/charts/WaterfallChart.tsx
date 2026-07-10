@@ -4,6 +4,7 @@ import { echarts } from '../../shared/utils/echarts';
 import { GRID_CONFIG, AXIS_SPLIT_LINE, getChartTheme } from '../../shared/config/chartStyles';
 import { useTheme } from '../../shared/theme';
 import { colorClasses } from '../../shared/styles';
+import type { EChartsParam } from '../../shared/types/echarts';
 
 interface WaterfallDataPoint {
   label: string;
@@ -80,10 +81,10 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
-        formatter: (params: any) => {
-            const param = params.find((p: any) => p.seriesName === '变动');
+        formatter: (params: EChartsParam[]) => {
+            const param = params.find((p: EChartsParam) => p.seriesName === '变动');
             if (!param) return '';
-            const val = param.value;
+            const val = param.value as number;
             const fmtVal = valueFormatter(val);
             return `${param.name}<br/>变动: <span style="color:${val >= 0 ? '#91CC75' : '#EE6666'}">${val > 0 ? '+' : ''}${fmtVal}</span>`;
         }
@@ -138,8 +139,8 @@ export const WaterfallChart: React.FC<WaterfallChartProps> = ({
           label: {
             show: true,
             position: 'top',
-            formatter: (params: any) => {
-                const val = params.value;
+            formatter: (params: EChartsParam) => {
+                const val = params.value as number;
                 return val > 0 ? `+${valueFormatter(val)}` : valueFormatter(val);
             },
             ...theme.chartTextStyles.dynamicLabel

@@ -6,6 +6,7 @@ import { useTheme } from '@/shared/theme';
 import { cardStyles, textStyles, cn } from '@/shared/styles';
 import { formatPremiumWan } from '@/shared/utils/formatters';
 import { buildScatterAxes, scatterSymbolSize, buildTierSeriesData } from '../utils/repairScatter';
+import type { EChartsParam } from '@/shared/types/echarts';
 
 export interface ScatterShopPoint {
   shop_code: string;
@@ -63,8 +64,8 @@ export const RepairScatter: React.FC<Props> = ({ data, loading, onPointClick }) 
     const opt = {
       tooltip: {
         ...theme.tooltipConfig,
-        formatter: (params: any) => {
-          const shop = params.data?.shop as ScatterShopPoint | undefined;
+        formatter: (params: EChartsParam) => {
+          const shop = (params.data as { shop?: ScatterShopPoint })?.shop;
           if (!shop) return '';
           return [
             `<div style="font-weight:600">${shop.shop_name ?? shop.shop_code}</div>`,
@@ -102,8 +103,8 @@ export const RepairScatter: React.FC<Props> = ({ data, loading, onPointClick }) 
 
   const onEvents = useMemo(
     () => ({
-      click: (params: any) => {
-        const shop = params?.data?.shop as ScatterShopPoint | undefined;
+      click: (params: EChartsParam) => {
+        const shop = (params?.data as { shop?: ScatterShopPoint })?.shop;
         if (shop && onPointClick) onPointClick(shop);
       },
     }),
