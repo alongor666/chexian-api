@@ -9,6 +9,8 @@ import {
   skillSupportsOrgFlag,
   listBranchOrgMappingCodes,
   planProvinceMirror,
+  parseSkillVersion,
+  skillSupportsBranchOnlyMode,
 } from '../数据管理/lib/period-trend-orgs.mjs';
 import { BRANCH_ORGANIZATIONS } from '../src/shared/config/organizations';
 import { ORG_GROUPS_BY_BRANCH } from '../src/shared/config/org-groups';
@@ -99,6 +101,36 @@ describe('skillSupportsOrgFlag', () => {
     expect(skillSupportsOrgFlag('')).toBe(false);
     expect(skillSupportsOrgFlag(undefined)).toBe(false);
     expect(skillSupportsOrgFlag(null)).toBe(false);
+  });
+});
+
+/** B346 SX follow-up P1：省级分省能力闸（可执行发布契约，按 SKILL.md 版本判定） */
+describe('parseSkillVersion', () => {
+  it('解析 frontmatter version: "X.Y.Z"', () => {
+    expect(parseSkillVersion('---\nname: x\nversion: "2.5.0"\n---')).toEqual({ major: 2, minor: 5, patch: 0 });
+    expect(parseSkillVersion('version: 2.4.1')).toEqual({ major: 2, minor: 4, patch: 1 });
+    expect(parseSkillVersion('version: "10.0.3"')).toEqual({ major: 10, minor: 0, patch: 3 });
+  });
+  it('无版本行 / 非字符串 → null', () => {
+    expect(parseSkillVersion('name: x')).toBeNull();
+    expect(parseSkillVersion('')).toBeNull();
+    expect(parseSkillVersion(undefined)).toBeNull();
+  });
+});
+
+describe('skillSupportsBranchOnlyMode（v2.5.0+ 才支持「仅 --branch」省级模式）', () => {
+  it('v2.5.0 / v2.6 / v3.0 → true', () => {
+    expect(skillSupportsBranchOnlyMode({ major: 2, minor: 5, patch: 0 })).toBe(true);
+    expect(skillSupportsBranchOnlyMode({ major: 2, minor: 6, patch: 0 })).toBe(true);
+    expect(skillSupportsBranchOnlyMode({ major: 3, minor: 0, patch: 0 })).toBe(true);
+  });
+  it('v2.4.x / v2.3.0 → false（有 --org 但拒绝仅 --branch，会静默降级）', () => {
+    expect(skillSupportsBranchOnlyMode({ major: 2, minor: 4, patch: 9 })).toBe(false);
+    expect(skillSupportsBranchOnlyMode({ major: 2, minor: 3, patch: 0 })).toBe(false);
+  });
+  it('版本解析失败（null）→ false（fail-closed）', () => {
+    expect(skillSupportsBranchOnlyMode(null)).toBe(false);
+    expect(skillSupportsBranchOnlyMode(undefined)).toBe(false);
   });
 });
 

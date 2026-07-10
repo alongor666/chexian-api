@@ -32,6 +32,36 @@ export function skillSupportsOrgFlag(helpText) {
 }
 
 /**
+ * 解析 SKILL.md frontmatter 的 `version: "X.Y.Z"`。
+ * @param {string} skillMdText - SKILL.md 全文
+ * @returns {{major:number,minor:number,patch:number}|null} 解析失败返回 null
+ */
+export function parseSkillVersion(skillMdText) {
+  if (typeof skillMdText !== 'string') return null;
+  const m = /^version:\s*"?(\d+)\.(\d+)\.(\d+)"?/m.exec(skillMdText);
+  if (!m) return null;
+  return { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]) };
+}
+
+/**
+ * 判定 skill 是否支持「仅 `--branch`（无 `--org`）」省级分省报告模式（v2.5.0+）。
+ *
+ * 为什么用版本而非 `--help` 探测（区别于 skillSupportsOrgFlag）：v2.4 与 v2.5 的 `--help`
+ * 都列出 `--branch`，但 v2.4 在**运行时**拒绝「仅 --branch」（`--org 与 --branch 必须成对`），
+ * help 文本无法区分二者的配对行为。若沿用 help 探测，v2.4 会通过探测、却在 `--branch SX`
+ * 调用时被拒 → fail-warn 湮没 → `branches/SX/` 恒不产出 → SX 分公司管理员持续 404（静默降级）。
+ * 故省级分省能力以 SKILL.md 版本作**可执行发布契约**判据（每次 daily/report 运行强制核验）。
+ * @param {{major:number,minor:number,patch:number}|null} version - parseSkillVersion 结果
+ * @returns {boolean}
+ */
+export function skillSupportsBranchOnlyMode(version) {
+  if (!version || typeof version.major !== 'number' || typeof version.minor !== 'number') {
+    return false;
+  }
+  return version.major > 2 || (version.major === 2 && version.minor >= 5);
+}
+
+/**
  * 枚举已注册省份（数据驱动，禁硬编码 SC/SX）：扫描 branch-org-mapping/ 下
  * 形如 <两位大写>.json 的文件名。新省上线只需落一份 <branch>.json，
  * daily.mjs 机构级报告循环即自动覆盖，零代码改动。
