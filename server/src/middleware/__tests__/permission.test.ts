@@ -22,6 +22,8 @@ import {
   getManageableBranchScope,
   canManageBranch,
   isNationalAdmin,
+  MOUNT_DOMAIN_WHITELIST_POLICY,
+  resolveDomainPolicy,
 } from '../permission.js';
 import { AppError } from '../error.js';
 
@@ -510,11 +512,11 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     expect(err).toBeUndefined();
   });
 
-  // ─── 挂载域限定：白名单只作用于 /api/query/*（242c07 收口时暴露的误伤面）───
-  it('org_user 经 /api/agent/diagnosis 挂载点访问 /quote-conversion → 通过（agent 诊断路由不受页面白名单约束）', async () => {
+  // ─── 挂载域策略（B-de1e40：按域显式声明纳管，替代非 query 域一刀切跳过）───
+  it('org_user 经 /api/agent/diagnosis 挂载点访问 /quote-conversion → 通过（注册表显式豁免，242c07 误伤面）', async () => {
     // agent 诊断路由（app.ts 挂载 /api/agent/diagnosis）设计上对 org_user 开放并
     // 带角色过滤；其 router 内 req.path='/quote-conversion' 与六域页面映射键同名，
-    // 必须靠 baseUrl 挂载域判定避免误伤 403
+    // 必须靠 baseUrl 挂载域策略避免误伤 403
     const req = makeReqWithPath(orgUser, '/quote-conversion', '/api/agent/diagnosis');
     const err = await runMiddlewarePath(req);
     expect(err).toBeUndefined();
@@ -525,6 +527,41 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     const err = await runMiddlewarePath(req);
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('org_user 经 /api/query 嵌套子挂载（/api/query/sub）访问 /cost → 403（前缀匹配保持 query 域纳管）', async () => {
+    const req = makeReqWithPath(orgUser, '/cost', '/api/query/sub');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('org_user 访问未在注册表声明的挂载域 → 403 fail-closed', async () => {
+    const req = makeReqWithPath(orgUser, '/anything', '/api/undeclared-domain');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+    expect((err as AppError).message).toContain('MOUNT_DOMAIN_WHITELIST_POLICY');
+  });
+
+  it('branch_admin 访问未声明挂载域 → 通过（不受路由白名单约束，fail-closed 只作用于受限角色）', async () => {
+    const req = makeReqWithPath(
+      { role: UserRole.BRANCH_ADMIN, branchCode: 'SC' },
+      '/anything',
+      '/api/undeclared-domain'
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
+  // 注册表内每个 exempt 域对 org_user 放行（即使 req.path 与页面映射键同名）
+  const exemptDomains = Object.entries(MOUNT_DOMAIN_WHITELIST_POLICY)
+    .filter(([, p]) => p.mode === 'exempt')
+    .map(([d]) => d);
+  it.each(exemptDomains)('org_user 经豁免域 %s 访问 /cost → 通过（显式 exempt）', async (domain) => {
+    const req = makeReqWithPath(orgUser, '/cost', domain);
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
   });
 
   // ─── admin / branch_admin 不受白名单限制 ───
@@ -786,5 +823,55 @@ describe('角色管理面全局收敛：isNationalAdmin', () => {
     envMock.BRANCH_RLS_ENABLED = 'true';
     expect(isNationalAdmin({ visibleBranches: ['sc', 'S1'] })).toBe(false);
     expect(isNationalAdmin({ visibleBranches: [] })).toBe(false);
+  });
+});
+
+// ── 挂载点 ↔ 纳管注册表对账（B-de1e40 防漂移闸）────────────────────────────
+// 静态分析 app.ts：凡 app.use('<path>', <routes>) 挂载、且对应路由文件里
+// router.use(permissionMiddleware) 的域，必须在 MOUNT_DOMAIN_WHITELIST_POLICY
+// 有声明（精确或前缀命中）。新增挂载域漏登记 → 本测试红 +（运行时 fail-closed 403）。
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+describe('MOUNT_DOMAIN_WHITELIST_POLICY：挂载点对账', () => {
+  const serverSrc = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+  const appSource = readFileSync(resolve(serverSrc, 'app.ts'), 'utf-8');
+
+  // import 标识符 → 相对模块路径（'./routes/data.js' → routes/data.ts）
+  const importMap = new Map<string, string>();
+  for (const m of appSource.matchAll(/^import\s+(\w+)(?:\s*,\s*\{[^}]*\})?\s+from\s+'(\.\/[^']+)\.js';/gm)) {
+    importMap.set(m[1], m[2].slice(2) + '.ts');
+  }
+
+  // app.use('/api/xxx', <identifier>) 挂载对
+  const mounts: Array<{ path: string; file: string }> = [];
+  for (const m of appSource.matchAll(/app\.use\('(\/api\/[^']+)',\s*(\w+)\)/g)) {
+    const file = importMap.get(m[2]);
+    if (file) mounts.push({ path: m[1], file });
+  }
+
+  it('app.ts 至少解析出全部已知 permissionMiddleware 挂载域（解析器自检）', () => {
+    const paths = mounts.map((m) => m.path);
+    for (const known of Object.keys(MOUNT_DOMAIN_WHITELIST_POLICY)) {
+      expect(paths).toContain(known);
+    }
+  });
+
+  it('凡挂 permissionMiddleware 的域必须在注册表声明（未声明 → 运行时 fail-closed）', () => {
+    const undeclared: string[] = [];
+    for (const { path, file } of mounts) {
+      const source = readFileSync(resolve(serverSrc, file), 'utf-8');
+      if (/router\.use\(permissionMiddleware\)/.test(source) && resolveDomainPolicy(path) === undefined) {
+        undeclared.push(path);
+      }
+    }
+    expect(undeclared, `挂载域漏登记纳管策略: ${undeclared.join(', ')}`).toEqual([]);
+  });
+
+  it('注册表内不得出现 app.ts 未挂载的幽灵域（防注册表腐烂）', () => {
+    const paths = new Set(mounts.map((m) => m.path));
+    const ghosts = Object.keys(MOUNT_DOMAIN_WHITELIST_POLICY).filter((d) => !paths.has(d));
+    expect(ghosts, `注册表声明了 app.ts 不存在的挂载域: ${ghosts.join(', ')}`).toEqual([]);
   });
 });

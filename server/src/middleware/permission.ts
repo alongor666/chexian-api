@@ -80,6 +80,93 @@ export const API_ROUTE_TO_PAGE_MAP: Record<string, string | string[]> = {
 };
 
 /**
+ * 挂载域白名单纳管策略（B-de1e40：替代「非 query 域一刀切跳过」）。
+ *
+ * permissionMiddleware 被多个挂载点（app.ts `app.use('/api/xxx', ...)`）复用，
+ * org_user 页面白名单（API_ROUTE_TO_PAGE_MAP）的键只对 /api/query 域有意义。
+ * 历史实现对非 query 域一律跳过白名单（mountedOutsideQuery），功能边界全靠数据层
+ * RLS 兜底——本注册表改为**每个挂载域显式声明**纳管方式：
+ *
+ * - `'page-map'`：应用 API_ROUTE_TO_PAGE_MAP 页面白名单（当前仅 /api/query）。
+ * - `'exempt'`：显式豁免页面白名单，必须给出理由（行级 permissionFilter 仍然生效）。
+ * - **未声明的挂载域 fail-closed**：受白名单约束的角色（org_user）一律 403，
+ *   直到开发者在此表登记决策。新增挂载 permissionMiddleware 的域时必须在此追加，
+ *   并同步 __tests__/permission.test.ts 的挂载点对账用例。
+ *
+ * 各域豁免理由均经消费方盘点（2026-07-10，B-de1e40）：
+ */
+export type DomainWhitelistPolicy =
+  | { mode: 'page-map' }
+  | { mode: 'exempt'; reason: string };
+
+export const MOUNT_DOMAIN_WHITELIST_POLICY: Record<string, DomainWhitelistPolicy> = {
+  '/api/query': { mode: 'page-map' },
+  '/api/filters': {
+    mode: 'exempt',
+    reason: '全页面共用筛选器基础数据（/options），org_user 白名单页（/home 等）必需',
+  },
+  '/api/data': {
+    mode: 'exempt',
+    reason:
+      '读接口（/metadata /version /kpi-plan-config GET）是 App 启动基础数据' +
+      '（DataContext / etlVersionPoller / HomePage）；写与管理端点已逐路由 requireRole(BRANCH_ADMIN)',
+  },
+  '/api/ai': {
+    mode: 'exempt',
+    reason: '/home 智能意图解析（intentParser）消费，org_user 默认可用页依赖；NL2SQL 仍下推 permissionFilter',
+  },
+  '/api/agent/audit': {
+    mode: 'exempt',
+    reason: 'agent 子系统能力/可观测性元数据，不返回行级业务数据',
+  },
+  '/api/agent/diagnosis': {
+    mode: 'exempt',
+    reason:
+      '242c07 裁定：诊断路由设计上对 org_user 开放（requirePermissionFilter 下推行级过滤）；' +
+      '且其 req.path（/quote-conversion 等）与六域页面映射键同名，纳管即误伤 403',
+  },
+  '/api/agent/explain': {
+    mode: 'exempt',
+    reason: '诊断结果 LLM 解读，输入为 permissionFilter 收敛后的诊断产物',
+  },
+  '/api/agent/forecast': {
+    mode: 'exempt',
+    reason: 'copilot 抽屉全局挂载（org_user 页面可用），行级由 requirePermissionFilter 收敛',
+  },
+  '/api/skills': {
+    mode: 'exempt',
+    reason: '程序化（PAT/CLI/MCP）只读入口，runSkill ctx 强制携带 permissionFilter',
+  },
+  '/api/workflows': {
+    mode: 'exempt',
+    reason:
+      'copilot 消费；敏感端点域内自带角色门（health=branch_admin、approve/reject=approverRoles、runs=本人或 admin）',
+  },
+  '/api/copilot': {
+    mode: 'exempt',
+    reason: 'copilot 抽屉全局挂载；run 编排下游查询均下推 permissionFilter',
+  },
+};
+
+/**
+ * 按挂载点 baseUrl 解析纳管策略：精确匹配优先，前缀匹配兜底（带 '/' 边界，
+ * 保持历史 `${baseUrl}/`.startsWith('/api/query/') 对嵌套子挂载的覆盖语义）。
+ * 返回 undefined = 挂载域未在注册表声明。
+ */
+export function resolveDomainPolicy(baseUrl: string): DomainWhitelistPolicy | undefined {
+  if (baseUrl in MOUNT_DOMAIN_WHITELIST_POLICY) {
+    return MOUNT_DOMAIN_WHITELIST_POLICY[baseUrl];
+  }
+  const keys = Object.keys(MOUNT_DOMAIN_WHITELIST_POLICY).sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    if (baseUrl.startsWith(key + '/')) {
+      return MOUNT_DOMAIN_WHITELIST_POLICY[key];
+    }
+  }
+  return undefined;
+}
+
+/**
  * 将后端请求路径（req.path）解析为对应的前端页面路径候选集合（一对多）。
  * 采用精确匹配优先、前缀匹配兜底（最长前缀优先，防止 /cost 误匹配 /cost-detail）。
  *
@@ -182,23 +269,34 @@ export function permissionMiddleware(
     // 原理：将 req.path（后端路径，如 '/cost'）映射到前端页面路径（如 '/cost'），
     // 再对比用户 allowedRoutes 白名单（值为前端页面路径，如 '/performance-analysis'）。
     //
-    // 挂载域限定：API_ROUTE_TO_PAGE_MAP 的键是 /api/query/* 下的相对路径，而本
-    // middleware 也被 /api/agent/* 等其他挂载点复用——那里的 req.path 同样是挂载
-    // 内相对路径（如 /api/agent/diagnosis/quote-conversion 内的 '/quote-conversion'），
-    // 与六域页面映射键同名会被误伤 403（242c07 收口时暴露：agent 诊断路由设计上
-    // 对 org_user 开放并带角色过滤）。故仅当挂载点（req.baseUrl）在 /api/query 域
-    // 时才应用页面白名单；baseUrl 缺失（单测直调 middleware 的 mock req）回退查表，
-    // 保持既有单测语义。
+    // 挂载域策略（B-de1e40）：API_ROUTE_TO_PAGE_MAP 的键是 /api/query/* 下的相对
+    // 路径，而本 middleware 也被 /api/agent/* 等其他挂载点复用——那里的 req.path
+    // 同样是挂载内相对路径（如 /api/agent/diagnosis 内的 '/quote-conversion'），
+    // 与六域页面映射键同名会被误伤 403（242c07 教训）。历史做法是非 query 域一刀切
+    // 跳过；现改为查 MOUNT_DOMAIN_WHITELIST_POLICY 按域显式决策：
+    // - 'page-map' → 应用页面白名单；'exempt' → 跳过（豁免理由见注册表）；
+    // - 未声明域 → fail-closed 403，倒逼新挂载域在注册表登记决策；
+    // - baseUrl 缺失（单测直调 middleware 的 mock req）回退查表，保持既有单测语义。
     const routeAllowList = getAllowedRoutesForRole(role);
     if (routeAllowList !== null) {
       const baseUrl = (req as { baseUrl?: unknown }).baseUrl;
-      const mountedOutsideQuery =
-        typeof baseUrl === 'string' &&
-        baseUrl !== '' &&
-        !`${baseUrl}/`.startsWith('/api/query/');
-      const pageRoutes = mountedOutsideQuery
-        ? undefined
-        : resolvePageRoutes(req.path as string | undefined);
+      let pageRoutes: string[] | undefined;
+      if (typeof baseUrl === 'string' && baseUrl !== '') {
+        const policy = resolveDomainPolicy(baseUrl);
+        if (policy === undefined) {
+          throw new AppError(
+            403,
+            `无访问权限：挂载域（${baseUrl}）未在 MOUNT_DOMAIN_WHITELIST_POLICY 声明纳管策略，` +
+              '对受路由白名单约束的角色默认拒绝（fail-closed）。请在 server/src/middleware/permission.ts 登记该域。'
+          );
+        }
+        pageRoutes =
+          policy.mode === 'page-map'
+            ? resolvePageRoutes(req.path as string | undefined)
+            : undefined;
+      } else {
+        pageRoutes = resolvePageRoutes(req.path as string | undefined);
+      }
       // 一对多判定：候选页面中任一在白名单内即放行（例如 /performance-org-heatmap
       // 候选 ['/performance-analysis', '/chart-ledger']，org_user 白名单含
       // /performance-analysis 时应放行，即使 /chart-ledger 不在白名单）。
