@@ -10,7 +10,6 @@
 import { logger } from '../utils/logger.js';
 import { getVehicleCategoryFilter, type VehicleCategory, crossSellTruthyExpr } from './cross-sell/shared.js';
 import { escapeSqlValue } from '../utils/security.js';
-import { qualifyBranchCodeColumn } from '../utils/branch-rls-qualify.js';
 
 export interface CrossSellHeatmapDrillStep {
   dimension: CrossSellHeatmapGroupDimension;
@@ -224,10 +223,10 @@ export function generateCrossSellHeatmapQuery(
   const vehicleFilter = getVehicleCategoryFilter(vehicleCategory);
   const seatClause = seatCoverageClause ? `AND ${seatCoverageClause}` : '';
   const usePF = needsPolicyFact(groupByDimension, drillFilter);
-  // usePF 路径 JOIN SalesmanTeamMapping tm（多省时同带 branch_code 列）——把 baseWhereClause 里
-  // permissionFilter 的裸 branch_code 绑定到事实表 p.，消歧（2026-07-09 生产 Binder Error）。
-  // Agg 路径（!usePF）FROM CrossSellDailyAgg 无别名、无 tm JOIN，保持裸 branch_code（字节安全）。
-  const pfWhere = qualifyBranchCodeColumn(baseWhereClause, 'p.');
+  // usePF 路径 JOIN team_mapping（剥列 CTE：只投影 full_name+team_name，不含 branch_code）——
+  // baseWhereClause 里 permissionFilter 的裸 branch_code 天然只解析到事实表 p.，无二义。
+  // Agg 路径（!usePF）FROM CrossSellDailyAgg 无 tm JOIN，裸 branch_code 本就不歧义。
+  // （2026-07-09 生产 Binder Error 结构层根治，替代 qualifyBranchCodeColumn；CTE 不去重不按省过滤 → 数字与现网一致）
   const drillAnd = (() => {
     const clause = usePF ? crossSellDrillToWherePF(drillFilter) : crossSellDrillToWhereAgg(drillFilter);
     return clause ? `AND ${clause}` : '';
@@ -271,7 +270,8 @@ export function generateCrossSellHeatmapQuery(
   const isCrossSelltruthy = crossSellTruthyExpr('p.is_cross_sell');
 
   const filteredCte = usePF ? `
-    WITH normalized AS (
+    WITH team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping),
+    normalized AS (
       SELECT
         CAST(p.${dateField} AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
@@ -295,8 +295,8 @@ export function generateCrossSellHeatmapQuery(
           ELSE 0
         END AS compulsory_premium
       FROM PolicyFact p
-      LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))
-      WHERE ${pfWhere}
+      LEFT JOIN team_mapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))
+      WHERE ${baseWhereClause}
         AND ${vehicleFilter}
         ${seatClause}
         ${drillAnd}

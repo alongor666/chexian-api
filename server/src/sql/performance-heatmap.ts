@@ -9,7 +9,6 @@
 
 import { logger } from '../utils/logger.js';
 import { escapeSqlValue } from '../utils/security.js';
-import { qualifyBranchCodeColumn } from '../utils/branch-rls-qualify.js';
 import {
   truthyExpr,
   normalizeSqlTableAliasPrefix,
@@ -240,9 +239,9 @@ export function generatePerformanceOrgHeatmapQuery(
   const supportsAnnualPlan = heatmapSupportsAnnualPlan(groupByDimension);
   const planDimExpr = getHeatmapPlanDimensionExpr(groupByDimension);
   const needsTeamJoin = groupByDimension === 'team' || drillFilter.some((s) => s.dimension === 'team');
-  // 主 PolicyFact 查询按团队维度会 JOIN SalesmanTeamMapping（多省时同带 branch_code 列）——
-  // 把 whereWithoutDate 里 permissionFilter 的裸 branch_code 绑定到事实表 p.，消歧（2026-07-09 生产 Binder Error）。
-  const pfWhere = qualifyBranchCodeColumn(whereWithoutDate, tableAlias);
+  // 主 PolicyFact 查询按团队维度 JOIN team_mapping（剥列 CTE：只投影 full_name+team_name，不含 branch_code）——
+  // whereWithoutDate 里 permissionFilter 的裸 branch_code 天然只解析到事实表 p.，无二义。
+  // （2026-07-09 生产 Binder Error 结构层根治，替代 qualifyBranchCodeColumn；CTE 不去重不按省过滤 → 数字与现网一致）
   const drillWhereClause = heatmapDrillToWhere(drillFilter);
   const drillAnd = drillWhereClause ? `AND ${drillWhereClause}` : '';
   const mappingDrillWhereClause = supportsAnnualPlan ? heatmapDrillToMappingWhere(drillFilter) : '';
@@ -350,7 +349,7 @@ export function generatePerformanceOrgHeatmapQuery(
     : '';
 
   const sql = `
-    WITH filtered AS (
+    WITH ${needsTeamJoin ? 'team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping),\n    ' : ''}filtered AS (
       SELECT
         CAST(p.${dateField} AS DATE) AS pd,
         ${dimConfig.selectExpr} AS ${dimConfig.alias},
@@ -363,8 +362,8 @@ export function generatePerformanceOrgHeatmapQuery(
         COALESCE(p.premium, 0) / 10000.0 AS premium_wan,
         p.commercial_pricing_factor AS cpf
       FROM PolicyFact p
-      ${needsTeamJoin ? "LEFT JOIN SalesmanTeamMapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))" : ''}
-      WHERE ${pfWhere}
+      ${needsTeamJoin ? "LEFT JOIN team_mapping tm ON TRIM(CAST(p.salesman_name AS VARCHAR)) = TRIM(CAST(tm.full_name AS VARCHAR))" : ''}
+      WHERE ${whereWithoutDate}
         AND ${segmentFilter}
         ${drillAnd}
     ),

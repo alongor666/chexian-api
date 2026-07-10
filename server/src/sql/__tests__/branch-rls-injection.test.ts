@@ -25,7 +25,6 @@ import { generatePerformanceOrgHeatmapQuery } from '../performance-heatmap.js';
 import { generatePerformanceDrilldownQuery } from '../performance-analysis/drilldown.js';
 import { generateCrossSellHeatmapQuery } from '../cross-sell-heatmap.js';
 import { generateCrossSellQuery } from '../cross-sell.js';
-import { qualifyBranchCodeColumn } from '../../utils/branch-rls-qualify.js';
 
 const BRANCH = "branch_code = 'SX'";
 const NO_BRANCH = "branch_code = '";
@@ -110,36 +109,40 @@ describe('performance-heatmap SalesmanTeamMapping 分省 RLS 注入（plan_by_di
  * 不变式：主查询 tm-JOIN 作用域内 branch_code 必绑定到**事实表**（PolicyFact p. / CrossSellDailyAgg c.），
  * 与 tm.branch_code 消歧；省份隔离键作用在 policy 行（.claude/rules/data-pipeline.md 省份数据隔离）。
  */
-describe('主查询 team 维度 branch_code 消歧（2026-07-09 生产 Binder Error 回归闸）', () => {
+describe('主查询 team 维度 branch_code 消歧（2026-07-09 生产 Binder Error 结构层根治 · 剥列 CTE）', () => {
   const BRANCH_SX = "branch_code = 'SX'";
-  /** 断言：SQL 中不存在**裸**（未被 x. 别名限定）的 branch_code 比较位置列引用 */
-  const expectNoBareBranchCode = (sql: string) =>
-    expect(sql).not.toMatch(/(?<![\w.])branch_code\b(?=\s*(?:=|IN\b|LIKE\b))/i);
+  const TEAM_CTE = 'team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping)';
+  // 新不变式（替代原 qualifyBranchCodeColumn 方案）：团队维度经**剥列 CTE** team_mapping JOIN
+  // （只投影 full_name+team_name，不含 branch_code）→ 主查询裸 branch_code 天然只解析到事实表，
+  // 结构层杜绝二义。断言：CTE 存在 + JOIN 指向 CTE 而非裸实体表 + 省份过滤仍注入。
+  const expectStrippedTeamCte = (sql: string) => {
+    expect(sql).toContain(TEAM_CTE);
+    expect(sql).toContain('JOIN team_mapping tm');
+    expect(sql).not.toContain('JOIN SalesmanTeamMapping tm'); // 不再裸 JOIN 实体表
+  };
 
-  it('performance-heatmap team 维度 → whereWithoutDate 裸 branch_code 绑定 p.（消歧）', () => {
+  it('performance-heatmap team 维度 → 走 team_mapping 剥列 CTE，裸 branch_code 无二义', () => {
     const sql = generatePerformanceOrgHeatmapQuery(BRANCH_SX, 'all', 'day', 15, 'team', [], 'policy_date');
-    expect(sql).toContain("p.branch_code = 'SX'");
-    expectNoBareBranchCode(sql);
+    expect(sql).toContain(BRANCH_SX);
+    expectStrippedTeamCte(sql);
   });
 
-  it('performance drilldown（恒 JOIN tm）→ all_rows 作用域 branch_code 绑定 p.', () => {
-    // whereWithDate 传 '1=1' 隔离 period_bounds（FROM PolicyFact 无 tm JOIN，裸列本就不歧义）；
-    // 只让 whereWithoutDate 的省份过滤流入 all_rows（JOIN tm）作用域，聚焦本 bug 面。
+  it('performance drilldown（恒 JOIN tm）→ all_rows 走 team_mapping 剥列 CTE', () => {
     const sql = generatePerformanceDrilldownQuery('1=1', BRANCH_SX, 'all', 'day', 'mom', [], 'team');
-    expect(sql).toContain("p.branch_code = 'SX'");
-    expectNoBareBranchCode(sql);
+    expect(sql).toContain(BRANCH_SX);
+    expectStrippedTeamCte(sql);
   });
 
-  it('cross-sell-heatmap team 维度（usePF）→ baseWhereClause 裸 branch_code 绑定 p.', () => {
+  it('cross-sell-heatmap team 维度（usePF）→ 走 team_mapping 剥列 CTE', () => {
     const sql = generateCrossSellHeatmapQuery(BRANCH_SX, 'all', undefined, 'day', 'team', [], 'policy_date');
-    expect(sql).toContain("p.branch_code = 'SX'");
-    expectNoBareBranchCode(sql);
+    expect(sql).toContain(BRANCH_SX);
+    expectStrippedTeamCte(sql);
   });
 
-  it('cross-sell team 维度（JOIN tm）→ baseWhereClause 裸 branch_code 绑定事实表 c.', () => {
+  it('cross-sell team 维度（JOIN tm）→ 走 team_mapping 剥列 CTE', () => {
     const sql = generateCrossSellQuery(BRANCH_SX, [], 'team');
-    expect(sql).toContain("c.branch_code = 'SX'");
-    expectNoBareBranchCode(sql);
+    expect(sql).toContain(BRANCH_SX);
+    expectStrippedTeamCte(sql);
   });
 
   it('单省（无省份 permissionFilter）→ 四个生成器均不注入 branch_code（字节安全）', () => {
@@ -147,25 +150,5 @@ describe('主查询 team 维度 branch_code 消歧（2026-07-09 生产 Binder Er
     expect(generatePerformanceDrilldownQuery('1=1', '1=1', 'all', 'day', 'mom', [], 'team')).not.toContain('branch_code');
     expect(generateCrossSellHeatmapQuery('1=1', 'all', undefined, 'day', 'team', [], 'policy_date')).not.toContain('branch_code');
     expect(generateCrossSellQuery('1=1', [], 'team')).not.toContain('branch_code');
-  });
-});
-
-describe('qualifyBranchCodeColumn 纯函数', () => {
-  it('裸 branch_code 等值/IN → 绑定别名', () => {
-    expect(qualifyBranchCodeColumn("branch_code = 'SX'", 'p.')).toBe("p.branch_code = 'SX'");
-    expect(qualifyBranchCodeColumn("branch_code IN ('SC', 'SX')", 'c.')).toBe("c.branch_code IN ('SC', 'SX')");
-    expect(qualifyBranchCodeColumn("(org_level_3 = '乐山') AND branch_code = 'SC'", 'p.'))
-      .toBe("(org_level_3 = '乐山') AND p.branch_code = 'SC'");
-  });
-  it('幂等：已带前缀不重复限定', () => {
-    expect(qualifyBranchCodeColumn("p.branch_code = 'SX'", 'p.')).toBe("p.branch_code = 'SX'");
-    expect(qualifyBranchCodeColumn("tm.branch_code = 'SX'", 'p.')).toBe("tm.branch_code = 'SX'");
-  });
-  it('空别名 → 原样返回（无 JOIN 场景字节安全）', () => {
-    expect(qualifyBranchCodeColumn("branch_code = 'SX'", '')).toBe("branch_code = 'SX'");
-  });
-  it('不误伤字符串字面量 / 子串', () => {
-    expect(qualifyBranchCodeColumn("customer_category = 'branch_code'", 'p.')).toBe("customer_category = 'branch_code'");
-    expect(qualifyBranchCodeColumn("sub_branch_code = 'X'", 'p.')).toBe("sub_branch_code = 'X'");
   });
 });

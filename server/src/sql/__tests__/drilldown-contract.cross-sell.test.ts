@@ -83,13 +83,15 @@ describe('驾意险推介率下钻 — SQL 语义不变式', () => {
   // C-07: team 维度触发 JOIN
   it('C-07: groupBy=team 触发 SalesmanTeamMapping JOIN', () => {
     const sql = gen('team');
-    expect(sql).toContain('LEFT JOIN SalesmanTeamMapping tm');
+    expect(sql).toContain('LEFT JOIN team_mapping tm'); // 剥列 CTE（2026-07-09 Binder Error 根治）
+    expect(sql).toContain('team_mapping AS (SELECT full_name, team_name FROM SalesmanTeamMapping)');
     expect(sql).toContain('team_name');
   });
 
   // C-08: 非 team 维度不产生 JOIN
   it('C-08: groupBy=is_new_car 不触发 SalesmanTeamMapping JOIN', () => {
     const sql = gen('is_new_car');
+    expect(sql).not.toContain('LEFT JOIN team_mapping');
     expect(sql).not.toContain('LEFT JOIN SalesmanTeamMapping');
   });
 
