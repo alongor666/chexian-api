@@ -10,8 +10,9 @@
  * ⚠️ 口径警告（B304）：本文件输出的 `earned_premium` 是【时间分摊口径】，
  *    用 `LEAST(cutoff - 起保 + 1, policy_term) / policy_term × premium` 计算，
  *    `policy_term = +INTERVAL 1 YEAR`（闰年感知 365/366），**不分险类、无系数**。
- *    与 `cost/earned-premium.ts` 的【财务口径】（+INTERVAL 364 DAY + 险类系数
- *    α=0.82/0.94/0.90）**字段同名但公式不同**，禁止下游混用——会算错赔付率。
+ *    与 `cost/earned-premium.ts` 的【财务口径】（终保日 +1 YEAR −1 DAY 闰年感知，
+ *    B304 2026-07-10 拍板统一；含险类系数 α=0.82/0.94/0.90 与首日费用项）
+ *    **语义不同但都叫"已赚保费"**，禁止下游混用——会算错赔付率。
  *    详见 `cost/earned-premium.ts` 文件头对照表 + BACKLOG B304。
  *
  * ⚠️ 赔款分子窗口对齐（B299 · 消费侧）：本文件三处 `LEFT JOIN ClaimsAgg c ON p.policy_no = c.policy_no`

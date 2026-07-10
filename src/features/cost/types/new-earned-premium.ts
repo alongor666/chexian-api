@@ -8,6 +8,10 @@
  * - policyPrevInCurr：Y-1 年保单在 Y 年的已赚（仅时间分摊增量）
  * - policyCurrInCurr：Y 年保单在 Y 年的已赚（含 premium / first_day_fee）
  * - policyCurrInNext：Y 年保单在 Y+1 年的已赚（仅时间分摊增量）
+ *
+ * ⚠️ 口径标注（B304）：本文件类型对应【财务口径】已赚保费（含首日费用与险类系数），
+ * 与满期赔付率分母的【时间分摊口径】earned_premium（满期保费）公式不同，禁止混用。
+ * 对照表见 server/src/sql/cost/earned-premium.ts 文件头。
  */
 
 // ==================== 相对年月度已赚行 ====================

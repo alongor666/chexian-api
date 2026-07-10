@@ -215,6 +215,7 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
     description: '满期赔付率、综合费用率、变动成本率的多维分解。',
     parameters: [...TS_COMMON, ...ORG_FILTER],
     timeWindow: 'window',
+    timeWindowNote: '⚠ 本路由按 type 参数返回两种不同口径的"已赚保费"（B304）：type=earned/earned-new/expense-forecast 为【财务口径】（滚动 12 月，含首日费用与险类系数，字段 earned_premium_cum/total_earned_premium 等）；type=claim 等成本率为【时间分摊口径】（满期保费，字段 earned_premium，是满期赔付率分母）。两者禁止混用，做赔付率分母只能用后者。',
     dataScope: 'any',
     tags: ['cost'],
   },
