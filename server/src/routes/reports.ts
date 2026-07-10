@@ -210,12 +210,62 @@ export function resolveReportOwner(metaPath: string, baseDir: string): ReportOwn
 export function assertStaticReportAccess(req: Request, originalUri: string): void {
   // 粗粒度角色闸先行（与 /api/reports 两个 handler 同序：先拒 telemarketing/未知角色，防枚举）
   assertReportRoleAllowed(req);
-  // branch_admin 全放行（与 assertReportAccess 一致），无需解析路径
-  if ((req.user?.role as UserRole | undefined) === UserRole.BRANCH_ADMIN) return;
+
+  // B346 leak 修复：branch_admin 也按省收紧，不再无条件全放行（历史漏洞：山西分公司管理员
+  // 可经老静态直链读四川省级报告）。与 resolvePortalScope 同源判定——全国超管（visibleBranches
+  // 非空）或系统级超管（无 branchCode）→ fullEntitlement 全放行；单省管理员仅可读本省文件。
+  if ((req.user?.role as UserRole | undefined) === UserRole.BRANCH_ADMIN) {
+    const visible = req.user?.visibleBranches;
+    const canSwitchBranch = Array.isArray(visible) && visible.length > 0;
+    const rawBranch = req.user?.branchCode;
+    if (canSwitchBranch || rawBranch === undefined) return; // 全国/系统级超管全放行
+    if (!isValidBranchCode(rawBranch)) {
+      throw new AppError(403, '无权访问报告'); // 坏 branchCode fail-closed（与门户一致）
+    }
+    const uriBranch = parseStaticReportBranch(originalUri, PORTAL_DEPLOYMENT_BRANCH);
+    if (rawBranch === uriBranch) return;
+    throw new AppError(403, '无权访问其他分公司的报告');
+  }
 
   const owner = parseStaticReportOwner(originalUri);
   // org_user：owner=null（省级/坏路径）fail-closed 403；机构路径走既有归属矩阵
   assertReportAccess(req, owner);
+}
+
+/**
+ * 从静态报告 URI 解析「该文件所属省份」（branch_admin 省级收紧用，B346 leak 修复）。
+ * 与 portalCandidateDirs 的「目录 → 省份」映射语义对齐：
+ *   - /reports/<slug>/orgs/<branch>/<org>/...  → branch（机构级）
+ *   - /reports/<slug>/branches/<branch>/...    → branch（分公司级）
+ *   - /reports/<slug>/<file>（根 legacy 省级） → deploymentBranch（根目录产物按构造属部署省）
+ * 坏路径 / 解码失败 / 遍历字符 → deploymentBranch（根级兜底；配合单省管理员的省份比对，
+ * 非部署省管理员一律拒，fail-closed 不放大——部署省/全国超管本就全放行，无泄漏）。
+ */
+export function parseStaticReportBranch(originalUri: string, deploymentBranch: string): string {
+  if (!originalUri || typeof originalUri !== 'string') return deploymentBranch;
+  const pathOnly = originalUri.split(/[?#]/, 1)[0];
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathOnly);
+  } catch {
+    return deploymentBranch; // 非法编码 → 根级兜底
+  }
+  decoded = decoded.replace(/\/{2,}/g, '/').replace(/\x00/g, '');
+  if (decoded.includes('..') || decoded.includes('\\') || /%2e|%2f|%5c/i.test(decoded)) {
+    return deploymentBranch;
+  }
+  if (!decoded.startsWith('/reports/')) return deploymentBranch;
+  const segments = decoded.split('/').filter((s) => s.length > 0);
+  // 机构级：reports/<slug>/orgs/<branch>/<org>/<file> → segments[3]=branch
+  if (segments.length >= 6 && segments[2] === 'orgs' && /^[A-Z]{2}$/.test(segments[3])) {
+    return segments[3];
+  }
+  // 分公司级：reports/<slug>/branches/<branch>/<file> → segments[3]=branch
+  if (segments.length >= 5 && segments[2] === 'branches' && /^[A-Z]{2}$/.test(segments[3])) {
+    return segments[3];
+  }
+  // 根 legacy 省级：reports/<slug>/<file> → 部署省
+  return deploymentBranch;
 }
 
 /**

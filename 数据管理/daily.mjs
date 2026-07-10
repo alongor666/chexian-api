@@ -1023,6 +1023,7 @@ function runPeriodTrendReport(scriptDir, python) {
     return;
   }
   const projectRoot = dirname(scriptDir);
+  const deployBranch = resolveEnvBranchCode('runPeriodTrendReport');
   log('cyan', '\n═══ 9. 短中长期对照报告（diagnose-period-trend skill）═══\n');
   const runOnce = (extraArgs, label) => {
     const result = spawnSync(
@@ -1051,7 +1052,6 @@ function runPeriodTrendReport(scriptDir, python) {
     // 门户（/api/reports/portal）按 branch_admin 的省份从 branches/ 取数
     // （B346：单省山西管理员不得读到四川省级报告）。镜像失败不阻塞。
     try {
-      const deployBranch = resolveEnvBranchCode('runPeriodTrendReport');
       const plan = planProvinceMirror(existsSync(slugDir) ? readdirSync(slugDir) : []);
       if (plan) {
         const destDir = join(slugDir, 'branches', deployBranch);
@@ -1095,6 +1095,15 @@ function runPeriodTrendReport(scriptDir, python) {
       continue;
     }
     if (units === null) continue; // 枚举来源即文件本身，理论不可达；防御性跳过
+    // 省级分省报告（B346 SX follow-up）：非部署省的省级报告落 branches/<code>/，供该省分公司
+    // 管理员（如 SX 的 yangjie0621）门户按省取数。部署省（deployBranch）的省级报告已由上方
+    // root→branches/<deployBranch> 镜像覆盖，此处跳过避免重复生成（SC 老路零回归）。
+    // skill 需支持「仅 --branch」省级模式（v2.5.0+）；旧 skill 会拒绝该调用，runOnce 返回 false 仅告警不阻塞。
+    if (branchCode !== deployBranch) {
+      if (runOnce(['--branch', branchCode], `${branchCode} 省级`)) {
+        log('green', `✅ [${branchCode}] 省级短中长期对照报告已生成（branches/${branchCode}/）`);
+      }
+    }
     log('cyan', `[ETL] [${branchCode}] 机构级短中长期报告：共 ${units.length} 个机构（orgs/${branchCode}/<机构>/）`);
     let orgOk = 0;
     for (const org of units) {
