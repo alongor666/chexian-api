@@ -7,12 +7,12 @@
 数据统一存放于 `policy/current/`（4 个分片），服务器直接加载：
 
 - `warehouse/fact/policy/current/*.parquet` — 保单+保费，3层分片（static/weekly/daily）
-- `warehouse/fact/claims/latest.parquet` — 赔付+费用，每周全量替换
+- `warehouse/fact/claims_detail/claims_*.parquet` — 赔案明细，年度分区（claims 域已删除，赔付数据统一由 claims_detail 提供，ClaimsAgg 由服务端动态聚合）
 - `warehouse/fact/quotes/latest.parquet` — 报价状态，每日全量替换
 
 服务器启动直接加载 `policy/current/` 分片，无 daily/ 检测逻辑。
 
-ETL 唯一入口：`node 数据管理/daily.mjs`（3层分片架构，无参数自动检测）。
+ETL 唯一入口：`node 数据管理/daily.mjs <域>|all`（域清单见 daily.mjs 的 `ALL_DOMAINS` 常量；⚠️ 无参会跌落 premium 单域 ETL，并非自动检测）。
 
 ## 红线
 
