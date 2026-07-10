@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   generateClaimRatioQuery,
   generateExpenseRatioQuery,
@@ -7,14 +7,10 @@ import {
   getRolling12MonthWindowStart,
   generateEarnedPremiumQuery,
   generateEarnedPremiumSummaryQuery,
-  generatePolicy2025In2025Query,
-  generatePolicy2025In2026Query,
-  generatePolicy2026In2026Query,
-  generatePolicy2026In2027Query,
-  generatePolicy2025EarnedPremiumQuery,
-  generatePolicy2026EarnedPremiumQuery,
+  generateEarnedPremiumMatrixQueries,
   generateNewEarnedPremiumSummaryQuery,
   generateMonthlyExpenseQuery,
+  resolveCostAnchorYear,
   DIMENSION_LABELS,
   COST_ANALYSIS_PRESETS,
   type CostDimension,
@@ -321,120 +317,125 @@ describe('generateEarnedPremiumSummaryQuery', () => {
 });
 
 // ══════════════════════════════════════════════════��
-// 3. V3 期间已赚保费委托包装器（4 个函数）
+// 3. V3 期间已赚保费矩阵（锚定年参数化）
 // ═══════════════════════════════════════════════════
 
-describe('V3 期间已赚保费包装器', () => {
-  it('generatePolicy2025In2025Query: policyYear=2025, earnedYear=2025', () => {
-    const sql = generatePolicy2025In2025Query();
-    expect(sql).toContain('2025');
-    expect(sql).toContain('earned_2025_total');
+describe('generateEarnedPremiumMatrixQueries', () => {
+  const matrix = generateEarnedPremiumMatrixQueries(2026);
+
+  it('prevInPrev: 筛选 Y-1 年保单，同年含保费/首日费用列', () => {
+    expect(matrix.prevInPrev).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2025');
+    expect(matrix.prevInPrev).toContain('AS premium');
+    expect(matrix.prevInPrev).toContain('AS first_day_fee');
+    expect(matrix.prevInPrev).toContain('AS earned_total');
   });
 
-  it('generatePolicy2025In2026Query: policyYear=2025, earnedYear=2026', () => {
-    const sql = generatePolicy2025In2026Query();
-    expect(sql).toContain('earned_2026_total');
+  it('prevInCurr: 筛选 Y-1 年保单，跨年无保费列', () => {
+    expect(matrix.prevInCurr).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2025');
+    expect(matrix.prevInCurr).not.toContain('AS first_day_fee');
+    expect(matrix.prevInCurr).toContain("DATE '2026-12-31'");
   });
 
-  it('generatePolicy2026In2026Query: policyYear=2026, earnedYear=2026', () => {
-    const sql = generatePolicy2026In2026Query();
-    expect(sql).toContain('earned_2026_total');
+  it('currInCurr: 筛选 Y 年保单，同年含保费/首日费用列', () => {
+    expect(matrix.currInCurr).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026');
+    expect(matrix.currInCurr).toContain('AS first_day_fee');
   });
 
-  it('generatePolicy2026In2027Query: policyYear=2026, earnedYear=2027', () => {
-    const sql = generatePolicy2026In2027Query();
-    expect(sql).toContain('earned_2027_total');
+  it('currInNext: 筛选 Y 年保单，跨年推进到 Y+1 月末', () => {
+    expect(matrix.currInNext).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026');
+    expect(matrix.currInNext).toContain("DATE '2027-12-31'");
   });
 
-  it('所有包装器接受 whereClause', () => {
+  it('字段契约为相对年 key：earned_01..earned_12，不再出现 earned_YYYY_MM', () => {
+    for (const sql of Object.values(matrix)) {
+      expect(sql).toContain('AS earned_01');
+      expect(sql).toContain('AS earned_12');
+      expect(sql).toContain('AS earned_total');
+      expect(sql).not.toMatch(/AS earned_\d{4}_/);
+    }
+  });
+
+  it('锚定年联动：换 2027 → 保单年过滤与月末日期整体平移', () => {
+    const m27 = generateEarnedPremiumMatrixQueries(2027);
+    expect(m27.prevInPrev).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026');
+    expect(m27.currInNext).toContain("DATE '2028-12-31'");
+  });
+
+  it('接受 whereClause', () => {
     const where = "org_level_3 = '天府'";
-    for (const fn of [
-      generatePolicy2025In2025Query,
-      generatePolicy2025In2026Query,
-      generatePolicy2026In2026Query,
-      generatePolicy2026In2027Query,
-    ]) {
-      const sql = fn({ whereClause: where });
+    const m = generateEarnedPremiumMatrixQueries(2026, { whereClause: where });
+    for (const sql of Object.values(m)) {
       expect(sql).toContain(where);
     }
   });
 });
 
 // ═══════════════════════════════════════════════════
-// 4. 月度已赚/费用明细（4 个函数）
+// 4. 滚动汇总 / 月度费用（锚定年参数化）
 // ═══════════════════════════════════════════════════
 
-describe('generatePolicy2025EarnedPremiumQuery', () => {
-  it('筛选 2025 年保单', () => {
-    const sql = generatePolicy2025EarnedPremiumQuery();
-    expect(sql).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2025');
+describe('resolveCostAnchorYear', () => {
+  afterEach(() => {
+    delete process.env.COST_ANCHOR_YEAR;
   });
 
-  it('输出 12 个月增量字段 + 验证差异', () => {
-    const sql = generatePolicy2025EarnedPremiumQuery();
-    expect(sql).toContain('earned_2025_12'); // 截至25年末
-    expect(sql).toContain('earned_2026_01'); // 26年1月增量
-    expect(sql).toContain('earned_2026_12'); // 26年12月增量
-    expect(sql).toContain('earned_total');
-    expect(sql).toContain('validation_diff');
+  it('默认返回北京时间当前年份', () => {
+    const beijingYear = Number(
+      new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', year: 'numeric' }).format(new Date())
+    );
+    expect(resolveCostAnchorYear()).toBe(beijingYear);
   });
 
-  it('按起保月分组', () => {
-    const sql = generatePolicy2025EarnedPremiumQuery();
-    expect(sql).toContain('GROUP BY policy_month');
-    expect(sql).toContain('ORDER BY policy_month');
-  });
-});
-
-describe('generatePolicy2026EarnedPremiumQuery', () => {
-  it('筛选 2026 年保单', () => {
-    const sql = generatePolicy2026EarnedPremiumQuery();
-    expect(sql).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026');
+  it('COST_ANCHOR_YEAR 环境变量可固定锚定年', () => {
+    process.env.COST_ANCHOR_YEAR = '2025';
+    expect(resolveCostAnchorYear()).toBe(2025);
   });
 
-  it('输出 26 年 + 27 年各 12 个月字段', () => {
-    const sql = generatePolicy2026EarnedPremiumQuery();
-    expect(sql).toContain('earned_2026_01');
-    expect(sql).toContain('earned_2026_12');
-    expect(sql).toContain('earned_2027_01');
-    expect(sql).toContain('earned_2027_12');
+  it('非法环境变量回退默认', () => {
+    process.env.COST_ANCHOR_YEAR = 'abc';
+    expect(resolveCostAnchorYear()).toBeGreaterThanOrEqual(2026);
   });
 });
 
 describe('generateNewEarnedPremiumSummaryQuery', () => {
   it('12 个月 UNION ALL', () => {
-    const sql = generateNewEarnedPremiumSummaryQuery();
+    const sql = generateNewEarnedPremiumSummaryQuery(2026);
     // 12 个月 = 11 个 UNION ALL
     const unionCount = (sql.match(/UNION ALL/g) || []).length;
     expect(unionCount).toBe(11);
   });
 
-  it('输出滚动保费 + 分年已赚 + 已赚率', () => {
-    const sql = generateNewEarnedPremiumSummaryQuery();
+  it('输出滚动保费 + 相对年已赚 + 已赚率', () => {
+    const sql = generateNewEarnedPremiumSummaryQuery(2026);
     expect(sql).toContain('rolling_12m_premium');
-    expect(sql).toContain('earned_from_2025');
-    expect(sql).toContain('earned_from_2026');
+    expect(sql).toContain('earned_from_prev');
+    expect(sql).toContain('earned_from_curr');
     expect(sql).toContain('total_earned_premium');
     expect(sql).toContain('earned_ratio');
   });
 
-  it('统计月份从 2026-01 到 2026-12', () => {
-    const sql = generateNewEarnedPremiumSummaryQuery();
+  it('统计月份从 Y-01 到 Y-12，窗口锚点随锚定年平移', () => {
+    const sql = generateNewEarnedPremiumSummaryQuery(2026);
     expect(sql).toContain("'2026-01'");
     expect(sql).toContain("'2026-12'");
+    expect(sql).toContain("DATE '2024-12-31'"); // M=1 窗口前一天 = Y-2 年末
+
+    const sql27 = generateNewEarnedPremiumSummaryQuery(2027);
+    expect(sql27).toContain("'2027-01'");
+    expect(sql27).toContain("DATE '2025-12-31'");
   });
 });
 
 describe('generateMonthlyExpenseQuery', () => {
   it('按起保月分组', () => {
-    const sql = generateMonthlyExpenseQuery();
+    const sql = generateMonthlyExpenseQuery(2026);
     expect(sql).toContain("STRFTIME(CAST(insurance_start_date AS DATE), '%Y-%m') AS policy_month");
     expect(sql).toContain('GROUP BY');
     expect(sql).toContain('ORDER BY policy_month');
   });
 
   it('输出保费 + 费用 + 税金', () => {
-    const sql = generateMonthlyExpenseQuery();
+    const sql = generateMonthlyExpenseQuery(2026);
     expect(sql).toContain('total_premium');
     expect(sql).toContain('total_fee');
     expect(sql).toContain('tax');
@@ -442,19 +443,19 @@ describe('generateMonthlyExpenseQuery', () => {
   });
 
   it('附加税费率 1.5%（B274：引用 fixed-cost-params.json SSOT，修正离群硬编码 0.016）', () => {
-    const sql = generateMonthlyExpenseQuery();
+    const sql = generateMonthlyExpenseQuery(2026);
     expect(sql).toContain('SUM(premium) * 0.015');
     expect(sql).not.toContain('0.016');
   });
 
-  it('覆盖 2025 + 2026 两年', () => {
-    const sql = generateMonthlyExpenseQuery();
-    expect(sql).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2025');
-    expect(sql).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) = 2026');
+  it('覆盖 Y-1 + Y 两个保单年度', () => {
+    const sql = generateMonthlyExpenseQuery(2026);
+    expect(sql).toContain('EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) IN (2025, 2026)');
+    expect(generateMonthlyExpenseQuery(2027)).toContain('IN (2026, 2027)');
   });
 
   it('接受 whereClause', () => {
-    const sql = generateMonthlyExpenseQuery({ whereClause: "org_level_3 = '天府'" });
+    const sql = generateMonthlyExpenseQuery(2026, { whereClause: "org_level_3 = '天府'" });
     expect(sql).toContain("org_level_3 = '天府'");
   });
 });
@@ -498,10 +499,10 @@ describe('安全性', () => {
       () => generateVariableCostQuery(BASE_CONFIG),
       () => generateEarnedPremiumQuery({ cutoffDate: '2026-03-31' }),
       () => generateEarnedPremiumSummaryQuery({ cutoffDate: '2026-03-31' }),
-      () => generatePolicy2025EarnedPremiumQuery(),
-      () => generatePolicy2026EarnedPremiumQuery(),
-      () => generateNewEarnedPremiumSummaryQuery(),
-      () => generateMonthlyExpenseQuery(),
+      () => generateEarnedPremiumMatrixQueries(2026).prevInPrev,
+      () => generateEarnedPremiumMatrixQueries(2026).currInNext,
+      () => generateNewEarnedPremiumSummaryQuery(2026),
+      () => generateMonthlyExpenseQuery(2026),
     ]) {
       const sql = fn();
       expect(sql.length).toBeGreaterThan(50);

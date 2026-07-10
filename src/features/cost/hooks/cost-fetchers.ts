@@ -24,10 +24,8 @@ import type {
   EarnedPremiumData,
   EarnedPremiumSummaryData,
   CostSummary,
-  Policy2025In2025Data,
-  Policy2025In2026Data,
-  Policy2026In2026Data,
-  Policy2026In2027Data,
+  SameYearEarnedRow,
+  CrossYearEarnedRow,
   NewEarnedPremiumSummaryData,
   MonthlyExpenseData,
   ExpenseRatioForecastData,
@@ -132,11 +130,17 @@ export async function fetchEarnedPremium(
 }
 
 interface NewEarnedPremiumResult {
-  policy2025In2025Data: Policy2025In2025Data[];
-  policy2025In2026Data: Policy2025In2026Data[];
-  policy2026In2026Data: Policy2026In2026Data[];
-  policy2026In2027Data: Policy2026In2027Data[];
+  anchorYear: number;
+  policyPrevInPrevData: SameYearEarnedRow[];
+  policyPrevInCurrData: CrossYearEarnedRow[];
+  policyCurrInCurrData: SameYearEarnedRow[];
+  policyCurrInNextData: CrossYearEarnedRow[];
   summaryData: NewEarnedPremiumSummaryData[];
+}
+
+/** 后端未回传锚定年时的兜底：取本地当前年（与后端北京时区口径差异仅出现在跨年时刻附近） */
+export function fallbackAnchorYear(): number {
+  return new Date().getFullYear();
 }
 
 export async function fetchNewEarnedPremium(
@@ -148,27 +152,31 @@ export async function fetchNewEarnedPremium(
   });
 
   const responseData = (response as Record<string, unknown>) || {};
-  const policy2025In2025Data = (responseData.policy2025In2025 || []) as Policy2025In2025Data[];
-  const policy2025In2026Data = (responseData.policy2025In2026 || []) as Policy2025In2026Data[];
-  const policy2026In2026Data = (responseData.policy2026In2026 || []) as Policy2026In2026Data[];
-  const policy2026In2027Data = (responseData.policy2026In2027 || []) as Policy2026In2027Data[];
+  const anchorYear = Number(responseData.anchorYear) || fallbackAnchorYear();
+  const policyPrevInPrevData = (responseData.policyPrevInPrev || []) as SameYearEarnedRow[];
+  const policyPrevInCurrData = (responseData.policyPrevInCurr || []) as CrossYearEarnedRow[];
+  const policyCurrInCurrData = (responseData.policyCurrInCurr || []) as SameYearEarnedRow[];
+  const policyCurrInNextData = (responseData.policyCurrInNext || []) as CrossYearEarnedRow[];
 
   const summaryData = calculateRolling12MonthSummary(
-    policy2025In2025Data,
-    policy2025In2026Data,
-    policy2026In2026Data
+    policyPrevInPrevData,
+    policyPrevInCurrData,
+    policyCurrInCurrData,
+    anchorYear
   );
 
   return {
-    policy2025In2025Data,
-    policy2025In2026Data,
-    policy2026In2026Data,
-    policy2026In2027Data,
+    anchorYear,
+    policyPrevInPrevData,
+    policyPrevInCurrData,
+    policyCurrInCurrData,
+    policyCurrInNextData,
     summaryData,
   };
 }
 
 interface ExpenseRatioForecastFetchResult {
+  anchorYear: number;
   forecastData: ExpenseRatioForecastData[];
   monthlyExpenseData: MonthlyExpenseData[];
 }
@@ -184,6 +192,7 @@ export async function fetchExpenseRatioForecast(
   });
 
   const responseData = (response as Record<string, unknown>) || {};
+  const anchorYear = Number(responseData.anchorYear) || fallbackAnchorYear();
   const summaryData = (responseData.summaryData || []) as NewEarnedPremiumSummaryData[];
   const monthlyExpenseData = (responseData.monthlyExpenseData || []) as MonthlyExpenseData[];
 
@@ -193,5 +202,5 @@ export async function fetchExpenseRatioForecast(
     operatingCostRate
   );
 
-  return { forecastData, monthlyExpenseData };
+  return { anchorYear, forecastData, monthlyExpenseData };
 }

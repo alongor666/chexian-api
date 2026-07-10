@@ -29,11 +29,11 @@ export interface ExpenseRatioForecastData {
   /** 统计月份，格式 YYYY-MM */
   stat_month: string;
 
-  // 分母 - 已赚保费（滚动12个月）
-  /** 来自2025年保单的已赚保费 */
-  earned_from_2025: number;
-  /** 来自2026年保单的已赚保费 */
-  earned_from_2026: number;
+  // 分母 - 已赚保费（滚动12个月，锚定年 Y）
+  /** 来自上一保单年度（Y-1）保单的已赚保费 */
+  earned_from_prev: number;
+  /** 来自锚定年（Y）保单的已赚保费 */
+  earned_from_curr: number;
   /** 总已赚保费 */
   total_earned_premium: number;
 
@@ -63,7 +63,9 @@ export interface ExpenseRatioForecastData {
  * 综合费用率预测Hook结果
  */
 export interface ExpenseRatioForecastResult {
-  /** 预测数据（2026年各月） */
+  /** 预测锚定年（后端解析的分析年度 Y） */
+  anchorYear: number;
+  /** 预测数据（锚定年各月） */
   forecastData: ExpenseRatioForecastData[];
   /** 月度费用明细 */
   monthlyExpenseData: MonthlyExpenseData[];

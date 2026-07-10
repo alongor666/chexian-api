@@ -7,12 +7,10 @@ import {
   generateComprehensiveCostQuery,
   generateVariableCostQuery,
   generateEarnedPremiumQuery,
-  generatePolicy2025In2025Query,
-  generatePolicy2025In2026Query,
-  generatePolicy2026In2026Query,
-  generatePolicy2026In2027Query,
+  generateEarnedPremiumMatrixQueries,
   generateNewEarnedPremiumSummaryQuery,
   generateMonthlyExpenseQuery,
+  resolveCostAnchorYear,
   CostDimension,
 } from '../../sql/cost.js';
 import { isCostCubeServable, generateCostCubeQuery, type CostCubeAnalysisType } from '../../sql/cube/cost-cube.js';
@@ -104,21 +102,23 @@ router.get(
       }
 
       if (type === 'earned-new') {
-        const config = { whereClause: finalWhereClause };
-        const [policy2025In2025, policy2025In2026, policy2026In2026, policy2026In2027] = await Promise.all([
-          duckdbService.query(generatePolicy2025In2025Query(config)),
-          duckdbService.query(generatePolicy2025In2026Query(config)),
-          duckdbService.query(generatePolicy2026In2026Query(config)),
-          duckdbService.query(generatePolicy2026In2027Query(config)),
+        const anchorYear = resolveCostAnchorYear();
+        const matrix = generateEarnedPremiumMatrixQueries(anchorYear, { whereClause: finalWhereClause });
+        const [policyPrevInPrev, policyPrevInCurr, policyCurrInCurr, policyCurrInNext] = await Promise.all([
+          duckdbService.query(matrix.prevInPrev),
+          duckdbService.query(matrix.prevInCurr),
+          duckdbService.query(matrix.currInCurr),
+          duckdbService.query(matrix.currInNext),
         ]);
 
         res.json({
           success: true,
           data: {
-            policy2025In2025,
-            policy2025In2026,
-            policy2026In2026,
-            policy2026In2027,
+            anchorYear,
+            policyPrevInPrev,
+            policyPrevInCurr,
+            policyCurrInCurr,
+            policyCurrInNext,
           },
         });
         return;
@@ -130,13 +130,15 @@ router.get(
         throw new AppError(400, `Invalid operatingCostRate: ${operatingCostRate}. Expected 0-100`);
       }
 
+      const anchorYear = resolveCostAnchorYear();
       const config = { whereClause: finalWhereClause };
-      const summaryData = await duckdbService.query(generateNewEarnedPremiumSummaryQuery(config));
-      const monthlyExpenseData = await duckdbService.query(generateMonthlyExpenseQuery(config));
+      const summaryData = await duckdbService.query(generateNewEarnedPremiumSummaryQuery(anchorYear, config));
+      const monthlyExpenseData = await duckdbService.query(generateMonthlyExpenseQuery(anchorYear, config));
 
       res.json({
         success: true,
         data: {
+          anchorYear,
           summaryData,
           monthlyExpenseData,
           operatingCostRate: parsedRate,

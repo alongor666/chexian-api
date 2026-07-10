@@ -3,12 +3,12 @@
  * New Earned Premium Analysis Table V4 - Actuarial Triangle View
  *
  * 核心改进：
- * - 2025年保单：合并为单个精算三角表（起保月 × 统计月）
- * - 2026年保单：合并为单个精算三角表（起保月 × 统计月）
+ * - 上一保单年度（Y-1）：合并为单个精算三角表（起保月 × 统计月）
+ * - 锚定年保单（Y）：合并为单个精算三角表（起保月 × 统计月）
  * - 汇总统计：滚动12个月统计
  *
  * 精算三角特征：
- * - 统计月列：25-1 到 25-12，26-1 到 26-12
+ * - 统计月列：起保年 1-12 月 + 次年 1-12 月（绝对年份由 anchorYear 推导）
  * - 0值灰色显示，聚焦三角区域
  * - 首日费用已并入起保月的已赚字段
  */
@@ -28,22 +28,23 @@ import {
   cn,
 } from '../../../shared/styles';
 import type {
-  Policy2025In2025Data,
-  Policy2025In2026Data,
-  Policy2026In2026Data,
-  Policy2026In2027Data,
+  SameYearEarnedRow,
+  CrossYearEarnedRow,
   NewEarnedPremiumSummaryData,
 } from '../types/costTypes';
+import { getEarnedMonthValue } from '../types/new-earned-premium';
 
 interface NewEarnedPremiumTableProps {
-  /** 2025年保单在2025年的已赚数据 */
-  policy2025In2025Data: Policy2025In2025Data[];
-  /** 2025年保单在2026年的已赚数据 */
-  policy2025In2026Data: Policy2025In2026Data[];
-  /** 2026年保单在2026年的已赚数据 */
-  policy2026In2026Data: Policy2026In2026Data[];
-  /** 2026年保单在2027年的已赚数据 */
-  policy2026In2027Data: Policy2026In2027Data[];
+  /** 锚定年 Y（后端解析的分析年度） */
+  anchorYear: number;
+  /** Y-1 年保单在 Y-1 年的已赚数据 */
+  policyPrevInPrevData: SameYearEarnedRow[];
+  /** Y-1 年保单在 Y 年的已赚数据 */
+  policyPrevInCurrData: CrossYearEarnedRow[];
+  /** Y 年保单在 Y 年的已赚数据 */
+  policyCurrInCurrData: SameYearEarnedRow[];
+  /** Y 年保单在 Y+1 年的已赚数据 */
+  policyCurrInNextData: CrossYearEarnedRow[];
   /** 汇总数据 */
   summaryData: NewEarnedPremiumSummaryData[];
   loading?: boolean;
@@ -51,8 +52,8 @@ interface NewEarnedPremiumTableProps {
   onExportExcel?: () => void;
 }
 
-/** 主标签页类型 */
-type MainTab = '2025' | '2026' | 'summary' | 'rolling12';
+/** 主标签页类型（prev = Y-1 年保单，curr = Y 年保单） */
+type MainTab = 'prev' | 'curr' | 'summary' | 'rolling12';
 
 /** 月份标签 */
 const MONTH_LABELS: Record<number, string> = {
@@ -63,36 +64,18 @@ const MONTH_LABELS: Record<number, string> = {
 
 // ==================== 精算三角数据类型 ====================
 
-/** 2025年保单精算三角行数据（合并25年和26年） */
-interface Policy2025TriangleRow {
+/**
+ * 保单精算三角行数据（起保年 + 次年两段各 12 个月，按月序数组存储）
+ * 绝对年份由渲染层的 baseYear 推导，行结构与具体年份解耦。
+ */
+interface PolicyTriangleRow {
   policy_month: number;
   premium: number;
   first_day_fee: number;
-  // 25年各月已赚
-  earned_25_01: number; earned_25_02: number; earned_25_03: number; earned_25_04: number;
-  earned_25_05: number; earned_25_06: number; earned_25_07: number; earned_25_08: number;
-  earned_25_09: number; earned_25_10: number; earned_25_11: number; earned_25_12: number;
-  // 26年各月已赚
-  earned_26_01: number; earned_26_02: number; earned_26_03: number; earned_26_04: number;
-  earned_26_05: number; earned_26_06: number; earned_26_07: number; earned_26_08: number;
-  earned_26_09: number; earned_26_10: number; earned_26_11: number; earned_26_12: number;
-  // 最终已赚（满期）
-  earned_total: number;
-}
-
-/** 2026年保单精算三角行数据（合并26年和27年） */
-interface Policy2026TriangleRow {
-  policy_month: number;
-  premium: number;
-  first_day_fee: number;
-  // 26年各月已赚
-  earned_26_01: number; earned_26_02: number; earned_26_03: number; earned_26_04: number;
-  earned_26_05: number; earned_26_06: number; earned_26_07: number; earned_26_08: number;
-  earned_26_09: number; earned_26_10: number; earned_26_11: number; earned_26_12: number;
-  // 27年各月已赚
-  earned_27_01: number; earned_27_02: number; earned_27_03: number; earned_27_04: number;
-  earned_27_05: number; earned_27_06: number; earned_27_07: number; earned_27_08: number;
-  earned_27_09: number; earned_27_10: number; earned_27_11: number; earned_27_12: number;
+  /** 起保年 1-12 月当月已赚（含首日费用并入起保月） */
+  firstYearEarned: number[];
+  /** 次年 1-12 月当月已赚（仅时间分摊增量） */
+  secondYearEarned: number[];
   // 最终已赚（满期）
   earned_total: number;
 }
@@ -101,8 +84,8 @@ interface Policy2026TriangleRow {
 interface DisplaySummaryData {
   stat_month: string;
   rolling_12m_premium: string;
-  earned_from_2025: string;
-  earned_from_2026: string;
+  earned_from_prev: string;
+  earned_from_curr: string;
   total_earned_premium: string;
   earned_ratio: string;
 }
@@ -111,8 +94,8 @@ interface DisplaySummaryData {
 interface Rolling12MonthCompareData {
   stat_month: string;           // 统计月（如 "26年1月"）
   window_range: string;         // 窗口范围（如 "25/2→26/1"）
-  policy_2025_months: string;   // 25年保单参与月数（如 "11个月"）
-  policy_2026_months: string;   // 26年保单参与月数（如 "1个月"）
+  policy_prev_months: string;   // 上一年保单参与月数（如 "11个月"）
+  policy_curr_months: string;   // 统计年保单参与月数（如 "1个月"）
   rolling_12m_premium: string;  // R12M保费(万)
   total_earned: string;         // R12M已赚(万)
   earned_ratio: string;         // 已赚率
@@ -120,102 +103,32 @@ interface Rolling12MonthCompareData {
 
 // ==================== 数据合并函数 ====================
 
-/** 合并2025年保单数据为精算三角行 */
-function merge2025PolicyData(
-  data2025In2025: Policy2025In2025Data[],
-  data2025In2026: Policy2025In2026Data[]
-): Policy2025TriangleRow[] {
-  const result: Policy2025TriangleRow[] = [];
+const TRIANGLE_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-  for (let m = 1; m <= 12; m++) {
-    const row2025 = data2025In2025.find(r => r.policy_month === m);
-    const row2026 = data2025In2026.find(r => r.policy_month === m);
+/**
+ * 合并某保单年度的「同年已赚 + 次年已赚」为精算三角行。
+ * 两个保单年度（Y-1 / Y）结构完全一致，统一走本函数。
+ */
+function mergeTriangleData(
+  sameYearData: SameYearEarnedRow[],
+  nextYearData: CrossYearEarnedRow[]
+): PolicyTriangleRow[] {
+  const result: PolicyTriangleRow[] = [];
 
-    if (!row2025) continue;
+  for (const m of TRIANGLE_MONTHS) {
+    const sameRow = sameYearData.find((r) => r.policy_month === m);
+    const nextRow = nextYearData.find((r) => r.policy_month === m);
 
-    result.push({
-      policy_month: m,
-      premium: row2025.premium,
-      first_day_fee: row2025.first_day_fee,
-      // 25年
-      earned_25_01: row2025.earned_2025_01,
-      earned_25_02: row2025.earned_2025_02,
-      earned_25_03: row2025.earned_2025_03,
-      earned_25_04: row2025.earned_2025_04,
-      earned_25_05: row2025.earned_2025_05,
-      earned_25_06: row2025.earned_2025_06,
-      earned_25_07: row2025.earned_2025_07,
-      earned_25_08: row2025.earned_2025_08,
-      earned_25_09: row2025.earned_2025_09,
-      earned_25_10: row2025.earned_2025_10,
-      earned_25_11: row2025.earned_2025_11,
-      earned_25_12: row2025.earned_2025_12,
-      // 26年
-      earned_26_01: row2026?.earned_2026_01 ?? 0,
-      earned_26_02: row2026?.earned_2026_02 ?? 0,
-      earned_26_03: row2026?.earned_2026_03 ?? 0,
-      earned_26_04: row2026?.earned_2026_04 ?? 0,
-      earned_26_05: row2026?.earned_2026_05 ?? 0,
-      earned_26_06: row2026?.earned_2026_06 ?? 0,
-      earned_26_07: row2026?.earned_2026_07 ?? 0,
-      earned_26_08: row2026?.earned_2026_08 ?? 0,
-      earned_26_09: row2026?.earned_2026_09 ?? 0,
-      earned_26_10: row2026?.earned_2026_10 ?? 0,
-      earned_26_11: row2026?.earned_2026_11 ?? 0,
-      earned_26_12: row2026?.earned_2026_12 ?? 0,
-      // 最终已赚 = 25年total + 26年total
-      earned_total: row2025.earned_2025_total + (row2026?.earned_2026_total ?? 0),
-    });
-  }
-
-  return result;
-}
-
-/** 合并2026年保单数据为精算三角行 */
-function merge2026PolicyData(
-  data2026In2026: Policy2026In2026Data[],
-  data2026In2027: Policy2026In2027Data[]
-): Policy2026TriangleRow[] {
-  const result: Policy2026TriangleRow[] = [];
-
-  for (let m = 1; m <= 12; m++) {
-    const row2026 = data2026In2026.find(r => r.policy_month === m);
-    const row2027 = data2026In2027.find(r => r.policy_month === m);
-
-    if (!row2026) continue;
+    if (!sameRow) continue;
 
     result.push({
       policy_month: m,
-      premium: row2026.premium,
-      first_day_fee: row2026.first_day_fee,
-      // 26年
-      earned_26_01: row2026.earned_2026_01,
-      earned_26_02: row2026.earned_2026_02,
-      earned_26_03: row2026.earned_2026_03,
-      earned_26_04: row2026.earned_2026_04,
-      earned_26_05: row2026.earned_2026_05,
-      earned_26_06: row2026.earned_2026_06,
-      earned_26_07: row2026.earned_2026_07,
-      earned_26_08: row2026.earned_2026_08,
-      earned_26_09: row2026.earned_2026_09,
-      earned_26_10: row2026.earned_2026_10,
-      earned_26_11: row2026.earned_2026_11,
-      earned_26_12: row2026.earned_2026_12,
-      // 27年
-      earned_27_01: row2027?.earned_2027_01 ?? 0,
-      earned_27_02: row2027?.earned_2027_02 ?? 0,
-      earned_27_03: row2027?.earned_2027_03 ?? 0,
-      earned_27_04: row2027?.earned_2027_04 ?? 0,
-      earned_27_05: row2027?.earned_2027_05 ?? 0,
-      earned_27_06: row2027?.earned_2027_06 ?? 0,
-      earned_27_07: row2027?.earned_2027_07 ?? 0,
-      earned_27_08: row2027?.earned_2027_08 ?? 0,
-      earned_27_09: row2027?.earned_2027_09 ?? 0,
-      earned_27_10: row2027?.earned_2027_10 ?? 0,
-      earned_27_11: row2027?.earned_2027_11 ?? 0,
-      earned_27_12: row2027?.earned_2027_12 ?? 0,
-      // 最终已赚 = 26年total + 27年total
-      earned_total: row2026.earned_2026_total + (row2027?.earned_2027_total ?? 0),
+      premium: sameRow.premium,
+      first_day_fee: sameRow.first_day_fee,
+      firstYearEarned: TRIANGLE_MONTHS.map((mm) => getEarnedMonthValue(sameRow, mm)),
+      secondYearEarned: TRIANGLE_MONTHS.map((mm) => (nextRow ? getEarnedMonthValue(nextRow, mm) : 0)),
+      // 最终已赚 = 起保年 total + 次年 total
+      earned_total: sameRow.earned_total + (nextRow?.earned_total ?? 0),
     });
   }
 
@@ -230,8 +143,8 @@ function transformSummaryData(data: NewEarnedPremiumSummaryData[]): DisplaySumma
     return {
       stat_month: `${shortYear}年${monthLabel}`,
       rolling_12m_premium: formatPremiumWan(row.rolling_12m_premium),
-      earned_from_2025: formatPremiumWan(row.earned_from_2025),
-      earned_from_2026: formatPremiumWan(row.earned_from_2026),
+      earned_from_prev: formatPremiumWan(row.earned_from_prev),
+      earned_from_curr: formatPremiumWan(row.earned_from_curr),
       total_earned_premium: formatPremiumWan(row.total_earned_premium),
       earned_ratio: formatPercent(row.earned_ratio, 1),
     };
@@ -263,26 +176,26 @@ function transformToRolling12MonthCompare(
       // 例如：统计月26年3月 → 窗口 [25/4, 26/3]
       const windowStartMonth = month + 1;
       let windowRange: string;
-      let policy2025Months: number;
-      let policy2026Months: number;
+      let policyPrevMonths: number;
+      let policyCurrMonths: number;
 
       if (windowStartMonth <= 12) {
         // 窗口跨两年
         windowRange = `${shortPrevYear}/${windowStartMonth}→${shortYear}/${month}`;
-        policy2025Months = 12 - month; // 25年参与月数 = 12 - statMonth
-        policy2026Months = month;      // 26年参与月数 = statMonth
+        policyPrevMonths = 12 - month; // 上一年参与月数 = 12 - statMonth
+        policyCurrMonths = month;      // 统计年参与月数 = statMonth
       } else {
-        // 窗口在同一年（statMonth=12时，窗口=[26/1, 26/12]）
+        // 窗口在同一年（statMonth=12时，窗口=[Y/1, Y/12]）
         windowRange = `${shortYear}/1→${shortYear}/${month}`;
-        policy2025Months = 0;          // 25年无参与
-        policy2026Months = 12;         // 26年全年参与
+        policyPrevMonths = 0;          // 上一年无参与
+        policyCurrMonths = 12;         // 统计年全年参与
       }
 
       return {
         stat_month: `${shortYear}年${month}月`,
         window_range: windowRange,
-        policy_2025_months: policy2025Months > 0 ? `${policy2025Months}个月` : '-',
-        policy_2026_months: `${policy2026Months}个月`,
+        policy_prev_months: policyPrevMonths > 0 ? `${policyPrevMonths}个月` : '-',
+        policy_curr_months: `${policyCurrMonths}个月`,
         rolling_12m_premium: formatPremiumWan(row.rolling_12m_premium),
         total_earned: formatPremiumWan(row.total_earned_premium),
         earned_ratio: formatPercent(row.earned_ratio, 1),
@@ -310,75 +223,26 @@ interface ExportTriangleRow {
 }
 
 /**
- * 将2025年保单精算三角数据转换为导出格式
+ * 将保单精算三角数据转换为导出格式（列头年份由起保年 baseYear 派生）
  */
-function transform2025TriangleForExport(data: Policy2025TriangleRow[]): ExportTriangleRow[] {
-  return data.map((row) => ({
-    '起保月': `${row.policy_month}月`,
-    '保费': Math.round(row.premium),
-    '首日': Math.round(row.first_day_fee),
-    '25年1月': Math.round(row.earned_25_01),
-    '25年2月': Math.round(row.earned_25_02),
-    '25年3月': Math.round(row.earned_25_03),
-    '25年4月': Math.round(row.earned_25_04),
-    '25年5月': Math.round(row.earned_25_05),
-    '25年6月': Math.round(row.earned_25_06),
-    '25年7月': Math.round(row.earned_25_07),
-    '25年8月': Math.round(row.earned_25_08),
-    '25年9月': Math.round(row.earned_25_09),
-    '25年10月': Math.round(row.earned_25_10),
-    '25年11月': Math.round(row.earned_25_11),
-    '25年12月': Math.round(row.earned_25_12),
-    '26年1月': Math.round(row.earned_26_01),
-    '26年2月': Math.round(row.earned_26_02),
-    '26年3月': Math.round(row.earned_26_03),
-    '26年4月': Math.round(row.earned_26_04),
-    '26年5月': Math.round(row.earned_26_05),
-    '26年6月': Math.round(row.earned_26_06),
-    '26年7月': Math.round(row.earned_26_07),
-    '26年8月': Math.round(row.earned_26_08),
-    '26年9月': Math.round(row.earned_26_09),
-    '26年10月': Math.round(row.earned_26_10),
-    '26年11月': Math.round(row.earned_26_11),
-    '26年12月': Math.round(row.earned_26_12),
-    '满期': Math.round(row.earned_total),
-  }));
-}
-
-/**
- * 将2026年保单精算三角数据转换为导出格式
- */
-function transform2026TriangleForExport(data: Policy2026TriangleRow[]): ExportTriangleRow[] {
-  return data.map((row) => ({
-    '起保月': `${row.policy_month}月`,
-    '保费': Math.round(row.premium),
-    '首日': Math.round(row.first_day_fee),
-    '26年1月': Math.round(row.earned_26_01),
-    '26年2月': Math.round(row.earned_26_02),
-    '26年3月': Math.round(row.earned_26_03),
-    '26年4月': Math.round(row.earned_26_04),
-    '26年5月': Math.round(row.earned_26_05),
-    '26年6月': Math.round(row.earned_26_06),
-    '26年7月': Math.round(row.earned_26_07),
-    '26年8月': Math.round(row.earned_26_08),
-    '26年9月': Math.round(row.earned_26_09),
-    '26年10月': Math.round(row.earned_26_10),
-    '26年11月': Math.round(row.earned_26_11),
-    '26年12月': Math.round(row.earned_26_12),
-    '27年1月': Math.round(row.earned_27_01),
-    '27年2月': Math.round(row.earned_27_02),
-    '27年3月': Math.round(row.earned_27_03),
-    '27年4月': Math.round(row.earned_27_04),
-    '27年5月': Math.round(row.earned_27_05),
-    '27年6月': Math.round(row.earned_27_06),
-    '27年7月': Math.round(row.earned_27_07),
-    '27年8月': Math.round(row.earned_27_08),
-    '27年9月': Math.round(row.earned_27_09),
-    '27年10月': Math.round(row.earned_27_10),
-    '27年11月': Math.round(row.earned_27_11),
-    '27年12月': Math.round(row.earned_27_12),
-    '满期': Math.round(row.earned_total),
-  }));
+function transformTriangleForExport(data: PolicyTriangleRow[], baseYear: number): ExportTriangleRow[] {
+  const y1 = baseYear % 100;
+  const y2 = (baseYear + 1) % 100;
+  return data.map((row) => {
+    const exportRow: ExportTriangleRow = {
+      '起保月': `${row.policy_month}月`,
+      '保费': Math.round(row.premium),
+      '首日': Math.round(row.first_day_fee),
+    };
+    TRIANGLE_MONTHS.forEach((m, i) => {
+      exportRow[`${y1}年${m}月`] = Math.round(row.firstYearEarned[i]);
+    });
+    TRIANGLE_MONTHS.forEach((m, i) => {
+      exportRow[`${y2}年${m}月`] = Math.round(row.secondYearEarned[i]);
+    });
+    exportRow['满期'] = Math.round(row.earned_total);
+    return exportRow;
+  });
 }
 
 // ==================== 精算三角表格样式 ====================
@@ -404,25 +268,25 @@ function isOutsideTriangle(policyMonth: number, statYear: number, statMonth: num
  * 由 baseYear prop 派生两个年度列前缀。
  */
 const PolicyTriangleTable: React.FC<{
-  data: Array<Policy2025TriangleRow | Policy2026TriangleRow>;
+  data: PolicyTriangleRow[];
   loading?: boolean;
-  /** 起保年份（如 2025 / 2026），决定三角的两个年度列前缀 */
+  /** 起保年份（Y-1 / Y），决定三角的两个年度列前缀 */
   baseYear: number;
 }> = ({ data, loading, baseYear }) => {
   if (loading) {
     return <div className={cn('p-8 text-center', colorClasses.text.neutralMuted)}>加载中...</div>;
   }
 
-  const y1 = baseYear % 100;        // 起保年两位数（25 / 26）
-  const y2 = (baseYear + 1) % 100;  // 次年两位数（26 / 27）
+  const y1 = baseYear % 100;        // 起保年两位数
+  const y2 = (baseYear + 1) % 100;  // 次年两位数
 
   // 表头：起保月、保费、首日费用、起保年各月、次年各月、最终已赚
   const headers = [
     { key: 'policy_month', label: '起保月', width: 56 },
     { key: 'premium', label: '保费', width: 72 },
     { key: 'first_day_fee', label: '首日', width: 56 },
-    ...Array.from({ length: 12 }, (_, i) => ({ key: `earned_${y1}_${String(i + 1).padStart(2, '0')}`, label: `${y1}-${i + 1}`, width: 52 })),
-    ...Array.from({ length: 12 }, (_, i) => ({ key: `earned_${y2}_${String(i + 1).padStart(2, '0')}`, label: `${y2}-${i + 1}`, width: 52 })),
+    ...TRIANGLE_MONTHS.map((m) => ({ key: `y1_${m}`, label: `${y1}-${m}`, width: 52 })),
+    ...TRIANGLE_MONTHS.map((m) => ({ key: `y2_${m}`, label: `${y2}-${m}`, width: 52 })),
     { key: 'earned_total', label: '满期', width: 72 },
   ];
 
@@ -445,7 +309,6 @@ const PolicyTriangleTable: React.FC<{
         <tbody>
           {data.map((row) => {
             const policyMonth = row.policy_month;
-            const cells = row as unknown as Record<string, number>;
             return (
               <tr key={policyMonth} className="border-b border-neutral-100 hover:bg-primary-bg/30">
                 {/* 起保月 */}
@@ -461,17 +324,15 @@ const PolicyTriangleTable: React.FC<{
                   {formatPremiumWan(row.first_day_fee)}
                 </td>
                 {/* 起保年各月（受三角约束） */}
-                {Array.from({ length: 12 }, (_, i) => {
-                  const m = i + 1;
-                  const key = `earned_${y1}_${String(m).padStart(2, '0')}`;
-                  const value = cells[key];
+                {TRIANGLE_MONTHS.map((m, i) => {
+                  const value = row.firstYearEarned[i];
                   const isOutside = isOutsideTriangle(policyMonth, baseYear, m, baseYear);
                   const isZero = value === 0 || isOutside;
                   // 起保月的单元格用特殊背景色（首日费用+时间分摊）
                   const isStartMonth = m === policyMonth;
                   return (
                     <td
-                      key={key}
+                      key={`y1_${m}`}
                       className={cn(
                         'px-1 py-1.5 text-right', fontStyles.numeric,
                         isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack,
@@ -483,14 +344,12 @@ const PolicyTriangleTable: React.FC<{
                   );
                 })}
                 {/* 次年各月 */}
-                {Array.from({ length: 12 }, (_, i) => {
-                  const m = i + 1;
-                  const key = `earned_${y2}_${String(m).padStart(2, '0')}`;
-                  const value = cells[key];
+                {TRIANGLE_MONTHS.map((m, i) => {
+                  const value = row.secondYearEarned[i];
                   const isZero = value === 0;
                   return (
                     <td
-                      key={key}
+                      key={`y2_${m}`}
                       className={cn(
                         'px-1 py-1.5 text-right', fontStyles.numeric,
                         isZero ? colorClasses.text.neutralMuted : colorClasses.text.neutralBlack
@@ -519,35 +378,38 @@ const PolicyTriangleTable: React.FC<{
  * 新口径已赚保费分析表格组件（V4版本 - 精算三角视图）
  */
 export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
-  policy2025In2025Data,
-  policy2025In2026Data,
-  policy2026In2026Data,
-  policy2026In2027Data,
+  anchorYear,
+  policyPrevInPrevData,
+  policyPrevInCurrData,
+  policyCurrInCurrData,
+  policyCurrInNextData,
   summaryData,
   loading = false,
   onExportCSV,
   onExportExcel,
 }) => {
+  const prevYear = anchorYear - 1;
+
   // 主标签页状态
-  const [mainTab, setMainTab] = useState<MainTab>('2025');
+  const [mainTab, setMainTab] = useState<MainTab>('prev');
 
   // 滚动12月对比表格的年度筛选状态
   const availableYears = useMemo(() => getAvailableYears(summaryData), [summaryData]);
   const [selectedYear, setSelectedYear] = useState<number>(() => {
     const years = getAvailableYears(summaryData);
-    return years.length > 0 ? years[years.length - 1] : 2026; // 默认选择最新年度
+    return years.length > 0 ? years[years.length - 1] : anchorYear; // 默认选择最新年度
   });
 
   // ==================== 数据合并 ====================
 
-  const policy2025TriangleData = useMemo(
-    () => merge2025PolicyData(policy2025In2025Data, policy2025In2026Data),
-    [policy2025In2025Data, policy2025In2026Data]
+  const prevPolicyTriangleData = useMemo(
+    () => mergeTriangleData(policyPrevInPrevData, policyPrevInCurrData),
+    [policyPrevInPrevData, policyPrevInCurrData]
   );
 
-  const policy2026TriangleData = useMemo(
-    () => merge2026PolicyData(policy2026In2026Data, policy2026In2027Data),
-    [policy2026In2026Data, policy2026In2027Data]
+  const currPolicyTriangleData = useMemo(
+    () => mergeTriangleData(policyCurrInCurrData, policyCurrInNextData),
+    [policyCurrInCurrData, policyCurrInNextData]
   );
 
   const displaySummaryData = useMemo(
@@ -566,12 +428,12 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
     () => [
       { key: 'stat_month', header: '统计年月', width: 110 },
       { key: 'rolling_12m_premium', header: '滚动12月保费(万)', width: 140, align: 'right' },
-      { key: 'earned_from_2025', header: '25保单已赚(万)', width: 130, align: 'right' },
-      { key: 'earned_from_2026', header: '26保单已赚(万)', width: 130, align: 'right' },
+      { key: 'earned_from_prev', header: `${prevYear % 100}保单已赚(万)`, width: 130, align: 'right' },
+      { key: 'earned_from_curr', header: `${anchorYear % 100}保单已赚(万)`, width: 130, align: 'right' },
       { key: 'total_earned_premium', header: '合计已赚(万)', width: 120, align: 'right' },
       { key: 'earned_ratio', header: '已赚率', width: 90, align: 'right' },
     ],
-    []
+    [prevYear, anchorYear]
   );
 
   // 滚动12月对比表格列配置
@@ -579,8 +441,8 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
     () => [
       { key: 'stat_month', header: '统计月', width: 100 },
       { key: 'window_range', header: '窗口范围', width: 120 },
-      { key: 'policy_2025_months', header: `${selectedYear - 1}年保单`, width: 100, align: 'center' },
-      { key: 'policy_2026_months', header: `${selectedYear}年保单`, width: 100, align: 'center' },
+      { key: 'policy_prev_months', header: `${selectedYear - 1}年保单`, width: 100, align: 'center' },
+      { key: 'policy_curr_months', header: `${selectedYear}年保单`, width: 100, align: 'center' },
       { key: 'rolling_12m_premium', header: 'R12M保费(万)', width: 130, align: 'right' },
       { key: 'total_earned', header: 'R12M已赚(万)', width: 130, align: 'right' },
       { key: 'earned_ratio', header: '已赚率', width: 90, align: 'right' },
@@ -590,42 +452,42 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
 
   // ==================== 精算三角导出处理 ====================
 
-  const handleExport2025CSV = useCallback(() => {
-    if (policy2025TriangleData.length === 0) return;
-    const exportData = transform2025TriangleForExport(policy2025TriangleData);
-    const filename = `2025年保单精算三角_${getTimestampForFilename()}.csv`;
+  const handleExportPrevCSV = useCallback(() => {
+    if (prevPolicyTriangleData.length === 0) return;
+    const exportData = transformTriangleForExport(prevPolicyTriangleData, prevYear);
+    const filename = `${prevYear}年保单精算三角_${getTimestampForFilename()}.csv`;
     exportArrayToCSV(exportData, filename);
-  }, [policy2025TriangleData]);
+  }, [prevPolicyTriangleData, prevYear]);
 
-  const handleExport2025Excel = useCallback(async () => {
-    if (policy2025TriangleData.length === 0) return;
-    const exportData = transform2025TriangleForExport(policy2025TriangleData);
-    const filename = `2025年保单精算三角_${getTimestampForFilename()}`;
-    await exportToExcel(exportData, filename, '2025精算三角');
-  }, [policy2025TriangleData]);
+  const handleExportPrevExcel = useCallback(async () => {
+    if (prevPolicyTriangleData.length === 0) return;
+    const exportData = transformTriangleForExport(prevPolicyTriangleData, prevYear);
+    const filename = `${prevYear}年保单精算三角_${getTimestampForFilename()}`;
+    await exportToExcel(exportData, filename, `${prevYear}精算三角`);
+  }, [prevPolicyTriangleData, prevYear]);
 
-  const handleExport2026CSV = useCallback(() => {
-    if (policy2026TriangleData.length === 0) return;
-    const exportData = transform2026TriangleForExport(policy2026TriangleData);
-    const filename = `2026年保单精算三角_${getTimestampForFilename()}.csv`;
+  const handleExportCurrCSV = useCallback(() => {
+    if (currPolicyTriangleData.length === 0) return;
+    const exportData = transformTriangleForExport(currPolicyTriangleData, anchorYear);
+    const filename = `${anchorYear}年保单精算三角_${getTimestampForFilename()}.csv`;
     exportArrayToCSV(exportData, filename);
-  }, [policy2026TriangleData]);
+  }, [currPolicyTriangleData, anchorYear]);
 
-  const handleExport2026Excel = useCallback(async () => {
-    if (policy2026TriangleData.length === 0) return;
-    const exportData = transform2026TriangleForExport(policy2026TriangleData);
-    const filename = `2026年保单精算三角_${getTimestampForFilename()}`;
-    await exportToExcel(exportData, filename, '2026精算三角');
-  }, [policy2026TriangleData]);
+  const handleExportCurrExcel = useCallback(async () => {
+    if (currPolicyTriangleData.length === 0) return;
+    const exportData = transformTriangleForExport(currPolicyTriangleData, anchorYear);
+    const filename = `${anchorYear}年保单精算三角_${getTimestampForFilename()}`;
+    await exportToExcel(exportData, filename, `${anchorYear}精算三角`);
+  }, [currPolicyTriangleData, anchorYear]);
 
   // ==================== 空状态检查 ====================
 
   if (
     !loading &&
-    policy2025In2025Data.length === 0 &&
-    policy2025In2026Data.length === 0 &&
-    policy2026In2026Data.length === 0 &&
-    policy2026In2027Data.length === 0 &&
+    policyPrevInPrevData.length === 0 &&
+    policyPrevInCurrData.length === 0 &&
+    policyCurrInCurrData.length === 0 &&
+    policyCurrInNextData.length === 0 &&
     summaryData.length === 0
   ) {
     return (
@@ -638,14 +500,14 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
   // ==================== 渲染表格内容 ====================
 
   const renderTableContent = () => {
-    // 2025年保单精算三角
-    if (mainTab === '2025') {
+    // 上一保单年度（Y-1）精算三角
+    if (mainTab === 'prev') {
       return (
         <div className={tableStyles.container}>
           <div className={cn(tableStyles.header, 'px-4 py-3 flex justify-between items-center')}>
             <div>
               <h3 className={textStyles.titleSmall}>
-                2025年保单精算三角（起保月 × 统计月）
+                {prevYear}年保单精算三角（起保月 × 统计月）
               </h3>
               <p className={cn(textStyles.caption, 'mt-1')}>
                 <span className={cn('inline-block w-3 h-3 mr-1 align-middle', colorClasses.bg.success, colorClasses.border.success, 'border')}></span>
@@ -656,36 +518,36 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
             <div className="flex items-center gap-3">
               <div className="flex gap-2">
                 <button
-                  onClick={handleExport2025CSV}
+                  onClick={handleExportPrevCSV}
                   className={cn(buttonStyles.base, buttonStyles.sizeSmall, buttonStyles.success)}
-                  disabled={policy2025TriangleData.length === 0}
+                  disabled={prevPolicyTriangleData.length === 0}
                 >
                   导出CSV
                 </button>
                 <button
-                  onClick={handleExport2025Excel}
+                  onClick={handleExportPrevExcel}
                   className={cn(buttonStyles.base, buttonStyles.sizeSmall, buttonStyles.primary)}
-                  disabled={policy2025TriangleData.length === 0}
+                  disabled={prevPolicyTriangleData.length === 0}
                 >
                   导出Excel
                 </button>
               </div>
-              <span className={textStyles.caption}>共 {policy2025TriangleData.length} 条记录</span>
+              <span className={textStyles.caption}>共 {prevPolicyTriangleData.length} 条记录</span>
             </div>
           </div>
-          <PolicyTriangleTable baseYear={2025} data={policy2025TriangleData} loading={loading} />
+          <PolicyTriangleTable baseYear={prevYear} data={prevPolicyTriangleData} loading={loading} />
         </div>
       );
     }
 
-    // 2026年保单精算三角
-    if (mainTab === '2026') {
+    // 锚定年（Y）保单精算三角
+    if (mainTab === 'curr') {
       return (
         <div className={tableStyles.container}>
           <div className={cn(tableStyles.header, 'px-4 py-3 flex justify-between items-center')}>
             <div>
               <h3 className={textStyles.titleSmall}>
-                2026年保单精算三角（起保月 × 统计月）
+                {anchorYear}年保单精算三角（起保月 × 统计月）
               </h3>
               <p className={cn(textStyles.caption, 'mt-1')}>
                 <span className={cn('inline-block w-3 h-3 mr-1 align-middle', colorClasses.bg.success, colorClasses.border.success, 'border')}></span>
@@ -696,24 +558,24 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
             <div className="flex items-center gap-3">
               <div className="flex gap-2">
                 <button
-                  onClick={handleExport2026CSV}
+                  onClick={handleExportCurrCSV}
                   className={cn(buttonStyles.base, buttonStyles.sizeSmall, buttonStyles.success)}
-                  disabled={policy2026TriangleData.length === 0}
+                  disabled={currPolicyTriangleData.length === 0}
                 >
                   导出CSV
                 </button>
                 <button
-                  onClick={handleExport2026Excel}
+                  onClick={handleExportCurrExcel}
                   className={cn(buttonStyles.base, buttonStyles.sizeSmall, buttonStyles.primary)}
-                  disabled={policy2026TriangleData.length === 0}
+                  disabled={currPolicyTriangleData.length === 0}
                 >
                   导出Excel
                 </button>
               </div>
-              <span className={textStyles.caption}>共 {policy2026TriangleData.length} 条记录</span>
+              <span className={textStyles.caption}>共 {currPolicyTriangleData.length} 条记录</span>
             </div>
           </div>
-          <PolicyTriangleTable baseYear={2026} data={policy2026TriangleData} loading={loading} />
+          <PolicyTriangleTable baseYear={anchorYear} data={currPolicyTriangleData} loading={loading} />
         </div>
       );
     }
@@ -725,7 +587,7 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
           <div className={cn(tableStyles.header, 'px-4 py-3 flex justify-between items-center')}>
             <div>
               <h3 className={textStyles.titleSmall}>
-                2026年各月末已赚保费汇总（滚动12个月）
+                {anchorYear}年各月末已赚保费汇总（滚动12个月）
               </h3>
               <p className={cn(textStyles.caption, 'mt-1')}>
                 已赚率 = 合计已赚保费 / 滚动12个月保费（起保日期口径）
@@ -797,24 +659,24 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
         <div className="flex justify-between items-center">
           <div className="flex gap-2">
             <button
-              onClick={() => setMainTab('2025')}
+              onClick={() => setMainTab('prev')}
               className={cn(
                 buttonStyles.base,
                 buttonStyles.sizeMedium,
-                mainTab === '2025' ? buttonStyles.success : buttonStyles.secondary
+                mainTab === 'prev' ? buttonStyles.success : buttonStyles.secondary
               )}
             >
-              2025年保单
+              {prevYear}年保单
             </button>
             <button
-              onClick={() => setMainTab('2026')}
+              onClick={() => setMainTab('curr')}
               className={cn(
                 buttonStyles.base,
                 buttonStyles.sizeMedium,
-                mainTab === '2026' ? buttonStyles.success : buttonStyles.secondary
+                mainTab === 'curr' ? buttonStyles.success : buttonStyles.secondary
               )}
             >
-              2026年保单
+              {anchorYear}年保单
             </button>
             <button
               onClick={() => setMainTab('summary')}
@@ -873,7 +735,7 @@ export const NewEarnedPremiumTable: React.FC<NewEarnedPremiumTableProps> = ({
             滚动12个月统计时，窗口内的首日费用<strong className={textStyles.emphasis}>自动计入</strong>已赚保费，窗口外则自动排除
           </li>
           <li>
-            精算三角：行=起保月(1-12月)，列=统计月(25-1到26-12)，<span className={colorClasses.text.neutralMuted}>灰色0</span>=起保前（三角外）
+            精算三角：行=起保月(1-12月)，列=统计月({prevYear % 100}-1到{anchorYear % 100}-12)，<span className={colorClasses.text.neutralMuted}>灰色0</span>=起保前（三角外）
           </li>
           <li>
             <strong className={textStyles.emphasis}>最终已赚</strong> = 首日费用 + 全部时间分摊 ≈ 保费 × (1 - F×(1-α))

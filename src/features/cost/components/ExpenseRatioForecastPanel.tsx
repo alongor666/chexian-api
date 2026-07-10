@@ -25,6 +25,8 @@ import {
 import type { ExpenseRatioForecastData } from '../types/costTypes';
 
 interface ExpenseRatioForecastPanelProps {
+  /** 预测锚定年（分析年度 Y，月份选项与标题据此派生） */
+  anchorYear: number;
   /** 预测数据 */
   forecastData: ExpenseRatioForecastData[];
   /** 加载状态 */
@@ -55,9 +57,9 @@ interface DisplayForecastData {
 
 function transformForecastData(data: ExpenseRatioForecastData[]): DisplayForecastData[] {
   return data.map((row) => {
-    const [, month] = (row.stat_month ?? '').split('-');
+    const [year, month] = (row.stat_month ?? '').split('-');
     return {
-      stat_month: `2026年${month}月`,
+      stat_month: `${year}年${month}月`,
       total_earned_premium: formatPremiumWan(row.total_earned_premium),
       expense_window: `${row.expense_window_start}至${row.expense_window_end}`,
       total_fee: formatPremiumWan(row.total_fee),
@@ -74,25 +76,26 @@ function transformForecastData(data: ExpenseRatioForecastData[]): DisplayForecas
  * 综合费用率预测面板组件
  */
 export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps> = ({
+  anchorYear,
   forecastData,
   loading = false,
   error = null,
   onOperatingCostRateChange,
   currentOperatingCostRate,
 }) => {
-  // 目标月份选择
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-03');
+  // 目标月份选择（默认锚定年 3 月）
+  const [selectedMonth, setSelectedMonth] = useState<string>(`${anchorYear}-03`);
   // 运营成本率输入
   const [inputOperatingCostRate, setInputOperatingCostRate] = useState<string>(
     currentOperatingCostRate.toString()
   );
 
-  // 月份选项
+  // 月份选项（锚定年 12 个月）
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
     const month = (i + 1).toString().padStart(2, '0');
     return {
-      value: `2026-${month}`,
-      label: `2026年${month}月`,
+      value: `${anchorYear}-${month}`,
+      label: `${anchorYear}年${month}月`,
     };
   });
 
@@ -289,7 +292,7 @@ export const ExpenseRatioForecastPanel: React.FC<ExpenseRatioForecastPanelProps>
       <div className={tableStyles.container}>
         <div className={cn(tableStyles.header, 'px-4 py-3 flex justify-between items-center')}>
           <div>
-            <h3 className={textStyles.titleSmall}>2026年各月综合费用率预测</h3>
+            <h3 className={textStyles.titleSmall}>{anchorYear}年各月综合费用率预测</h3>
             <p className={cn(textStyles.caption, 'mt-1')}>
               费用窗口延迟1个月（预测N月时，费用统计到N-1月）
             </p>

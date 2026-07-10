@@ -256,44 +256,47 @@ ORDER BY
   `.trim();
 }
 
-// ==================== V3 期间已赚保费包装器 ====================
+// ==================== V3 期间已赚保费包装器（锚定年参数化） ====================
 
-/** 2025年保单在2025年的已赚保费 */
-export function generatePolicy2025In2025Query(config: NewEarnedPremiumConfig = {}): string {
-  return generateEarnedPremiumPeriodQuery({
-    policyYear: 2025,
-    earnedYear: 2025,
-    isSameYear: true,
-    whereClause: config.whereClause ?? '1=1',
-  });
-}
-
-/** 2025年保单在2026年的已赚保费 */
-export function generatePolicy2025In2026Query(config: NewEarnedPremiumConfig = {}): string {
-  return generateEarnedPremiumPeriodQuery({
-    policyYear: 2025,
-    earnedYear: 2026,
-    isSameYear: false,
-    whereClause: config.whereClause ?? '1=1',
-  });
-}
-
-/** 2026年保单在2026年的已赚保费 */
-export function generatePolicy2026In2026Query(config: NewEarnedPremiumConfig = {}): string {
-  return generateEarnedPremiumPeriodQuery({
-    policyYear: 2026,
-    earnedYear: 2026,
-    isSameYear: true,
-    whereClause: config.whereClause ?? '1=1',
-  });
-}
-
-/** 2026年保单在2027年的已赚保费 */
-export function generatePolicy2026In2027Query(config: NewEarnedPremiumConfig = {}): string {
-  return generateEarnedPremiumPeriodQuery({
-    policyYear: 2026,
-    earnedYear: 2027,
-    isSameYear: false,
-    whereClause: config.whereClause ?? '1=1',
-  });
+/**
+ * 已赚保费矩阵四象限（相对锚定年 Y）：
+ * - prevInPrev：Y-1 年保单在 Y-1 年的已赚（同年，含首日费用）
+ * - prevInCurr：Y-1 年保单在 Y 年的已赚（跨年，仅时间分摊增量）
+ * - currInCurr：Y 年保单在 Y 年的已赚（同年，含首日费用）
+ * - currInNext：Y 年保单在 Y+1 年的已赚（跨年，仅时间分摊增量）
+ *
+ * 字段契约为相对年 key（earned_01..earned_12 / earned_total），
+ * 绝对年份由调用方随 anchorYear 元数据透出，跨年无需改代码。
+ */
+export function generateEarnedPremiumMatrixQueries(
+  anchorYear: number,
+  config: NewEarnedPremiumConfig = {}
+): { prevInPrev: string; prevInCurr: string; currInCurr: string; currInNext: string } {
+  const whereClause = config.whereClause ?? '1=1';
+  return {
+    prevInPrev: generateEarnedPremiumPeriodQuery({
+      policyYear: anchorYear - 1,
+      earnedYear: anchorYear - 1,
+      isSameYear: true,
+      whereClause,
+    }),
+    prevInCurr: generateEarnedPremiumPeriodQuery({
+      policyYear: anchorYear - 1,
+      earnedYear: anchorYear,
+      isSameYear: false,
+      whereClause,
+    }),
+    currInCurr: generateEarnedPremiumPeriodQuery({
+      policyYear: anchorYear,
+      earnedYear: anchorYear,
+      isSameYear: true,
+      whereClause,
+    }),
+    currInNext: generateEarnedPremiumPeriodQuery({
+      policyYear: anchorYear,
+      earnedYear: anchorYear + 1,
+      isSameYear: false,
+      whereClause,
+    }),
+  };
 }
