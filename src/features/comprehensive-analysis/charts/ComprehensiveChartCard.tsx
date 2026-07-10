@@ -1,7 +1,6 @@
 import React from 'react';
-import ReactEChartsCore from 'echarts-for-react/lib/core';
+import { EChartContainer } from '../../../widgets/charts/EChartContainer';
 import type { EChartsOption } from 'echarts';
-import { echarts } from '@/shared/utils/echarts';
 import { cardStyles, cn, colorClasses, textStyles, comprehensiveTheme } from '@/shared/styles';
 
 interface ComprehensiveChartCardProps {
@@ -36,13 +35,7 @@ export const ComprehensiveChartCard: React.FC<ComprehensiveChartCardProps> = ({
           <span>加载中...</span>
         </div>
       ) : (
-        <ReactEChartsCore
-          echarts={echarts}
-          option={option}
-          style={{ height, width: '100%' }}
-          notMerge
-          lazyUpdate
-        />
+        <EChartContainer option={option} height={height} lazyUpdate />
       )}
     </section>
   );

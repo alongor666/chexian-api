@@ -44,7 +44,7 @@
 - **`utils/formatters.ts`**：统一格式化唯一事实源（`formatCount`/`formatPremiumWan`/`formatPercent`/`formatCoefficient`/`formatChartValue`/`formatSalesmanName` 等，禁止在特性层另写格式化）
 - **`utils/echarts.ts`**：ECharts 按需导入注册
 - **`utils/size-sensor.ts`**：size-sensor 安全兼容层（⚠️ 经 `vite.config.ts` 包别名被 echarts-for-react 使用，引用图分析不可见，勿当死代码删除）
-- **`utils/logger.ts`** / **`utils/storage.ts`** / **`utils/date.ts`** / **`utils/export.ts`**（CSV/Excel）
+- **`utils/logger.ts`** / **`utils/storage.ts`** / **`utils/date.ts`** / **`utils/export.ts`**（CSV/Excel；`escapeCSVField`/`downloadFile` 为 CSV 转义与 BOM+Blob 下载唯一实现，禁止在特性层另写）
 - **`utils/quickFilterHelpers.ts`**：快捷筛选派生与回写
 
 ### Config
