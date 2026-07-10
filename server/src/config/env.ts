@@ -260,6 +260,12 @@ export const feishuEnv = {
    * 显式设 'true' 才启用。
    */
   FEISHU_SALESMAN_FALLBACK: process.env.FEISHU_SALESMAN_FALLBACK ?? '',
+  /**
+   * 开发环境扫码回调后的前端回跳源（仅 NODE_ENV !== 'production' 生效）。
+   * dev 下后端(3000)不托管 SPA，回调若相对重定向 '/#/...' 会落在后端 404 页；
+   * 默认回跳 vite dev server。生产环境同源部署（nginx 托管 SPA），恒用相对路径，本值被忽略。
+   */
+  FEISHU_DEV_FRONTEND_ORIGIN: process.env.FEISHU_DEV_FRONTEND_ORIGIN ?? 'http://localhost:5173',
 } as const;
 
 // ─── 运维配置 ──────────────────────────────────────────────────────────────────
