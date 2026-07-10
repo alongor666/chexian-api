@@ -403,7 +403,7 @@ export class CacheWarmer {
         try {
             // 1. 获取动态的最大日期计算 Year-to-Date
             const maxDateResult = await duckdbService.query<{ max_date: string }>(
-                `SELECT MAX(policy_date) as max_date FROM PolicyFact WHERE EXTRACT(YEAR FROM policy_date) = ${dataYear}`
+                `SELECT MAX(policy_date) as max_date FROM PolicyFact WHERE CAST(policy_date AS DATE) BETWEEN DATE '${dataYear}-01-01' AND DATE '${dataYear}-12-31'`
             );
             const maxDateRaw = maxDateResult[0]?.max_date;
             if (!maxDateRaw) {
@@ -477,7 +477,7 @@ export class CacheWarmer {
     }
 
     private async resolveDefaultDateRange(dataYear?: number): Promise<{ startDate: string; maxDate: string | null }> {
-        const whereYear = dataYear ? `WHERE EXTRACT(YEAR FROM policy_date) = ${dataYear}` : '';
+        const whereYear = dataYear ? `WHERE CAST(policy_date AS DATE) BETWEEN DATE '${dataYear}-01-01' AND DATE '${dataYear}-12-31'` : '';
         const maxDateResult = await duckdbService.query<{ max_date: string }>(
             `SELECT MAX(policy_date) as max_date FROM PolicyFact ${whereYear}`,
             QUERY_CACHE.hotspotLong

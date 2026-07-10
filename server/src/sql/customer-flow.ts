@@ -16,9 +16,15 @@ export interface CustomerFlowFilters {
   direction?: 'inflow' | 'outflow';
 }
 
+/** 年份过滤用日期范围比较（保住 zonemap 剪枝），与 YEAR(col)=N 语义等价（NULL 行两种写法均被过滤） */
+function yearRangeClause(year: number): string {
+  const y = Math.trunc(year);
+  return `AND CAST(insurance_start_date AS DATE) BETWEEN DATE '${y}-01-01' AND DATE '${y}-12-31'`;
+}
+
 export function generateInflowQuery(filters: CustomerFlowFilters, whereClause: string = '1=1'): string {
   const yearClause = filters.year
-    ? `AND YEAR(CAST(insurance_start_date AS DATE)) = ${Number(filters.year)}`
+    ? yearRangeClause(Number(filters.year))
     : '';
   return `
     SELECT
@@ -40,7 +46,7 @@ export function generateInflowQuery(filters: CustomerFlowFilters, whereClause: s
 /** 流失分析：华安 → 次年保险公司 */
 export function generateOutflowQuery(filters: CustomerFlowFilters, whereClause: string = '1=1'): string {
   const yearClause = filters.year
-    ? `AND YEAR(CAST(insurance_start_date AS DATE)) = ${Number(filters.year)}`
+    ? yearRangeClause(Number(filters.year))
     : '';
   return `
     SELECT
@@ -62,7 +68,7 @@ export function generateOutflowQuery(filters: CustomerFlowFilters, whereClause: 
 /** 月度流失趋势 */
 export function generateFlowTrendQuery(filters: CustomerFlowFilters, whereClause: string = '1=1'): string {
   const yearClause = filters.year
-    ? `AND YEAR(CAST(insurance_start_date AS DATE)) = ${Number(filters.year)}`
+    ? yearRangeClause(Number(filters.year))
     : '';
   return `
     SELECT
@@ -82,7 +88,7 @@ export function generateFlowTrendQuery(filters: CustomerFlowFilters, whereClause
 /** 总览统计 */
 export function generateFlowSummaryQuery(filters: CustomerFlowFilters, whereClause: string = '1=1'): string {
   const yearClause = filters.year
-    ? `AND YEAR(CAST(insurance_start_date AS DATE)) = ${Number(filters.year)}`
+    ? yearRangeClause(Number(filters.year))
     : '';
   return `
     SELECT

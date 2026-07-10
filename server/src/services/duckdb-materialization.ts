@@ -8,6 +8,7 @@ import type { DuckDBQueryable } from './duckdb-types.js';
 import { DUCKDB_INIT_OPTIONS } from '../config/database.js';
 import { generateColumnMappingSQL, getColumnMapping, BOOLEAN_FIELDS } from './column-normalizer.js';
 import { sanitizeTableName } from '../utils/security.js';
+import { segmentCaseExpr } from '../sql/performance-analysis/shared.js';
 
 // ============================================
 // 派生表注册表（集中管理清理）
@@ -167,9 +168,16 @@ export async function materializePolicyFactWorkingSet(db: DuckDBQueryable): Prom
     `(CASE WHEN LOWER(TRIM(CAST("${field}" AS VARCHAR))) IN ('是', '1', 'true', 't', 'y', 'yes', '有', '有驾意险交叉销售') THEN true ELSE false END) AS "${field}"`
   );
 
+  // B306/F-03：段口径 CASE（8 层 LIKE + CAST/TRIM）从查询期逐行计算前移到物化期预算，
+  // 查询层（performance-analysis/shared.ts segmentTagExpr）只做低基数等值比较。
+  // 口径 SSOT = segmentCaseExpr()；源表已带 segment_tag 列（未来 ETL 下沉）则不重复追加。
+  const segmentTagClause = (existingCols.has('customer_category') && !existingCols.has('segment_tag'))
+    ? `, ${segmentCaseExpr()} AS segment_tag`
+    : '';
+
   const selectExpr = replaceClauses.length > 0
-    ? `SELECT * REPLACE (${replaceClauses.join(', ')})`
-    : 'SELECT *';
+    ? `SELECT * REPLACE (${replaceClauses.join(', ')})${segmentTagClause}`
+    : `SELECT *${segmentTagClause}`;
 
   // ORDER BY policy_date 让 DuckDB 写入时生成有序 zonemap，date-range 过滤可跳过整块 row group
   // 这是分析型查询的关键优化：B-tree 索引对范围扫描作用有限，zonemap 才是 DuckDB 列式剪枝的主力

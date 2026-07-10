@@ -177,7 +177,7 @@ const ENDPOINT_DEFINITIONS = [
 
   // ── /api/data（GET only）─────────────────
   { slug: 'data-metadata', path: '/api/data/metadata', params: {}, deprecated: false, volatile: true }, // 含运行时元信息→非确定性
-  { slug: 'data-files', path: '/api/data/files', params: {}, deprecated: false },
+  { slug: 'data-files', path: '/api/data/files', params: {}, deprecated: false, volatile: true }, // 含 modifiedTime=本次数据装载实时戳，跨服务重启必变→非确定性
   { slug: 'data-version', path: '/api/data/version', params: {}, deprecated: false, volatile: true }, // 含 buildTime/serverStartTime 实时戳→非确定性
   { slug: 'data-kpi-plan-config', path: '/api/data/kpi-plan-config', params: {}, deprecated: false },
 
