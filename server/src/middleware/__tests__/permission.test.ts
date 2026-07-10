@@ -354,7 +354,7 @@ describe('requirePermissionFilter: B326 fail-closed 收窄', () => {
 //   telemarketing_user        → 不受路由白名单限制（无 PRESET_ROLES allowedRoutes）
 //   路由不在映射表（共用基础路由）→ 通过（不限制）
 // ─────────────────────────────────────────────────────────────────────────
-import { API_ROUTE_TO_PAGE_MAP } from '../permission.js';
+import { API_ROUTE_TO_PAGE_MAP, MOUNT_WHITELIST_POLICY } from '../permission.js';
 
 function makeReqWithPath(user: any, path: string, baseUrl?: string) {
   return { user, path, query: {}, ...(baseUrl !== undefined ? { baseUrl } : {}) } as any;
@@ -525,6 +525,46 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     const err = await runMiddlewarePath(req);
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).statusCode).toBe(403);
+  });
+
+  // ─── 按域显式声明纳管（de1e40：MOUNT_WHITELIST_POLICY 替代 mountedOutsideQuery 一刀切）───
+  it('注册表：/api/query 是唯一 governed 域，其余全部显式豁免且带 reason', () => {
+    expect(MOUNT_WHITELIST_POLICY['/api/query']).toEqual({ governed: true });
+    for (const [mount, policy] of Object.entries(MOUNT_WHITELIST_POLICY)) {
+      if (mount === '/api/query') continue;
+      expect(policy.governed, `${mount} 应显式豁免`).toBe(false);
+    }
+  });
+
+  it.each([
+    '/api/filters',
+    '/api/data',
+    '/api/ai',
+    '/api/agent/audit',
+    '/api/agent/explain',
+    '/api/agent/forecast',
+    '/api/skills',
+    '/api/workflows',
+    '/api/copilot',
+  ])('org_user 经显式豁免域 %s 访问同名路径 /cost → 通过（页面白名单不作用于豁免域）', async (mount) => {
+    const req = makeReqWithPath(orgUser, '/cost', mount);
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+    expect(req.permissionFilter).toBeDefined();
+  });
+
+  it('org_user 经 /api/query 子挂载点（/api/query/sub）访问 /cost → 403（前缀匹配纳管随父域）', async () => {
+    const req = makeReqWithPath(orgUser, '/cost', '/api/query/sub');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('org_user 经未登记挂载点访问同名路径 → 通过（fail-open 豁免，声明缺失由静态测试拦截）', async () => {
+    const req = makeReqWithPath(orgUser, '/cost', '/api/not-declared-mount');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+    expect(req.permissionFilter).toBeDefined();
   });
 
   // ─── admin / branch_admin 不受白名单限制 ───

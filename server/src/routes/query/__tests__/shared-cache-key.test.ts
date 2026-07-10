@@ -46,6 +46,7 @@ vi.mock('../../../utils/route-helpers.js', () => ({
 }));
 vi.mock('../../../utils/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 vi.mock('../../../middleware/error.js', () => ({
   asyncHandler: (fn: unknown) => fn,
