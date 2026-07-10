@@ -1957,3 +1957,15 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （消息正则判定反模式若再现（grep `\.message\)?\s*\)?\.test\(|test\(.*message` 于 services/**）可考虑 governance 闸；首例先登记。）
+
+---
+
+## 2026-07-10 · #1021 评审打回：runner 护栏做成 fail-open（提示不拦截 + 非法值静默回退）
+
+- **场景**：cx CLI 去僵化 PR 新增 `CX_UX_RUNNER=tsx|bin` 强制开关消除 UX 基线 runner 漂移。评审实测两处 fail-open：`CX_UX_RUNNER=invalid` 被静默当未设置回退到编译产物；`--check` 时基线 runner 与当前 runner 不一致仅打 `ℹ️` 提示仍通过——护栏形同虚设，基线仍可在错误 runner 下"验证通过"。
+- **根因**：写护栏时默认了"提示足够 + 未知值宽容处理"，与护栏的存在目的（消除漂移）自相矛盾。宽容处理让"以为在强制 tsx"的调用实际跑了 dist/cx。
+- **修复**：`resolveRunner`/`checkRunnerConsistency` 抽导出纯函数——非法值抛错（exit 1）、runner 不一致置 failed；主流程包 `isCliEntry()` 守卫（realpathSync+pathToFileURL，中文路径安全）使测试可无副作用 import；6 个回归用例锁死；CI workflow 显式 `CX_UX_RUNNER: tsx` 钉死意图。
+- **预防**：新建任何"约束/闸/开关"时，§3.4 自审补一问——**枚举值输入收到未知值是报错还是静默回退？不一致是 fail 还是仅提示？** 护栏一律 fail-closed：宁可硬失败逼人显式对齐，不做"提示后照过"。与本仓既有共识一致（省份解析 fail-closed、SX 晋级 block 语义）。
+
+### needs_automation: false
+（同类失败首次。若再现"新增护栏被评审/事故证实 fail-open" → 升级为 pr-checklist 红线行固化。）
