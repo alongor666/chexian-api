@@ -355,6 +355,7 @@ export function generateClaimsHeatmapQuery(
         ${policyYearExpr} AS policy_year,
         MAKE_DATE(${policyYearExpr}, 1, 1) AS year_start,
         MAKE_DATE(${policyYearExpr}, 12, 31) AS year_end,
+        MAKE_DATE(${policyYearExpr} - 1, 1, 1) AS prev_year_start,
         LEAST(MAKE_DATE(${policyYearExpr}, 12, 31), (SELECT max_date FROM ref_date)) AS effective_end
     ),
 
@@ -381,8 +382,8 @@ export function generateClaimsHeatmapQuery(
         ANY_VALUE(fuel_type) AS fuel_type
       FROM PolicyFact
       WHERE (${whereClause})
-        AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) >= (SELECT policy_year FROM year_bounds) - 1
-        AND EXTRACT(YEAR FROM CAST(insurance_start_date AS DATE)) <= (SELECT policy_year FROM year_bounds)
+        AND CAST(insurance_start_date AS DATE) >= (SELECT prev_year_start FROM year_bounds)
+        AND CAST(insurance_start_date AS DATE) <= (SELECT year_end FROM year_bounds)
       GROUP BY policy_no, CAST(insurance_start_date AS DATE)
       HAVING SUM(premium) > 0
     ),
@@ -411,7 +412,8 @@ export function generateClaimsHeatmapQuery(
       FROM eligible_policies p
       ${teamJoin}
       CROSS JOIN all_cutoffs ac
-      WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds)
+      WHERE CAST(p.insurance_start_date AS DATE) >= (SELECT year_start FROM year_bounds)
+        AND CAST(p.insurance_start_date AS DATE) <= (SELECT year_end FROM year_bounds)
         AND CAST(p.insurance_start_date AS DATE) <= ac.cutoff
         ${policyWhere}
       GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
@@ -442,7 +444,8 @@ export function generateClaimsHeatmapQuery(
       JOIN eligible_policies p ON c.policy_no = p.policy_no
       ${teamJoin}
       CROSS JOIN all_cutoffs ac
-      WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds)
+      WHERE CAST(p.insurance_start_date AS DATE) >= (SELECT year_start FROM year_bounds)
+        AND CAST(p.insurance_start_date AS DATE) <= (SELECT year_end FROM year_bounds)
         AND CAST(p.insurance_start_date AS DATE) <= ac.cutoff
         AND CAST(c.${safeClaimsDateField} AS DATE) <= ac.cutoff
         ${policyWhere}
@@ -470,7 +473,8 @@ export function generateClaimsHeatmapQuery(
       FROM eligible_policies p
       ${teamJoin}
       CROSS JOIN all_cutoffs ac
-      WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds) - 1
+      WHERE CAST(p.insurance_start_date AS DATE) >= (SELECT prev_year_start FROM year_bounds)
+        AND CAST(p.insurance_start_date AS DATE) < (SELECT year_start FROM year_bounds)
         AND CAST(p.insurance_start_date AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
         ${policyWhere}
       GROUP BY ${dimConfig.selectExpr}, ac.cutoff_idx
@@ -497,7 +501,8 @@ export function generateClaimsHeatmapQuery(
       JOIN eligible_policies p ON c.policy_no = p.policy_no
       ${teamJoin}
       CROSS JOIN all_cutoffs ac
-      WHERE EXTRACT(YEAR FROM CAST(p.insurance_start_date AS DATE)) = (SELECT policy_year FROM year_bounds) - 1
+      WHERE CAST(p.insurance_start_date AS DATE) >= (SELECT prev_year_start FROM year_bounds)
+        AND CAST(p.insurance_start_date AS DATE) < (SELECT year_start FROM year_bounds)
         AND CAST(p.insurance_start_date AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
         AND CAST(c.${safeClaimsDateField} AS DATE) <= (ac.cutoff - INTERVAL 1 YEAR)::DATE
         ${policyWhere}

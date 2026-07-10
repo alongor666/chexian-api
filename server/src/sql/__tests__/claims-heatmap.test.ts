@@ -94,9 +94,11 @@ describe('generateClaimsHeatmapQuery — YoY 对称', () => {
     );
   });
 
-  it('prev 年份 = policy_year - 1', () => {
+  it('prev cohort = [prev_year_start, year_start)（B306/F-01 日期范围替代 EXTRACT(YEAR)=Y-1）', () => {
     const sql = generateClaimsHeatmapQuery(EMPTY, 'org_level_3', 'insurance_start_date', 'report_time', 2026);
-    expect(sql).toMatch(/prev_premium_cumulative AS[\s\S]*?\(SELECT policy_year FROM year_bounds\) - 1/);
+    expect(sql).toMatch(/prev_premium_cumulative AS[\s\S]*?>= \(SELECT prev_year_start FROM year_bounds\)[\s\S]*?< \(SELECT year_start FROM year_bounds\)/);
+    // year_bounds 携带 Y-1 年首日，供 prev cohort 引用
+    expect(sql).toMatch(/MAKE_DATE\([\s\S]*?- 1, 1, 1\) AS prev_year_start/);
   });
 });
 
