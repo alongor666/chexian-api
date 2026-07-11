@@ -37,13 +37,12 @@ DATA_ROOT = HERE.parents[1]
 REPO_ROOT = HERE.parents[2]
 if str(DATA_ROOT) not in sys.path:
     sys.path.insert(0, str(DATA_ROOT))  # 供 import pipelines.*（branch_paths SSOT）
-from pipelines.branch_paths import policy_current_glob  # noqa: E402
+from pipelines.branch_paths import policy_current_glob, resolve_province  # noqa: E402
 DEFAULT_STATE_PATH = HERE / "state" / "renewal_2026_may_jul_vin_record_map_6fDmy0.json"
 DEFAULT_TABLE_SCHEMA_PATH = HERE / "outputs" / "renewal_may_jul_schema_6fDmy0.json"
-# 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：扁平/子目录自动路由
-DEFAULT_POLICY_GLOB = policy_current_glob(
-    DATA_ROOT / "warehouse" / "fact" / "policy" / "current", missing_ok=True
-)
+# 省份轴收窄（50d62e）：policy glob 默认值在 main 按 --province fail-closed 解析后计算，
+# --policy-glob 显式传入时优先（但 WHERE branch_code 仍按 --province 过滤，隔离不旁路）
+_POLICY_CURRENT_DIR = DATA_ROOT / "warehouse" / "fact" / "policy" / "current"
 DEFAULT_RENEWAL_TRACKER_PATH = DATA_ROOT / "warehouse" / "fact" / "renewal_tracker" / "latest.parquet"
 DEFAULT_QUOTES_PATH = DATA_ROOT / "warehouse" / "fact" / "quotes_conversion" / "latest.parquet"
 DEFAULT_CUSTOMER_FLOW_PATH = DATA_ROOT / "warehouse" / "fact" / "customer_flow" / "latest.parquet"
@@ -147,6 +146,7 @@ class SyncConfig:
     quotes_path: str
     customer_flow_path: str
     policy_glob: str
+    province: str  # resolve_province fail-closed 校验后的省份码（WHERE branch_code 隔离键）
     state_path: Path
     webhook_env: str
     webhook_url: str | None
@@ -164,6 +164,14 @@ def parse_args() -> argparse.Namespace:
     def add_common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--state", default=str(DEFAULT_STATE_PATH), help="VIN -> record_id state 路径")
 
+    def add_province(p: argparse.ArgumentParser) -> None:
+        # 省份轴收窄（50d62e）：fail-closed，缺省/未知省份即报错中止，禁止静默回落单省
+        p.add_argument("--province", required=True,
+                       help="省份代码（仅接受已注册省份如 SC/SX；data-pipeline.md「省份数据隔离」红线）")
+        p.add_argument("--policy-glob", default=None,
+                       help="覆盖保单 parquet glob（默认按 --province 自动收窄；"
+                            "显式传入时 WHERE branch_code 仍按 --province 过滤，隔离不旁路）")
+
     prime = subparsers.add_parser("prime-state", help="从企微现有表读取车架号并建立 record_id state")
     add_common(prime)
     src = prime.add_mutually_exclusive_group(required=True)
@@ -176,13 +184,13 @@ def parse_args() -> argparse.Namespace:
 
     sync = subparsers.add_parser("sync", help="按本地数据源更新 5 个字段；默认 dry-run")
     add_common(sync)
+    add_province(sync)
     sync.add_argument("--start", default="2026-05-01", help="到期日开始，默认 2026-05-01")
     sync.add_argument("--end", default="2026-07-31", help="到期日结束，默认 2026-07-31")
     sync.add_argument("--quote-window-start", default="2025-12-03", help="报价匹配开始日期")
     sync.add_argument("--renewal-tracker-path", default=str(DEFAULT_RENEWAL_TRACKER_PATH))
     sync.add_argument("--quotes-path", default=str(DEFAULT_QUOTES_PATH))
     sync.add_argument("--customer-flow-path", default=str(DEFAULT_CUSTOMER_FLOW_PATH))
-    sync.add_argument("--policy-glob", default=str(DEFAULT_POLICY_GLOB))
     sync.add_argument("--webhook-env", default=DEFAULT_WEBHOOK_ENV)
     sync.add_argument("--webhook-url", help="直接传 webhook URL；优先级高于 --webhook-env，不建议写入脚本")
     sync.add_argument(
@@ -202,18 +210,19 @@ def parse_args() -> argparse.Namespace:
     sync.add_argument("--vin-file", help="只更新文件中的车架号；每行一个，支持逗号分隔")
 
     inspect = subparsers.add_parser("inspect", help="只查询指定车架号的 5 个字段，不读/写企微")
+    add_province(inspect)
     inspect.add_argument("--start", default="2026-05-01", help="到期日开始，默认 2026-05-01")
     inspect.add_argument("--end", default="2026-07-31", help="到期日结束，默认 2026-07-31")
     inspect.add_argument("--quote-window-start", default="2025-12-03", help="报价匹配开始日期")
     inspect.add_argument("--renewal-tracker-path", default=str(DEFAULT_RENEWAL_TRACKER_PATH))
     inspect.add_argument("--quotes-path", default=str(DEFAULT_QUOTES_PATH))
     inspect.add_argument("--customer-flow-path", default=str(DEFAULT_CUSTOMER_FLOW_PATH))
-    inspect.add_argument("--policy-glob", default=str(DEFAULT_POLICY_GLOB))
     inspect.add_argument("--vin", action="append", default=[], help="指定车架号；可多次传，也可用英文逗号分隔")
     inspect.add_argument("--vin-file", help="车架号文件；每行一个，支持逗号分隔")
     inspect.add_argument("--output", help="把核验清单写入 JSON 文件")
 
     seed = subparsers.add_parser("seed-from-excel", help="从导出的 Excel 三个月清单全字段写入空表/新表，并保存 record_id state")
+    add_province(seed)
     seed.add_argument("--input", required=True, help="企微智能表导出的 Excel")
     seed.add_argument("--start", default="2026-05-01", help="到期日开始，默认 2026-05-01")
     seed.add_argument("--end", default="2026-07-31", help="到期日结束，默认 2026-07-31")
@@ -221,7 +230,6 @@ def parse_args() -> argparse.Namespace:
     seed.add_argument("--renewal-tracker-path", default=str(DEFAULT_RENEWAL_TRACKER_PATH))
     seed.add_argument("--quotes-path", default=str(DEFAULT_QUOTES_PATH))
     seed.add_argument("--customer-flow-path", default=str(DEFAULT_CUSTOMER_FLOW_PATH))
-    seed.add_argument("--policy-glob", default=str(DEFAULT_POLICY_GLOB))
     seed.add_argument("--state", default=str(DEFAULT_STATE_PATH), help="VIN -> record_id state 路径")
     seed.add_argument("--webhook-env", default=DEFAULT_WEBHOOK_ENV)
     seed.add_argument("--webhook-url", help="直接传 webhook URL；优先级高于 --webhook-env")
@@ -417,6 +425,7 @@ def fetch_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
              ) AS policy_pricing_factor
       FROM read_parquet('{config.policy_glob}', union_by_name=true)
       WHERE vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
+        AND branch_code = ?
       GROUP BY policy_no, vehicle_frame_no
     ),
     flow AS (
@@ -448,7 +457,10 @@ def fetch_source_rows(config: SyncConfig) -> list[dict[str, Any]]:
     LEFT JOIN flow ON flow.vehicle_frame_no = rt.vehicle_frame_no
     """
     con = duckdb.connect(":memory:")
-    return con.execute(sql, [config.start, config.end, config.quote_window_start]).fetchdf().to_dict("records")
+    # 参数顺序跟随 SQL 中 ? 出现顺序：rt(start,end) → q_latest(quote_window_start) → policy_one(province)
+    return con.execute(
+        sql, [config.start, config.end, config.quote_window_start, config.province]
+    ).fetchdf().to_dict("records")
 
 
 def clean_text(value: Any) -> str:
@@ -1006,6 +1018,18 @@ def run_seed_from_excel(config: SyncConfig, *, input_path: Path, execute: bool, 
     return summary
 
 
+def _resolve_policy_scope(args: argparse.Namespace) -> tuple[str, str]:
+    """(province, policy_glob)：--province fail-closed 解析 + glob 按省收窄。
+
+    --policy-glob 显式传入时优先作 glob，但 WHERE branch_code 仍按 --province 过滤。
+    """
+    province = resolve_province(args.province)
+    policy_glob = args.policy_glob or str(
+        policy_current_glob(_POLICY_CURRENT_DIR, province, missing_ok=True)
+    )
+    return province, policy_glob
+
+
 def main() -> int:
     args = parse_args()
     try:
@@ -1032,6 +1056,7 @@ def main() -> int:
             vin_filter = parse_vins(args.vin, args.vin_file)
             if not vin_filter:
                 raise RuntimeError("inspect 必须传 --vin 或 --vin-file，避免全量输出")
+            province, policy_glob = _resolve_policy_scope(args)
             config = SyncConfig(
                 start=args.start,
                 end=args.end,
@@ -1039,7 +1064,8 @@ def main() -> int:
                 renewal_tracker_path=args.renewal_tracker_path,
                 quotes_path=args.quotes_path,
                 customer_flow_path=args.customer_flow_path,
-                policy_glob=args.policy_glob,
+                policy_glob=policy_glob,
+                province=province,
                 state_path=DEFAULT_STATE_PATH,
                 webhook_env=DEFAULT_WEBHOOK_ENV,
                 webhook_url=None,
@@ -1059,6 +1085,7 @@ def main() -> int:
             if args.table_schema_file:
                 apply_table_schema_file(Path(args.table_schema_file).expanduser())
             BASE_UPDATE_KEYS[:] = SEED_UPDATE_KEYS
+            province, policy_glob = _resolve_policy_scope(args)
             config = SyncConfig(
                 start=args.start,
                 end=args.end,
@@ -1066,7 +1093,8 @@ def main() -> int:
                 renewal_tracker_path=args.renewal_tracker_path,
                 quotes_path=args.quotes_path,
                 customer_flow_path=args.customer_flow_path,
-                policy_glob=args.policy_glob,
+                policy_glob=policy_glob,
+                province=province,
                 state_path=state_path,
                 webhook_env=args.webhook_env,
                 webhook_url=args.webhook_url,
@@ -1091,6 +1119,7 @@ def main() -> int:
                 apply_table_schema_file(Path(args.table_schema_file).expanduser())
             BASE_UPDATE_KEYS[:] = FIELD_SETS[getattr(args, "fields", "quote")]
             vin_filter = parse_vins(getattr(args, "vin", []), getattr(args, "vin_file", None))
+            province, policy_glob = _resolve_policy_scope(args)
             config = SyncConfig(
                 start=args.start,
                 end=args.end,
@@ -1098,7 +1127,8 @@ def main() -> int:
                 renewal_tracker_path=args.renewal_tracker_path,
                 quotes_path=args.quotes_path,
                 customer_flow_path=args.customer_flow_path,
-                policy_glob=args.policy_glob,
+                policy_glob=policy_glob,
+                province=province,
                 state_path=state_path,
                 webhook_env=args.webhook_env,
                 webhook_url=args.webhook_url,

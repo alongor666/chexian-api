@@ -13,19 +13,40 @@ import sync_may_renewal_fields as smrf  # noqa: E402
 
 
 def test_table_schema_file_is_optional_for_default_sync(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["sync_may_renewal_fields.py", "sync"])
+    monkeypatch.setattr(sys, "argv", ["sync_may_renewal_fields.py", "sync", "--province", "SC"])
 
     args = smrf.parse_args()
 
     assert args.table_schema_file is None
+    assert args.province == "SC"
 
 
 def test_table_schema_file_is_optional_for_default_seed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["sync_may_renewal_fields.py", "seed-from-excel", "--input", "export.xlsx"])
+    monkeypatch.setattr(
+        sys, "argv",
+        ["sync_may_renewal_fields.py", "seed-from-excel", "--province", "SC", "--input", "export.xlsx"],
+    )
 
     args = smrf.parse_args()
 
     assert args.table_schema_file is None
+
+
+def test_sync_without_province_exits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """省份轴收窄（50d62e）fail-closed：缺 --province 直接 argparse 报错退出。"""
+    monkeypatch.setattr(sys, "argv", ["sync_may_renewal_fields.py", "sync"])
+
+    with pytest.raises(SystemExit):
+        smrf.parse_args()
+
+
+def test_unregistered_province_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """未注册省份禁静默回落（data-pipeline.md 红线）——resolve 阶段抛错。"""
+    monkeypatch.setattr(sys, "argv", ["sync_may_renewal_fields.py", "sync", "--province", "XX"])
+
+    args = smrf.parse_args()
+    with pytest.raises(Exception, match="未注册省份"):
+        smrf._resolve_policy_scope(args)
 
 
 def test_seed_values_include_coverage_combination_from_excel() -> None:

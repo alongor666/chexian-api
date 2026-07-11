@@ -48,12 +48,14 @@ REPO_ROOT = HERE.parent.parent.parent
 _DATA_ROOT = REPO_ROOT / "数据管理"
 if str(_DATA_ROOT) not in sys.path:
     sys.path.insert(0, str(_DATA_ROOT))  # 供 import pipelines.*（branch_paths SSOT）
-from pipelines.branch_paths import policy_current_glob  # noqa: E402
-
-# 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：扁平/子目录自动路由
-PARQUET_POLICY = policy_current_glob(
-    _DATA_ROOT / "warehouse" / "fact" / "policy" / "current", missing_ok=True
+from pipelines.branch_paths import (  # noqa: E402
+    PolicyCurrentLayoutError,
+    policy_current_glob,
+    resolve_province,
 )
+
+# 省份轴收窄（50d62e）：policy glob 在 main 按 --province 解析后计算（fail-closed，禁全省混查）
+_POLICY_CURRENT_DIR = _DATA_ROOT / "warehouse" / "fact" / "policy" / "current"
 PARQUET_CLAIMS = REPO_ROOT / "数据管理" / "warehouse" / "fact" / "claims_detail" / "*.parquet"
 
 FEEDBACK_PLACEHOLDER = "<!-- FEEDBACK_URL -->"
@@ -129,8 +131,19 @@ def alert_level(metric_key: str, value: Any) -> str:
     return "normal"
 
 
-def build_filtered_cte(agent_name: str, start_date: str, end_date: str, personal_only: bool = False) -> str:
-    """构造去重 + 标签化 + 派生维度的 CTE。过滤条件用 insurance_start_date 区间。"""
+def build_filtered_cte(
+    agent_name: str,
+    start_date: str,
+    end_date: str,
+    policy_glob: str,
+    province: str,
+    personal_only: bool = False,
+) -> str:
+    """构造去重 + 标签化 + 派生维度的 CTE。过滤条件用 insurance_start_date 区间。
+
+    province 已经 resolve_province fail-closed 校验；WHERE branch_code 才是省份
+    隔离保证，glob 收窄仅性能辅助（data-pipeline.md 红线）。
+    """
     safe_agent = agent_name.replace("'", "''")
     extra_filter = "AND customer_category = '非营业个人客车'" if personal_only else ""
     return f"""
@@ -150,8 +163,9 @@ def build_filtered_cte(agent_name: str, start_date: str, end_date: str, personal
         premium,
         COALESCE(fee_amount, 0) AS fee_amount,
         CAST(policy_date AS DATE) AS policy_date
-      FROM read_parquet('{PARQUET_POLICY}', union_by_name=true)
+      FROM read_parquet('{policy_glob}', union_by_name=true)
       WHERE agent_name = '{safe_agent}'
+        AND branch_code = '{province}'
         AND CAST(insurance_start_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'
         {extra_filter}
     ),
@@ -945,6 +959,9 @@ def build_html(
 def main() -> int:
     parser = argparse.ArgumentParser(description="经代/机构诊断 HTML 报告生成器（杂志风视觉 + 规则化问题点）")
     parser.add_argument("--agent-name", required=True, help="精确匹配的 agent_name 全字符串")
+    parser.add_argument("--province", required=True,
+                        help="省份代码（fail-closed：仅接受已注册省份如 SC/SX，缺省/未知即报错中止；"
+                             "data-pipeline.md「省份数据隔离」红线）")
     parser.add_argument("--start-date", default="2026-01-01", help="保险起期下限 YYYY-MM-DD（含）")
     parser.add_argument("--end-date", default=date.today().isoformat(), help="保险起期上限 YYYY-MM-DD（含）")
     parser.add_argument("--title", required=True, help="报告主标题")
@@ -952,9 +969,20 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True, help="输出 HTML 路径")
     args = parser.parse_args()
 
+    try:
+        province = resolve_province(args.province)
+    except PolicyCurrentLayoutError as e:
+        sys.stderr.write(f"[ERROR] {e}\n")
+        return 2
+    policy_glob = policy_current_glob(_POLICY_CURRENT_DIR, province, missing_ok=True)
+
     con = duckdb.connect()
-    base_cte_all = build_filtered_cte(args.agent_name, args.start_date, args.end_date, personal_only=False)
-    base_cte_personal = build_filtered_cte(args.agent_name, args.start_date, args.end_date, personal_only=True)
+    base_cte_all = build_filtered_cte(
+        args.agent_name, args.start_date, args.end_date, policy_glob, province, personal_only=False
+    )
+    base_cte_personal = build_filtered_cte(
+        args.agent_name, args.start_date, args.end_date, policy_glob, province, personal_only=True
+    )
 
     total_rows = query(con, base_cte_all + metrics_sql(group_by=None, having_premium=False))
     if not total_rows or not total_rows[0].get("policy_count"):

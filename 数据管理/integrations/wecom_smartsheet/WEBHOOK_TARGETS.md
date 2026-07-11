@@ -18,14 +18,14 @@
 续保 5 月默认只同步稳定字段，避免单选项缺失阻塞报价更新：
 
 ```bash
-python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync
-python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync --execute
+python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync --province SC
+python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync --province SC --execute
 ```
 
 观察风险等级/流失公司，不建议直接执行：
 
 ```bash
-python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync --fields all
+python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync --province SC --fields all
 ```
 
 各三级机构续保：

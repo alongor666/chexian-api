@@ -20,7 +20,7 @@ last_updated: "2026-04-13"
 ## 工具路径
 
 ```
-python3 数据管理/tools/analyze_flow.py [参数]
+python3 数据管理/tools/analyze_flow.py --province <省份码> [参数]
 ```
 
 ## 参数映射规则
@@ -52,25 +52,25 @@ python3 数据管理/tools/analyze_flow.py [参数]
 
 ```bash
 # "看看营业货车的流向"
-python3 数据管理/tools/analyze_flow.py --category 营业货车
+python3 数据管理/tools/analyze_flow.py --province SC --category 营业货车
 
 # "2026年10吨以上营业货车，重点看转入来源和风险"
-python3 数据管理/tools/analyze_flow.py --category 营业货车 --tonnage 10吨以上 --year 2026 --sections summary,insurer,risk
+python3 数据管理/tools/analyze_flow.py --province SC --category 营业货车 --tonnage 10吨以上 --year 2026 --sections summary,insurer,risk
 
 # "谁在抢我们的个人客车主全业务"
-python3 数据管理/tools/analyze_flow.py --category 非营业个人客车 --coverage 主全 --direction outbound --sections summary,insurer,org
+python3 数据管理/tools/analyze_flow.py --province SC --category 非营业个人客车 --coverage 主全 --direction outbound --sections summary,insurer,org
 
 # "天府的摩托车流向"
-python3 数据管理/tools/analyze_flow.py --category 摩托车 --org 天府
+python3 数据管理/tools/analyze_flow.py --province SC --category 摩托车 --org 天府
 
 # "华农和中意抢走了哪些保单"
-python3 数据管理/tools/analyze_flow.py --insurer 华农,中意 --direction outbound
+python3 数据管理/tools/analyze_flow.py --province SC --insurer 华农,中意 --direction outbound
 
 # "个人客车流失归因，哪些是主动提价、哪些是可惜的"
-python3 数据管理/tools/analyze_flow.py --category 非营业个人客车 --sections loss
+python3 数据管理/tools/analyze_flow.py --province SC --category 非营业个人客车 --sections loss
 
 # "营业货车流失，按业务员看谁丢的最多"
-python3 数据管理/tools/analyze_flow.py --category 营业货车 --year 2025 --sections loss
+python3 数据管理/tools/analyze_flow.py --province SC --category 营业货车 --year 2025 --sections loss
 ```
 
 ## 输出解读提示
