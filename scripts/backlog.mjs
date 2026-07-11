@@ -13,7 +13,14 @@
  *   bun scripts/backlog.mjs status <id|uid> CANCELLED|WONTFIX --evidence "弃置理由" [--actor @claude]
  *   bun scripts/backlog.mjs note   <id|uid> "补充信息" [--actor @claude]
  *   bun scripts/backlog.mjs amend  <id|uid> --priority P1 [--actor @claude]   (可改 section/priority/desc/docs/code/owner)
+ *   bun scripts/backlog.mjs claim  <id|uid> [--agent "认领方"] [--note "..."] [--actor @claude]   (派发即登记：置 DOING + owner + note；已认领则拒绝)
+ *   bun scripts/backlog.mjs release <id|uid> "撤回理由" [--actor @claude]                          (撤回认领：DOING → PROPOSED)
  *   bun scripts/backlog.mjs list   [--all]
+ *
+ * 派发纪律（防重复派发 · 见 .claude/rules/backlog-eventlog.md §11）：
+ *   spawn_task 派发任务卡『之前』必须先 `claim`——把「已派发/在做」实时写回 backlog（status=DOING + owner=认领方）。
+ *   claim 对已 DOING/IN_PROGRESS 的任务 fail-closed 拒绝，从机制上杜绝两个 Agent 认领同一任务撞车。
+ *   撤回任务卡时对称 `release`，把 DOING 退回 PROPOSED，交还队列。
  *
  * 选择器 <id|uid>：曾用号(B244) / 完整 uid / uid 唯一后缀，皆可。
  *
@@ -28,6 +35,7 @@ import {
   ACTIVE_STATUSES, TERMINAL_STATUSES, PRIORITY_ORDER, AMENDABLE_FIELDS,
   LOG_PATH, BACKLOG_PATH, ARCHIVE_PATH,
 } from './backlog/lib.mjs';
+import { evaluateClaim, evaluateRelease } from './backlog/claim-gate.mjs';
 
 const ALL_STATUSES = [...ACTIVE_STATUSES, ...TERMINAL_STATUSES];
 
@@ -167,6 +175,68 @@ function cmdAmend(pos, flags) {
   console.log(`✅ ${displayId(tasks.get(uid))} 已修订 ${events.map(e => e.field).join(', ')}（视图已刷新）`);
 }
 
+/**
+ * claim：派发即登记（防重复派发的核心闸）。
+ *
+ * 根治的病：spawn_task 派发任务卡与 backlog 状态是两套互不联动的系统——PROPOSED 任务被派发后，
+ * 看板毫无痕迹，别的 Agent（或同一循环再跑一次）会重复认领撞车（实证：2026-07-10 山西维修域
+ * 2815e4 已有 Agent 在做，backlog 仍 PROPOSED 被重复 spawn）。
+ *
+ * 语义：把「已派发/在做」原子写回 backlog —— status→DOING + owner→认领方 + 一条认领 note。
+ * fail-closed：目标已是 DOING/IN_PROGRESS（有人在做）或终态 → 拒绝，杜绝两人认领同一任务。
+ */
+function cmdClaim(pos, flags) {
+  const [, sel] = pos;
+  const tasks = fold(loadLog());
+  const uid = resolveUid(sel, tasks);
+  const task = tasks.get(uid);
+  const actor = flags.actor || '@claude';
+  const verdict = evaluateClaim(task, TERMINAL_STATUSES);
+  if (!verdict.allowed) {
+    if (verdict.code === 'already-claimed') {
+      die(`任务 ${displayId(task)} ${verdict.reason} —— 勿重复派发。\n` +
+          `   · 确需接手：先与现 owner 对齐；\n` +
+          `   · 该认领已废弃：先 \`release ${displayId(task)} "理由"\` 交还队列，再 claim。`);
+    }
+    die(`任务 ${displayId(task)} ${verdict.reason}，不可认领。`);
+  }
+  const agent = (flags.agent != null && flags.agent !== true) ? String(flags.agent) : actor;
+  const extra = (flags.note != null && flags.note !== true) ? `；${flags.note}` : '';
+  const stamp = new Date().toISOString();
+  const claimNote = `【认领·派发登记】${agent} 于 ${stamp} 接手（派发即登记，防重复派发）${extra}`;
+  appendAndRerender([
+    { uid, kind: 'status', ts: today(), actor, status: 'DOING' },
+    { uid, kind: 'amend', ts: today(), actor, field: 'owner', value: esc(agent) },
+    { uid, kind: 'note', ts: today(), actor, text: esc(claimNote) },
+  ]);
+  console.log(`✅ ${displayId(task)} 已认领 → DOING（owner=${agent}；视图已刷新）`);
+  console.log('   ▶ 纪律：spawn_task 派发任务卡『之前』先跑本命令，让 backlog 实时反映在做的任务。');
+}
+
+/**
+ * release：撤回认领（claim 的对称操作）。把 claim 产生的 DOING 退回 PROPOSED，交还队列。
+ * 只针对 DOING —— IN_PROGRESS/PARTIAL 是实质进展态，用 status 正常流转，不该被 release 简单退回。
+ */
+function cmdRelease(pos, flags) {
+  const [, sel, ...rest] = pos;
+  const reason = rest.join(' ').trim() || ((flags.reason != null && flags.reason !== true) ? String(flags.reason) : '');
+  const tasks = fold(loadLog());
+  const uid = resolveUid(sel, tasks);
+  const task = tasks.get(uid);
+  const actor = flags.actor || '@claude';
+  const verdict = evaluateRelease(task);
+  if (!verdict.allowed) {
+    die(`任务 ${displayId(task)} ${verdict.reason}，无需 release。\n` +
+        `   （IN_PROGRESS/PARTIAL 是实质进展态，请用 \`status\` 正常流转，不用 release 退回。）`);
+  }
+  if (!reason) die('release 必须说明撤回理由：release <id> "理由" 或 --reason "理由"');
+  appendAndRerender([
+    { uid, kind: 'status', ts: today(), actor, status: 'PROPOSED' },
+    { uid, kind: 'note', ts: today(), actor, text: esc(`【撤回认领】${actor}：${reason}`) },
+  ]);
+  console.log(`✅ ${displayId(task)} 已撤回认领 → PROPOSED（重新开放；视图已刷新）`);
+}
+
 function cmdList(flags) {
   const tasks = [...fold(loadLog()).values()];
   const show = flags.all ? tasks : tasks.filter(isActive);
@@ -187,6 +257,8 @@ switch (cmd) {
   case 'status': cmdStatus(pos, flags); break;
   case 'note': cmdNote(pos, flags); break;
   case 'amend': cmdAmend(pos, flags); break;
+  case 'claim': cmdClaim(pos, flags); break;
+  case 'release': cmdRelease(pos, flags); break;
   case 'list': cmdList(flags); break;
   default:
     console.log('用法：bun scripts/backlog.mjs <add|status|note|amend|list> ...');
@@ -195,6 +267,8 @@ switch (cmd) {
     console.log('         终态 ' + TERMINAL_STATUSES.join('/') + ' 必须带 --evidence（DONE=完成证据，CANCELLED/WONTFIX=弃置理由）');
     console.log('  note   <id|uid> "..." [--actor @x]');
     console.log('  amend  <id|uid> --priority P1|--section ...|--desc ... [--actor @x]');
+    console.log('  claim  <id|uid> [--agent "认领方"] [--note "..."] [--actor @x]   派发即登记：置 DOING+owner+note（已认领则拒绝）');
+    console.log('  release <id|uid> "撤回理由" [--actor @x]                        撤回认领：DOING → PROPOSED');
     console.log('  list   [--all]');
     process.exit(cmd ? 1 : 0);
 }
