@@ -192,8 +192,8 @@ describe('批量 SX 账号 — active 闸全覆盖', () => {
     .filter((u) => u.branchCode === 'SX')
     .map((u) => u.username);
 
-  it('SX 账号数量应为 13（sxAdmin + yangjie0621 + 11 org_user）', () => {
-    expect(sxUsernames).toHaveLength(13);
+  it('SX 账号数量应为 19（sxAdmin + yangjie0621 + 6 车险部个人 + 11 org_user）', () => {
+    expect(sxUsernames).toHaveLength(19);
   });
 
   for (const username of sxUsernames) {

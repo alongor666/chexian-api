@@ -104,8 +104,8 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
 
   it('SX 账号密码均为「构造式 tombstone」占位（bcrypt 格式 + 含 Tombstone 标记 → fail-safe，绝非真实凭据）', () => {
     const sxUsers = Object.values(PRESET_USERS).filter((u) => u.branchCode === 'SX');
-    // sxAdmin + yangjie0621（2 超管）+ 11 org_user = 13
-    expect(sxUsers).toHaveLength(13);
+    // sxAdmin + yangjie0621（2 超管）+ 6 车险部个人 branch_admin（2026-07-11 统一初始密码发放）+ 11 org_user = 19
+    expect(sxUsers).toHaveLength(19);
     for (const u of sxUsers) {
       // 1) bcrypt 60 字符格式（可被 bcrypt.compare 解析而不抛错）
       expect(u.passwordHash).toMatch(/^\$2[aby]\$\d{2}\$/);

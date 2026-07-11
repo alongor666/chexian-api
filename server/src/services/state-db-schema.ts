@@ -91,6 +91,30 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE access_users ADD COLUMN branch_code TEXT;
     `,
   },
+  {
+    id: 5,
+    description: 'password_changed_at on access_users for first-login forced password change (2026-07-11)',
+    sql: `
+      ALTER TABLE access_users ADD COLUMN password_changed_at TEXT;
+    `,
+  },
+  {
+    id: 6,
+    description: 'activation_tokens for admin-issued one-time password-set tokens (2026-07-11)',
+    sql: `
+      CREATE TABLE IF NOT EXISTS activation_tokens (
+        token_id   TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL,
+        user_id    TEXT NOT NULL,
+        username   TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at    TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_activation_tokens_user ON activation_tokens(user_id);
+    `,
+  },
 ];
 
 /**

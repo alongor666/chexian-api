@@ -1,0 +1,1 @@
+{"uid":"2026-07-03-claude-b714a7","kind":"note","ts":"2026-07-11","actor":"@claude","text":"check-merged-drift 命中 b221c4c0 系误报：该提交是交叉销售物化表自动重建(#1056)，与本 L5 HTML 转义任务无关","at":"2026-07-11T22:02:15.392Z","eid":"219bd16a"}

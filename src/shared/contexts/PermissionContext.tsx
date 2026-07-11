@@ -35,6 +35,12 @@ interface PermissionContextValue {
   loginWithPassword: (username: string, password: string, remember?: boolean) => Promise<boolean>;
   /** 基于 cookie 会话恢复当前用户 */
   restoreSession: () => Promise<boolean>;
+  /** pns：该账号尚未自设专属密码，须先设密才能进业务页（AuthGuard 据此强制渲染设密页） */
+  mustChangePassword: boolean;
+  /** 账号是否存在可验证的旧密码凭据（false → 设密页「首次设密」模式，免填当前密码） */
+  hasPassword: boolean;
+  /** 用户本人设密/改密；成功后 mustChangePassword 复位，会话自动换发。oldPassword 首次设密可缺省 */
+  changePassword: (oldPassword: string | undefined, newPassword: string) => Promise<void>;
   /** 登出 */
   logout: () => void;
   /** 检查是否可查看指定机构 */
@@ -53,6 +59,9 @@ const PermissionContext = createContext<PermissionContextValue>({
   login: () => { },
   loginWithPassword: async () => false,
   restoreSession: async () => false,
+  mustChangePassword: false,
+  hasPassword: true,
+  changePassword: async () => { },
   logout: () => { },
   canView: () => true,
 });
@@ -69,6 +78,10 @@ interface PermissionProviderProps {
 export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children }) => {
   const [userPermission, setUserPermissionState] = useState<UserPermission | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // pns 强制设密标记（后端 /login、/me 按会话 pns 声明回传；密码登录与飞书登录都可能置位）
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  // 账号是否存在可验证旧凭据：决定设密页是「改密模式」（要求当前密码）还是「首次设密模式」
+  const [hasPassword, setHasPassword] = useState(true);
 
   const buildPermission = useCallback((user: {
     username: string;
@@ -110,9 +123,13 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       const me = await apiClient.getCurrentUser();
       const permission = buildPermission(me);
       setUserPermission(permission);
+      setMustChangePassword(me.mustChangePassword === true);
+      setHasPassword(me.hasPassword !== false);
       return true;
     } catch {
       setUserPermission(null);
+      setMustChangePassword(false);
+      setHasPassword(true);
       apiClient.clearToken();
       return false;
     }
@@ -176,6 +193,9 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       const permission = buildPermission(authResult.user);
 
       setUserPermission(permission);
+      setMustChangePassword(authResult.user.mustChangePassword === true);
+      // 密码登录成功 = 刚用旧密码验证通过 → 该账号必有可验证旧凭据（设密页走改密模式）
+      setHasPassword(true);
 
       // 3. 触发登录事件（通知 DataContext 刷新数据）
       window.dispatchEvent(new Event('auth-login'));
@@ -189,9 +209,18 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     }
   }, [buildPermission, setUserPermission]);
 
+  /** 用户本人设密/改密：成功后复位强制设密标记（后端同步换发不含 pns 的会话）。失败原样抛错供页面展示 */
+  const changePassword = useCallback(async (oldPassword: string | undefined, newPassword: string): Promise<void> => {
+    await apiClient.changePassword(oldPassword, newPassword);
+    setMustChangePassword(false);
+    setHasPassword(true);
+  }, []);
+
   /** 登出 */
   const logout = useCallback(() => {
     setUserPermission(null);
+    setMustChangePassword(false);
+    setHasPassword(true);
     apiClient.logout(); // 清除 API 客户端 token
   }, [setUserPermission]);
 
@@ -227,6 +256,9 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       login,
       loginWithPassword,
       restoreSession,
+      mustChangePassword,
+      hasPassword,
+      changePassword,
       logout,
       canView,
     }),
@@ -242,6 +274,9 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       login,
       loginWithPassword,
       restoreSession,
+      mustChangePassword,
+      hasPassword,
+      changePassword,
       logout,
       canView,
     ]

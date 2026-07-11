@@ -50,6 +50,7 @@ import {
   syncQuickReferenceFile,
 } from '../数据管理/pipelines/quick_reference.mjs';
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
+import { runSelfServicePasswordIsolationCheck } from './governance/self-service-password-isolation.mjs';
 import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
 import { listPolicyCurrentShards, collectValidationDimFileEntries, collectValidationFactFileEntries } from './lib/policy-current-shards.mjs';
 import {
@@ -2225,6 +2226,8 @@ function checkStateDbDependencyIsolation() {
     'server/src/services/personal-access-token-store.ts',
     'server/src/services/__tests__/personal-access-token-store-sqlite.test.ts',
     'server/src/scripts/admin-import-pat-from-json.ts',
+    // 全员密码闭环（2026-07-11）：激活令牌 Repository（backend=sqlite 单层）
+    'server/src/services/activation-token-store.ts',
   ]);
 
   const serverSrc = path.join(ROOT_DIR, 'server/src');
@@ -3450,6 +3453,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: 'TS检查范围', fn: checkTsconfigTypecheckScope },
   { name: '锁文件策略', fn: checkPackageManagerLockPolicy },
   { name: '凭据扫描', fn: checkStagedCredentials },
+  { name: '自助设密账号禁入USER_PASSWORDS', fn: () => runSelfServicePasswordIsolationCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   { name: 'PR体量门禁', fn: checkPrSizeLimit },
   { name: 'gitignore审计', fn: checkGitignoreShadow },
   { name: '字段定义一致', fn: checkFieldDefinitionConsistency },

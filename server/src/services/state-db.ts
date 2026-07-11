@@ -2,7 +2,7 @@
  * State DB - SQLite 状态持久层（v5 状态持久层迁移 Phase 1）
  *
  * ⚠️ 访问契约（RED LINE）：
- *   ONLY {access-control,personal-access-token}-store.ts may import this module.
+ *   ONLY {access-control,personal-access-token,activation-token}-store.ts may import this module.
  *   CLI / MCP 必须走 HTTP API，禁止 require('better-sqlite3')。
  *   理由：API server 持有唯一权威写入口，避免多进程并发与原生模块依赖污染。
  *

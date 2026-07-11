@@ -160,6 +160,8 @@ export const AUTH_ROUTES = {
   REFRESH: 'auth/refresh',
   LOGOUT: 'auth/logout',
   ME: 'auth/me',
+  /** 用户本人改密（统一初始密码首登强制改密链路） */
+  CHANGE_PASSWORD: 'auth/change-password',
 
   USERS: 'auth/users',
   USER_BY_ID: 'auth/users',

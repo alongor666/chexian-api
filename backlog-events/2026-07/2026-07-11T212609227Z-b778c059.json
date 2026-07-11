@@ -1,0 +1,1 @@
+{"uid":"2026-07-11-claude-3ac77b","kind":"create","ts":"2026-07-11","actor":"@claude","section":"认证与账号安全","priority":"P2","desc":"全员密码体系改造 PR-2 找回+通知（占位）：密码找回链路 + 激活令牌/改密事件通知；blocked-by 阶段一 PR（uid 2026-07-11-claude-a0035a），待阶段一合并后由中枢会话另发任务卡","docs":"N/A","code":"N/A","at":"2026-07-11T21:26:09.227Z","eid":"b778c059"}

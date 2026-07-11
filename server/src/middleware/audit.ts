@@ -158,7 +158,12 @@ export type AuthEventKind =
   | 'login_ip_denied'
   | 'pat_created'
   | 'pat_revoked'
-  | 'pat_expired';
+  | 'pat_expired'
+  | 'password_changed'
+  | 'password_change_failure'
+  | 'activation_token_created'
+  | 'activation_success'
+  | 'activation_failure';
 
 export function auditAuthEvent(params: {
   event: AuthEventKind;
@@ -169,8 +174,17 @@ export function auditAuthEvent(params: {
   tokenId?: string;
 }): void {
   const isLoginPath = params.event.startsWith('login_');
-  const path = isLoginPath ? '/api/auth/login' : '/api/auth/tokens';
-  const successEvents = new Set<AuthEventKind>(['login_success', 'pat_created', 'pat_revoked']);
+  const path = isLoginPath
+    ? '/api/auth/login'
+    : params.event.startsWith('password_')
+      ? '/api/auth/change-password'
+      : params.event.startsWith('activation_')
+        ? '/api/auth/activate'
+        : '/api/auth/tokens';
+  const successEvents = new Set<AuthEventKind>([
+    'login_success', 'pat_created', 'pat_revoked',
+    'password_changed', 'activation_token_created', 'activation_success',
+  ]);
   writeAuditLog({
     timestamp: new Date().toISOString(),
     request_id: 'auth-event',

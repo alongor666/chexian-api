@@ -123,11 +123,19 @@ router.get('/callback', async (req: Request, res: Response) => {
             return res.redirect(buildFrontendRedirect('/#/login?error=feishu_auth_denied'));
         }
 
-        // 4. 签发 cookie 会话（access+refresh）
+        // 4. pns 判定（全员密码闭环：飞书扫码是激活便捷通道，不是设密豁免通道）——
+        //    对应 store 账号尚未自设密码且不豁免 → 会话带 pns 声明，登录后被强制引导设密。
+        //    store 无对应账号实体（纯飞书裸 ID 身份）→ 非 pns（无可设密的账号）。
+        const mustChangePassword = await authService.isPasswordNotSetForUsername(userCredential.username);
+
+        // 5. 签发 cookie 会话（access+refresh）
         const secure = process.env.NODE_ENV === 'production';
         const accessMaxAge = parseDurationToMs(authEnv.JWT_EXPIRES_IN, 4 * 60 * 60 * 1000);
         const refreshMaxAge = parseDurationToMs(authEnv.JWT_REFRESH_EXPIRES_IN, 7 * 24 * 60 * 60 * 1000);
-        const session = authService.issueCookieSession(userCredential);
+        const session = authService.issueCookieSession({
+            ...userCredential,
+            mustChangePassword: mustChangePassword || undefined,
+        });
 
         res.cookie(ACCESS_COOKIE, session.accessToken, {
             httpOnly: true,
@@ -144,7 +152,7 @@ router.get('/callback', async (req: Request, res: Response) => {
             path: '/',
         });
 
-        // 5. 重定向回前端页面（不在 URL 暴露 token）
+        // 6. 重定向回前端页面（不在 URL 暴露 token）；pns 由前端 /me 拉取后引导设密页
         res.redirect(buildFrontendRedirect('/#/login?feishu=success'));
 
     } catch (error: any) {

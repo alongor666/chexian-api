@@ -42,6 +42,7 @@ import {
   revokePat,
   type TtlDays,
 } from '../services/personal-access-token.js';
+import { createActivationToken, activateWithToken } from '../services/activation-token.js';
 import { QUERY_ROUTE_METADATA } from '../config/query-routes-metadata.js';
 import { assertStaticReportAccess, shouldEnforceStaticReportPolicy } from './reports.js';
 
@@ -258,6 +259,147 @@ router.post(
     authService.revokeCookieSession(refreshToken);
     clearSessionCookies(res);
     res.json({ success: true, data: { loggedOut: true } });
+  })
+);
+
+/**
+ * POST /api/auth/change-password
+ * 用户本人设密/改密。未设密账号（会话带 pns 声明）被 authMiddleware 拦在本端点白名单内，
+ * 设密成功后重发不含 pns 的会话即解锁业务路由。
+ *   - 账号已有可用密码凭据（存量账号）→ 必须验旧密（旧密码即一次性激活凭据）；
+ *   - 无任何可用凭据（tombstone 账号飞书首登）→ oldPassword 可缺省，会话本身是身份凭据。
+ * 仅浏览器会话可调（PAT 强制只读且不涉密码）；旧密码错误计入登录失败锁定（防爆破）。
+ */
+const changePasswordSchema = z.object({
+  oldPassword: z.string().optional(),
+  newPassword: z.string().min(1, 'New password is required'),
+});
+
+router.post(
+  '/change-password',
+  authMiddleware,
+  asyncHandler(async (req: Request, res: Response) => {
+    requireSessionAuth(req);
+    if (!req.user) throw new AppError(401, 'No token provided');
+
+    const parseResult = changePasswordSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const { oldPassword, newPassword } = parseResult.data;
+    const username = req.user.username;
+    const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+
+    // 与登录共用 IP+用户名双键锁定：防止持有效会话爆破旧密码
+    checkAccountLock(clientIp, username);
+    try {
+      await authService.changePassword(username, oldPassword, newPassword);
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === 401) {
+        recordLoginFailure(clientIp, username);
+      }
+      auditAuthEvent({ event: 'password_change_failure', username, ip: clientIp });
+      throw err;
+    }
+    resetLoginAttempts(clientIp, username);
+    auditAuthEvent({ event: 'password_changed', username, ip: clientIp, role: req.user.role });
+
+    // 重发不含 pns 声明的会话（cookie + token 双通道），前端无需重新登录
+    const session = authService.issueCookieSession({
+      username,
+      displayName: username,
+      role: req.user.role,
+      organization: req.user.organization,
+      branchCode: req.user.branchCode,
+    });
+    setSessionCookies(res, session.accessToken, session.refreshToken);
+    res.json({
+      success: true,
+      data: { changed: true, token: session.accessToken },
+    });
+  })
+);
+
+/**
+ * POST /api/auth/activate
+ * 消费激活令牌自设密码（管理员发放的一次性 cx_act_ 令牌，不依赖飞书的备份激活通道）。
+ * 未认证端点：app.ts 挂独立限流桶（5/min/IP），服务层统一错误消息防枚举；
+ * 成功即写密码 + 置 password_changed_at + 令牌作废，之后用新密码正常登录。
+ */
+const activateSchema = z.object({
+  token: z.string().min(1, 'Activation token is required'),
+  newPassword: z.string().min(1, 'New password is required'),
+});
+
+router.post(
+  '/activate',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = activateSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const { token, newPassword } = parseResult.data;
+    const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+
+    let username: string;
+    try {
+      username = await activateWithToken(token, newPassword);
+    } catch (err) {
+      // 审计不落令牌明文，只记事件与 IP（防枚举的统一错误已由服务层保证）
+      auditAuthEvent({ event: 'activation_failure', username: 'unknown', ip: clientIp });
+      throw err;
+    }
+    auditAuthEvent({ event: 'activation_success', username, ip: clientIp });
+    res.json({ success: true, data: { activated: true } });
+  })
+);
+
+/**
+ * POST /api/auth/users/:id/activation-token
+ * 管理员为账号签发一次性激活令牌（24h；明文仅本响应返回一次，禁入日志/审计）。
+ * 鉴权与账号管理面同级：branch_admin + 目标账号须在调用者可管理省范围内。
+ * 重发即作废该账号旧的未使用令牌。
+ */
+router.post(
+  '/users/:id/activation-token',
+  authMiddleware,
+  readonlyMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    requireSessionAuth(req);
+    if (!req.user) throw new AppError(401, 'Authentication required');
+
+    const target = await getUserById(req.params.id);
+    if (!target) throw new AppError(404, '用户不存在');
+    if (!target.active) throw new AppError(400, '账号已停用，无法签发激活令牌');
+    // 管理面按省收敛：只能给可管理范围内的账号发令牌（与 PUT /users/:id 同一闸）
+    const scope = getManageableBranchScope(req.user ?? {});
+    if (scope !== null && !canManageBranch(scope, target.branchCode)) {
+      throw new AppError(403, '无权管理其他分公司的账号');
+    }
+
+    const created = await createActivationToken({
+      userId: target.id,
+      username: target.username,
+      createdBy: req.user.username,
+    });
+    auditAuthEvent({
+      event: 'activation_token_created',
+      username: target.username,
+      ip: req.ip,
+      role: req.user.role,
+      tokenId: created.tokenId,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        token: created.plaintext, // 明文，仅此次返回
+        tokenId: created.tokenId,
+        username: created.username,
+        expiresAt: created.expiresAt.toISOString(),
+      },
+    });
   })
 );
 
@@ -612,13 +754,19 @@ router.get(
     if (!user) {
       user = await ensurePresetUser(username);
     }
+    // mustChangePassword 按会话声明（pns）回传而非按 store 重算：
+    // 会话签发时点已判定（密码登录/飞书扫码两条链路都会置位），设密成功换发会话即消失。
+    const mustChangePassword = req.user.pns === true || undefined;
+    // hasPassword：账号当前是否存在可验证的密码凭据 —— 前端设密页据此决定
+    // 显示「改密模式」（要求输入当前密码）还是「首次设密模式」（tombstone 账号免验旧密）。
+    const hasPassword = user ? authService.hasUsablePassword(username, user) : true;
     if (user) {
       const { passwordHash: _pw, ...rest } = user;
       // visibleBranches 由 auth 中间件按 username 从 PRESET_USERS 派生（store 不持久化该字段），
       // 随 /me 回前端，保证刷新/恢复会话后切省下拉仍可见（codex 闸-1 P1-3）。
       res.json({
         success: true,
-        data: { ...rest, visibleBranches, tokenType },
+        data: { ...rest, visibleBranches, tokenType, mustChangePassword, hasPassword },
       });
       return;
     }
@@ -631,6 +779,8 @@ router.get(
         organization,
         visibleBranches,
         tokenType,
+        mustChangePassword,
+        hasPassword,
       },
     });
   })

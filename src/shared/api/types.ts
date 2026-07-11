@@ -36,6 +36,11 @@ export interface AuthData {
     visibleBranches?: string[];
     allowedRoutes?: string[];
     defaultRoute?: string;
+    /** pns：该账号尚未自设专属密码，须先设密才能访问业务页（密码登录与飞书登录都可能出现） */
+    mustChangePassword?: boolean;
+    /** 账号当前是否存在可验证的旧密码凭据（false → 设密页走「首次设密」模式，免填当前密码） */
+    hasPassword?: boolean;
+    specialFeatures?: string[];
   };
 }
 
