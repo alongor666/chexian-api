@@ -38,7 +38,9 @@
  *
  * 可选环境变量:
  *   SYNC_VPS_SSH_ALIAS, SYNC_VPS_HOST, SYNC_VPS_USER, SYNC_VPS_PORT,
- *   SYNC_VPS_KEY_PATH, SYNC_VPS_DATA_DIR, SYNC_VPS_FRONTEND_DIST, SYNC_VPS_HEALTH_URL
+ *   SYNC_VPS_KEY_PATH, SYNC_VPS_DATA_DIR, SYNC_VPS_FRONTEND_DIST, SYNC_VPS_HEALTH_URL,
+ *   SYNC_VPS_SSH_MUX（=0 关闭 SSH ControlMaster 连接复用，回落逐连接直连），
+ *   SYNC_VPS_CONCURRENCY（域间 rsync 并发上限，默认 6，见 sshConcurrencyLimit()）
  */
 
 import { existsSync, statSync, readdirSync, readFileSync, writeFileSync } from 'fs';
@@ -362,8 +364,71 @@ function runLocal(cmd, args = [], options = {}) {
   });
 }
 
+/**
+ * SSH 连接复用 + 域间有界并发（BACKLOG 2026-07-10-claude-976a9d）。
+ *
+ * 背景：runStandardMode 曾无上限并行 14+ 个域任务，每任务 mkdir(ssh) + rsync(-e ssh) 各开
+ * 独立 TCP 连接，一次发布瞬时约 30 条预认证连接，触发生产 sshd MaxStartups（默认 10:30:100）
+ * 随机拒绝（kex_exchange_identification: Connection reset by peer）——CRITICAL 域同步失败即
+ * 中止发布链（2026-07-10 连续多次 release:daily 撞 fact/claims_detail、policy/current/SC）。
+ *
+ * 客户端侧收敛（红线：不动生产 sshd 服务端配置）：
+ *   1. ControlMaster/ControlPersist —— 全部 ssh/rsync 走同一 control socket，MaxStartups
+ *      只计主连接 1 条；ControlPersist=60s 空闲后自动回收后台主连接进程。
+ *   2. 域间并发上限（runWithConcurrency，默认 6）—— 复用后受服务端 MaxSessions（默认 10）
+ *      单连接会话数限制，无上限并发会撞第二道墙；6 并发给 mkdir/健康检查等旁路会话留余量。
+ *
+ * SYNC_VPS_SSH_MUX=0 整体关闭复用（应急逃生阀，行为回落逐连接直连 = 历史行为）。
+ * ControlPath 固定放 ~/.ssh/（unix socket 路径长度上限约 104 字节，不能放仓库内中文长路径）；
+ * %C 是 本机名+目标host+port+user 的哈希，同目标的 alias 连接与显式 user@host 连接自动共享。
+ */
+function sshMuxEnabled() {
+  const v = (process.env.SYNC_VPS_SSH_MUX ?? '').trim().toLowerCase();
+  return !(v === '0' || v === 'false' || v === 'no');
+}
+
+function buildSshMuxOptions() {
+  if (!sshMuxEnabled()) return [];
+  return [
+    '-o', 'ControlMaster=auto',
+    '-o', `ControlPath=${join(os.homedir(), '.ssh', 'cx-sync-%C')}`,
+    '-o', 'ControlPersist=60s',
+  ];
+}
+
+/** rsync -e 用的 ssh 命令串（rsync 按空白切分该串；ControlPath 在 ~/.ssh 下不含空格，可安全拼接） */
+function buildSshCommandString() {
+  return ['ssh', ...buildSshMuxOptions()].join(' ');
+}
+
+function sshConcurrencyLimit() {
+  const n = Number(process.env.SYNC_VPS_CONCURRENCY || 6);
+  return Number.isInteger(n) && n > 0 ? n : 6;
+}
+
+/**
+ * 有界并发执行器：最多 limit 个 worker 同时在跑，结果按 items 原序返回。
+ * worker 内部须自行捕获异常并返回 { ok:false, ... }（与 rsyncDir 既有契约一致）；
+ * 未捕获的异常会向上抛（与历史 Promise.allSettled 不同，调用方 worker 已包 try/catch）。
+ */
+async function runWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const laneCount = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: laneCount }, async () => {
+    while (nextIndex < items.length) {
+      const i = nextIndex;
+      nextIndex += 1;
+      results[i] = await worker(items[i], i);
+    }
+  }));
+  return results;
+}
+
 function buildSshArgs(config, remoteCommand) {
   return [
+    // 976a9d：ControlMaster 复用——execRemote 全部会话（预检/curl/健康检查/mv）走同一主连接
+    ...buildSshMuxOptions(),
     '-o',
     'StrictHostKeyChecking=no',
     '-o',
@@ -406,9 +471,11 @@ const RSYNC_EXCLUDE_ARGS = RSYNC_EXCLUDES.flatMap((p) => ['--exclude', p]);
  *     并发读取者绝不遇「分片已删、替换未就位」中间态。
  *   非原子路径（atomic=false）参数逐字节等价历史（仍 `--delete`，无 `--delay-updates`），字节安全基线不破。
  *   注：`--delay-updates`/`--delete-after` 属接收端（VPS rsync）行为，须 VPS rsync 支持（GNU rsync ≥ 2.6.4，Linux 普遍具备）。
+ * @param {string} [o.sshCommand='ssh'] rsync -e 的远端 shell 命令串（976a9d：生产调用方传
+ *   buildSshCommandString() 注入 ControlMaster 复用选项；默认 'ssh' 保持纯函数历史字节等价）
  * @returns {string[]}
  */
-export function buildRsyncArgs({ src, remote, deleteRemote = true, atomic = false }) {
+export function buildRsyncArgs({ src, remote, deleteRemote = true, atomic = false, sshCommand = 'ssh' }) {
   const deleteArgs = deleteRemote === false ? [] : (atomic ? ['--delete-after'] : ['--delete']);
   const atomicArgs = atomic ? ['--delay-updates'] : [];
   return [
@@ -416,7 +483,7 @@ export function buildRsyncArgs({ src, remote, deleteRemote = true, atomic = fals
     ...atomicArgs,
     ...deleteArgs,
     ...RSYNC_EXCLUDE_ARGS,
-    '-e', 'ssh',
+    '-e', sshCommand,
     src,
     remote,
   ];
@@ -487,8 +554,9 @@ async function rsyncDir(alias, localDir, remoteDir, label, options = {}) {
   log('yellow', `  rsync ${label}${suffix}: ${src} → ${alias}:${dst}`);
 
   try {
-    await runLocal('ssh', [alias, `mkdir -p ${quoteForSingle(remoteDir)}`], { silent: true });
-    await runLocal('rsync', buildRsyncArgs({ src, remote: `${alias}:${dst}`, deleteRemote, atomic }));
+    // 976a9d：mkdir 与 rsync 均走 ControlMaster socket——密集发布不再每任务开 2 条独立 TCP 连接
+    await runLocal('ssh', [...buildSshMuxOptions(), alias, `mkdir -p ${quoteForSingle(remoteDir)}`], { silent: true });
+    await runLocal('rsync', buildRsyncArgs({ src, remote: `${alias}:${dst}`, deleteRemote, atomic, sshCommand: buildSshCommandString() }));
     log('green', `  ✓ ${label} 同步完成`);
     return { ok: true, label };
   } catch (err) {
@@ -511,7 +579,7 @@ async function rsyncLatestAtomically(config, localDir, remoteDir, label) {
     log('yellow', `  rsync ${label} atomic latest: ${latest} → ${config.alias}:${tmpRemote}`);
     await runLocal('rsync', [
       '-azv',
-      '-e', 'ssh',
+      '-e', buildSshCommandString(),
       latest,
       `${config.alias}:${tmpRemote}`,
     ]);
@@ -737,7 +805,18 @@ async function ensureSshReady(config) {
     throw new Error('未检测到 OpenSSH 客户端（ssh/scp），请先安装并加入 PATH');
   }
 
+  // 本次预检同时充当 ControlMaster 主连接预热（buildSshArgs 已带复用选项）
   await execRemote(config, 'true', { silent: true });
+
+  // 976a9d：再预热 alias 通道——rsyncDir 的 mkdir/rsync 走 `ssh <alias>`，其 ControlPath=%C 哈希
+  // 通常与上面显式 user@host 同 socket（同 host/port/user），但 alias HostName 配置不同时会各自
+  // 成主连接。无论哪种，必须在并行 rsync 首发**之前**串行建好主连接：ControlMaster=auto 在并行
+  // 首发时存在竞态（多进程同时发现无 socket → 各自直连），预热后全部会话稳定复用。
+  // 失败不阻断（allowFailure）：alias 不可用时回落逐连接直连，行为等价历史；真正的连接问题
+  // 由后续 rsync 的 critical 失败机制暴露。
+  if (sshMuxEnabled()) {
+    await runLocal('ssh', [...buildSshMuxOptions(), config.alias, 'true'], { silent: true, allowFailure: true });
+  }
 }
 
 async function healthCheck(config, healthUrl, maxAttempts = 8) {
@@ -1033,6 +1112,7 @@ function printDryRun(sshConfig, runConfig) {
         remote: `${sshConfig.alias}:${task.remote}/`,
         deleteRemote: task.deleteRemote,
         atomic: task.atomic,
+        sshCommand: buildSshCommandString(),
       });
       console.log(`  ${tag} rsync ${rsyncArgs.join(' ')}${suffix}`);
     }
@@ -1060,8 +1140,9 @@ async function maybeRestart(config, noRestart, healthUrl) {
 }
 
 /**
- * rsync 全目录同步模式（并行）
- * 所有目录并行 rsync，按 critical/optional 分级：
+ * rsync 全目录同步模式（有界并发）
+ * 目录任务经 runWithConcurrency 有界并发 rsync（默认 6，SYNC_VPS_CONCURRENCY 可调；
+ * 976a9d：配合 SSH ControlMaster 复用收敛生产 sshd MaxStartups 节流），按 critical/optional 分级：
  * - critical 目录失败 → 中止重启 + process.exit(1)
  * - optional 目录失败 → 打印警告，继续重启
  */
@@ -1115,27 +1196,29 @@ async function runStandardMode(sshConfig, runConfig) {
     }
   }
 
-  log('green', `▶ 并行同步 ${activeTasks.length} 个目录...`);
+  log('green', `▶ 有界并发同步 ${activeTasks.length} 个目录（并发上限 ${sshConcurrencyLimit()}）...`);
 
-  // 并行 rsync 所有目录（B3：分省隔离由每省独立 current/<省>/ 目标目录提供，rsyncDir 已退役前缀 filter）
-  const results = await Promise.allSettled(
-    activeTasks.map(task => (
-      task.atomicLatest
-        ? rsyncLatestAtomically(sshConfig, task.local, task.remote, task.label)
-        : rsyncDir(alias, task.local, task.remote, task.label, {
+  // 有界并发 rsync（976a9d：ControlMaster 复用后单连接会话数受服务端 MaxSessions 限制，
+  // 不再无上限 Promise.allSettled 全量齐发；B3：分省隔离由每省独立 current/<省>/ 目标目录提供）
+  const results = await runWithConcurrency(activeTasks, sshConcurrencyLimit(), async (task) => {
+    try {
+      return task.atomicLatest
+        ? await rsyncLatestAtomically(sshConfig, task.local, task.remote, task.label)
+        : await rsyncDir(alias, task.local, task.remote, task.label, {
             deleteRemote: task.deleteRemote,
             atomic: task.atomic,
-          })
-    ))
-  );
+          });
+    } catch (err) {
+      // 不应发生（rsyncDir/rsyncLatestAtomically 内部已 catch），防御性兜底与历史 allSettled 等价
+      return { ok: false, label: task.label, error: err?.message };
+    }
+  });
 
   // 收集失败结果；optional 任务一次性重试（网络抖动/SSH 瞬时失败容错）
   const failures = [];
   for (let i = 0; i < results.length; i++) {
-    const result = results[i];
     const task = activeTasks[i];
-    // Promise.allSettled rejected（不应发生，rsyncDir 内部已 catch）或 rsyncDir 返回 ok:false
-    let rsyncResult = result.status === 'fulfilled' ? result.value : { ok: false, label: task.label, error: result.reason?.message };
+    let rsyncResult = results[i];
     if (!rsyncResult.ok && !task.critical) {
       log('yellow', `  重试 optional ${task.label}（抖动容错）...`);
       rsyncResult = task.atomicLatest
@@ -1217,7 +1300,7 @@ async function generateManifestsLocal(sshConfig, reportsTask) {
   const pullDst = localDir.endsWith('/') ? localDir : `${localDir}/`;
   log('yellow', `  rsync pull: ${alias}:${pullSrc} → ${pullDst}`);
   try {
-    await runLocal('rsync', ['-az', ...RSYNC_EXCLUDE_ARGS, '-e', 'ssh', `${alias}:${pullSrc}`, pullDst]);
+    await runLocal('rsync', ['-az', ...RSYNC_EXCLUDE_ARGS, '-e', buildSshCommandString(), `${alias}:${pullSrc}`, pullDst]);
   } catch (err) {
     log('yellow', `  ⚠ pull VPS 报告失败（继续，manifest 可能仅含本地期）：${err.message}`);
   }
@@ -1438,6 +1521,12 @@ export {
   queryVpsSecurityStatus,
   parseSecurityStatusResponse,
   runSxAutoPromote,
+  // 976a9d：SSH 连接复用 + 有界并发（单测用）
+  sshMuxEnabled,
+  buildSshMuxOptions,
+  buildSshCommandString,
+  sshConcurrencyLimit,
+  runWithConcurrency,
 };
 
 const isMain = process.env.RUN_MAIN || (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]));
