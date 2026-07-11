@@ -158,9 +158,14 @@ function runCmd(label, cmd, args, { dryRun, cwd = ROOT_DIR, timeoutMs = 0, env =
   // 统一记录每环节的耗时与终态（成功+失败都记）——此前台账只记成功的"点"事件，无 duration、
   // 无失败事件，当天 3 次发布失败在台账里完全不可见，事后只能翻 launchd 文本日志考古。
   const t0 = Date.now();
-  const record = (status, extra = {}) => recordEvent({
-    stage: 'pipeline', step: label, status, duration_ms: Date.now() - t0, ...extra,
-  });
+  // settled 哨兵：SIGKILL 杀进程后子进程的 exit 事件仍会到达（code=null），不拦住的话
+  // 一次超时会记两条 failed 事件，analyze 的环节次数/失败数/总耗时全部双计。
+  let settled = false;
+  const record = (status, extra = {}) => {
+    if (settled) return;
+    settled = true;
+    recordEvent({ stage: 'pipeline', step: label, status, duration_ms: Date.now() - t0, ...extra });
+  };
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, stdio: 'inherit', env: { ...process.env, ...env } });
     const timer = timeoutMs > 0 ? setTimeout(() => {
@@ -585,6 +590,8 @@ async function main() {
     if (!healthy) {
       log('red', '\n❌ 健康检查失败！PM2 可能未正常启动');
       log('yellow', '  排查：ssh ' + sshAlias + ' "sudo /usr/local/bin/deploy-chexian-api logs 50"');
+      // process.exit 不走 main().catch，须在此补记 run end，否则健康检查失败在台账里"无终态"
+      recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: '健康检查失败（/health 不通）' });
       process.exit(1);
     }
     // 闭环验证：前端可见性（filters/options 必须能返回最新 max_date）
@@ -601,6 +608,8 @@ async function main() {
     if (!stillHealthy) {
       log('red', '\n❌ 稳定性二次校验失败：进程在启动 30s 内崩溃，疑似 OOM/启动后崩溃');
       log('yellow', '  排查：ssh ' + sshAlias + ' "sudo /usr/local/bin/deploy-chexian-api logs 100"');
+      // 同上：exit 旁路必须自带 run end 打点
+      recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: '稳定性二次校验失败（启动 30s 内崩溃）' });
       process.exit(1);
     }
     log('green', '  ✓ 30s 稳定性二次校验通过');
@@ -723,8 +732,12 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(err => {
-  // 断点入账：err.message 含失败环节 label（runCmd reject 消息），run end 事件据此定位断在哪一环
-  recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: err.message });
+  // 断点入账：err.message 含失败环节 label（runCmd reject 消息），run end 事件据此定位断在哪一环。
+  // dry-run 不打点（与 run start/end success 的守护对称，否则 dry-run 失败会留下无 start 配对的孤儿事件）；
+  // opts 不在本作用域，与 parseArgs 同源地看 argv。
+  if (!process.argv.includes('--dry-run')) {
+    recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: err.message });
+  }
   log('red', `\n❌ 流程中断：${err.message}`);
   log('yellow', '提示：单步重试可使用：');
   log('yellow', '  node 数据管理/daily.mjs <subcommand>');
