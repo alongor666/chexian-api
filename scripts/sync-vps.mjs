@@ -897,8 +897,11 @@ function printHelp() {
 }
 
 // loader（data-bootstrapper resolveBranchFactExtras + resolveBranchClaimsDetailExtras）从 validation/<省>
-// 读取的派生域集合。维度域（salesman/plan/repair）SX 未隔离（validation/<省> 无 dim/ 子层），不在此列。
-const VALIDATION_SYNCED_DOMAINS = ['claims_detail', 'quotes_conversion', 'renewal_tracker', 'cross_sell', 'new_energy_claims'];
+// 读取的派生域集合。业务员/计划维度（salesman/plan）SX 仍未隔离（validation/<省> 无 dim/ 子层），不在此列。
+// repair_resource（维修资源）例外：SX 副本走标准域 fact 形态落 validation/<省>/repair_resource/latest.parquet
+// （非 dim/repair/），RepairDim loader 经 resolveBranchFactExtras('repair_resource') 读取，故须随此列同步，
+// 否则山西维修页 total_shops=0（缺口 2026-07-10-claude-2815e4 ②）。
+const VALIDATION_SYNCED_DOMAINS = ['claims_detail', 'quotes_conversion', 'renewal_tracker', 'cross_sell', 'new_energy_claims', 'repair_resource'];
 
 /**
  * validation 分省同步总开关（codex 闸-2 CRITICAL 修复）。

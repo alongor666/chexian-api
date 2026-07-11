@@ -649,8 +649,14 @@ export class DataBootstrapper {
     this.lazyRegistry.register('RepairDim', async () => {
       const p = getRepairDimPaths().find(p => fs.existsSync(p));
       if (!p) return;
-      // ADR G3 多省共存：探测 SX 等非 SC 省份维修隔离副本（0a 期无 → 空 → 单源字节安全）
-      const extras = this.resolveBranchDimExtras('repair');
+      // ADR G3 多省共存：探测 SX 等非 SC 省份维修隔离副本（0a 期无 → 空 → 单源字节安全）。
+      // ⚠️ SX 维修副本落在 validation/<省>/repair_resource/latest.parquet（标准域 fact 形态，域名
+      //    repair_resource），而非 validation/<省>/dim/repair/（dim 形态）——SX 维修 ETL 走
+      //    runStandardDomain('repair_resource') 输出标准域路径，SC 基线才用遗留 dim/repair/ 路径。
+      //    故用 resolveBranchFactExtras('repair_resource')（fact 路径模板）而非
+      //    resolveBranchDimExtras('repair')；后者查 dim/repair/ 永远落空 → SX 维修数据从不加载
+      //    （山西 /api/query/repair/metadata total_shops=0，缺口 2026-07-10-claude-2815e4 ②）。
+      const extras = this.resolveBranchFactExtras('repair_resource');
       await domainLoaders.loadRepairDim(db, p, extras);
     });
 

@@ -14,7 +14,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
-import { getValidationRootDirs, getValidationRootDir, getDataDir } from '../paths.js';
+import { getValidationRootDirs, getValidationRootDir, getDataDir, getBranchValidationFactPath, getBranchValidationDimPath } from '../paths.js';
 
 describe('getValidationRootDirs（VPS 回退候选）', () => {
   it('返回本地 warehouse + VPS data/validation 两候选（顺序：本地优先）', () => {
@@ -54,5 +54,29 @@ describe('getValidationRootDir（首个存在者，注入候选）', () => {
 
   it('默认无参 → 等价 getValidationRootDirs() 的选择（生产调用方路径）', () => {
     expect(getValidationRootDir()).toBe(getValidationRootDir(getValidationRootDirs()));
+  });
+});
+
+// 缺口 2026-07-10-claude-2815e4 ②：SX 维修副本落 fact 形态路径（repair_resource/latest.parquet），
+// 非 dim 形态（dim/repair/latest.parquet）。RepairDim loader 曾误用 resolveBranchDimExtras('repair')
+// 查 dim 路径 → 永远落空 → 山西 total_shops=0。修复改用 resolveBranchFactExtras('repair_resource')。
+// 本用例锁定两模板互不相同，防回退到 dim 路径。
+describe('维修域 validation 路径模板（fact 形态 vs dim 形态）', () => {
+  it('getBranchValidationFactPath(SX, repair_resource) = validation/SX/repair_resource/latest.parquet（loader 实读路径）', () => {
+    expect(getBranchValidationFactPath('SX', 'repair_resource')).toMatch(
+      /validation[/\\]SX[/\\]repair_resource[/\\]latest\.parquet$/,
+    );
+  });
+
+  it('getBranchValidationDimPath(SX, repair) = validation/SX/dim/repair/…（旧错误路径，SX 无此文件）', () => {
+    expect(getBranchValidationDimPath('SX', 'repair')).toMatch(
+      /validation[/\\]SX[/\\]dim[/\\]repair[/\\]latest\.parquet$/,
+    );
+  });
+
+  it('两模板互不相同（fact 无 dim/ 子层）→ 保证 loader 不再退回 dim 路径', () => {
+    expect(getBranchValidationFactPath('SX', 'repair_resource')).not.toBe(
+      getBranchValidationDimPath('SX', 'repair'),
+    );
   });
 });

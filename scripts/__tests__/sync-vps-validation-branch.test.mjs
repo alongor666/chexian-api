@@ -80,6 +80,19 @@ describe('buildValidationBranchSyncTasks · 开关开启后的枚举', () => {
     expect(claims.critical).toBe(false); // GATED：RLS-off 不消费，失败不阻断日常同步
   });
 
+  it('SX 含 repair_resource（维修资源，标准域 fact 形态 latest.parquet）→ 建同步任务（缺口 2815e4 ②：山西维修可见）', () => {
+    // 维修 SX 副本落 validation/SX/repair_resource/latest.parquet（非 dim/repair/）；
+    // RepairDim loader 经 resolveBranchFactExtras('repair_resource') 读取，故须随 validation 同步，
+    // 否则山西 /api/query/repair/metadata total_shops=0。锁定「loader 读取域 == sync 推送域」对称。
+    mkDomain(root, 'SX', 'repair_resource');
+    const tasks = buildValidationBranchSyncTasks('/remote/data', root);
+    const repair = tasks.find((t) => t.label === 'validation/SX/repair_resource');
+    expect(repair).toBeDefined();
+    expect(repair.local).toBe(join(root, 'SX', 'repair_resource'));
+    expect(repair.remote).toBe('/remote/data/validation/SX/repair_resource');
+    expect(repair.critical).toBe(false);
+  });
+
   it('域目录存在但无数据文件 → 排除（防空目录 rsync --delete 误删 VPS · codex 闸-2 HIGH）', () => {
     mkdirSync(join(root, 'SX', 'claims_detail'), { recursive: true });      // 空目录，无 claims_*.parquet
     mkdirSync(join(root, 'SX', 'quotes_conversion'), { recursive: true });  // 空目录，无 latest.parquet
