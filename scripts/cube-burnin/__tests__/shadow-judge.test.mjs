@@ -14,7 +14,7 @@ import {
   computeDelta,
   judge,
   VERDICT,
-  SHADOW_KEYS,
+  ACTIVE_SHADOW_KEYS,
 } from '../lib/shadow-judge.mjs';
 
 // ─── fixtures ─────────────────────────────────────────────────────
@@ -49,13 +49,16 @@ function healthyHealth(matchCount = 2000) {
 // ─── snapshotShadow ───────────────────────────────────────────────
 
 describe('snapshotShadow — 快照提取', () => {
-  it('正常 health 响应 → 返回 5 路由各三字段', () => {
+  it('正常 health 响应 → 返回 3 条活跃路由各三字段，退役 cost/kpi 不进快照', () => {
     const snap = snapshotShadow(healthyHealth(500));
-    const keys = SHADOW_KEYS;
+    const keys = ACTIVE_SHADOW_KEYS;
     expect(Object.keys(snap)).toEqual(expect.arrayContaining(keys));
     for (const k of keys) {
       expect(snap[k]).toMatchObject({ match: 500, mismatch: 0, error: 0 });
     }
+    // 2026-07-11（f1c991）：cost/kpi 随 65f495 退役，判定域收窄到活跃路由
+    expect(snap.cost).toBeUndefined();
+    expect(snap.kpi).toBeUndefined();
   });
 
   it('cubeShadow 整体缺失 → 所有路由兜底为 0，不抛出', () => {
@@ -65,18 +68,16 @@ describe('snapshotShadow — 快照提取', () => {
     }
   });
 
-  it('某路由缺失（如 kpi 不在 cubeShadow 中）→ kpi 兜底 0', () => {
+  it('某活跃路由缺失（如 growth 不在 cubeShadow 中，生产懒构建前实况）→ growth 兜底 0', () => {
     const health = {
       cubeShadow: {
         trend:              { match: 10, mismatch: 0, error: 0 },
-        growth:             { match: 10, mismatch: 0, error: 0 },
-        cost:               { match: 10, mismatch: 0, error: 0 },
-        // kpi 故意缺失
+        // growth 故意缺失（生产未有流量命中时 /health 不含该 key）
         'salesman-ranking': { match: 10, mismatch: 0, error: 0 },
       },
     };
     const snap = snapshotShadow(health);
-    expect(snap.kpi).toMatchObject({ match: 0, mismatch: 0, error: 0 });
+    expect(snap.growth).toMatchObject({ match: 0, mismatch: 0, error: 0 });
   });
 
   it('字段值为字符串数字 → 转为 number', () => {
@@ -100,7 +101,7 @@ describe('computeDelta — delta 计算', () => {
     const before = snapshotShadow(zeroHealth());
     const after  = snapshotShadow(healthyHealth(1000));
     const delta  = computeDelta(before, after);
-    for (const key of SHADOW_KEYS) {
+    for (const key of ACTIVE_SHADOW_KEYS) {
       expect(delta[key].match).toBe(1000);
       expect(delta[key].mismatch).toBe(0);
       expect(delta[key].error).toBe(0);
@@ -118,8 +119,8 @@ describe('computeDelta — delta 计算', () => {
     const h = healthyHealth(500);
     const delta = computeDelta(snapshotShadow(h), snapshotShadow(h));
     expect(delta.trend.match).toBe(0);
-    expect(delta.cost.mismatch).toBe(0);
-    expect(delta.kpi.error).toBe(0);
+    expect(delta.growth.mismatch).toBe(0);
+    expect(delta['salesman-ranking'].error).toBe(0);
   });
 
   it('各字段均正增长 → match delta 为正数，mismatch/error delta 非负', () => {
@@ -127,7 +128,7 @@ describe('computeDelta — delta 计算', () => {
     const after  = snapshotShadow(healthyHealth(1000));
     const delta  = computeDelta(before, after);
     expect(delta.trend.match).toBeGreaterThan(0);
-    expect(delta.cost.mismatch).toBeGreaterThanOrEqual(0);
+    expect(delta.growth.mismatch).toBeGreaterThanOrEqual(0);
     expect(delta['salesman-ranking'].error).toBeGreaterThanOrEqual(0);
   });
 
@@ -249,24 +250,21 @@ describe('judge — 多路由优先级 FAIL > WARN > INSUFFICIENT', () => {
     expect(result.verdict).toBe(VERDICT.WARN);
   });
 
-  it('perRoute 每个路由的 verdict 独立正确', () => {
-    const before = snapshotShadow(zeroHealth());
+  it('perRoute 每个活跃路由的 verdict 独立正确，退役路由不进 perRoute', () => {
     const afterHealth = {
       cubeShadow: {
         trend:              { match: 2000, mismatch: 1, error: 0 },  // FAIL
         growth:             { match: 2000, mismatch: 0, error: 1 },  // WARN
-        cost:               { match: 5,    mismatch: 0, error: 0 },  // INSUFFICIENT
-        kpi:                { match: 2000, mismatch: 0, error: 0 },  // PASS
-        'salesman-ranking': { match: 2000, mismatch: 0, error: 0 },  // PASS
+        'salesman-ranking': { match: 5,    mismatch: 0, error: 0 },  // INSUFFICIENT
       },
     };
     const delta  = computeDelta(snapshotShadow(zeroHealth()), snapshotShadow(afterHealth));
     const result = judge(delta, { minMatch: 1000 });
     expect(result.perRoute.trend.verdict).toBe(VERDICT.FAIL);
     expect(result.perRoute.growth.verdict).toBe(VERDICT.WARN);
-    expect(result.perRoute.cost.verdict).toBe(VERDICT.INSUFFICIENT);
-    expect(result.perRoute.kpi.verdict).toBe(VERDICT.PASS);
-    expect(result.perRoute['salesman-ranking'].verdict).toBe(VERDICT.PASS);
+    expect(result.perRoute['salesman-ranking'].verdict).toBe(VERDICT.INSUFFICIENT);
+    expect(result.perRoute.cost).toBeUndefined();
+    expect(result.perRoute.kpi).toBeUndefined();
     // 全局取最高优先级
     expect(result.verdict).toBe(VERDICT.FAIL);
   });
