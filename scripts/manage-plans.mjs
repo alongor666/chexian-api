@@ -106,9 +106,10 @@ function ensureBacklogViews(rootDir) {
   const backlogPath = path.join(rootDir, 'BACKLOG.md');
   const archivePath = path.join(rootDir, 'BACKLOG_ARCHIVE.md');
   const logPath = path.join(rootDir, 'BACKLOG_LOG.jsonl');
+  const eventsDir = path.join(rootDir, 'backlog-events');
   if (isFile(backlogPath) && isFile(archivePath)) return;
-  if (!isFile(logPath)) return; // 无日志则无从渲染，交由既有 isFile 守卫降级
-  const tasks = [...fold(loadLog(logPath)).values()];
+  if (!isFile(logPath) && !fs.existsSync(eventsDir)) return; // 两源皆无则无从渲染，交由既有 isFile 守卫降级
+  const tasks = [...fold(loadLog(logPath, eventsDir)).values()];
   if (!isFile(backlogPath)) fs.writeFileSync(backlogPath, renderBacklog(tasks), 'utf-8');
   if (!isFile(archivePath)) fs.writeFileSync(archivePath, renderArchive(tasks), 'utf-8');
 }

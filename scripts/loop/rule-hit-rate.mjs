@@ -25,6 +25,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseLedger, normalizeVerdict, collectRevertedPrs, parseUserReworkLog } from './quality-report.mjs';
 import { CLAIM_STATUSES } from './dispatch.mjs';
+import { loadEventsDir } from '../backlog/lib.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -171,7 +172,13 @@ export function loadContext({ noGit = false } = {}) {
   const prEvo = readFileSafe(PR_EVO_PATH);
   let config = {};
   try { config = JSON.parse(readFileSafe(CONFIG_PATH) || '{}'); } catch { config = {}; }
-  const backlogEvents = parseJsonl(readFileSafe(BACKLOG_LOG_PATH));
+  // 两源合并：冻结 jsonl（存量）+ backlog-events/ 目录（增量）。env 覆盖（e2e 隔离）时只读 fixture、
+  // 不混入真实仓目录事件；目录解析失败按「数据缺失」降级为仅 jsonl（本工具是 advisory 审计，不硬失败）。
+  let dirEvents = [];
+  if (!process.env.LOOP_BACKLOG_LOG) {
+    try { dirEvents = loadEventsDir(path.join(ROOT, 'backlog-events')); } catch { dirEvents = []; }
+  }
+  const backlogEvents = [...parseJsonl(readFileSafe(BACKLOG_LOG_PATH)), ...dirEvents];
   const reworkCount = parseUserReworkLog(readFileSafe(REWORK_PATH).split('\n')).length;
   let revertedCount = null;
   if (!noGit) {

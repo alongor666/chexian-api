@@ -53,7 +53,7 @@ import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
 import { listPolicyCurrentShards, collectValidationDimFileEntries } from './lib/policy-current-shards.mjs';
 import {
-  parseLog, loadLog, fold, validateLog, displayId, TERMINAL_STATUSES,
+  loadLog, fold, validateLog, displayId, TERMINAL_STATUSES,
 } from './backlog/lib.mjs';
 import { SHADOW_KEYS, MAIN_CUBES, CUBE_STATE_NAMES } from './shared/cube-routes.mjs';
 import { parseLedger as parseLoopLedger, normalizeVerdict as normalizeLoopVerdict } from './loop/quality-report.mjs';
@@ -155,16 +155,17 @@ function checkBacklogEvidence() {
   info('检查 BACKLOG 证据链（折叠日志）...');
 
   const logPath = path.join(ROOT_DIR, 'BACKLOG_LOG.jsonl');
-  if (!fs.existsSync(logPath)) {
-    error('BACKLOG_LOG.jsonl 不存在，跳过证据链检查');
+  const eventsDir = path.join(ROOT_DIR, 'backlog-events');
+  if (!fs.existsSync(logPath) && !fs.existsSync(eventsDir)) {
+    error('BACKLOG_LOG.jsonl 与 backlog-events/ 均不存在，跳过证据链检查');
     return false;
   }
 
   let tasks;
   try {
-    tasks = [...fold(loadLog(logPath)).values()];
+    tasks = [...fold(loadLog(logPath, eventsDir)).values()];
   } catch (e) {
-    error(`折叠 BACKLOG_LOG.jsonl 失败：${e.message}`);
+    error(`折叠 BACKLOG 事件日志失败：${e.message}`);
     return false;
   }
 
@@ -285,16 +286,26 @@ function checkClaudeMdSections() {
  */
 function checkBacklogLog() {
   const logPath = path.join(ROOT_DIR, 'BACKLOG_LOG.jsonl');
-  if (!fs.existsSync(logPath)) {
-    error('BACKLOG_LOG.jsonl 不存在（首次请 bun scripts/backlog/migrate.mjs --apply）');
+  const eventsDir = path.join(ROOT_DIR, 'backlog-events');
+  if (!fs.existsSync(logPath) && !fs.existsSync(eventsDir)) {
+    error('BACKLOG_LOG.jsonl 与 backlog-events/ 均不存在（首次请 bun scripts/backlog/migrate.mjs --apply）');
     return false;
   }
 
   let events;
   try {
-    events = parseLog(fs.readFileSync(logPath, 'utf-8'));
+    // 两源合并：冻结 jsonl（存量）+ backlog-events/ 目录（增量，每事件一文件）
+    events = loadLog(logPath, eventsDir);
   } catch (e) {
-    error(`BACKLOG_LOG.jsonl 解析失败：${e.message}`);
+    error(`BACKLOG 事件日志解析失败：${e.message}`);
+    return false;
+  }
+
+  // 0. 目录事件文件名 ↔ 内容 eid 一致性（防手工复制/改名造成的身份漂移）
+  const eidMismatch = events.filter(e => e.__src && e.eid && !e.__src.includes(`-${e.eid}.json`));
+  if (eidMismatch.length > 0) {
+    error(`backlog-events/ 有 ${eidMismatch.length} 个事件文件名与内容 eid 不一致（文件名须为 <at压缩>-<eid>.json）：`);
+    eidMismatch.slice(0, 10).forEach(e => console.log(`    - ${e.__src}（内容 eid=${e.eid}）`));
     return false;
   }
 

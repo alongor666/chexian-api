@@ -3,6 +3,10 @@
 # BACKLOG event-log（2026-06 治本）：真相是 append-only 事件日志 BACKLOG_LOG.jsonl。
 # 每行一个 JSON 事件、按内容唯一 → merge=union 把多分支的新增事件自动并入，
 # 且因「写入方永不挑号 + 状态变更=追加事件」，结构性地不再碰号、不再产生重复行。
+# ⚠️ 2026-07-11（卡 637c35）起该文件**冻结只读**：merge=union 只在本地生效，GitHub 服务端
+# 计算 PR 可合并性不应用 merge 策略，两 PR 同改文件尾仍标 CONFLICTING。新事件一律写
+# backlog-events/ 目录（每事件一文件，文件名含 at+eid 保唯一）——不同 PR 写不同文件，
+# GitHub 层面结构性零冲突，无需任何 merge 策略。union 行保留以兜底存量在飞分支的旧式追加。
 BACKLOG_LOG.jsonl merge=union
 # BACKLOG.md / BACKLOG_ARCHIVE.md 是日志的「派生视图」，2026-07-09 起 gitignored、不进 git
 #（本地按需渲染：bun run backlog:render）。因此它们不再需要任何 merge 策略——PR 只碰真相日志，

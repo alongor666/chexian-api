@@ -36,7 +36,11 @@ import { normalizeVerdict, ledgerUid, COMPLETION_VERDICTS } from './quality-repo
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..', '..');
 // 路径 env 可覆盖（默认指向真实文件，prod 行为不变；供 e2e 用 temp 路径隔离·不污染真实账本）。
+// LOOP_BACKLOG_LOG 覆盖时默认关闭真实 backlog-events/ 目录源（否则 fixture 会混入真实仓事件），
+// 需要目录 fixture 时另用 LOOP_BACKLOG_EVENTS_DIR 显式指定。
 const LOG_PATH = process.env.LOOP_BACKLOG_LOG || path.join(ROOT, 'BACKLOG_LOG.jsonl');
+const EVENTS_DIR = process.env.LOOP_BACKLOG_EVENTS_DIR
+  || (process.env.LOOP_BACKLOG_LOG ? null : path.join(ROOT, 'backlog-events'));
 const LEDGER_PATH = process.env.LOOP_LEDGER_PATH || path.join(ROOT, '.claude/workflow/loop-quality-ledger.jsonl');
 const CONFIG_PATH = path.join(ROOT, 'scripts/loop/dispatch-config.json');
 
@@ -419,7 +423,7 @@ export function sessionPrompt({ task, domains }) {
     ``,
     `【🔒 认领（跨会话锁·防重复劳动）——开工立即做，先于实现】`,
     `bun scripts/backlog.mjs status ${task.uid} IN_PROGRESS --actor ${branch}`,
-    `git add BACKLOG_LOG.jsonl BACKLOG.md BACKLOG_ARCHIVE.md && git commit -m "chore(loop): 认领 ${task.uid}（跨会话锁）" && git push -u origin ${branch}`,
+    `git add backlog-events && git commit -m "chore(loop): 认领 ${task.uid}（跨会话锁）" && git push -u origin ${branch}`,
     `（认领即推送 → 别的会话 dispatch 收集多 ref 日志会把本任务锁出前沿；认领后超 ${DEFAULT_CLAIM_TTL_HOURS}h 无后续事件会被自动释放。开工前先 \`bun run loop:dispatch\` 确认本任务未被别会话新鲜认领。）`,
     ``,
     `【任务】${task.desc}`,
@@ -508,9 +512,8 @@ function loadConfig() {
  * 各 ref 的 BACKLOG_LOG.jsonl 都 append-only + merge=union，按 eid 去重后并集仍可被 latestClaims 正确折叠。
  * @returns {{events: object[], branches: string[]}}
  */
-function gatherClaimContext(localLines, { fetch = true } = {}) {
-  let events = [];
-  try { events = parseLog(localLines.join('\n')); } catch { events = []; }
+function gatherClaimContext(localEvents, { fetch = true } = {}) {
+  const events = [...localEvents];
   const seen = new Set(events.map((e) => e.eid).filter(Boolean));
   const branches = [];
   const mergeText = (text) => {
@@ -542,14 +545,18 @@ function gatherClaimContext(localLines, { fetch = true } = {}) {
   for (const r of claimRefs) {
     if (r.startsWith('origin/claude/')) branches.push(r.slice('origin/'.length));
     try { mergeText(git(`show ${r}:BACKLOG_LOG.jsonl`, { maxBuffer: 64 * 1024 * 1024 })); } catch { /* 该 ref 无此文件/不可读 → 跳过 */ }
+    // backlog-events/ 目录源（每事件一文件，单行 JSON）：git grep 空模式一次性倾倒该 ref 下
+    // 全部事件文件内容（-h 去文件名前缀，每行恰为一条事件 JSON），免去逐文件 git show 的 N 次子进程。
+    try { mergeText(git(`grep --no-color -h -e "" ${r} -- backlog-events`, { maxBuffer: 64 * 1024 * 1024 })); } catch { /* 该 ref 无此目录/无匹配 → 跳过 */ }
   }
   return { events, branches };
 }
 
 function main() {
   const args = process.argv.slice(2);
-  const localLines = fs.readFileSync(LOG_PATH, 'utf-8').split('\n');
-  const tasks = foldBacklog(localLines); // 任务宇宙/状态以本地 main 日志为准（与 BACKLOG.md 视图一致）
+  // 两源合并：冻结 jsonl（存量）+ backlog-events/ 目录（增量，每事件一文件）；env 覆盖时目录源默认关闭
+  const localEvents = loadLog(LOG_PATH, EVENTS_DIR);
+  const tasks = [...fold(localEvents).values()]; // 任务宇宙/状态以本地 main 日志为准（与 BACKLOG.md 视图一致）
   const config = loadConfig();
 
   // --merge-gate 提前短路：mergeGate 只读 tasks + config.inflight，不依赖认领扫描——
@@ -566,7 +573,7 @@ function main() {
   let claims = {};
   let branches = [];
   if (useClaims) {
-    const ctx = gatherClaimContext(localLines, { fetch: doFetch });
+    const ctx = gatherClaimContext(localEvents, { fetch: doFetch });
     claims = latestClaims(ctx.events);
     branches = ctx.branches;
   }
