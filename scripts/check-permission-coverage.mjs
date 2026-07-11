@@ -69,8 +69,8 @@ const KNOWN_GAPS = new Map([
     + 'permissionFilter 可注入），故仍列 known-gap。B328 phase-1 已堵跨机构泄漏（非 branch_admin fail-closed）；'
     + 'phase-2 已让 org_user 读归属本机构报告（sidecar .meta.json 解析 ownerOrg/ownerBranch，按 '
     + 'org_level_3 等值 + branch_code 校验）。生产方 emit 已收敛（2026-07-10）：push_html.py 单文件 '
-    + 'sidecar 已交付+契约测试；机构级报告改走 portal 路径 schema 归属（4210ab）。残留：真实 org_user '
-    + '生产端到端验收（等 owner 凭据，BACKLOG 4210ab）。',
+    + 'sidecar 已交付+契约测试；机构级报告改走 portal 路径 schema 归属（4210ab）。org_user 生产端到端 '
+    + '验收已通过（2026-07-10 owner 实测 tianfu 首页报告卡 200，4210ab DONE）。',
   ],
 ]);
 
