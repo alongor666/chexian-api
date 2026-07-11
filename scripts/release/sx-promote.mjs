@@ -127,6 +127,7 @@ import { join, basename, resolve, dirname } from 'node:path';
 import { spawnSync, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
+import { beijingDayOf } from '../../数据管理/lib/bi-export-pull.mjs';
 
 // ─────────────────────────── 路径常量 ───────────────────────────
 
@@ -626,6 +627,71 @@ export function discoverSourceFiles({ sourceDir, targetDir }) {
   });
 }
 
+// ─────────────────── 被取代滚动分片归档（2026-07-11 根因修复） ───────────────────
+
+/**
+ * SX 滚动分片命名：每日数据_<start>_<end>.parquet（每天全量重刷，仅 <end> 前移）。
+ * 晋升新分片后旧分片若残留，会与新分片时间范围重叠，被 sync-vps 的
+ * assertNoPolicyCurrentOverlap 闸拦停整条发布链（2026-07-11 自动发布两次失败实证；
+ * 此前 .archive/20260708~20260710 均为人工兜底归档）。
+ */
+const ROLLING_SHARD_RE = /^每日数据_(\d{8})_(\d{8})\.parquet$/;
+
+/**
+ * 找出 targetDir 顶层被取代的旧滚动分片：同 <start> 分组，仅保留 <end> 最大者，
+ * 其余全部视为被取代。不同 <start> 的分片（如历史定稿分片）互不影响。
+ *
+ * @param {string} targetDir
+ * @returns {string[]} 被取代的文件名（字典序）
+ */
+export function findSupersededRollingShards(targetDir) {
+  const groups = new Map(); // start → [{ name, end }]
+  for (const name of readdirSync(targetDir)) {
+    const m = ROLLING_SHARD_RE.exec(name);
+    if (!m) continue;
+    const [, start, end] = m;
+    if (!groups.has(start)) groups.set(start, []);
+    groups.get(start).push({ name, end });
+  }
+  const superseded = [];
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const maxEnd = list.reduce((mx, f) => (f.end > mx ? f.end : mx), '');
+    for (const f of list) {
+      if (f.end < maxEnd) superseded.push(f.name);
+    }
+  }
+  return superseded.sort();
+}
+
+/**
+ * 把被取代的旧滚动分片归档到 targetDir/.archive/<北京日YYYYMMDD>/（同日已存在则
+ * 追加 -2、-3 后缀，与既有人工归档惯例一致）。归档 = rename 移动，可人工回滚。
+ * .archive/ 是子目录，不被顶层 *.parquet glob（bootstrapper / sync-vps / overlap 闸）匹配。
+ *
+ * @param {string} targetDir
+ * @param {{ beijingDay?: string }} [opts] beijingDay：YYYY-MM-DD（测试注入；默认取当前北京日）
+ * @returns {{ archived: string[], archiveDir: string|null }}
+ */
+export function archiveSupersededRollingShards(targetDir, { beijingDay } = {}) {
+  const superseded = findSupersededRollingShards(targetDir);
+  if (superseded.length === 0) return { archived: [], archiveDir: null };
+
+  const day = (beijingDay ?? beijingDayOf(new Date())).replaceAll('-', '');
+  const base = join(targetDir, '.archive', day);
+  let archiveDir = base;
+  for (let i = 2; existsSync(archiveDir); i++) archiveDir = `${base}-${i}`;
+  mkdirSync(archiveDir, { recursive: true });
+
+  const archived = [];
+  for (const name of superseded) {
+    renameSync(join(targetDir, name), join(archiveDir, name));
+    archived.push(name);
+    log('ok', `  已归档被取代分片: ${name} → ${join('.archive', basename(archiveDir), name)}`);
+  }
+  return { archived, archiveDir };
+}
+
 // ─────────────────────────── 计划打印（dry-run） ───────────────────────────
 
 /**
@@ -700,6 +766,27 @@ async function printPlan(files) {
  *   Phase D：全部通过 → 短窗口批量 rename staging→final；任一失败 → 回滚
  * @param {ReturnType<typeof discoverSourceFiles>} files
  */
+/**
+ * 归档被取代滚动分片；失败即写 manifest 并退出（残留重叠分片必然被下游
+ * overlap 闸拦停，晚失败不如此处响亮失败）。已晋升的文件不回滚（数据本身正确）。
+ *
+ * @param {object} manifest
+ * @param {string} failStatus 失败时写入 manifest.summary.status 的标签
+ * @returns {{ archived: string[], archiveDir: string|null }}
+ */
+function runSupersededArchiveOrDie(manifest, failStatus) {
+  try {
+    return archiveSupersededRollingShards(targetDir);
+  } catch (e) {
+    log('error', `被取代分片归档失败：${e.message}`);
+    log('error', `  残留的重叠分片会被 sync-vps 的 overlap 闸拦停发布，请人工归档后重试：`);
+    log('error', `  mv "${targetDir}/每日数据_<旧end>.parquet" "${targetDir}/.archive/<北京日YYYYMMDD>/"`);
+    manifest.summary = { status: failStatus, error: e.message };
+    writeManifest(manifest);
+    process.exit(1);
+  }
+}
+
 export async function applyPromote(files) {
   log('info', `【APPLY 模式】正式 promote：${files.length} 个文件`);
   log('info', `  源: ${sourceDir}`);
@@ -788,8 +875,11 @@ export async function applyPromote(files) {
   }
 
   if (toProcess.length === 0) {
-    // 全部 skip（幂等）
+    // 全部 skip（幂等）。仍执行被取代分片归档：修复上一轮 promote 成功但归档失败的残留，
+    // 否则重叠分片会一直卡死下游 sync-vps 的 overlap 闸。
+    const archiveResult = runSupersededArchiveOrDie(manifest, 'ARCHIVE_FAILED_ALL_SKIPPED');
     manifest.summary = { status: 'SUCCESS_ALL_SKIPPED', totalSkipped: files.length };
+    manifest.archivedShards = archiveResult;
     writeManifest(manifest);
     log('ok', `promote 完成：所有文件目标已存在且 sha256 完全一致，无需重新复制。`);
     return;
@@ -974,6 +1064,14 @@ export async function applyPromote(files) {
         log('warn', `  backup 删除失败（非阻断，可手动清理）：${basename(backupPath)}: ${e.message}`);
       }
     }
+  }
+
+  // ─── Phase F：归档被取代的旧滚动分片（防下游 overlap 闸拦停发布链） ───
+  log('info', '─── Phase F：归档被取代的旧滚动分片（.archive/<北京日>/）───');
+  const archiveResult = runSupersededArchiveOrDie(manifest, 'SUCCESS_ARCHIVE_FAILED');
+  manifest.archivedShards = archiveResult;
+  if (archiveResult.archived.length === 0) {
+    log('info', '  无被取代分片，跳过');
   }
 
   // 更新 manifest：将 staged_verified 改为 ok

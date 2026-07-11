@@ -214,3 +214,74 @@ export function collectValidationDimFileEntries(validationRoot) {
   }
   return entries;
 }
+
+/**
+ * 非 SC 省事实域隔离副本的同步域清单（单一事实源）。
+ *
+ * sync-vps.mjs:buildValidationBranchSyncTasks（写侧：SYNC_VALIDATION_BRANCHES=1 时按此列
+ * 构建 rsync 任务并写入 .last-sync-manifest.json）与 governance checkDataDrift（读侧：本地
+ * 扫描对账清单）必须消费同一份清单——2026-07-11 实测：sync-vps 内私有的同名常量新增
+ * repair_resource 等域后清单键 `validation/SX/<域>/<文件>` 已入 manifest，而 drift 检查
+ * 本地扫描仍只认 dim 副本 → 11 处「已删除」误报，release:daily 第 3 次被拦（与 2026-07-08
+ * dim 误报事故同构，故与 listValidationDimShards 同居本模块根治）。
+ */
+export const VALIDATION_SYNCED_FACT_DOMAINS = ['claims_detail', 'quotes_conversion', 'renewal_tracker', 'cross_sell', 'new_energy_claims', 'repair_resource'];
+
+/**
+ * 事实域数据存在性判定（与 sync-vps 任务创建条件严格一致）：
+ * claims_detail 为年度分区（claims_*.parquet）；其余派生域须有 latest.parquet。
+ * @param {string} domainDir
+ * @param {string} domain
+ */
+export function validationFactDomainHasData(domainDir, domain) {
+  if (domain === 'claims_detail') {
+    return readdirSync(domainDir).some((f) => f.startsWith('claims_') && f.endsWith('.parquet'));
+  }
+  return existsSync(join(domainDir, 'latest.parquet'));
+}
+
+/**
+ * 非 SC 省事实域隔离副本枚举（warehouse/validation/<省>/<域>/ 顶层全部 *.parquet）。
+ *
+ * 与 sync-vps.mjs:buildValidationBranchSyncTasks + writeSyncManifest 同一套发现规则：
+ * 同省份谓词（^[A-Z]{2}$ 排除 SC）、同域清单（VALIDATION_SYNCED_FACT_DOMAINS）、同存在性
+ * 判定（validationFactDomainHasData，无数据的域不建任务故清单无其键，本 helper 同样跳过防
+ * 反向「新增未同步」误报）、同文件发现（readdir 顶层 .parquet，.archive/ 子目录天然不入）。
+ *
+ * @param {string} validationRoot 通常为 数据管理/warehouse/validation 绝对路径
+ * @returns {Array<{key:string, path:string}>}
+ */
+export function listValidationFactShards(validationRoot) {
+  if (!existsSync(validationRoot)) return [];
+  const shards = [];
+  const provinces = readdirSync(validationRoot)
+    .filter((entry) => entry !== 'SC' && PROVINCE_SUBDIR.test(entry))
+    .sort((a, b) => a.localeCompare(b));
+  for (const province of provinces) {
+    for (const domain of VALIDATION_SYNCED_FACT_DOMAINS) {
+      const domainDir = join(validationRoot, province, domain);
+      if (!existsSync(domainDir) || !statSync(domainDir).isDirectory()) continue;
+      if (!validationFactDomainHasData(domainDir, domain)) continue;
+      for (const f of readdirSync(domainDir).filter((name) => name.endsWith('.parquet'))) {
+        shards.push({ key: `validation/${province}/${domain}/${f}`, path: join(domainDir, f) });
+      }
+    }
+  }
+  return shards;
+}
+
+/**
+ * governance checkDataDrift 用：枚举 validation 事实域副本并组装成 {key: {size, mtimeMs}} 条目，
+ * 与 collectValidationDimFileEntries 对称。
+ *
+ * @param {string} validationRoot 通常为 数据管理/warehouse/validation 绝对路径
+ * @returns {Record<string, {size:number, mtimeMs:number}>}
+ */
+export function collectValidationFactFileEntries(validationRoot) {
+  const entries = {};
+  for (const shard of listValidationFactShards(validationRoot)) {
+    const stat = statSync(shard.path);
+    entries[shard.key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
+  }
+  return entries;
+}
