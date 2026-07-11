@@ -74,26 +74,24 @@ describe('runWithConcurrency — 并发执行器', () => {
 
 // ─── ROUTES ──────────────────────────────────────────────────────
 
-describe('ROUTES 常量', () => {
-  it('长度为 5', () => {
-    expect(ROUTES).toHaveLength(5);
+describe('ROUTES 常量（2026-07-11 f1c991：收窄到活跃路由，cost/kpi 随 65f495 退役不再打流量）', () => {
+  it('长度为 3（活跃路由）', () => {
+    expect(ROUTES).toHaveLength(3);
   });
 
-  it('包含 5 个预期路由 key', () => {
+  it('包含 3 个活跃路由 key，不含退役的 cost/kpi', () => {
     const keys = ROUTES.map(r => r.key);
     expect(keys).toContain('trend');
     expect(keys).toContain('growth');
-    expect(keys).toContain('cost');
-    expect(keys).toContain('kpi');
     expect(keys).toContain('salesman');
+    expect(keys).not.toContain('cost');
+    expect(keys).not.toContain('kpi');
   });
 
-  it('每个路由的 path 映射符合预期', () => {
+  it('每个活跃路由的 path 映射符合预期', () => {
     const byKey = Object.fromEntries(ROUTES.map(r => [r.key, r.path]));
     expect(byKey.trend).toBe('/api/query/trend');
     expect(byKey.growth).toBe('/api/query/growth');
-    expect(byKey.cost).toBe('/api/query/cost');
-    expect(byKey.kpi).toBe('/api/query/kpi');
     expect(byKey.salesman).toBe('/api/query/salesman-ranking');
   });
 });

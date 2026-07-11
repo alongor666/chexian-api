@@ -48,7 +48,8 @@ function printHelp() {
   --tier <tier>      矩阵层级：basic（99）| org（297）| cross（≈3564）
                      默认：basic
   --min-match <n>    每路由最低期望 match 增量（默认：1000）
-  --concurrency <n>  并发请求数（默认：8）
+  --concurrency <n>  并发请求数（默认：8；对生产回放建议 1-2）
+  --pace-ms <n>      逐请求间隔毫秒（默认：0；对生产回放建议 ≥700，避开分钟级限流）
   --dry-run          仅打印计划，不发请求
   --help             显示帮助
 
@@ -95,6 +96,7 @@ async function main() {
   const tier        = String(args.tier  || TIER_BASIC);
   const minMatch    = Number(args['min-match']  || 1000);
   const concurrency = Number(args.concurrency   || 8);
+  const paceMs      = Number(args['pace-ms']    || 0);
   const dryRun      = args['dry-run'] === true || args['dry-run'] === 'true';
 
   // Bearer Token 从 env 注入（禁止 --token 参数，避免进 shell history）
@@ -115,10 +117,10 @@ async function main() {
 
   const matrix = buildWhereMatrix(tier);
 
-  console.log(`[cube-burnin] base=${baseUrl} tier=${tier} matrix=${matrix.length} minMatch=${minMatch} concurrency=${concurrency} dryRun=${dryRun} token=${token ? '已设置' : '未设置'}`);
+  console.log(`[cube-burnin] base=${baseUrl} tier=${tier} matrix=${matrix.length} minMatch=${minMatch} concurrency=${concurrency} paceMs=${paceMs} dryRun=${dryRun} token=${token ? '已设置' : '未设置'}`);
 
   if (dryRun) {
-    await runFlight({ baseUrl, tier, concurrency, dryRun: true, matrix, token, signal: ac.signal });
+    await runFlight({ baseUrl, tier, concurrency, paceMs, dryRun: true, matrix, token, signal: ac.signal });
     process.exit(0);
   }
 
@@ -134,7 +136,7 @@ async function main() {
   const before = snapshotShadow(beforeHealth);
 
   // 2. 发流量（含预热 + 鉴权探针）
-  const flightResult = await runFlight({ baseUrl, tier, concurrency, dryRun: false, matrix, token, signal: ac.signal });
+  const flightResult = await runFlight({ baseUrl, tier, concurrency, paceMs, dryRun: false, matrix, token, signal: ac.signal });
   if (flightResult.authError) {
     process.exitCode = 1;
     return;

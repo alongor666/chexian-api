@@ -4,7 +4,7 @@
  * 纯函数，无 IO 副作用。可被测试直接 import。
  */
 
-import { SHADOW_KEYS } from '../../shared/cube-routes.mjs';
+import { SHADOW_KEYS, ACTIVE_SHADOW_KEYS } from '../../shared/cube-routes.mjs';
 
 // ─── 判定常量 ────────────────────────────────────────────────────
 
@@ -15,8 +15,10 @@ export const VERDICT = Object.freeze({
   INSUFFICIENT: 'INSUFFICIENT',
 });
 
-/** re-export 给本 lib 测试用（SSOT 在 scripts/shared/cube-routes.mjs）*/
-export { SHADOW_KEYS };
+/** re-export 给本 lib 测试用（SSOT 在 scripts/shared/cube-routes.mjs）。
+ * 2026-07-11（f1c991）：快照/判定收窄到 ACTIVE_SHADOW_KEYS——cost/kpi 已随 65f495 退役，
+ * 永远 match=0，留在判定集会让 burn-in 恒 INSUFFICIENT、切流晋级链结构性卡死。 */
+export { SHADOW_KEYS, ACTIVE_SHADOW_KEYS };
 
 // ─── 核心函数 ────────────────────────────────────────────────────
 
@@ -31,7 +33,7 @@ export { SHADOW_KEYS };
 export function snapshotShadow(healthResponse) {
   const shadow = healthResponse?.cubeShadow ?? {};
   const result = {};
-  for (const key of SHADOW_KEYS) {
+  for (const key of ACTIVE_SHADOW_KEYS) {
     const entry = shadow[key] ?? {};
     result[key] = {
       match:    Number(entry.match    ?? 0),
@@ -54,7 +56,7 @@ export function snapshotShadow(healthResponse) {
  */
 export function computeDelta(before, after) {
   const result = {};
-  for (const key of SHADOW_KEYS) {
+  for (const key of ACTIVE_SHADOW_KEYS) {
     const b = before[key] ?? { match: 0, mismatch: 0, error: 0 };
     const a = after[key]  ?? { match: 0, mismatch: 0, error: 0 };
     result[key] = {
@@ -87,7 +89,7 @@ export function judge(delta, { minMatch = 1000 } = {}) {
   let hasWarn  = false;
   let hasInsuf = false;
 
-  for (const key of SHADOW_KEYS) {
+  for (const key of ACTIVE_SHADOW_KEYS) {
     const d = delta[key] ?? { match: 0, mismatch: 0, error: 0 };
     let routeVerdict = VERDICT.PASS;
 
@@ -116,7 +118,7 @@ export function judge(delta, { minMatch = 1000 } = {}) {
   else if (hasInsuf) verdict = VERDICT.INSUFFICIENT;
   else               verdict = VERDICT.PASS;
 
-  const lines = SHADOW_KEYS.map(key => {
+  const lines = ACTIVE_SHADOW_KEYS.map(key => {
     const r = perRoute[key];
     return `  ${key}: ${r.verdict} (match=${r.match}, mismatch=${r.mismatch}, error=${r.error})`;
   });
