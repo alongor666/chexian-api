@@ -95,7 +95,43 @@ import { comprehensiveTheme } from '@/shared/styles'
 | success | `#389E0D` | 达标 |
 | danger | `#CF1322` | 超标 |
 
+### 图表色 token（ECharts canvas 专用 · `chartColors`）
+
+> **为什么单独一层**：ECharts 渲染在 `<canvas>` 里，**读不到 CSS 变量与 Tailwind class**，
+> 图表色必须是具体 hex 字符串。`chartColors`（`src/shared/styles/index.ts`）是所有 ECharts
+> option 硬编码 hex 的唯一来源 —— 把散落在各图表组件里的裸 hex 收拢、按语义命名后复用（B247）。
+>
+> **两套调色板并存是既有事实**：UI 色系 `colors.*` 是 antd 色系（主蓝 `#1890ff`），面向 DOM
+> className；图表历史上用 Tailwind / ECharts 色系（`#3B82F6` / `#10B981` / 经典 6 色分类板）。
+> `chartColors` **如实保留图表色系、不强并入 `colors`**（并入会改变渲染颜色），仅对 hex 对齐项
+> 引用 `semanticColors`（如 `series.blue = semanticColors.info.DEFAULT`）。
+
+```typescript
+import { chartColors } from '@/shared/styles'
+option.color = chartColors.categorical                    // 多系列默认循环板
+series: [{ itemStyle: { color: chartColors.series.emerald } }]
+```
+
+| 组 | 键 | 色值 / 内容 | 用途 |
+|----|----|------------|------|
+| `categorical` | [0..5] | `#5470C6` `#91CC75` `#FAC858` `#EE6666` `#73C0DE` `#9A60B4` | 无固定语义的分类维度循环（吨位 / 树图 / 地图折线） |
+| `series` | blue / blueLight | `#3B82F6` / `#60A5FA` | 承保 / 主蓝线 · 渐变亮端（对齐 `semanticColors.info`） |
+| `series` | emerald / amber / orange | `#10B981` / `#F59E0B` / `#fa8c16` | 转化率正向线 · 转保预警线 · 达成率阈值标记 |
+| `series` | slate / slateLight | `#94a3b8` / `#e2e8f0` | 报价量柱 · 报价量柱基线 |
+| `series` | teal / gold / coral / good / danger / muted | `#13C2C2` `#E8B339` `#F5615C` `#52C41A` `#F5222D` `#8C8C8C` | 图表账本语义色（主色 / 阈值线 / 离群 / 达标 / 超标 / 参照） |
+| `geoRamp` | greenBlue / blue | 4~5 段渐变 | 地图 visualMap（赔付风险 绿→蓝 / 保费规模 蓝阶） |
+| `mapAreaHighlight` | — | `#ffd666` | 地图选中 / 聚焦区域填充 |
+
+**深色模式**：图表文字 / 轴 / 网格明暗切换由 `getChartTheme(isDark)`（`shared/config/chartStyles.ts`）
+统一负责；`chartColors.series` 色值在明 / 暗两态背景上均可读，故不按 token 分明暗。
+
+**诚实边界（本层不收拢什么）**：① 各图表里 `isDark ? '#a3a3a3' : '#595959'` 之类**文字 / 轴色**属
+`getChartTheme` 主题层，非调色板 token，统一迁移是独立行为性重构，另行登记；② 色块上的固定深色墨字
+（如 `#10161f`）是 canvas 必需对比色，就地保留。
+
 ### 报价转化专用色（6 色）
+
+> 派生自 `chartColors.series`（B247 起不再裸 hex），语义映射保持不变。
 
 ```typescript
 import { quoteChartColors } from '@/shared/styles'
@@ -105,10 +141,10 @@ import { quoteChartColors } from '@/shared/styles'
 |------|------|------|
 | quoteBar | `#94a3b8` | 报价量柱（灰） |
 | quoteBarLight | `#e2e8f0` | 报价量柱-浅（时间趋势） |
-| insuredBar | `#3b82f6` | 承保量柱（蓝） |
-| conversionLine | `#10b981` | 转化率线（绿） |
-| renewalLine | `#3b82f6` | 续保转化率线（蓝） |
-| switchLine | `#f59e0b` | 转保转化率线（琥珀） |
+| insuredBar | `#3B82F6` | 承保量柱（蓝） |
+| conversionLine | `#10B981` | 转化率线（绿） |
+| renewalLine | `#3B82F6` | 续保转化率线（蓝） |
+| switchLine | `#F59E0B` | 转保转化率线（琥珀） |
 
 ### 图表年份色（6 年）
 

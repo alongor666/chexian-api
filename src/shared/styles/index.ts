@@ -136,6 +136,90 @@ export const semanticColors = {
   },
 } as const
 
+// ============================================================================
+// 图表色 token（RED LINE · ECharts canvas 专用色值 SSOT）
+// ============================================================================
+
+/**
+ * 图表色 token —— ECharts option 里所有硬编码 hex 的唯一来源（B247）
+ *
+ * 【为什么是 JS hex 常量，而不是 CSS 变量】
+ * ECharts 渲染在 <canvas> 里，读不到 CSS 变量（`var(--x)`）也读不到 Tailwind class。
+ * 所以图表色必须是**具体 hex / rgb 字符串**。本 token 层就是把原本散落在各图表组件
+ * option 里的裸 hex 收拢到设计系统 SSOT，集中维护、按语义命名后复用。
+ *
+ * 【与 UI 色系 `colors` 的关系（审计核心结论）】
+ * `colors.*` 是 antd 色系（主蓝 `#1890ff`、成功绿 `#52c41a`），面向 DOM className；
+ * 图表历史上用的是 Tailwind / ECharts 色系（`#3B82F6` / `#10B981` / `#F59E0B` / 经典 6 色分类板）。
+ * 两套调色板并存是既有事实。本 token 层**如实保留图表色系、不强行并入 `colors`**——
+ * 并入会改变实际渲染颜色，违反「行为保持」；仅对 hex 完全对齐的项引用 `semanticColors`
+ * （如主蓝线 = `semanticColors.info.DEFAULT`），减少重复。
+ *
+ * 【深色模式】
+ * 图表的文字 / 轴线 / 网格明暗切换由 `shared/config/chartStyles.ts` 的 `getChartTheme(isDark)`
+ * 统一负责；本 token 层的 `series` 色值在明 / 暗两态背景上均可读，故不按 token 分明暗。
+ * 地图 `geoRamp`、`categorical` 同理（用于 canvas 色块，非文字）。
+ *
+ * 【用法】
+ *   import { chartColors } from '@/shared/styles'
+ *   series: [{ itemStyle: { color: chartColors.series.emerald } }]
+ *   option.color = chartColors.categorical   // ECharts 多系列默认循环板
+ *
+ * 【本层不收拢什么（诚实边界）】
+ * - 各图表里 `isDark ? '#a3a3a3' : '#595959'` 之类的**文字 / 轴色**：属 `getChartTheme` 的
+ *   明暗主题层，不是调色板 token；统一迁移到 `getChartTheme` 是独立的行为性重构，另行登记。
+ * - 色块上的固定深色墨字（如 `#10161f`）：canvas 必需的对比色，非语义调色板，就地保留。
+ */
+export const chartColors = {
+  /** 多系列默认分类板（ECharts 经典 6 色，用于吨位 / 树图等无固定语义的分类维度循环） */
+  categorical: [
+    '#5470C6', // 蓝
+    '#91CC75', // 绿
+    '#FAC858', // 黄
+    '#EE6666', // 红
+    '#73C0DE', // 青
+    '#9A60B4', // 紫
+  ],
+  /** 语义化单系列色（同一语义同一色值，跨图表复用） */
+  series: {
+    /** 承保量 / 主蓝线（= semanticColors.info.DEFAULT #3B82F6） */
+    blue: semanticColors.info.DEFAULT,
+    /** 渐变亮端 / 次蓝（= semanticColors.info.light #60A5FA） */
+    blueLight: semanticColors.info.light,
+    /** 翠绿 — 转化率 / 正向线 */
+    emerald: '#10B981',
+    /** 琥珀 — 转保 / 预警线 */
+    amber: '#F59E0B',
+    /** 橙 — 达成率阈值标记 */
+    orange: '#fa8c16',
+    /** 石板灰 — 报价量柱 */
+    slate: '#94a3b8',
+    /** 浅石板 — 报价量柱（时间趋势基线） */
+    slateLight: '#e2e8f0',
+    /** 青 — 账本主色 */
+    teal: '#13C2C2',
+    /** 金 — 阈值参照线 */
+    gold: '#E8B339',
+    /** 珊瑚 — 离群 / 控制限 */
+    coral: '#F5615C',
+    /** 绿 — 达标 */
+    good: '#52C41A',
+    /** 红 — 超标 */
+    danger: '#F5222D',
+    /** 灰 — 次要 / 参照 */
+    muted: '#8C8C8C',
+  },
+  /** 地图 visualMap 渐变带（低→高） */
+  geoRamp: {
+    /** 绿→蓝（赔付风险热力） */
+    greenBlue: ['#e0f3db', '#a8ddb5', '#43a2ca', '#0868ac'],
+    /** 蓝阶（保费规模热力） */
+    blue: ['#e6f4ff', '#91caff', '#4096ff', '#0958d9', '#002c8c'],
+  },
+  /** 地图高亮区域填充（选中 / 聚焦省市） */
+  mapAreaHighlight: '#ffd666',
+} as const
+
 /**
  * 综合分析页主题令牌
  * - 用于图表 option 与模块状态色统一
@@ -643,20 +727,20 @@ export const colorClasses = {
 // 报价转化分析专用颜色（DC-003 合规）
 // ============================================================================
 
-/** ECharts 图表色值（hex，用于 ECharts option） */
+/** ECharts 图表色值（派生自 chartColors token，用于 ECharts option） */
 export const quoteChartColors = {
   /** 报价量柱 - 中性灰 */
-  quoteBar: '#94a3b8',
+  quoteBar: chartColors.series.slate,
   /** 报价量柱 - 浅灰（时间趋势） */
-  quoteBarLight: '#e2e8f0',
+  quoteBarLight: chartColors.series.slateLight,
   /** 承保量柱 - 蓝色 */
-  insuredBar: '#3b82f6',
+  insuredBar: chartColors.series.blue,
   /** 转化率线 - 绿色 */
-  conversionLine: '#10b981',
+  conversionLine: chartColors.series.emerald,
   /** 续保转化率线 - 蓝色 */
-  renewalLine: '#3b82f6',
+  renewalLine: chartColors.series.blue,
   /** 转保转化率线 - 琥珀色 */
-  switchLine: '#f59e0b',
+  switchLine: chartColors.series.amber,
 } as const
 
 /** 漏斗层级背景色（L1→L4 渐进） */

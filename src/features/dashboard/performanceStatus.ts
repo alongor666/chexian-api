@@ -1,4 +1,4 @@
-import { colorClasses, colors } from '../../shared/styles';
+import { colorClasses, colors, chartColors } from '../../shared/styles';
 
 export type AchievementBand = 'ge_105' | 'ge_100' | 'ge_95' | 'ge_90' | 'lt_90' | 'no_plan';
 export type GrowthBand = 'excellent' | 'healthy' | 'abnormal' | 'danger' | 'negative' | 'unknown';
@@ -33,7 +33,7 @@ export const PERFORMANCE_QUADRANT_META: Record<Exclude<PerformanceQuadrant, 'unk
   low_growth_high_achievement: {
     label: '低增长高达成',
     status: '预警',
-    color: '#fa8c16',
+    color: chartColors.series.orange,  // #fa8c16
   },
   low_growth_low_achievement: {
     label: '低增长低达成',

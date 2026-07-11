@@ -8,7 +8,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import { echarts } from '@/shared/utils/echarts';
-import { cardStyles, colorClasses, cn, fontStyles, tableStyles } from '@/shared/styles';
+import { cardStyles, colorClasses, cn, fontStyles, tableStyles, chartColors } from '@/shared/styles';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { ensureMapRegistered, preloadDefaultMaps } from '@/shared/utils/geo-map-loader';
@@ -169,7 +169,7 @@ export const GeoSection: React.FC = () => {
         text: ['高', '低'],
         realtime: false,
         calculable: true,
-        inRange: { color: ['#e6f4ff', '#91caff', '#4096ff', '#0958d9', '#002c8c'] },
+        inRange: { color: [...chartColors.geoRamp.blue] },
         left: 'left',
         bottom: 20,
       },
@@ -197,11 +197,11 @@ export const GeoSection: React.FC = () => {
         },
         emphasis: {
           label: { show: true, fontSize: 13, fontWeight: 'bold' as const },
-          itemStyle: { areaColor: '#ffd666' },
+          itemStyle: { areaColor: chartColors.mapAreaHighlight },
         },
         select: {
           label: { show: true },
-          itemStyle: { areaColor: '#ffd666' },
+          itemStyle: { areaColor: chartColors.mapAreaHighlight },
         },
         data,
       }],
