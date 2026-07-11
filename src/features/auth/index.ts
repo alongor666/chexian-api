@@ -10,3 +10,4 @@
 export { LoginPage } from './LoginPage';
 export { AuthGuard } from './AuthGuard';
 export { RouteAccessGuard } from './RouteAccessGuard';
+export { ChangePasswordPage } from './ChangePasswordPage';

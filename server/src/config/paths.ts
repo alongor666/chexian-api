@@ -165,6 +165,14 @@ export function getApiTokenStorePath(): string {
 }
 
 /**
+ * 激活令牌持久层文件路径（backend=json 时使用；backend=sqlite 走 state.db activation_tokens 表）。
+ * 低频账号激活链路，单层存储（无 DuckDB mirror），文件仅存 bcrypt(secret) 不含明文。
+ */
+export function getActivationTokenStorePath(): string {
+  return path.resolve(getDataDir(), 'activation_tokens.json');
+}
+
+/**
  * state.db SQLite 文件路径（v5 状态持久层迁移）。
  * 优先级：dbEnv.STATE_DB_PATH > server/data/state.db
  * 仅 STATE_STORE_BACKEND=sqlite 时被 init，否则文件不会被创建。

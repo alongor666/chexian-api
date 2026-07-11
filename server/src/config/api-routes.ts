@@ -168,11 +168,17 @@ export const AUTH_ROUTES = {
   REFRESH: '/refresh',
   LOGOUT: '/logout',
   ME: '/me',
+  /** 用户本人设密/改密（全员密码闭环：pns 会话在此解锁） */
+  CHANGE_PASSWORD: '/change-password',
+  /** 消费激活令牌自设密码（未认证端点：独立限流桶 + 统一错误防枚举） */
+  ACTIVATE: '/activate',
   /** Nginx 静态 /reports/* auth_request 细闸（B346 机构级授权），非前端直调 */
   REPORT_ACCESS: '/report-access',
 
   USERS: '/users',
   USER_BY_ID: '/users/:id',
+  /** 管理员为账号签发一次性激活令牌（24h，明文仅返回一次） */
+  USER_ACTIVATION_TOKEN: '/users/:id/activation-token',
 
   ROLES: '/roles',
   ROLE_BY_ID: '/roles/:role',

@@ -9,10 +9,12 @@ import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
 import { authEnv } from '../config/env.js';
-import { PRESET_USERS, getPresetVisibleBranches } from '../config/preset-users.js';
+import { PRESET_USERS, getPresetVisibleBranches, SELF_SERVICE_PASSWORD_ONLY_USERS } from '../config/preset-users.js';
+import { validatePasswordPolicy } from '../config/password-policy.js';
 import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
-import { ensurePresetUser, getUserByUsername } from './access-control.js';
+import { ensurePresetUser, getUserByUsername, setUserPasswordByUsername } from './access-control.js';
+import type { AccessUser } from './access-control.js';
 import { isIpAllowed as isIpAllowedShared } from '../utils/ip.js';
 
 /**
@@ -33,6 +35,29 @@ export interface UserCredential {
   defaultRoute?: string;
   specialFeatures?: string[];
   active?: boolean;
+  /**
+   * pns（password-not-set）：该账号尚未自设专属密码（password_changed_at 为空且不在豁免清单），
+   * 本次会话须先设密才能访问业务路由。密码登录与飞书扫码两条链路都会置位；
+   * authMiddleware 按 JWT/Cookie 会话的 pns 声明拦截，设密成功后重发无 pns 会话解锁。
+   */
+  mustChangePassword?: boolean;
+}
+
+/**
+ * pns 豁免清单：password_changed_at 恒空但不强制设密的账号。
+ * 仅 admin —— 保留 USER_PASSWORDS 强密码 + PAT 作应急破窗通道（用户拍板，2026-07-11）。
+ */
+const PNS_EXEMPT_USERNAMES: ReadonlySet<string> = new Set(['admin']);
+
+/** 「仅限自助设密」账号（永不吃 USER_PASSWORDS 覆盖），名单见 preset-users.ts */
+const SELF_SERVICE_ONLY_SET: ReadonlySet<string> = new Set(SELF_SERVICE_PASSWORD_ONLY_USERS);
+
+/**
+ * 构造式 tombstone 占位哈希判定（含 "Tombstone" 可辨标记，bcrypt.compare 对任意明文恒 false）。
+ * 与 preset-users.ts SX 段先例同一约定；用于区分「无任何可用密码凭据」的账号（设密免验旧密）。
+ */
+function isTombstoneHash(hash: string): boolean {
+  return /tombstone/i.test(hash);
 }
 
 /**
@@ -124,14 +149,16 @@ class AuthService {
     if (!user.active) {
       throw new AppError(403, 'Account disabled');
     }
-    const passwordOverride = PASSWORD_OVERRIDES[normalizedUsername];
     const allowedIpsOverride = ALLOWED_IP_OVERRIDES[normalizedUsername];
     const userCredential: UserCredential = {
       ...user,
-      passwordHash: passwordOverride ?? user.passwordHash,
+      passwordHash: this.resolveEffectiveHash(normalizedUsername, user),
       allowedIps: allowedIpsOverride ?? user.allowedIps,
       // 全国超管可见省集合按 username 从 PRESET_USERS 派生（单一事实源），随登录响应回前端显示切省下拉。
       visibleBranches: getPresetVisibleBranches(normalizedUsername),
+      // pns：尚未自设专属密码（且不豁免）→ 本次会话强制设密。
+      // 存量账号旧密码（USER_PASSWORDS/preset 哈希）由此降级为一次性激活凭据：登录成功即被拦去设密。
+      mustChangePassword: this.isPasswordNotSet(normalizedUsername, user) || undefined,
     };
 
     if (!this.isIpAllowed(clientIp, userCredential.allowedIps)) {
@@ -151,6 +178,8 @@ class AuthService {
       role: userCredential.role,
       organization: userCredential.organization,
       branchCode: userCredential.branchCode,
+      // pns（password-not-set）声明：未自设密码的会话进 token，authMiddleware 据此拦业务路由
+      ...(userCredential.mustChangePassword ? { pns: true } : {}),
     };
 
     const token = jwt.sign(
@@ -165,6 +194,114 @@ class AuthService {
       token,
       user: userInfo,
     };
+  }
+
+  /**
+   * 解析账号当前生效的密码哈希（三级优先级链，单测锁死）：
+   *   1. 用户运行时自设密码（password_changed_at 非空的 store 哈希）
+   *   2. USER_PASSWORDS 环境变量覆盖（运维注入的旧密码/应急凭据）
+   *   3. store/preset 哈希（tombstone 占位则恒不可登录）
+   * 「仅限自助设密」账号（SELF_SERVICE_PASSWORD_ONLY_USERS）跳过第 2 级：
+   * 即便 USER_PASSWORDS 被误注入也不生效（governance 静态闸 + 此处运行时兜底双保险）。
+   */
+  private resolveEffectiveHash(normalizedUsername: string, user: AccessUser): string {
+    if (user.passwordChangedAt) {
+      return user.passwordHash;
+    }
+    if (SELF_SERVICE_ONLY_SET.has(normalizedUsername)) {
+      return user.passwordHash;
+    }
+    return PASSWORD_OVERRIDES[normalizedUsername] ?? user.passwordHash;
+  }
+
+  /**
+   * pns（password-not-set）判定：password_changed_at 为空 且 username 不在豁免清单（仅 admin）。
+   * 覆盖密码登录与飞书登录两条链路；不做存量 backfill —— 存量账号下次登录成功即被强制设密。
+   */
+  isPasswordNotSet(normalizedUsername: string, user: AccessUser): boolean {
+    return !user.passwordChangedAt && !PNS_EXEMPT_USERNAMES.has(normalizedUsername);
+  }
+
+  /**
+   * 按用户名做 pns 判定（飞书扫码 callback 用）。
+   * store 无该账号时尝试物化 preset；两者皆无（如纯飞书裸 ID 身份）→ 非 pns
+   * （没有可设密的账号实体，强制设密无意义）。
+   */
+  async isPasswordNotSetForUsername(username: string): Promise<boolean> {
+    const normalizedUsername = this.normalizeUsername(username);
+    let user = await getUserByUsername(normalizedUsername);
+    if (!user && PRESET_USER_KEYS.has(normalizedUsername)) {
+      user = await ensurePresetUser(normalizedUsername);
+    }
+    if (!user) return false;
+    return this.isPasswordNotSet(normalizedUsername, user);
+  }
+
+  /**
+   * 账号当前是否存在可验证的密码凭据（决定设密时是否必须验旧密）：
+   *   - 已自设（password_changed_at 非空）→ 有
+   *   - USER_PASSWORDS 有效覆盖（非自助设密账号）→ 有（旧密码即一次性激活凭据）
+   *   - 其余看 store 哈希是否构造式 tombstone：tombstone → 无（首次设密免验旧密）
+   */
+  hasUsablePassword(normalizedUsername: string, user: AccessUser): boolean {
+    if (user.passwordChangedAt) return true;
+    if (!SELF_SERVICE_ONLY_SET.has(normalizedUsername) && PASSWORD_OVERRIDES[normalizedUsername]) {
+      return true;
+    }
+    return !isTombstoneHash(user.passwordHash);
+  }
+
+  /**
+   * 新密码强度校验（返回违规原因，null = 通过）。
+   * 口径收口于 config/password-policy.ts（change-password 与 activate 共用）。
+   */
+  validateNewPassword(password: string, username?: string): string | null {
+    return validatePasswordPolicy(password, { username });
+  }
+
+  /**
+   * 用户本人设密/改密（全员密码闭环链路）。
+   *   - 账号已有可用密码凭据 → 必须验旧密（旧密码即一次性激活凭据）；
+   *   - 无任何可用凭据（tombstone 且未注入 env，如飞书首登的自助设密账号）→ 免验旧密，
+   *     会话本身（飞书扫码/激活令牌）就是身份凭据；
+   *   - 强度校验 → 写库置 password_changed_at（此后 store 自设哈希优先，旧密码即刻失效）。
+   */
+  async changePassword(
+    username: string,
+    oldPassword: string | undefined,
+    newPassword: string
+  ): Promise<void> {
+    const normalizedUsername = this.normalizeUsername(username);
+    const normalizedNew = this.normalizePassword(newPassword);
+
+    const user = await getUserByUsername(normalizedUsername);
+    if (!user || !user.active) {
+      throw new AppError(401, 'Invalid username or password');
+    }
+
+    let normalizedOld: string | undefined;
+    if (this.hasUsablePassword(normalizedUsername, user)) {
+      normalizedOld = this.normalizePassword(oldPassword ?? '');
+      if (!normalizedOld) {
+        throw new AppError(401, '当前密码不正确');
+      }
+      const effectiveHash = this.resolveEffectiveHash(normalizedUsername, user);
+      const isOldValid = await this.verifyPassword(normalizedOld, effectiveHash);
+      if (!isOldValid) {
+        throw new AppError(401, '当前密码不正确');
+      }
+    }
+
+    const policyViolation = this.validateNewPassword(normalizedNew, normalizedUsername);
+    if (policyViolation) {
+      throw new AppError(400, policyViolation);
+    }
+    if (normalizedOld && normalizedNew === normalizedOld) {
+      throw new AppError(400, '新密码不能与当前密码相同');
+    }
+
+    const newHash = await this.hashPassword(normalizedNew);
+    await setUserPasswordByUsername(normalizedUsername, newHash);
   }
 
   private signAccessToken(payload: JwtPayload): string {
@@ -208,6 +345,8 @@ class AuthService {
       role: user.role,
       organization: user.organization,
       branchCode: user.branchCode,
+      // pns 随 cookie 会话下发（密码登录与飞书扫码共用本出口）
+      ...(user.mustChangePassword ? { pns: true } : {}),
     };
     const sessionId = `sid_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const refreshTtlSec = this.parseDurationToSeconds(authConfig.jwtRefreshExpiresIn, 7 * 24 * 3600);
@@ -312,6 +451,8 @@ class AuthService {
       role: decoded.role,
       organization: decoded.organization,
       branchCode: decoded.branchCode,
+      // pns 必须随刷新透传：否则「刷新一次 token」就能绕过强制设密拦截
+      ...(decoded.pns ? { pns: true } : {}),
     };
     const next = this.issueCookieSession({
       username: payload.username,
@@ -319,6 +460,7 @@ class AuthService {
       role: payload.role,
       organization: payload.organization,
       branchCode: payload.branchCode,
+      mustChangePassword: decoded.pns ? true : undefined,
     });
     return {
       ...next,

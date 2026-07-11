@@ -39,6 +39,7 @@ export async function initDuckDBTables(db: DuckDBQueryable): Promise<void> {
       allowed_ips VARCHAR,
       special_features VARCHAR,
       active BOOLEAN,
+      password_changed_at VARCHAR,
       created_at TIMESTAMP,
       updated_at TIMESTAMP
     )
@@ -54,6 +55,14 @@ export async function initDuckDBTables(db: DuckDBQueryable): Promise<void> {
   // 迁移：plan v2 多分公司前置（0D），已有表补 branch_code 列
   try {
     await db.query(`ALTER TABLE UserAccount ADD COLUMN IF NOT EXISTS branch_code VARCHAR`);
+  } catch {
+    // 列已存在或表刚创建，忽略
+  }
+
+  // 迁移：统一初始密码首登强制改密（2026-07-11），已有表补 password_changed_at 列。
+  // VARCHAR 存 ISO 字符串而非 TIMESTAMP：该值经 JSON snapshot 往返再插回，避免 Neo 时间戳序列化坑。
+  try {
+    await db.query(`ALTER TABLE UserAccount ADD COLUMN IF NOT EXISTS password_changed_at VARCHAR`);
   } catch {
     // 列已存在或表刚创建，忽略
   }

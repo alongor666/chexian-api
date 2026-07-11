@@ -178,6 +178,25 @@ export const queryLimiter = rateLimit({
 });
 
 /**
+ * 激活令牌消费接口限流器（严格，独立桶）
+ * 5 次/分钟 · 按 IP。/api/auth/activate 是未认证端点（持一次性激活令牌设密），
+ * 与 login 同级加严防爆破/枚举；不动三级基线（100/5/200 不变，仅新增独立桶）。
+ */
+export const activateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  message: rateLimitBody('激活尝试次数过多，请 1 分钟后再试'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  // C4 组合策略：生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过
+  skip: shouldSkipRateLimit,
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress || 'unknown',
+  handler: (req, res) => {
+    res.status(429).json(rateLimitBody('激活尝试次数过多，请 1 分钟后再试'));
+  },
+});
+
+/**
  * AI 接口限流器（最严格）
  * 10 次/分钟
  */

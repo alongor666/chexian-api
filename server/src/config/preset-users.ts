@@ -28,6 +28,26 @@ export interface PresetUser {
   active?: boolean;
 }
 
+/**
+ * 「仅限自助设密」账号名单（全员密码体系改造 · 阶段一）。
+ *
+ * 名单内账号的密码只能由本人经激活令牌（/api/auth/activate）或飞书首登强制设密链路自设，
+ * **永不进 USER_PASSWORDS 环境变量**：
+ *   - 运行时兜底：auth.ts resolveEffectiveHash 对名单账号忽略 USER_PASSWORDS 覆盖
+ *     （即便运维误注入也不生效，杜绝共享初始密码回潮）；
+ *   - 静态闸：governance「自助设密账号禁入USER_PASSWORDS」扫描 env/部署文件拦截误注入。
+ * passwordHash 保持构造式 tombstone（含 "Tombstone" 字样，bcrypt.compare 恒 false），
+ * 自设前无任何可登录凭据。
+ */
+export const SELF_SERVICE_PASSWORD_ONLY_USERS: readonly string[] = [
+  'liangchunfan',
+  'changlixia',
+  'yaoqian',
+  'lvzhenran',
+  'gonghuixin',
+  'houyabing',
+];
+
 export interface PresetRole {
   role: string;
   name: string;
@@ -271,6 +291,57 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     branchCode: 'SX',
     active: true,
   },
+  // ── 山分车险部个人账号（2026-07-11 发放）：仅限自助设密（SELF_SERVICE_PASSWORD_ONLY_USERS），
+  //    密码由本人经激活令牌或飞书首登强制设密自设，永不进 USER_PASSWORDS；
+  //    passwordHash 保持构造式 tombstone 占位，自设前不可密码登录 ──
+  liangchunfan: {
+    username: 'liangchunfan',
+    passwordHash: '$2b$10$LiangchunfanTombstone0000000000000000000000000000000u',
+    displayName: '山西管理员（梁春帆）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+  },
+  changlixia: {
+    username: 'changlixia',
+    passwordHash: '$2b$10$ChanglixiaTombstone000000000000000000000000000000000u',
+    displayName: '山西管理员（常丽霞）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+  },
+  yaoqian: {
+    username: 'yaoqian',
+    passwordHash: '$2b$10$YaoqianTombstone000000000000000000000000000000000000u',
+    displayName: '山西管理员（姚茜）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+  },
+  lvzhenran: {
+    username: 'lvzhenran',
+    passwordHash: '$2b$10$LvzhenranTombstone0000000000000000000000000000000000u',
+    displayName: '山西管理员（吕镇冉）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+  },
+  gonghuixin: {
+    username: 'gonghuixin',
+    passwordHash: '$2b$10$GonghuixinTombstone000000000000000000000000000000000u',
+    displayName: '山西管理员（弓慧鑫）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+  },
+  houyabing: {
+    username: 'houyabing',
+    passwordHash: '$2b$10$HouyabingTombstone0000000000000000000000000000000000u',
+    displayName: '山西管理员（侯亚兵）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+  },
   sx_taiyuan1: {
     // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
     username: 'sx_taiyuan1',
@@ -405,6 +476,8 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   test_org_user: {
     username: 'test_org_user',
+    // 全员密码体系改造（2026-07-11）：测试账号停用（active:false），不参与密码迁移；
+    // 需要时由管理员在管理面重新启用。
     passwordHash: '$2b$10$JyCWJdWGvcPKjSBJ5/KcAeFQOryg6d6GbMcq5jdX99L2PCEsCMDOi',
     displayName: '测试机构用户',
     role: 'org_user',
@@ -412,6 +485,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SC',
+    active: false,
   },
 };
 

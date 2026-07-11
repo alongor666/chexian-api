@@ -51,10 +51,12 @@ export function replaceAll(snapshot: AccessControlSnapshot): void {
     const insertUser = db.prepare(`
       INSERT INTO access_users
         (id, username, display_name, password_hash, role, organization, branch_code,
-         allowed_routes, default_route, allowed_ips, special_features, active, updated_at)
+         allowed_routes, default_route, allowed_ips, special_features, active,
+         password_changed_at, updated_at)
       VALUES
         (@id, @username, @displayName, @passwordHash, @role, @organization, @branchCode,
-         @allowedRoutes, @defaultRoute, @allowedIps, @specialFeatures, @active, datetime('now'))
+         @allowedRoutes, @defaultRoute, @allowedIps, @specialFeatures, @active,
+         @passwordChangedAt, datetime('now'))
     `);
     for (const user of snapshot.users) {
       insertUser.run({
@@ -70,6 +72,7 @@ export function replaceAll(snapshot: AccessControlSnapshot): void {
         allowedIps: serializeArray(user.allowedIps),
         specialFeatures: serializeArray(user.specialFeatures),
         active: user.active ? 1 : 0,
+        passwordChangedAt: user.passwordChangedAt ?? null,
       });
     }
 
@@ -117,6 +120,7 @@ export function readAll(): AccessControlSnapshot {
     allowedIps: parseArray(row.allowed_ips),
     specialFeatures: parseArray(row.special_features),
     active: row.active === 1 || row.active === true,
+    passwordChangedAt: row.password_changed_at ? String(row.password_changed_at) : undefined,
   }));
 
   const roles: AccessRole[] = roleRows.map((row) => ({

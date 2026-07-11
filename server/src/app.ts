@@ -119,11 +119,13 @@ app.use(auditMiddleware);
  * 4.5 API 限流中间件
  * 防止恶意高频请求
  */
-import { apiLimiter, loginLimiter, queryLimiter, aiLimiter } from './middleware/rateLimiter.js';
+import { apiLimiter, loginLimiter, queryLimiter, aiLimiter, activateLimiter } from './middleware/rateLimiter.js';
 // 通用限流（兜底：100次/分钟）
 app.use('/api', apiLimiter);
 // 登录接口严格限流（5次/分钟）
 app.use('/api/auth/login', loginLimiter);
+// 激活令牌消费接口独立限流桶（5次/分钟，未认证端点防爆破/枚举）
+app.use('/api/auth/activate', activateLimiter);
 // 查询接口限流（30次/分钟）
 app.use('/api/query', queryLimiter);
 // Agent 诊断接口会触发确定性分析查询，使用查询级限流
