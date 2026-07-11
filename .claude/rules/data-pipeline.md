@@ -52,7 +52,7 @@ paths: ["数据管理/**", "scripts/sync-vps.mjs", "scripts/**"]
 
 **生产代码层省份解析**（区别于本规则覆盖的"查询 / 技能 / 直查层"）：见 `开发文档/reviews/2026-06-27-多省硬编码审计/` 工程一「省份解析 fail-closed」路线图（规划中：建 `resolveBranchCode()` 替换全栈 23 处 `?? 'SC'` 静默默认，当前**尚未落地**；现存 `getDeploymentBranchCode()` 负责写入 `branch_code` 列）。
 
-**山西 GATED**：SX 生产 API 不返回数据，验证一律 duckdb 直查 `SX_*.parquet`。worktree 无 Parquet（gitignored），须用主仓绝对路径 `/Users/<user>/.../chexian-api/数据管理/warehouse/...`。
+**山西已上线（2026-07-07 生产 cutover · RLS-on）**：SX 生产 API 已按 token branchCode RLS 分租户返回山西数据。本地口径验证仍可 duckdb 直查 `SX_*.parquet`；worktree 无 Parquet（gitignored），须用主仓绝对路径 `/Users/<user>/.../chexian-api/数据管理/warehouse/...`。
 
 ## 数据加载流程
 
