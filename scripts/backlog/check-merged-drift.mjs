@@ -108,7 +108,7 @@ function implementationCommits(token, paths) {
     }
     // 改动了任一非账本文件 + 命中 declared code 路径 → 算实现提交（非登记/顺带提及）
     // 保留全 SHA：误报压制按 note 里的短 SHA 做前缀匹配，展示时再截短
-    const nonLedger = files.filter(f => !LEDGER_FILES.has(f));
+    const nonLedger = files.filter(f => !LEDGER_FILES.has(f) && !f.startsWith('backlog-events/'));
     if (nonLedger.length > 0 && touchesDeclaredCode(nonLedger, paths)) {
       out.push({ hash, subject });
     }

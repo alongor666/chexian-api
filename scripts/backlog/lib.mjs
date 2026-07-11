@@ -3,7 +3,8 @@
  * BACKLOG event-log 核心库（唯一事实源：解析 + 折叠 + 渲染）
  *
  * 模型（道）：
- *   真相 = BACKLOG_LOG.jsonl（append-only 事件日志，merge=union）
+ *   真相 = 冻结的 BACKLOG_LOG.jsonl（存量事件，2026-07-11 起只读）
+ *        + backlog-events/ 目录（增量事件，**每事件一文件**，唯一写路径）
  *   视图 = BACKLOG.md（活跃）+ BACKLOG_ARCHIVE.md（归档）—— 由本库折叠日志「渲染」得出，禁止手工编辑
  *
  * 为什么（根治上一代「可变表 + 并发」的三类病）：
@@ -11,18 +12,26 @@
  *   2. 原地改行冲突：状态变更 = 追加一条 status 事件，从不回去改旧行 → union 永不产生重复行
  *   3. 手解派生文件：视图是日志的纯函数，冲突时「重新渲染」而非手解
  *
- * 事件种类（每行一个 JSON）：
+ * 为什么再进一步「每事件一文件」（2026-07-11，卡 637c35）：
+ *   单文件尾部追加是全仓最高并发写竞争点——.gitattributes merge=union 只在**本地**生效，
+ *   GitHub 服务端计算 PR 可合并性不应用 merge 策略，两个 PR 同改文件尾仍标 CONFLICTING、
+ *   CI 不入队。改为每事件一个独立文件（文件名含 at+eid 保唯一）后，不同 PR 写不同文件，
+ *   GitHub 层面结构性永不冲突。存量 jsonl 冻结只读，读取层合并两源（fold 按 (at,eid) 全序，
+ *   与事件物理落位无关）。
+ *
+ * 事件种类（jsonl 每行一个 / 目录每文件一个 JSON）：
  *   create {uid,kind,ts,actor,section,priority,desc,docs,code,legacy_id?}  任务诞生（uid=稳定身份）
  *   status {uid,kind,ts,actor,status,evidence}                            状态流转 + 证据
  *   note   {uid,kind,ts,actor,text}                                       追加上下文（渲染到证据列末尾）
  *   amend  {uid,kind,ts,actor,field,value}                                修订单字段
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, existsSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'fs';
+import { resolve, dirname } from 'path';
 
 export const ROOT = process.cwd();
 export const LOG_PATH = resolve(ROOT, 'BACKLOG_LOG.jsonl');
+export const EVENTS_DIR = resolve(ROOT, 'backlog-events');
 export const BACKLOG_PATH = resolve(ROOT, 'BACKLOG.md');
 export const ARCHIVE_PATH = resolve(ROOT, 'BACKLOG_ARCHIVE.md');
 
@@ -74,10 +83,62 @@ export function parseLog(text) {
   return events;
 }
 
-/** 从磁盘读日志（不存在 → 空数组） */
-export function loadLog(p = LOG_PATH) {
-  if (!existsSync(p)) return [];
-  return parseLog(readFileSync(p, 'utf-8'));
+/** 事件 → 目录内相对路径：<YYYY-MM>/<at压缩>-<eid>.json（按月分片限住单目录条目数与 git tree 抖动；文件名含 at+eid → 跨分支唯一 + 按名可排） */
+export function eventFilePath(e) {
+  if (!e || !e.at || !e.eid) throw new Error('eventFilePath：事件缺 at/eid（写入前须先补全时间戳与唯一键）');
+  const shard = String(e.at).slice(0, 7); // YYYY-MM
+  const stamp = String(e.at).replace(/[:.]/g, ''); // 文件系统安全（去掉冒号/点）
+  return `${shard}/${stamp}-${e.eid}.json`;
+}
+
+/** 读事件目录（每事件一文件，按月分片）→ 事件数组（带 __src 相对路径便于报错定位） */
+export function loadEventsDir(dir = EVENTS_DIR) {
+  if (!dir || !existsSync(dir)) return [];
+  const events = [];
+  for (const shard of readdirSync(dir).sort()) {
+    const shardPath = resolve(dir, shard);
+    if (!statSync(shardPath).isDirectory()) continue;
+    for (const f of readdirSync(shardPath).sort()) {
+      if (!f.endsWith('.json')) continue;
+      const rel = `backlog-events/${shard}/${f}`;
+      let ev;
+      try {
+        ev = JSON.parse(readFileSync(resolve(shardPath, f), 'utf-8'));
+      } catch (err) {
+        throw new Error(`${rel} 非法 JSON：${err.message}`);
+      }
+      ev.__src = rel;
+      events.push(ev);
+    }
+  }
+  return events;
+}
+
+/**
+ * 从磁盘读全部事件 = 冻结 jsonl（存量，只读）+ backlog-events/ 目录（增量）。
+ * 两源均可缺失（各自回空）；折叠排序由 fold 按 (at,eid) 全序保证，与事件物理落位无关。
+ * dir 传 null 可显式关闭目录源（供 e2e 用 env 指向隔离 fixture 时避免混入真实仓事件）。
+ */
+export function loadLog(p = LOG_PATH, dir = EVENTS_DIR) {
+  const fromJsonl = existsSync(p) ? parseLog(readFileSync(p, 'utf-8')) : [];
+  return fromJsonl.concat(loadEventsDir(dir));
+}
+
+/**
+ * 追加事件（唯一写路径）：每事件写一个独立 JSON 文件到 backlog-events/<YYYY-MM>/。
+ * flag 'wx'：文件已存在即抛错（at+eid 撞名 = 异常，宁可响亮失败不静默覆盖）。
+ * 返回写入的相对路径列表。禁止再向 BACKLOG_LOG.jsonl 追加（已冻结）。
+ */
+export function appendEvents(events, dir = EVENTS_DIR) {
+  const written = [];
+  for (const e of events) {
+    const rel = eventFilePath(e); // 内含 at/eid 缺失校验
+    const abs = resolve(dir, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, JSON.stringify(e) + '\n', { encoding: 'utf-8', flag: 'wx' });
+    written.push(`backlog-events/${rel}`);
+  }
+  return written;
 }
 
 /**
@@ -352,15 +413,20 @@ export function renderArchive(tasksAll) {
   return `${archiveHeader(doneCount, discardedCount)}\n${body}\n`;
 }
 
+/** 事件定位标签：jsonl 事件报行号，目录事件报相对文件路径 */
+export function eventLocation(e) {
+  return e.__src ? `事件文件 ${e.__src}` : `第 ${e.__line} 行`;
+}
+
 /** 校验事件日志结构完整性 → { errors:[], warnings:[], stats:{} } */
 export function validateLog(events) {
   const errors = [];
   const warnings = [];
-  const createUids = new Map(); // uid -> __line
+  const createUids = new Map(); // uid -> 定位标签
   const legacyIds = new Map(); // legacy_id -> uid
 
   for (const e of events) {
-    const at = `第 ${e.__line} 行`;
+    const at = eventLocation(e);
     if (!EVENT_KINDS.includes(e.kind)) {
       errors.push(`${at}：未知事件 kind="${e.kind}"`);
       continue;
@@ -369,9 +435,9 @@ export function validateLog(events) {
     if (!e.ts || !/^\d{4}-\d{2}-\d{2}$/.test(e.ts)) errors.push(`${at}：ts 缺失或非 YYYY-MM-DD（${e.ts}）`);
     if (e.kind === 'create') {
       if (createUids.has(e.uid)) {
-        errors.push(`${at}：create uid 重复（与第 ${createUids.get(e.uid)} 行撞）— uid 必须唯一`);
+        errors.push(`${at}：create uid 重复（与${createUids.get(e.uid)}撞）— uid 必须唯一`);
       } else {
-        createUids.set(e.uid, e.__line);
+        createUids.set(e.uid, at);
       }
       if (e.legacy_id) {
         if (legacyIds.has(e.legacy_id) && legacyIds.get(e.legacy_id) !== e.uid) {
@@ -391,7 +457,7 @@ export function validateLog(events) {
   // 孤儿事件：status/note/amend 引用了不存在的 create uid
   for (const e of events) {
     if (e.kind !== 'create' && e.uid && !createUids.has(e.uid)) {
-      errors.push(`第 ${e.__line} 行：${e.kind} 事件引用了不存在的任务 uid="${e.uid}"（孤儿事件）`);
+      errors.push(`${eventLocation(e)}：${e.kind} 事件引用了不存在的任务 uid="${e.uid}"（孤儿事件）`);
     }
   }
 
