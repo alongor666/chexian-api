@@ -169,4 +169,56 @@ describe('materializeInBatches — 批次物化逻辑', () => {
     expect(sqlCalls.some(s => s.includes('SET threads'))).toBe(false);
     expect(sqlCalls.some(s => s.includes('SET preserve_insertion_order'))).toBe(false);
   });
+
+  // MB-10（beb706 复现）：热重载后源数据变更，重跑 materializeInBatches 必须让物化表
+  // 反映新数据，而非冻结在 ETL 前快照。真实 DuckDB（非 mock）端到端跑一遍物化→改源→重物化。
+  // 这正是热重载后 CrossSellDailyAgg 不刷新的根因验证：只要 reload 路径无条件重跑物化
+  // （loader 幂等：materializeInBatches 先 DROP 再建），物化表就会带上新数据。
+  it('MB-10（beb706）: 源数据变更后重跑物化，物化表反映新数据（非旧快照）', async () => {
+    // 1. 建真实 PolicyFact 源（2 个月，合计 300）
+    await duckdbService.query(`CREATE OR REPLACE TABLE PolicyFact AS
+      SELECT * FROM (VALUES
+        (DATE '2024-01-15', 100.0),
+        (DATE '2024-02-15', 200.0)
+      ) AS t(policy_date, premium)`);
+
+    const cteSql = `SELECT CAST(policy_date AS DATE) AS policy_date, premium
+                    FROM PolicyFact WHERE policy_date IS NOT NULL`;
+    const aggSql = `SELECT policy_date, SUM(premium) AS total_premium
+                    FROM normalized GROUP BY policy_date`;
+    const viewFallback = `CREATE OR REPLACE VIEW BebAggTest AS WITH normalized AS (${cteSql}) ${aggSql}`;
+
+    // 2. 首次物化（模拟启动首载 CrossSellDailyAgg）
+    const r1 = await materializeInBatches(
+      duckdbService, 'BebAggTest', cteSql, aggSql, viewFallback, [],
+    );
+    expect(r1).toBe('table');
+    const before = await duckdbService.query<{ total: number; months: number }>(
+      'SELECT SUM(total_premium) AS total, COUNT(*) AS months FROM BebAggTest');
+    expect(Number(before[0].total)).toBe(300);
+    expect(Number(before[0].months)).toBe(2);
+
+    // 3. 模拟热重载：PolicyFact 换新数据（金额变化 + 新增一个月，合计 900）
+    await duckdbService.query(`CREATE OR REPLACE TABLE PolicyFact AS
+      SELECT * FROM (VALUES
+        (DATE '2024-01-15', 150.0),
+        (DATE '2024-02-15', 250.0),
+        (DATE '2024-03-15', 500.0)
+      ) AS t(policy_date, premium)`);
+
+    // 4. reload 路径 = 无条件重跑物化（区别于 ensureDomainLoaded 的 no-op）
+    const r2 = await materializeInBatches(
+      duckdbService, 'BebAggTest', cteSql, aggSql, viewFallback, [],
+    );
+    expect(r2).toBe('table');
+
+    // 5. 断言：物化表反映新数据（900/3 月），而非冻结在旧快照（300/2 月）——beb706 的核心保证
+    const after = await duckdbService.query<{ total: number; months: number }>(
+      'SELECT SUM(total_premium) AS total, COUNT(*) AS months FROM BebAggTest');
+    expect(Number(after[0].total)).toBe(900);
+    expect(Number(after[0].months)).toBe(3);
+
+    await duckdbService.query('DROP TABLE IF EXISTS BebAggTest');
+    await duckdbService.query('DROP TABLE IF EXISTS PolicyFact');
+  });
 });

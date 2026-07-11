@@ -82,6 +82,29 @@ describe('DataBootstrapper.reloadDomains', () => {
     await expect(bootstrapper.reloadDomains(['policy'])).rejects.toThrow('Unsupported data reload domain');
   });
 
+  it('beb706：reloadDomain 对已 loaded 域仍重跑 loader（区别于 ensureDomainLoaded 的 no-op），重建物化表', async () => {
+    const fake = createFakeDb(0);
+    const bootstrapper = new DataBootstrapper(fake.db);
+    let loaderCalls = 0;
+    (bootstrapper as any).lazyRegistry.register('CrossSell', async () => {
+      loaderCalls++;
+    });
+
+    // 首次 ensure 触发一次载入
+    await bootstrapper.ensureDomainLoaded('CrossSell');
+    expect(loaderCalls).toBe(1);
+    expect(bootstrapper.getDomainState('CrossSell')).toBe('loaded');
+
+    // 再 ensure：已 loaded → no-op（不重跑 loader），这正是热重载后物化表不刷新的根因
+    await bootstrapper.ensureDomainLoaded('CrossSell');
+    expect(loaderCalls).toBe(1);
+
+    // reloadDomain：无条件重跑 loader，重建 CrossSellDailyAgg 物化表
+    await bootstrapper.reloadDomain('CrossSell');
+    expect(loaderCalls).toBe(2);
+    expect(bootstrapper.getDomainState('CrossSell')).toBe('loaded');
+  });
+
   it('B311：辅助域 reload 仍 bump 版本（ETag/route-cache 正确性），但 scope=domains（监听者跳过全量预热）', async () => {
     const fake = createFakeDb(1);
     const bootstrapper = new DataBootstrapper(fake.db);

@@ -375,8 +375,11 @@ async function startServer() {
       // 先物化 CrossSell（最小化交叉销售路由的 503 降级窗口），完成后再跑笛卡尔预热。
       // 笛卡尔预热依赖 listen 端口，必须在 listen 后才能跑；
       // 监听者注册位置在 listen 之前，所以这里发起即可（首次 listen 完成后再触发也安全）
+      // beb706：这是 post-ETL（热重载）路径——CrossSell 多半已 loaded，须 reloadIfLoaded
+      // 强制重建 CrossSellDailyAgg 物化表，否则 ensureDomainLoaded no-op 让交叉销售页
+      // 数据冻结在 ETL 前快照，直到进程重启。
       cacheWarmer
-        .warmPostListenDomains()
+        .warmPostListenDomains({ reloadIfLoaded: true })
         .then(() => cacheWarmer.warmCommonRoutes())
         .catch((err) => console.warn('[Server] post-listen warming (post-ETL) failed:', err));
     });

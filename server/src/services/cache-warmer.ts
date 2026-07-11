@@ -456,7 +456,7 @@ export class CacheWarmer {
      * 交叉销售路由的惰性中间件会在完成后自然放行；吞掉错误保证调用方
      * （warmCommonRoutes 预热链）不被中断。
      */
-    async warmPostListenDomains(): Promise<void> {
+    async warmPostListenDomains(options: { reloadIfLoaded?: boolean } = {}): Promise<void> {
         const bootstrapper = getBootstrapper();
         if (!bootstrapper) {
             logger.warn('[CacheWarmer] Bootstrapper not registered, skipped post-listen domain warming.');
@@ -465,11 +465,25 @@ export class CacheWarmer {
         for (const domain of POST_LISTEN_DOMAIN_WARMUP_ORDER) {
             const t0 = Date.now();
             try {
+                // beb706：热重载（同进程 ETL）后 PolicyFact 已换新数据、dataVersion 已 bump，
+                // 但已 loaded 惰性域（CrossSell/CrossSellDailyAgg 物化表）仍指向 ETL 前快照。
+                // ensureDomainLoaded 对 state='loaded' 域是 no-op，物化表不会重建——故 post-ETL
+                // 路径显式传 reloadIfLoaded 强制对已加载域走 reload；未加载域仍走 ensureDomainLoaded
+                // （惰性首载或等待进行中的载入 promise），保持启动路径行为不变。
                 // eslint-disable-next-line no-await-in-loop
-                await bootstrapper.ensureDomainLoaded(domain, {
-                    timeoutMs: POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS,
-                });
-                logger.info(`[CacheWarmer] Post-listen domain ${domain} warmed in ${Date.now() - t0}ms.`);
+                if (options.reloadIfLoaded && bootstrapper.getDomainState(domain) === 'loaded') {
+                    // eslint-disable-next-line no-await-in-loop
+                    await bootstrapper.reloadDomain(domain, {
+                        timeoutMs: POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS,
+                    });
+                    logger.info(`[CacheWarmer] Post-listen domain ${domain} reloaded (post-ETL rebuild) in ${Date.now() - t0}ms.`);
+                } else {
+                    // eslint-disable-next-line no-await-in-loop
+                    await bootstrapper.ensureDomainLoaded(domain, {
+                        timeoutMs: POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS,
+                    });
+                    logger.info(`[CacheWarmer] Post-listen domain ${domain} warmed in ${Date.now() - t0}ms.`);
+                }
             } catch (e) {
                 logger.warn(`[CacheWarmer] Post-listen domain ${domain} warming failed after ${Date.now() - t0}ms (lazy middleware will keep serving 503 until loaded):`, e);
             }
