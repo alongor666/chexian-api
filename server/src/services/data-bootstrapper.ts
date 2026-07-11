@@ -721,6 +721,23 @@ export class DataBootstrapper {
   }
 
   /**
+   * 强制重建单个惰性域（重跑 loader，重建其视图/物化表）。
+   *
+   * 与 ensureDomainLoaded 的区别：ensureDomainLoaded 对已 loaded 域是 no-op
+   * （惰性域只加载一次），而 reload 无条件重跑 loader。
+   *
+   * beb706：热重载（同进程 ETL，非重启进程）后，PolicyFact 已换新数据并 bump
+   * dataVersion(scope='full')，但 CrossSell 等已 loaded 惰性域的 CrossSellDailyAgg
+   * 物化表仍指向 ETL 前快照——ensureDomainLoaded 因 state='loaded' 直接 no-op，
+   * 物化表不重建，交叉销售页数据冻结至下次进程重启。故版本变更监听者需对已
+   * loaded 域走本方法（reload）而非 ensureDomainLoaded。loader 幂等
+   * （materializeInBatches 先 DROP 再建 / CREATE OR REPLACE VIEW），重跑安全。
+   */
+  async reloadDomain(domain: string, options?: LazyDomainLoadOptions): Promise<void> {
+    return this.lazyRegistry.reload(domain, options);
+  }
+
+  /**
    * 数据发布后按域重载 full_snapshot 辅助域。
    * 不重建 PolicyFact / CrossSellDailyAgg 等无关关系，只重建对应 VIEW 并让缓存版本失效。
    */

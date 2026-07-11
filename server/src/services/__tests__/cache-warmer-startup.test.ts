@@ -4,6 +4,8 @@ var queryMock: ReturnType<typeof vi.fn>;
 var setRouteCacheMock: ReturnType<typeof vi.fn>;
 var fetchDashboardBundleDataMock: ReturnType<typeof vi.fn>;
 var ensureDomainLoadedMock: ReturnType<typeof vi.fn>;
+var getDomainStateMock: ReturnType<typeof vi.fn>;
+var reloadDomainMock: ReturnType<typeof vi.fn>;
 var loggerMock: {
   info: ReturnType<typeof vi.fn>;
   warn: ReturnType<typeof vi.fn>;
@@ -34,9 +36,13 @@ vi.mock('../../routes/query/shared.js', () => ({
 
 vi.mock('../bootstrapper-registry.js', () => {
   ensureDomainLoadedMock = vi.fn();
+  getDomainStateMock = vi.fn();
+  reloadDomainMock = vi.fn();
   return {
     getBootstrapper: () => ({
       ensureDomainLoaded: ensureDomainLoadedMock,
+      getDomainState: getDomainStateMock,
+      reloadDomain: reloadDomainMock,
     }),
   };
 });
@@ -107,21 +113,57 @@ describe('cacheWarmer.warmPostListenDomains', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ensureDomainLoadedMock.mockResolvedValue(undefined);
+    reloadDomainMock.mockResolvedValue(undefined);
+    getDomainStateMock.mockReturnValue('unloaded');
   });
 
-  it('listen 后异步预热 CrossSell，使用长超时（物化 VPS 实测可达数分钟）', async () => {
+  it('启动路径（无 reloadIfLoaded）异步预热 CrossSell，走 ensureDomainLoaded + 长超时（物化 VPS 实测可达数分钟）', async () => {
     await cacheWarmer.warmPostListenDomains();
 
     expect(ensureDomainLoadedMock).toHaveBeenCalledTimes(1);
     expect(ensureDomainLoadedMock).toHaveBeenCalledWith('CrossSell', {
       timeoutMs: POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS,
     });
+    expect(reloadDomainMock).not.toHaveBeenCalled();
+  });
+
+  it('beb706：post-ETL 路径（reloadIfLoaded）对已 loaded 的 CrossSell 走 reloadDomain，强制重建 CrossSellDailyAgg 物化表', async () => {
+    getDomainStateMock.mockReturnValue('loaded');
+
+    await cacheWarmer.warmPostListenDomains({ reloadIfLoaded: true });
+
+    expect(reloadDomainMock).toHaveBeenCalledTimes(1);
+    expect(reloadDomainMock).toHaveBeenCalledWith('CrossSell', {
+      timeoutMs: POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS,
+    });
+    // 已 loaded 域禁止走 ensureDomainLoaded（它对 state='loaded' 是 no-op，物化表不会重建）
+    expect(ensureDomainLoadedMock).not.toHaveBeenCalled();
+  });
+
+  it('beb706：post-ETL 路径下 CrossSell 尚未 loaded 时仍走 ensureDomainLoaded（惰性首载，不误 reload 未加载域）', async () => {
+    getDomainStateMock.mockReturnValue('unloaded');
+
+    await cacheWarmer.warmPostListenDomains({ reloadIfLoaded: true });
+
+    expect(ensureDomainLoadedMock).toHaveBeenCalledTimes(1);
+    expect(ensureDomainLoadedMock).toHaveBeenCalledWith('CrossSell', {
+      timeoutMs: POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS,
+    });
+    expect(reloadDomainMock).not.toHaveBeenCalled();
   });
 
   it('单个域预热失败/超时不抛出（吞掉错误保证后续 warmCommonRoutes 链不被中断），仅记录 warn', async () => {
     ensureDomainLoadedMock.mockRejectedValueOnce(new Error('Domain CrossSell loading timeout (600000ms)'));
 
     await expect(cacheWarmer.warmPostListenDomains()).resolves.toBeUndefined();
+    expect(loggerMock.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('beb706：reload 失败也被吞掉（惰性中间件继续兜底），仅记录 warn', async () => {
+    getDomainStateMock.mockReturnValue('loaded');
+    reloadDomainMock.mockRejectedValueOnce(new Error('Domain CrossSell loading timeout (600000ms)'));
+
+    await expect(cacheWarmer.warmPostListenDomains({ reloadIfLoaded: true })).resolves.toBeUndefined();
     expect(loggerMock.warn).toHaveBeenCalledTimes(1);
   });
 });
