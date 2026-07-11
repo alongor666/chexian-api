@@ -28,11 +28,12 @@ import fs from 'fs';
 import path from 'path';
 import { execSync, execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { parseLog, fold } from '../backlog/lib.mjs';
+import { fold, loadLog } from '../backlog/lib.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..', '..');
 const LOG_PATH = path.join(ROOT, 'BACKLOG_LOG.jsonl');
+const EVENTS_DIR = path.join(ROOT, 'backlog-events');
 
 /** 视为「未完成、可推进」的状态——只有这些才可能「陈旧」（DONE/BLOCKED 不扫）。 */
 export const SCANNABLE = new Set(['PROPOSED', 'TRIAGED', 'TODO', 'DOING', 'IN_PROGRESS', 'PARTIAL']);
@@ -117,9 +118,8 @@ export function scanStale(tasks, notesByUid, churnByUid = new Map(), mergedPrsBy
   return out.sort((a, b) => (rank[a.confidence] - rank[b.confidence]) || (b.churnCount - a.churnCount) || (a.uid < b.uid ? -1 : 1));
 }
 
-/** 把日志行折叠成任务态（委托权威 fold）+ 按 uid 聚合 note 文本。 */
-export function loadTasksAndNotes(lines) {
-  const events = parseLog(lines.join('\n'));
+/** 把事件折叠成任务态（委托权威 fold）+ 按 uid 聚合 note 文本。 */
+export function loadTasksAndNotesFromEvents(events) {
   const tasks = [...fold(events).values()];
   const notesByUid = new Map();
   for (const e of events) {
@@ -207,8 +207,8 @@ function render(hits) {
 
 function main() {
   const args = process.argv.slice(2);
-  const lines = fs.readFileSync(LOG_PATH, 'utf-8').split('\n');
-  const { tasks, notesByUid } = loadTasksAndNotes(lines);
+  // 两源合并：冻结 jsonl（存量）+ backlog-events/ 目录（增量，每事件一文件）
+  const { tasks, notesByUid } = loadTasksAndNotesFromEvents(loadLog(LOG_PATH, EVENTS_DIR));
 
   // PR-合并信号（默认开，--no-pr 关）：一次 gh 取近期已合 PR，按 uidToken 匹配实现分支。网络不可用自动降级。
   const mergedPrsByUid = args.includes('--no-pr') ? new Map() : loadMergedPrsByUid(tasks);

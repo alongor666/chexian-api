@@ -1,5 +1,5 @@
 ---
-paths: ["scripts/loop/**", ".claude/workflow/**", "BACKLOG_LOG.jsonl"]
+paths: ["scripts/loop/**", ".claude/workflow/**", "BACKLOG_LOG.jsonl", "backlog-events/**"]
 ---
 
 # Loop v2 编排协议（多会话并行调度 + 双对抗闸 + 质量度量 + 自进化）
@@ -232,6 +232,12 @@ policy: append-only
   - **收口纪律（降低撞窗概率）**：代码改动可并行推进，**backlog jsonl 追加尽量放收口最后一步**，且在**前一卡 PR 合并后**先 rebase 再追加/push（#1046 首推因等 #1044 合并后才追加而零冲突）；spawn 续卡模板须含「确认前卡 PR 已合并；jsonl 尾部冲突按 loop-orchestration §4 2026-07-10 meta SOP 处理」条目。
   - **结构级根治已登记**：BACKLOG `2026-07-10-claude-637c35`（P3）——事件日志改「每事件一文件」目录（`backlog-events/<eid>.json`，render 聚合），不同 PR 写不同文件，GitHub 层面永不冲突；非紧急，SOP 已把处理成本降到零手工。
   - **needs_automation: false**（SOP 为两条无分支 git 命令；结构根治由 637c35 另卡跟踪。若后续实证会话仍手工解冲突踩坑，可在 pre-push hook 加「jsonl 落后 origin/main 即自动 rebase」确定性钩子再立项）。
+
+- **meta（2026-07-11 · 本 PR · 卡 637c35 落地）· 结构级根治完成：事件日志「每事件一文件」，上一条 meta 的 SOP/收口纪律降级为历史**：
+  - **落地**：`BACKLOG_LOG.jsonl` 冻结只读；新事件一律经 `backlog.mjs` 写 `backlog-events/<YYYY-MM>/<at压缩>-<eid>.json`（每事件一个独立文件）；读取层（`backlog/lib.mjs loadLog`）合并两源，fold 按 `(at,eid)` 全序、与事件物理落位无关。不同 PR 写不同文件 → **GitHub 服务端零冲突**（实施前评估数据 + 两分支 merge-tree 验证见 `.claude/rules/backlog-eventlog.md` §12 与本 PR body）。
+  - **对本协议的影响**：① 上一条 meta（2026-07-10）的「收口纪律」（jsonl 追加放收口最后一步 + 等前卡合并）与「CONFLICTING SOP」不再必要——账本文件天然不冲突（SOP 对**其余** union 文件如 `pr-evolution.md`/`loop-quality-ledger.jsonl` 仍适用）；② `sessionPrompt` 认领步的 `git add` 已改 `backlog-events`；③ dispatch 跨 ref 认领扫描同时读 `git show <ref>:BACKLOG_LOG.jsonl`（存量）+ `git grep -h -e "" <ref> -- backlog-events`（增量，一次子进程倾倒单行 JSON 事件文件）；④ 本文件 frontmatter paths 增 `backlog-events/**`。
+  - **e2e 隔离语义**：`LOOP_BACKLOG_LOG` 覆盖时**默认关闭**真实 `backlog-events/` 目录源（防 fixture 混入真实仓事件），目录 fixture 另用 `LOOP_BACKLOG_EVENTS_DIR` 显式指定（dispatch / rule-hit-rate 同款）。
+  - **needs_automation: false**（本条即机制落地：写路径唯一、governance「BACKLOG事件日志」新增文件名↔eid 守卫自动执行；无新纪律残留点）。
 
 ---
 

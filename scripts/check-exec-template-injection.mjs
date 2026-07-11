@@ -99,7 +99,7 @@ const KNOWN_SAFE_INTERPOLATIONS = {
     { line: 62, reason: 'ALIAS 为脚本内硬编码常量 "chexian-vps-deploy"，非外部输入' },
   ],
   'scripts/loop/dispatch.mjs': [
-    { line: 527, reason: 'cmd 调用点均为脚本内硬编码 git 子命令；ref 名经上方 SAFE_REF 正则白名单（仅 \\w./- ）过滤后才拼入' },
+    { line: 530, reason: 'cmd 调用点均为脚本内硬编码 git 子命令；ref 名经上方 SAFE_REF 正则白名单（仅 \\w./- ）过滤后才拼入' },
   ],
 };
 

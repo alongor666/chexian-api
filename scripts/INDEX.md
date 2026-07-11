@@ -57,13 +57,13 @@
 
 ### 📋 任务管理类（BACKLOG event-log 模型，2026-06 治本）
 
-> 道：真相是 append-only 事件日志 `BACKLOG_LOG.jsonl`；`BACKLOG.md`/`BACKLOG_ARCHIVE.md` 是其**派生视图**（禁止手工编辑）。
-> 写入 = 追加事件（永不挑号、永不原地改行）→ 多分支并发结构性不再碰号、不再产生重复行。
+> 道：真相 = 冻结的 `BACKLOG_LOG.jsonl`（存量只读）+ `backlog-events/` 目录（增量，**每事件一文件**，2026-07-11 卡 637c35 起）；`BACKLOG.md`/`BACKLOG_ARCHIVE.md` 是其**派生视图**（禁止手工编辑）。
+> 写入 = 每事件写一个独立文件（永不挑号、永不原地改行）→ 多分支并发不碰号、无重复行，且不同 PR 写不同文件 → **GitHub 服务端也零冲突**（见 `.claude/rules/backlog-eventlog.md` §12）。
 
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
-| `backlog.mjs` | **BACKLOG 写入入口**（唯一写路径）：add/status/note/amend/list，追加事件并自动重渲染视图 | `bun scripts/backlog.mjs add --actor @x --priority Px --section "..." --desc "..."` |
-| `governance-backlog-curate.mjs` | **BACKLOG 渲染器**（幂等纯函数）：折叠 `BACKLOG_LOG.jsonl` → 渲染 BACKLOG.md + BACKLOG_ARCHIVE.md + 速查看板 | `bun scripts/governance-backlog-curate.mjs [--apply]` |
+| `backlog.mjs` | **BACKLOG 写入入口**（唯一写路径）：add/status/note/amend/claim/release/list，写事件文件并自动重渲染视图 | `bun scripts/backlog.mjs add --actor @x --priority Px --section "..." --desc "..."` |
+| `governance-backlog-curate.mjs` | **BACKLOG 渲染器**（幂等纯函数）：折叠事件日志（jsonl+目录两源）→ 渲染 BACKLOG.md + BACKLOG_ARCHIVE.md + 速查看板 | `bun scripts/governance-backlog-curate.mjs [--apply]` |
 | `backlog/lib.mjs` | event-log 核心库（解析/折叠/渲染/校验的唯一事实源），被 curate / backlog.mjs / check-governance 共用 | （被引用） |
 | `backlog/migrate.mjs` | 一次性：把旧「可变表」BACKLOG.md/ARCHIVE 播种为事件日志（含 106/106 逐列等价校验） | `bun scripts/backlog/migrate.mjs [--apply]` |
 | `manage-plans.mjs` | 扫描`.claude/plans`计划文件，生成状态快照并归档已完成文件 | `node scripts/manage-plans.mjs [--dry-run] [--apply]` |

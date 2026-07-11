@@ -2,9 +2,11 @@
 /**
  * BACKLOG 事件追加入口（唯一写路径，写入方永不挑号）
  *
- * 道：所有变更 = 向 BACKLOG_LOG.jsonl **追加一条事件**，绝不原地改行、绝不挑编号。
- *     追加完自动重渲染 BACKLOG.md + BACKLOG_ARCHIVE.md（保持视图与日志一致）。
- *     多分支并发各自 add → merge=union 自动并入，结构性无碰号、无重复行。
+ * 道：所有变更 = 向 backlog-events/ 目录写入**每事件一个独立 JSON 文件**（文件名含 at+eid 保唯一），
+ *     绝不原地改行、绝不挑编号。存量 BACKLOG_LOG.jsonl 已冻结只读（2026-07-11，卡 637c35），
+ *     读取层自动合并两源。追加完自动重渲染 BACKLOG.md + BACKLOG_ARCHIVE.md（本地派生视图）。
+ *     多分支并发各写不同文件 → 本地与 GitHub 服务端均结构性零冲突（根治 merge=union
+ *     只在本地生效、GitHub 仍标 CONFLICTING 的盲区）。
  *
  * 用法：
  *   bun scripts/backlog.mjs add --actor @claude --priority P2 --section "Bug/Backend" --desc "描述" [--docs "..."] [--code "..."]
@@ -28,12 +30,13 @@
  * （DONE=完成证据，CANCELLED/WONTFIX=弃置理由）—— 同一强制机制，缺证据/理由一律拒绝写入。
  */
 
-import { appendFileSync, writeFileSync, readFileSync, existsSync } from 'fs';
+import { writeFileSync, existsSync } from 'fs';
 import { randomBytes } from 'crypto';
 import {
   loadLog, fold, validateLog, renderBacklog, renderArchive, displayId, isActive,
+  appendEvents,
   ACTIVE_STATUSES, TERMINAL_STATUSES, PRIORITY_ORDER, AMENDABLE_FIELDS,
-  LOG_PATH, BACKLOG_PATH, ARCHIVE_PATH,
+  LOG_PATH, EVENTS_DIR, BACKLOG_PATH, ARCHIVE_PATH,
 } from './backlog/lib.mjs';
 import { evaluateClaim, evaluateRelease } from './backlog/claim-gate.mjs';
 
@@ -91,15 +94,14 @@ function resolveUid(sel, tasks) {
   return hit[0].uid;
 }
 
-/** 追加事件并重渲染视图。每条事件补 at（全时间戳）+ eid（唯一键）→ 折叠分支无关确定性 */
+/** 追加事件（每事件一文件写入 backlog-events/）并重渲染视图。每条事件补 at（全时间戳）+ eid（唯一键）→ 折叠分支无关确定性 */
 function appendAndRerender(events) {
   const stamped = events.map(e => ({
     ...e,
     at: e.at || new Date().toISOString(),
     eid: e.eid || randomBytes(4).toString('hex'),
   }));
-  const line = stamped.map(e => JSON.stringify(e)).join('\n') + '\n';
-  appendFileSync(LOG_PATH, line, 'utf-8');
+  appendEvents(stamped);
   // 校验 + 重渲染
   const all = loadLog();
   const { errors } = validateLog(all);
@@ -248,7 +250,9 @@ function cmdList(flags) {
 }
 
 // ── 入口 ──
-if (!existsSync(LOG_PATH)) die(`未找到事件日志 ${LOG_PATH}（首次请先 bun scripts/backlog/migrate.mjs --apply）`);
+if (!existsSync(LOG_PATH) && !existsSync(EVENTS_DIR)) {
+  die(`未找到事件日志（${LOG_PATH} 或 ${EVENTS_DIR}/ 至少一个须存在；首次请先 bun scripts/backlog/migrate.mjs --apply）`);
+}
 
 const { pos, flags } = parseArgs(process.argv.slice(2));
 const cmd = pos[0];
