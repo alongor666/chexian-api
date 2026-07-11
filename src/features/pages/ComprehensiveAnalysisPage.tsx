@@ -19,23 +19,20 @@ import { ComprehensiveChartCard } from '@/features/comprehensive-analysis/charts
 import { ComprehensiveMetricTable, type ComprehensiveColumn } from '@/features/comprehensive-analysis/components/ComprehensiveMetricTable';
 import {
   buildCostOption,
-  buildExpenseOption,
-  buildExpenseSurplusOption,
   buildLossQuadrantOption,
   buildLossTrendOption,
-  buildOverviewOption,
-  buildPremiumOption,
   buildRoiOption,
 } from '@/features/comprehensive-analysis/charts/options';
 
 type LossViewMode = 'quadrant' | 'trend';
 
+// 02aa70-b（owner 2026-07-04 拍板裁剪 + 2026-07-11 定形态「综合页瘦身」）：
+// 只保留本页独有价值 tab——成本象限 / 赔案分析（象限+趋势）/ ROI 效率；
+// 总览、保费进度、费用分析的明细与 /cost basic 视图（CostAnalysisPanel）实质重叠，已删。
+// 后端 comprehensive-bundle 契约未动（overview/premium/expense 节仍返回，前端不再消费）。
 const tabItems = [
-  { key: 'overview', label: '总览' },
-  { key: 'premium', label: '保费进度' },
-  { key: 'cost', label: '成本分析' },
+  { key: 'cost', label: '成本象限' },
   { key: 'loss', label: '赔案分析' },
-  { key: 'expense', label: '费用分析' },
   { key: 'roi', label: 'ROI效率' },
 ];
 
@@ -71,7 +68,7 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
   }, [quickFilters]);
   const { data, loading, error } = useComprehensiveBundle(filters, maxDataDate);
 
-  const [activeTab, setActiveTab] = useState<ComprehensiveTabKey>('overview');
+  const [activeTab, setActiveTab] = useState<ComprehensiveTabKey>('cost');
   const [lossView, setLossView] = useState<LossViewMode>('quadrant');
   const [dimensions, setDimensions] = useState<Record<ComprehensiveTabKey, ComprehensiveDimensionKey>>({
     overview: 'org',
@@ -87,16 +84,10 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
   const selectedMetricRows = useMemo(() => {
     if (!data) return [];
     switch (activeTab) {
-      case 'overview':
-        return filterRowsByDimension(data.overview.rows, currentDimension);
-      case 'premium':
-        return filterRowsByDimension(data.premium.rows, currentDimension);
       case 'cost':
         return filterRowsByDimension(data.cost.rows, currentDimension);
       case 'loss':
         return filterRowsByDimension(data.loss.quadrantRows, currentDimension);
-      case 'expense':
-        return filterRowsByDimension(data.expense.rows, currentDimension);
       case 'roi':
       default:
         return filterRowsByDimension(data.cost.rows, currentDimension);
@@ -131,28 +122,6 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
     {
       key: 'premiumShare',
       title: '保费贡献度',
-      align: 'right',
-      render: (value) => formatPercent(value as number),
-    },
-  ];
-
-  const expenseColumns: Array<ComprehensiveColumn<ComprehensiveMetricRow>> = [
-    { key: 'dimKey', title: '维度' },
-    {
-      key: 'feeAmount',
-      title: '费用金额(万)',
-      align: 'right',
-      render: (value) => formatPremiumWan(value as number),
-    },
-    {
-      key: 'expenseRatio',
-      title: '费用率',
-      align: 'right',
-      render: (value) => formatPercent(value as number | null),
-    },
-    {
-      key: 'expenseShare',
-      title: '费用占比',
       align: 'right',
       render: (value) => formatPercent(value as number),
     },
@@ -193,10 +162,6 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
     if (!data) return {};
 
     switch (activeTab) {
-      case 'overview':
-        return buildOverviewOption(selectedMetricRows, isDark);
-      case 'premium':
-        return buildPremiumOption(selectedMetricRows, isDark);
       case 'cost':
         return buildCostOption(selectedMetricRows);
       case 'loss':
@@ -207,21 +172,11 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
           selectedMetricRows,
           data.meta.thresholds.lossRateWarn
         );
-      case 'expense':
-        return buildExpenseOption(selectedMetricRows, data.meta.thresholds.expenseBudget, isDark);
       case 'roi':
       default:
         return buildRoiOption(roiRows);
     }
   }, [activeTab, data, isDark, lossView, roiRows, selectedMetricRows]);
-
-  const secondaryChartOption = useMemo(() => {
-    if (!data || activeTab !== 'expense') return null;
-    return buildExpenseSurplusOption(
-      data.expense.surplusRows.filter((row) => row.dimType === currentDimension),
-      isDark
-    );
-  }, [activeTab, currentDimension, data, isDark]);
 
   const isDimensionVisible = activeTab !== 'loss' || lossView === 'quadrant';
 
@@ -292,89 +247,19 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
           )}
         </section>
 
-        {activeTab === 'overview' && data && (
-          <section className={cn(cardStyles.standard, 'space-y-3')}>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className={cn(cardStyles.base, 'p-3')}>
-                <div className={textStyles.caption}>签单保费</div>
-                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPremiumWan(data.overview.summary.signedPremium)} 万</div>
-              </div>
-              <div className={cn(cardStyles.base, 'p-3')}>
-                <div className={textStyles.caption}>单均保费 (元)</div>
-                <div className={cn(textStyles.titleMedium, 'mt-1')}>
-                  {data.overview.summary.perVehiclePremium === null
-                    ? '-'
-                    : Math.round(data.overview.summary.perVehiclePremium).toLocaleString()}
-                </div>
-              </div>
-              <div className={cn(cardStyles.base, 'p-3')}>
-                <div className={textStyles.caption}>满期赔付率</div>
-                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.earnedClaimRatio)}</div>
-              </div>
-              <div className={cn(cardStyles.base, 'p-3')}>
-                <div className={textStyles.caption}>满期出险率 (年化)</div>
-                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.claimFrequency)}</div>
-              </div>
-              <div className={cn(cardStyles.base, 'p-3')}>
-                <div className={textStyles.caption}>费用率</div>
-                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.expenseRatio)}</div>
-              </div>
-              <div className={cn(cardStyles.base, 'p-3')}>
-                <div className={textStyles.caption}>综合费用率</div>
-                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.comprehensiveExpenseRatio)}</div>
-              </div>
-              <div className={cn(cardStyles.base, 'p-3')}>
-                <div className={textStyles.caption}>变动成本率</div>
-                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.variableCostRatio)}</div>
-              </div>
-              <div className={cn(cardStyles.base, 'p-3')}>
-                <div className={textStyles.caption}>年计划达成率</div>
-                <div className={cn(textStyles.titleMedium, 'mt-1')}>{formatPercent(data.overview.summary.achievementRate)}</div>
-              </div>
-            </div>
-
-            {data.overview.alerts.length > 0 && (
-              <div className={cn(cardStyles.base, 'p-3')}>
-                <div className={cn(textStyles.label, colorClasses.text.danger)}>预警提示</div>
-                <ul className={cn('mt-2 space-y-1', textStyles.body)}>
-                  {data.overview.alerts.map((alert) => (
-                    <li key={alert} className="list-disc list-inside">{alert}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </section>
-        )}
-
         <ComprehensiveChartCard
           title={
-            activeTab === 'overview'
-              ? '总览分析'
-              : activeTab === 'premium'
-                ? '保费进度分析'
-                : activeTab === 'cost'
-                  ? '成本指标象限'
-                  : activeTab === 'loss'
-                    ? (lossView === 'trend' ? '赔付趋势分析' : '赔付贡献象限')
-                    : activeTab === 'expense'
-                      ? '费用率分析'
-                      : 'ROI 效率分析'
+            activeTab === 'cost'
+              ? '成本指标象限'
+              : activeTab === 'loss'
+                ? (lossView === 'trend' ? '赔付趋势分析' : '赔付贡献象限')
+                : 'ROI 效率分析'
           }
           option={chartOption}
           loading={loading}
           error={error}
           height={360}
         />
-
-        {secondaryChartOption && (
-          <ComprehensiveChartCard
-            title="费用结余分析"
-            option={secondaryChartOption}
-            loading={loading}
-            error={error}
-            height={320}
-          />
-        )}
 
         {activeTab === 'roi' ? (
           <ComprehensiveMetricTable
@@ -387,7 +272,7 @@ export const ComprehensiveAnalysisPage: React.FC<ComprehensiveAnalysisPageProps>
           <ComprehensiveMetricTable
             title={`${tabItems.find((item) => item.key === activeTab)?.label || ''}明细（Top 20）`}
             rows={selectedMetricRows}
-            columns={activeTab === 'expense' ? expenseColumns : overviewColumns}
+            columns={overviewColumns}
             loading={loading}
           />
         )}
