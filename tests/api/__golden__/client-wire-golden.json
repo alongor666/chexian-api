@@ -121,6 +121,17 @@
     "auth": true,
     "dedupe": ""
   },
+  "changePassword": {
+    "verb": "POST",
+    "path": "/auth/change-password",
+    "params": [],
+    "bodyKeys": [
+      "newPassword",
+      "oldPassword"
+    ],
+    "auth": true,
+    "dedupe": ""
+  },
   "claimsDetail.causeAnalysis": {
     "verb": "GET",
     "path": "/query/claims-detail/cause-analysis",

@@ -25,7 +25,7 @@ import {
   __resetActiveUsernamesCacheForTest,
 } from '../../services/user-activation-cache.js';
 
-function makeReq(opts: { authorization?: string; cookie?: string } = {}) {
+function makeReq(opts: { authorization?: string; cookie?: string; originalUrl?: string } = {}) {
   const headers: Record<string, string> = {};
   if (opts.authorization) headers.authorization = opts.authorization;
   if (opts.cookie) headers.cookie = opts.cookie;
@@ -33,6 +33,8 @@ function makeReq(opts: { authorization?: string; cookie?: string } = {}) {
     headers,
     ip: '127.0.0.1',
     socket: { remoteAddress: '127.0.0.1' },
+    // pwc 拦截读 req.originalUrl（业务默认路由；pwc 用例按需覆盖）
+    originalUrl: opts.originalUrl ?? '/api/query/kpi',
   } as any;
 }
 
@@ -189,5 +191,80 @@ describe('authMiddleware: JWT 实时吊销（isUsernameActive 二次校验）', 
     const req = makeReq({ authorization: `Bearer ${jwtFor('whoever')}` });
     const err = await runMiddleware(req);
     expect(err).toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// pwc（统一初始密码未改密）拦截 —— 强制改密的服务端代码兜底（Prompt 禁令须代码兜底）
+// 锁死安全边界：带 pwc 声明的会话打业务路由必 403，只放行改密/会话生命周期白名单。
+// 对抗性评审 MEDIUM 修复：补齐中间件层测试 + 精确匹配（防前缀污染）回归锁。
+// ─────────────────────────────────────────────────────────────────────────────
+describe('authMiddleware: pwc 强制改密拦截', () => {
+  // 带 pwc:true 的 JWT（模拟用统一初始密码登录、尚未改密的会话）
+  function pwcJwt(username = 'liangchunfan'): string {
+    return jwt.sign(
+      { userId: 'u', username, role: 'branch_admin', branchCode: 'SX', pwc: true },
+      'test-secret',
+      { expiresIn: '1h' },
+    );
+  }
+
+  beforeEach(() => {
+    // active 缓存就绪（账号本身有效），确保 403 只可能来自 pwc 而非实时吊销
+    setActiveUsernames(['liangchunfan']);
+  });
+
+  it('pwc 会话打业务路由 → 403 PASSWORD_CHANGE_REQUIRED', async () => {
+    const req = makeReq({ authorization: `Bearer ${pwcJwt()}`, originalUrl: '/api/query/kpi' });
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+    expect((err as AppError).message).toBe('PASSWORD_CHANGE_REQUIRED');
+    expect(req.user).toBeUndefined(); // 拦在赋值前，不泄漏身份给下游
+  });
+
+  it.each([
+    '/api/auth/change-password',
+    '/api/auth/me',
+    '/api/auth/logout',
+    '/api/auth/refresh',
+    '/api/auth/me?x=1', // 带 query string 仍放行（剥 ? 后匹配）
+  ])('pwc 会话打白名单 %s → 放行', async (originalUrl) => {
+    const req = makeReq({ authorization: `Bearer ${pwcJwt()}`, originalUrl });
+    const err = await runMiddleware(req);
+    expect(err).toBeUndefined();
+    expect(req.user?.username).toBe('liangchunfan');
+  });
+
+  it.each([
+    '/api/auth/change-password-history', // 前缀污染：以白名单项为前缀但语义不同
+    '/api/auth/mentions', // 以 /api/auth/me 为裸前缀
+  ])('pwc 会话打伪装成白名单前缀的路由 %s → 仍 403（精确匹配，非裸 startsWith）', async (originalUrl) => {
+    const req = makeReq({ authorization: `Bearer ${pwcJwt()}`, originalUrl });
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('无 pwc 声明的普通会话打业务路由 → 放行（对照，证明 403 确由 pwc 触发）', async () => {
+    const token = jwt.sign(
+      { userId: 'u', username: 'liangchunfan', role: 'branch_admin' },
+      'test-secret',
+      { expiresIn: '1h' },
+    );
+    const req = makeReq({ authorization: `Bearer ${token}`, originalUrl: '/api/query/kpi' });
+    const err = await runMiddleware(req);
+    expect(err).toBeUndefined();
+    expect(req.user?.username).toBe('liangchunfan');
+  });
+
+  it('pwc 会话经 Cookie 出口打业务路由 → 同样 403（cookie 分支不漏兜底）', async () => {
+    const req = makeReq({
+      cookie: `cx_access_token=${encodeURIComponent(pwcJwt())}`,
+      originalUrl: '/api/query/kpi',
+    });
+    const err = await runMiddleware(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
   });
 });

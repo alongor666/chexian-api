@@ -36,6 +36,9 @@ export interface AuthData {
     visibleBranches?: string[];
     allowedRoutes?: string[];
     defaultRoute?: string;
+    /** 本会话用统一初始密码登录，须改密后才能访问业务页（仅密码登录链路出现） */
+    mustChangePassword?: boolean;
+    specialFeatures?: string[];
   };
 }
 

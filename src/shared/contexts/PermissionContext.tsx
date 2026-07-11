@@ -35,6 +35,10 @@ interface PermissionContextValue {
   loginWithPassword: (username: string, password: string, remember?: boolean) => Promise<boolean>;
   /** 基于 cookie 会话恢复当前用户 */
   restoreSession: () => Promise<boolean>;
+  /** 本会话使用统一初始密码登录，须改密后才能进业务页（AuthGuard 据此强制渲染改密页） */
+  mustChangePassword: boolean;
+  /** 用户本人改密；成功后 mustChangePassword 复位，会话自动换发 */
+  changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   /** 登出 */
   logout: () => void;
   /** 检查是否可查看指定机构 */
@@ -53,6 +57,8 @@ const PermissionContext = createContext<PermissionContextValue>({
   login: () => { },
   loginWithPassword: async () => false,
   restoreSession: async () => false,
+  mustChangePassword: false,
+  changePassword: async () => { },
   logout: () => { },
   canView: () => true,
 });
@@ -69,6 +75,8 @@ interface PermissionProviderProps {
 export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children }) => {
   const [userPermission, setUserPermissionState] = useState<UserPermission | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // 统一初始密码强制改密标记（后端 /login、/me 按会话 pwc 声明回传；飞书扫码会话恒 false）
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   const buildPermission = useCallback((user: {
     username: string;
@@ -110,9 +118,11 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       const me = await apiClient.getCurrentUser();
       const permission = buildPermission(me);
       setUserPermission(permission);
+      setMustChangePassword(me.mustChangePassword === true);
       return true;
     } catch {
       setUserPermission(null);
+      setMustChangePassword(false);
       apiClient.clearToken();
       return false;
     }
@@ -176,6 +186,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       const permission = buildPermission(authResult.user);
 
       setUserPermission(permission);
+      setMustChangePassword(authResult.user.mustChangePassword === true);
 
       // 3. 触发登录事件（通知 DataContext 刷新数据）
       window.dispatchEvent(new Event('auth-login'));
@@ -189,9 +200,16 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     }
   }, [buildPermission, setUserPermission]);
 
+  /** 用户本人改密：成功后复位强制改密标记（后端同步换发不含 pwc 的会话）。失败原样抛错供页面展示 */
+  const changePassword = useCallback(async (oldPassword: string, newPassword: string): Promise<void> => {
+    await apiClient.changePassword(oldPassword, newPassword);
+    setMustChangePassword(false);
+  }, []);
+
   /** 登出 */
   const logout = useCallback(() => {
     setUserPermission(null);
+    setMustChangePassword(false);
     apiClient.logout(); // 清除 API 客户端 token
   }, [setUserPermission]);
 
@@ -227,6 +245,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       login,
       loginWithPassword,
       restoreSession,
+      mustChangePassword,
+      changePassword,
       logout,
       canView,
     }),
@@ -242,6 +262,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       login,
       loginWithPassword,
       restoreSession,
+      mustChangePassword,
+      changePassword,
       logout,
       canView,
     ]

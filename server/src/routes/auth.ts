@@ -261,6 +261,62 @@ router.post(
   })
 );
 
+/**
+ * POST /api/auth/change-password
+ * 用户本人改密。统一初始密码账号（JWT 带 pwc 声明）首登被 authMiddleware 拦在
+ * 本端点白名单内，改密成功后重发不含 pwc 的会话即解锁业务路由。
+ * 仅浏览器会话可调（PAT 强制只读且不涉密码）；旧密码错误计入登录失败锁定（防爆破）。
+ */
+const changePasswordSchema = z.object({
+  oldPassword: z.string().min(1, 'Old password is required'),
+  newPassword: z.string().min(1, 'New password is required'),
+});
+
+router.post(
+  '/change-password',
+  authMiddleware,
+  asyncHandler(async (req: Request, res: Response) => {
+    requireSessionAuth(req);
+    if (!req.user) throw new AppError(401, 'No token provided');
+
+    const parseResult = changePasswordSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const { oldPassword, newPassword } = parseResult.data;
+    const username = req.user.username;
+    const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+
+    // 与登录共用 IP+用户名双键锁定：防止持有效会话爆破旧密码
+    checkAccountLock(clientIp, username);
+    try {
+      await authService.changePassword(username, oldPassword, newPassword);
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === 401) {
+        recordLoginFailure(clientIp, username);
+      }
+      auditAuthEvent({ event: 'password_change_failure', username, ip: clientIp });
+      throw err;
+    }
+    resetLoginAttempts(clientIp, username);
+    auditAuthEvent({ event: 'password_changed', username, ip: clientIp, role: req.user.role });
+
+    // 重发不含 pwc 声明的会话（cookie + token 双通道），前端无需重新登录
+    const session = authService.issueCookieSession({
+      username,
+      displayName: username,
+      role: req.user.role,
+      organization: req.user.organization,
+      branchCode: req.user.branchCode,
+    });
+    setSessionCookies(res, session.accessToken, session.refreshToken);
+    res.json({
+      success: true,
+      data: { changed: true, token: session.accessToken },
+    });
+  })
+);
+
 router.get(
   '/users',
   authMiddleware,
@@ -612,13 +668,16 @@ router.get(
     if (!user) {
       user = await ensurePresetUser(username);
     }
+    // mustChangePassword 按会话声明（pwc）回传而非按 store 重算：
+    // 只有密码登录会话须强制改密，飞书扫码会话不受影响。
+    const mustChangePassword = req.user.pwc === true || undefined;
     if (user) {
       const { passwordHash: _pw, ...rest } = user;
       // visibleBranches 由 auth 中间件按 username 从 PRESET_USERS 派生（store 不持久化该字段），
       // 随 /me 回前端，保证刷新/恢复会话后切省下拉仍可见（codex 闸-1 P1-3）。
       res.json({
         success: true,
-        data: { ...rest, visibleBranches, tokenType },
+        data: { ...rest, visibleBranches, tokenType, mustChangePassword },
       });
       return;
     }
@@ -631,6 +690,7 @@ router.get(
         organization,
         visibleBranches,
         tokenType,
+        mustChangePassword,
       },
     });
   })

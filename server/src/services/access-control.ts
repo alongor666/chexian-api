@@ -37,6 +37,12 @@ export interface AccessUser {
   allowedIps?: string[];
   specialFeatures?: string[];
   active: boolean;
+  /**
+   * 用户/管理员在运行时自设密码的时间（ISO 字符串）。非空 → password_hash 是运行时写入的
+   * 真实密码，登录时优先于 USER_PASSWORDS 环境变量初始密码；空 → 密码仍走 env 覆盖 ?? 占位。
+   * 配合 PresetUser.mustChangePassword 实现「统一初始密码首登强制改密」。
+   */
+  passwordChangedAt?: string;
 }
 
 export interface AccessRole {
@@ -95,6 +101,7 @@ function mapUserRow(row: any): AccessUser {
     allowedIps: parseStringArray(row.allowed_ips),
     specialFeatures: parseStringArray(row.special_features),
     active: Boolean(row.active),
+    passwordChangedAt: row.password_changed_at ? String(row.password_changed_at) : undefined,
   };
 }
 
@@ -256,12 +263,13 @@ async function loadFromStore(store: UserStoreData): Promise<void> {
       ${serializeStringArray(user.allowedIps)},
       ${serializeStringArray(user.specialFeatures)},
       ${toSqlBoolean(user.active)},
+      ${toSqlString(user.passwordChangedAt)},
       CURRENT_TIMESTAMP,
       CURRENT_TIMESTAMP
     )`).join(',\n');
     await duckdbService.query(`
       INSERT INTO UserAccount
-        (id, username, display_name, password_hash, role, organization, branch_code, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
+        (id, username, display_name, password_hash, role, organization, branch_code, allowed_routes, default_route, allowed_ips, special_features, active, password_changed_at, created_at, updated_at)
       VALUES
       ${userValues}
     `);
@@ -503,6 +511,9 @@ export async function updateUser(id: string, input: {
   }
   if (input.passwordHash) {
     updates.push(`password_hash = '${escapeSqlValue(input.passwordHash)}'`);
+    // 管理面重置密码同样视为「运行时自设」：置 password_changed_at，令新哈希优先于
+    // USER_PASSWORDS 环境变量初始密码生效（否则 env 覆盖恒胜，重置无效）。
+    updates.push(`password_changed_at = '${escapeSqlValue(new Date().toISOString())}'`);
   }
   await duckdbService.query(`
     UPDATE UserAccount
@@ -520,6 +531,35 @@ export async function updateUser(id: string, input: {
     throw new AppError(404, '用户不存在');
   }
   return mapUserRow(rows[0]);
+}
+
+/**
+ * 用户本人改密（统一初始密码首登强制改密链路）。
+ * 写入新哈希并置 password_changed_at —— 此后登录以 store 哈希为准，
+ * USER_PASSWORDS 环境变量里的统一初始密码对该账号自动失效。
+ */
+export async function setUserPasswordByUsername(
+  username: string,
+  passwordHash: string
+): Promise<AccessUser> {
+  const user = await getUserByUsername(username);
+  if (!user) {
+    throw new AppError(404, '用户不存在');
+  }
+  await duckdbService.query(`
+    UPDATE UserAccount
+    SET
+      password_hash = '${escapeSqlValue(passwordHash)}',
+      password_changed_at = '${escapeSqlValue(new Date().toISOString())}',
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = '${escapeSqlValue(user.id)}'
+  `);
+  await persistToFile();
+  const updated = await getUserByUsername(username);
+  if (!updated) {
+    throw new AppError(500, '密码更新失败');
+  }
+  return updated;
 }
 
 export async function deleteUser(id: string): Promise<void> {

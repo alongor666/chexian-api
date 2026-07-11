@@ -168,6 +168,8 @@ export const AUTH_ROUTES = {
   REFRESH: '/refresh',
   LOGOUT: '/logout',
   ME: '/me',
+  /** 用户本人改密（统一初始密码首登强制改密链路） */
+  CHANGE_PASSWORD: '/change-password',
   /** Nginx 静态 /reports/* auth_request 细闸（B346 机构级授权），非前端直调 */
   REPORT_ACCESS: '/report-access',
 

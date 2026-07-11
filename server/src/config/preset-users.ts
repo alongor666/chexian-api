@@ -26,6 +26,13 @@ export interface PresetUser {
   allowedIps?: string[];
   specialFeatures?: string[];
   active?: boolean;
+  /**
+   * 统一初始密码账号标记：true → 该账号以统一初始密码（USER_PASSWORDS 注入）发放，
+   * 首次密码登录必须改密后才能访问业务路由（authMiddleware 按 JWT pwc 声明拦截）。
+   * 用户自设密码后（store password_changed_at 非空）标记自动失效。
+   * 仅作用于密码登录链路；飞书扫码会话不携带 pwc、不受影响。
+   */
+  mustChangePassword?: boolean;
 }
 
 export interface PresetRole {
@@ -270,6 +277,62 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     role: 'branch_admin',
     branchCode: 'SX',
     active: true,
+  },
+  // ── 山分车险部个人账号（2026-07-11 发放）：统一初始密码经 USER_PASSWORDS 注入，
+  //    首次密码登录强制改密（mustChangePassword）；passwordHash 保持 tombstone 占位不可登录 ──
+  liangchunfan: {
+    username: 'liangchunfan',
+    passwordHash: '$2b$10$LiangchunfanTombstone0000000000000000000000000000000u',
+    displayName: '山西管理员（梁春帆）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+    mustChangePassword: true,
+  },
+  changlixia: {
+    username: 'changlixia',
+    passwordHash: '$2b$10$ChanglixiaTombstone000000000000000000000000000000000u',
+    displayName: '山西管理员（常丽霞）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+    mustChangePassword: true,
+  },
+  yaoqian: {
+    username: 'yaoqian',
+    passwordHash: '$2b$10$YaoqianTombstone000000000000000000000000000000000000u',
+    displayName: '山西管理员（姚茜）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+    mustChangePassword: true,
+  },
+  lvzhenran: {
+    username: 'lvzhenran',
+    passwordHash: '$2b$10$LvzhenranTombstone0000000000000000000000000000000000u',
+    displayName: '山西管理员（吕镇冉）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+    mustChangePassword: true,
+  },
+  gonghuixin: {
+    username: 'gonghuixin',
+    passwordHash: '$2b$10$GonghuixinTombstone000000000000000000000000000000000u',
+    displayName: '山西管理员（弓慧鑫）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+    mustChangePassword: true,
+  },
+  houyabing: {
+    username: 'houyabing',
+    passwordHash: '$2b$10$HouyabingTombstone0000000000000000000000000000000000u',
+    displayName: '山西管理员（侯亚兵）',
+    role: 'branch_admin',
+    branchCode: 'SX',
+    active: true,
+    mustChangePassword: true,
   },
   sx_taiyuan1: {
     // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位

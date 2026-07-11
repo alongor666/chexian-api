@@ -91,6 +91,13 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE access_users ADD COLUMN branch_code TEXT;
     `,
   },
+  {
+    id: 5,
+    description: 'password_changed_at on access_users for first-login forced password change (2026-07-11)',
+    sql: `
+      ALTER TABLE access_users ADD COLUMN password_changed_at TEXT;
+    `,
+  },
 ];
 
 /**

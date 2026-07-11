@@ -122,6 +122,26 @@ class ApiClient extends ApiClientCore {
     return user;
   }
 
+  /**
+   * 用户本人改密（统一初始密码首登强制改密链路）。
+   * 成功后后端重发不含 pwc 声明的会话（cookie + token），这里同步换用新 token —— 属会话
+   * 生命周期方法（改写 token 状态），与 login/logout 一样保留在基类而非 auth 子客户端。
+   */
+  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+    const result = await this.request<{ changed: boolean; token?: string }>(
+      `/${AUTH_ROUTES.CHANGE_PASSWORD}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ oldPassword, newPassword }),
+      }
+    );
+    if (result.token) {
+      this.setToken(result.token);
+    } else {
+      this.setSessionCookieHint(true);
+    }
+  }
+
   // 鉴权/账号管理 API（用户/PAT/角色/企微配置 共 12 个 CRUD）已迁出至 auth 子客户端（见类首字段 + auth-api.ts）。
   // login / logout / getCurrentUser 刻意保留在基类：会话生命周期、改写 token 状态（setToken/clearToken/setSessionCookieHint），不泄漏 token 写入到 transport 句柄。
 

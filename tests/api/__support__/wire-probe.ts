@@ -59,6 +59,8 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: null, method: 'login', args: () => ['u', 'p'] },
   { ns: null, method: 'getCurrentUser', args: NO_ARGS },
   { ns: null, method: 'logout', args: NO_ARGS },
+  // 拆分后合法新增（统一初始密码首登强制改密）：会话生命周期方法，与 login/logout 同留基类
+  { ns: null, method: 'changePassword', args: () => ['old-pw', 'new-pw'] },
   { ns: null, method: 'getKpi', args: NO_ARGS },
   { ns: null, method: 'getKpiDetail', args: NO_ARGS },
   { ns: null, method: 'getTrend', args: NO_ARGS },

@@ -12,7 +12,8 @@ import { authEnv } from '../config/env.js';
 import { PRESET_USERS, getPresetVisibleBranches } from '../config/preset-users.js';
 import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
-import { ensurePresetUser, getUserByUsername } from './access-control.js';
+import { ensurePresetUser, getUserByUsername, setUserPasswordByUsername } from './access-control.js';
+import type { AccessUser } from './access-control.js';
 import { isIpAllowed as isIpAllowedShared } from '../utils/ip.js';
 
 /**
@@ -33,6 +34,11 @@ export interface UserCredential {
   defaultRoute?: string;
   specialFeatures?: string[];
   active?: boolean;
+  /**
+   * 本次密码登录使用的是统一初始密码，须改密后才能访问业务路由。
+   * 仅密码登录链路产生（飞书扫码会话恒 undefined）；authMiddleware 按 JWT pwc 声明拦截。
+   */
+  mustChangePassword?: boolean;
 }
 
 /**
@@ -124,14 +130,15 @@ class AuthService {
     if (!user.active) {
       throw new AppError(403, 'Account disabled');
     }
-    const passwordOverride = PASSWORD_OVERRIDES[normalizedUsername];
     const allowedIpsOverride = ALLOWED_IP_OVERRIDES[normalizedUsername];
     const userCredential: UserCredential = {
       ...user,
-      passwordHash: passwordOverride ?? user.passwordHash,
+      passwordHash: this.resolveEffectiveHash(normalizedUsername, user),
       allowedIps: allowedIpsOverride ?? user.allowedIps,
       // 全国超管可见省集合按 username 从 PRESET_USERS 派生（单一事实源），随登录响应回前端显示切省下拉。
       visibleBranches: getPresetVisibleBranches(normalizedUsername),
+      // 统一初始密码账号（preset 标记）且尚未自设密码 → 本次会话强制改密
+      mustChangePassword: this.isPasswordChangeRequired(normalizedUsername, user) || undefined,
     };
 
     if (!this.isIpAllowed(clientIp, userCredential.allowedIps)) {
@@ -151,6 +158,8 @@ class AuthService {
       role: userCredential.role,
       organization: userCredential.organization,
       branchCode: userCredential.branchCode,
+      // pwc（password-change-required）声明只在密码登录且须改密时进 token
+      ...(userCredential.mustChangePassword ? { pwc: true } : {}),
     };
 
     const token = jwt.sign(
@@ -165,6 +174,73 @@ class AuthService {
       token,
       user: userInfo,
     };
+  }
+
+  /**
+   * 解析账号当前生效的密码哈希。
+   * 优先级：用户运行时自设密码（password_changed_at 非空的 store 哈希）
+   *        > USER_PASSWORDS 环境变量覆盖（统一初始密码/运维注入）
+   *        > store/preset 哈希（tombstone 占位则恒不可登录）。
+   */
+  private resolveEffectiveHash(normalizedUsername: string, user: AccessUser): string {
+    if (user.passwordChangedAt) {
+      return user.passwordHash;
+    }
+    return PASSWORD_OVERRIDES[normalizedUsername] ?? user.passwordHash;
+  }
+
+  /** 统一初始密码账号（preset mustChangePassword）且尚未自设密码 → 密码登录须强制改密 */
+  private isPasswordChangeRequired(normalizedUsername: string, user: AccessUser): boolean {
+    return PRESET_USERS[normalizedUsername]?.mustChangePassword === true && !user.passwordChangedAt;
+  }
+
+  /**
+   * 新密码强度校验（返回违规原因，null = 通过）。
+   * 口径：≥ 8 位，且同时含字母与数字。
+   */
+  validateNewPassword(password: string): string | null {
+    if (password.length < 8) return '新密码长度至少 8 位';
+    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return '新密码必须同时包含字母和数字';
+    }
+    return null;
+  }
+
+  /**
+   * 用户本人改密（统一初始密码首登强制改密链路）。
+   * 验旧密（按当前生效哈希）→ 强度校验 → 写库（password_changed_at 置位，
+   * 此后 USER_PASSWORDS 初始密码对该账号失效）。
+   */
+  async changePassword(
+    username: string,
+    oldPassword: string,
+    newPassword: string
+  ): Promise<void> {
+    const normalizedUsername = this.normalizeUsername(username);
+    const normalizedOld = this.normalizePassword(oldPassword);
+    const normalizedNew = this.normalizePassword(newPassword);
+
+    const user = await getUserByUsername(normalizedUsername);
+    if (!user || !user.active) {
+      throw new AppError(401, 'Invalid username or password');
+    }
+
+    const effectiveHash = this.resolveEffectiveHash(normalizedUsername, user);
+    const isOldValid = await this.verifyPassword(normalizedOld, effectiveHash);
+    if (!isOldValid) {
+      throw new AppError(401, '当前密码不正确');
+    }
+
+    const policyViolation = this.validateNewPassword(normalizedNew);
+    if (policyViolation) {
+      throw new AppError(400, policyViolation);
+    }
+    if (normalizedNew === normalizedOld) {
+      throw new AppError(400, '新密码不能与当前密码相同');
+    }
+
+    const newHash = await this.hashPassword(normalizedNew);
+    await setUserPasswordByUsername(normalizedUsername, newHash);
   }
 
   private signAccessToken(payload: JwtPayload): string {
@@ -208,6 +284,7 @@ class AuthService {
       role: user.role,
       organization: user.organization,
       branchCode: user.branchCode,
+      ...(user.mustChangePassword ? { pwc: true } : {}),
     };
     const sessionId = `sid_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const refreshTtlSec = this.parseDurationToSeconds(authConfig.jwtRefreshExpiresIn, 7 * 24 * 3600);
@@ -312,6 +389,8 @@ class AuthService {
       role: decoded.role,
       organization: decoded.organization,
       branchCode: decoded.branchCode,
+      // pwc 必须随刷新透传：否则「刷新一次 token」就能绕过强制改密拦截
+      ...(decoded.pwc ? { pwc: true } : {}),
     };
     const next = this.issueCookieSession({
       username: payload.username,
@@ -319,6 +398,7 @@ class AuthService {
       role: payload.role,
       organization: payload.organization,
       branchCode: payload.branchCode,
+      mustChangePassword: decoded.pwc ? true : undefined,
     });
     return {
       ...next,

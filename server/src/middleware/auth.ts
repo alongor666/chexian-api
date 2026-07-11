@@ -44,6 +44,12 @@ export interface JwtPayload {
    * 不进签名 token —— 免重登即对存量会话生效，且单一事实源在 preset 配置（codex 闸-1 P1-3）。
    */
   visibleBranches?: string[];
+  /**
+   * pwc（password-change-required）：本会话使用统一初始密码登录，须改密。
+   * 仅密码登录链路注入（authService.login）；飞书扫码会话不携带。
+   * authMiddleware 据此拦截非改密白名单路由；改密成功后重发不含 pwc 的会话即解锁。
+   */
+  pwc?: boolean;
 }
 
 /**
@@ -61,6 +67,28 @@ declare global {
 }
 
 const PAT_PREFIX = 'cx_pat_';
+
+/**
+ * 携带 pwc 声明（统一初始密码未改密）的会话唯一可访问的路由白名单。
+ * 改密本体 + 会话生命周期（查身份/登出/刷新）放行，其余业务路由一律 403。
+ * 匹配用 req.originalUrl（ESM 部署三坑之一：勿用 req.url，router 挂载后会被截断）。
+ *
+ * 精确匹配路径本体或其子路径（path === p || path 以 p+'/' 开头），先剥掉 query string；
+ * 刻意不用裸 `startsWith(prefix)`——否则未来新增 `/api/auth/change-password-history`、
+ * `/api/auth/mentions` 之类以白名单项为前缀的路由会被静默纳入白名单，让未改密会话越权访问，
+ * 且无测试/governance 能拦住这种回归（对抗性评审 MEDIUM 修复）。
+ */
+const PWC_ALLOWED_PATHS = [
+  '/api/auth/change-password',
+  '/api/auth/me',
+  '/api/auth/logout',
+  '/api/auth/refresh',
+];
+
+function isPwcAllowedPath(originalUrl: string): boolean {
+  const path = originalUrl.split('?')[0];
+  return PWC_ALLOWED_PATHS.some((p) => path === p || path.startsWith(p + '/'));
+}
 
 /**
  * 主认证中间件。
@@ -118,6 +146,11 @@ export async function authMiddleware(
     // 缓存未就绪时 isUsernameActive fail-open（不误锁），正常运行期恒就绪。
     if (!isUsernameActive(decoded.username)) {
       throw new AppError(401, 'Account is disabled or removed. Please contact an administrator.');
+    }
+    // 统一初始密码未改密的会话（pwc 声明）：除改密/会话生命周期白名单外一律 403，
+    // 防止前端拦截被绕过后直接持 token 调业务 API（prompt 禁令须代码兜底）。
+    if (decoded.pwc && !isPwcAllowedPath(req.originalUrl)) {
+      throw new AppError(403, 'PASSWORD_CHANGE_REQUIRED');
     }
     req.user = decoded;
     decorateVisibleBranches(req.user); // 全国超管能力按 username 派生（JWT/cookie 出口）；旧 token 免重登生效
