@@ -76,7 +76,7 @@
 
 ## 统一设计系统（`styles/`）
 
-唯一事实源 `styles/index.ts`：设计令牌（`colors`/`spacing`/`fontSize`/...）、组件样式常量（`cardStyles`/`buttonStyles`/`tableStyles`/`textStyles`/`fontStyles`/`stickyTableStyles`/`comprehensiveTheme`）、工具函数（`cn`/`getTrendColorClass`/`getTrendColorClassByPolarity`/`MetricPolarity`/`getYearChartColor`）。使用规范见 `DESIGN.md` §8 与 `.claude/rules/frontend.md`。
+唯一事实源 `styles/index.ts`：设计令牌（`colors`/`semanticColors`/`chartColors`（ECharts canvas 专用图表色 SSOT）/`spacing`/`fontSize`/...）、组件样式常量（`cardStyles`/`buttonStyles`/`tableStyles`/`textStyles`/`fontStyles`/`stickyTableStyles`/`comprehensiveTheme`）、工具函数（`cn`/`getTrendColorClass`/`getTrendColorClassByPolarity`/`MetricPolarity`/`getYearChartColor`）。使用规范见 `DESIGN.md` §8 与 `.claude/rules/frontend.md`。
 
 子模块 `styles/heatmap-scale.ts`（经 index 全量 re-export）：热力图 7 级发散色带体系 SSOT——`HeatmapTier`/`HeatmapColorEntry`/`HeatmapThresholdTier` 类型、`HEATMAP_COLOR_SCALE`（明暗双主题）、`HEATMAP_TIER_LABELS`/`HEATMAP_LEGEND_TIERS`、分档函数 `resolveTierByThresholds`/`resolveTierByQuantile`/`computeQuantiles`。消费方：交叉销售热力图与业绩机构热力图 V2；各业务阈值表留在 feature 内。
 

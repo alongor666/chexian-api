@@ -4,17 +4,17 @@
  * 从原 EnhancedKpiCard.tsx 迁出的 4 个内部 helper / 常量，
  * 不对外 export（仅供同目录子组件 import）。
  */
-import { colors } from '../../../shared/styles';
+import { colors, chartColors } from '../../../shared/styles';
 import { TONE_VAR, type StatusTone } from '@/shared/utils/kpiStatus';
 
 /** 默认颜色（保留兼容 — 旧 donut/bar 类型沿用） */
 export const DEFAULT_COLORS = [colors.primary.DEFAULT, colors.neutral[400]];
 
-/** 多段条形图默认配色 */
+/** 多段条形图默认配色（图表色 token，B247） */
 export const SEGMENT_COLORS = [
   colors.primary.DEFAULT,
-  '#10B981',
-  '#F59E0B',
+  chartColors.series.emerald,  // #10B981
+  chartColors.series.amber,    // #F59E0B
   colors.neutral[400],
 ];
 

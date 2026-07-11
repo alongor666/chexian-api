@@ -27,6 +27,7 @@ import {
   cn,
   fontStyles,
   tableStyles,
+  chartColors,
 } from '@/shared/styles';
 import { EmptyState } from '@/shared/ui';
 import { useTheme } from '@/shared/theme';
@@ -395,7 +396,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
         text: ['高', '低'],
         realtime: false,
         calculable: true,
-        inRange: { color: ['#e0f3db', '#a8ddb5', '#43a2ca', '#0868ac'] },
+        inRange: { color: [...chartColors.geoRamp.greenBlue] },
         left: 'left',
         bottom: 20,
       },
@@ -412,11 +413,11 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
           },
           emphasis: {
             label: { show: true, fontSize: 13, fontWeight: 'bold' as const },
-            itemStyle: { areaColor: '#ffd666' },
+            itemStyle: { areaColor: chartColors.mapAreaHighlight },
           },
           select: {
             label: { show: true },
-            itemStyle: { areaColor: '#ffd666' },
+            itemStyle: { areaColor: chartColors.mapAreaHighlight },
           },
           data,
         },
@@ -459,7 +460,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
           type: 'line' as const,
           data: data.map(r => r.freq_per_1000 ?? 0),
           smooth: true,
-          itemStyle: { color: '#5470c6' },
+          itemStyle: { color: chartColors.categorical[0] },  // #5470C6
         },
         {
           name: '人伤占比(%)',
@@ -467,7 +468,7 @@ export const GeoRiskPanel: React.FC<Props> = ({ hook, params }) => {
           yAxisIndex: 1,
           data: data.map(r => r.injury_pct ?? 0),
           smooth: true,
-          itemStyle: { color: '#ee6666' },
+          itemStyle: { color: chartColors.categorical[3] },  // #EE6666
         },
       ],
       grid: { left: 60, right: 60, bottom: 60 },

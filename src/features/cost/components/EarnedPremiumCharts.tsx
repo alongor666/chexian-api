@@ -15,7 +15,7 @@ import { echarts } from '../../../shared/utils/echarts';
 import { formatCurrency, formatPercent } from '../../../shared/utils/formatters';
 import { EnhancedKpiCard } from '../../../widgets/kpi/EnhancedKpiCard';
 import { GRID_CONFIG, getChartTheme } from '../../../shared/config/chartStyles';
-import { colorClasses, cn } from '../../../shared/styles';
+import { colorClasses, cn, chartColors } from '../../../shared/styles';
 import { useTheme } from '../../../shared/theme';
 import type { EarnedPremiumData, EarnedPremiumSummaryData } from '../types/costTypes';
 import type { EChartsParam } from '../../../shared/types/echarts';
@@ -446,8 +446,8 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
               x2: 1,
               y2: 0,
               colorStops: [
-                { offset: 0, color: '#3b82f6' },
-                { offset: 1, color: '#60a5fa' },
+                { offset: 0, color: chartColors.series.blue },       // #3B82F6
+                { offset: 1, color: chartColors.series.blueLight },   // #60A5FA
               ],
             },
           },
@@ -466,8 +466,8 @@ const OrgComparisonBar: React.FC<OrgComparisonBarProps> = ({ summaryData, loadin
           data: ratioData,
           symbol: 'circle',
           symbolSize: 8,
-          lineStyle: { color: '#f59e0b', width: 2 },
-          itemStyle: { color: '#f59e0b' },
+          lineStyle: { color: chartColors.series.amber, width: 2 },
+          itemStyle: { color: chartColors.series.amber },
         },
       ],
     };

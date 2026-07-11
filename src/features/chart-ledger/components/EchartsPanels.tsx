@@ -10,7 +10,7 @@ import React, { useMemo } from 'react';
 import { EChartContainer } from '../../../widgets/charts/EChartContainer';
 import { getChartTheme } from '@/shared/config/chartStyles';
 import { useTheme } from '@/shared/theme';
-import { cn, colorClasses, fontStyles } from '@/shared/styles';
+import { cn, colorClasses, fontStyles, chartColors } from '@/shared/styles';
 import { formatPercent, formatWanDirect, formatCount } from '@/shared/utils/formatters';
 import { LOSS_RATIO_THRESHOLD } from '../ledgerMeta';
 import type { AsyncState, ChartResult, ParetoBar, PointDatum } from '../types';
@@ -18,14 +18,14 @@ import type { EChartsParam } from '../../../shared/types/echarts';
 
 /** 图表账本统一配色（echarts 内联 hex，与既有 widgets 一致，不受 DC-003 className 约束） */
 export const LEDGER_COLORS = {
-  teal: '#13C2C2',
-  tealDim: 'rgba(19,194,194,.28)',
-  gold: '#E8B339',
-  coral: '#F5615C',
-  coralDim: 'rgba(245,97,92,.30)',
-  good: '#52C41A',
-  danger: '#F5222D',
-  muted: '#8C8C8C',
+  teal: chartColors.series.teal,      // #13C2C2
+  tealDim: 'rgba(19,194,194,.28)',    // teal 的 28% 透明变体（canvas 专用，非调色板 token）
+  gold: chartColors.series.gold,      // #E8B339
+  coral: chartColors.series.coral,    // #F5615C
+  coralDim: 'rgba(245,97,92,.30)',    // coral 的 30% 透明变体（canvas 专用）
+  good: chartColors.series.good,      // #52C41A
+  danger: chartColors.series.danger,  // #F5222D
+  muted: chartColors.series.muted,    // #8C8C8C
 } as const;
 
 /** 满期赔付率 → 珊瑚渐变（50→95 映射 teal→coral），供热力图/散点着色复用 */

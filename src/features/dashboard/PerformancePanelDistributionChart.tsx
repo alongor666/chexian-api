@@ -5,7 +5,7 @@ import type { EChartsOption } from 'echarts';
 import { EChartContainer, buildEmptyChartOption } from '../../widgets/charts/EChartContainer';
 import { useTheme } from '@/shared/theme';
 import { formatCount, formatPercent } from '@/shared/utils/formatters';
-import { cardStyles, cn, colorClasses, colors, textStyles } from '@/shared/styles';
+import { cardStyles, cn, colorClasses, colors, textStyles, chartColors } from '@/shared/styles';
 import type { PerformanceRow } from './hooks/usePerformanceDrilldown';
 import type { EChartsParam } from '@/shared/types/echarts';
 import {
@@ -180,7 +180,7 @@ export function DistributionChart({
                 { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: axisRange.yMax },
               ],
               [
-                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: axisRange.yMin, itemStyle: { color: '#fa8c16' } },
+                { xAxis: PERFORMANCE_ACHIEVEMENT_THRESHOLD, yAxis: axisRange.yMin, itemStyle: { color: chartColors.series.orange } },
                 { xAxis: axisRange.xMax, yAxis: PERFORMANCE_GROWTH_THRESHOLD },
               ],
               [

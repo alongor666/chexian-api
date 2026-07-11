@@ -10,17 +10,18 @@
  * - 图表轴标签：水平显示（rotate: 0）
  */
 
-import { colors } from '../styles';
+import { colors, chartColors } from '../styles';
 
 // ==================== 颜色配置 ====================
 
+/** 吨位分段配色 — 引用图表分类板 token（chartColors.categorical，B247） */
 export const TONNAGE_COLORS: Record<string, string> = {
-  '1吨以下': '#5470C6',
-  '1-2吨': '#91CC75',
-  '2-5吨': '#FAC858',
-  '5-10吨': '#EE6666',
-  '10吨以上': '#73C0DE',
-  '未知': '#9A60B4',
+  '1吨以下': chartColors.categorical[0],   // #5470C6
+  '1-2吨': chartColors.categorical[1],     // #91CC75
+  '2-5吨': chartColors.categorical[2],     // #FAC858
+  '5-10吨': chartColors.categorical[3],    // #EE6666
+  '10吨以上': chartColors.categorical[4],  // #73C0DE
+  '未知': chartColors.categorical[5],      // #9A60B4
 };
 
 /** 统一文字颜色 - 使用设计系统 */
