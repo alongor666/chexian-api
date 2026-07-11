@@ -1,16 +1,18 @@
 /**
- * route-runner.mjs — 5 路由请求构造 + 并发执行
+ * route-runner.mjs — 活跃灰度路由请求构造 + 并发执行
  *
  * 管理请求构造、并发限流、预热、进度日志。
  * 不包含判定逻辑（见 shadow-judge.mjs）。
  */
 
-import { CUBE_ROUTES } from '../../shared/cube-routes.mjs';
+import { ACTIVE_CUBE_ROUTES } from '../../shared/cube-routes.mjs';
 
 // ─── 路由清单 ────────────────────────────────────────────────────
 
-/** re-export 给本 lib 测试用（SSOT 在 scripts/shared/cube-routes.mjs）*/
-export const ROUTES = CUBE_ROUTES;
+/** re-export 给本 lib 测试用（SSOT 在 scripts/shared/cube-routes.mjs）。
+ * 2026-07-11（f1c991）：只对活跃路由（trend/growth/salesman-ranking）打流量——
+ * cost/kpi 已随 65f495 退役，对退役路由发请求纯属浪费预算且拉高限流风险。 */
+export const ROUTES = ACTIVE_CUBE_ROUTES;
 
 // ─── 工具函数 ────────────────────────────────────────────────────
 
@@ -43,7 +45,12 @@ export function buildQueryString(filters) {
  * @param {number} concurrency - 最大并发数
  * @returns {Promise<any[]>} 与 tasks 顺序对应的结果数组
  */
-export async function runWithConcurrency(tasks, concurrency) {
+/**
+ * 并发执行任务，可选逐任务间隔（paceMs）。
+ * paceMs > 0 时每个 worker 领取下一任务前 sleep——对生产回放限速
+ * （生产 /api/query 有分钟级限流，无间隔并发会大面积 429 白打）。
+ */
+export async function runWithConcurrency(tasks, concurrency, { paceMs = 0 } = {}) {
   const results = new Array(tasks.length);
   let index = 0;
 
@@ -51,6 +58,7 @@ export async function runWithConcurrency(tasks, concurrency) {
     while (index < tasks.length) {
       const current = index++;
       results[current] = await tasks[current]();
+      if (paceMs > 0 && index < tasks.length) await sleep(paceMs);
     }
   }
 
@@ -128,7 +136,7 @@ async function waitForCubeReady(baseUrl, signal, timeoutMs = 30000) {
  * @param {AbortSignal} [opts.signal]  - 中断信号（Ctrl+C 时中止飞行中的请求）
  * @returns {Promise<{ sent: number, ok: number, failed: number, errors: string[], authError?: boolean, cubeNotReady?: boolean }>}
  */
-export async function runFlight({ baseUrl, tier, concurrency = 8, dryRun = false, matrix, token, signal }) {
+export async function runFlight({ baseUrl, tier, concurrency = 8, paceMs = 0, dryRun = false, matrix, token, signal }) {
   const base = baseUrl.replace(/\/+$/, '');
   const totalRequests = matrix.length * ROUTES.length;
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -174,7 +182,7 @@ export async function runFlight({ baseUrl, tier, concurrency = 8, dryRun = false
   }
 
   // 主流量
-  console.log(`[cube-burnin] 发送 ${totalRequests} 个请求（tier=${tier}, concurrency=${concurrency}）…`);
+  console.log(`[cube-burnin] 发送 ${totalRequests} 个请求（tier=${tier}, concurrency=${concurrency}${paceMs > 0 ? `, pace=${paceMs}ms` : ''}）…`);
 
   const tasks = [];
   for (const filter of matrix) {
@@ -185,7 +193,7 @@ export async function runFlight({ baseUrl, tier, concurrency = 8, dryRun = false
     }
   }
 
-  const rawResults = await runWithConcurrency(tasks, concurrency);
+  const rawResults = await runWithConcurrency(tasks, concurrency, { paceMs });
 
   let ok = 0;
   let failed = 0;

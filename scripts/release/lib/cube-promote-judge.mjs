@@ -14,20 +14,33 @@
  * - 不导出 CLI 入口、不读 ecosystem.config.cjs（IO 留在主 mjs）
  *
  * 暴露：
- *   常量：DEFAULT_MATCH_FLOOR / SHADOW_ROUTES
+ *   常量：DEFAULT_MATCH_FLOOR / SHADOW_ROUTES / ACTIVE_ROUTES
  *   函数：detectSwitches / detectPhase / fetchHealth / checkBuildHealth /
  *        checkShadowSampleFloor / fetchSentinelHistory / buildVerdict
  */
 
-import { SHADOW_KEYS } from '../../shared/cube-routes.mjs';
+import { SHADOW_KEYS, ACTIVE_SHADOW_KEYS, ACTIVE_MAIN_CUBES } from '../../shared/cube-routes.mjs';
 
 // ─────────────────────────── 常量 ───────────────────────────
 
-/** 影子对账每条路由最低观测门槛：低于此数视为"样本不足，禁止放行" */
-export const DEFAULT_MATCH_FLOOR = 1000;
+/**
+ * 影子对账每条活跃路由最低观测门槛：低于此数视为"样本不足，禁止放行"。
+ *
+ * 2026-07-11 校准（f1c991 · owner 拍板「校准门槛 + 回放灌样本」）：原值 1000 无流量依据，
+ * 生产实测自然流量日增 trend≈45 / salesman-ranking≈26 / growth≈0——1000 在 2026-08-03
+ * 时间盒内结构性不可达。校准为 200 = 自然流量 7 天可达量级（trend≈315 / salesman≈180）
+ * 的保守下限，配合 cube-burnin 对生产只读回放灌样本（补 growth 覆盖与窗口多样性）；
+ * 「连续 7 天 mismatch=0 + error=0」的正确性门槛不变。env CUBE_PROMOTE_MATCH_FLOOR 可覆盖。
+ */
+export const DEFAULT_MATCH_FLOOR = 200;
 
 /** 影子对账的 5 条路由名（SSOT 在 scripts/shared/cube-routes.mjs，re-export 保持向后兼容）*/
 export const SHADOW_ROUTES = SHADOW_KEYS;
+
+/** 晋级闸门实际考核的活跃路由（trend/growth/salesman-ranking）：排除 owner 已拍板退役的
+ * cost/kpi——退役路由永远 match=0 / 立方体永不构建，留在考核集会把切流晋级结构性卡死。
+ * SSOT = cube-routes.mjs 的 retired 字段（65f495）。 */
+export const ACTIVE_ROUTES = ACTIVE_SHADOW_KEYS;
 
 // ─────────────────────────── 阶段判定 ───────────────────────────
 
@@ -90,14 +103,15 @@ export async function fetchHealth(url) {
 }
 
 /**
- * 检查三个立方体（trend/cost/salesman）的构建健康状态。
+ * 检查活跃主立方体（trend/salesman，SSOT=ACTIVE_MAIN_CUBES）的构建健康状态。
  * 任一 lastError != null 或 builtVersion === null → 视为构建失败。
+ * cost 立方体已随 65f495 退役，不再纳入考核（否则永不构建 → 晋级永远被卡）。
  *
  * @returns {{ pass: boolean, failedCubes: string[] }}
  */
 export function checkBuildHealth(cubes) {
   const failedCubes = [];
-  for (const name of ['trend', 'cost', 'salesman']) {
+  for (const name of ACTIVE_MAIN_CUBES.map((r) => r.key)) {
     const s = cubes[name];
     if (!s) {
       failedCubes.push(`${name}（状态缺失）`);
@@ -113,8 +127,8 @@ export function checkBuildHealth(cubes) {
 }
 
 /**
- * 检查影子对账 5 条路由的累计 match 是否达到样本下限。
- * 任一路由 match < matchFloor → 视为样本不足。
+ * 检查活跃路由（trend/growth/salesman-ranking）的影子对账累计 match 是否达到样本下限。
+ * 任一活跃路由 match < matchFloor → 视为样本不足。退役路由（cost/kpi）不考核。
  *
  * @param {object} cubeShadow /health.cubeShadow 节点
  * @param {number} matchFloor 样本下限（默认 DEFAULT_MATCH_FLOOR，cube-promote.mjs 顶部从 env 派生 MATCH_FLOOR）
@@ -124,7 +138,7 @@ export function checkShadowSampleFloor(cubeShadow, matchFloor = DEFAULT_MATCH_FL
   const routeFloors = {};
   let allPass = true;
 
-  for (const route of SHADOW_ROUTES) {
+  for (const route of ACTIVE_ROUTES) {
     const s = cubeShadow[route];
     const matchCount = s?.match ?? 0;
     const routePass = matchCount >= matchFloor;
@@ -226,11 +240,12 @@ export function buildVerdict({ phase, switches, history, healthData, matchFloor 
     sampleFloorPass = sf.pass;
 
     healthSummaryNode.buildHealth = bh.pass ? 'pass' : 'fail';
-    healthSummaryNode.cubes = {
-      trend: { lastError: healthData.cubes.trend?.lastError ?? null, builtVersion: healthData.cubes.trend?.builtVersion ?? null },
-      cost: { lastError: healthData.cubes.cost?.lastError ?? null, builtVersion: healthData.cubes.cost?.builtVersion ?? null },
-      salesman: { lastError: healthData.cubes.salesman?.lastError ?? null, builtVersion: healthData.cubes.salesman?.builtVersion ?? null },
-    };
+    healthSummaryNode.cubes = Object.fromEntries(
+      ACTIVE_MAIN_CUBES.map((r) => [r.key, {
+        lastError: healthData.cubes[r.key]?.lastError ?? null,
+        builtVersion: healthData.cubes[r.key]?.builtVersion ?? null,
+      }])
+    );
     healthSummaryNode.shadowFloors = sf.routeFloors;
 
     if (!bh.pass) {

@@ -326,15 +326,24 @@ describe('checkBuildHealth — 三立方体健康检查', () => {
     expect(r.failedCubes).toHaveLength(0);
   });
 
-  it('cost.lastError != null → pass=false，failedCubes 含 cost', () => {
+  it('salesman.lastError != null → pass=false，failedCubes 含 salesman', () => {
     const r = checkBuildHealth({
       trend: { builtVersion: 'v1', lastError: null },
-      cost: { builtVersion: 'v1', lastError: 'OOM Error' },
-      salesman: { builtVersion: 'v1', lastError: null },
+      salesman: { builtVersion: 'v1', lastError: 'OOM Error' },
     });
     expect(r.pass).toBe(false);
-    expect(r.failedCubes[0]).toMatch(/cost/);
+    expect(r.failedCubes[0]).toMatch(/salesman/);
     expect(r.failedCubes[0]).toMatch(/OOM/);
+  });
+
+  it('cost 已退役（65f495）：lastError/状态缺失均不影响 pass（f1c991 结构性卡死修复）', () => {
+    const r = checkBuildHealth({
+      trend: { builtVersion: 'v1', lastError: null },
+      cost: { builtVersion: null, lastError: 'OOM Error' }, // 退役立方体永不构建
+      salesman: { builtVersion: 'v1', lastError: null },
+    });
+    expect(r.pass).toBe(true);
+    expect(r.failedCubes).toHaveLength(0);
   });
 
   it('trend.builtVersion=null → pass=false', () => {
@@ -361,30 +370,42 @@ describe('checkBuildHealth — 三立方体健康检查', () => {
 
 // ─── checkShadowSampleFloor 测试（新增）─────────────────────────────────────
 
-describe('checkShadowSampleFloor — 5 路由样本下限', () => {
-  it('5 路由 match 全 ≥ 1000 → pass=true', () => {
+describe('checkShadowSampleFloor — 活跃路由样本下限（2026-07-11 f1c991：cost/kpi 退役不考核）', () => {
+  it('DEFAULT_MATCH_FLOOR 校准为 200（owner 2026-07-11 拍板：按生产自然流量 7 天可达量级）', () => {
+    expect(DEFAULT_MATCH_FLOOR).toBe(200);
+  });
+
+  it('3 条活跃路由 match 全 ≥ floor → pass=true；退役 cost/kpi 不进 routeFloors', () => {
     const r = checkShadowSampleFloor({
       trend: { match: 1200 },
       growth: { match: 1100 },
-      cost: { match: 1500 },
-      kpi: { match: 2000 },
       'salesman-ranking': { match: 1000 },
     });
     expect(r.pass).toBe(true);
     expect(Object.values(r.routeFloors).every((v) => v.pass)).toBe(true);
+    expect(Object.keys(r.routeFloors).sort()).toEqual(['growth', 'salesman-ranking', 'trend']);
   });
 
-  it('kpi.match=0 → pass=false，routeFloors.kpi.pass=false', () => {
+  it('growth.match=0（无自然流量实况）→ pass=false，routeFloors.growth.pass=false', () => {
     const r = checkShadowSampleFloor({
       trend: { match: 1200 },
-      growth: { match: 1100 },
-      cost: { match: 1500 },
-      kpi: { match: 0 },
+      growth: { match: 0 },
       'salesman-ranking': { match: 1000 },
     });
     expect(r.pass).toBe(false);
-    expect(r.routeFloors.kpi.pass).toBe(false);
+    expect(r.routeFloors.growth.pass).toBe(false);
     expect(r.routeFloors.trend.pass).toBe(true);
+  });
+
+  it('退役 kpi.match=0 混在 cubeShadow 里 → 不影响 pass（结构性卡死修复）', () => {
+    const r = checkShadowSampleFloor({
+      trend: { match: 1200 },
+      growth: { match: 1100 },
+      cost: { match: 0 },
+      kpi: { match: 0 },
+      'salesman-ranking': { match: 1000 },
+    });
+    expect(r.pass).toBe(true);
   });
 
   it('边界值 match=DEFAULT_MATCH_FLOOR → pass=true', () => {
