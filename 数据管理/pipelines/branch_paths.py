@@ -221,6 +221,25 @@ def policy_current_glob(
     return pattern
 
 
+def resolve_province(value: str | None) -> str:
+    """`--province` fail-closed 解析（手动工具省份轴收窄 · data-pipeline.md 红线）。
+
+    仅接受已注册省份（唯一事实源 = fields.json branch_code.derivation.mapping）；
+    缺省 / 空串 / 未注册省份一律抛 PolicyCurrentLayoutError，禁止静默回落 'SC'。
+    大小写归一（'sc' → 'SC'）是输入便利，不构成省份回落。
+    返回值供 policy_current_glob(branch=...) 与 SQL `WHERE branch_code = ?` 双层使用
+    （glob 仅性能辅助，WHERE branch_code 才是隔离保证）。
+    """
+    if value is None or not str(value).strip():
+        raise PolicyCurrentLayoutError(
+            f"缺少 --province 参数（已注册省份：{sorted(_known_branches())}）。"
+            "多省 warehouse 下禁止全省混查/静默回落单省 — data-pipeline.md「省份数据隔离」红线。"
+        )
+    branch = str(value).strip().upper()
+    _validate_branch(branch)
+    return branch
+
+
 def has_policy_current_parquet(current_dir: str | Path) -> bool:
     """双布局数据存在性探测（不抛错）——供测试 skipif / 站点前置检查用。"""
     return bool(list_policy_current_shards(current_dir))

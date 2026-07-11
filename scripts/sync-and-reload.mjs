@@ -607,9 +607,12 @@ async function main() {
     if (!opts.wecomDryRun) orgRenewalArgs.push('--execute');
     if (opts.wecomOrg) orgRenewalArgs.push('--org', opts.wecomOrg);
 
+    // 电销 5-7 月续保表是四川实例：--province 为脚本侧 fail-closed 必填参数（50d62e 省份轴收窄），
+    // 此处是调用方对该实例省份的显式声明（同 sync_filtered_policies 用 instance yaml 声明省份）
     const renewalMayArgs = [
       '数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py',
       'sync',
+      '--province', 'SC',
     ];
     if (!opts.wecomDryRun) renewalMayArgs.push('--execute');
 

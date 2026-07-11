@@ -3,7 +3,7 @@
 """率值指标 + 多维组合筛选对账：API(PAT) vs DuckDB（72 指标项，含组合筛选）。
 
 用法（本机一次性复盘脚本，2026-06-10 全站筛选器联动审计的数据准确性对账工具）：
-    python3 scripts/ad-hoc/reconcile-kpi-rates-combos.py
+    python3 scripts/ad-hoc/reconcile-kpi-rates-combos.py --province SC
 
 依赖（有意 YAGNI 不参数化——进 CI 前再改，治理计划 §0 已确认）：
 - 本机 Parquet：数据管理/warehouse/fact/policy/current/*.parquet（PROJECT 常量为绝对路径）
@@ -19,10 +19,24 @@ PROJECT = "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api"
 from pathlib import Path as _Path
 if PROJECT + "/数据管理" not in sys.path:
     sys.path.insert(0, PROJECT + "/数据管理")  # 供 import pipelines.*（branch_paths SSOT · 801409 cutover 前置）
-from pipelines.branch_paths import policy_current_glob  # noqa: E402
-# 双布局自适应（branch_paths SSOT）：跨省全量读（一次性对账脚本，行为等价）
-_POLICY_GLOB = policy_current_glob(_Path(PROJECT) / "数据管理/warehouse/fact/policy/current", missing_ok=True)
-PARQUET = f"read_parquet('{_POLICY_GLOB}', union_by_name=true)"
+from pipelines.branch_paths import (  # noqa: E402
+    PolicyCurrentLayoutError,
+    policy_current_glob,
+    resolve_province,
+)
+
+# 省份轴收窄（50d62e）：--province fail-closed 必填，禁全省混查（data-pipeline.md 红线）
+import argparse  # noqa: E402
+_ap = argparse.ArgumentParser(description="率值指标 + 多维组合筛选对账（API vs DuckDB）")
+_ap.add_argument("--province", required=True,
+                 help="省份代码（仅接受已注册省份如 SC/SX，缺省/未知即报错中止）")
+try:
+    PROVINCE = resolve_province(_ap.parse_args().province)
+except PolicyCurrentLayoutError as e:
+    raise SystemExit(f"❌ {e}")
+_POLICY_GLOB = policy_current_glob(_Path(PROJECT) / "数据管理/warehouse/fact/policy/current", PROVINCE, missing_ok=True)
+# WHERE branch_code 是省份隔离保证（glob 收窄仅性能辅助）
+PARQUET = f"(SELECT * FROM read_parquet('{_POLICY_GLOB}', union_by_name=true) WHERE branch_code = '{PROVINCE}')"
 PAT = json.load(open(os.path.expanduser("~/.chexian/config.json")))["token"]
 BASE = "https://chexian.cretvalu.com/api/query/kpi"
 

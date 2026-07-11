@@ -228,8 +228,8 @@ python3 数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py
 
 # 2) 5-7 月电销续保字段回填表（update-only 5 字段）
 # 子命令必填；默认 = dry-run；execute 转正
-python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync           # dry-run
-python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync --execute # 真实
+python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync --province SC           # dry-run
+python3 数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py sync --province SC --execute # 真实
 # 其他子命令：prime-state / inspect / seed-from-excel（首次/排障专用，见 wecom_smartsheet/README）
 
 # 3) 邮政经代签单全量表（add-only）
@@ -251,7 +251,7 @@ python3 数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py \
 
 ```bash
 python3 .../sync_org_renewal_from_xlsx.py --execute > /tmp/wecom_org.log 2>&1 &
-python3 .../sync_may_renewal_fields.py sync --execute > /tmp/wecom_may.log 2>&1 &
+python3 .../sync_may_renewal_fields.py sync --province SC --execute > /tmp/wecom_may.log 2>&1 &
 python3 .../sync_filtered_policies.py --instance .../postal-policy-since-20260420.yaml --mode sync > /tmp/wecom_postal.log 2>&1 &
 wait
 # 三者退出码 0 + 各日志 grep -E 'errcode":\s*0|failed_count":\s*0' 全 0 即成功

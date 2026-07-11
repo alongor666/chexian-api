@@ -3,33 +3,33 @@
 """
 客户来源去向 自助分析工具
 
-用法:
-    # 全量全板块
-    python3 数据管理/tools/analyze_flow.py
+用法（--province 必填，fail-closed 只接受已注册省份，见 data-pipeline.md 省份隔离红线）:
+    # 单省全板块
+    python3 数据管理/tools/analyze_flow.py --province SC
 
     # 2026年营业货车10吨以上
-    python3 数据管理/tools/analyze_flow.py --category 营业货车 --tonnage 10吨以上 --year 2026
+    python3 数据管理/tools/analyze_flow.py --province SC --category 营业货车 --tonnage 10吨以上 --year 2026
 
     # 聚焦主全+交三
-    python3 数据管理/tools/analyze_flow.py --coverage 主全,交三
+    python3 数据管理/tools/analyze_flow.py --province SC --coverage 主全,交三
 
     # 只看转入（从竞品转来华安）
-    python3 数据管理/tools/analyze_flow.py --direction inbound
+    python3 数据管理/tools/analyze_flow.py --province SC --direction inbound
 
     # 只看流向华农和中意
-    python3 数据管理/tools/analyze_flow.py --insurer 华农,中意
+    python3 数据管理/tools/analyze_flow.py --province SC --insurer 华农,中意
 
     # 选择板块
-    python3 数据管理/tools/analyze_flow.py --sections summary,insurer,org
+    python3 数据管理/tools/analyze_flow.py --province SC --sections summary,insurer,org
 
     # 指定机构
-    python3 数据管理/tools/analyze_flow.py --org 天府,新都
+    python3 数据管理/tools/analyze_flow.py --province SC --org 天府,新都
 
     # 流失归因（评级对比 + 四象限 + 渠道/业务员归因）
-    python3 数据管理/tools/analyze_flow.py --sections loss --direction outbound
+    python3 数据管理/tools/analyze_flow.py --province SC --sections loss --direction outbound
 
     # 个人客车流失归因
-    python3 数据管理/tools/analyze_flow.py --category 非营业个人客车 --sections loss
+    python3 数据管理/tools/analyze_flow.py --province SC --category 非营业个人客车 --sections loss
 
 板块: summary, insurer, org, coverage, tonnage, risk, premium, trend, loss
 """
@@ -51,7 +51,11 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _SCRIPT_DIR.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))  # 供 import pipelines.*（branch_paths SSOT）
-from pipelines.branch_paths import policy_current_glob  # noqa: E402
+from pipelines.branch_paths import (  # noqa: E402
+    PolicyCurrentLayoutError,
+    policy_current_glob,
+    resolve_province,
+)
 _WAREHOUSE = _PROJECT_ROOT / 'warehouse'
 _CF_PATH = _WAREHOUSE / 'fact' / 'customer_flow' / 'latest.parquet'
 _POLICY_DIR = _WAREHOUSE / 'fact' / 'policy' / 'current'
@@ -100,6 +104,9 @@ def _sub_banner(text: str):
 
 def parse_args():
     p = argparse.ArgumentParser(description='客户来源去向自助分析')
+    p.add_argument('--province', required=True,
+                   help='省份代码（fail-closed：仅接受已注册省份如 SC/SX，缺省/未知即报错中止；'
+                        'data-pipeline.md「省份数据隔离」红线）')
     p.add_argument('--category', help='客户类别筛选（逗号分隔）')
     p.add_argument('--tonnage', help='吨位段筛选（如 10吨以上）')
     p.add_argument('--year', type=int, help='保单年度（按保险起期）')
@@ -157,14 +164,17 @@ def _build_category_conditions(args) -> list[str]:
     return conditions
 
 
-def load_data(con: duckdb.DuckDBPyConnection, args):
-    """加载并关联数据，返回筛选后的表名 'flow'"""
+def load_data(con: duckdb.DuckDBPyConnection, args, province: str):
+    """加载并关联数据，返回筛选后的表名 'flow'。
 
-    # policy/current 双布局自适应（branch_paths SSOT · 801409 cutover 前置）：跨省全量读
-    _policy_glob = policy_current_glob(_POLICY_DIR, missing_ok=True)
+    province 已经 resolve_province fail-closed 校验（仅已注册省份）；
+    glob 收窄仅是性能辅助，WHERE branch_code 才是隔离保证（data-pipeline.md 红线）。
+    """
+    _policy_glob = policy_current_glob(_POLICY_DIR, province, missing_ok=True)
     con.execute(f"""
         CREATE TABLE policy AS
         SELECT * FROM read_parquet('{_policy_glob}', union_by_name=true)
+        WHERE branch_code = '{province}'
     """)
     _load_quotes(con)
 
@@ -225,8 +235,11 @@ def load_data(con: duckdb.DuckDBPyConnection, args):
         total = con.execute("SELECT COUNT(*) FROM flow").fetchone()[0]
         return total
 
-    # ── 标准模式：通过 customer_flow 关联 ──
-    con.execute(f"CREATE TABLE cf AS SELECT * FROM read_parquet('{_CF_PATH}')")
+    # ── 标准模式：通过 customer_flow 关联（customer_flow 也带 branch_code 列，同层过滤）──
+    con.execute(f"""
+        CREATE TABLE cf AS SELECT * FROM read_parquet('{_CF_PATH}')
+        WHERE branch_code = '{province}'
+    """)
 
     con.execute("""
         CREATE TABLE base AS
@@ -770,6 +783,11 @@ SECTION_MAP = {
 
 def main():
     args = parse_args()
+    try:
+        province = resolve_province(args.province)
+    except PolicyCurrentLayoutError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        sys.exit(2)
     sections = [s.strip() for s in args.sections.split(',')]
     invalid = [s for s in sections if s not in SECTION_MAP]
     if invalid:
@@ -777,7 +795,7 @@ def main():
         sys.exit(1)
 
     # 筛选条件摘要
-    filters = []
+    filters = [f"省份={province}"]
     if args.category: filters.append(f"客户类别={args.category}")
     if args.tonnage: filters.append(f"吨位段={args.tonnage}")
     if args.year: filters.append(f"年度={args.year}")
@@ -799,7 +817,7 @@ def main():
     print(f"{'═' * 80}")
 
     con = duckdb.connect()
-    total = load_data(con, args)
+    total = load_data(con, args, province)
 
     if total == 0:
         print("\n   ⚠ 筛选条件下无数据")

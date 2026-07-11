@@ -37,14 +37,27 @@ ROOT = Path(__file__).resolve().parents[2]
 _DM = ROOT / "数据管理"
 if str(_DM) not in sys.path:
     sys.path.insert(0, str(_DM))  # 供 import pipelines.*（branch_paths SSOT · 801409 cutover 前置）
-from pipelines.branch_paths import policy_current_glob  # noqa: E402
+from pipelines.branch_paths import (  # noqa: E402
+    PolicyCurrentLayoutError,
+    policy_current_glob,
+    resolve_province,
+)
 
-# 双布局自适应（branch_paths SSOT）：跨省全量读（一次性复盘脚本，行为等价）
-POLICY_GLOB = policy_current_glob(ROOT / "数据管理/warehouse/fact/policy/current", missing_ok=True)
+# 省份轴收窄（50d62e）：--province fail-closed 必填，禁全省混查（data-pipeline.md 红线）
+import argparse  # noqa: E402
+_ap = argparse.ArgumentParser(description="2025 保单年度深度分析 v2（NCD=0.8 专题）")
+_ap.add_argument("--province", required=True,
+                 help="省份代码（仅接受已注册省份如 SC/SX，缺省/未知即报错中止）")
+try:
+    PROVINCE = resolve_province(_ap.parse_args().province)
+except PolicyCurrentLayoutError as e:
+    raise SystemExit(f"❌ {e}")
+POLICY_GLOB = policy_current_glob(ROOT / "数据管理/warehouse/fact/policy/current", PROVINCE, missing_ok=True)
 CLAIMS_GLOB = "/Users/alongor666/Downloads/底层数据湖DUD/chexian-api/数据管理/warehouse/fact/claims_detail/claims_*.parquet"
 
 con = duckdb.connect(":memory:")
-con.execute(f"CREATE VIEW policy AS SELECT * FROM read_parquet('{POLICY_GLOB}', union_by_name=true)")
+# WHERE branch_code 是省份隔离保证（glob 收窄仅性能辅助）
+con.execute(f"CREATE VIEW policy AS SELECT * FROM read_parquet('{POLICY_GLOB}', union_by_name=true) WHERE branch_code = '{PROVINCE}'")
 con.execute(f"CREATE VIEW claims AS SELECT * FROM read_parquet('{CLAIMS_GLOB}', union_by_name=true)")
 
 LATEST = con.execute("SELECT MAX(CAST(policy_date AS DATE)) FROM policy").fetchone()[0]

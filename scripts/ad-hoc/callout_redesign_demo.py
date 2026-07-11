@@ -26,14 +26,29 @@ ROOT = Path(__file__).resolve().parents[2]
 _DM = ROOT / "数据管理"
 if str(_DM) not in sys.path:
     sys.path.insert(0, str(_DM))  # 供 import pipelines.*（branch_paths SSOT · 801409 cutover 前置）
-from pipelines.branch_paths import policy_current_glob  # noqa: E402
-# 双布局自适应（branch_paths SSOT）：跨省全量读（一次性复盘脚本，行为等价）
-POLICY_GLOB = policy_current_glob(ROOT / "数据管理/warehouse/fact/policy/current", missing_ok=True)
+from pipelines.branch_paths import (  # noqa: E402
+    PolicyCurrentLayoutError,
+    policy_current_glob,
+    resolve_province,
+)
+
+# 省份轴收窄（50d62e）：--province fail-closed 必填，禁全省混查（data-pipeline.md 红线）
+import argparse  # noqa: E402
+_ap = argparse.ArgumentParser(description="callout 改造样例（数据驱动 callout 文本）")
+_ap.add_argument("--province", required=True,
+                 help="省份代码（仅接受已注册省份如 SC/SX，缺省/未知即报错中止）")
+try:
+    PROVINCE = resolve_province(_ap.parse_args().province)
+except PolicyCurrentLayoutError as e:
+    raise SystemExit(f"❌ {e}")
+POLICY_GLOB = policy_current_glob(ROOT / "数据管理/warehouse/fact/policy/current", PROVINCE, missing_ok=True)
 CLAIMS_GLOB = str(ROOT / "数据管理/warehouse/fact/claims_detail/claims_*.parquet")
 
 VALUATION = date.today().isoformat()
+# WHERE branch_code 是省份隔离保证（glob 收窄仅性能辅助）
 WHERE_BASE = (
-    "customer_category = '非营业个人客车' "
+    f"branch_code = '{PROVINCE}' "
+    "AND customer_category = '非营业个人客车' "
     "AND driver_age_group IN ('年龄＜24岁', '24岁≤年龄＜28岁') "
     "AND YEAR(insurance_start_date) BETWEEN 2021 AND 2026"
 )

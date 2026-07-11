@@ -26,6 +26,7 @@ from pipelines.branch_paths import (  # noqa: E402
     list_policy_current_shards,
     policy_current_files,
     policy_current_glob,
+    resolve_province,
 )
 
 
@@ -232,3 +233,24 @@ def test_has_policy_current_parquet(flat_dir, subdir_dir, tmp_path):
     assert has_policy_current_parquet(flat_dir) is True
     assert has_policy_current_parquet(subdir_dir) is True
     assert has_policy_current_parquet(tmp_path / "nope") is False
+
+
+# ── resolve_province（--province fail-closed 解析 · 50d62e）────────────
+
+
+def test_resolve_province_accepts_registered_codes():
+    assert resolve_province("SC") == "SC"
+    assert resolve_province("SX") == "SX"
+    assert resolve_province(" sc ") == "SC"  # 大小写/空白归一是输入便利，非省份回落
+
+
+@pytest.mark.parametrize("bad", [None, "", "   "])
+def test_resolve_province_missing_raises(bad):
+    with pytest.raises(PolicyCurrentLayoutError, match="缺少 --province"):
+        resolve_province(bad)
+
+
+@pytest.mark.parametrize("bad", ["XX", "四川", "SC,SX", "ALL"])
+def test_resolve_province_unregistered_raises(bad):
+    with pytest.raises(PolicyCurrentLayoutError, match="未注册省份"):
+        resolve_province(bad)
