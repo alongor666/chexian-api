@@ -88,17 +88,26 @@ vi.mock('@/features/comprehensive-analysis/charts/ComprehensiveChartCard', () =>
 }));
 
 describe('ComprehensiveAnalysisPage interactions', () => {
-  it('renders tabs and switches view', () => {
+  it('renders slimmed tabs（02aa70-b：只留独有价值 成本象限/赔案分析/ROI，重叠明细 tab 已裁）and switches view', () => {
     render(<ComprehensiveAnalysisPage />);
 
-    expect(screen.getByText('总览')).toBeTruthy();
-    expect(screen.getByText('保费进度')).toBeTruthy();
+    // 保留的三个独有价值 tab
+    expect(screen.getByRole('tab', { name: '成本象限' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '赔案分析' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'ROI效率' })).toBeTruthy();
+    // 与 /cost basic 明细重叠的 tab 已删（负向锁，防回归）
+    expect(screen.queryByRole('tab', { name: '总览' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: '保费进度' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: '费用分析' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('tab', { name: '保费进度' }));
-    expect(screen.getByText('保费进度分析')).toBeTruthy();
+    // 默认落在成本象限
+    expect(screen.getByText('成本指标象限')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: '赔案分析' }));
     expect(screen.getByText('象限视图')).toBeTruthy();
     expect(screen.getByText('趋势视图')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'ROI效率' }));
+    expect(screen.getByText('ROI 效率分析')).toBeTruthy();
   });
 });
