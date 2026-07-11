@@ -57,6 +57,8 @@ import {
   listPolicyCurrentShards,
   toDuckdbReadParquetList,
   findPolicyCurrentSyncGateViolations,
+  VALIDATION_SYNCED_FACT_DOMAINS,
+  validationFactDomainHasData,
 } from './lib/policy-current-shards.mjs';
 // SX 自动晋升安全闸纯函数（2026-07-09，见文件头及 runSxAutoPromote() 注释）
 import { evaluateSxAutoPromoteReadiness } from '../数据管理/lib/sx-promote-gate.mjs';
@@ -901,7 +903,10 @@ function printHelp() {
 // repair_resource（维修资源）例外：SX 副本走标准域 fact 形态落 validation/<省>/repair_resource/latest.parquet
 // （非 dim/repair/），RepairDim loader 经 resolveBranchFactExtras('repair_resource') 读取，故须随此列同步，
 // 否则山西维修页 total_shops=0（缺口 2026-07-10-claude-2815e4 ②）。
-const VALIDATION_SYNCED_DOMAINS = ['claims_detail', 'quotes_conversion', 'renewal_tracker', 'cross_sell', 'new_energy_claims', 'repair_resource'];
+// 清单本体上移 scripts/lib/policy-current-shards.mjs（单一事实源）：governance checkDataDrift 的本地扫描
+// 须与本清单严格对称，否则新增域后清单键入 manifest 而扫描失明 → 「已删除」误报拦停发布
+// （2026-07-11 repair_resource 等 11 键实证，与 2026-07-08 dim 误报同构）。
+const VALIDATION_SYNCED_DOMAINS = VALIDATION_SYNCED_FACT_DOMAINS;
 
 /**
  * validation 分省同步总开关（codex 闸-2 CRITICAL 修复）。
@@ -930,10 +935,8 @@ function validationBranchSyncEnabled() {
  * - 其余派生域：单文件 → 须有 `latest.parquet`（同 getBranchValidationFactPath）。
  */
 function validationDomainHasData(domainDir, domain) {
-  if (domain === 'claims_detail') {
-    return readdirSync(domainDir).some((f) => f.startsWith('claims_') && f.endsWith('.parquet'));
-  }
-  return existsSync(join(domainDir, 'latest.parquet'));
+  // 判定本体上移 lib/policy-current-shards.mjs（与 governance drift 扫描共享，防两侧漂移）
+  return validationFactDomainHasData(domainDir, domain);
 }
 
 /**

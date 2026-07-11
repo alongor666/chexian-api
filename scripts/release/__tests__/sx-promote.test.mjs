@@ -65,6 +65,8 @@ import {
   leftoverPreflight,
   writeReadyMarker,
   assertSameDevice,
+  findSupersededRollingShards,
+  archiveSupersededRollingShards,
 } from '../sx-promote.mjs';
 
 // ─────────────────────────── 常量（内联与脚本同步） ───────────────────────────
@@ -1084,4 +1086,63 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
     expect(exitCode).toBe(1);
     expect(stdout).toMatch(/不是 SX 省份子目录/);
   }, 30_000);
+});
+
+// ─────────────── 单元测试：被取代滚动分片归档（2026-07-11 根因修复） ───────────────
+
+describe('sx-promote: findSupersededRollingShards / archiveSupersededRollingShards', () => {
+  it('同 start 多个滚动分片：仅保留 end 最大者，其余判为被取代', () => {
+    const dir = join(tmpRoot, 'superseded_basic');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '每日数据_20250601_20260709.parquet'), 'old');
+    writeFileSync(join(dir, '每日数据_20250601_20260710.parquet'), 'new');
+    writeFileSync(join(dir, '20210101-20250531_01_签单清单_定稿.parquet'), 'hist');
+    expect(findSupersededRollingShards(dir)).toEqual(['每日数据_20250601_20260709.parquet']);
+  });
+
+  it('单个滚动分片 / 不同 start 的分片互不影响：无被取代', () => {
+    const dir = join(tmpRoot, 'superseded_none');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '每日数据_20250601_20260710.parquet'), 'a');
+    writeFileSync(join(dir, '每日数据_20240101_20250531.parquet'), 'b');
+    expect(findSupersededRollingShards(dir)).toEqual([]);
+  });
+
+  it('归档：被取代分片移入 .archive/<北京日>/，最新分片与历史分片保留在顶层', () => {
+    const dir = join(tmpRoot, 'archive_move');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '每日数据_20250601_20260708.parquet'), 'older');
+    writeFileSync(join(dir, '每日数据_20250601_20260709.parquet'), 'old');
+    writeFileSync(join(dir, '每日数据_20250601_20260710.parquet'), 'new');
+    const r = archiveSupersededRollingShards(dir, { beijingDay: '2026-07-11' });
+    expect(r.archived).toEqual([
+      '每日数据_20250601_20260708.parquet',
+      '每日数据_20250601_20260709.parquet',
+    ]);
+    expect(r.archiveDir).toBe(join(dir, '.archive', '20260711'));
+    expect(existsSync(join(dir, '每日数据_20250601_20260710.parquet'))).toBe(true);
+    expect(existsSync(join(dir, '每日数据_20250601_20260709.parquet'))).toBe(false);
+    expect(existsSync(join(dir, '.archive', '20260711', '每日数据_20250601_20260709.parquet'))).toBe(true);
+    expect(existsSync(join(dir, '.archive', '20260711', '每日数据_20250601_20260708.parquet'))).toBe(true);
+  });
+
+  it('同日重复归档：目录已存在时追加 -2 后缀（与既有人工归档惯例一致）', () => {
+    const dir = join(tmpRoot, 'archive_suffix');
+    mkdirSync(join(dir, '.archive', '20260711'), { recursive: true });
+    writeFileSync(join(dir, '每日数据_20250601_20260709.parquet'), 'old');
+    writeFileSync(join(dir, '每日数据_20250601_20260710.parquet'), 'new');
+    const r = archiveSupersededRollingShards(dir, { beijingDay: '2026-07-11' });
+    expect(r.archiveDir).toBe(join(dir, '.archive', '20260711-2'));
+    expect(existsSync(join(dir, '.archive', '20260711-2', '每日数据_20250601_20260709.parquet'))).toBe(true);
+  });
+
+  it('无被取代分片时不创建归档目录', () => {
+    const dir = join(tmpRoot, 'archive_noop');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '每日数据_20250601_20260710.parquet'), 'only');
+    const r = archiveSupersededRollingShards(dir, { beijingDay: '2026-07-11' });
+    expect(r.archived).toEqual([]);
+    expect(r.archiveDir).toBe(null);
+    expect(existsSync(join(dir, '.archive'))).toBe(false);
+  });
 });

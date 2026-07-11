@@ -51,7 +51,7 @@ import {
 } from '../数据管理/pipelines/quick_reference.mjs';
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
-import { listPolicyCurrentShards, collectValidationDimFileEntries } from './lib/policy-current-shards.mjs';
+import { listPolicyCurrentShards, collectValidationDimFileEntries, collectValidationFactFileEntries } from './lib/policy-current-shards.mjs';
 import {
   loadLog, fold, validateLog, displayId, TERMINAL_STATUSES,
 } from './backlog/lib.mjs';
@@ -1912,6 +1912,10 @@ function checkDataDrift() {
   }
 
   Object.assign(currentFiles, collectValidationDimFileEntries(path.join(ROOT_DIR, '数据管理/warehouse/validation')));
+  // validation 事实域副本（claims_detail/quotes_conversion/...）：与 sync-vps buildValidationBranchSyncTasks
+  // 写入 manifest 的键严格对称，否则新增同步域后本地扫描失明 → 「已删除」误报拦停发布
+  // （2026-07-11 repair_resource 等 11 键实证；域清单 SSOT = VALIDATION_SYNCED_FACT_DOMAINS）
+  Object.assign(currentFiles, collectValidationFactFileEntries(path.join(ROOT_DIR, '数据管理/warehouse/validation')));
 
   const manifestFiles = manifest.files || {};
   const diffs = [];
