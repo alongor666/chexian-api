@@ -35,6 +35,7 @@
     "auto-release:install": "node scripts/auto-release-daily.mjs --install-launchd",
     "auto-release:status": "node scripts/auto-release-daily.mjs --status",
     "auto-release:once": "node scripts/auto-release-daily.mjs --once",
+    "ledger:analyze": "node scripts/etl-ledger/analyze.mjs",
     "release:daily:dry": "node scripts/sync-and-reload.mjs --wecom-dry-run --dry-run",
     "daily:doctor": "node scripts/daily-doctor.mjs",
     "release:vps:heatmap": "node scripts/release-vps-heatmap.mjs",
