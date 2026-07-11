@@ -154,19 +154,36 @@ function runCmd(label, cmd, args, { dryRun, cwd = ROOT_DIR, timeoutMs = 0, env =
     log('yellow', `  (dry-run，跳过实际执行)`);
     return Promise.resolve(0);
   }
+  // 全链路耗时/断点打点（2026-07-11）：runCmd 是所有 Stage 子进程的必经收口点，在此
+  // 统一记录每环节的耗时与终态（成功+失败都记）——此前台账只记成功的"点"事件，无 duration、
+  // 无失败事件，当天 3 次发布失败在台账里完全不可见，事后只能翻 launchd 文本日志考古。
+  const t0 = Date.now();
+  // settled 哨兵：SIGKILL 杀进程后子进程的 exit 事件仍会到达（code=null），不拦住的话
+  // 一次超时会记两条 failed 事件，analyze 的环节次数/失败数/总耗时全部双计。
+  let settled = false;
+  const record = (status, extra = {}) => {
+    if (settled) return;
+    settled = true;
+    recordEvent({ stage: 'pipeline', step: label, status, duration_ms: Date.now() - t0, ...extra });
+  };
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, stdio: 'inherit', env: { ...process.env, ...env } });
     const timer = timeoutMs > 0 ? setTimeout(() => {
       log('red', `  ⏱ 超时 ${timeoutMs}ms，杀进程`);
       child.kill('SIGKILL');
+      record('failed', { note: `超时 ${timeoutMs}ms 被杀` });
       reject(new Error(`${label} 超时`));
     }, timeoutMs) : null;
     child.on('exit', (code) => {
       if (timer) clearTimeout(timer);
-      if (code === 0) resolve(0);
-      else reject(new Error(`${label} 退出码 ${code}`));
+      if (code === 0) { record('success'); resolve(0); }
+      else { record('failed', { exit_code: code }); reject(new Error(`${label} 退出码 ${code}`)); }
     });
-    child.on('error', reject);
+    child.on('error', (err) => {
+      if (timer) clearTimeout(timer);
+      record('failed', { note: `spawn error: ${err.message}` });
+      reject(err);
+    });
   });
 }
 
@@ -286,6 +303,17 @@ async function healthCheck(url, maxAttempts = 8, intervalMs = 5000) {
   return false;
 }
 
+// run 级打点（2026-07-11）：每次发布（无论 watcher 自动 / AI 驱动 / 人工）都在台账留
+// start/end 一对事件——end 带总耗时与终态，断在哪一环节由 pipeline 级 failed 事件定位。
+// trigger 判定：watcher spawn 注入 AUTO_RELEASE_TRIGGER=watcher；Claude Code 会话有
+// CLAUDECODE env → ai；其余 → manual。
+const RUN_T0 = Date.now();
+function detectTrigger() {
+  if (process.env.AUTO_RELEASE_TRIGGER === 'watcher') return 'watcher';
+  if (process.env.CLAUDECODE) return 'ai';
+  return 'manual';
+}
+
 async function main() {
   loadDotEnvLocal();
   const opts = parseArgs(process.argv.slice(2));
@@ -293,6 +321,9 @@ async function main() {
   const healthUrl = process.env.SYNC_AND_RELOAD_HEALTH_URL || 'https://chexian.cretvalu.com/health';
   // ETL 台账 run_id：贯穿全链路（透传给 daily.mjs 子进程 + 本脚本各埋点），串起一次发布的所有事件
   process.env.ETL_RUN_ID = process.env.ETL_RUN_ID || new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
+  if (!opts.dryRun) {
+    recordEvent({ stage: 'run', step: 'start', trigger: detectTrigger(), note: process.argv.slice(2).join(' ') || '(默认参数)' });
+  }
 
   log('bold', '════════════════════════════════════════════════');
   log('bold', '  sync-and-reload：ETL → governance → reload → /health');
@@ -559,6 +590,8 @@ async function main() {
     if (!healthy) {
       log('red', '\n❌ 健康检查失败！PM2 可能未正常启动');
       log('yellow', '  排查：ssh ' + sshAlias + ' "sudo /usr/local/bin/deploy-chexian-api logs 50"');
+      // process.exit 不走 main().catch，须在此补记 run end，否则健康检查失败在台账里"无终态"
+      recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: '健康检查失败（/health 不通）' });
       process.exit(1);
     }
     // 闭环验证：前端可见性（filters/options 必须能返回最新 max_date）
@@ -575,6 +608,8 @@ async function main() {
     if (!stillHealthy) {
       log('red', '\n❌ 稳定性二次校验失败：进程在启动 30s 内崩溃，疑似 OOM/启动后崩溃');
       log('yellow', '  排查：ssh ' + sshAlias + ' "sudo /usr/local/bin/deploy-chexian-api logs 100"');
+      // 同上：exit 旁路必须自带 run end 打点
+      recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: '稳定性二次校验失败（启动 30s 内崩溃）' });
       process.exit(1);
     }
     log('green', '  ✓ 30s 稳定性二次校验通过');
@@ -677,6 +712,9 @@ async function main() {
     log('green', `  ✓ WeCom 全部 ${wecomTasks.length} 个任务完成`);
   }
 
+  if (!opts.dryRun) {
+    recordEvent({ stage: 'run', step: 'end', status: 'success', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0 });
+  }
   log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
   if (claimsFreshnessWarning) {
     log('yellow', `⚠ 健康汇总：claims 报案截止日新鲜度告警未解除——${claimsFreshnessWarning}`);
@@ -694,6 +732,12 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(err => {
+  // 断点入账：err.message 含失败环节 label（runCmd reject 消息），run end 事件据此定位断在哪一环。
+  // dry-run 不打点（与 run start/end success 的守护对称，否则 dry-run 失败会留下无 start 配对的孤儿事件）；
+  // opts 不在本作用域，与 parseArgs 同源地看 argv。
+  if (!process.argv.includes('--dry-run')) {
+    recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: err.message });
+  }
   log('red', `\n❌ 流程中断：${err.message}`);
   log('yellow', '提示：单步重试可使用：');
   log('yellow', '  node 数据管理/daily.mjs <subcommand>');

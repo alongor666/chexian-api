@@ -220,10 +220,15 @@ function acquireLock() {
 
 function runReleaseDaily() {
   log('cyan', '▶ 五张表就绪，触发 bun run release:daily（Stage 0 会做完整 rsync+字节校验+省份核验）');
+  // 全链路打点（2026-07-11）：watcher 预生成 run_id 传给发布链，使 watcher 侧事件与
+  // release 全链路事件在台账里同 run_id 可关联；AUTO_RELEASE_TRIGGER 标记触发方式
+  //（sync-and-reload 的 run start/end 事件 trigger 字段据此区分 watcher/ai/manual）。
+  const runId = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
   const r = spawnSync('bun', ['run', 'release:daily'], {
     cwd: PROJECT_ROOT,
     stdio: 'inherit', // launchd 模式下由 StandardOutPath 收进 launchd 日志
     timeout: 90 * 60 * 1000,
+    env: { ...process.env, ETL_RUN_ID: runId, AUTO_RELEASE_TRIGGER: 'watcher' },
   });
   if (r.error) return { ok: false, detail: r.error.message };
   return { ok: r.status === 0, detail: `exit=${r.status}` };
