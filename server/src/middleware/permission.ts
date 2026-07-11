@@ -9,6 +9,9 @@ import { Request, Response, NextFunction } from 'express';
 import { AppError } from './error.js';
 import { dbEnv } from '../config/env.js';
 import { PRESET_ROLES } from '../config/preset-users.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('permission');
 
 /**
  * 后端 API 路由前缀 → 前端页面路径映射表（唯一事实源）
@@ -78,6 +81,104 @@ export const API_ROUTE_TO_PAGE_MAP: Record<string, string | string[]> = {
   // apiClient.performance.orgHeatmap），候选数组任一命中 org_user allowedRoutes 即放行。
   '/performance-org-heatmap': ['/performance-analysis', '/chart-ledger'],
 };
+
+/**
+ * 挂载域 → 页面白名单纳管策略（唯一事实源，backlog de1e40）
+ *
+ * permissionMiddleware 被 app.ts 多个挂载域复用，而页面白名单（API_ROUTE_TO_PAGE_MAP）
+ * 的键是 /api/query/* 下的相对路径，只对 query 域有意义。历史实现用 mountedOutsideQuery
+ * 一刀切跳过所有非 query 域——隐含"新挂载域默认逃逸白名单"且各域纳管意图不可见。
+ * 本注册表改为按域显式声明：
+ *  - governed: true  → 该域相对路径过 API_ROUTE_TO_PAGE_MAP × allowedRoutes 页面白名单
+ *  - governed: false → 显式豁免，reason 记录业务依据（数据层 RLS 仍由 permissionFilter 强制）
+ *
+ * 新挂载 permissionMiddleware 的域必须在此登记——由静态测试
+ * mount-whitelist-declaration.test.ts 与 app.ts 挂载点对账强制。未登记域运行时按豁免
+ * 处理并 warn（fail-open）：不选运行时 fail-closed 是 242c07 事故的教训——agent 诊断
+ * 路由设计上对 org_user 开放，盲目 403 误伤比漏管破坏性更大；声明缺失应由 CI 拦截，
+ * 而非生产 403。
+ */
+export type MountWhitelistPolicy =
+  | { governed: true }
+  | { governed: false; reason: string };
+
+export const MOUNT_WHITELIST_POLICY: Record<string, MountWhitelistPolicy> = {
+  // 唯一纳管域：六页面域路由（/cost、/repair、/claims-detail…）按前端页面白名单管控
+  '/api/query': { governed: true },
+
+  '/api/filters': {
+    governed: false,
+    reason: '筛选器选项是全页面共用基础能力，无独立页面归属；行级隔离靠 permissionFilter',
+  },
+  '/api/data': {
+    governed: false,
+    reason:
+      '元数据/版本读取为全页面共用基础能力；upload/load/clear/download 等敏感操作已由单路由 requireRole(BRANCH_ADMIN) 把守',
+  },
+  '/api/ai': {
+    governed: false,
+    reason: 'NL2SQL/需求识别为全页面共用 AI 能力，无页面归属；行级隔离靠 permissionFilter',
+  },
+  '/api/agent/audit': {
+    governed: false,
+    reason: 'agent 审计路由对 org_user 开放（242c07 收口口径）；行级隔离靠 permissionFilter',
+  },
+  '/api/agent/diagnosis': {
+    governed: false,
+    reason:
+      'agent 诊断路由设计上对 org_user 开放并带角色过滤（242c07：与六域页面映射键同名曾被误伤 403）',
+  },
+  '/api/agent/explain': {
+    governed: false,
+    reason: '同 /api/agent/diagnosis，对 org_user 开放；行级隔离靠 permissionFilter',
+  },
+  '/api/agent/forecast': {
+    governed: false,
+    reason: '路由内自带 branch_admin 自查（agent-forecast.ts），无需页面白名单叠加',
+  },
+  '/api/skills': {
+    governed: false,
+    reason: '本地技能编排对 org_user 开放；行级隔离靠 permissionFilter',
+  },
+  '/api/workflows': {
+    governed: false,
+    reason: '工作流编排对 org_user 开放；行级隔离靠 permissionFilter',
+  },
+  '/api/copilot': {
+    governed: false,
+    reason: '与 /api/workflows 同栈（copilot.ts 注释），对 org_user 开放；行级隔离靠 permissionFilter',
+  },
+};
+
+/** 未登记挂载点只 warn 一次，避免高频路由刷爆日志 */
+const undeclaredMountsWarned = new Set<string>();
+
+/**
+ * 按 req.baseUrl 解析挂载域的页面白名单纳管策略。
+ *
+ * - baseUrl 缺失/空串（单测直调 middleware 的 mock req）→ 视为 query 域纳管（既有单测语义）
+ * - 精确匹配或子挂载前缀匹配（最长前缀优先，防 /api/query 误吞假想的 /api/query-x 兄弟域）
+ * - 未登记挂载点 → fail-open 豁免 + warn 一次（声明缺失由静态测试在 CI 拦截，见注册表注释）
+ */
+function resolveMountWhitelistPolicy(baseUrl: unknown): MountWhitelistPolicy {
+  if (typeof baseUrl !== 'string' || baseUrl === '') {
+    return { governed: true };
+  }
+  const keys = Object.keys(MOUNT_WHITELIST_POLICY).sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    if (baseUrl === key || baseUrl.startsWith(key + '/')) {
+      return MOUNT_WHITELIST_POLICY[key];
+    }
+  }
+  if (!undeclaredMountsWarned.has(baseUrl)) {
+    undeclaredMountsWarned.add(baseUrl);
+    log.warn(
+      `挂载点 ${baseUrl} 未在 MOUNT_WHITELIST_POLICY 登记，页面白名单按豁免处理（fail-open）；` +
+        '请在 server/src/middleware/permission.ts 登记该域（mount-whitelist-declaration.test.ts 会在 CI 拦截）'
+    );
+  }
+  return { governed: false, reason: '未登记挂载点（fail-open 豁免 + warn）' };
+}
 
 /**
  * 将后端请求路径（req.path）解析为对应的前端页面路径候选集合（一对多）。
@@ -186,19 +287,16 @@ export function permissionMiddleware(
     // middleware 也被 /api/agent/* 等其他挂载点复用——那里的 req.path 同样是挂载
     // 内相对路径（如 /api/agent/diagnosis/quote-conversion 内的 '/quote-conversion'），
     // 与六域页面映射键同名会被误伤 403（242c07 收口时暴露：agent 诊断路由设计上
-    // 对 org_user 开放并带角色过滤）。故仅当挂载点（req.baseUrl）在 /api/query 域
-    // 时才应用页面白名单；baseUrl 缺失（单测直调 middleware 的 mock req）回退查表，
+    // 对 org_user 开放并带角色过滤）。是否应用页面白名单由 MOUNT_WHITELIST_POLICY
+    // 按挂载域（req.baseUrl）显式声明（backlog de1e40，替代 mountedOutsideQuery
+    // 一刀切）；baseUrl 缺失（单测直调 middleware 的 mock req）回退查表，
     // 保持既有单测语义。
     const routeAllowList = getAllowedRoutesForRole(role);
     if (routeAllowList !== null) {
-      const baseUrl = (req as { baseUrl?: unknown }).baseUrl;
-      const mountedOutsideQuery =
-        typeof baseUrl === 'string' &&
-        baseUrl !== '' &&
-        !`${baseUrl}/`.startsWith('/api/query/');
-      const pageRoutes = mountedOutsideQuery
-        ? undefined
-        : resolvePageRoutes(req.path as string | undefined);
+      const mountPolicy = resolveMountWhitelistPolicy((req as { baseUrl?: unknown }).baseUrl);
+      const pageRoutes = mountPolicy.governed
+        ? resolvePageRoutes(req.path as string | undefined)
+        : undefined;
       // 一对多判定：候选页面中任一在白名单内即放行（例如 /performance-org-heatmap
       // 候选 ['/performance-analysis', '/chart-ledger']，org_user 白名单含
       // /performance-analysis 时应放行，即使 /chart-ledger 不在白名单）。

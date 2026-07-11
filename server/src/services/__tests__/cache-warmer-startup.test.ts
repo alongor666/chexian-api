@@ -61,6 +61,7 @@ vi.mock('../../utils/logger.js', () => ({
     warn: vi.fn(),
     error: vi.fn(),
   },
+  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
 import { STARTUP_DOMAIN_WARMUP_TIMEOUT_MS, POST_LISTEN_DOMAIN_WARMUP_TIMEOUT_MS, cacheWarmer } from '../cache-warmer.js';
