@@ -1981,3 +1981,15 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （一次性基础设施修复，已在 `load-env.ts` 落地为代码，无需额外自动化钩子；本地 dev server 的 env 加载路径已固定为该文件的职责。）
+
+---
+
+## 2026-07-11 · #1068 Production Gate E2E 红：新鉴权机制按设计拦截了自家 E2E 固件的存量账号登录
+
+- **场景**：全员密码闭环 PR（pns 强制设密）本地 verify:full 5143 单测全绿 + curl 三链路实证后推送，Production Gate 的 E2E `verify-org-permissions.spec.ts`「快照隔离」用例红：leshan 用 CI 注入的随机旧密码登录后请求 dashboard-bundle，期望 200 收到 403 `PASSWORD_NOT_SET`。
+- **根因**：不是回归，是新机制按设计生效——存量账号（password_changed_at 为空）登录即带 pns，业务 API 一律 403。设计评审时只盘点了单测/curl/前端消费方，**漏盘点「E2E 固件本身也是一个存量账号消费方」**：CI 每轮生成随机凭据注入 USER_PASSWORDS，天然全是"未自设密码"账号。
+- **修复**：不绕过机制——E2E `loginAs` 检测 `mustChangePassword` 后调 change-password 完成强制设密再取数（顺带把 pns 全链路纳入 E2E 覆盖）；Playwright 整测试重试时密码已轮换 → 401 回退确定性派生密码登录。本地 CI 同款环境（合成 fixture + 随机凭据）5/5 通过后重推。
+- **预防**：改动**认证/权限/会话语义**的 PR，§3.4 自审补一问——`grep tests/e2e -l "auth/login"` 列出所有以密码登录的 E2E 用户，逐个核对新语义下这些登录会话还能否直通业务路由；E2E 固件注入的凭据（USER_PASSWORDS/E2E_*）视同一类"存量账号消费方"盘点，不要只盘生产账号。
+
+### needs_automation: false
+（同类失败首次。若再现"鉴权语义改动漏盘 E2E 固件账号" → 升级为 pr-checklist 红线行。）
