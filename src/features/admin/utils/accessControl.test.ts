@@ -66,4 +66,20 @@ describe('toggleSelection · 复选不可变更新', () => {
     toggleSelection(input, 'a', false);
     expect(input).toEqual(['a', 'b']);
   });
+
+  it('切换 canonical 路由时保留已有 legacy alias', () => {
+    const existingRoutes = ['/truck', '/comparison', '/dashboard'];
+
+    expect(toggleSelection(existingRoutes, '/growth', true)).toEqual([
+      '/truck',
+      '/comparison',
+      '/dashboard',
+      '/growth',
+    ]);
+    expect(toggleSelection(existingRoutes, '/dashboard', false)).toEqual([
+      '/truck',
+      '/comparison',
+    ]);
+    expect(existingRoutes).toEqual(['/truck', '/comparison', '/dashboard']);
+  });
 });

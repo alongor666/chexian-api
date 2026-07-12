@@ -68,6 +68,15 @@ describe('route registry contract', () => {
     for (const legacyPath of ['/renewal', '/truck', '/cross-sell', '/comparison']) {
       expect(permissionPaths).not.toContain(legacyPath);
     }
+    expect(permissionPaths).toEqual([
+      '/home',
+      '/dashboard',
+      '/performance-analysis',
+      '/reports',
+      '/growth',
+      '/renewal-tracker',
+      '/specialty',
+    ]);
     expect(permissionRoutes.every((route) => route.kind === 'canonical')).toBe(true);
   });
 
