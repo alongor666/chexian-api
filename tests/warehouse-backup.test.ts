@@ -18,6 +18,7 @@ describe('resolveWarehouseBackupConfig', () => {
       srcDir: WAREHOUSE_BACKUP_DEFAULTS.srcDir,
       backupDir: WAREHOUSE_BACKUP_DEFAULTS.backupDir,
       keep: 7,
+      excludes: [],
     });
   });
 
@@ -27,7 +28,7 @@ describe('resolveWarehouseBackupConfig', () => {
       WAREHOUSE_BACKUP_DIR: '/opt/backups/warehouse',
       WAREHOUSE_BACKUP_KEEP: '30',
     });
-    expect(cfg).toEqual({ srcDir: '/opt/app/data', backupDir: '/opt/backups/warehouse', keep: 30 });
+    expect(cfg).toEqual({ srcDir: '/opt/app/data', backupDir: '/opt/backups/warehouse', keep: 30, excludes: [] });
   });
 
   it.each([
@@ -41,6 +42,22 @@ describe('resolveWarehouseBackupConfig', () => {
 
   it.each(['0', '366', '1.5', 'abc'])('非法保留份数 %s fail-fast', (v) => {
     expect(() => resolveWarehouseBackupConfig({ WAREHOUSE_BACKUP_KEEP: v })).toThrow(/1~365/);
+  });
+
+  it('排除模式解析：逗号分隔+去空白；默认空数组', () => {
+    expect(resolveWarehouseBackupConfig({}).excludes).toEqual([]);
+    expect(
+      resolveWarehouseBackupConfig({ WAREHOUSE_BACKUP_EXCLUDE: './chexian.duckdb*, ./reports/*' }).excludes,
+    ).toEqual(['./chexian.duckdb*', './reports/*']);
+  });
+
+  it.each([
+    ['非 ./ 开头', 'reports/*'],
+    ['绝对路径', '/etc/*'],
+    ['含单引号', "./a'b*"],
+    ['含分号', './a;rm*'],
+  ])('非法排除模式 fail-fast：%s', (_label, p) => {
+    expect(() => resolveWarehouseBackupConfig({ WAREHOUSE_BACKUP_EXCLUDE: p })).toThrow(/排除模式/);
   });
 
   it('备份目录位于源目录内部时拒绝（防自包含递归）', () => {
@@ -68,6 +85,15 @@ describe('buildWarehouseBackupScript', () => {
     expect(s).toContain('$ARCHIVE.manifest');
     expect(s).toContain('EXCESS=$((TOTAL - KEEP))'); // 可移植滚动清理
     expect(s).not.toContain('head -n -'); // 禁 GNU-only 负数 head
+  });
+
+  it('额外排除模式进入 find 清单（生产用：热库文件与可再生产物不入档）', () => {
+    const s = buildWarehouseBackupScript({ ...cfg, excludes: ['./chexian.duckdb*', './reports/*'] });
+    expect(s).toContain("! -path './chexian.duckdb*'");
+    expect(s).toContain("! -path './reports/*'");
+    expect(() =>
+      buildWarehouseBackupScript({ ...cfg, excludes: ["./x'y*"] }),
+    ).toThrow(/排除模式/);
   });
 
   it('产物先落 .tmp 再原子改名（半成品不会被当成有效备份）', () => {

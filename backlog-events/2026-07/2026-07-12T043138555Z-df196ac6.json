@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-648977","kind":"status","ts":"2026-07-12","actor":"@claude","status":"DONE","evidence":"PR #1074 已合并（2026-07-12T04:23:56Z，gh 权威核实，merge 310d3cd2）：守恒测试 7 例锁定注册表 earned_claim_ratio/earned_loss_frequency 与 comprehensive-analysis 手写表达式；代理侧做过篡改→变红→复原→变绿证伪，指挥中枢独立实跑 7/7 绿；两道 CI 必检全绿","at":"2026-07-12T04:31:38.555Z","eid":"df196ac6"}

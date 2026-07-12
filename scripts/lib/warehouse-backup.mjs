@@ -28,6 +28,9 @@ export const WAREHOUSE_BACKUP_DEFAULTS = Object.freeze({
 /** 绝对路径白名单：斜杠开头，仅含字母数字与 . _ - /（防 shell 注入与相对路径） */
 const SAFE_ABS_PATH = /^\/[A-Za-z0-9._/-]+$/;
 
+/** 排除模式白名单：./ 开头的相对模式，仅含字母数字与 . _ - / *（供 find ! -path 使用） */
+const SAFE_EXCLUDE_PATTERN = /^\.\/[A-Za-z0-9._*/-]+$/;
+
 function assertSafeAbsPath(label, value) {
   if (!SAFE_ABS_PATH.test(value)) {
     throw new Error(`[warehouse-backup] ${label} 必须是仅含字母数字._-/ 的绝对路径，当前：${value}`);
@@ -44,12 +47,14 @@ function assertKeep(keep) {
  * 从环境变量解析备份配置。非法值直接抛错（调用方 fail-fast）。
  *
  * 环境变量：
- *   WAREHOUSE_BACKUP_SRC   源数据目录绝对路径（默认生产 server/data）
- *   WAREHOUSE_BACKUP_DIR   备份目录绝对路径（必须在源目录之外）
- *   WAREHOUSE_BACKUP_KEEP  保留份数（1~365 整数）
+ *   WAREHOUSE_BACKUP_SRC      源数据目录绝对路径（默认生产 server/data）
+ *   WAREHOUSE_BACKUP_DIR      备份目录绝对路径（必须在源目录之外）
+ *   WAREHOUSE_BACKUP_KEEP     保留份数（1~365 整数）
+ *   WAREHOUSE_BACKUP_EXCLUDE  逗号分隔的额外排除模式（./ 开头相对 srcDir，可含 *；
+ *                             用于排除运行时热文件与可再生产物，如 ./chexian.duckdb*,./reports/*）
  *
  * @param {Record<string, string|undefined>} env 一般传 process.env
- * @returns {{srcDir: string, backupDir: string, keep: number}}
+ * @returns {{srcDir: string, backupDir: string, keep: number, excludes: string[]}}
  */
 export function resolveWarehouseBackupConfig(env) {
   const srcDir = (env.WAREHOUSE_BACKUP_SRC || WAREHOUSE_BACKUP_DEFAULTS.srcDir).trim().replace(/\/+$/, '');
@@ -64,7 +69,17 @@ export function resolveWarehouseBackupConfig(env) {
   const keep = Number(rawKeep);
   assertKeep(keep);
 
-  return { srcDir, backupDir, keep };
+  const excludes = (env.WAREHOUSE_BACKUP_EXCLUDE ?? '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  for (const p of excludes) {
+    if (!SAFE_EXCLUDE_PATTERN.test(p)) {
+      throw new Error(`[warehouse-backup] 排除模式必须以 ./ 开头且仅含字母数字._-/*，当前：${p}`);
+    }
+  }
+
+  return { srcDir, backupDir, keep, excludes };
 }
 
 /** sha256 工具探测片段（Linux=sha256sum，macOS=shasum -a 256），两模式共用 */
@@ -86,15 +101,22 @@ const DETECT_SHA = [
  * @param {string} cfg.backupDir 备份目录绝对路径
  * @param {string} cfg.dateStamp 备份文件日期戳（YYYYMMDD，北京时区）
  * @param {number} cfg.keep 保留最近 N 份
+ * @param {string[]} [cfg.excludes] 额外排除模式（./ 开头相对 srcDir，可含 *）
  * @returns {string} POSIX sh 脚本
  */
-export function buildWarehouseBackupScript({ srcDir, backupDir, dateStamp, keep }) {
+export function buildWarehouseBackupScript({ srcDir, backupDir, dateStamp, keep, excludes = [] }) {
   assertSafeAbsPath('srcDir', srcDir);
   assertSafeAbsPath('backupDir', backupDir);
   if (!/^\d{8}$/.test(dateStamp)) {
     throw new Error(`[warehouse-backup] dateStamp 必须是 YYYYMMDD，当前：${dateStamp}`);
   }
   assertKeep(keep);
+  for (const p of excludes) {
+    if (!SAFE_EXCLUDE_PATTERN.test(p)) {
+      throw new Error(`[warehouse-backup] 排除模式必须以 ./ 开头且仅含字母数字._-/*，当前：${p}`);
+    }
+  }
+  const extraExcludes = excludes.map((p) => `! -path '${p}'`).join(' ');
 
   return [
     'set -eu',
@@ -106,8 +128,8 @@ export function buildWarehouseBackupScript({ srcDir, backupDir, dateStamp, keep 
     'if [ ! -d "$SRC" ]; then echo "[warehouse-backup] 源目录不存在：$SRC"; exit 3; fi',
     'mkdir -p "$DIR"',
     'LIST=$(mktemp); trap \'rm -f "$LIST"\' EXIT',
-    // 递归文件清单：排除 state.db*（独立备份通道 + 热文件）与源目录内可能存在的 backups/
-    "( cd \"$SRC\" && find . -type f ! -name 'state.db*' ! -path './backups/*' | LC_ALL=C sort > \"$LIST\" )",
+    // 递归文件清单：排除 state.db*（独立备份通道 + 热文件）、源目录内可能存在的 backups/、以及调用方额外排除项
+    `( cd "$SRC" && find . -type f ! -name 'state.db*' ! -path './backups/*'${extraExcludes ? ` ${extraExcludes}` : ''} | LC_ALL=C sort > "$LIST" )`,
     'COUNT=$(wc -l < "$LIST" | tr -d " ")',
     'if [ "$COUNT" -eq 0 ]; then echo "[warehouse-backup] 源目录无可备份文件：$SRC"; exit 3; fi',
     // 逐文件 sha256 清单（相对路径，供 verify 模式 -c 对账）

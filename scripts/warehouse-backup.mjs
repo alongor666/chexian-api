@@ -3,9 +3,9 @@
  * warehouse 源数据备份 CLI（BACKLOG 2026-07-12-claude-3dac98 · 审计FIND-002）
  *
  * 用法：
- *   node scripts/warehouse-backup.mjs backup [--src DIR] [--dest DIR] [--keep N] [--print]
+ *   node scripts/warehouse-backup.mjs backup [--src DIR] [--dest DIR] [--keep N] [--exclude "./a*,./b/*"] [--print]
  *   node scripts/warehouse-backup.mjs verify <archive.tar.gz> [--print]
- *   node scripts/warehouse-backup.mjs emit --out FILE [--src DIR] [--dest DIR] [--keep N]
+ *   node scripts/warehouse-backup.mjs emit --out FILE [--src DIR] [--dest DIR] [--keep N] [--exclude "./a*,./b/*"]
  *
  * backup  在本机执行备份（默认路径为生产 VPS 布局，本地测试须显式 --src/--dest）
  * verify  从归档完整还原到临时目录并逐文件 sha256 对账（验收口径：还原对账）
@@ -29,7 +29,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--print') args.print = true;
-    else if (a === '--src' || a === '--dest' || a === '--keep' || a === '--out') {
+    else if (a === '--src' || a === '--dest' || a === '--keep' || a === '--out' || a === '--exclude') {
       const key = a.slice(2);
       args[key] = argv[i + 1];
       i += 1;
@@ -47,6 +47,7 @@ function configFromArgs(args) {
   if (args.src) env.WAREHOUSE_BACKUP_SRC = args.src;
   if (args.dest) env.WAREHOUSE_BACKUP_DIR = args.dest;
   if (args.keep) env.WAREHOUSE_BACKUP_KEEP = args.keep;
+  if (args.exclude) env.WAREHOUSE_BACKUP_EXCLUDE = args.exclude;
   return resolveWarehouseBackupConfig(env);
 }
 
