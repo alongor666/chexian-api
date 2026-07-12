@@ -1,7 +1,7 @@
 /**
  * 发布停更「自动接手」决策纯函数（BACKLOG 2026-07-12-claude-966ae7 · 审计 FIND-001）
  *
- * 背景：看门狗（VPS）负责发现停更 + 告警；本模块所属的 Mac 侧 auto-remediate-stale.mjs
+ * 背景：数据巡检（VPS）负责发现停更 + 告警；本模块所属的 Mac 侧 auto-remediate-stale.mjs
  * 负责「自动接手」——把 FIND-001 从「只告警」升级为「分级自主处置」。release:daily 依赖
  * Mac 的 ETL 管道，只能在 Mac 跑，故接手方在 Mac。
  *
