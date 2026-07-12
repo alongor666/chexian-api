@@ -1,0 +1,127 @@
+name: Dependency Audit Sentinel
+
+# 依赖漏洞扫描哨兵 — 发布后周期监控（非准入闸门）。
+#
+# 背景（BACKLOG uid=2026-07-03-claude-4cc18e「防再退化」补充）：
+# 2026-07-03 全量安全审计发现 40 个依赖漏洞，PR #942 已把可安全升级的部分收敛到 6 个残留
+# （echarts XSS / vite fs.deny / esbuild / uuid，均因上游大版本或被其他依赖锁定而暂不可动）。
+# 但该审计此后一个月无人复核——因为依赖漏洞扫描从未自动化，只能靠人工偶尔手跑 `bun audit`。
+# 本工作流把"扫描"这一步自动化、定期化，防止"审计一次、退化一年"。
+#
+# 设计红线（与本卡任务要求一致）：
+# 1. 只做检测告警，不自动升级任何依赖版本（升级永远是人工评估后的独立 PR）。
+# 2. 不加入 governance-check.yml / production-gate.yml 等 PR 必检门禁——外部安全平台
+#    新披露的漏洞不受本仓库改动控制，若把它设为 PR 门禁，会导致"别人披露了一个新 CVE"
+#    就能阻塞一个跟依赖完全无关的 PR 合并。因此本工作流独立定时运行，只在 Actions 列表
+#    里把自己置红作为可见告警，不影响任何 PR 的合并流程。
+# 3. 已知坑（本工作流内处理）：
+#    - `bun audit` 只读 lockfile（bun.lock）即可产出结果，不需要先 `bun install`；
+#      本地实测（干净 clone、无 node_modules）确认可直接跑，省去安装耗时与安装期网络抖动。
+#    - `bun audit --json` 在本仓库锁定的 bun 1.3.14 上会**忽略 `--audit-level` 过滤**
+#      （同时传两个参数时，JSON 输出仍包含所有等级、退出码也不受 level 影响）——这是
+#      2026-07-11 实测确认的版本行为，不是假设。因此本工作流不依赖 `--audit-level` 做门禁，
+#      而是自己用 jq 按 severity 字段精确统计 high/critical 数量后再决定是否让 job 失败。
+#    - 根目录与 server/ 是两套独立的 lockfile（bun.lock 与 server/bun.lock），必须分别扫描。
+
+on:
+  schedule:
+    # UTC 01:00 周一 = 北京时间周一 09:00。
+    - cron: '0 1 * * 1'
+  workflow_dispatch: {}
+
+concurrency:
+  group: dependency-audit-sentinel
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: 依赖漏洞扫描
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      - name: 依赖漏洞扫描 - 根目录
+        id: audit_root
+        run: |
+          set +e
+          bun audit --json > audit-root.json 2> audit-root-banner.log
+          set -e
+          if [ ! -s audit-root.json ] || ! jq empty audit-root.json 2>/dev/null; then
+            echo "::error::根目录 bun audit 未产出有效 JSON（可能是网络异常或 registry 不可达），详见下方日志"
+            cat audit-root-banner.log
+            exit 1
+          fi
+          TOTAL=$(jq '[.[][]] | length' audit-root.json)
+          HIGH_CRIT=$(jq '[.[][] | select(.severity=="critical" or .severity=="high")] | length' audit-root.json)
+          BREAKDOWN=$(jq -r 'if (. | length) == 0 then "无" else ([.[][].severity] | group_by(.) | map("\(.[0]):\(length)") | join("，")) end' audit-root.json)
+          echo "root_total=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "root_high_crit=$HIGH_CRIT" >> "$GITHUB_OUTPUT"
+          echo "root_breakdown=$BREAKDOWN" >> "$GITHUB_OUTPUT"
+
+      - name: 依赖漏洞扫描 - server 目录
+        id: audit_server
+        run: |
+          set +e
+          (cd server && bun audit --json) > audit-server.json 2> audit-server-banner.log
+          set -e
+          if [ ! -s audit-server.json ] || ! jq empty audit-server.json 2>/dev/null; then
+            echo "::error::server 目录 bun audit 未产出有效 JSON（可能是网络异常或 registry 不可达），详见下方日志"
+            cat audit-server-banner.log
+            exit 1
+          fi
+          TOTAL=$(jq '[.[][]] | length' audit-server.json)
+          HIGH_CRIT=$(jq '[.[][] | select(.severity=="critical" or .severity=="high")] | length' audit-server.json)
+          BREAKDOWN=$(jq -r 'if (. | length) == 0 then "无" else ([.[][].severity] | group_by(.) | map("\(.[0]):\(length)") | join("，")) end' audit-server.json)
+          echo "server_total=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "server_high_crit=$HIGH_CRIT" >> "$GITHUB_OUTPUT"
+          echo "server_breakdown=$BREAKDOWN" >> "$GITHUB_OUTPUT"
+
+      - name: 中文摘要与告警判定
+        run: |
+          ROOT_TOTAL="${{ steps.audit_root.outputs.root_total }}"
+          ROOT_HC="${{ steps.audit_root.outputs.root_high_crit }}"
+          ROOT_BREAKDOWN="${{ steps.audit_root.outputs.root_breakdown }}"
+          SERVER_TOTAL="${{ steps.audit_server.outputs.server_total }}"
+          SERVER_HC="${{ steps.audit_server.outputs.server_high_crit }}"
+          SERVER_BREAKDOWN="${{ steps.audit_server.outputs.server_breakdown }}"
+
+          {
+            echo "## 依赖漏洞扫描摘要（仅检测告警，不自动升级依赖）"
+            echo ""
+            echo "| 目录 | 漏洞总数 | 高危+严重数 | 等级分布 |"
+            echo "|---|---|---|---|"
+            echo "| 根目录 | ${ROOT_TOTAL} | ${ROOT_HC} | ${ROOT_BREAKDOWN} |"
+            echo "| server/ | ${SERVER_TOTAL} | ${SERVER_HC} | ${SERVER_BREAKDOWN} |"
+            echo ""
+            echo "完整明细见本次运行的 \`audit-root.json\` / \`audit-server.json\` 附件。"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+          TOTAL_HC=$((ROOT_HC + SERVER_HC))
+          echo ""
+          if [ "$TOTAL_HC" -gt 0 ]; then
+            echo "❌ 检测到 ${TOTAL_HC} 条高危/严重（high/critical）依赖漏洞，本工作流故意置为失败以在 Actions 列表醒目告警。"
+            echo "   处置：人工复核该漏洞是否已有安全补丁版本可升级；若需大版本升级或被其他依赖锁定，登记 BACKLOG 而非在此自动处理。"
+            exit 1
+          else
+            echo "✅ 未发现高危/严重（high/critical）依赖漏洞。中低危明细见上表，不阻断本工作流。"
+          fi
+
+      - name: 上传扫描原始结果
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-${{ github.run_id }}
+          path: |
+            audit-root.json
+            audit-server.json
+          if-no-files-found: ignore
+          retention-days: 90

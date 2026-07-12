@@ -2014,3 +2014,15 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （首次出现「审计卡未落账即被引用」；再现一次则在 backlog.mjs 写入后打印"⚠️ 未提交"提醒或加 governance 检查。）
+
+---
+
+## 2026-07-12 · 子代理误在派发者 worktree 写入 backlog 事件，被记账 PR 顺手扫走
+
+- **场景**：指挥中枢并行派发两个 worktree 隔离子代理执行审计卡。子代理 B 开工的第一条 `backlog.mjs note` 误跑在派发者的 worktree（cwd 尚未切入自己的隔离 worktree），产生孤立未提交事件文件；派发者随后的记账提交 `git add -A` 将其无感扫进 PR #1073。
+- **根因**：子代理启动初期 cwd 仍在父会话目录；派发 prompt 只说"先认领"，没要求先确认自己身处隔离 worktree。叠加派发者记账用 `git add -A` 不核对暂存清单。
+- **修复**：本次无需返工——backlog 为 append-only 事件日志，多一条"开工"note 是合法历史（其完整版进展 note 在子代理自己的 PR #1075）。
+- **预防**：① 派发 prompt 模板固定第一步为 `pwd && git branch --show-current`，确认在自己的 worktree 分支后才允许任何 `backlog.mjs` 写入；② 派发者记账提交前用 `git status --porcelain` 逐文件核对暂存清单，不裸 `git add -A`。
+
+### needs_automation: false
+（首次出现。再现一次 → 给 backlog.mjs 写入时打印当前分支并在检测到 worktree-agent-* 之外的"他人分支"时要求 --force 确认。）
