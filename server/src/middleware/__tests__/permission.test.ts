@@ -190,7 +190,8 @@ describe('permissionMiddleware: preset 用户标签验证', () => {
     const users = Object.values(PRESET_USERS);
     const scUsers = users.filter((u) => u.branchCode === 'SC');
     const noBranchCode = users.filter((u) => !u.branchCode);
-    expect(scUsers.length).toBe(20); // 全部 20 个 SC 用户都标 SC
+    // 20 存量 SC 用户 + 2026-07-12 新增 5 个（1 全国超管 zongbu + 4 市州一把手）= 25
+    expect(scUsers.length).toBe(25); // 全部 25 个 SC 用户都标 SC
     expect(noBranchCode.length).toBe(0); // 无人缺 branchCode（fail-closed 前提）
   });
 });

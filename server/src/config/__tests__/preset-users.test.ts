@@ -146,6 +146,56 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
   });
 });
 
+describe('总部超管 + 市州一把手（2026-07-12 发放）', () => {
+  // 市州一把手 → 复用现有 SC org_user 的 organization（已验证精确匹配 org_level_3）
+  const CITY_HEADS = [
+    { username: 'yibinzong', organization: '宜宾' },
+    { username: 'leshanzong', organization: '乐山' },
+    { username: 'dazhouzong', organization: '达州' },
+    { username: 'luzhouzong', organization: '泸州' },
+  ];
+
+  it('zongbu 是全国超管：role=branch_admin / branchCode=SC / visibleBranches=[SC,SX] / cost+moto_cost', () => {
+    const u = PRESET_USERS.zongbu;
+    expect(u).toBeDefined();
+    expect(u.role).toBe('branch_admin');
+    expect(u.branchCode).toBe('SC'); // 默认省，保 fail-closed 不变量（无人缺 branchCode）
+    expect(u.visibleBranches).toEqual(['SC', 'SX']); // 全国超管恒见所有省（不变量下方锁死）
+    expect(u.specialFeatures).toContain('cost');
+    expect(u.specialFeatures).toContain('moto_cost');
+    expect(u.organization).toBeUndefined(); // 超管不绑定单一 organization
+    expect(u.active).toBe(true);
+  });
+
+  it('4 个市州一把手：role=org_user（dataScope=org）/ branchCode=SC / organization 精确匹配 / 只读结构镜像', () => {
+    for (const { username, organization } of CITY_HEADS) {
+      const u = PRESET_USERS[username];
+      expect(u, username).toBeDefined();
+      expect(u.role).toBe('org_user'); // org_user → dataScope=org（PRESET_ROLES 派生），天然只读本机构
+      expect(u.branchCode).toBe('SC');
+      expect(u.organization).toBe(organization);
+      expect(u.allowedRoutes).toEqual(ORG_ROLE_ALLOWED_ROUTES);
+      expect(u.defaultRoute).toBe(ORG_ROLE_DEFAULT_ROUTE);
+      expect(u.active).toBe(true);
+      expect(u.visibleBranches).toBeUndefined(); // 非超管，无跨省视图
+    }
+  });
+
+  it('5 账号密码均为「构造式 tombstone」占位（bcrypt 60 字符格式 + 含 Tombstone 标记 → fail-safe）', () => {
+    for (const username of ['zongbu', ...CITY_HEADS.map((c) => c.username)]) {
+      const u = PRESET_USERS[username];
+      expect(u.passwordHash, username).toMatch(/^\$2[aby]\$\d{2}\$/);
+      expect(u.passwordHash, username).toHaveLength(60);
+      expect(u.passwordHash, username).toMatch(/Tombstone/i);
+      // 行为闸：bcrypt.compare 对任意明文恒 false 且不抛错（真验证占位哈希为废值，非仅字符串形态）
+      for (const pwd of [username, '']) {
+        expect(() => bcrypt.compareSync(pwd, u.passwordHash)).not.toThrow();
+        expect(bcrypt.compareSync(pwd, u.passwordHash)).toBe(false);
+      }
+    }
+  });
+});
+
 describe('全国超管 visibleBranches（切省 + 全国合并视图）', () => {
   it('xuechenglong 是全国超管：branchCode=SC（默认省，保 fail-closed 不变量）+ visibleBranches=[SC,SX]', () => {
     const u = PRESET_USERS.xuechenglong;
@@ -173,7 +223,7 @@ describe('全国超管 visibleBranches（切省 + 全国合并视图）', () => 
     const superAdmins = Object.values(PRESET_USERS).filter(
       (u) => u.visibleBranches && u.visibleBranches.length > 0
     );
-    expect(superAdmins.length).toBeGreaterThan(0); // 至少 xuechenglong
+    expect(superAdmins.length).toBeGreaterThan(0); // xuechenglong + zongbu（2026-07-12 新增）
     for (const u of superAdmins) {
       // 角色必须是 branch_admin（permission.ts 仅 branch_admin 认 visibleBranches，防 org_user 越权）
       expect(u.role).toBe('branch_admin');

@@ -261,6 +261,76 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     role: 'telemarketing_user',
     branchCode: 'SC',
   },
+  // ===== 总部超管 + 市州一把手（2026-07-12 发放）=====
+  // 1 全国超管 zongbu + 4 市州机构负责人（宜宾/乐山/达州/泸州，只读看本机构）。
+  // passwordHash 均为「构造式 tombstone」占位（标准 bcrypt 60 字符格式、含 "Tombstone" 可辨标记，
+  //   bcrypt.compare 对任意明文恒 false → fail-safe，源码永不含真实凭据/明文）。真实临时密码仅由
+  //   生产 USER_PASSWORDS 环境变量注入（auth.ts login: passwordOverride ?? user.passwordHash，
+  //   漏注入则回落到此处占位 → 恒拒绝，绝不成后门），首登经 pns 强制改密后自设。
+  // 这 5 账号走「USER_PASSWORDS 临时密码 + 首登强制改密」路径，不进 SELF_SERVICE_PASSWORD_ONLY_USERS。
+  zongbu: {
+    // 全国超管：默认省四川（保留 branchCode='SC' 满足 fail-closed 不变量 permission.test.ts:181），
+    // visibleBranches 表达「可切 SC/SX 单省、可看全国合并」。加省时把新省加进此数组即可
+    //   （不变量：任一非空 visibleBranches 必 == getAllBranchCodes() == ['SC','SX']，加省须同步三处）。
+    // 参照现有全国超管 xuechenglong。
+    username: 'zongbu',
+    passwordHash: '$2b$10$ZongbuTombstone0000000000000000000000000000000000000u',
+    displayName: '总部超管',
+    role: 'branch_admin',
+    branchCode: 'SC',
+    visibleBranches: ['SC', 'SX'],
+    specialFeatures: ['cost', 'moto_cost'],
+    active: true,
+  },
+  yibinzong: {
+    // 宜宾机构负责人（只读看本机构）：org_user 天然只读本 organization，无需额外只读开关。
+    // organization 复用现有 yibin 账号的 '宜宾'（已验证能精确匹配 org_level_3 取到数据）。
+    username: 'yibinzong',
+    passwordHash: '$2b$10$YibinzongTombstone0000000000000000000000000000000000u',
+    displayName: '宜宾负责人',
+    role: 'org_user',
+    organization: '宜宾',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
+    active: true,
+  },
+  leshanzong: {
+    // 乐山机构负责人（只读看本机构）。organization 复用现有 leshan 账号的 '乐山'。
+    username: 'leshanzong',
+    passwordHash: '$2b$10$LeshanzongTombstone000000000000000000000000000000000u',
+    displayName: '乐山负责人',
+    role: 'org_user',
+    organization: '乐山',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
+    active: true,
+  },
+  dazhouzong: {
+    // 达州机构负责人（只读看本机构）。organization 复用现有 dazhou 账号的 '达州'。
+    username: 'dazhouzong',
+    passwordHash: '$2b$10$DazhouzongTombstone000000000000000000000000000000000u',
+    displayName: '达州负责人',
+    role: 'org_user',
+    organization: '达州',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
+    active: true,
+  },
+  luzhouzong: {
+    // 泸州机构负责人（只读看本机构）。organization 复用现有 luzhou 账号的 '泸州'。
+    username: 'luzhouzong',
+    passwordHash: '$2b$10$LuzhouzongTombstone000000000000000000000000000000000u',
+    displayName: '泸州负责人',
+    role: 'org_user',
+    organization: '泸州',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SC',
+    active: true,
+  },
   // ===== 山西分公司（SX）— G7 多省接入账号定义 =====
   // BRANCH_RLS_ENABLED 默认关，加账号不改默认行为；RLS-on 时 permission.ts 按 branch_code='SX' 过滤。
   // 全部 passwordHash 仍为「构造式 tombstone」占位（含 "Tombstone" 可辨标记，bcrypt.compare 对任意明文恒 false，
