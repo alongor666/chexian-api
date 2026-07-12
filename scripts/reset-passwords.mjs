@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { filterOutSelfService, readSelfServiceUsers } from './lib/self-service-users.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -168,7 +169,13 @@ async function main() {
     hashMap['admin'] = existingAdminHash;
   }
 
-  for (const { username, org } of ORG_USERS) {
+  // 防御性剔除自助设密账号：当前 ORG_USERS 硬编码 12 机构账号本就不含它们，但一旦有人
+  // 误把某自助设密账号加进 ORG_USERS，这道过滤保证它仍不会被写进 USER_PASSWORDS（这些
+  // 账号密码只能本人自设，见 governance「自助设密账号禁入USER_PASSWORDS」闸）。
+  const selfService = readSelfServiceUsers(PROJECT_ROOT);
+  const resetTargets = filterOutSelfService(ORG_USERS, selfService);
+
+  for (const { username, org } of resetTargets) {
     const password = generatePassword(12);
     const hash = await bcrypt.hash(password, 10);
     results.push({ username, password, org });

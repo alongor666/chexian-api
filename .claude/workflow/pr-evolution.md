@@ -2063,3 +2063,15 @@ expires: 2026-07-26
 
 ### needs_automation: false
 （automation 由上条 #1077 既有 needs_automation 项 expires 2026-07-26 + 新卡 3901cd 共同跟踪；本条为执行收尾 + 根因细化，不另立重复 automation 项。）
+## 2026-07-12 · 卡 3901cd：密码生成器下沉 SELF_SERVICE 过滤——把「残留清理」从事后闸兜底改为源头「生成即合规」（evidence-loop scorecard）
+
+> 承接卡 c0f97a 生产事故。上面 needs_automation(expires 2026-07-26) 的源头级根治项，本 PR 落地。
+
+- **合同**：改「事后 governance 闸兜底」为「生成源头合规」——两个密码生成器构建 USER_PASSWORDS 前必须剔除 `SELF_SERVICE_PASSWORD_ONLY_USERS`，杜绝自助设密账号被回注 .env。
+- **根因证据（先证伪再动刀·`audit-agent-findings-are-leads-not-conclusions`）**：本地 worktree user_store（21 用户）**不含**这 6 账号，一度动摇「生成器是根因」判断；但直查**生产 VPS** user_store（40 用户）**实测含**全部 6 个自助设密账号（passwordHash 占位、changed_at 空 = 待自设）→ 生产上 `rotate-passwords.mjs`（遍历全部 user_store 用户）确会回注 → 生成器是**生产上确证的再生成向量**，根因成立。`reset-passwords.mjs` 用硬编码 12 机构列表本就不含它们（安全），加防御过滤统一不变式。
+- **实现**：新增 `scripts/lib/self-service-users.mjs`（`readSelfServiceUsers` 正则读 preset-users.ts SSOT，与 governance 同法同源；`filterOutSelfService` 纯函数保序不 mutate）；rotate/reset 各接一处过滤 + rotate 打印剔除数。
+- **oracle（多路证据）**：① 合成 user_store 端到端 dry-run——5 用户→剔除 2 自助设密→将重置 3 普通账号，自助设密确不进列表；② 新增 `tests/self-service-users.test.ts` 8 测（读真实 SSOT 非空/多行解析/空名单/缺失 fail-fast/rotate 剔除/reset 恒等/保序不 mutate/空名单恒等）；③ 全量单测 359 文件 5209 测通过零回归；④ typecheck 通过；⑤ governance 退出码 0、自助设密闸绿。
+- **诚实边界**：本次修的是**再生成向量**（rotate 下次跑会回注）；07-12 事故的**当次**残留来自 7-11 账号发放的初始密码 seeding（非生成器本轮触发）。两者都真实：seeding 是历史一次性来源、生成器是持续性来源，本 PR 堵持续性来源，一次性来源由 c0f97a 手工清理已闭环。
+
+### needs_automation: false
+（本条即上方 expires 2026-07-26 项的源头级落地。governance「自助设密账号禁入USER_PASSWORDS」闸保留为纯防回归第二道线；生成器过滤是第一道源头线。两道线正交互补，无新残留纪律点。）
