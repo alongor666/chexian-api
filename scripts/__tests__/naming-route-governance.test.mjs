@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { checkProductNaming, checkRouteRegistry } from '../governance/check-naming-route.mjs';
+import { checkDocumentationTruth, checkProductNaming, checkRouteRegistry } from '../governance/check-naming-route.mjs';
 
 function fixture(files) {
   const root = mkdtempSync(join(tmpdir(), 'naming-route-governance-'));
@@ -59,6 +59,47 @@ describe('路由注册表治理', () => {
       expect.stringMatching(/重复 canonical path.*\/home/),
       expect.stringMatching(/重复 redirect path.*\/legacy/),
       expect.stringMatching(/redirect.*canonical.*\/dashboard/),
+    ]));
+  });
+
+  it('permission-only alias 与 canonical 冲突或自身重复时 fail-loud', () => {
+    const root = fixture({
+      'src/shared/config/routeRegistry.ts': `
+        export const ROUTES = [{ id: 'home', path: '/home' }];
+        export const LEGACY_PERMISSION_ALIASES = [
+          { path: '/home', to: '/home' },
+          { path: '/renewal', to: '/home' },
+          { path: '/renewal', to: '/home' },
+        ];
+      `,
+    });
+    expect(checkRouteRegistry(root)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/permission alias.*canonical.*\/home/),
+      expect.stringMatching(/重复 permission alias path.*\/renewal/),
+    ]));
+  });
+});
+
+describe('当前文档治理', () => {
+  it('README 拒绝易腐快照计数与已退役当前能力', () => {
+    const root = fixture({
+      'README.md': '22 个业务模块；17 个查询模块；35 个 SQL 生成器；marketing-report；coefficient',
+      'reference/legacy-python-subproject-convention.md': '',
+    });
+    expect(checkDocumentationTruth(root)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/易腐快照计数/),
+      expect.stringMatching(/marketing-report/),
+      expect.stringMatching(/coefficient/),
+    ]));
+  });
+
+  it('legacy reference 必须保留旧规范关键章节原文锚点', () => {
+    const root = fixture({
+      'README.md': '当前数量以目录为准',
+      'reference/legacy-python-subproject-convention.md': '# 摘要',
+    });
+    expect(checkDocumentationTruth(root)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/legacy.*缺少原文锚点/),
     ]));
   });
 });

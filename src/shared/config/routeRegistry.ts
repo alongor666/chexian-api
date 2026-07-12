@@ -84,21 +84,21 @@ export function getPermissionRoutes(): readonly RouteDefinition[] {
   return ROUTES.filter((route) => route.permissionConfigurable);
 }
 
-const PERMISSION_ONLY_REDIRECTS: readonly RouteRedirect[] = Object.freeze([
+export const LEGACY_PERMISSION_ALIASES: readonly RouteRedirect[] = Object.freeze([
   Object.freeze({ path: '/', to: '/home' }),
   Object.freeze({ path: '/renewal', to: '/renewal-tracker' }),
 ]);
 
-const ALL_ROUTE_REDIRECTS = [...ROUTES.flatMap((route) => route.redirects ?? []), ...PERMISSION_ONLY_REDIRECTS];
+const ALL_ROUTE_ALIASES = [...ROUTES.flatMap((route) => route.redirects ?? []), ...LEGACY_PERMISSION_ALIASES];
 
 export function canonicalizeRoutePath(path: string): string {
-  const redirect = ALL_ROUTE_REDIRECTS.find((candidate) => candidate.path === path);
+  const redirect = ALL_ROUTE_ALIASES.find((candidate) => candidate.path === path);
   return (redirect?.to ?? path).split('?')[0];
 }
 
 export function getEquivalentRoutePaths(path: string): readonly string[] {
   const canonical = canonicalizeRoutePath(path);
-  return [canonical, ...ALL_ROUTE_REDIRECTS
+  return [canonical, ...ALL_ROUTE_ALIASES
     .filter((redirect) => canonicalizeRoutePath(redirect.path) === canonical)
     .map((redirect) => redirect.path)];
 }

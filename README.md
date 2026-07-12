@@ -78,13 +78,13 @@
 chexian-api/
 ├── src/                             # 前端应用
 │   ├── app/                         #   应用入口、路由、布局
-│   ├── features/                    #   22 个业务功能模块
+│   ├── features/                    #   业务功能模块（以目录与 INDEX 为准）
 │   │   ├── dashboard/               #     经营仪表盘
 │   │   ├── cost/                    #     成本分析 + 综合分析
 │   │   ├── growth/                  #     增长分析 + 机构对比
 │   │   ├── claims-detail/           #     赔案明细
 │   │   ├── quote-conversion/        #     报价转化
-│   │   └── ...                      #     （共 22 个模块）
+│   │   └── ...                      #     其他模块见 src/features/INDEX.md
 │   ├── widgets/                     #   图表/表格/KPI 复用组件
 │   ├── shared/                      #   API 客户端、上下文、样式、工具、类型
 │   │   ├── api/                     #     API 路由定义 + HTTP 客户端
@@ -94,17 +94,17 @@ chexian-api/
 │
 ├── server/                          # 后端 API 服务
 │   ├── src/
-│   │   ├── app.ts                   #   启动入口（198 行，已拆分）
+│   │   ├── app.ts                   #   启动入口
 │   │   ├── routes/                  #   路由层
 │   │   │   ├── query.ts             #     查询路由注册器
-│   │   │   ├── query/               #     17 个查询子路由模块
+│   │   │   ├── query/               #     查询子路由模块（以目录为准）
 │   │   │   ├── auth.ts              #     认证路由
 │   │   │   ├── data.ts              #     数据管理路由
 │   │   │   ├── ai.ts                #     AI 路由
 │   │   │   ├── filters.ts           #     筛选器路由
 │   │   │   └── wecom-auth.ts        #     企业微信路由
 │   │   ├── services/                #   服务层（模块化拆分）
-│   │   │   ├── duckdb.ts            #     查询执行（498 行）
+│   │   │   ├── duckdb.ts            #     查询执行
 │   │   │   ├── duckdb-infra.ts      #     连接与基础设施
 │   │   │   ├── duckdb-domain-loaders.ts  # 分域数据加载
 │   │   │   ├── duckdb-materialization.ts # 预聚合物化
@@ -112,27 +112,27 @@ chexian-api/
 │   │   │   ├── access-control.ts    #     权限控制
 │   │   │   ├── route-cache.ts       #     路由级缓存
 │   │   │   └── ...                  #     auth/wecom/openrouter/zhipu
-│   │   ├── sql/                     #   35 个 SQL 生成器
+│   │   ├── sql/                     #   SQL 生成器（以目录为准）
 │   │   ├── middleware/              #   认证、权限、限流、审计、异常
 │   │   ├── config/                  #   配置中心
 │   │   │   ├── metric-registry/     #     指标注册表（数量见 validate.ts）
-│   │   │   ├── field-registry/      #     字段注册表（56 个字段）
-│   │   │   ├── env.ts               #     环境变量（20+ 变量）
+│   │   │   ├── field-registry/      #     字段注册表（以注册表为准）
+│   │   │   ├── env.ts               #     环境变量事实源
 │   │   │   └── api-routes.ts        #     路由常量
 │   │   └── normalize/               #   列映射与字段标准化（codegen 生成）
 │   └── data/                        #   运行时数据目录
 │
 ├── 数据管理/                         # 数据 ETL 管道
 │   ├── daily.mjs                    #   智能增量 ETL 入口
-│   ├── data-sources.json            #   15 域元数据注册表
+│   ├── data-sources.json            #   数据域元数据注册表
 │   ├── shard-config.json            #   分片配置
 │   ├── pipelines/                   #   ETL 转换脚本（Python）
 │   ├── warehouse/                   #   本地数据仓库
-│   │   ├── fact/                    #     8 个事实域（policy/claims/quotes/...）
-│   │   └── dim/                     #     7 个维度表（salesman/plan/brand/...）
+│   │   ├── fact/                    #     事实域（以目录为准）
+│   │   └── dim/                     #     维度表（以目录为准）
 │   └── knowledge/                   #   数据知识库
 │
-├── tests/                           # 测试（77 个文件）
+├── tests/                           # 测试（以测试目录与 runner 输出为准）
 │   ├── api/                         #   API 测试
 │   ├── components/                  #   组件测试
 │   ├── comprehensive/               #   综合分析测试
@@ -140,9 +140,9 @@ chexian-api/
 │   ├── integration/                 #   集成测试（需 DuckDB 原生）
 │   └── shared/                      #   共享工具测试
 │
-├── scripts/                         # 37 个工程脚本
+├── scripts/                         # 工程脚本（见 scripts/INDEX.md）
 ├── deploy/                          # VPS 部署（Nginx + PM2 + Docker）
-├── .github/workflows/               # 6 条 CI/CD pipeline
+├── .github/workflows/               # CI/CD workflows（以目录为准）
 ├── 开发文档/                         # 架构、规范、索引
 └── 数据管理/knowledge/               # 数据知识库
 ```
@@ -185,14 +185,13 @@ chexian-api/
 | DELETE | `/api/data/clear` | 清空数据 |
 | GET/PUT | `/api/data/kpi-plan-config` | 计划值配置 |
 
-### 业务查询（`/api/query`）— 17 个子路由模块
+### 业务查询（`/api/query`）
 
 | 模块 | 主要端点 | 路由文件 |
 |------|----------|----------|
 | KPI | `kpi`, `kpi-detail` | `query/kpi.ts` |
 | 趋势 | `trend`, `quality-business-trend` | `query/trend.ts` |
 | 增长 | `growth` | `query/growth.ts` |
-| 系数 | `coefficient` | `query/coefficient.ts` |
 | 成本 | `cost` | `query/cost.ts` |
 | 综合分析 | `comprehensive-bundle`, `comprehensive-analysis-bundle` | `query/comprehensive.ts` |
 | 续保 | `renewal`, `renewal-drilldown` | `query/renewal.ts` |
@@ -205,7 +204,7 @@ chexian-api/
 | 费用发展 | `expense-development` | `query/expense-development.ts` |
 | 维修资源 | `repair-*` | `query/repair.ts` |
 | 货车 | `truck` | `query/truck.ts` |
-| 报表 | `marketing-report`, `premium-report/plan`, `dashboard-bundle` 等 | `query/report.ts` |
+| 报表 | `premium-report/plan`, `dashboard-bundle` 等 | `query/report.ts` |
 
 ### 筛选器（`/api/filters`）
 
@@ -234,11 +233,11 @@ React 页面/Hook
 
 前端不直接执行 SQL，不加载 DuckDB-WASM，不再维护浏览器 Local 模式。
 
-### 数据域注册表（11 个活跃域）
+### 数据域注册表
 
 | 域 ID | 名称 | 类型 | 状态 |
 |--------|------|------|------|
-| premium | 保费 | fact | 活跃 — 350 万+ 行 |
+| premium | 保费 | fact | 活跃（规模以 warehouse 元数据为准） |
 | claims_detail | 赔案明细 | fact | 活跃 |
 | cross_sell | 交叉销售 | fact | 活跃 |
 | quotes_conversion | 报价转化 | fact | 活跃 |
@@ -286,7 +285,7 @@ React 页面/Hook
 | `ZHIPU_API_KEY` | 智谱兜底 Key | — |
 | `WECOM_CORP_ID` | 企业微信 ID（可选） | — |
 
-完整变量列表见 `server/src/config/env.ts`（20+ 变量，6 个分组）。
+完整变量与分组以 `server/src/config/env.ts` 为准。
 
 ## 7) 运行与部署
 
