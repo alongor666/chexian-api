@@ -61,6 +61,51 @@ def to_bool(x: str) -> bool:
     return x in BOOL_TRUE_VALUES
 
 
+def enforce_schema_contract(
+    df,
+    known_cols,
+    ignored_cols=(),
+    *,
+    force: bool = False,
+    declare_hint: str = "",
+) -> list:
+    """Schema 契约：检测 df 中既未被处理（known_cols）也未被显式忽略（ignored_cols）的源列。
+
+    上游若在源文件里悄改/新增字段，这些列既不在映射也不在忽略清单里，就会被静默丢弃、
+    口径悄悄失真无人察觉（backlog FIND-004）。本函数把这一风险变为**响亮失败**：有未知列时
+    打印字段名 + 非空率 + 前 3 个示例值，默认 sys.exit(1) 阻断 ETL；`--force`（调试逃生阀）
+    时仅打印后返回、不退出。
+
+    这是 premium 域（transform.py finalize_schema）与 base_converter.py（brand / repair /
+    cross_sell 等标准域）共用的单一实现，两处拦截逻辑不再各写一份（消除重复漂移）。
+
+    参数:
+      df: 待检测的 DataFrame（列名为源列名，通常是中文）
+      known_cols: 已被处理/映射的列集合（premium = final ∪ core ∪ optional；
+                  base_converter = get_cn_to_en() 的键集合）
+      ignored_cols: 显式忽略列集合（premium = shard-config.json explicitly_ignored_fields；
+                    base_converter = 各 converter get_explicitly_ignored_columns() 声明）
+      force: True 时跳过 sys.exit（仅调试；对应 --force）
+      declare_hint: 追加的"应在何处声明"提示行（各调用方定制，可为空）
+    返回:
+      unknown 列名列表（空列表 = 契约通过）
+    """
+    known = set(known_cols)
+    ignored = set(ignored_cols)
+    unknown = [c for c in df.columns if c not in known and c not in ignored]
+    if unknown:
+        print(f"\n   ❌ Schema 契约违反：以下 {len(unknown)} 个源字段未被处理也未被显式忽略：")
+        for col in unknown:
+            sample = df[col].dropna().head(3).tolist()
+            print(f"      ❓ '{col}' (非空率 {df[col].notna().mean():.1%}, 示例: {sample})")
+        if declare_hint:
+            print(declare_hint)
+        print("      → 使用 --force 跳过此检查（仅用于调试）")
+        if not force:
+            sys.exit(1)
+    return unknown
+
+
 def load_excel_all_sheets(
     input_file,
     dtype: Optional[dict] = None,

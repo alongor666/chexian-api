@@ -44,6 +44,7 @@ def build_customer_flow_dataframe(
     snapshot_dir: Path | None = None,
     batch_date: str | None = None,
     declared_branch: str | None = None,
+    force: bool = False,
 ) -> pd.DataFrame:
     """读取新的 08/09 双产物，并合成为原 customer_flow schema。
 
@@ -73,6 +74,20 @@ def build_customer_flow_dataframe(
         if missing:
             raise ValueError(f"{input_file.name} 缺少必须列: {missing}; 实际列: {list(df.columns)}")
 
+        # Schema 契约（backlog FIND-004）：customer_flow 走自有 run()、不经 base_converter
+        # step 3，但同样会静默丢弃未映射列（08/09 源的 保险止期 一直被吞）。此处用同一
+        # enforce_schema_contract 拦截：未映射也未显式忽略的源列 → fail-fast。
+        from pipelines.etl_validation import enforce_schema_contract
+        enforce_schema_contract(
+            df,
+            set(cn_to_en.keys()),
+            converter.get_explicitly_ignored_columns(),
+            force=force,
+            declare_hint=(
+                "      → 在 CustomerFlowConverter.get_cn_to_en() 映射或 "
+                "get_explicitly_ignored_columns() 中声明"
+            ),
+        )
         rename_map = {k: v for k, v in cn_to_en.items() if k in df.columns}
         df = df.rename(columns=rename_map)
         keep = [c for c in df.columns if c in OUTPUT_COLUMNS]
@@ -154,6 +169,11 @@ class CustomerFlowConverter(BaseConverter):
     def get_required_columns(self) -> list:
         return ["保单号"]
 
+    def get_explicitly_ignored_columns(self) -> list:
+        # 09（转保上年公司）源含「保险止期」(insurance_end_date)，业务上不消费、历来静默丢弃。
+        # 显式声明后 Schema 契约放行且不落盘，保持既有行为；上游若再新增字段则响亮失败。
+        return ["保险止期"]
+
     def get_str_force_cols(self) -> dict:
         return {"保单号": str, "车架号": str}
 
@@ -231,6 +251,11 @@ class CustomerFlowConverter(BaseConverter):
             help="跳过 data-sources.json 写入（manifest 驱动流程专用，由 refresh_metadata.py 统一写）",
         )
         parser.add_argument(
+            "--force",
+            action="store_true",
+            help="跳过 Schema 契约检查（发现未声明源列时不 exit，仅告警；仅用于调试）",
+        )
+        parser.add_argument(
             "--branch-code",
             default=None,
             help="多省 P3-B（ADR D5）：分公司编码（如 SX）。提供时透传 declared_branch 给"
@@ -262,6 +287,7 @@ class CustomerFlowConverter(BaseConverter):
             snapshot_dir=snapshot_dir,
             batch_date=args.batch_date,
             declared_branch=declared_branch,
+            force=args.force,
         )
         self.pre_write_hook(df, output_file)
 

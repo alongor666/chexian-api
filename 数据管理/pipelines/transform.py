@@ -1111,17 +1111,16 @@ def finalize_schema(df):
     except (FileNotFoundError, json.JSONDecodeError):
         print("   ⚠️ shard-config.json 读取失败，Schema 契约使用空忽略列表")
         explicitly_ignored = set()
-    all_known = set(final_fields) | set(core_fields) | set(optional_fields) | explicitly_ignored
-    unknown_cols = [c for c in df.columns if c not in all_known]
-    if unknown_cols:
-        print(f"\n   ❌ Schema 契约违反：以下 {len(unknown_cols)} 个源字段未被处理也未被显式忽略：")
-        for col in unknown_cols:
-            sample = df[col].dropna().head(3).tolist()
-            print(f"      ❓ '{col}' (非空率 {df[col].notna().mean():.1%}, 示例: {sample})")
-        print(f"      → 必须在 finalize_schema() 的 optional_fields 或 explicitly_ignored 中声明")
-        print(f"      → 使用 --force 跳过此检查（仅用于调试）")
-        if not getattr(args, 'force', False):
-            sys.exit(1)
+    # 拦截逻辑与 base_converter（brand/repair/cross_sell 等标准域）共用同一实现
+    # （pipelines.etl_validation.enforce_schema_contract），两处不再各写一份（消除重复漂移）。
+    from pipelines.etl_validation import enforce_schema_contract
+    enforce_schema_contract(
+        df,
+        set(final_fields) | set(core_fields) | set(optional_fields),
+        explicitly_ignored,
+        force=getattr(args, 'force', False),
+        declare_hint="      → 必须在 finalize_schema() 的 optional_fields 或 explicitly_ignored 中声明",
+    )
 
     df_final = df[final_fields]
 
