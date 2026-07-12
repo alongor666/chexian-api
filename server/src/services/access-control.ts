@@ -521,9 +521,12 @@ export async function updateUser(id: string, input: {
   }
   if (input.passwordHash) {
     updates.push(`password_hash = '${escapeSqlValue(input.passwordHash)}'`);
-    // 管理面重置密码同样视为「运行时自设」：置 password_changed_at，令新哈希优先于
-    // USER_PASSWORDS 环境变量初始密码生效（否则 env 覆盖恒胜，重置无效）。
-    updates.push(`password_changed_at = '${escapeSqlValue(new Date().toISOString())}'`);
+    // 管理面重置密码 = 一次性临时凭据（阶段二口径，取代阶段一「视为自设」）：
+    // 置空 password_changed_at → 该账号回到 pns 态，用户凭临时密码下次登录成功即被
+    // 强制自设专属密码。禁止管理员直接设定长期生效密码（管理员不应知晓用户长期密码）。
+    // 边界：仍在 USER_PASSWORDS 覆盖清单内的账号，pns 态下 env 哈希优先于本临时哈希
+    // （三级哈希链第 2 级），此临时密码不生效——此类账号请改用 reset-token 通道。
+    updates.push('password_changed_at = NULL');
   }
   await duckdbService.query(`
     UPDATE UserAccount

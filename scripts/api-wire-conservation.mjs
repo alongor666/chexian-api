@@ -78,6 +78,8 @@ const POST_SPLIT_ADDITIONS = [
   { name: 'copilot.profitScenario', pr: 'backlog 2026-07-03-claude-05dff4' },
   // 统一初始密码首登强制改密：会话生命周期方法（改写 token 状态），与 login/logout 同留基类
   { name: 'changePassword', pr: 'branch claude/feishu-login-auth-error-2c12f7' },
+  // 全员密码闭环阶段二（找回双通道）：凭一次性重置令牌重设密码（未认证端点，无会话状态 → auth 命名空间）
+  { name: 'auth.resetPassword', pr: 'backlog 2026-07-11-claude-3ac77b' },
 ];
 
 /**

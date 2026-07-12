@@ -55,6 +55,13 @@ export const authEnv = {
   USER_ALLOWED_IPS: process.env.USER_ALLOWED_IPS ?? '',
   /** 开发环境跳过认证（仅 NODE_ENV=development 且值为 '1' 时生效） */
   DEV_SKIP_AUTH: process.env.DEV_SKIP_AUTH ?? '',
+  /**
+   * 密码事件 webhook 群播通知 URL（飞书群机器人，全员密码闭环阶段二）。
+   * 覆盖四类事件：激活成功 / 自助改密 / 找回重设 / 管理员重置。
+   * 未配置则静默不通知（通知失败不阻塞主流程，审计事件独立落盘兜底）。
+   * 独立于 UNMATCHED_NOTIFY_WEBHOOK，禁止复用该变量（两类事件受众/群不同）。
+   */
+  PASSWORD_EVENT_NOTIFY_WEBHOOK: process.env.PASSWORD_EVENT_NOTIFY_WEBHOOK ?? '',
 } as const;
 
 // 生产环境未配置 USER_PASSWORDS → 默认 fail-fast（拒绝带预置弱口令哈希启动）。

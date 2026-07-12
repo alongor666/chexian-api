@@ -172,6 +172,8 @@ export const AUTH_ROUTES = {
   CHANGE_PASSWORD: '/change-password',
   /** 消费激活令牌自设密码（未认证端点：独立限流桶 + 统一错误防枚举） */
   ACTIVATE: '/activate',
+  /** 消费找回/重置令牌重设密码（未认证端点：独立限流桶 + 统一错误防枚举，找回双通道统一消费口） */
+  RESET_PASSWORD: '/reset-password',
   /** Nginx 静态 /reports/* auth_request 细闸（B346 机构级授权），非前端直调 */
   REPORT_ACCESS: '/report-access',
 
@@ -179,6 +181,8 @@ export const AUTH_ROUTES = {
   USER_BY_ID: '/users/:id',
   /** 管理员为账号签发一次性激活令牌（24h，明文仅返回一次） */
   USER_ACTIVATION_TOKEN: '/users/:id/activation-token',
+  /** 管理员为账号签发一次性重置令牌（24h，明文仅返回一次；消费后强制走全员密码策略） */
+  USER_RESET_TOKEN: '/users/:id/reset-token',
 
   ROLES: '/roles',
   ROLE_BY_ID: '/roles/:role',

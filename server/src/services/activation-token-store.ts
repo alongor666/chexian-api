@@ -31,16 +31,31 @@ async function ensureStateDb(): Promise<StateDbModule> {
   return stateDb;
 }
 
+/**
+ * 令牌用途（阶段二新增 reset）：
+ *   - 'activation'：管理员签发的激活令牌（cx_act_，首次设密通道）
+ *   - 'reset'：找回/重置令牌（cx_rst_，飞书扫码找回 or 管理员重置发放）
+ * 两类共用同一张表/文件，消费端点按 kind 严格隔离（activation 令牌打不了 reset 端点，反之亦然）。
+ */
+export type PasswordTokenKind = 'activation' | 'reset';
+
 export interface ActivationTokenRecord {
   token_id: string;
   token_hash: string;
   user_id: string;
   username: string;
-  /** 签发管理员 username（审计追责） */
+  /** 签发者（管理员 username；飞书找回自助签发为 'feishu-reset'）（审计追责） */
   created_by: string;
   created_at: string; // ISO
   expires_at: string; // ISO
   used_at: string | null;
+  /** 令牌用途。历史行（migration 7 之前 / 旧 JSON 文件）缺省视为 'activation'（读取时归一化） */
+  kind: PasswordTokenKind;
+}
+
+/** 历史存量行无 kind 字段（阶段一产物）→ 归一化为 'activation'；非法值同样兜底 */
+function normalizeKind(raw: unknown): PasswordTokenKind {
+  return raw === 'reset' ? 'reset' : 'activation';
 }
 
 function useSqlite(): boolean {
@@ -89,9 +104,9 @@ export async function insertActivationToken(record: ActivationTokenRecord): Prom
     mod.withTransaction((db) => {
       db.prepare(`
         INSERT INTO activation_tokens
-          (token_id, token_hash, user_id, username, created_by, created_at, expires_at, used_at)
+          (token_id, token_hash, user_id, username, created_by, created_at, expires_at, used_at, kind)
         VALUES
-          (@token_id, @token_hash, @user_id, @username, @created_by, @created_at, @expires_at, @used_at)
+          (@token_id, @token_hash, @user_id, @username, @created_by, @created_at, @expires_at, @used_at, @kind)
       `).run(record);
     });
     return;
@@ -100,19 +115,26 @@ export async function insertActivationToken(record: ActivationTokenRecord): Prom
   writeJsonStore({ ...store, tokens: [...store.tokens, record] });
 }
 
-/** 作废该用户所有未使用令牌（重发即取代：同一账号同时只有一张有效令牌） */
-export async function deleteUnusedTokensForUser(userId: string): Promise<void> {
+/**
+ * 作废该用户同 kind 的所有未使用令牌（重发即取代：同一账号同一用途同时只有一张有效令牌）。
+ * 按 kind 隔离：签发 reset 令牌不影响在途的 activation 令牌，反之亦然。
+ */
+export async function deleteUnusedTokensForUser(userId: string, kind: PasswordTokenKind): Promise<void> {
   if (useSqlite()) {
     const mod = await ensureStateDb();
     mod.withTransaction((db) => {
-      db.prepare('DELETE FROM activation_tokens WHERE user_id = ? AND used_at IS NULL').run(userId);
+      db.prepare(
+        "DELETE FROM activation_tokens WHERE user_id = ? AND used_at IS NULL AND COALESCE(kind, 'activation') = ?"
+      ).run(userId, kind);
     });
     return;
   }
   const store = readJsonStore();
   writeJsonStore({
     ...store,
-    tokens: store.tokens.filter((t) => !(t.user_id === userId && t.used_at === null)),
+    tokens: store.tokens.filter(
+      (t) => !(t.user_id === userId && t.used_at === null && normalizeKind(t.kind) === kind)
+    ),
   });
 }
 
@@ -133,10 +155,12 @@ export async function getActivationTokenById(tokenId: string): Promise<Activatio
       created_at: String(row.created_at),
       expires_at: String(row.expires_at),
       used_at: row.used_at === null || row.used_at === undefined ? null : String(row.used_at),
+      kind: normalizeKind(row.kind),
     };
   }
   const store = readJsonStore();
-  return store.tokens.find((t) => t.token_id === tokenId) ?? null;
+  const found = store.tokens.find((t) => t.token_id === tokenId);
+  return found ? { ...found, kind: normalizeKind(found.kind) } : null;
 }
 
 /**

@@ -162,6 +162,8 @@ export const AUTH_ROUTES = {
   ME: 'auth/me',
   /** 用户本人改密（统一初始密码首登强制改密链路） */
   CHANGE_PASSWORD: 'auth/change-password',
+  /** 凭一次性重置令牌重设密码（找回双通道统一消费端点；令牌来自飞书找回 cookie 或管理员发放） */
+  RESET_PASSWORD: 'auth/reset-password',
 
   USERS: 'auth/users',
   USER_BY_ID: 'auth/users',

@@ -11,7 +11,7 @@ import { BranchProvider } from '../shared/contexts/BranchContext';
 import { ThemeProvider } from '../shared/theme';
 import { ExportProvider } from '../shared/export/ExportContext';
 import { DataImportPage } from '../features/home/DataImportPage';
-import { LoginPage, AuthGuard, RouteAccessGuard } from '../features/auth';
+import { LoginPage, AuthGuard, RouteAccessGuard, ResetPasswordPage } from '../features/auth';
 import { FileMenu } from '../features/file';
 import { canAccessExpenseDevelopment, canAccessMotoCost } from '../shared/config/organizations';
 import { isForbiddenError, isRateLimitError } from '../shared/api/client';
@@ -185,6 +185,9 @@ function App() {
               <Routes>
                 {/* 登录页面 - 不需要认证 */}
                 <Route path="/login" element={<LoginPage />} />
+
+                {/* 重设密码页（找回双通道消费入口）- 不需要认证 */}
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                 {/* 主应用 - 需要认证 */}
                 <Route path="/" element={

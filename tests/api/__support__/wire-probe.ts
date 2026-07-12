@@ -170,6 +170,8 @@ export const REGISTRY: RegistryEntry[] = [
   { ns: 'auth', method: 'updateRole', args: () => ['r', {}] },
   { ns: 'auth', method: 'deleteRole', args: () => ['r'] },
   { ns: 'auth', method: 'getFeishuConfig', args: NO_ARGS },
+  // 拆分后合法新增（全员密码闭环阶段二·找回双通道）：凭一次性重置令牌重设密码（未认证端点）
+  { ns: 'auth', method: 'resetPassword', args: () => [{ newPassword: 'pw' }] },
 
   // ── premium（3）──
   { ns: 'premium', method: 'report', args: NO_ARGS },

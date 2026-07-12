@@ -9,7 +9,7 @@
  */
 
 import { safeLog } from '../utils/security.js';
-import { aiEnv } from '../config/env.js';
+import { aiEnv, authEnv } from '../config/env.js';
 
 const WEBHOOK_URL = aiEnv.UNMATCHED_NOTIFY_WEBHOOK;
 
@@ -59,5 +59,61 @@ export async function notifyUnmatchedIntent(payload: UnmatchedNotifyPayload): Pr
     }
   } catch (err) {
     safeLog('warn', 'notify', `Unmatched notify webhook failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 密码事件通知（全员密码闭环 · 阶段二）
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 密码变更方式（通知文案用中文标签，四类事件用户拍板）：
+ *   activation = 激活令牌激活 / self_change = 自助改密 /
+ *   feishu_reset = 飞书扫码找回 / admin_reset = 管理员重置
+ */
+export type PasswordEventMethod = 'activation' | 'self_change' | 'feishu_reset' | 'admin_reset';
+
+const PASSWORD_METHOD_LABELS: Record<PasswordEventMethod, string> = {
+  activation: '激活令牌激活',
+  self_change: '自助改密',
+  feishu_reset: '飞书扫码找回',
+  admin_reset: '管理员重置',
+};
+
+/**
+ * 密码事件 webhook 群播（主路径通知：纯登录飞书应用无 bot 能力、旧桥接应用禁放开可用范围，
+ * 故不做 bot 私信，群播 + 审计留痕即闭环）。
+ *
+ * 静默失败：webhook 未配置或调用失败，记录日志后返回，绝不阻塞设密/改密主流程
+ * （审计事件由调用方独立落盘，不依赖本通知成功）。
+ * ⚠️ 本函数只收 username 与方式，令牌明文/密码明文禁止传入。
+ */
+export async function notifyPasswordEvent(payload: {
+  username: string;
+  method: PasswordEventMethod;
+}): Promise<void> {
+  const webhookUrl = authEnv.PASSWORD_EVENT_NOTIFY_WEBHOOK;
+  if (!webhookUrl) return;
+
+  const ts = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  const label = PASSWORD_METHOD_LABELS[payload.method];
+  const content = `账号 ${payload.username} 的密码于 ${ts}（北京时间）通过「${label}」方式变更，非本人操作请联系管理员`;
+
+  try {
+    const resp = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        msg_type: 'text',
+        content: { text: content },
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!resp.ok) {
+      safeLog('warn', 'notify', `Password event webhook returned ${resp.status}`);
+    }
+  } catch (err) {
+    safeLog('warn', 'notify', `Password event webhook failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }

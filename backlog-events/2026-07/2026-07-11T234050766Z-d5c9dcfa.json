@@ -1,0 +1,1 @@
+{"uid":"2026-07-11-claude-3ac77b","kind":"note","ts":"2026-07-11","actor":"@claude","text":"【认领·派发登记】claude-worktree-optimistic-ptolemy 于 2026-07-11T23:40:50.766Z 接手（派发即登记，防重复派发）；任务卡2/2开工：找回双通道（飞书扫码找回+管理员重置令牌）+ 通知webhook + 限流，基于 main@43cd9944（含PR#1068）","at":"2026-07-11T23:40:50.766Z","eid":"d5c9dcfa"}
