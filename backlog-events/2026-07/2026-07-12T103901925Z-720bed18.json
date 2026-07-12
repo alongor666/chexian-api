@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-a79bf1","kind":"create","ts":"2026-07-12","actor":"@claude","section":"认证与账号安全","priority":"P1","desc":"新建 1 超管 zongbu + 4 市州一把手只读账号","docs":"N/A","code":"server/src/config/preset-users.ts","at":"2026-07-12T10:39:01.925Z","eid":"720bed18"}
