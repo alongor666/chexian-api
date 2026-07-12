@@ -163,7 +163,24 @@ export type AuthEventKind =
   | 'password_change_failure'
   | 'activation_token_created'
   | 'activation_success'
-  | 'activation_failure';
+  | 'activation_failure'
+  // 阶段二（找回双通道）：reset_token_created = 重置令牌签发（管理员/飞书找回）；
+  // password_reset* = 凭重置令牌重设密码；password_admin_reset = 管理员改密触发强制设密
+  | 'reset_token_created'
+  | 'password_reset'
+  | 'password_reset_failure'
+  | 'password_admin_reset';
+
+/** 认证事件 → 审计条目 path 归属（事件语义所在端点，非真实请求路径） */
+function resolveAuthEventPath(event: AuthEventKind): string {
+  if (event.startsWith('login_')) return '/api/auth/login';
+  if (event === 'password_reset' || event === 'password_reset_failure') return '/api/auth/reset-password';
+  if (event === 'password_admin_reset') return '/api/auth/users';
+  if (event.startsWith('password_')) return '/api/auth/change-password';
+  if (event.startsWith('activation_')) return '/api/auth/activate';
+  if (event === 'reset_token_created') return '/api/auth/users/reset-token';
+  return '/api/auth/tokens';
+}
 
 export function auditAuthEvent(params: {
   event: AuthEventKind;
@@ -173,17 +190,11 @@ export function auditAuthEvent(params: {
   organization?: string;
   tokenId?: string;
 }): void {
-  const isLoginPath = params.event.startsWith('login_');
-  const path = isLoginPath
-    ? '/api/auth/login'
-    : params.event.startsWith('password_')
-      ? '/api/auth/change-password'
-      : params.event.startsWith('activation_')
-        ? '/api/auth/activate'
-        : '/api/auth/tokens';
+  const path = resolveAuthEventPath(params.event);
   const successEvents = new Set<AuthEventKind>([
     'login_success', 'pat_created', 'pat_revoked',
     'password_changed', 'activation_token_created', 'activation_success',
+    'reset_token_created', 'password_reset', 'password_admin_reset',
   ]);
   writeAuditLog({
     timestamp: new Date().toISOString(),

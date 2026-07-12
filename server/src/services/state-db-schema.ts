@@ -115,6 +115,13 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_activation_tokens_user ON activation_tokens(user_id);
     `,
   },
+  {
+    id: 7,
+    description: 'kind column on activation_tokens: activation vs reset (password recovery, 2026-07-11 phase 2)',
+    sql: `
+      ALTER TABLE activation_tokens ADD COLUMN kind TEXT NOT NULL DEFAULT 'activation';
+    `,
+  },
 ];
 
 /**

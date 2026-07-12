@@ -85,6 +85,7 @@ export const LoginPage: React.FC = () => {
         'feishu_org_denied': '您不属于授权组织，禁止登录',
         'feishu_auth_denied': '您不在权限白名单/业务员名单中，请联系业务管理员',
         'feishu_auth_failed': '飞书登录异常，请稍后重试',
+        'feishu_reset_failed': '找回密码失败：未能完成飞书身份验证，请重试或联系管理员发放重置令牌',
       };
       setError(errorMap[callbackError] || '扫码登录失败');
       // 清除 URL 中的错误参数
@@ -122,6 +123,23 @@ export const LoginPage: React.FC = () => {
     } catch (err) {
       setError('飞书登录暂不可用，请联系系统管理员');
       setIsFeishuLoading(false);
+    }
+  }, []);
+
+  // 忘记密码 → 飞书扫码找回（intent=reset：callback 只发一次性重置令牌，不发登录会话）
+  const handleFeishuReset = useCallback(async () => {
+    setError('');
+    try {
+      const config = await apiClient.auth.getFeishuConfig('reset');
+      if (config) {
+        const { appId, callbackUrl, state } = config;
+        const qrUrl = `https://accounts.feishu.cn/open-apis/authen/v1/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(callbackUrl)}&state=${state}`;
+        window.location.href = qrUrl;
+      } else {
+        setError('获取飞书配置失败');
+      }
+    } catch (err) {
+      setError('飞书找回暂不可用，请联系管理员发放重置令牌');
     }
   }, []);
 
@@ -305,9 +323,26 @@ export const LoginPage: React.FC = () => {
             </button>
           </div>
 
-          {/* 帮助信息 */}
+          {/* 忘记密码（找回双通道：飞书扫码找回 / 管理员发放重置令牌） */}
           <div className={cn("mt-6 pt-6 border-t", colorClasses.border.neutral)}>
-            <p className={cn("text-sm text-center", colorClasses.text.neutralMuted)}>
+            <div className="flex items-center justify-center gap-4 text-sm">
+              <button
+                type="button"
+                onClick={handleFeishuReset}
+                className={cn(colorClasses.text.primary, 'hover:underline')}
+              >
+                忘记密码？飞书扫码找回
+              </button>
+              <span className={colorClasses.text.neutralMuted}>·</span>
+              <button
+                type="button"
+                onClick={() => navigate('/reset-password')}
+                className={cn(colorClasses.text.neutralMuted, 'hover:underline')}
+              >
+                使用重置令牌
+              </button>
+            </div>
+            <p className={cn("text-xs text-center mt-3", colorClasses.text.neutralMuted)}>
               如需帮助，请联系系统管理员
             </p>
           </div>

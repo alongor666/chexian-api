@@ -197,6 +197,43 @@ export const activateLimiter = rateLimit({
 });
 
 /**
+ * 找回/重置令牌消费接口限流器（严格，独立桶，阶段二）
+ * 5 次/分钟 · 按 IP。/api/auth/reset-password 是未认证端点（持一次性重置令牌重设密码），
+ * 与 activate 同级加严防爆破/枚举；不动三级基线（100/5/200 不变，仅新增独立桶）。
+ */
+export const resetPasswordLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  message: rateLimitBody('重置尝试次数过多，请 1 分钟后再试'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  // C4 组合策略：生产硬拒 + E2E 显式开关 + 本地 localhost 默认跳过
+  skip: shouldSkipRateLimit,
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress || 'unknown',
+  handler: (req, res) => {
+    res.status(429).json(rateLimitBody('重置尝试次数过多，请 1 分钟后再试'));
+  },
+});
+
+/**
+ * 找回发起入口限流器（严格，独立桶，阶段二）
+ * 5 次/分钟 · 按 IP。挂在 /api/auth/feishu/config 上，但仅对 intent=reset（发起找回）
+ * 的请求生效——普通登录取配置不受影响（skip 放行），不动三级基线。
+ */
+export const resetInitLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  message: rateLimitBody('找回请求过于频繁，请 1 分钟后再试'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => shouldSkipRateLimit(req) || req.query?.intent !== 'reset',
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress || 'unknown',
+  handler: (req, res) => {
+    res.status(429).json(rateLimitBody('找回请求过于频繁，请 1 分钟后再试'));
+  },
+});
+
+/**
  * AI 接口限流器（最严格）
  * 10 次/分钟
  */

@@ -126,8 +126,20 @@ export class AuthApi {
     });
   }
 
-  // ── 飞书扫码登录配置（state 为后端下发的防 CSRF 随机串，拼入授权 URL） ──
-  getFeishuConfig(): Promise<{ appId: string; callbackUrl: string; state: string }> {
-    return this.t.request(`/${AUTH_ROUTES.FEISHU_CONFIG}`);
+  // ── 飞书扫码登录/找回配置（state 为后端下发的防 CSRF 随机串，拼入授权 URL）──
+  // intent 缺省 = 登录；'reset' = 发起找回密码（callback 只发一次性重置令牌，绝不发会话）
+  getFeishuConfig(intent?: 'login' | 'reset'): Promise<{ appId: string; callbackUrl: string; state: string }> {
+    const query = intent === 'reset' ? '?intent=reset' : '';
+    return this.t.request(`/${AUTH_ROUTES.FEISHU_CONFIG}${query}`);
+  }
+
+  // ── 凭一次性重置令牌重设密码（找回双通道统一消费端点，未认证）──
+  // token 缺省 = 飞书找回链路（令牌在 httpOnly cookie cx_reset_token 里，随请求自动携带）；
+  // 传入 token = 管理员发放的 cx_rst_ 令牌（用户粘贴）。
+  resetPassword(payload: { token?: string; newPassword: string }): Promise<{ reset: boolean }> {
+    return this.t.request<{ reset: boolean }>(`/${AUTH_ROUTES.RESET_PASSWORD}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 }

@@ -42,7 +42,13 @@ import {
   revokePat,
   type TtlDays,
 } from '../services/personal-access-token.js';
-import { createActivationToken, activateWithToken } from '../services/activation-token.js';
+import {
+  createActivationToken,
+  activateWithToken,
+  createPasswordResetToken,
+  resetPasswordWithToken,
+} from '../services/activation-token.js';
+import { notifyPasswordEvent } from '../services/notify.js';
 import { QUERY_ROUTE_METADATA } from '../config/query-routes-metadata.js';
 import { assertStaticReportAccess, shouldEnforceStaticReportPolicy } from './reports.js';
 
@@ -303,6 +309,8 @@ router.post(
     }
     resetLoginAttempts(clientIp, username);
     auditAuthEvent({ event: 'password_changed', username, ip: clientIp, role: req.user.role });
+    // webhook 群播（静默失败不阻塞主流程；审计已独立落盘）
+    void notifyPasswordEvent({ username, method: 'self_change' });
 
     // 重发不含 pns 声明的会话（cookie + token 双通道），前端无需重新登录
     const session = authService.issueCookieSession({
@@ -350,7 +358,74 @@ router.post(
       throw err;
     }
     auditAuthEvent({ event: 'activation_success', username, ip: clientIp });
+    // webhook 群播（静默失败不阻塞主流程；审计已独立落盘）
+    void notifyPasswordEvent({ username, method: 'activation' });
     res.json({ success: true, data: { activated: true } });
+  })
+);
+
+/**
+ * POST /api/auth/reset-password
+ * 消费找回/重置令牌重设密码（阶段二找回双通道的统一消费端点，activate 风格）。
+ * 令牌来源两条链路：
+ *   - 飞书扫码找回：callback 种下的 httpOnly cookie cx_reset_token（path 收窄到本端点）；
+ *   - 管理员一次性重置令牌：管理员线下交付明文，用户在设新密页粘贴（body.token）。
+ * 未认证端点：app.ts 挂独立限流桶 resetPasswordLimiter（5/min/IP），服务层统一错误防枚举；
+ * 成功即写密码 + 置 password_changed_at + 令牌作废，之后用新密码正常登录。
+ */
+const resetPasswordSchema = z.object({
+  token: z.string().min(1).optional(),
+  newPassword: z.string().min(1, 'New password is required'),
+});
+
+/** 与服务层 KIND_CONFIG.reset 一致的统一错误（缺令牌也回同一句，防枚举） */
+const RESET_UNIFIED_MESSAGE = '重置令牌无效或已过期';
+const RESET_TOKEN_COOKIE = 'cx_reset_token';
+
+router.post(
+  '/reset-password',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = resetPasswordSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw new AppError(400, parseResult.error.issues[0].message);
+    }
+    const { token, newPassword } = parseResult.data;
+    const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+
+    // body 令牌（管理员链路，用户粘贴）优先；否则取飞书找回种下的 cookie
+    const rawToken = token || parseCookieValue(req, RESET_TOKEN_COOKIE);
+    if (!rawToken) {
+      throw new AppError(400, RESET_UNIFIED_MESSAGE);
+    }
+
+    let consumed;
+    try {
+      consumed = await resetPasswordWithToken(rawToken, newPassword);
+    } catch (err) {
+      // 审计不落令牌明文，只记事件与 IP（防枚举的统一错误已由服务层保证）
+      auditAuthEvent({ event: 'password_reset_failure', username: 'unknown', ip: clientIp });
+      throw err;
+    }
+
+    // 消费成功即清掉找回 cookie（一次性语义在服务层已保证，这里是浏览器侧收尾）
+    res.clearCookie(RESET_TOKEN_COOKIE, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/api/auth/reset-password',
+    });
+    auditAuthEvent({
+      event: 'password_reset',
+      username: consumed.username,
+      ip: clientIp,
+      tokenId: consumed.tokenId,
+    });
+    // webhook 群播：按签发来源区分「飞书找回」vs「管理员重置」（静默失败不阻塞）
+    void notifyPasswordEvent({
+      username: consumed.username,
+      method: consumed.createdBy === 'feishu-reset' ? 'feishu_reset' : 'admin_reset',
+    });
+    res.json({ success: true, data: { reset: true } });
   })
 );
 
@@ -385,6 +460,55 @@ router.post(
     });
     auditAuthEvent({
       event: 'activation_token_created',
+      username: target.username,
+      ip: req.ip,
+      role: req.user.role,
+      tokenId: created.tokenId,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        token: created.plaintext, // 明文，仅此次返回
+        tokenId: created.tokenId,
+        username: created.username,
+        expiresAt: created.expiresAt.toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * POST /api/auth/users/:id/reset-token
+ * 管理员为账号签发一次性重置令牌（找回双通道之二，不依赖飞书；24h；明文仅本响应
+ * 返回一次，禁入日志/审计）。用户凭令牌走 POST /api/auth/reset-password 重设密码。
+ * 鉴权/省域收敛与激活令牌端点同闸；重发即作废该账号旧的未使用重置令牌（kind 隔离，
+ * 不影响在途激活令牌）。
+ */
+router.post(
+  '/users/:id/reset-token',
+  authMiddleware,
+  readonlyMiddleware,
+  requireRole(UserRole.BRANCH_ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    requireSessionAuth(req);
+    if (!req.user) throw new AppError(401, 'Authentication required');
+
+    const target = await getUserById(req.params.id);
+    if (!target) throw new AppError(404, '用户不存在');
+    if (!target.active) throw new AppError(400, '账号已停用，无法签发重置令牌');
+    const scope = getManageableBranchScope(req.user ?? {});
+    if (scope !== null && !canManageBranch(scope, target.branchCode)) {
+      throw new AppError(403, '无权管理其他分公司的账号');
+    }
+
+    const created = await createPasswordResetToken({
+      userId: target.id,
+      username: target.username,
+      createdBy: req.user.username,
+    });
+    auditAuthEvent({
+      event: 'reset_token_created',
       username: target.username,
       ip: req.ip,
       role: req.user.role,
@@ -503,6 +627,17 @@ router.put(
       specialFeatures: data.specialFeatures,
       active: data.active,
     });
+    // 管理员重置密码：updateUser 已置空 password_changed_at（新哈希只是一次性临时凭据，
+    // 用户下次登录被 pns 拦截强制自设专属密码）——审计 + webhook 群播留痕
+    if (passwordHash) {
+      auditAuthEvent({
+        event: 'password_admin_reset',
+        username: updated.username,
+        ip: req.ip,
+        role: req.user?.role,
+      });
+      void notifyPasswordEvent({ username: updated.username, method: 'admin_reset' });
+    }
     const { passwordHash: _pw, ...rest } = updated;
     res.json({ success: true, data: rest });
   })

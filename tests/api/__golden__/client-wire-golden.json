@@ -97,6 +97,16 @@
     "auth": true,
     "dedupe": "GET:/auth/users"
   },
+  "auth.resetPassword": {
+    "verb": "POST",
+    "path": "/auth/reset-password",
+    "params": [],
+    "bodyKeys": [
+      "newPassword"
+    ],
+    "auth": true,
+    "dedupe": ""
+  },
   "auth.revokeMyToken": {
     "verb": "DELETE",
     "path": "/auth/tokens/t",
