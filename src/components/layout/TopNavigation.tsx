@@ -14,6 +14,7 @@ import { DropdownMenu, type DropdownItem } from './DropdownMenu';
 import { useSidebar } from './SidebarLayout';
 import { useTheme } from '../../shared/theme';
 import { useBranch, branchLabel } from '../../shared/contexts/BranchContext';
+import { PRODUCT_METADATA } from '../../shared/config/productMetadata';
 
 interface TopNavigationProps {
   /** 文件菜单 slot：由 App.tsx 注入 `<FileMenu />`，避免顶栏反向依赖 features/file */
@@ -57,8 +58,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ fileMenu }) => {
           </button>
         )}
         <Car size={24} className="text-primary mr-2" aria-hidden="true" />
-        <h1 className="text-lg font-semibold tracking-tight text-neutral-800 dark:text-white hidden sm:block">车险经营管理系统</h1>
-        <h1 className="text-lg font-semibold tracking-tight text-neutral-800 dark:text-white sm:hidden">车险系统</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-neutral-800 dark:text-white hidden sm:block">{PRODUCT_METADATA.productName}</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-neutral-800 dark:text-white sm:hidden">{PRODUCT_METADATA.mobileName}</h1>
         <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-primary bg-primary-bg rounded-full">
           v2.0
         </span>

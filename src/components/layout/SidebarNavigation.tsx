@@ -31,6 +31,7 @@ import { useRBAC } from '../../shared/hooks/useRBAC';
 import { buildFilterParams } from '../../shared/utils/filterParams';
 import { apiClient } from '../../shared/api/client';
 import { queryKeys } from '../../shared/api/query-keys';
+import { getNavigationGroups, type IconKey, type RouteDefinition } from '../../shared/config/routeRegistry';
 
 
 interface NavItem {
@@ -41,31 +42,20 @@ interface NavItem {
   tooltipLabel?: string;
 }
 
-const dataNavItems: NavItem[] = [
-  { path: '/home', icon: Home, label: '首页', shortLabel: '首页' },
-  { path: '/dashboard', icon: Gauge, label: '仪表盘', shortLabel: '仪表' },
-  { path: '/performance-analysis', icon: TrendingUp, label: '业绩分析', shortLabel: '业绩' },
-  { path: '/reports', icon: DollarSign, label: '保费达成', shortLabel: '保费' },
-  { path: '/specialty', icon: Gift, label: '专项分析', shortLabel: '专项' },
-  { path: '/growth', icon: BarChart3, label: '增长与对比', shortLabel: '增长' },
-  { path: '/cost', icon: Calculator, label: '成本综合', shortLabel: '成本' },
-];
+const ICONS: Record<IconKey, LucideIcon> = {
+  home: Home, gauge: Gauge, 'layout-grid': LayoutGrid, 'trending-up': TrendingUp,
+  'dollar-sign': DollarSign, 'bar-chart': BarChart3, calculator: Calculator,
+  'file-warning': FileWarning, 'trending-down': TrendingDown, bike: Bike,
+  refresh: RefreshCw, target: Target, 'arrow-left-right': ArrowLeftRight,
+  gift: Gift, wrench: Wrench, database: Database, shield: Shield,
+};
 
-const toolNavItems: NavItem[] = [
-  { path: '/renewal-tracker', icon: RefreshCw, label: '续保追踪', shortLabel: '续保' },
-  { path: '/quote-conversion', icon: Target, label: '报价转化', shortLabel: '报价' },
-  { path: '/expense-development', icon: TrendingDown, label: '费用率发展', shortLabel: '费发' },
-  { path: '/claims-detail', icon: FileWarning, label: '赔案明细', shortLabel: '赔案' },
-  { path: '/repair', icon: Wrench, label: '维修资源', shortLabel: '维修' },
-  { path: '/customer-flow', icon: ArrowLeftRight, label: '客户来源', shortLabel: '来源' },
-  { path: '/chart-ledger', icon: LayoutGrid, label: '图表账本', shortLabel: '账本' },
-  { path: '/data-import', icon: Database, label: '数据导入', shortLabel: '导入' },
-  { path: '/moto-cost', icon: Bike, label: '摩意模型', shortLabel: '摩意' },
-];
-
-const adminNavItems: NavItem[] = [
-  { path: '/admin/access-control', icon: Shield, label: '权限管理', shortLabel: '权限' },
-];
+const toNavItem = (route: RouteDefinition): NavItem => ({
+  path: route.path,
+  icon: ICONS[route.iconKey],
+  label: route.label,
+  shortLabel: route.shortLabel,
+});
 
 /**
  * 侧边栏导航组件
@@ -154,6 +144,19 @@ export const SidebarNavigation: React.FC = () => {
 
   // 移动端保持抽屉展开；桌面端固定为图标 + 两字短标签的窄栏。
   const isCompactRail = !isMobile;
+
+  const isRouteVisible = (route: RouteDefinition) => {
+    if (route.specialFeature === 'moto_cost') {
+      return canAccessMotoCost(userPermission?.username, userPermission?.specialFeatures);
+    }
+    if (route.specialFeature === 'expense_development') {
+      return canAccessExpenseDevelopment(userPermission?.username, userPermission?.specialFeatures);
+    }
+    if (route.id === 'access-control') {
+      return userPermission?.role === UserRole.BRANCH_ADMIN;
+    }
+    return true;
+  };
 
   const renderNavItem = (item: NavItem) => {
     const IconComponent = item.icon;
@@ -262,24 +265,11 @@ export const SidebarNavigation: React.FC = () => {
       {/* 导航菜单 */}
       <div className="flex-1 overflow-y-auto overflow-x-visible">
         <nav className={`${isMobile ? 'px-3 py-4' : 'px-2 py-3'} space-y-1`}>
-          {renderSection('数据分析', dataNavItems)}
-
-          {renderSection(
-            '工具',
-            toolNavItems.filter(item => {
-              if (item.path === '/moto-cost') {
-                return canAccessMotoCost(userPermission?.username, userPermission?.specialFeatures);
-              }
-              if (item.path === '/expense-development') {
-                return canAccessExpenseDevelopment(userPermission?.username, userPermission?.specialFeatures);
-              }
-              return true;
-            })
-          )}
-
-          {userPermission?.role === UserRole.BRANCH_ADMIN && (
-            renderSection('管理', adminNavItems)
-          )}
+          {getNavigationGroups().map((group) => (
+            <React.Fragment key={group.domain}>
+              {renderSection(group.label, group.routes.filter(isRouteVisible).map(toNavItem))}
+            </React.Fragment>
+          ))}
         </nav>
 
       </div>

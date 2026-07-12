@@ -2,7 +2,7 @@
  * Express 应用入口
  * Application Entry Point
  *
- * 车险业绩分析系统 - 后端服务（前后端分离架构）
+ * 车险经营分析平台 - 后端服务（前后端分离架构）
  */
 
 // 必须是第一条 import：ESM import 静态提升，env 加载须先于任何读 process.env 的模块执行

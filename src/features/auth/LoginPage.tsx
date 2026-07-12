@@ -7,6 +7,7 @@ import { apiClient } from '../../shared/api/client';
 import { maskUsernameForLog, resolveRedirectPath, sanitizePathForLog } from '../../shared/utils/redirect-state';
 import { Logger } from '../../shared/utils/logger';
 import { colorClasses, cn } from '../../shared/styles';
+import { PRODUCT_METADATA } from '../../shared/config/productMetadata';
 
 const logger = new Logger('LoginPage');
 
@@ -190,7 +191,7 @@ export const LoginPage: React.FC = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-solid rounded-2xl mb-4 shadow-lg">
             <Shield size={32} className="text-white" />
           </div>
-          <h1 className={cn("text-2xl font-bold", colorClasses.text.neutralBlack)}>车险业绩分析系统</h1>
+          <h1 className={cn("text-2xl font-bold", colorClasses.text.neutralBlack)}>{PRODUCT_METADATA.productName}</h1>
           <p className={cn(colorClasses.text.neutralMuted, "mt-2")}>内网用户登录</p>
         </div>
 
@@ -368,7 +369,7 @@ export const LoginPage: React.FC = () => {
 
         {/* 版权信息 */}
         <p className={cn("text-center text-xs mt-6", colorClasses.text.neutralMuted)}>
-          &copy; 2026 车险业绩分析系统 · 内网专用
+          &copy; 2026 {PRODUCT_METADATA.productName} · 内网专用
         </p>
       </div>
     </div>
