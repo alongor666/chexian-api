@@ -20,6 +20,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { filterOutSelfService, readSelfServiceUsers } from './lib/self-service-users.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,7 +81,14 @@ const allUsers = (store.users || []).map(u => ({
   branchCode: u.branchCode || '?',
   role: u.role || '?',
 }));
-const targets = allUsers.filter(u => !keep.has(u.username));
+
+// 自助设密账号永不进 USER_PASSWORDS override：这些账号密码只能本人自设，env 注入会被
+// auth.ts 运行时忽略、并触发 governance「自助设密账号禁入USER_PASSWORDS」闸阻断发布。
+// 生产 user_store 含这些账号，故轮换必须在源头剔除（BACKLOG 2026-07-12-claude-3901cd）。
+const selfService = readSelfServiceUsers(PROJECT_ROOT);
+const rotatable = allUsers.filter(u => !keep.has(u.username));
+const targets = filterOutSelfService(rotatable, selfService);
+const excludedSelfService = rotatable.length - targets.length;
 
 console.log('');
 console.log('==========================================');
@@ -89,6 +97,7 @@ console.log('==========================================');
 console.log(`  项目根:       ${PROJECT_ROOT}`);
 console.log(`  user_store:   ${allUsers.length} 个用户`);
 console.log(`  --keep 保留:  ${keep.size ? [...keep].join(', ') : '无'} (${keep.size})`);
+console.log(`  自助设密剔除: ${excludedSelfService} 个（永不进 USER_PASSWORDS，密码只能本人自设）`);
 console.log(`  将重置:       ${targets.length} 个`);
 console.log('');
 
