@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-b63661","kind":"status","ts":"2026-07-12","actor":"@claude","status":"DONE","evidence":"PR #1078 已合并（merge commit 98fee094，经本地 origin/main 引用核实；gh API 因出网故障暂不可达）：密码事件通知新增飞书应用 API（chat_id）通道，webhook 旧路径保留兜底。生产 /health 200。中枢会话收尾闭环","at":"2026-07-12T08:32:12.898Z","eid":"60822cce"}
