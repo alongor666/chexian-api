@@ -1,0 +1,1 @@
+{"uid":"2026-07-11-claude-a0035a","kind":"note","ts":"2026-07-11","actor":"@claude","text":"CI 收敛：380d87b3 Production Gate + Governance Check 双绿（E2E 快照隔离用例已适配 pns 强制设密链路并纳入覆盖）。GitGuardian 12 处告警逐条核实均为合成测试常量/弱密码黑名单误报，非必需检查不阻断合并。PR #1068 待人工审核合并","at":"2026-07-11T22:36:59.006Z","eid":"b7f19a3a"}
