@@ -1,0 +1,1 @@
+{"uid":"2026-07-03-claude-575d2f","kind":"note","ts":"2026-07-12","actor":"@claude","text":"审计交叉引用 2026-07-11：state.db 备份现已接入 sync-and-reload Stage 3.8(state-db-backup.mjs·14 份滚动·失败不阻塞)，本项可据此复核是否可置 PARTIAL/DONE。但 warehouse parquet 源数据备份仍是姊妹缺口，已另立 P1 卡 2026-07-12-claude-3dac98(FIND-002)。","at":"2026-07-12T03:09:19.546Z","eid":"ebcf1dd7"}

@@ -2002,3 +2002,15 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 - **根因**：不是本次代码问题，是**存量注入与新闸的时间差**：worktree 引导（PR #990 时代的 USER_PASSWORDS 自注入/主仓 .env 拷贝）早于 #1068 的隔离闸落地，本地 env 文件里残留全量 19 账号注入。闸设计上就要查本地 env（第一道静态闸），命中属预期行为。
 - **修复**：从 worktree `server/.env` 的 USER_PASSWORDS JSON 里剔除 6 个自助设密账号（19→13），governance 55/55 恢复全绿。
 - **预防**：任何在 #1068 之前创建的 worktree / 本地环境，首跑 governance 若命中此闸，先查 `server/.env` 是否存量注入（闸报错会列出账号名与文件位置），剔除即可——不要误判为本次 diff 引入。**主仓 `server/.env` 若同样残留 6 账号，主仓 governance 也会红，需同样清理**（生产 VPS 侧由 #1068 交接清单负责）。
+
+---
+
+## 2026-07-12 · 审计五发现落账 + warehouse 备份 W1a（evidence-loop scorecard，非失败复盘）
+
+- **场景**：证据优先审计（评审册 dossier）用户验收后进入执行；评审收尾问题①「五张审计卡是另一 worktree 未提交文件」→ 本 PR 拷贝落账；W1a 按合同交付 warehouse 备份能力（卡 3dac98）。
+- **合同→证据**：oracle 四路全过（还原对账 exit 0 / 篡改清单 exit 4 且指名文件 / keep=2 滚动清理最旧份 / emit 独立 sh 通过 `sh -n`）；单测 20 项、governance 55 项、typecheck 全绿。
+- **经验**：① 审计会话建的 backlog 事件是 untracked 文件，worktree 被清即蒸发——凡「审计→执行」跨会话交接，接手方第一步先把台账事件拷入自己分支落账；② 备份脚本复用 state-db-backup「纯函数生成 POSIX sh」模式，本地合成数据即可端到端验收，无需碰生产。
+- **预防**：跨会话引用卡号前先 `ls backlog-events/` 确认已 git 跟踪，未跟踪先落账再引用。
+
+### needs_automation: false
+（首次出现「审计卡未落账即被引用」；再现一次则在 backlog.mjs 写入后打印"⚠️ 未提交"提醒或加 governance 检查。）
