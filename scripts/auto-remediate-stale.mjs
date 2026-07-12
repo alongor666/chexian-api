@@ -33,6 +33,7 @@ const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(dirname(__filename), '..');
 const LOGS_DIR = join(PROJECT_ROOT, '数据管理', 'logs');
 const RELEASE_STATE_PATH = join(LOGS_DIR, 'auto-release-state.json');
+const RELEASE_LOCK_PATH = join(LOGS_DIR, '.auto-release.lock'); // auto-release-daily 运行时持有，接手前查它防并发
 const REMEDIATE_STATE_PATH = join(LOGS_DIR, 'auto-remediate-state.json');
 const LAST_FAILURE_LOG = join(LOGS_DIR, 'auto-remediate-last-failure.log');
 const LOG_PATH = join(LOGS_DIR, 'auto-remediate.log');
@@ -171,6 +172,11 @@ function main() {
   const nowISO = new Date().toISOString();
 
   if (decision.action === 'tier1-retry') {
+    // 并发闸（第二道）：auto-release 正持锁运行 → 本 tick 让路，下轮再接手，绝不并发跑 release:daily
+    if (existsSync(RELEASE_LOCK_PATH)) {
+      log('⏸ auto-release 正在运行（.auto-release.lock 存在），本 tick 让路，不接手');
+      return undefined;
+    }
     const { ok, log: relLog } = runReleaseDaily();
     if (ok) {
       writeRemediateState(nextRemediateState('recovered', { todayBeijing, prevState: remediateState, note: 'Tier1 重跑 release:daily 成功', nowISO }));
