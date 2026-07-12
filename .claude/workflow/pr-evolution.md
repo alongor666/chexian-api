@@ -2102,3 +2102,15 @@ expires: 2026-07-26
 
 ### needs_automation: false
 （本条即「把发现→处置的人工闭环自动化」本身；Tier2 的人工确认是有意保留的高风险闸，非待自动化缺口。卡 966ae7 跟踪；部署（Mac launchd install + VPS 看门狗）是 gated 步骤。）
+
+---
+
+## 2026-07-12 · 自动接手并发闸（激活前部署自查发现的必修项）+ VPS 看门狗部署实录（卡 966ae7/47f8ce）
+
+- **部署前自查抓到并发风险**：`auto-remediate` 每 30 分钟触发，若在 `auto-release-daily` 还在重试窗（attempts<2）时就接手，会**两个 `release:daily` 并发**（ETL 写 parquet / rsync / reload 撞车）。激活 Mac launchd 前必须堵。
+- **两道并发闸**：① 决策层 `decideRemediation` 加 `minReleaseAttempts`（默认 2 = auto-release 的 `DEFAULT_MAX_ATTEMPTS`）——failed 态须 attempts≥2（auto-release 已达上限停手）才接手，missed 天然已停手不受约束；② 执行层 tier1 前查 `.auto-release.lock`（`auto-release-daily.acquireLock` 'wx' 运行时持有、完成即删，路径逐字一致），存在即让路。两道正交：决策闸防「窗内插入」，锁闸防「恰好收尾瞬间」。18 单测（+3 并发闸）通过。
+- **VPS 看门狗部署实录（gated 步骤实做）**：scp → `/usr/local/bin/`；`/etc/chexian/watchdog.env`（600，python 提取 FEISHU 凭据不回显）；crontab `*/30`；真实运行 exit 0 无误报。
+- **验证抓到真 bug（断言≠验证的又一实证）**：自检发送 **code 230002「Bot can NOT be out of the chat」**——#1078 env.ts 注释断言「bot 已在目标群」是**错的**，登录应用 `cli_a94d08f4` 的 bot 根本不在「AI赋能车险经营」(oc_07c20f22，那是 lark-cli 另一 bot 的群)。查 bot 实际所在群 → 只在「claude&机器人管理」「数据分析系统上线测试」两个群。用户改选「claude&机器人管理」群，自检 code=0 发送成功。**教训**：#1078 合并时若做过真实群发自检就会早发现；注释里的「bot 已在群」是未验证断言，被本次端到端自检戳破。
+
+### needs_automation: false
+（并发闸即安全必修，已代码化 + 单测；部署实录属一次性 gated 操作。#1078 注释断言未验证的教训 → 复用 memory `feedback_verify_not_claim` 精神，无新机制点。）

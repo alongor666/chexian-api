@@ -1,7 +1,7 @@
 /**
  * 发布停更「自动接手」决策纯函数（BACKLOG 2026-07-12-claude-966ae7 · 审计 FIND-001）
  *
- * 背景：看门狗（VPS）负责发现停更 + 告警；本模块所属的 Mac 侧 auto-remediate-stale.mjs
+ * 背景：数据巡检（VPS）负责发现停更 + 告警；本模块所属的 Mac 侧 auto-remediate-stale.mjs
  * 负责「自动接手」——把 FIND-001 从「只告警」升级为「分级自主处置」。release:daily 依赖
  * Mac 的 ETL 管道，只能在 Mac 跑，故接手方在 Mac。
  *
@@ -19,6 +19,14 @@
 /** Tier 1 每日自动重跑上限（默认 1：瞬时失败一跑即好，多跑无益且放大风险）。 */
 export const DEFAULT_MAX_TIER1 = 1;
 
+/**
+ * 接手前要求 auto-release 已「放弃」的最小失败尝试数（默认 2，= auto-release-decision
+ * 的 DEFAULT_MAX_ATTEMPTS）。**并发闸**：只在 auto-release 达重试上限停手后才接手，
+ * 否则会与其重试窗口内的 release:daily 并发跑（ETL/rsync/reload 撞车）。missed 态天然
+ * 已停手（窗口已过），不受此数约束。
+ */
+export const DEFAULT_MIN_RELEASE_ATTEMPTS = 2;
+
 /** 触发接手的发布状态集（今日发布处于这些状态才接手）。 */
 const REMEDIABLE_RELEASE_STATUSES = ['failed', 'missed'];
 
@@ -32,15 +40,31 @@ const REMEDIABLE_RELEASE_STATUSES = ['failed', 'missed'];
  *   auto-remediate-state.json 内容（无文件传 null）。
  * @param {string} opts.todayBeijing 北京今天 YYYY-MM-DD。
  * @param {number} [opts.maxTier1=DEFAULT_MAX_TIER1]
+ * @param {number} [opts.minReleaseAttempts=DEFAULT_MIN_RELEASE_ATTEMPTS] 并发闸阈值
  * @returns {{action:'skip'|'tier1-retry'|'tier2-diagnose', reason:string}}
  *   - skip：本 tick 不动作
  *   - tier1-retry：轻风险自处置——重跑 release:daily
  *   - tier2-diagnose：重风险——诊断 + 回帖群待确认
  */
-export function decideRemediation({ releaseState, remediateState, todayBeijing, maxTier1 = DEFAULT_MAX_TIER1 }) {
+export function decideRemediation({
+  releaseState,
+  remediateState,
+  todayBeijing,
+  maxTier1 = DEFAULT_MAX_TIER1,
+  minReleaseAttempts = DEFAULT_MIN_RELEASE_ATTEMPTS,
+}) {
   const releaseSameDay = releaseState?.beijingDay === todayBeijing;
   if (!releaseSameDay || !REMEDIABLE_RELEASE_STATUSES.includes(releaseState?.status)) {
     return { action: 'skip', reason: '今日发布非 failed/missed（未失败或已 released），无需接手' };
+  }
+  // 并发闸：failed 态须达重试上限（auto-release 已停手）才接手，防与其重试窗并发跑 release:daily。
+  // missed 态天然已停手（窗口已过），不受尝试数约束。
+  const attempts = releaseState?.attempts ?? 0;
+  if (releaseState?.status === 'failed' && attempts < minReleaseAttempts) {
+    return {
+      action: 'skip',
+      reason: `auto-release 仍在重试（failed·attempts=${attempts}<${minReleaseAttempts}），等其停手再接手（防并发）`,
+    };
   }
 
   const remedSameDay = remediateState?.beijingDay === todayBeijing;
