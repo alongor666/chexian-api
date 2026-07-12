@@ -9,7 +9,7 @@
  */
 
 import { safeLog } from '../utils/security.js';
-import { aiEnv, authEnv } from '../config/env.js';
+import { aiEnv, authEnv, feishuEnv } from '../config/env.js';
 
 const WEBHOOK_URL = aiEnv.UNMATCHED_NOTIFY_WEBHOOK;
 
@@ -80,40 +80,126 @@ const PASSWORD_METHOD_LABELS: Record<PasswordEventMethod, string> = {
   admin_reset: '管理员重置',
 };
 
+const FEISHU_TENANT_TOKEN_URL = 'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal';
+const FEISHU_SEND_MESSAGE_URL = 'https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id';
+/** tenant_access_token 提前刷新窗口：过期前 5 分钟即视为失效 */
+const TOKEN_REFRESH_AHEAD_MS = 5 * 60 * 1000;
+
+/** 进程内 tenant_access_token 缓存（按 appId 区分，防将来换专用通知应用时串 token） */
+const tenantTokenCache = new Map<string, { token: string; expiresAt: number }>();
+
+/** 仅供单测清缓存，业务代码禁止调用 */
+export function __resetTenantTokenCacheForTest(): void {
+  tenantTokenCache.clear();
+}
+
 /**
- * 密码事件 webhook 群播（主路径通知：纯登录飞书应用无 bot 能力、旧桥接应用禁放开可用范围，
- * 故不做 bot 私信，群播 + 审计留痕即闭环）。
+ * 获取飞书 tenant_access_token（进程内缓存至过期前 5 分钟）。
+ * 失败抛错，由调用方按通知失败静默处理；错误信息不含 app_secret / token。
+ */
+async function getTenantAccessToken(appId: string, appSecret: string): Promise<string> {
+  const cached = tenantTokenCache.get(appId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.token;
+  }
+
+  const resp = await fetch(FEISHU_TENANT_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!resp.ok) {
+    throw new Error(`tenant_access_token HTTP ${resp.status}`);
+  }
+  const data = await resp.json() as { code?: number; msg?: string; tenant_access_token?: string; expire?: number };
+  if (data.code !== 0 || !data.tenant_access_token) {
+    throw new Error(`tenant_access_token code=${data.code} msg=${data.msg ?? ''}`);
+  }
+
+  const expireSeconds = typeof data.expire === 'number' && data.expire > 0 ? data.expire : 0;
+  tenantTokenCache.set(appId, {
+    token: data.tenant_access_token,
+    expiresAt: Date.now() + expireSeconds * 1000 - TOKEN_REFRESH_AHEAD_MS,
+  });
+  return data.tenant_access_token;
+}
+
+/** 飞书应用 API 直发群消息（以应用身份，receive_id_type=chat_id） */
+async function sendChatMessageViaApp(chatId: string, text: string): Promise<void> {
+  const appId = authEnv.PASSWORD_NOTIFY_APP_ID || feishuEnv.FEISHU_APP_ID;
+  const appSecret = authEnv.PASSWORD_NOTIFY_APP_SECRET || feishuEnv.FEISHU_APP_SECRET;
+  if (!appId || !appSecret) {
+    safeLog('warn', 'notify', 'Password event chat notify skipped: Feishu app credentials missing');
+    return;
+  }
+
+  const token = await getTenantAccessToken(appId, appSecret);
+  const resp = await fetch(FEISHU_SEND_MESSAGE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      receive_id: chatId,
+      msg_type: 'text',
+      content: JSON.stringify({ text }),
+    }),
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!resp.ok) {
+    throw new Error(`im/v1/messages HTTP ${resp.status}`);
+  }
+  const data = await resp.json() as { code?: number; msg?: string };
+  if (data.code !== 0) {
+    throw new Error(`im/v1/messages code=${data.code} msg=${data.msg ?? ''}`);
+  }
+}
+
+/**
+ * 密码事件群播通知，双通道选择（主路径通知：纯登录飞书应用无 bot 能力、旧桥接应用禁放开可用范围，
+ * 故不做 bot 私信，群播 + 审计留痕即闭环）：
+ *   1. PASSWORD_EVENT_NOTIFY_WEBHOOK 非空 → 自定义机器人 webhook（旧通道，修补不拆除）
+ *   2. 否则 PASSWORD_EVENT_NOTIFY_CHAT_ID 非空 → 飞书应用 API 直发群（新通道，飞书已下线自定义机器人入口）
+ *   3. 两者皆空 → 跳过
  *
- * 静默失败：webhook 未配置或调用失败，记录日志后返回，绝不阻塞设密/改密主流程
+ * 静默失败：通道未配置或调用失败，记录 warn 日志后返回，绝不阻塞设密/改密主流程
  * （审计事件由调用方独立落盘，不依赖本通知成功）。
- * ⚠️ 本函数只收 username 与方式，令牌明文/密码明文禁止传入。
+ * ⚠️ 本函数只收 username 与方式，令牌明文/密码明文禁止传入；app_secret/token 禁止打进日志。
  */
 export async function notifyPasswordEvent(payload: {
   username: string;
   method: PasswordEventMethod;
 }): Promise<void> {
   const webhookUrl = authEnv.PASSWORD_EVENT_NOTIFY_WEBHOOK;
-  if (!webhookUrl) return;
+  const chatId = authEnv.PASSWORD_EVENT_NOTIFY_CHAT_ID;
+  if (!webhookUrl && !chatId) return;
 
   const ts = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
   const label = PASSWORD_METHOD_LABELS[payload.method];
   const content = `账号 ${payload.username} 的密码于 ${ts}（北京时间）通过「${label}」方式变更，非本人操作请联系管理员`;
 
   try {
-    const resp = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        msg_type: 'text',
-        content: { text: content },
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
+    if (webhookUrl) {
+      const resp = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          msg_type: 'text',
+          content: { text: content },
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
 
-    if (!resp.ok) {
-      safeLog('warn', 'notify', `Password event webhook returned ${resp.status}`);
+      if (!resp.ok) {
+        safeLog('warn', 'notify', `Password event webhook returned ${resp.status}`);
+      }
+      return;
     }
+
+    await sendChatMessageViaApp(chatId, content);
   } catch (err) {
-    safeLog('warn', 'notify', `Password event webhook failed: ${err instanceof Error ? err.message : String(err)}`);
+    safeLog('warn', 'notify', `Password event notify failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
