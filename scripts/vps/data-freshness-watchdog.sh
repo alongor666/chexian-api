@@ -98,15 +98,19 @@ sys.stdout.write(str(d.get("code")))' 2>/dev/null || true)
   echo "[watchdog] ⚠ 飞书发送失败 code=$_code（不中止，下轮重试）"; return 1
 }
 
+# 把纯文本安全编码进 JSON 字符串（含引号，正确转义换行/引号/反斜杠），供 webhook 通道拼接。
+json_quote() { WD_S="$1" python3 -c 'import os,json,sys;sys.stdout.write(json.dumps(os.environ["WD_S"],ensure_ascii=False))'; }
+
 send_msg() {
   TEXT="$1"
-  if [ "$DRY_RUN" = "1" ]; then echo "[watchdog][dry-run] $TEXT"; return 0; fi
+  if [ "$DRY_RUN" = "1" ]; then printf '[watchdog][dry-run]\n%s\n' "$TEXT"; return 0; fi
   if [ -n "$WEBHOOK_URL" ]; then
-    # 通道 B：群机器人 webhook（旧通道，非空即优先）
+    # 通道 B：群机器人 webhook（旧通道，非空即优先）。经 json_quote 转义，多行文案亦为合法 JSON。
+    _q=$(json_quote "$TEXT")
     if [ "$KIND" = "feishu" ]; then
-      BODY=$(printf '{"msg_type":"text","content":{"text":"%s"}}' "$TEXT")
+      BODY='{"msg_type":"text","content":{"text":'"$_q"'}}'
     else
-      BODY=$(printf '{"msgtype":"text","text":{"content":"%s"}}' "$TEXT")
+      BODY='{"msgtype":"text","text":{"content":'"$_q"'}}'
     fi
     curl -sS --max-time 10 -H 'Content-Type: application/json' -d "$BODY" "$WEBHOOK_URL" >/dev/null \
       || echo "[watchdog] ⚠ webhook 发送失败（不中止，下轮重试）"
@@ -116,11 +120,15 @@ send_msg() {
   fi
 }
 
+# 多行文案换行符（POSIX sh 无 $'\n'，用字面换行的变量）
+NL='
+'
+
 NOW=$(date +%s)
 NEWEST=$(newest_epoch)
 if [ "$NEWEST" -eq 0 ]; then
   echo "[watchdog] ❌ 监控目录无文件或不可读：$DATA_DIRS"
-  send_msg "【车险数据看门狗】异常：监控目录无文件或不可读（$DATA_DIRS），请立即检查 VPS 数据目录。"
+  send_msg "🔴 车险数据目录异常${NL}${NL}发现　监控目录无文件或不可读（疑似磁盘故障 / 误删 / 权限变更）${NL}安排　AI 值守 / 人工（此类非发布链问题，自动接手不覆盖）${NL}做什么　核查数据目录完整性，从备份恢复${NL}怎么做　登录 VPS 查 /var/www/chexian/server/data，比对 warehouse 备份恢复"
   exit 4
 fi
 AGE_H=$(( (NOW - NEWEST) / 3600 ))
@@ -128,7 +136,7 @@ BEIJING_NEWEST=$(TZ=Asia/Shanghai date -d "@$NEWEST" '+%m-%d %H:%M' 2>/dev/null 
 
 if [ "$AGE_H" -lt "$STALE_HOURS" ]; then
   if [ -f "$ALERT_STAMP" ]; then
-    send_msg "【车险数据看门狗】✅ 已恢复：数据于北京时间 $BEIJING_NEWEST 更新（距今 ${AGE_H}h）。"
+    send_msg "🟢 车险数据已恢复${NL}${NL}发现　数据于 ${BEIJING_NEWEST}（北京）恢复更新${NL}结果　停更已解除，无需处理"
     rm -f "$ALERT_STAMP"
   fi
   echo "[watchdog] ✅ 新鲜（最新更新：北京 $BEIJING_NEWEST，距今 ${AGE_H}h < ${STALE_HOURS}h）"
@@ -140,6 +148,6 @@ if [ $(( NOW - LAST_ALERT )) -lt $(( REALERT_HOURS * 3600 )) ]; then
   echo "[watchdog] 🔴 仍陈旧（${AGE_H}h），距上次告警未满 ${REALERT_HOURS}h，本轮静默"
   exit 0
 fi
-send_msg "【车险数据看门狗】🔴 生产数据已 ${AGE_H} 小时未更新（最后更新：北京 $BEIJING_NEWEST，阈值 ${STALE_HOURS}h）。发布链可能静默中断（Mac 离线/发布失败），请检查 auto-release 状态与日志。"
+send_msg "🔴 车险数据停更 ${AGE_H} 小时${NL}${NL}发现　数据已 ${AGE_H} 小时未更新，最后 ${BEIJING_NEWEST}（北京），超 ${STALE_HOURS}h 阈值${NL}安排　Mac 侧自动接手（auto-remediate）${NL}做什么　轻风险自处置重跑补发，重风险回帖群待确认${NL}怎么做　自动重跑 release:daily；仍失败则诊断原因回帖，重风险动作等人工确认"
 echo "$NOW" > "$ALERT_STAMP"
 echo "[watchdog] 🔴 已告警（数据 ${AGE_H}h 未更新）"
