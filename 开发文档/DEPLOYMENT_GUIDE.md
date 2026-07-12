@@ -335,39 +335,32 @@ logrotate -d /etc/logrotate.d/chexian
 
 ### 步骤 8：数据备份自动化
 
+> ⚠️ 历史版本此处是一段手抄 `tar *.parquet` 命令——扁平通配匹配不到分省子目录
+> （`fact/policy/current/SC/`、`current/SX/`），且从未入仓、从未自动执行（审计 FIND-002，
+> BACKLOG `2026-07-12-claude-3dac98`）。现以仓库内脚本 `scripts/warehouse-backup.mjs`
+> 为唯一事实源：find 递归清单打包（任意深度子目录逐一入档）+ 逐文件 sha256 校验清单
+> + 还原对账 + 滚动保留。**禁止再手抄 tar 命令。**
+
 ```bash
-cat > /root/backup-chexian.sh << 'EOF'
-#!/bin/bash
-BACKUP_DIR=/var/backups/chexian
-DATE=$(date +%Y%m%d)
+# ① 在仓库内生成独立备份脚本（零依赖 POSIX sh，无需 node）并上传 VPS
+node scripts/warehouse-backup.mjs emit --out /tmp/backup-warehouse.sh \
+  --src /var/www/chexian/server/data --dest /var/backups/chexian/warehouse --keep 7
+scp /tmp/backup-warehouse.sh chexian-vps:/usr/local/bin/backup-warehouse.sh
 
-mkdir -p $BACKUP_DIR
+# ② VPS 上手动跑一次并做还原对账（验收：逐文件 sha256 一致才算备份可用）
+ssh chexian-vps 'sh /usr/local/bin/backup-warehouse.sh'
+# 校验最近一份归档（还原到临时目录 + 逐文件对账）：
+#   node scripts/warehouse-backup.mjs verify /var/backups/chexian/warehouse/warehouse-<日期>.tar.gz
 
-# 备份数据文件
-tar -czf $BACKUP_DIR/chexian-data-$DATE.tar.gz \
-    /var/www/chexian/server/data/*.parquet \
-    /var/www/chexian/server/data/*.json \
-    /var/www/chexian/logs/audit.log
+# ③ 验收通过后挂定时（每天凌晨 2:00，避开发布窗口；发布进行中 parquet 会被替换）
+ssh chexian-vps 'crontab -l 2>/dev/null | { cat; echo "0 2 * * * sh /usr/local/bin/backup-warehouse.sh >> /var/log/chexian-backup.log 2>&1"; } | crontab -'
 
-# 备份环境变量（仅首次）
-if [ ! -f $BACKUP_DIR/env-backup.txt ]; then
-    cat /var/www/chexian/server/.env > $BACKUP_DIR/env-backup.txt
-    chmod 600 $BACKUP_DIR/env-backup.txt
-fi
-
-# 保留最近 30 天
-find $BACKUP_DIR -name "chexian-data-*" -mtime +30 -delete
-
-echo "[$(date)] 备份完成: $BACKUP_DIR/chexian-data-$DATE.tar.gz"
-EOF
-
-chmod +x /root/backup-chexian.sh
-
-# 添加定时任务（每天凌晨 2:00）
-crontab -e
-# 添加以下行:
-# 0 2 * * * /root/backup-chexian.sh >> /var/log/chexian-backup.log 2>&1
+# ④ 环境变量备份（仅首次，与数据备份互相独立）
+ssh chexian-vps 'install -m 600 /var/www/chexian/server/.env /var/backups/chexian/env-backup.txt'
 ```
+
+说明：`state.db`（用户/角色/PAT）有独立在线备份通道（`scripts/lib/state-db-backup.mjs`，
+已接入发布链），warehouse 备份脚本刻意排除它，两通道互不重叠。
 
 ### 步骤 9：腾讯云安全组配置
 
