@@ -88,8 +88,17 @@ module.exports = {
 
       // 自动重启配置
       max_memory_restart: '3500M', // DuckDB ~1.5G + Node 稳态 800M + route-cache 400MB → 4G VPS 留 500MB 安全边际
-      restart_delay: 5000, // 重启间隔 5 秒（给 OS 回收内存）
-      max_restarts: 5, // 最多重启 5 次（减少 OOM 循环）
+      // 指数退避重启（2026-07-12 生产 502 RCA 根治 A，卡 2026-07-12-claude-4d85f8）：
+      // 事故根因=内核升级重启触发 pm2 resurrect，对着部署 npm ci 半装窗口里"缺 express 的
+      // node_modules"拉起 → 崩溃循环；旧 `max_restarts:5` 让 PM2 崩 5 次后【永久放弃】，把
+      // 秒级瞬时故障（node_modules 几十秒内自我补全）恶化为需人工介入的【持续 502】。
+      // 启用 exp_backoff_restart_delay 后，PM2 以递增延迟（100ms→…→上限 ~15s）【无限重试】，
+      // 一旦 node_modules 补全，下一次退避重试即成功 → 自愈；退避上限也抑制紧密 thrash，
+      // 保留原 max_restarts 抑制 OOM 空转的意图。覆盖开机 resurrect 与部署 reload 两条路径。
+      // 详见 开发文档/reviews/2026-07-12-生产502事故RCA.md §5 根治 A。
+      exp_backoff_restart_delay: 100,
+      restart_delay: 5000, // exp_backoff 生效时被退避策略取代；保留作显式回退基线
+      max_restarts: 5, // exp_backoff 下作为"进入退避"的阈值（不再永久放弃），仍抑制 OOM 空转
       min_uptime: '30s', // 最小运行时间（启动加载需 30-40s）
 
       // 监控配置
