@@ -1,64 +1,59 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { ROUTES } from '../src/shared/config/routeRegistry';
 
-const appSource = readFileSync(
-  resolve(process.cwd(), 'src/app/App.tsx'),
-  'utf8',
-);
+const appSource = readFileSync(resolve(process.cwd(), 'src/app/App.tsx'), 'utf8');
+const sourceFile = ts.createSourceFile('App.tsx', appSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 
-function declaredRoutePaths(source: string): Set<string> {
-  const paths = new Set<string>();
-  for (const match of source.matchAll(/<Route\s+[^>]*path=["']([^"']+)["']/gs)) {
-    const declared = match[1];
-    paths.add(declared.startsWith('/') ? declared : `/${declared}`);
-  }
-  return paths;
+function jsxAttribute(node: ts.JsxAttributes, name: string): string | undefined {
+  const attribute = node.properties.find((property): property is ts.JsxAttribute => (
+    ts.isJsxAttribute(property) && property.name.getText(sourceFile) === name
+  ));
+  return attribute?.initializer && ts.isStringLiteral(attribute.initializer)
+    ? attribute.initializer.text
+    : undefined;
+}
+
+function appRoutes(): Map<string, string | undefined> {
+  const routes = new Map<string, string | undefined>();
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(sourceFile) === 'Route') {
+      const path = jsxAttribute(node.attributes, 'path');
+      if (path) {
+        let destination: string | undefined;
+        node.forEachChild(function findNavigate(child) {
+          if (ts.isJsxSelfClosingElement(child) && child.tagName.getText(sourceFile) === 'Navigate') {
+            destination = jsxAttribute(child.attributes, 'to');
+          }
+          child.forEachChild(findNavigate);
+        });
+        routes.set(path.startsWith('/') ? path : `/${path}`, destination);
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  return routes;
 }
 
 describe('route registry and App route synchronization', () => {
   it('keeps all 17 canonical pages as explicit App routes', () => {
-    const declaredPaths = declaredRoutePaths(appSource);
-
+    const declared = appRoutes();
     expect(ROUTES).toHaveLength(17);
     for (const route of ROUTES) {
-      expect(declaredPaths, `missing explicit Route for ${route.id}: ${route.path}`).toContain(route.path);
+      expect(declared.has(route.path), `missing explicit Route for ${route.id}: ${route.path}`).toBe(true);
     }
   });
 
-  it('retains every registered legacy alias as an explicit redirect', () => {
-    const declaredPaths = declaredRoutePaths(appSource);
-    const aliases = ROUTES.flatMap((route) => route.aliases ?? []);
+  it('derives every explicit legacy redirect path and destination from the registry', () => {
+    const declared = appRoutes();
+    const redirects = ROUTES.flatMap((route) => route.redirects ?? []);
 
-    expect(aliases).toEqual(expect.arrayContaining([
-      '/old-dashboard',
-      '/premium-report',
-      '/marketing-report',
-      '/truck',
-      '/cross-sell',
-      '/comparison',
-      '/comprehensive-analysis',
-    ]));
-    for (const alias of aliases) {
-      expect(declaredPaths, `missing redirect Route for alias ${alias}`).toContain(alias);
-    }
-
-    const redirects = new Map([
-      ['/old-dashboard', '/dashboard'],
-      ['/premium-report', '/reports'],
-      ['/marketing-report', '/reports'],
-      ['/truck', '/specialty?tab=truck'],
-      ['/cross-sell', '/specialty?tab=cross-sell'],
-      ['/comparison', '/growth'],
-      ['/comprehensive-analysis', '/cost?view=comprehensive'],
-    ]);
-    for (const [alias, destination] of redirects) {
-      const relativeAlias = alias.slice(1);
-      const routePattern = new RegExp(
-        `<Route\\s+path=["'](?:${alias}|${relativeAlias})["']\\s+element=\\{<Navigate\\s+to=["']${destination.replace('?', '\\?')}["']\\s+replace\\s*/>}`,
-      );
-      expect(appSource, `${alias} must remain a redirect to ${destination}`).toMatch(routePattern);
+    expect(redirects).toHaveLength(7);
+    for (const redirect of redirects) {
+      expect(declared.get(redirect.path), `redirect drift for ${redirect.path}`).toBe(redirect.to);
     }
   });
 });

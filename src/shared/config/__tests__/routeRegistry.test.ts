@@ -39,8 +39,9 @@ describe('route registry contract', () => {
     expect(new Set(ROUTES.map((route) => route.path)).size).toBe(ROUTES.length);
   });
 
-  it('keeps aliases unique and separate from canonical paths', () => {
-    const aliases = ROUTES.flatMap((route) => route.aliases ?? []);
+  it('keeps redirects unique, targeted, and separate from canonical paths', () => {
+    const redirects = ROUTES.flatMap((route) => route.redirects ?? []);
+    const aliases = redirects.map((redirect) => redirect.path);
     const canonicalPaths = new Set(ROUTES.map((route) => route.path));
 
     expect(new Set(aliases).size).toBe(aliases.length);
@@ -54,12 +55,17 @@ describe('route registry contract', () => {
       '/comprehensive-analysis',
       '/old-dashboard',
     ]));
+    expect(redirects).toEqual(expect.arrayContaining([
+      { path: '/truck', to: '/specialty?tab=truck' },
+      { path: '/cross-sell', to: '/specialty?tab=cross-sell' },
+      { path: '/comprehensive-analysis', to: '/cost?view=comprehensive' },
+    ]));
   });
 
   it('only returns canonical routes as permission choices', () => {
     const permissionRoutes = getPermissionRoutes();
     const permissionPaths = permissionRoutes.map((route) => route.path);
-    const aliases = ROUTES.flatMap((route) => route.aliases ?? []);
+    const aliases = ROUTES.flatMap((route) => route.redirects?.map((redirect) => redirect.path) ?? []);
 
     expect(permissionPaths).not.toContain('/');
     for (const alias of aliases) {
@@ -122,14 +128,18 @@ describe('route registry contract', () => {
   it('freezes the route registry and all nested registry values at runtime', () => {
     const originalDomainLabel = DECISION_DOMAINS[0].label;
     const originalRouteLabel = ROUTES[0].label;
-    const routeWithAliases = ROUTES.find((route) => route.aliases?.length);
-    const originalAliases = [...(routeWithAliases?.aliases ?? [])];
+    const routeWithRedirects = ROUTES.find((route) => route.redirects?.length);
+    const redirects = routeWithRedirects?.redirects;
+    const originalRedirects = [...(redirects ?? [])];
 
     expect(Object.isFrozen(DECISION_DOMAINS)).toBe(true);
     expect(DECISION_DOMAINS.every(Object.isFrozen)).toBe(true);
     expect(Object.isFrozen(ROUTES)).toBe(true);
     expect(ROUTES.every(Object.isFrozen)).toBe(true);
-    expect(ROUTES.filter((route) => route.aliases).every((route) => Object.isFrozen(route.aliases))).toBe(true);
+    expect(ROUTES.filter((route) => 'redirects' in route).every((route) => {
+      const values = route.redirects;
+      return Object.isFrozen(values) && values?.every(Object.isFrozen);
+    })).toBe(true);
 
     expect(() => (DECISION_DOMAINS as unknown as unknown[]).push({})).toThrow(TypeError);
     expect(() => {
@@ -139,10 +149,10 @@ describe('route registry contract', () => {
     expect(() => {
       (ROUTES[0] as { label: string }).label = '被篡改';
     }).toThrow(TypeError);
-    expect(() => (routeWithAliases?.aliases as unknown as string[]).push('/mutated')).toThrow(TypeError);
+    expect(() => (redirects as unknown as object[]).push({ path: '/mutated', to: '/home' })).toThrow(TypeError);
 
     expect(DECISION_DOMAINS[0].label).toBe(originalDomainLabel);
     expect(ROUTES[0].label).toBe(originalRouteLabel);
-    expect(routeWithAliases?.aliases).toEqual(originalAliases);
+    expect(redirects).toEqual(originalRedirects);
   });
 });

@@ -102,13 +102,13 @@ describe('Organizations Config', () => {
 
 
   describe('route defaults for org users', () => {
-    it('should allow merged specialty routes and keep legacy aliases compatible for org users', () => {
+    it('should allow merged specialty routes without expanding renewal tracker access', () => {
       const orgUser = getPermissionByUsername('leshan')!;
 
       expect(canAccessRoute(orgUser, '/performance-analysis')).toBe(true);
       expect(canAccessRoute(orgUser, '/growth')).toBe(true);
       expect(canAccessRoute(orgUser, '/specialty')).toBe(true);
-      expect(canAccessRoute(orgUser, '/renewal')).toBe(true);
+      expect(canAccessRoute(orgUser, '/renewal')).toBe(false);
       expect(canAccessRoute(orgUser, '/cross-sell')).toBe(true);
       expect(canAccessRoute(orgUser, '/truck')).toBe(true);
 
@@ -121,6 +121,25 @@ describe('Organizations Config', () => {
     it('should use performance-analysis as fallback default route for org user', () => {
       const orgUser = getPermissionByUsername('leshan')!;
       expect(getDefaultRoute(orgUser)).toBe('/performance-analysis');
+    });
+  });
+
+  describe('canAccessRoute legacy permission aliases', () => {
+    const permissionFor = (allowedRoute: string) => ({
+      username: 'legacy-user',
+      displayName: 'Legacy User',
+      role: UserRole.ORG_USER,
+      organization: '乐山' as const,
+      allowedRoutes: [allowedRoute],
+    });
+
+    it.each([
+      ['/truck', '/specialty'],
+      ['/comparison', '/growth'],
+      ['/renewal', '/renewal-tracker'],
+      ['/', '/home'],
+    ])('treats stored %s as access to canonical %s', (stored, canonical) => {
+      expect(canAccessRoute(permissionFor(stored), canonical)).toBe(true);
     });
   });
 

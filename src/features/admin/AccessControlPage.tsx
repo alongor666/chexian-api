@@ -14,7 +14,7 @@ import {
   useConfirmDialog,
 } from '../../shared/ui';
 import { ApiTokensPanel } from './ApiTokensPanel';
-import { splitIpList, joinList, toggleSelection } from './utils/accessControl';
+import { splitIpList, joinList, toggleSelection, isRouteSelected, toggleRouteSelection } from './utils/accessControl';
 import { getPermissionRoutes } from '../../shared/config/routeRegistry';
 
 /**
@@ -79,7 +79,7 @@ const RouteCheckboxGroup: React.FC<{
   onChange: (routes: string[]) => void;
 }> = ({ selected, onChange }) => {
   const toggle = (path: string, checked: boolean) => {
-    onChange(toggleSelection(selected, path, checked));
+    onChange(toggleRouteSelection(selected, path, checked));
   };
 
   return (
@@ -93,7 +93,7 @@ const RouteCheckboxGroup: React.FC<{
           >
             <input
               type="checkbox"
-              checked={selected.includes(route.path)}
+              checked={isRouteSelected(selected, route.path)}
               onChange={e => toggle(route.path, e.target.checked)}
               className="w-4 h-4 rounded accent-primary cursor-pointer"
             />

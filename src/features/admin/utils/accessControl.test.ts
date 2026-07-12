@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitIpList, joinList, toggleSelection } from './accessControl';
+import { splitIpList, joinList, toggleSelection, isRouteSelected, toggleRouteSelection } from './accessControl';
 
 describe('splitIpList · IP 白名单解析', () => {
   it('空串 → []', () => {
@@ -81,5 +81,16 @@ describe('toggleSelection · 复选不可变更新', () => {
       '/comparison',
     ]);
     expect(existingRoutes).toEqual(['/truck', '/comparison', '/dashboard']);
+  });
+
+  it('取消 canonical 路由时移除其等价 legacy alias', () => {
+    expect(toggleRouteSelection(['/truck', '/cross-sell', '/growth'], '/specialty', false)).toEqual(['/growth']);
+  });
+
+  it('legacy alias 会让对应 canonical 复选框显示已选', () => {
+    expect(isRouteSelected(['/truck'], '/specialty')).toBe(true);
+    expect(isRouteSelected(['/comparison'], '/growth')).toBe(true);
+    expect(isRouteSelected(['/renewal'], '/renewal-tracker')).toBe(true);
+    expect(isRouteSelected(['/'], '/home')).toBe(true);
   });
 });

@@ -4,6 +4,8 @@
  * 定义机构层级结构和用户权限规则
  */
 
+import { canonicalizeRoutePath } from './routeRegistry';
+
 /**
  * 三级机构列表（12个，四川 SC）
  * 对应 salesman_organization_mapping.json 中的 organizations。
@@ -167,15 +169,6 @@ export const ORG_USER_DEFAULT_ALLOWED_ROUTES: readonly string[] = [
  * 机构角色默认落地页
  */
 export const ORG_USER_DEFAULT_ROUTE = '/performance-analysis';
-
-const ROUTE_ALIAS_MAP: Record<string, string> = {
-  '/premium-report': '/reports',
-  '/truck': '/specialty',
-  '/renewal': '/specialty',
-  '/cross-sell': '/specialty',
-  '/comparison': '/growth',
-  '/comprehensive-analysis': '/cost',
-};
 
 /**
  * 用户认证配置（含密码）
@@ -439,7 +432,7 @@ export function canAccessRoute(permission: UserPermission, pathname: string): bo
   // 分公司管理员不受路由白名单限制
   if (permission.role === UserRole.BRANCH_ADMIN) return true;
 
-  const normalizedPathname = ROUTE_ALIAS_MAP[pathname] || pathname;
+  const normalizedPathname = canonicalizeRoutePath(pathname);
 
   const effectiveAllowedRoutes =
     permission.allowedRoutes && permission.allowedRoutes.length > 0
@@ -453,12 +446,10 @@ export function canAccessRoute(permission: UserPermission, pathname: string): bo
   }
 
   return effectiveAllowedRoutes.some((allowedRoute) => {
-    if (allowedRoute === '/') {
-      return normalizedPathname === '/';
-    }
+    const normalizedAllowedRoute = canonicalizeRoutePath(allowedRoute);
     return (
-      normalizedPathname === allowedRoute ||
-      normalizedPathname.startsWith(`${allowedRoute}/`)
+      normalizedPathname === normalizedAllowedRoute ||
+      normalizedPathname.startsWith(`${normalizedAllowedRoute}/`)
     );
   });
 }

@@ -1,10 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SidebarNavigation } from '../src/components/layout/SidebarNavigation';
 
 const sidebarState = vi.hoisted(() => ({ isMobile: false }));
+
+afterEach(() => {
+  sidebarState.isMobile = false;
+});
 
 vi.mock('../src/components/layout/SidebarLayout', () => ({
   DESKTOP_SIDEBAR_WIDTH: 96,
@@ -83,7 +87,5 @@ describe('SidebarNavigation compact rail', () => {
     expect(screen.getByRole('link', { name: '经营看板' }).getAttribute('href')).toBe('/dashboard');
     expect(screen.getByRole('link', { name: '赔案分析' }).getAttribute('href')).toBe('/claims-detail');
     expect(screen.getByRole('link', { name: '数据管理' }).getAttribute('href')).toBe('/data-import');
-
-    sidebarState.isMobile = false;
   });
 });
