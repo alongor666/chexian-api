@@ -1,0 +1,1 @@
+{"uid":"2026-07-11-claude-3ac77b","kind":"note","ts":"2026-07-12","actor":"@claude","text":"PR #1069 已创建（ready 非 draft、未开 auto-merge）：https://github.com/alongor666/chexian-api/pull/1069 —— 合并前留证：verify:full 5168 全绿 + governance 55/55 + curl 11 步 + webhook 实测送达；生产灰度清单（飞书真实扫码/webhook 送达/限流 429）见 PR 描述","at":"2026-07-12T00:27:38.597Z","eid":"6b131f93"}
