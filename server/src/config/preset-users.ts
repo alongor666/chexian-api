@@ -77,12 +77,21 @@ export const PRESET_ROLES: PresetRole[] = [
   { role: 'telemarketing_user', name: '电销用户', dataScope: 'telemarketing' },
 ];
 
+/**
+ * 全局不变量（RED LINE · 安全审查 H1，preset-users.test.ts「全局 tombstone 不变量」锁死）：
+ * **所有** 账号的 passwordHash 必须是构造式 tombstone（含 "Tombstone" 标记、60 字符、bcrypt.compare
+ * 对任意明文恒 false）——源码永不保留真实可登录哈希。真实凭据只有两条来源：
+ *   1. 生产 USER_PASSWORDS 环境变量注入（临时密码，首登经 pns 强制改密）；
+ *   2. 用户经激活令牌 / 飞书首登自设（写库置 password_changed_at）。
+ * 后果：漏注入 USER_PASSWORDS key = 该账号回落 tombstone = 恒拒登录（fail-safe），绝不成后门。
+ * 新增账号一律照此写 tombstone；勿把 bcrypt(明文) 直接写进源码。
+ */
 export const PRESET_USERS: Record<string, PresetUser> = {
   admin: {
     username: 'admin',
-    // tombstone 占位（不可登录）：admin 凭据仅由 USER_PASSWORDS 环境变量提供。
-    // 旧泄漏密码已于 2026-06-09 轮换，此处不再保留任何可用哈希。
-    passwordHash: '$2b$10$PNyAVhUD9EEoLZZWzFtIjOm15LNJWezVd9nmLeWESo3ENroom0U7a',
+    // 构造式 tombstone 占位（不可登录）：admin 凭据仅由 USER_PASSWORDS 环境变量提供，
+    // 漏注入则回落此 tombstone 恒拒登录（旧泄漏密码 2026-06-09 已轮换，源码不留真实哈希）。
+    passwordHash: '$2b$10$AdminTombstone00000000000000000000000000000000000000u',
     displayName: '系统管理员',
     role: 'branch_admin',
     branchCode: 'SC',
@@ -90,7 +99,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   leshan: {
     username: 'leshan',
-    passwordHash: '$2b$10$CeX2KL/WI2MWZ63xF7enqO2yQSLP.xvGk0QfnuS23UT4lrn8F6gmS',
+    passwordHash: '$2b$10$LeshanTombstone0000000000000000000000000000000000000u',
     displayName: '乐山机构',
     role: 'org_user',
     organization: '乐山',
@@ -100,7 +109,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   tianfu: {
     username: 'tianfu',
-    passwordHash: '$2b$10$TKH31uTuhfV3qLrBRmSAPeqzTVW0sGLwB8UMr2IyalHWVIblS1N0K',
+    passwordHash: '$2b$10$TianfuTombstone0000000000000000000000000000000000000u',
     displayName: '天府机构',
     role: 'org_user',
     organization: '天府',
@@ -112,7 +121,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     username: 'liangqin',
     // tombstone 占位（不可登录）：凭据仅由 USER_PASSWORDS 环境变量提供。
     // 旧明文初始密码已于 2026-06-09 轮换，此处不再保留任何可用哈希。
-    passwordHash: '$2b$10$Z01ljSK8Is7iUKzuUxVXcekwmS3tuJ48.4dQbY0CZ3fQB88ypcy4u',
+    passwordHash: '$2b$10$LiangqinTombstone00000000000000000000000000000000000u',
     displayName: '天府机构-梁琴',
     role: 'org_user',
     organization: '天府',
@@ -122,7 +131,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   yibin: {
     username: 'yibin',
-    passwordHash: '$2b$10$2tbYhm0rBqaSQQsHOuWdAeQg6c4mCO/4fwLbjBDkn8Rfc3XVv4rBm',
+    passwordHash: '$2b$10$YibinTombstone00000000000000000000000000000000000000u',
     displayName: '宜宾机构',
     role: 'org_user',
     organization: '宜宾',
@@ -132,7 +141,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   deyang: {
     username: 'deyang',
-    passwordHash: '$2b$10$zDni4lZoEkDMYMkP6uMhgO1jdQKSpfkSt4GtpY8UOxTLAEWnv3nHu',
+    passwordHash: '$2b$10$DeyangTombstone0000000000000000000000000000000000000u',
     displayName: '德阳机构',
     role: 'org_user',
     organization: '德阳',
@@ -142,7 +151,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   xindu: {
     username: 'xindu',
-    passwordHash: '$2b$10$0U8wIDAXrW3YlOc3/XPdHuJo4urye9qPYmIU9c6FOxRxr1TjBApR6',
+    passwordHash: '$2b$10$XinduTombstone00000000000000000000000000000000000000u',
     displayName: '新都机构',
     role: 'org_user',
     organization: '新都',
@@ -152,7 +161,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   wuhou: {
     username: 'wuhou',
-    passwordHash: '$2b$10$uNyKQR32nlcca.oaywfZwOoceTEeMJXQX5IzXSutwdnVdm/ejwx9m',
+    passwordHash: '$2b$10$WuhouTombstone00000000000000000000000000000000000000u',
     displayName: '武侯机构',
     role: 'org_user',
     organization: '武侯',
@@ -162,7 +171,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   luzhou: {
     username: 'luzhou',
-    passwordHash: '$2b$10$gKzgBHHfHcBq99SFpx7NZO2ndskDz.xe9MUAPzFGc2sx8hCMAXQTS',
+    passwordHash: '$2b$10$LuzhouTombstone0000000000000000000000000000000000000u',
     displayName: '泸州机构',
     role: 'org_user',
     organization: '泸州',
@@ -172,7 +181,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   zigong: {
     username: 'zigong',
-    passwordHash: '$2b$10$JFOozBJNV8lHU55DhIekfuNo1ddIBFafC.1Uz26BYBf4lwVmPvSc.',
+    passwordHash: '$2b$10$ZigongTombstone0000000000000000000000000000000000000u',
     displayName: '自贡机构',
     role: 'org_user',
     organization: '自贡',
@@ -182,7 +191,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   ziyang: {
     username: 'ziyang',
-    passwordHash: '$2b$10$KPGSRPfpFU46thFf06DHNeA0XFdnkGupmSKpyBU9YkGyEv.1ZMrS2',
+    passwordHash: '$2b$10$ZiyangTombstone0000000000000000000000000000000000000u',
     displayName: '资阳机构',
     role: 'org_user',
     organization: '资阳',
@@ -192,7 +201,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   dazhou: {
     username: 'dazhou',
-    passwordHash: '$2b$10$Aw0DqjuPUkffTwy51z/PNuDixo4eHmatDIuENLYsShAQG45E2mmmq',
+    passwordHash: '$2b$10$DazhouTombstone0000000000000000000000000000000000000u',
     displayName: '达州机构',
     role: 'org_user',
     organization: '达州',
@@ -202,7 +211,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   qingyang: {
     username: 'qingyang',
-    passwordHash: '$2b$10$tEooGxkbqThh6LGY5fSbLOe9gvvTEF.3lQ7VXOihyAJPz6loGJ54y',
+    passwordHash: '$2b$10$QingyangTombstone00000000000000000000000000000000000u',
     displayName: '青羊机构',
     role: 'org_user',
     organization: '青羊',
@@ -212,7 +221,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   gaoxin: {
     username: 'gaoxin',
-    passwordHash: '$2b$10$0gZkoX6BUQXY/z42K1XKiOqVfY26xQl/a8ipNwNaN6kGBzp7aPUQi',
+    passwordHash: '$2b$10$GaoxinTombstone0000000000000000000000000000000000000u',
     displayName: '高新机构',
     role: 'org_user',
     organization: '高新',
@@ -222,14 +231,14 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   jiachengxian: {
     username: 'jiachengxian',
-    passwordHash: '$2b$10$gy9XfxPHgbFrdSJfFrTtW.tu3kRzGYsPxGRrtvMyleCGNTpdTDhL6',
+    passwordHash: '$2b$10$JiachengxianTombstone0000000000000000000000000000000u',
     displayName: 'jiachengxian',
     role: 'branch_admin',
     branchCode: 'SC',
   },
   xuechenglong: {
     username: 'xuechenglong',
-    passwordHash: '$2b$10$NHIOCyjuqXWLXyq5UaP8Y.5p/NNsDMXBrsnk/eHsmq.tVSd0swcwu',
+    passwordHash: '$2b$10$XuechenglongTombstone0000000000000000000000000000000u',
     displayName: '薛成龙',
     role: 'branch_admin',
     // 全国超管：默认省四川（保留 branchCode='SC' 满足 fail-closed 不变量 permission.test.ts:181），
@@ -240,7 +249,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   linxia: {
     username: 'linxia',
-    passwordHash: '$2b$10$IPuFIhlNl6NFLXSC8A4o4.tuqMsK9J7B6D5DbeKzpOnJtE9uLA/BO',
+    passwordHash: '$2b$10$LinxiaTombstone0000000000000000000000000000000000000u',
     displayName: '林霞',
     role: 'branch_admin',
     branchCode: 'SC',
@@ -248,7 +257,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   chexianbu: {
     username: 'chexianbu',
-    passwordHash: '$2b$10$MNXiN2ASW4I1h.uqWRKySuQH80CmVCn1wjnXbXWzV5ersVLcoE4wu',
+    passwordHash: '$2b$10$ChexianbuTombstone0000000000000000000000000000000000u',
     displayName: '车险部',
     role: 'branch_admin',
     branchCode: 'SC',
@@ -256,7 +265,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   },
   scdianxiao: {
     username: 'scdianxiao',
-    passwordHash: '$2b$10$LGsDuG1.fieDoR/mbsII1u2ecFY0iteEyFMKkgzO98OKfdbUAj4cK',
+    passwordHash: '$2b$10$ScdianxiaoTombstone000000000000000000000000000000000u',
     displayName: '四川电销',
     role: 'telemarketing_user',
     branchCode: 'SC',
@@ -548,7 +557,7 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     username: 'test_org_user',
     // 全员密码体系改造（2026-07-11）：测试账号停用（active:false），不参与密码迁移；
     // 需要时由管理员在管理面重新启用。
-    passwordHash: '$2b$10$JyCWJdWGvcPKjSBJ5/KcAeFQOryg6d6GbMcq5jdX99L2PCEsCMDOi',
+    passwordHash: '$2b$10$TestorguserTombstone00000000000000000000000000000000u',
     displayName: '测试机构用户',
     role: 'org_user',
     organization: '乐山',

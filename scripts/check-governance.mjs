@@ -63,6 +63,8 @@ import { buildPatternChecks } from './governance/pattern-engine.mjs';
 import { PATTERN_RULES } from './governance/pattern-rules.mjs';
 import { checkUploadSizeLimitConsistency as runUploadSizeCheck } from './governance/upload-size-consistency.mjs';
 import { checkDualLockConsistency as runDualLockConsistencyCheck, checkBranchMappingMirror as runBranchMappingMirrorCheck } from './governance/dual-lock-and-branch-mirror-checks.mjs';
+import { runBranchRlsEnabledCheck } from './governance/branch-rls-enabled.mjs';
+import { runPatReadonlyCoverageCheck } from './governance/pat-readonly-coverage.mjs';
 import { governanceCheckChunkInvariants } from './check-chunk-invariants.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -3470,6 +3472,8 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '能力矩阵镜像', fn: checkFilterCapabilityMirror },
   { name: '双锁一致性', fn: () => runDualLockConsistencyCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   { name: '省份映射前后端镜像', fn: () => runBranchMappingMirrorCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
+  { name: 'RLS总闸必开', fn: () => runBranchRlsEnabledCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
+  { name: 'PAT只读端点覆盖', fn: () => runPatReadonlyCoverageCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   patternCheck('Bundle路由开关合规'),
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
   { name: '非query路由域对账', fn: checkNonQueryRoutesConsistency },
