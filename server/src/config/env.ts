@@ -12,6 +12,9 @@
  */
 
 import { parsePositiveInt } from '../utils/parse-env.js';
+// 安全审查 H1：启动期核对 active 账号的 USER_PASSWORDS 覆盖（WARN，非 fail-fast）。
+// preset-users.ts 零 import，此依赖单向、无循环。
+import { PRESET_USERS, SELF_SERVICE_PASSWORD_ONLY_USERS } from './preset-users.js';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -85,18 +88,52 @@ export const authEnv = {
 if (isProd && !authEnv.USER_PASSWORDS) {
   if (process.env.ALLOW_DEFAULT_CREDENTIALS === 'true') {
     console.warn(
-      '[env] ⚠️ ALLOW_DEFAULT_CREDENTIALS=true：生产环境正在使用 preset-users 默认密码哈希。' +
-      '这些是已知弱口令，仅供受控临时场景。请尽快配置 USER_PASSWORDS 并移除此逃生阀。'
+      '[env] ⚠️ ALLOW_DEFAULT_CREDENTIALS=true：生产环境跳过了 USER_PASSWORDS 校验。' +
+      'preset-users.ts 现在全部是 fail-safe tombstone（漏注入即恒拒登录，非弱口令后门），' +
+      '但缺 USER_PASSWORDS 意味着无人能用临时密码登录。请尽快配置 USER_PASSWORDS。'
     );
   } else {
     throw new Error(
       '[env] 生产环境必需变量 USER_PASSWORDS 未配置：' +
-      'preset-users.ts 内置的是已知默认弱口令哈希，禁止用于生产。' +
+      'preset-users.ts 现在全部是 fail-safe tombstone 占位（不含真实凭据），' +
+      '缺 USER_PASSWORDS 会导致所有非自设密码账号无法登录。' +
       '请将 USER_PASSWORDS 配置为 {"username":"$2b$10$..."} JSON 映射表；' +
-      '若确需临时使用默认口令，显式设置 ALLOW_DEFAULT_CREDENTIALS=true。'
+      '若确需临时无凭据启动，显式设置 ALLOW_DEFAULT_CREDENTIALS=true。'
     );
   }
 }
+
+/**
+ * 安全审查 H1（WARN，非 fail-fast）：USER_PASSWORDS 非空时，列出「active 且非自助设密、
+ * 且不在 USER_PASSWORDS key」的账号——这些账号若尚未自设密码将无法登录（源码已是 tombstone）。
+ * 刻意不 fail-fast：启动期读不到 store 的 password_changed_at，硬拦会误伤已自设密码的账号。
+ * 安全性由 tombstone + preset-users.test.ts 全局不变量承担，本处仅作运维可见性。
+ */
+function warnMissingUserPasswordKeys(): void {
+  const raw = authEnv.USER_PASSWORDS;
+  if (!raw) return;
+  let keys: Set<string>;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return;
+    keys = new Set(Object.keys(parsed).map((k) => k.toLowerCase()));
+  } catch {
+    return; // 解析失败由 auth.ts loadPasswordOverrides 侧告警，这里不重复
+  }
+  const selfService = new Set(SELF_SERVICE_PASSWORD_ONLY_USERS.map((u) => u.toLowerCase()));
+  const missing = Object.values(PRESET_USERS)
+    .filter((u) => u.active !== false)
+    .map((u) => u.username.toLowerCase())
+    .filter((name) => !selfService.has(name) && !keys.has(name));
+  if (missing.length > 0) {
+    console.warn(
+      `[env] ⚠️ 以下 ${missing.length} 个 active 账号未在 USER_PASSWORDS 提供临时密码：` +
+      `${missing.join(', ')}。若其尚未自设密码将无法登录（源码为 fail-safe tombstone）。` +
+      '如需其可登录，请在 USER_PASSWORDS 补 bcrypt 哈希；确认已自设密码可忽略本告警。'
+    );
+  }
+}
+warnMissingUserPasswordKeys();
 
 // ─── 数据库配置 ────────────────────────────────────────────────────────────────
 

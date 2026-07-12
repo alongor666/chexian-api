@@ -245,3 +245,39 @@ describe('全国超管 visibleBranches（切省 + 全国合并视图）', () => 
     expect(PRESET_USERS.xuechenglong.visibleBranches).toEqual(['SC', 'SX']);
   });
 });
+
+/**
+ * 全局 tombstone 不变量（安全审查 H1 · RED LINE）：
+ * 所有账号（不限省份/批次）的 passwordHash 必须是构造式 tombstone——源码永不含真实可登录哈希。
+ * 这是防「未来又把 bcrypt(明文) 写进源码」的 durable 回归闸；此前只有 SX/zongbu 分批断言，
+ * 存量四川账号（admin/leshan/... 约 19 个）曾带真实哈希 = 漏注入 USER_PASSWORDS key 即后门。
+ */
+describe('全局 tombstone 不变量（H1）', () => {
+  const entries = Object.entries(PRESET_USERS);
+
+  it.each(entries)('%s 的 passwordHash 是合法格式的构造式 tombstone', (_username, user) => {
+    // 字符串形态闸：标准 bcrypt 前缀 + 长度 60 + 含 Tombstone 标记
+    expect(user.passwordHash).toMatch(/^\$2[aby]\$\d{2}\$/);
+    expect(user.passwordHash).toHaveLength(60);
+    expect(user.passwordHash).toMatch(/Tombstone/i);
+  });
+
+  it(
+    '每个账号 bcrypt.compare 对代表性明文恒 false 且不抛（行为闸）',
+    () => {
+      // cost=10 × N 账号 × 3 明文，默认 5s 超时在全量套件下会 flaky，显式放宽到 30s。
+      const candidates = ['', 'Chexian@2026', 'password'];
+      for (const [username, user] of entries) {
+        for (const pw of [username, ...candidates]) {
+          expect(bcrypt.compareSync(pw, user.passwordHash)).toBe(false);
+        }
+      }
+    },
+    30000,
+  );
+
+  it('所有 tombstone 唯一（防 codemod 生成碰撞）', () => {
+    const hashes = entries.map(([, u]) => u.passwordHash);
+    expect(new Set(hashes).size).toBe(hashes.length);
+  });
+});

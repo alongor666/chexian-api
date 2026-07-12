@@ -158,6 +158,8 @@ export type AuthEventKind =
   | 'login_ip_denied'
   | 'pat_created'
   | 'pat_revoked'
+  // 凭据轮换（改密/激活/找回/管理员重置）联动批量吊销该用户全部 active PAT（安全审查 M4）
+  | 'pat_revoked_on_password_change'
   | 'pat_expired'
   | 'password_changed'
   | 'password_change_failure'
@@ -192,7 +194,7 @@ export function auditAuthEvent(params: {
 }): void {
   const path = resolveAuthEventPath(params.event);
   const successEvents = new Set<AuthEventKind>([
-    'login_success', 'pat_created', 'pat_revoked',
+    'login_success', 'pat_created', 'pat_revoked', 'pat_revoked_on_password_change',
     'password_changed', 'activation_token_created', 'activation_success',
     'reset_token_created', 'password_reset', 'password_admin_reset',
   ]);

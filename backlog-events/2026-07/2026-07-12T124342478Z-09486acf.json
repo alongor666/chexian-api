@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-00a670","kind":"create","ts":"2026-07-12","actor":"@claude","section":"安全-治理","priority":"P2","desc":"M3-full: RLS 路由消费闸升级为逐 endpoint 语义级覆盖（按 handler/route block 建立 SQL 执行↔permissionFilter 消费对应），替代当前 checkRlsRouteCoverage 的文件级 grep。本轮务实版被评审判定与既有检查等价已删除。","docs":"N/A","code":"scripts/check-governance.mjs","at":"2026-07-12T12:43:42.478Z","eid":"09486acf"}

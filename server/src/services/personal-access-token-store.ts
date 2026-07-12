@@ -149,6 +149,20 @@ export async function revokePatInSqlite(tokenId: string, revokedAt: string): Pro
   });
 }
 
+/**
+ * Batch revoke：吊销某用户全部 active（revoked_at IS NULL）PAT（凭据轮换联动，安全审查 M4）。
+ * 单条 UPDATE + 单事务，避免逐 token 三层写放大。回滚复用逐 token unrevokePatInSqlite。
+ */
+export async function revokeActivePatsForUserInSqlite(userId: string, revokedAt: string): Promise<void> {
+  const mod = await ensureStateDb();
+  mod.withTransaction((db) => {
+    db.prepare('UPDATE api_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').run(
+      revokedAt,
+      userId,
+    );
+  });
+}
+
 /** Row-level un-revoke：revokePat mirror 失败时回滚用 */
 export async function unrevokePatInSqlite(tokenId: string): Promise<void> {
   const mod = await ensureStateDb();

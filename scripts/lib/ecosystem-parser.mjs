@@ -8,7 +8,11 @@
  * 从 ecosystem.config.cjs 纯文本中提取第一个 env: { ... } 块的键名
  *
  * @param {string} content - ecosystem.config.cjs 文件内容
- * @returns {{ keys: string[], corsOrigin: string }}
+ * @returns {{ keys: string[], corsOrigin: string, env: Record<string, string> }}
+ *   - keys: env 块内所有键名（保持既有语义）
+ *   - corsOrigin: CORS_ORIGIN 的清洗后值（保持既有语义）
+ *   - env: 键 → 清洗后值（去行内注释 / 去引号）的完整映射，供治理/发布脚本共用同一解析，
+ *          避免各处再写易误伤注释/重复块的单行正则
  */
 export function parseEcosystemEnvKeys(content) {
   // 1. 剥离块注释 /* ... */
@@ -16,13 +20,13 @@ export function parseEcosystemEnvKeys(content) {
 
   // 2. 用负向后瞻精确匹配 env:（排除 env_production: 等）
   const envMatch = cleaned.match(/(?<![_\w])env\s*:/);
-  if (!envMatch) return { keys: [], corsOrigin: '' };
+  if (!envMatch) return { keys: [], corsOrigin: '', env: {} };
 
   const envStart = envMatch.index;
 
   // 3. 找到 { 开始
   const braceStart = cleaned.indexOf('{', envStart);
-  if (braceStart === -1) return { keys: [], corsOrigin: '' };
+  if (braceStart === -1) return { keys: [], corsOrigin: '', env: {} };
 
   // 4. 匹配对应的 }（状态机计数大括号深度）
   let depth = 0;
@@ -37,26 +41,30 @@ export function parseEcosystemEnvKeys(content) {
       }
     }
   }
-  if (braceEnd === -1) return { keys: [], corsOrigin: '' };
+  if (braceEnd === -1) return { keys: [], corsOrigin: '', env: {} };
 
   const block = cleaned.slice(braceStart + 1, braceEnd);
   const keys = [];
+  const env = {};
   let corsOrigin = '';
+
+  // 清洗单个原始值：优先取引号内内容（避免 https:// 被行内注释正则误伤），否则剥行内注释
+  const cleanValue = (raw) => {
+    const quotedMatch = raw.match(/['"]([^'"]*)['"]/);
+    return quotedMatch ? quotedMatch[1].trim() : raw.replace(/\/\/.*$/, '').trim();
+  };
 
   // 5. 提取 KEY: value 对，剥离行内注释
   const keyPattern = /^\s*(\w+)\s*:\s*(.+?)(?:,\s*)?$/gm;
   let match;
   while ((match = keyPattern.exec(block)) !== null) {
     keys.push(match[1]);
+    const value = cleanValue(match[2]);
+    env[match[1]] = value;
     if (match[1] === 'CORS_ORIGIN') {
-      const raw = match[2];
-      // 优先提取引号内的值（避免 https:// 被行内注释正则误伤）
-      const quotedMatch = raw.match(/['"]([^'"]*)['"]/);
-      corsOrigin = quotedMatch
-        ? quotedMatch[1].trim()
-        : raw.replace(/\/\/.*$/, '').trim();
+      corsOrigin = value;
     }
   }
 
-  return { keys, corsOrigin };
+  return { keys, corsOrigin, env };
 }

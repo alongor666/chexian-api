@@ -27,6 +27,7 @@ import {
   saveApiTokens,
   upsertPatToSqlite,
   revokePatInSqlite,
+  revokeActivePatsForUserInSqlite,
   unrevokePatInSqlite,
   deletePatFromSqlite,
   updateLastUsedBatchInSqlite,
@@ -453,6 +454,96 @@ export async function revokePat(userId: string, tokenId: string): Promise<void> 
   } catch (jsonErr) {
     throw new AppError(500, jsonErr instanceof Error ? jsonErr.message : String(jsonErr));
   }
+}
+
+/**
+ * 批量吊销某用户全部 active PAT（凭据轮换联动，安全审查 M4）。
+ * 用于改密 / 激活令牌设密 / 管理员重置密码后，令旧 PAT 立即失效（防「改密后旧 PAT 仍是只读后门」）。
+ *
+ * 与逐 token revokePat 的差异（评审 P1）：一次性批量，避免「Promise.all(revokePat) 对已吊销 PAT
+ * 抛 404 + 三层写放大」。只选 revoked_at IS NULL：
+ *   - Layer 1 SQLite 单条 UPDATE ... WHERE user_id AND revoked_at IS NULL；
+ *   - Layer 2 DuckDB mirror 单条 UPDATE；失败按 backend 走 reload 兜底或回滚（逐 token unrevoke）；
+ *   - 清理涉及 tokenId 的 verifyCache；
+ *   - Layer 3 仅一次 saveApiTokens 快照。
+ * 幂等：零 active PAT → {revokedCount:0}，不抛。
+ */
+export async function revokeActivePatsForUser(userId: string): Promise<{ revokedCount: number }> {
+  const rows = await duckdbService.query(`
+    SELECT token_id FROM ApiToken
+    WHERE user_id = '${escapeSqlValue(userId)}'
+      AND revoked_at IS NULL
+  `);
+  if (rows.length === 0) return { revokedCount: 0 };
+  const tokenIds = rows.map((r) => String(r.token_id));
+
+  const nowDate = new Date();
+  const nowIso = nowDate.toISOString();
+  const nowSql = nowIso.slice(0, 19).replace('T', ' ');
+  const backend = dbEnv.STATE_STORE_BACKEND;
+
+  // ─── Layer 1: SQLite first（仅 backend=sqlite） ──────────────────
+  let sqliteWritten = false;
+  if (backend === 'sqlite') {
+    try {
+      await revokeActivePatsForUserInSqlite(userId, nowIso);
+      sqliteWritten = true;
+    } catch (err) {
+      throw new AppError(
+        500,
+        `[PAT] state.db 批量吊销失败: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  // ─── Layer 2: DuckDB :memory: mirror 批量 UPDATE ────────────────
+  try {
+    await duckdbService.query(`
+      UPDATE ApiToken
+      SET revoked_at = TIMESTAMP '${nowSql}'
+      WHERE user_id = '${escapeSqlValue(userId)}'
+        AND revoked_at IS NULL
+    `);
+  } catch (mirrorErr) {
+    const mirrorMsg = mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr);
+    if (backend !== 'sqlite') {
+      // json backend：DuckDB 即权威工作副本，快照尚未写 → 直接抛，无部分状态
+      throw new AppError(500, `[PAT] DuckDB 批量吊销失败: ${mirrorMsg}`);
+    }
+    // sqlite backend：先 reload 兜底让 mirror 与 SQLite 一致；失败则回滚本批 SQLite
+    try {
+      await reloadApiTokenMirrorFromSqlite();
+    } catch (reloadErr) {
+      if (sqliteWritten) {
+        for (const id of tokenIds) {
+          try {
+            await unrevokePatInSqlite(id);
+          } catch (rollbackErr) {
+            console.error(`[PAT] SQLite 批量回滚失败 (token=${id}):`, rollbackErr);
+          }
+        }
+      }
+      const reloadMsg = reloadErr instanceof Error ? reloadErr.message : String(reloadErr);
+      throw new AppError(
+        500,
+        `[PAT] DuckDB mirror 批量吊销 sync 失败 (user=${userId}): mirror=${mirrorMsg}; reload=${reloadMsg}`,
+      );
+    }
+  }
+
+  // 清空这些 tokenId 相关的验证缓存
+  for (const key of verifyCache.keys()) {
+    if (tokenIds.some((id) => key.startsWith(`${id}:`))) verifyCache.delete(key);
+  }
+
+  // ─── Layer 3: 单次 JSON snapshot ────────────────────────────────
+  try {
+    await saveApiTokens();
+  } catch (jsonErr) {
+    throw new AppError(500, jsonErr instanceof Error ? jsonErr.message : String(jsonErr));
+  }
+
+  return { revokedCount: tokenIds.length };
 }
 
 /**
