@@ -10,14 +10,19 @@ export type IconKey =
   | 'calculator' | 'file-warning' | 'trending-down' | 'bike' | 'refresh' | 'target'
   | 'arrow-left-right' | 'gift' | 'wrench' | 'database' | 'shield';
 
-export const DECISION_DOMAINS: readonly { readonly id: DecisionDomainId; readonly label: string }[] = [
+function freezeObjects<T extends object>(values: T[]): readonly Readonly<T>[] {
+  values.forEach((value) => Object.freeze(value));
+  return Object.freeze(values);
+}
+
+export const DECISION_DOMAINS: readonly { readonly id: DecisionDomainId; readonly label: string }[] = freezeObjects([
   { id: 'overview', label: '经营总览' },
   { id: 'growth', label: '增长达成' },
   { id: 'cost', label: '成本质量' },
   { id: 'customer', label: '客户经营' },
   { id: 'specialty', label: '专项资源' },
   { id: 'platform', label: '平台管理' },
-];
+]);
 export type SpecialFeature = 'moto_cost' | 'expense_development';
 
 export interface RouteDefinition {
@@ -35,7 +40,15 @@ export interface RouteDefinition {
   readonly specialFeature?: SpecialFeature;
 }
 
-export const ROUTES: readonly RouteDefinition[] = [
+function freezeRoutes(routes: RouteDefinition[]): readonly RouteDefinition[] {
+  routes.forEach((route) => {
+    if (route.aliases) Object.freeze(route.aliases);
+    Object.freeze(route);
+  });
+  return Object.freeze(routes);
+}
+
+export const ROUTES: readonly RouteDefinition[] = freezeRoutes([
   { kind: 'canonical', id: 'home', path: '/home', label: '首页', shortLabel: '首页', iconKey: 'home', navigationDomain: 'overview', navigationOrder: 10, showInNavigation: true, permissionConfigurable: true },
   { kind: 'canonical', id: 'dashboard', path: '/dashboard', label: '经营看板', shortLabel: '看板', iconKey: 'gauge', navigationDomain: 'overview', navigationOrder: 20, showInNavigation: true, permissionConfigurable: true, aliases: ['/old-dashboard'] },
   { kind: 'canonical', id: 'chart-ledger', path: '/chart-ledger', label: '图表账本', shortLabel: '账本', iconKey: 'layout-grid', navigationDomain: 'overview', navigationOrder: 30, showInNavigation: true, permissionConfigurable: true },
@@ -58,7 +71,7 @@ export const ROUTES: readonly RouteDefinition[] = [
 
   { kind: 'canonical', id: 'data-import', path: '/data-import', label: '数据管理', shortLabel: '数据', iconKey: 'database', navigationDomain: 'platform', navigationOrder: 10, showInNavigation: true, permissionConfigurable: false },
   { kind: 'canonical', id: 'access-control', path: '/admin/access-control', label: '权限管理', shortLabel: '权限', iconKey: 'shield', navigationDomain: 'platform', navigationOrder: 20, showInNavigation: true, permissionConfigurable: false },
-] as const;
+]);
 
 export function getPermissionRoutes(): readonly RouteDefinition[] {
   return ROUTES.filter((route) => route.permissionConfigurable);
