@@ -2088,3 +2088,17 @@ expires: 2026-07-26
 
 ### needs_automation: false
 （看门狗即 FIND-001 单点故障的机制化缓解本身；通知通道复用 #1078 现成能力，无新残留纪律点。卡 47f8ce 仍开——FIND-001 发布链单点比看门狗更广，看门狗是其一缓解。）
+
+---
+
+## 2026-07-12 · 发布停更「自动接手」链路：FIND-001 从「只告警」升级为「分级自主处置」（卡 966ae7）
+
+- **用户决策链**：文案迭代中用户先给「发现什么/安排谁/做什么/怎么做」四要素框架，再澄清「安排谁≠人，是脚本/程序/Agent」，最终拍板「同时建自动接手链路」+「分级自主：轻风险自处置、重风险待确认」。看门狗只「发现+告警」，本链路补「自动接手」。
+- **硬约束驱动的架构**：`release:daily` 依赖 Mac 的 ETL 管道，只能在 Mac 跑 → 接手方必须在 Mac（VPS 看门狗发现、Mac launchd 接手）。这也正是 FIND-001 单点的本质：修复能力锁在 Mac。
+- **分级实现（确定性脚本，非 headless LLM 自动改生产）**：`数据管理/lib/auto-remediate-decision.mjs`（纯函数）定 Tier1 自处置/Tier2 待确认/每日幂等；`scripts/auto-remediate-stale.mjs` 执行壳（仿 auto-release-daily：launchd PATH / 状态文件 / lark-cli 通知 / worktree fail-closed）。**Tier1**=重跑一次 `release:daily`，成功即回帖群；**Tier2**=仍失败则 `classifyReleaseFailure` 粗分类（governance/ETL/网络/上游）+ 回帖群待确认，**绝不自动改配置/密钥/生产数据**（保住高风险动作人工闸）。
+- **为何确定性而非 headless Claude agent**：分级里「轻风险自处置」=重跑（安全幂等），「重风险」本就要人工闸——用确定性脚本比让 LLM 自动改生产更可控、可测、可回滚。「AI 值守」体现在 Tier2 回帖后由人/AI 会话确认执行，不在无人值守时自动动刀。
+- **oracle**：决策纯函数 15 单测（分级/幂等/跨天/失败分类）；执行壳 `node --check` + `--status` import 解析 + worktree 守卫拒绝 `--dry-run` 均验证。**诚实边界**：Tier1 真实重跑 release:daily 的端到端只能在 Mac 主仓 `--dry-run`/`--once` 实测（worktree 无管道，守卫已拒），放部署时做。
+- **文案落地**：看门狗三条消息重构为四要素（发现/安排/做什么/怎么做），停更告警点名「安排：Mac 侧自动接手（auto-remediate）」，名副其实。
+
+### needs_automation: false
+（本条即「把发现→处置的人工闭环自动化」本身；Tier2 的人工确认是有意保留的高风险闸，非待自动化缺口。卡 966ae7 跟踪；部署（Mac launchd install + VPS 看门狗）是 gated 步骤。）
