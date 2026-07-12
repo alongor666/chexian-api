@@ -2075,3 +2075,16 @@ expires: 2026-07-26
 
 ### needs_automation: false
 （本条即上方 expires 2026-07-26 项的源头级落地。governance「自助设密账号禁入USER_PASSWORDS」闸保留为纯防回归第二道线；生成器过滤是第一道源头线。两道线正交互补，无新残留纪律点。）
+
+---
+
+## 2026-07-12 · W1b 数据新鲜度看门狗通知层：webhook → 飞书应用 API（复用 #1078 通道，卡 47f8ce）
+
+- **背景**：W1b 看门狗（`scripts/vps/data-freshness-watchdog.sh`，#1077 交付）是与 Mac 发布链故障域隔离的 dead-man's-switch（数据 >30h 未更新即告警）。原设计要 webhook URL，但飞书已下线自定义机器人 webhook 入口（memory `feishu-custom-bot-webhook-deprecated`），VPS 也无 webhook。
+- **复用而非另造（`patterns` 先看有没有现成的）**：并行合并的 #1078 刚给 `server/src/services/notify.ts` 加了飞书应用 API 通道（`tenant_access_token` → `im/v1/messages`，`receive_id_type=chat_id`），并证实 VPS 登录应用 `cli_a94d08f4` 的 bot 已在目标群、能群发。看门狗照搬同款 curl 流程，凭据默认回落 VPS 已有 `FEISHU_APP_ID/SECRET`，配置只需一个群 `chat_id`，零新增密钥。
+- **实现**：`send_msg` 双通道（webhook 非空走旧路径=修补不拆除，否则走飞书应用 API）；`feishu_app_send` 用 python3 做 JSON 双编码（content 是 `{"text":...}` 的 JSON 字符串）+ 响应 code 解析；**app_secret 走 env 传 python3、经 stdin 喂 curl，不进任何 argv**（防 `ps` 泄漏）。
+- **oracle**：`sh -n` 语法通过；三场景 dry-run（新鲜 exit0 / 40h 陈旧告警 / 无通道配置拒绝 exit3）全过；VPS 实测 `tenant_access_token` code=0/msg=ok。剩余端到端「真实群发」验证放到 VPS 部署时一次性做（需用户许可发消息）。
+- **诚实边界**：token 获取已证凭据可用，但「该 bot 能否发到 `oc_07c20f22` 群」只能靠真实发一条消息证——#1078 注释断言 bot 在群，但断言≠验证，部署时补一条自检发送坐实。
+
+### needs_automation: false
+（看门狗即 FIND-001 单点故障的机制化缓解本身；通知通道复用 #1078 现成能力，无新残留纪律点。卡 47f8ce 仍开——FIND-001 发布链单点比看门狗更广，看门狗是其一缓解。）
