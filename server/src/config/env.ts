@@ -56,12 +56,26 @@ export const authEnv = {
   /** 开发环境跳过认证（仅 NODE_ENV=development 且值为 '1' 时生效） */
   DEV_SKIP_AUTH: process.env.DEV_SKIP_AUTH ?? '',
   /**
-   * 密码事件 webhook 群播通知 URL（飞书群机器人，全员密码闭环阶段二）。
+   * 密码事件 webhook 群播通知 URL（飞书自定义机器人，全员密码闭环阶段二·旧通道）。
    * 覆盖四类事件：激活成功 / 自助改密 / 找回重设 / 管理员重置。
-   * 未配置则静默不通知（通知失败不阻塞主流程，审计事件独立落盘兜底）。
+   * 飞书已下线自定义机器人入口，新部署请改用 PASSWORD_EVENT_NOTIFY_CHAT_ID（应用 API 通道）；
+   * 本变量保留（修补不拆除），非空时优先走 webhook 旧路径。
+   * 未配置则看 CHAT_ID；两者皆空静默不通知（通知失败不阻塞主流程，审计事件独立落盘兜底）。
    * 独立于 UNMATCHED_NOTIFY_WEBHOOK，禁止复用该变量（两类事件受众/群不同）。
    */
   PASSWORD_EVENT_NOTIFY_WEBHOOK: process.env.PASSWORD_EVENT_NOTIFY_WEBHOOK ?? '',
+  /**
+   * 密码事件飞书应用 API 群播目标群 ID（oc_ 开头，新通道）。
+   * 走「以应用身份发消息」（im/v1/messages, receive_id_type=chat_id），
+   * 应用凭证默认复用 FEISHU_APP_ID/SECRET（车险登录 cli_a94d08f46539dbcd，bot 已在目标群），
+   * 可用 PASSWORD_NOTIFY_APP_ID/SECRET 覆盖为专用通知应用。
+   * 仅当 PASSWORD_EVENT_NOTIFY_WEBHOOK 为空时生效（webhook 旧路径优先）。
+   */
+  PASSWORD_EVENT_NOTIFY_CHAT_ID: process.env.PASSWORD_EVENT_NOTIFY_CHAT_ID ?? '',
+  /** 密码事件通知专用飞书应用 App ID（可选；缺省回落 FEISHU_APP_ID） */
+  PASSWORD_NOTIFY_APP_ID: process.env.PASSWORD_NOTIFY_APP_ID ?? '',
+  /** 密码事件通知专用飞书应用 App Secret（可选；缺省回落 FEISHU_APP_SECRET；禁止打进日志） */
+  PASSWORD_NOTIFY_APP_SECRET: process.env.PASSWORD_NOTIFY_APP_SECRET ?? '',
 } as const;
 
 // 生产环境未配置 USER_PASSWORDS → 默认 fail-fast（拒绝带预置弱口令哈希启动）。
