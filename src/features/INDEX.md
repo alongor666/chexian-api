@@ -11,17 +11,17 @@
 - 统一筛选：`src/features/filters/PageFilterPanel.tsx` + `src/features/filters/AdvancedFilterPanel.tsx`
 - 数据入口：`src/shared/api/client.ts`（`apiClient.*`，详见 CODE_INDEX.md）
 
-## 模块清单（按决策五问归位）
+## 模块清单（与 route registry 决策域对齐）
 
-### 一、经营全貌
+### 一、经营总览
 
 | 模块 | 路由 | 职责 | 关键入口 |
 |------|------|------|---------|
-| `home/` | `/home`、`/data-import` | 报告门户 + 数据导入 | `HomePage.tsx` · `DataImportPage.tsx` |
+| `home/` | `/home` | 报告门户 | `HomePage.tsx` |
 | `dashboard/`（保费看板部分） | `/dashboard` | 保费分析看板（KPI/趋势/排名/玫瑰图，bundle 优先） | `PremiumDashboard.tsx` · `hooks/useDashboardBundle.ts` |
 | `chart-ledger/` | `/chart-ledger` | 保险经营图表账本（12 类经营图表方法论，真实数据+全局筛选联动） | `ChartLedgerPage.tsx` · [README](./chart-ledger/README.md) |
 
-### 二、增长与达成
+### 二、增长达成
 
 | 模块 | 路由 | 职责 | 关键入口 |
 |------|------|------|---------|
@@ -29,7 +29,7 @@
 | `growth/` | `/growth` | 增长率分析（同比/环比/年累计/对比分析） | `components/GrowthAnalysisPanel.tsx` · `hooks/useGrowthAnalysis.ts` |
 | `premium-report/` | `/reports` | 保费达成（计划达成 + 机构/业务员保费报表） | `components/PremiumReportPanel.tsx` · `components/PremiumPlanPanel.tsx` |
 
-### 三、成本与亏损
+### 三、成本质量
 
 | 模块 | 路由 | 职责 | 关键入口 |
 |------|------|------|---------|
@@ -47,13 +47,20 @@
 | `quote-conversion/` | `/quote-conversion` | 报价转化分析（独立数据源） | `QuoteConversionPage.tsx` |
 | `customer-flow/` | `/customer-flow` | 客户来源去向分析（独立数据源） | `CustomerFlowPage.tsx` |
 
-### 五、专项分析
+### 五、专项资源
 
 | 模块 | 路由 | 职责 | 关键入口 |
 |------|------|------|---------|
 | `dashboard/`（交叉销售部分） | `/specialty?tab=cross-sell` | 驾意险交叉销售（KPI/热力图/趋势/下钻/Top20，bundle 优先） | `CrossSellAnalysisPanel.tsx` · `hooks/useCrossSellAnalysis.ts` |
 | `dashboard/`（货车专项部分） | `/specialty?tab=truck` | 营业货车专项分析 | `TruckAnalysisPanel.tsx` |
 | `repair/` | `/repair` | 维修资源分析（独立数据源 RepairDim） | `RepairPage.tsx` |
+
+### 六、平台管理
+
+| 模块 | 路由 | 职责 | 关键入口 |
+|------|------|------|---------|
+| `home/` | `/data-import` | 数据管理与导入 | `DataImportPage.tsx` |
+| `admin/` | `/admin/access-control` | 用户、角色与页面权限配置 | `AccessControlPage.tsx` |
 
 ### 支撑模块（非分析页面）
 

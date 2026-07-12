@@ -66,6 +66,7 @@ import { checkDualLockConsistency as runDualLockConsistencyCheck, checkBranchMap
 import { runBranchRlsEnabledCheck } from './governance/branch-rls-enabled.mjs';
 import { runPatReadonlyCoverageCheck } from './governance/pat-readonly-coverage.mjs';
 import { governanceCheckChunkInvariants } from './check-chunk-invariants.mjs';
+import { checkNamingAndRouteGovernance } from './governance/check-naming-route.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3441,6 +3442,19 @@ function patternCheck(name) {
 // 代码治理校验：随「代码变更」而变红，是代码门禁（pre-push + CI）的职责。
 const CODE_GOVERNANCE_CHECKS = [
   { name: '必需文件与核心索引', fn: checkRequiredFiles },
+  {
+    name: '产品命名与页面路由注册表',
+    fn: () => {
+      info('检查产品命名与页面路由注册表防漂移...');
+      const problems = checkNamingAndRouteGovernance(ROOT_DIR);
+      if (problems.length === 0) {
+        success('产品命名与页面路由注册表一致');
+        return true;
+      }
+      problems.forEach((problem) => error(problem));
+      return false;
+    },
+  },
   { name: 'BACKLOG证据链', fn: checkBacklogEvidence },
   { name: 'CLAUDE章节', fn: checkClaudeMdSections },
   patternCheck('DC-002合规'),

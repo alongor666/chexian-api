@@ -50,10 +50,11 @@ describe('route registry and App route synchronization', () => {
   it('derives every explicit legacy redirect path and destination from the registry', () => {
     const declared = appRoutes();
     const redirects = ROUTES.flatMap((route) => route.redirects ?? []);
+    const declaredRedirects = new Map(
+      [...declared].filter((entry): entry is [string, string] => entry[1] !== undefined),
+    );
 
     expect(redirects).toHaveLength(7);
-    for (const redirect of redirects) {
-      expect(declared.get(redirect.path), `redirect drift for ${redirect.path}`).toBe(redirect.to);
-    }
+    expect(declaredRedirects).toEqual(new Map(redirects.map((redirect) => [redirect.path, redirect.to])));
   });
 });

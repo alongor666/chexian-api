@@ -1,8 +1,8 @@
-# 车险数据分析平台（chexian-api）
+# 车险经营分析平台（chexian-api）
 
 > 面向车险经营分析的 API-only 数据平台：React 客户端 + Express REST API + DuckDB native 后端。
 > 当前系统不包含浏览器 DuckDB-WASM / Local 模式，前端所有数据访问都通过 `/api/*`。
-> 519+ commits | 97 API 端点 | 15 数据域 | 35 SQL 生成器 | 77 测试文件
+> 页面、API、数据域、SQL 生成器和测试规模均持续演进；当前数量以对应注册表与目录为准。
 
 ## 1) 项目概述
 
@@ -10,8 +10,8 @@
 
 - **经营看板**：KPI 总览、保费趋势、结构分析、机构排名
 - **专题分析**：增长分析、成本分析、续保漏斗、交叉销售、报价转化、费用发展趋势、赔案明细、客户流向、维修资源
-- **保费管理**：保费计划达成、保费报表、营销战报
-- **数据治理**：15 域 ETL 管道、分片架构、字段/指标注册表、21 项治理检查
+- **保费管理**：保费计划达成、机构与业务员保费报表
+- **数据治理**：分域 ETL 管道、分片架构、字段/指标注册表与自动治理检查
 - **权限与安全**：RBAC + 行级数据过滤、企业微信 SSO、三级限流
 - **AI 能力**：趋势解读（OpenRouter 主路由 + 智谱兜底）
 
@@ -19,15 +19,22 @@
 
 | 页面 | 路由 | 说明 |
 |------|------|------|
-| 经营仪表盘 | `/dashboard` | KPI + 趋势 + 排名 + 结构 |
+| 首页 | `/home` | 报告门户与快捷入口 |
+| 经营看板 | `/dashboard` | KPI + 趋势 + 排名 + 结构 |
+| 图表账本 | `/chart-ledger` | 经营图表方法与真实数据联动 |
 | 业绩分析 | `/performance-analysis` | 业务员/机构绩效 + 热力图 |
-| 增长分析 | `/growth` | 同比/环比 + 机构对比 |
+| 保费计划达成 | `/reports` | 计划达成 + 机构/业务员报表 |
+| 增长对比 | `/growth` | 同比/环比 + 机构对比 |
 | 成本分析 | `/cost` | 综合成本率 + 赔付 + 费用（含综合分析视图） |
-| 系数分析 | `/coefficient` | 自主定价系数分布 + 趋势 |
-| 保费达成 | `/reports` | 保费计划达成 + 保费报表 + 营销战报 |
-| 专项分析 | `/specialty` | 驾意险交叉销售 + 续保 + 货车（Tab 合并） |
-| 赔案明细 | `/claims-detail` | 赔案下钻 + 品牌车型 |
-| 数据导入 | `/data-import` | Parquet 文件上传与管理 |
+| 赔案分析 | `/claims-detail` | 赔案下钻 + 品牌车型 |
+| 费用率发展 | `/expense-development` | 费用率发展分析（特性授权） |
+| 摩意成本 | `/moto-cost` | 摩托车成本模型（特性授权） |
+| 续保追踪 | `/renewal-tracker` | 商业险续保到期窗口盯盘 |
+| 报价转化 | `/quote-conversion` | 报价转化分析 |
+| 客户流向 | `/customer-flow` | 客户来源去向分析 |
+| 驾意险与货车 | `/specialty` | 驾意险交叉销售与货车专项 |
+| 维修资源 | `/repair` | 维修资源分析 |
+| 数据管理 | `/data-import` | Parquet 文件上传与管理 |
 | 权限管理 | `/admin/access-control` | 用户/角色/权限配置 |
 
 ## 2) 技术栈
@@ -62,8 +69,8 @@
 | Bun | 包管理与运行时 |
 | Vitest | 单元/集成测试 |
 | Playwright 1.58 | E2E 测试 |
-| GitHub Actions | CI/CD（6 条 pipeline） |
-| 治理检查 | 21 项自动校验 |
+| GitHub Actions | CI/CD（工作流数量以 `.github/workflows/` 为准） |
+| 治理检查 | `bun run governance` 自动校验 |
 
 ## 3) 目录结构
 
@@ -313,7 +320,7 @@ bun run test              # 单元测试（Vitest）
 bun run test:integration  # 集成测试（需本地 DuckDB 原生二进制）
 bun run test:e2e          # E2E 测试（Playwright，需先 dev:full）
 bun run test:coverage     # 覆盖率报告
-bun run governance        # 21 项治理检查
+bun run governance        # 运行当前全部治理检查
 bun run typecheck         # TypeScript 类型检查
 bun run verify:quick      # 快速验证（preflight + governance + typecheck）
 bun run verify:full       # 完整验证（quick + test）
