@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-9b1167","kind":"create","ts":"2026-07-12","actor":"@claude","section":"安全-纵深","priority":"P2","desc":"M8: 飞书回调 redirect_uri 取自客户端 Host 头(buildCallbackUrl)无服务端白名单，纵深防御完全外包给飞书侧 redirect_uri 匹配。建议改读固定 FEISHU_CALLBACK_ORIGIN 配置或加 Host 白名单校验。","docs":"N/A","code":"server/src/routes/feishu-auth.ts","at":"2026-07-12T12:43:42.641Z","eid":"795fe55d"}

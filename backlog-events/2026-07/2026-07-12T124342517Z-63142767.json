@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-4b93ea","kind":"create","ts":"2026-07-12","actor":"@claude","section":"安全-热路径","priority":"P2","desc":"M5: GET /api/query/sql 对 PAT 开放（readonly 只拦非 GET），PAT 泄漏爆炸半径≈任意只读 SQL（受 RLS 约束）。建议按 PAT 来源收紧可用表/字段，或对 PAT 调用该端点重点审计告警。来源：账号管理安全审查。","docs":"N/A","code":"server/src/routes/query/sql-passthrough.ts","at":"2026-07-12T12:43:42.517Z","eid":"63142767"}

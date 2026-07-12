@@ -48,6 +48,7 @@ vi.mock('../access-control.js', () => {
 const saveApiTokensSpy = vi.fn(async () => {});
 const upsertPatSpy = vi.fn(async (_r: unknown) => {});
 const revokePatSpy = vi.fn(async (_id: string, _at: string) => {});
+const revokeActiveForUserSpy = vi.fn(async (_uid: string, _at: string) => {});
 const unrevokePatSpy = vi.fn(async (_id: string) => {});
 const deletePatSpy = vi.fn(async (_id: string) => {});
 const updateLastUsedBatchSpy = vi.fn(async (_u: unknown) => {});
@@ -57,6 +58,7 @@ vi.mock('../personal-access-token-store.js', () => ({
   saveApiTokens: () => saveApiTokensSpy(),
   upsertPatToSqlite: (r: unknown) => upsertPatSpy(r),
   revokePatInSqlite: (id: string, at: string) => revokePatSpy(id, at),
+  revokeActivePatsForUserInSqlite: (uid: string, at: string) => revokeActiveForUserSpy(uid, at),
   unrevokePatInSqlite: (id: string) => unrevokePatSpy(id),
   deletePatFromSqlite: (id: string) => deletePatSpy(id),
   updateLastUsedBatchInSqlite: (u: unknown) => updateLastUsedBatchSpy(u),
@@ -86,6 +88,7 @@ import {
   createPat,
   verifyPat,
   revokePat,
+  revokeActivePatsForUser,
   listPatsByUser,
   _clearVerifyCacheForTest,
   _flushPendingForTest,
@@ -117,6 +120,7 @@ beforeEach(() => {
   saveApiTokensSpy.mockClear();
   upsertPatSpy.mockClear().mockImplementation(async () => {});
   revokePatSpy.mockClear().mockImplementation(async () => {});
+  revokeActiveForUserSpy.mockClear().mockImplementation(async () => {});
   unrevokePatSpy.mockClear().mockImplementation(async () => {});
   deletePatSpy.mockClear().mockImplementation(async () => {});
   updateLastUsedBatchSpy.mockClear().mockImplementation(async () => {});
@@ -618,5 +622,56 @@ describe('v5 Phase 3: backend=sqlite flushPendingUpdates fire-and-forget warn', 
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+describe('revokeActivePatsForUser（凭据轮换联动批量吊销 · M4）', () => {
+  // 让 SELECT token_id 返回给定 active token 集合，UPDATE 返回 []
+  function withActiveTokens(ids: string[]) {
+    setQueryImpl(async (sql: string) => {
+      if (/SELECT token_id FROM ApiToken/.test(sql)) {
+        return ids.map((token_id) => ({ token_id }));
+      }
+      return [];
+    });
+  }
+
+  it('零 active PAT → {revokedCount:0}，不写快照、不发 UPDATE', async () => {
+    withActiveTokens([]);
+    const res = await revokeActivePatsForUser('u-1');
+    expect(res).toEqual({ revokedCount: 0 });
+    expect(saveApiTokensSpy).not.toHaveBeenCalled();
+    expect(getQueries().some((q) => /UPDATE ApiToken/.test(q.sql))).toBe(false);
+  });
+
+  it('多 active PAT → 单条 UPDATE(WHERE user_id AND revoked_at IS NULL) + 单次快照', async () => {
+    withActiveTokens(['AAAAAAAA', 'BBBBBBBB', 'CCCCCCCC']);
+    const res = await revokeActivePatsForUser('u-1');
+    expect(res).toEqual({ revokedCount: 3 });
+    const updates = getQueries().filter((q) => /UPDATE ApiToken/.test(q.sql));
+    expect(updates).toHaveLength(1);
+    expect(updates[0].sql).toMatch(/user_id = 'u-1'/);
+    expect(updates[0].sql).toMatch(/revoked_at IS NULL/);
+    // 单次快照（避免逐 token 三层写放大）
+    expect(saveApiTokensSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('json backend mirror UPDATE 失败 → 抛 500，不写快照（无部分状态）', async () => {
+    setQueryImpl(async (sql: string) => {
+      if (/SELECT token_id FROM ApiToken/.test(sql)) return [{ token_id: 'AAAAAAAA' }];
+      throw new Error('duckdb down');
+    });
+    await expect(revokeActivePatsForUser('u-1')).rejects.toThrow(/DuckDB 批量吊销失败/);
+    expect(saveApiTokensSpy).not.toHaveBeenCalled();
+  });
+
+  it('sqlite backend → 调 SQLite 批量吊销原语 + 单次快照', async () => {
+    process.env.__TEST_BACKEND = 'sqlite';
+    withActiveTokens(['AAAAAAAA', 'BBBBBBBB']);
+    const res = await revokeActivePatsForUser('u-9');
+    expect(res).toEqual({ revokedCount: 2 });
+    expect(revokeActiveForUserSpy).toHaveBeenCalledTimes(1);
+    expect(revokeActiveForUserSpy.mock.calls[0][0]).toBe('u-9'); // userId
+    expect(saveApiTokensSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -40,6 +40,7 @@ import {
   createPat,
   listPatsByUser,
   revokePat,
+  revokeActivePatsForUser,
   type TtlDays,
 } from '../services/personal-access-token.js';
 import {
@@ -170,6 +171,29 @@ const tokenCreateSchema = z.object({
 function requireSessionAuth(req: Request): void {
   if (req.pat) {
     throw new AppError(403, 'Cannot manage tokens via PAT. Use browser session.');
+  }
+}
+
+/**
+ * 凭据轮换（改密 / 激活 / 找回 / 管理员重置）后联动吊销该用户全部 active PAT（安全审查 M4）。
+ * PAT.user_id 存的是会话 JWT userId（= 用户名），故按 username 吊销。
+ * best-effort：吊销失败不回滚已完成的密码变更（密码已换更重要），仅告警 + 审计，运维可手动补吊销。
+ * @param username 目标账号用户名（= 其 PAT 的 user_id）
+ */
+async function revokePatsOnCredentialRotation(
+  username: string,
+  ip: string | undefined,
+  role?: string,
+): Promise<void> {
+  try {
+    const { revokedCount } = await revokeActivePatsForUser(username);
+    if (revokedCount > 0) {
+      auditAuthEvent({ event: 'pat_revoked_on_password_change', username, ip, role });
+    }
+  } catch (err) {
+    console.warn(
+      `[Auth] 凭据轮换后 PAT 批量吊销失败 (user=${username}): ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -309,6 +333,8 @@ router.post(
     }
     resetLoginAttempts(clientIp, username);
     auditAuthEvent({ event: 'password_changed', username, ip: clientIp, role: req.user.role });
+    // 凭据轮换联动：吊销该用户全部 active PAT（防改密后旧 PAT 仍是只读后门，M4）
+    await revokePatsOnCredentialRotation(req.user.userId, clientIp, req.user.role);
     // webhook 群播（静默失败不阻塞主流程；审计已独立落盘）
     void notifyPasswordEvent({ username, method: 'self_change' });
 
@@ -358,6 +384,8 @@ router.post(
       throw err;
     }
     auditAuthEvent({ event: 'activation_success', username, ip: clientIp });
+    // 凭据轮换联动：吊销该用户全部 active PAT（M4）
+    await revokePatsOnCredentialRotation(username, clientIp);
     // webhook 群播（静默失败不阻塞主流程；审计已独立落盘）
     void notifyPasswordEvent({ username, method: 'activation' });
     res.json({ success: true, data: { activated: true } });
@@ -420,6 +448,8 @@ router.post(
       ip: clientIp,
       tokenId: consumed.tokenId,
     });
+    // 凭据轮换联动：吊销该用户全部 active PAT（M4）
+    await revokePatsOnCredentialRotation(consumed.username, clientIp);
     // webhook 群播：按签发来源区分「飞书找回」vs「管理员重置」（静默失败不阻塞）
     void notifyPasswordEvent({
       username: consumed.username,
@@ -636,6 +666,8 @@ router.put(
         ip: req.ip,
         role: req.user?.role,
       });
+      // 凭据轮换联动：吊销被重置账号全部 active PAT（疑似账号被盗时防旧 PAT 残留只读后门，M4）
+      await revokePatsOnCredentialRotation(updated.username, req.ip, req.user?.role);
       void notifyPasswordEvent({ username: updated.username, method: 'admin_reset' });
     }
     const { passwordHash: _pw, ...rest } = updated;

@@ -178,8 +178,32 @@ describe('parseEcosystemEnvKeys — 夹具测试', () => {
 
   // TC-08: 块注释中的假 env 不被提取
   it('TC-08: /* */ 块注释中的假 env 不被提取', () => {
-    const { keys, corsOrigin } = parseEcosystemEnvKeys(BLOCK_COMMENT_FAKE_ENV);
+    const { keys, corsOrigin, env } = parseEcosystemEnvKeys(BLOCK_COMMENT_FAKE_ENV);
     expect(keys).toEqual([]);
     expect(corsOrigin).toBe('');
+    expect(env).toEqual({});
+  });
+
+  // TC-09: env value map 清洗（去引号 / 去行内注释），供治理脚本按值断言
+  it('TC-09: env 映射返回清洗后的值（引号内容 + 行内注释剥离）', () => {
+    const { env } = parseEcosystemEnvKeys(INLINE_COMMENT);
+    expect(env.NODE_ENV).toBe('production');
+    expect(env.CORS_ORIGIN).toBe('https://chexian.cretvalu.com');
+    // 行内注释文本不残留
+    expect(env.NODE_ENV).not.toContain('do not change');
+    expect(env.PORT).not.toContain('default port');
+  });
+
+  // TC-10: 布尔开关类值（如 BRANCH_RLS_ENABLED）经 env 映射可直接严格比较
+  it('TC-10: 引号布尔开关值可直接 === 比较', () => {
+    const fixture = `
+module.exports = { apps: [{ env: {
+  BRANCH_RLS_ENABLED: 'true', // 多省 RLS 总闸
+  STATE_STORE_BACKEND: 'json',
+} }] };
+`;
+    const { env } = parseEcosystemEnvKeys(fixture);
+    expect(env.BRANCH_RLS_ENABLED).toBe('true');
+    expect(env.STATE_STORE_BACKEND).toBe('json');
   });
 });
