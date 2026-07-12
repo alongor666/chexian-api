@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   DECISION_DOMAINS,
   ROUTES,
+  buildNavigationGroups,
   getNavigationGroups,
   getPermissionRoutes,
 } from '../routeRegistry';
+import type { DecisionDomainId, RouteDefinition, RouteId } from '../routeRegistry';
 
 const CANONICAL_APP_PATHS = [
   '/home',
@@ -55,7 +57,8 @@ describe('route registry contract', () => {
   });
 
   it('only returns canonical routes as permission choices', () => {
-    const permissionPaths = getPermissionRoutes().map((route) => route.path);
+    const permissionRoutes = getPermissionRoutes();
+    const permissionPaths = permissionRoutes.map((route) => route.path);
     const aliases = ROUTES.flatMap((route) => route.aliases ?? []);
 
     expect(permissionPaths).not.toContain('/');
@@ -65,10 +68,11 @@ describe('route registry contract', () => {
     for (const legacyPath of ['/renewal', '/truck', '/cross-sell', '/comparison']) {
       expect(permissionPaths).not.toContain(legacyPath);
     }
+    expect(permissionRoutes.every((route) => route.kind === 'canonical')).toBe(true);
   });
 
   it('keeps the six decision domains in their approved order', () => {
-    expect(DECISION_DOMAINS).toEqual([
+    expect(DECISION_DOMAINS.map((domain) => domain.label)).toEqual([
       '经营总览',
       '增长达成',
       '成本质量',
@@ -76,7 +80,9 @@ describe('route registry contract', () => {
       '专项资源',
       '平台管理',
     ]);
-    expect(getNavigationGroups().map((group) => group.domain)).toEqual(DECISION_DOMAINS);
+    expect(getNavigationGroups().map((group) => group.domain)).toEqual(
+      DECISION_DOMAINS.map((domain) => domain.id),
+    );
   });
 
   it('sorts routes within each navigation domain by navigation order', () => {
@@ -85,5 +91,22 @@ describe('route registry contract', () => {
         [...group.routes].map((route) => route.navigationOrder).sort((a, b) => a - b),
       );
     }
+  });
+
+  it('defines icon and navigation metadata for every canonical route', () => {
+    expect(ROUTES.every((route) => typeof route.iconKey === 'string' && route.iconKey.length > 0)).toBe(true);
+    expect(ROUTES.every((route) => typeof route.showInNavigation === 'boolean')).toBe(true);
+    expect(ROUTES.every((route) => route.kind === 'canonical')).toBe(true);
+  });
+
+  it('omits routes explicitly hidden from navigation', () => {
+    const hiddenRoute: RouteDefinition = {
+      ...ROUTES[0],
+      id: 'home' as RouteId,
+      navigationDomain: 'overview' as DecisionDomainId,
+      showInNavigation: false,
+    };
+
+    expect(buildNavigationGroups([hiddenRoute]).flatMap((group) => group.routes)).toEqual([]);
   });
 });

@@ -4,6 +4,6 @@ export const PRODUCT_METADATA = Object.freeze({
   aiAssistantName: '经营副驾',
 });
 
-export function formatDocumentTitle(pageName: string): string {
-  return `${pageName}｜${PRODUCT_METADATA.productName}`;
+export function formatDocumentTitle(pageName?: string): string {
+  return pageName ? `${pageName}｜${PRODUCT_METADATA.productName}` : PRODUCT_METADATA.productName;
 }

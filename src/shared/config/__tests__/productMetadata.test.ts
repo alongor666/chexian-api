@@ -13,4 +13,8 @@ describe('product metadata', () => {
   it('formats a page title with the product name', () => {
     expect(formatDocumentTitle('成本分析')).toBe('成本分析｜车险经营分析平台');
   });
+
+  it('uses the product name when no page name is provided', () => {
+    expect(formatDocumentTitle()).toBe('车险经营分析平台');
+  });
 });
