@@ -2114,3 +2114,15 @@ expires: 2026-07-26
 
 ### needs_automation: false
 （并发闸即安全必修，已代码化 + 单测；部署实录属一次性 gated 操作。#1078 注释断言未验证的教训 → 复用 memory `feedback_verify_not_claim` 精神，无新机制点。）
+
+---
+
+## 2026-07-12 · 全链路部署上线收尾（数据巡检 + 自动接手，卡 966ae7/47f8ce）
+
+- **上线内容**：① Mac 自动接手 launchd `com.chexian.auto-remediate-stale`（每 30min，分级自主 + 并发闸就位，dry-run 决策正确）；② VPS 数据巡检 `data-freshness-patrol.sh` + `patrol.env`(600) + crontab `*/30`，真实运行 `[patrol] ✅ 新鲜` exit 0。两个 launchd（auto-release-daily + auto-remediate-stale）与两条 VPS crontab（数据巡检 + warehouse 备份）齐活。
+- **FIND-001 缓解定性（诚实）**：本轮把「发布失败静默」变为「VPS 发现 + Mac 分级接手 + 告警」，**发现与处置分故障域**。但 FIND-001 单点本质（Mac 是唯一发布机、ETL 管道锁在 Mac）**未消除**——是缓解非根除，如实记 47f8ce。
+- **端到端诚实边界**：数据巡检检测/告警/飞书发送已真实验证（VPS 实跑 + 自检 code=0）；Mac 自动接手的 Tier1「真实重跑 release:daily」端到端**尚未在真实停更下触发过**（今日发布已 released），待下次真实 failed/missed 或人工构造 failed 态实测坐实。决策/并发闸逻辑已 18 单测锁死，但「真跑管道」这一步是纯函数测不到的。
+- **一路验证抓到的真问题（本会话累计）**：warehouse 备份 34 天备 0 业务数据（FIND-002 实证）· 主仓 .env 残留致当日发布 2 次失败（c0f97a）· 生成器持续再生成残留（3901cd，生产 user_store 实测含 6 账号）· #1078「bot 已在目标群」未验证断言被自检 code 230002 戳破。**共性：断言≠验证，每个"应该没问题"都被真实执行推翻——正是 `feedback_verify_not_claim` 的价值。**
+
+### needs_automation: false
+（部署收尾属一次性 gated 操作。Tier1 端到端实测缺口非自动化缺口，是"等真实故障或构造故障"的验证待办，已在卡 966ae7 evidence 记录诚实边界。）
