@@ -2051,3 +2051,15 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 ### needs_automation: true
 expires: 2026-07-26
 （同类第 2 次。已升级动作：本次将残留清理卡片化（c0f97a）；截止日前给该 governance 检查的报错文案附标准修复命令，并在 #1068 系列收尾时全环境（主仓/worktree/VPS）扫一遍残留。）
+
+---
+
+## 2026-07-12 · c0f97a 生产事故收尾（承接上条 #1077 env-residue 项）：补发已完成 + 根因细化到密码生成器 + 卡 3901cd
+
+> 上一条（#1077，本文件同段）已记录「同类第 2 次残留、卡片化 c0f97a、needs_automation expires 2026-07-26」。本条只补上条之后**真正执行完成的证据**与**比上条更深一层的根因**，不重复场景描述；automation 仍由上条既有项 + 新卡 3901cd 跟踪，故本条 `needs_automation: false`。
+
+- **补发执行证据（上条只登记、未执行）**：主仓 `server/.env` 剔除 6 账号（19→13，依据 `preset-users.ts` 的 `SELF_SERVICE_PASSWORD_ONLY_USERS` 精确 6 人；diff 证仅 USER_PASSWORDS 单行变化；备份 `.env.bak-20260712-governance-fix` 600 保留）→ governance 55/55 全绿 → 补发 `release:daily` exit=0：VPS `current/SC`、`current/SX` policy parquet 的 sha256 与本地 ETL 产物**逐字一致**（最大签单日 07-11），state.db 备份 + PM2 reload + `/health`×2 + 30s 稳定性均过；据实校正 `auto-release-state.json` failed→released 防兜底监督误触发重发。**核验副产**：① VPS 侧 `server/.env`（32 账号）复查 6 账号**零残留**——残留只在**发布机主仓**，生产 env 本就干净；② PM2「重启」归因＝`error.log` 自 3-25 无新写入、今日零错误→无崩溃，进程号递增（676→678→679）是 reload 的 delete+start 语义、当前 id679 ↺=0。
+- **根因细化（比上条"报错文案 + 全环境扫残留"更进一层）**：残留会**反复再生**——USER_PASSWORDS 两个生成器 `scripts/rotate-passwords.mjs`（line 83 `allUsers.filter(u=>!keep.has(u.username))`）与 `scripts/reset-passwords.mjs` 生成映射时都**不排除** `SELF_SERVICE_PASSWORD_ONLY_USERS`。任何人跑一次轮换/重置就把 6 个自助设密账号写回 .env → 再次触发同一闸。#1068 闸是发布时事后兜底，生成器在源头持续制造污染。**根治＝把 SELF_SERVICE 过滤下沉进两个生成器（生成即合规），governance 退回纯防回归**——已登记卡 `2026-07-12-claude-3901cd`（P2），属改动认证/权限映射须独立 PR + 单测。
+
+### needs_automation: false
+（automation 由上条 #1077 既有 needs_automation 项 expires 2026-07-26 + 新卡 3901cd 共同跟踪；本条为执行收尾 + 根因细化，不另立重复 automation 项。）
