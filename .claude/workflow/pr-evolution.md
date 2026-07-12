@@ -1993,3 +1993,12 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: false
 （同类失败首次。若再现"鉴权语义改动漏盘 E2E 固件账号" → 升级为 pr-checklist 红线行。）
+
+---
+
+## 2026-07-11 · 阶段二 PR 前 governance 红：worktree 本地 server/.env 的 USER_PASSWORDS 撞上 #1068 新闸
+
+- **场景**：全员密码闭环阶段二开发（PR #1069），首跑 `bun run governance` 时「自助设密账号禁入USER_PASSWORDS」闸红——worktree 本地 gitignored 的 `server/.env` 里 USER_PASSWORDS 含 6 个自助设密账号（changlixia/gonghuixin/houyabing/liangchunfan/lvzhenran/yaoqian）。
+- **根因**：不是本次代码问题，是**存量注入与新闸的时间差**：worktree 引导（PR #990 时代的 USER_PASSWORDS 自注入/主仓 .env 拷贝）早于 #1068 的隔离闸落地，本地 env 文件里残留全量 19 账号注入。闸设计上就要查本地 env（第一道静态闸），命中属预期行为。
+- **修复**：从 worktree `server/.env` 的 USER_PASSWORDS JSON 里剔除 6 个自助设密账号（19→13），governance 55/55 恢复全绿。
+- **预防**：任何在 #1068 之前创建的 worktree / 本地环境，首跑 governance 若命中此闸，先查 `server/.env` 是否存量注入（闸报错会列出账号名与文件位置），剔除即可——不要误判为本次 diff 引入。**主仓 `server/.env` 若同样残留 6 账号，主仓 governance 也会红，需同样清理**（生产 VPS 侧由 #1068 交接清单负责）。
