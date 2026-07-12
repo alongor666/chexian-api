@@ -6,22 +6,39 @@
  * 编排里抽出来，行为全部可 vitest 锁定。
  *
  * 状态文件（数据管理/logs/auto-release-state.json）语义：
- *   { beijingDay, status: 'released'|'failed'|'missed', attempts, ... }
+ *   { beijingDay, status: 'released'|'failed'|'missed', attempts, consecutiveMissedDays, ... }
  *   - released：当天已成功发布 → 后续 tick 全部跳过（幂等护栏）
  *   - failed：release:daily 跑过但失败；attempts < maxAttempts 时窗口内可重试
  *   - missed：窗口结束仍未就绪/未成功，已告警 → 当天不再动作，等人工
- *   - 跨天（state.beijingDay ≠ 今天）视为无状态，从头开始
+ *   - 跨天（state.beijingDay ≠ 今天）视为无状态，从头开始（attempts 归零）
+ *   - consecutiveMissedDays：released 前连续多少个自然日未成功发布（不含今天）。
+ *     released 当天归零；跨天时若上一天未 released 则 +1。用于 mark-missed 告警
+ *     升级（见 computeConsecutiveMissedDays）——单日故障只告警一次，但一旦拖过
+ *     第二天，说明人没看到/没修，告警必须更响，不能仍是同等力度的一条消息。
  *
  * 时间一律北京时区（上游出表节奏以北京为准；本机时钟时区不可信，调用方负责换算）。
  *
  * 无副作用、不读文件系统 / env / 时钟，可被 vitest 直接 import。
  */
 
-/** 默认发布窗口（北京时间）：上游约 09:30 出 01/03/04/05、10:30 出 02，故 10:35 起窗。 */
-export const DEFAULT_WINDOW = Object.freeze({ start: '10:35', end: '14:00' });
+/**
+ * 默认发布窗口（北京时间）：上游约 09:30 出 01/03/04/05、10:30 出 02，故 10:35 起窗。
+ * end 原为 14:00（2026-07-12 前）。实证复盘 `数据管理/logs/auto-release.log`（07-08~07-12）
+ * 发现窗口内仅 2 次自动重试往往在 11:40 前就耗尽——之后即使根因（治理闸拦截 / VPS SSH
+ * 瞬时抖动）当天被人工修复，也要等到人手动 `--once` 补跑才追上，导致报告与数据一起滞后
+ * 1~3 天（首页报告卡「数据未更新」正是这个滞后的可见症状）。延长到 20:00，让自愈式重试
+ * 有更长窗口去自动追上修复，而不必等人工介入。
+ */
+export const DEFAULT_WINDOW = Object.freeze({ start: '10:35', end: '20:00' });
 
-/** release:daily 失败后的当天最大尝试次数（超过即告警停手，等人工）。 */
-export const DEFAULT_MAX_ATTEMPTS = 2;
+/**
+ * release:daily 失败后的当天最大尝试次数（超过即告警停手，等人工）。
+ * 原为 2（2026-07-12 前），同上实证：2 次重试在 20~30 分钟内即耗尽，窗口内剩余数小时
+ * 完全浪费。提到 6 次，配合更宽的窗口，让瞬时故障（SSH 抖动等）有更多机会自愈；若 6 次
+ * 仍全部失败，大概率是持续性问题（如代码 bug），继续重试无意义，交由 mark-missed 的
+ * 升级告警（见 computeConsecutiveMissedDays）通知人工介入。
+ */
+export const DEFAULT_MAX_ATTEMPTS = 6;
 
 /** HH:MM 字符串合法性（宽松：仅格式，不校验 24h 语义边界之外的值）。 */
 export function isValidHHMM(s) {
@@ -77,11 +94,34 @@ export function decideTickAction({
 }
 
 /**
+ * 计算「releases 之前连续多少个自然日未成功发布」（不含今天）。
+ *
+ * - status === 'released' → 今天成功了，归零。
+ * - 同一天内的多次状态变化（failed→failed→missed）不重复计数，只在跨天时才 +1。
+ * - 跨天且上一天状态不是 'released' → 说明上一天也没成功，计数 +1；
+ *   上一天是 'released' → 说明是全新的一天开始出问题，从 0 起算。
+ *
+ * @param {'released'|'failed'|'missed'} status 本次写入的状态
+ * @param {object} opts
+ * @param {string} opts.todayBeijing
+ * @param {{beijingDay?:string,status?:string,consecutiveMissedDays?:number}|null} opts.prevState
+ * @returns {number}
+ */
+export function computeConsecutiveMissedDays(status, { todayBeijing, prevState }) {
+  if (status === 'released') return 0;
+  if (!prevState) return 0; // 首次运行，无历史可言，不能算作"之前有一天没发布"
+  const sameDay = prevState.beijingDay === todayBeijing;
+  if (sameDay) return prevState.consecutiveMissedDays ?? 0;
+  const prevWasSuccess = prevState.status === 'released';
+  return prevWasSuccess ? 0 : (prevState.consecutiveMissedDays ?? 0) + 1;
+}
+
+/**
  * 组装下一份状态文件内容（纯函数；调用方负责落盘）。
  * @param {'released'|'failed'|'missed'} status
  * @param {object} opts
  * @param {string} opts.todayBeijing
- * @param {{beijingDay?:string,attempts?:number}|null} opts.prevState
+ * @param {{beijingDay?:string,attempts?:number,status?:string,consecutiveMissedDays?:number}|null} opts.prevState
  * @param {string} [opts.note]
  * @param {string} [opts.nowISO] 时间戳由调用方注入（保持纯函数可测）
  */
@@ -93,6 +133,7 @@ export function nextState(status, { todayBeijing, prevState, note = '', nowISO =
     status,
     // released / failed 都消耗一次尝试；missed 是窗口超时的终态标记，不计尝试
     attempts: status === 'missed' ? prevAttempts : prevAttempts + 1,
+    consecutiveMissedDays: computeConsecutiveMissedDays(status, { todayBeijing, prevState }),
     note,
     updatedAt: nowISO,
   };

@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MAX_TIER1,
+  DEFAULT_MIN_RELEASE_ATTEMPTS,
   classifyReleaseFailure,
   decideRemediation,
   nextRemediateState,
@@ -23,7 +24,7 @@ describe('decideRemediation', () => {
   });
 
   it('今日 failed 且未接手过 → tier1-retry（轻风险自处置）', () => {
-    const d = decideRemediation({ releaseState: { beijingDay: TODAY, status: 'failed', attempts: 2 }, remediateState: null, todayBeijing: TODAY });
+    const d = decideRemediation({ releaseState: { beijingDay: TODAY, status: 'failed', attempts: DEFAULT_MIN_RELEASE_ATTEMPTS }, remediateState: null, todayBeijing: TODAY });
     expect(d.action).toBe('tier1-retry');
   });
 
@@ -33,21 +34,21 @@ describe('decideRemediation', () => {
 
   it('Tier1 已用尽（tier1Attempts>=max）→ tier2-diagnose（重风险待确认）', () => {
     const d = decideRemediation({
-      releaseState: { beijingDay: TODAY, status: 'failed', attempts: 2 },
+      releaseState: { beijingDay: TODAY, status: 'failed', attempts: DEFAULT_MIN_RELEASE_ATTEMPTS },
       remediateState: { beijingDay: TODAY, status: 'tier1-failed', tier1Attempts: DEFAULT_MAX_TIER1 },
       todayBeijing: TODAY,
     });
     expect(d.action).toBe('tier2-diagnose');
   });
 
-  it('并发闸：failed 但 attempts<2（auto-release 仍在重试）→ skip（防并发跑 release:daily）', () => {
-    const d = decideRemediation({ releaseState: { beijingDay: TODAY, status: 'failed', attempts: 1 }, remediateState: null, todayBeijing: TODAY });
+  it('并发闸：failed 但 attempts<DEFAULT_MIN_RELEASE_ATTEMPTS（auto-release 仍在重试）→ skip（防并发跑 release:daily）', () => {
+    const d = decideRemediation({ releaseState: { beijingDay: TODAY, status: 'failed', attempts: DEFAULT_MIN_RELEASE_ATTEMPTS - 1 }, remediateState: null, todayBeijing: TODAY });
     expect(d.action).toBe('skip');
     expect(d.reason).toMatch(/仍在重试|防并发/);
   });
 
-  it('并发闸：failed 且 attempts>=2（auto-release 已停手）→ tier1-retry', () => {
-    expect(decideRemediation({ releaseState: { beijingDay: TODAY, status: 'failed', attempts: 2 }, remediateState: null, todayBeijing: TODAY }).action).toBe('tier1-retry');
+  it('并发闸：failed 且 attempts>=DEFAULT_MIN_RELEASE_ATTEMPTS（auto-release 已停手）→ tier1-retry', () => {
+    expect(decideRemediation({ releaseState: { beijingDay: TODAY, status: 'failed', attempts: DEFAULT_MIN_RELEASE_ATTEMPTS }, remediateState: null, todayBeijing: TODAY }).action).toBe('tier1-retry');
   });
 
   it('并发闸：missed 天然已停手，attempts 缺省也接手', () => {
@@ -63,7 +64,7 @@ describe('decideRemediation', () => {
   });
 
   it('昨天的接手状态在今天视为无（重新从 Tier1 起）', () => {
-    const d = decideRemediation({ releaseState: { beijingDay: TODAY, status: 'failed', attempts: 2 }, remediateState: { beijingDay: '2026-07-11', status: 'tier2-awaiting', tier1Attempts: 3 }, todayBeijing: TODAY });
+    const d = decideRemediation({ releaseState: { beijingDay: TODAY, status: 'failed', attempts: DEFAULT_MIN_RELEASE_ATTEMPTS }, remediateState: { beijingDay: '2026-07-11', status: 'tier2-awaiting', tier1Attempts: 3 }, todayBeijing: TODAY });
     expect(d.action).toBe('tier1-retry');
   });
 });

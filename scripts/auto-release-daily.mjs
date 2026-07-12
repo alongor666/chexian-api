@@ -27,8 +27,8 @@
  *   node scripts/auto-release-daily.mjs --uninstall-launchd # 卸载
  *
  * 环境变量：
- *   AUTO_RELEASE_WINDOW_START / AUTO_RELEASE_WINDOW_END  发布窗口，北京时间（默认 10:35 / 14:00）
- *   AUTO_RELEASE_MAX_ATTEMPTS                            当日失败重试上限（默认 2）
+ *   AUTO_RELEASE_WINDOW_START / AUTO_RELEASE_WINDOW_END  发布窗口，北京时间（默认 10:35 / 20:00）
+ *   AUTO_RELEASE_MAX_ATTEMPTS                            当日失败重试上限（默认 6）
  *   AUTO_RELEASE_LARK_CHAT_ID                            飞书告警群 chat_id（默认「AI 赋能车险经营」群，lark-cli bot 已入群免配）
  *   AUTO_RELEASE_WEBHOOK_URL                             企微群机器人 webhook（可选，与飞书并行发）
  *   AUTO_RELEASE_INTERVAL_SEC                            安装时写入 launchd 的轮询间隔（默认 900）
@@ -164,6 +164,23 @@ async function notify(title, body) {
   } catch (e) {
     log('yellow', `⚠ webhook 通知失败：${e.message}`);
   }
+}
+
+/**
+ * 告警升级（2026-07-12）：单日故障只告警一次容易被忽略——07-08/07-09 两天都是这样悄悄拖过去的，
+ * 首页报告卡「数据未更新」正是这个滞后攒了 2~3 天后才被人注意到。consecutiveMissedDays
+ * （见 auto-release-decision.mjs computeConsecutiveMissedDays）记录了「今天之前已经连续
+ * 多少天没成功发布」——一旦 ≥1（即已经跨天拖过），说明上一次同等力度的告警没被处理，
+ * 必须用更醒目的标题+更强烈的措辞让人不能再当作日常噪声划过。
+ * @returns {[string, string]} 传给 notify(title, body) 的参数
+ */
+function escalatedAlert(title, body, consecutiveMissedDays) {
+  if (!consecutiveMissedDays || consecutiveMissedDays < 1) return [title, body];
+  const daysStuck = consecutiveMissedDays + 1; // +1 把今天也算进去，即“已连续 N 天”
+  return [
+    `🚨🚨🚨 已连续 ${daysStuck} 天未自动发布 —— ${title}`,
+    `${body}\n⚠ 这不是今天第一次：过去 ${consecutiveMissedDays} 天也未成功发布，请立即人工介入排查，不要再等下一轮自动重试。`,
+  ];
 }
 
 // ── 远程探测（只读 manifest，不 rsync）──
@@ -358,8 +375,10 @@ async function main() {
     return;
   }
   if (decision.action === 'mark-missed') {
-    writeState(nextState('missed', { todayBeijing, prevState: state, note: decision.reason, nowISO: new Date().toISOString() }));
-    await notify('今天未自动发布', `${decision.reason}。请人工检查上游出表情况（ssh myvps 看 auto_loadbi/exports），需要时手动 bun run release:daily`);
+    const missedState = nextState('missed', { todayBeijing, prevState: state, note: decision.reason, nowISO: new Date().toISOString() });
+    writeState(missedState);
+    const body = `${decision.reason}。请人工检查上游出表情况（ssh myvps 看 auto_loadbi/exports），需要时手动 bun run release:daily`;
+    await notify(...escalatedAlert('今天未自动发布', body, missedState.consecutiveMissedDays));
     return;
   }
 
@@ -401,7 +420,8 @@ async function main() {
   } else {
     const st = nextState('failed', { todayBeijing, prevState: state, note: `release:daily 失败 ${result.detail}`, nowISO: now });
     writeState(st);
-    await notify('自动发布失败', `release:daily ${result.detail}（第 ${st.attempts}/${maxAttempts} 次）。日志：${LOG_PATH} 与 launchd 日志；上限内下个周期自动重试`);
+    const body = `release:daily ${result.detail}（第 ${st.attempts}/${maxAttempts} 次）。日志：${LOG_PATH} 与 launchd 日志；上限内下个周期自动重试`;
+    await notify(...escalatedAlert('自动发布失败', body, st.consecutiveMissedDays));
     process.exit(1);
   }
 }

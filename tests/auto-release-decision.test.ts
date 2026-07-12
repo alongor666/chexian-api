@@ -6,6 +6,7 @@ import {
   isValidHHMM,
   decideTickAction,
   nextState,
+  computeConsecutiveMissedDays,
 } from '../数据管理/lib/auto-release-decision.mjs';
 
 const TODAY = '2026-07-05';
@@ -29,11 +30,11 @@ describe('decideTickAction（窗口 × 当日状态机）', () => {
 
   it('窗口内无状态 → probe', () => {
     expect(decideTickAction({ ...base, state: null, nowHHMM: '10:35' }).action).toBe('probe');
-    expect(decideTickAction({ ...base, state: null, nowHHMM: '13:59' }).action).toBe('probe');
+    expect(decideTickAction({ ...base, state: null, nowHHMM: '19:59' }).action).toBe('probe');
   });
 
   it('🔴 窗口结束仍未成功 → mark-missed（告警，禁止默默不发布）', () => {
-    const d = decideTickAction({ ...base, state: null, nowHHMM: '14:00' });
+    const d = decideTickAction({ ...base, state: null, nowHHMM: DEFAULT_WINDOW.end });
     expect(d.action).toBe('mark-missed');
   });
 
@@ -54,7 +55,7 @@ describe('decideTickAction（窗口 × 当日状态机）', () => {
   });
 
   it('🔴 failed 达上限 → skip 停手等人工（--once 也不放行，防手抖连发）', () => {
-    const state = { beijingDay: TODAY, status: 'failed', attempts: 2 };
+    const state = { beijingDay: TODAY, status: 'failed', attempts: DEFAULT_MAX_ATTEMPTS };
     expect(decideTickAction({ ...base, state, nowHHMM: '11:00' }).action).toBe('skip');
     expect(decideTickAction({ ...base, state, nowHHMM: '11:00', once: true }).action).toBe('skip');
   });
@@ -85,5 +86,43 @@ describe('nextState（状态迁移纯函数）', () => {
     const s = nextState('missed', { todayBeijing: TODAY, prevState: prev, nowISO: 't' });
     expect(s.attempts).toBe(1);
     expect(s.status).toBe('missed');
+  });
+});
+
+describe('computeConsecutiveMissedDays（🔴 告警升级依据 — 单日故障只告警一次容易被忽略，2026-07-12）', () => {
+  const YESTERDAY = '2026-07-04';
+  const TODAY2 = '2026-07-05';
+
+  it('released → 归零，不管之前多少天没发布', () => {
+    const prevState = { beijingDay: YESTERDAY, status: 'missed', consecutiveMissedDays: 3 };
+    expect(computeConsecutiveMissedDays('released', { todayBeijing: TODAY2, prevState })).toBe(0);
+  });
+
+  it('同一天内多次 failed/missed 不重复计数', () => {
+    const prevState = { beijingDay: TODAY2, status: 'failed', consecutiveMissedDays: 1 };
+    expect(computeConsecutiveMissedDays('missed', { todayBeijing: TODAY2, prevState })).toBe(1);
+  });
+
+  it('跨天且昨天是 released → 全新一天出问题，从 0 起算', () => {
+    const prevState = { beijingDay: YESTERDAY, status: 'released', consecutiveMissedDays: 0 };
+    expect(computeConsecutiveMissedDays('failed', { todayBeijing: TODAY2, prevState })).toBe(0);
+  });
+
+  it('跨天且昨天不是 released → +1（连续多日未发布累加）', () => {
+    const prevState = { beijingDay: YESTERDAY, status: 'missed', consecutiveMissedDays: 1 };
+    expect(computeConsecutiveMissedDays('failed', { todayBeijing: TODAY2, prevState })).toBe(2);
+  });
+
+  it('无历史状态（首次运行）→ 0', () => {
+    expect(computeConsecutiveMissedDays('failed', { todayBeijing: TODAY2, prevState: null })).toBe(0);
+  });
+
+  it('nextState 透传 consecutiveMissedDays 字段', () => {
+    const s1 = nextState('missed', { todayBeijing: YESTERDAY, prevState: null, nowISO: 't1' });
+    expect(s1.consecutiveMissedDays).toBe(0);
+    const s2 = nextState('missed', { todayBeijing: TODAY2, prevState: s1, nowISO: 't2' });
+    expect(s2.consecutiveMissedDays).toBe(1); // 昨天也是 missed，跨天 +1
+    const s3 = nextState('released', { todayBeijing: '2026-07-06', prevState: s2, nowISO: 't3' });
+    expect(s3.consecutiveMissedDays).toBe(0); // 今天成功，归零
   });
 });

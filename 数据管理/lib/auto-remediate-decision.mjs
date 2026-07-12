@@ -20,12 +20,15 @@
 export const DEFAULT_MAX_TIER1 = 1;
 
 /**
- * 接手前要求 auto-release 已「放弃」的最小失败尝试数（默认 2，= auto-release-decision
- * 的 DEFAULT_MAX_ATTEMPTS）。**并发闸**：只在 auto-release 达重试上限停手后才接手，
- * 否则会与其重试窗口内的 release:daily 并发跑（ETL/rsync/reload 撞车）。missed 态天然
- * 已停手（窗口已过），不受此数约束。
+ * 接手前要求 auto-release 已「放弃」的最小失败尝试数（须与 auto-release-decision 的
+ * DEFAULT_MAX_ATTEMPTS 保持一致——本模块不 import 该常量以避免跨模块运行时耦合，
+ * 但两边任一方调整重试上限时必须同步改这里，否则并发闸会失效）。**并发闸**：只在
+ * auto-release 达重试上限停手后才接手，否则会与其重试窗口内的 release:daily 并发跑
+ * （ETL/rsync/reload 撞车）。missed 态天然已停手（窗口已过），不受此数约束。
+ * 2026-07-12：auto-release-decision.DEFAULT_MAX_ATTEMPTS 由 2 调宽到 6（见该文件注释），
+ * 此处同步调整，否则本模块会在 auto-release 仍有重试余量时提前接手、造成并发跑。
  */
-export const DEFAULT_MIN_RELEASE_ATTEMPTS = 2;
+export const DEFAULT_MIN_RELEASE_ATTEMPTS = 6;
 
 /** 触发接手的发布状态集（今日发布处于这些状态才接手）。 */
 const REMEDIABLE_RELEASE_STATUSES = ['failed', 'missed'];
