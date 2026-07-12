@@ -83,6 +83,16 @@ class BaseConverter(ABC):
         """必须非空的列（任意 NaN 整行过滤）。dedup_key 自动加入。"""
         return []
 
+    def get_explicitly_ignored_columns(self) -> list:
+        """有意丢弃、不进 parquet 的源列名（中文）。
+
+        默认空 = 源列必须全部在 get_cn_to_en() 映射内，否则 Schema 契约 fail-fast
+        （backlog FIND-004：防上游悄改字段被静默吞掉）。当上游确实新增了一列且业务上
+        确认无需消费时，在对应 converter override 本方法声明该列（等价 premium 域
+        shard-config.json 的 explicitly_ignored_fields），即可放行且不落盘。
+        """
+        return []
+
     def validate_business_rules(self, df: pd.DataFrame) -> pd.DataFrame:
         """业务规则校验，默认 pass-through"""
         return df
@@ -145,13 +155,26 @@ class BaseConverter(ABC):
             print(f"      实际列: {list(df.columns)}")
             sys.exit(1)
 
-        # 3. 列名重命名（丢弃未映射列）
+        # 3. Schema 契约 + 列名重命名
+        #    未映射也未显式忽略的源列 → fail-fast（与 premium transform.py finalize_schema
+        #    对齐，backlog FIND-004 下沉）；显式忽略列（get_explicitly_ignored_columns）静默
+        #    丢弃，映射列重命名保留。--force 为调试逃生阀。
+        from pipelines.etl_validation import enforce_schema_contract
+        ignored = self.get_explicitly_ignored_columns()
+        enforce_schema_contract(
+            df,
+            set(cn_to_en.keys()),
+            ignored,
+            force=getattr(args, "force", False),
+            declare_hint=(
+                f"      → 在 {type(self).__name__}.get_cn_to_en() 映射或 "
+                f"get_explicitly_ignored_columns() 中声明"
+            ),
+        )
         rename_map = {k: v for k, v in cn_to_en.items() if k in df.columns}
         df = df.rename(columns=rename_map)
-        extra = [c for c in df.columns if c not in cn_to_en.values()]
-        if extra:
-            print(f"   ⚠ 未映射列（已丢弃）: {extra}")
-            df = df[[c for c in df.columns if c in cn_to_en.values()]]
+        # 只保留映射后的目标列（丢弃 get_explicitly_ignored_columns 声明的忽略列）
+        df = df[[c for c in df.columns if c in cn_to_en.values()]]
         print(f"   列名重命名: {len(rename_map)}/{len(cn_to_en)} 列")
 
         # 4. 子类类型转换 + 派生字段
@@ -248,6 +271,11 @@ class BaseConverter(ABC):
             "--no-metadata",
             action="store_true",
             help="跳过 data-sources.json 写入（manifest 驱动流程专用，由 refresh_metadata.py 统一写）",
+        )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="跳过 Schema 契约检查（发现未声明源列时不 exit，仅告警；仅用于调试）",
         )
         parser.add_argument(
             "--branch-code",

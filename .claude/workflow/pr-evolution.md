@@ -2126,3 +2126,16 @@ expires: 2026-07-26
 
 ### needs_automation: false
 （部署收尾属一次性 gated 操作。Tier1 端到端实测缺口非自动化缺口，是"等真实故障或构造故障"的验证待办，已在卡 966ae7 evidence 记录诚实边界。）
+
+---
+
+## 2026-07-12 · Schema 契约拦截下沉全域（FIND-004，PR #1088，卡 0e75be）
+
+- **缺口**：Schema 契约「上游未声明字段即 exit(1)」此前只装在 premium 域（transform.py finalize_schema）；brand/repair/cross_sell/customer_flow 走 base_converter，对未映射列只 print 后**静默丢弃**——上游悄改字段被吞、口径悄悄失真无人察觉。
+- **先证伪再动手（价值实证）**：diff 三域真实源列 vs 映射键，brand/repair/cross_sell（含 SC/SX/旧格式）**零静默丢列** → 下沉 exit(1) 不误伤正常 ETL。但 customer_flow 09 源含隐藏列 `保险止期`（24 批次并集），**一直被静默吞**——若不先声明就下沉会 exit(1) 阻断 customer_flow ETL。这正是任务警告的「有域靠静默丢字段过日子」，证伪步骤直接拦下一次回归。
+- **修复**：抽共享核 `enforce_schema_contract`（etl_validation.py）→ base_converter step 3 + customer_flow 自有路径 fail-fast + `get_explicitly_ignored_columns()` hook（customer_flow 声明 `保险止期`）；premium 内联块改调同核，两处去重消漂移。保留 `--force` 逃生阀。
+- **oracle/回归门**：11 pytest 用例锁「注入未声明列→非零退出」「正常源→通过」「--force/显式忽略放行」（合成数据）；四域真实源 ETL 干跑全 exit0；test:py 547 passed；governance 55/55；Production Gate + Governance Check CI 双 success。
+- **诚实边界**：quotes（quote_etl.py）是独立第 4 条 ETL 路径、自带 schema 处理，本次未动，PR 登记为 follow-up。
+
+### needs_automation: false
+（拦截已代码化为 base_converter step 3 + governance 覆盖的 pytest，非 prompt 规则；"先证伪源列再下沉"是本次一次性方法，无重复失败模式需升级为闸。）
