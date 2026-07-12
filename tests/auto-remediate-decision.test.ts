@@ -10,8 +10,19 @@ import {
   decideRemediation,
   nextRemediateState,
 } from '../数据管理/lib/auto-remediate-decision.mjs';
+// @ts-expect-error — 纯 JS 模块，无类型声明
+import { DEFAULT_MAX_ATTEMPTS } from '../数据管理/lib/auto-release-decision.mjs';
 
 const TODAY = '2026-07-12';
+
+describe('🔴 并发闸常量防漂移（2026-07-12 code-reviewer 发现：两个常量靠注释手动同步，无自动检查）', () => {
+  it('DEFAULT_MIN_RELEASE_ATTEMPTS 必须等于 auto-release-decision 的 DEFAULT_MAX_ATTEMPTS', () => {
+    // 这两个常量分属两个模块、故意不互相 import（避免运行时耦合，见 auto-remediate-decision.mjs
+    // 注释），只靠人工同步维护——本测试把"忘记同步"从静默 bug 转成 CI 红灯：任一方改了
+    // 重试上限而忘记同步另一方，此测试立即失败，而不是等并发跑 release:daily 撞车才发现。
+    expect(DEFAULT_MIN_RELEASE_ATTEMPTS).toBe(DEFAULT_MAX_ATTEMPTS);
+  });
+});
 
 describe('decideRemediation', () => {
   it('今日发布未失败（released/无状态）→ skip', () => {

@@ -12,7 +12,8 @@
  *   - missed：窗口结束仍未就绪/未成功，已告警 → 当天不再动作，等人工
  *   - 跨天（state.beijingDay ≠ 今天）视为无状态，从头开始（attempts 归零）
  *   - consecutiveMissedDays：released 前连续多少个自然日未成功发布（不含今天）。
- *     released 当天归零；跨天时若上一天未 released 则 +1。用于 mark-missed 告警
+ *     released 当天归零；跨天时若上一天未 released 则按实际相差的自然日数累加
+ *     （非固定 +1，覆盖 Mac 睡眠/关机跨越多天未触发的场景）。用于 mark-missed 告警
  *     升级（见 computeConsecutiveMissedDays）——单日故障只告警一次，但一旦拖过
  *     第二天，说明人没看到/没修，告警必须更响，不能仍是同等力度的一条消息。
  *
@@ -94,11 +95,27 @@ export function decideTickAction({
 }
 
 /**
+ * 两个 YYYY-MM-DD 字符串之间相差的自然日数（均按 UTC 午夜解析，只用于算日期差，
+ * 与实际时区无关——两端都是「北京日」字符串，差值不受时区影响）。
+ * @param {string} fromYMD
+ * @param {string} toYMD
+ * @returns {number}
+ */
+function daysBetweenYMD(fromYMD, toYMD) {
+  const from = Date.parse(`${fromYMD}T00:00:00Z`);
+  const to = Date.parse(`${toYMD}T00:00:00Z`);
+  return Math.round((to - from) / 86400000);
+}
+
+/**
  * 计算「releases 之前连续多少个自然日未成功发布」（不含今天）。
  *
  * - status === 'released' → 今天成功了，归零。
- * - 同一天内的多次状态变化（failed→failed→missed）不重复计数，只在跨天时才 +1。
- * - 跨天且上一天状态不是 'released' → 说明上一天也没成功，计数 +1；
+ * - 同一天内的多次状态变化（failed→failed→missed）不重复计数，只在跨天时才累加。
+ * - 跨天且上一天状态不是 'released' → 说明上一天也没成功，按实际相差的自然日数累加
+ *   （而非固定 +1）——Mac 睡眠/关机跨越多天不触发时（见文件头 "⚠️ Mac 睡眠时 launchd
+ *   不触发"），prevState.beijingDay 与 todayBeijing 之间可能隔了不止一天，若仍固定 +1
+ *   会低估滞后天数，恰好在"该功能存在的意义"这种长时间无人值守场景里失真；
  *   上一天是 'released' → 说明是全新的一天开始出问题，从 0 起算。
  *
  * @param {'released'|'failed'|'missed'} status 本次写入的状态
@@ -113,7 +130,9 @@ export function computeConsecutiveMissedDays(status, { todayBeijing, prevState }
   const sameDay = prevState.beijingDay === todayBeijing;
   if (sameDay) return prevState.consecutiveMissedDays ?? 0;
   const prevWasSuccess = prevState.status === 'released';
-  return prevWasSuccess ? 0 : (prevState.consecutiveMissedDays ?? 0) + 1;
+  if (prevWasSuccess) return 0;
+  const gap = Math.max(1, daysBetweenYMD(prevState.beijingDay ?? todayBeijing, todayBeijing));
+  return (prevState.consecutiveMissedDays ?? 0) + gap;
 }
 
 /**
