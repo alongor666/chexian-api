@@ -87,69 +87,18 @@ git commit -m "feat(config): add product and route registries"
 
 ## Task 3：迁移品牌、侧栏与权限消费者
 
-**Files:**
-- Modify: `src/components/layout/TopNavigation.tsx`
-- Modify: `src/features/auth/LoginPage.tsx`
-- Modify: `src/features/copilot/CopilotDrawer.tsx`
-- Modify: `src/components/layout/SidebarNavigation.tsx`
-- Modify: `src/features/admin/AccessControlPage.tsx`
-- Modify: `index.html`
-- Modify: `server/package.json`
-- Modify: `server/src/app.ts`
-- Modify: `tests/sidebar-navigation-collapsed.test.tsx`
-- Create: `tests/route-registry-app-sync.test.ts`
+已完成的消费者迁移保留以下验收契约：
 
-- [ ] **Step 1: claim 子任务并先扩充失败测试**
+- 顶栏、登录页和副驾标题消费 `PRODUCT_METADATA`；HTML 静态标题由治理闸对账，server 包名为 `@chexian/server`。
+- 侧栏由 registry 生成六域，Lucide 映射留在布局层；`canAccessRoute`、特殊功能守卫、hover prefetch、compact rail 与移动端行为不变。
+- 权限 UI 只展示 `getPermissionRoutes()` 的 canonical 项；legacy alias 兼容已存权限但不成为新选项，且不得扩大 `allowedRoutes`。
+- App 保持显式 Route，registry redirects 保持目标及 query 字节行为；同步测试用 TSX AST 对账。
 
-侧栏测试锁定六个一级域和关键入口；权限注册表测试锁定 canonical 路径；App 同步测试读取 `src/app/App.tsx`，断言每个 `navigation`/`permissionConfigurable` canonical path 都有显式 Route 或有注释声明的入口映射。
-
-```ts
-expect(screen.getByText('经营总览')).toBeTruthy();
-expect(screen.getByText('成本质量')).toBeTruthy();
-expect(screen.getByRole('link', { name: '经营看板' })).toBeTruthy();
-```
-
-- [ ] **Step 2: 运行测试并确认 RED**
-
-Run: `bun run test --run tests/sidebar-navigation-collapsed.test.tsx tests/route-registry-app-sync.test.ts`
-
-Expected: 新分组/标签断言失败。
-
-- [ ] **Step 3: 迁移品牌消费者**
-
-顶部、登录页和 Copilot 用户可见标题从 `PRODUCT_METADATA` 读取；`index.html` 因 Vite HTML 无法直接 import，静态写入同一主名并由治理闸对账。将 `<html lang="en">` 改为 `<html lang="zh-CN">`。后端包改名为 `@chexian/server`，注释与描述使用产品主名。
-
-- [ ] **Step 4: 迁移侧栏但保留行为**
-
-将现有 `dataNavItems/toolNavItems/adminNavItems` 替换为注册表派生的六域结构。图标映射留在布局层，或由 registry 保存 Lucide icon 引用；不得把 React 组件引入纯配置测试难以加载的模块。保留：
-
-- `canAccessRoute`；
-- `canAccessMotoCost` / `canAccessExpenseDevelopment` 特殊守卫；
-- hover prefetch switch；
-- compact rail 两字短标签；
-- 移动端关闭抽屉行为。
-
-- [ ] **Step 5: 迁移权限配置**
-
-删除 `AccessControlPage.tsx` 内手写 `ALL_ROUTES`，改用 `getPermissionRoutes()` 映射 `{ path, label }`。现有用户或角色中遗留 alias 可以继续显示为已存值或在提交前由后端现有对齐逻辑处理，但 UI 不再提供新勾选入口；不得自动扩大 allowedRoutes。
-
-- [ ] **Step 6: 运行定向测试**
-
-Run: `bun run test --run tests/sidebar-navigation-collapsed.test.tsx tests/route-registry-app-sync.test.ts tests/config/organizations.test.ts tests/route-redirect-guards.test.tsx`
-
-Expected: 全部通过，redirect 行为保持原样。
-
-- [ ] **Step 7: 类型与构建验证**
-
-Run: `bun run typecheck && bun run build`
-
-Expected: exit 0。
-
-- [ ] **Step 8: 提交消费者迁移**
+验证命令：
 
 ```bash
-git add -- index.html server/package.json server/src/app.ts src/components/layout/TopNavigation.tsx src/components/layout/SidebarNavigation.tsx src/features/auth/LoginPage.tsx src/features/copilot/CopilotDrawer.tsx src/features/admin/AccessControlPage.tsx tests/sidebar-navigation-collapsed.test.tsx tests/route-registry-app-sync.test.ts
-git commit -m "refactor(ui): derive naming and navigation from registries"
+bun run test --run tests/sidebar-navigation-collapsed.test.tsx tests/route-registry-app-sync.test.ts tests/config/organizations.test.ts tests/route-redirect-guards.test.tsx
+bun run typecheck && bun run build
 ```
 
 ## Task 4：纠偏文档并建立防漂移治理闸
@@ -211,23 +160,9 @@ git commit -m "docs(governance): align naming and architecture truth"
 
 ## Task 5：全量审计、backlog 收口与 PR
 
-**Files:**
-- Create: remaining `backlog-events/2026-07/*.json` through script only
-- Verify locally generated ignored views: `BACKLOG.md`, `BACKLOG_ARCHIVE.md`（不得强制加入 Git）
+收口时仅通过 backlog 脚本追加事件，不手改事件或强制提交 ignored 派生视图。每个实施项必须完成规格审查、质量审查及修复复审，主代理核验真实 diff 和输出后才能标记 DONE。
 
-- [ ] **Step 1: claim 最终验证子任务**
-
-从 Task 1 的四个子任务输出中取描述为“完成全量验证、独立审计、PR 与 CI 收口”的真实 uid，记为 shell 变量 `FINAL_UID`，再运行：
-
-Run: `bun scripts/backlog.mjs claim "$FINAL_UID" --agent final-verification --actor @codex`
-
-Expected: 状态变为 DOING；只有当前 owner 可继续收口。
-
-- [ ] **Step 2: 逐项完成独立审查闭环**
-
-每个实施任务依次执行：规格审查 → 修复 → 复审通过 → 代码质量审查 → 修复 → 复审通过。审查 Agent 不得修改代码；实施 Agent 负责修复。主代理读取真实 diff 和测试输出后才更新 backlog。
-
-- [ ] **Step 3: 新鲜全量验证**
+新鲜验证：
 
 ```bash
 bun run typecheck
@@ -237,48 +172,4 @@ bun run governance
 git diff --check origin/main...HEAD
 ```
 
-Expected: 所有命令 exit 0；全量测试无失败；diff 无 whitespace error。
-
-- [ ] **Step 4: 逐个标记子任务 DONE**
-
-```bash
-TASK_UID="Task 1 输出的真实子任务 uid" \
-COMMIT_SHA="该分项真实提交的 git rev-parse 短 SHA" \
-bun scripts/backlog.mjs status "$TASK_UID" DONE \
-  --actor @codex \
-  --evidence "commit=$COMMIT_SHA; spec review=approved; quality review=approved; targeted tests=passed"
-```
-
-父任务暂不 DONE，只追加 note 记录本地验证和待 PR/CI 状态。
-
-- [ ] **Step 5: 提交 backlog 本地收口事件**
-
-```bash
-git add -- backlog-events/2026-07
-git commit -m "chore(backlog): record naming rollout verification"
-```
-
-- [ ] **Step 6: 按 commit-push-pr 流程推送并创建 PR**
-
-PR 标题建议：`refactor(ui): unify product naming and route registry`。
-
-PR 正文必须列出：范围、非目标、旧 URL 兼容、权限半径不变、定向/全量验证、Agent 双审结果和回滚方式。
-
-- [ ] **Step 7: 审核 GitHub CI 与 review comments**
-
-检查 mergeability、required Actions 和未解决 review threads。失败则回到对应实施 Agent 修复并重复定向/全量验证。
-
-- [ ] **Step 8: CI 全绿后标记父任务 DONE 并推送同一 PR**
-
-```bash
-PARENT_UID="Task 1 输出的真实父任务 uid" \
-PR_NUMBER="gh pr view --json number --jq .number 的真实输出" \
-bun scripts/backlog.mjs status "$PARENT_UID" DONE \
-  --actor @codex \
-  --evidence "PR #$PR_NUMBER; required CI success; no unresolved review comments; full local verification passed"
-git add -- backlog-events/2026-07
-git commit -m "chore(backlog): close naming registry rollout"
-git push
-```
-
-Expected: 父任务进入归档视图，PR 仍保持可合并且 required CI 重新通过。
+所有命令须 exit 0。子任务证据必须包含真实 commit、双审通过和定向测试；父任务只在 required CI 全绿、无未解决 review thread 后标记 DONE。PR 正文保留范围/非目标、旧 URL 兼容、权限半径、验证、审查与回滚说明。
