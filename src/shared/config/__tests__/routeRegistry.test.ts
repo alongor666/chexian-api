@@ -76,6 +76,7 @@ describe('route registry contract', () => {
     }
     expect(permissionPaths).toEqual([
       '/data-import',
+      '/home',
       '/dashboard',
       '/performance-analysis',
       '/reports',

@@ -94,4 +94,20 @@ describe('toggleSelection · 复选不可变更新', () => {
     expect(isRouteSelected(['/'], '/data-import')).toBe(true);
     expect(isRouteSelected(['/'], '/home')).toBe(false);
   });
+
+  it('可独立授予和撤销 home 与 data-import', () => {
+    const withHome = toggleRouteSelection([], '/home', true);
+    expect(withHome).toEqual(['/home']);
+    expect(isRouteSelected(withHome, '/home')).toBe(true);
+    expect(isRouteSelected(withHome, '/data-import')).toBe(false);
+
+    const withBoth = toggleRouteSelection(withHome, '/data-import', true);
+    expect(withBoth).toEqual(['/home', '/data-import']);
+    expect(toggleRouteSelection(withBoth, '/home', false)).toEqual(['/data-import']);
+    expect(toggleRouteSelection(withBoth, '/data-import', false)).toEqual(['/home']);
+  });
+
+  it('取消 data-import 清除 legacy / 但不影响 home', () => {
+    expect(toggleRouteSelection(['/', '/home'], '/data-import', false)).toEqual(['/home']);
+  });
 });

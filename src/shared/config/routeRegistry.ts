@@ -56,7 +56,7 @@ function freezeRoutes(routes: RouteDefinition[]): readonly RouteDefinition[] {
 }
 
 export const ROUTES: readonly RouteDefinition[] = freezeRoutes([
-  { kind: 'canonical', id: 'home', path: '/home', label: '首页', shortLabel: '首页', iconKey: 'home', navigationDomain: 'overview', navigationOrder: 10, showInNavigation: true, permissionConfigurable: false },
+  { kind: 'canonical', id: 'home', path: '/home', label: '首页', shortLabel: '首页', iconKey: 'home', navigationDomain: 'overview', navigationOrder: 10, showInNavigation: true, permissionConfigurable: true },
   { kind: 'canonical', id: 'dashboard', path: '/dashboard', label: '经营看板', shortLabel: '看板', iconKey: 'gauge', navigationDomain: 'overview', navigationOrder: 20, showInNavigation: true, permissionConfigurable: true, redirects: [{ path: '/old-dashboard', to: '/dashboard' }] },
   { kind: 'canonical', id: 'chart-ledger', path: '/chart-ledger', label: '图表账本', shortLabel: '账本', iconKey: 'layout-grid', navigationDomain: 'overview', navigationOrder: 30, showInNavigation: true, permissionConfigurable: false },
 
