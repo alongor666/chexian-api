@@ -27,6 +27,7 @@ import {
   unmarkActivationTokenUsed,
   type PasswordTokenKind,
 } from './activation-token-store.js';
+import { assertPasswordAllowed } from './credential-policy.js';
 
 export type { PasswordTokenKind };
 
@@ -93,6 +94,7 @@ async function createPasswordToken(
   input: { userId: string; username: string; createdBy: string; ttlMs?: number },
   kind: PasswordTokenKind
 ): Promise<CreatedActivationToken> {
+  await assertPasswordAllowed(input.userId);
   const tokenId = encodeCrockfordBase32(crypto.randomBytes(8), TOKEN_ID_LEN);
   const secret = crypto.randomBytes(SECRET_BYTES).toString('base64url');
   const tokenHash = await bcrypt.hash(secret, authConfig.bcryptSaltRounds);
@@ -190,6 +192,7 @@ async function consumeTokenAndSetPassword(
   if (!user || !user.active || user.username !== record.username) {
     throw new AppError(400, unified);
   }
+  await assertPasswordAllowed(user.id);
 
   // 策略校验放在令牌占用之前：弱密码被拒时令牌不烧，用户换个密码可直接重试
   const normalizedNew = newPassword.normalize('NFKC').trim();

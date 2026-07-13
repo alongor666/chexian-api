@@ -40,6 +40,8 @@ export interface AuthData {
     mustChangePassword?: boolean;
     /** 账号当前是否存在可验证的旧密码凭据（false → 设密页走「首次设密」模式，免填当前密码） */
     hasPassword?: boolean;
+    authMethods?: Array<'password' | 'feishu'>;
+    canChangePassword?: boolean;
     specialFeatures?: string[];
   };
 }

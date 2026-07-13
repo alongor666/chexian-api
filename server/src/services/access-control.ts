@@ -9,6 +9,7 @@ import { dbEnv } from '../config/env.js';
 import { AppError } from '../middleware/error.js';
 import { createLogger } from '../utils/logger.js';
 import { setActiveUsernames } from './user-activation-cache.js';
+import type { AuthIdentityRecord, PasswordCredentialRecord } from './auth-model.js';
 
 const log = createLogger('access-control');
 
@@ -58,6 +59,8 @@ interface UserStoreData {
   exportedAt: string;
   users: AccessUser[];
   roles: AccessRole[];
+  identities?: AuthIdentityRecord[];
+  passwordCredentials?: PasswordCredentialRecord[];
 }
 
 function toSqlString(value?: string | null): string {
@@ -142,18 +145,22 @@ function ensureDataDir(): void {
 async function persistToFile(): Promise<void> {
   const users = await listUsersInternal();
   const roles = await listRoles();
+  const identities = await listAuthIdentitiesInternal();
+  const passwordCredentials = await listPasswordCredentialsInternal();
   const snapshot: UserStoreData = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     users,
     roles,
+    identities,
+    passwordCredentials,
   };
 
   // SQLite first（仅 backend=sqlite 模式）—— v5 plan 用户决策 lock 2026-05-16
   if (dbEnv.STATE_STORE_BACKEND === 'sqlite') {
     try {
       const store = await ensureAccessControlStore();
-      store.replaceAll({ users, roles });
+      store.replaceAll({ users, roles, identities, passwordCredentials });
     } catch (err) {
       throw new AppError(
         500,
@@ -228,6 +235,8 @@ async function loadFromStore(store: UserStoreData): Promise<void> {
   // 清空内存表再插入
   await duckdbService.query('DELETE FROM UserAccount');
   await duckdbService.query('DELETE FROM RoleConfig');
+  await duckdbService.query('DELETE FROM AuthIdentity');
+  await duckdbService.query('DELETE FROM PasswordCredential');
 
   // 插入角色
   if (store.roles && store.roles.length > 0) {
@@ -274,6 +283,45 @@ async function loadFromStore(store: UserStoreData): Promise<void> {
       ${userValues}
     `);
   }
+  const identities = Array.isArray(store.identities) ? store.identities : [];
+  if (identities.length > 0) {
+    const values = identities.map((identity) => `(
+      '${escapeSqlValue(identity.id)}',
+      '${escapeSqlValue(identity.userId)}',
+      '${escapeSqlValue(identity.provider)}',
+      '${escapeSqlValue(identity.providerSubject)}',
+      ${toSqlBoolean(identity.enabled)},
+      ${toSqlString(identity.lastVerifiedAt)},
+      '${escapeSqlValue(identity.createdAt)}',
+      '${escapeSqlValue(identity.updatedAt)}'
+    )`).join(',\n');
+    await duckdbService.query(`
+      INSERT INTO AuthIdentity
+        (id, user_id, provider, provider_subject, enabled, last_verified_at, created_at, updated_at)
+      VALUES ${values}
+    `);
+  }
+  const passwordCredentials = Array.isArray(store.passwordCredentials)
+    ? store.passwordCredentials
+    : store.users.map((user) => ({
+        userId: user.id,
+        passwordHash: user.passwordHash,
+        state: user.passwordChangedAt ? 'active' as const : 'bootstrap_required' as const,
+        changedAt: user.passwordChangedAt,
+      }));
+  if (passwordCredentials.length > 0) {
+    const values = passwordCredentials.map((credential) => `(
+      '${escapeSqlValue(credential.userId)}',
+      '${escapeSqlValue(credential.passwordHash)}',
+      '${escapeSqlValue(credential.state)}',
+      ${toSqlString(credential.changedAt)},
+      '${escapeSqlValue(new Date().toISOString())}'
+    )`).join(',\n');
+    await duckdbService.query(`
+      INSERT INTO PasswordCredential (user_id, password_hash, state, changed_at, updated_at)
+      VALUES ${values}
+    `);
+  }
   console.log(`[AccessControl] 从 user_store.json 加载了 ${store.users.length} 个用户和 ${store.roles.length} 个角色`);
 }
 
@@ -281,6 +329,8 @@ async function seedFromPreset(): Promise<void> {
   // 清空已有数据（文件数据库可能已有旧数据）
   await duckdbService.query('DELETE FROM UserAccount');
   await duckdbService.query('DELETE FROM RoleConfig');
+  await duckdbService.query('DELETE FROM AuthIdentity');
+  await duckdbService.query('DELETE FROM PasswordCredential');
 
   // 插入预置角色
   const roleValues = PRESET_ROLES.map((role) => `(
@@ -302,9 +352,9 @@ async function seedFromPreset(): Promise<void> {
   }
 
   // 插入预置用户
-  const users = Object.values(PRESET_USERS);
-  const userValues = users.map((user) => `(
-    '${escapeSqlValue(crypto.randomUUID())}',
+  const users = Object.values(PRESET_USERS).map((user) => ({ user, id: crypto.randomUUID() }));
+  const userValues = users.map(({ user, id }) => `(
+    '${escapeSqlValue(id)}',
     '${escapeSqlValue(user.username)}',
     '${escapeSqlValue(user.displayName)}',
     '${escapeSqlValue(user.passwordHash)}',
@@ -325,6 +375,17 @@ async function seedFromPreset(): Promise<void> {
         (id, username, display_name, password_hash, role, organization, branch_code, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
       VALUES
       ${userValues}
+    `);
+    const credentialValues = users.map(({ user, id }) => `(
+      '${escapeSqlValue(id)}',
+      '${escapeSqlValue(user.passwordHash)}',
+      'bootstrap_required',
+      NULL,
+      '${escapeSqlValue(new Date().toISOString())}'
+    )`).join(',\n');
+    await duckdbService.query(`
+      INSERT INTO PasswordCredential (user_id, password_hash, state, changed_at, updated_at)
+      VALUES ${credentialValues}
     `);
   }
   console.log(`[AccessControl] 从预置配置初始化了 ${users.length} 个用户和 ${PRESET_ROLES.length} 个角色`);
@@ -355,6 +416,16 @@ async function ensureUserFromPreset(user: PresetUser): Promise<AccessUser> {
       ${toSqlBoolean(user.active ?? true)},
       CURRENT_TIMESTAMP,
       CURRENT_TIMESTAMP
+    )
+  `);
+  await duckdbService.query(`
+    INSERT INTO PasswordCredential (user_id, password_hash, state, changed_at, updated_at)
+    VALUES (
+      '${escapeSqlValue(id)}',
+      '${escapeSqlValue(user.passwordHash)}',
+      'bootstrap_required',
+      NULL,
+      '${escapeSqlValue(new Date().toISOString())}'
     )
   `);
   await persistToFile();
@@ -399,6 +470,10 @@ async function refreshActiveUsernamesCache(): Promise<void> {
   }
 }
 
+export async function refreshActiveUsernames(): Promise<void> {
+  await refreshActiveUsernamesCache();
+}
+
 // ============================================
 // 查询
 // ============================================
@@ -433,6 +508,34 @@ export async function getUserById(id: string): Promise<AccessUser | null> {
 async function listUsersInternal(): Promise<AccessUser[]> {
   const rows = await duckdbService.query('SELECT * FROM UserAccount ORDER BY username ASC');
   return rows.map(mapUserRow);
+}
+
+async function listAuthIdentitiesInternal(): Promise<AuthIdentityRecord[]> {
+  const rows = await duckdbService.query('SELECT * FROM AuthIdentity ORDER BY provider, provider_subject');
+  return rows.map((row) => ({
+    id: String(row.id),
+    userId: String(row.user_id),
+    provider: String(row.provider) as AuthIdentityRecord['provider'],
+    providerSubject: String(row.provider_subject),
+    enabled: Boolean(row.enabled),
+    lastVerifiedAt: row.last_verified_at ? String(row.last_verified_at) : undefined,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  }));
+}
+
+async function listPasswordCredentialsInternal(): Promise<PasswordCredentialRecord[]> {
+  const rows = await duckdbService.query('SELECT * FROM PasswordCredential ORDER BY user_id');
+  return rows.map((row) => ({
+    userId: String(row.user_id),
+    passwordHash: String(row.password_hash),
+    state: String(row.state) as PasswordCredentialRecord['state'],
+    changedAt: row.changed_at ? String(row.changed_at) : undefined,
+  }));
+}
+
+export async function persistAccessControlState(): Promise<void> {
+  await persistToFile();
 }
 
 export async function listUsers(): Promise<AccessUser[]> {
@@ -481,6 +584,16 @@ export async function createUser(input: {
       CURRENT_TIMESTAMP
     )
   `);
+  await duckdbService.query(`
+    INSERT INTO PasswordCredential (user_id, password_hash, state, changed_at, updated_at)
+    VALUES (
+      '${escapeSqlValue(id)}',
+      '${escapeSqlValue(input.passwordHash)}',
+      'bootstrap_required',
+      NULL,
+      '${escapeSqlValue(new Date().toISOString())}'
+    )
+  `);
   await persistToFile();
   await refreshActiveUsernamesCache();
   const created = await getUserByUsername(input.username);
@@ -488,6 +601,85 @@ export async function createUser(input: {
     throw new AppError(500, '创建用户失败');
   }
   return created;
+}
+
+/**
+ * 飞书个人身份专用开户：用户与身份绑定在同一 DuckDB 事务内创建，避免留下无身份孤儿账号。
+ * 保留兼容 password_hash 列，但不创建 PasswordCredential。
+ */
+export async function createFeishuUserWithIdentity(input: {
+  username: string;
+  displayName: string;
+  role: 'org_user';
+  organization: string;
+  branchCode: string;
+  passwordHash: string;
+  identityId: string;
+  providerSubject: string;
+  verifiedAt: string;
+}): Promise<AccessUser> {
+  const existing = await getUserByUsername(input.username);
+  if (existing) throw new AppError(409, '用户名已存在');
+  const id = crypto.randomUUID();
+  await duckdbService.query(`
+    BEGIN TRANSACTION;
+      INSERT INTO UserAccount
+        (id, username, display_name, password_hash, role, organization, branch_code, active, created_at, updated_at)
+      VALUES (
+        '${escapeSqlValue(id)}', '${escapeSqlValue(input.username)}', '${escapeSqlValue(input.displayName)}',
+        '${escapeSqlValue(input.passwordHash)}', '${escapeSqlValue(input.role)}', '${escapeSqlValue(input.organization)}',
+        '${escapeSqlValue(input.branchCode)}', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      INSERT INTO AuthIdentity
+        (id, user_id, provider, provider_subject, enabled, last_verified_at, created_at, updated_at)
+      VALUES (
+        '${escapeSqlValue(input.identityId)}', '${escapeSqlValue(id)}', 'feishu',
+        '${escapeSqlValue(input.providerSubject)}', true, '${escapeSqlValue(input.verifiedAt)}',
+        '${escapeSqlValue(input.verifiedAt)}', '${escapeSqlValue(input.verifiedAt)}'
+      );
+    COMMIT;
+  `);
+  await persistToFile();
+  await refreshActiveUsernamesCache();
+  const created = await getUserByUsername(input.username);
+  if (!created) throw new AppError(500, '创建飞书个人账号失败');
+  return created;
+}
+
+export async function updateFeishuUserEntitlement(user: AccessUser, input: {
+  displayName: string;
+  role: 'org_user';
+  organization: string;
+  branchCode: string;
+}): Promise<AccessUser> {
+  await duckdbService.query(`
+    UPDATE UserAccount SET
+      display_name = '${escapeSqlValue(input.displayName)}', role = '${escapeSqlValue(input.role)}',
+      organization = '${escapeSqlValue(input.organization)}', branch_code = '${escapeSqlValue(input.branchCode)}',
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = '${escapeSqlValue(user.id)}'
+  `);
+  await persistToFile();
+  return (await getUserById(user.id)) ?? user;
+}
+
+/** 明确重新获得部门授权时，复用原账号并恢复 active。 */
+export async function reactivateFeishuUserEntitlement(user: AccessUser, input: {
+  displayName: string;
+  role: 'org_user';
+  organization: string;
+  branchCode: string;
+}): Promise<AccessUser> {
+  await duckdbService.query(`
+    UPDATE UserAccount SET
+      display_name = '${escapeSqlValue(input.displayName)}', role = '${escapeSqlValue(input.role)}',
+      organization = '${escapeSqlValue(input.organization)}', branch_code = '${escapeSqlValue(input.branchCode)}',
+      active = true, updated_at = CURRENT_TIMESTAMP
+    WHERE id = '${escapeSqlValue(user.id)}'
+  `);
+  await persistToFile();
+  await refreshActiveUsernamesCache();
+  return (await getUserById(user.id)) ?? { ...user, ...input, active: true };
 }
 
 export async function updateUser(id: string, input: {
@@ -502,6 +694,14 @@ export async function updateUser(id: string, input: {
   specialFeatures?: string[];
   active?: boolean;
 }): Promise<AccessUser> {
+  if (input.passwordHash) {
+    const credentials = await duckdbService.query(`
+      SELECT user_id FROM PasswordCredential
+      WHERE user_id = '${escapeSqlValue(id)}'
+      LIMIT 1
+    `);
+    if (credentials.length === 0) throw new AppError(403, 'AUTH_METHOD_NOT_ALLOWED');
+  }
   const updates = [
     `display_name = '${escapeSqlValue(input.displayName)}'`,
     `role = '${escapeSqlValue(input.role)}'`,
@@ -533,6 +733,19 @@ export async function updateUser(id: string, input: {
     SET ${updates.join(', ')}
     WHERE id = '${escapeSqlValue(id)}'
   `);
+  if (input.passwordHash) {
+    await duckdbService.query(`DELETE FROM PasswordCredential WHERE user_id = '${escapeSqlValue(id)}'`);
+    await duckdbService.query(`
+      INSERT INTO PasswordCredential (user_id, password_hash, state, changed_at, updated_at)
+      VALUES (
+        '${escapeSqlValue(id)}',
+        '${escapeSqlValue(input.passwordHash)}',
+        'bootstrap_required',
+        NULL,
+        '${escapeSqlValue(new Date().toISOString())}'
+      )
+    `);
+  }
   await persistToFile();
   await refreshActiveUsernamesCache();
   const rows = await duckdbService.query(`
@@ -567,6 +780,18 @@ export async function setUserPasswordByUsername(
       updated_at = CURRENT_TIMESTAMP
     WHERE id = '${escapeSqlValue(user.id)}'
   `);
+  const changedAt = new Date().toISOString();
+  await duckdbService.query(`DELETE FROM PasswordCredential WHERE user_id = '${escapeSqlValue(user.id)}'`);
+  await duckdbService.query(`
+    INSERT INTO PasswordCredential (user_id, password_hash, state, changed_at, updated_at)
+    VALUES (
+      '${escapeSqlValue(user.id)}',
+      '${escapeSqlValue(passwordHash)}',
+      'active',
+      '${escapeSqlValue(changedAt)}',
+      '${escapeSqlValue(changedAt)}'
+    )
+  `);
   await persistToFile();
   const updated = await getUserByUsername(username);
   if (!updated) {
@@ -576,6 +801,8 @@ export async function setUserPasswordByUsername(
 }
 
 export async function deleteUser(id: string): Promise<void> {
+  await duckdbService.query(`DELETE FROM AuthIdentity WHERE user_id = '${escapeSqlValue(id)}'`);
+  await duckdbService.query(`DELETE FROM PasswordCredential WHERE user_id = '${escapeSqlValue(id)}'`);
   await duckdbService.query(`
     DELETE FROM UserAccount
     WHERE id = '${escapeSqlValue(id)}'

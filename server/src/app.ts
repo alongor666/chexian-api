@@ -14,7 +14,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { corsConfig } from './config/cors.js';
 import { helmetOptions } from './config/csp.js';
-import { serverEnv, dbEnv } from './config/env.js';
+import { serverEnv, dbEnv, feishuEnv } from './config/env.js';
 import { duckdbService } from './services/duckdb.js';
 import { getTrendCubeState, getCostCubeState, getSalesmanCubeState } from './services/duckdb-cube.js';
 import { getShadowStats, redactMismatchDetail } from './services/cube-shadow.js';
@@ -33,6 +33,7 @@ import { onDataVersionChange } from './services/data-version.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { startAuditLogMaintenance } from './skills/audit-log.js';
 import { logger } from './utils/logger.js';
+import { startFeishuIdentityReconciler, stopFeishuIdentityReconciler } from './services/feishu-identity-reconciler.js';
 
 import type { Server } from 'http';
 
@@ -332,6 +333,9 @@ async function startServer() {
       stateDb.init();
     }
     await seedAccessControlData();
+    if (feishuEnv.FEISHU_DEPARTMENT_PERSONAL_ACCOUNTS_ENABLED === 'true') {
+      startFeishuIdentityReconciler();
+    }
     // PAT 持久层：DuckDB 主库是 :memory:，PM2 reload 后必须从 api_tokens.json 重建
     await loadApiTokensIntoTable();
     console.log('[Server] ⚡ Realtime-only mode: all analytics query PolicyFact in realtime');
@@ -431,6 +435,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   dataReady = false; // 健康检查立即返回 503，通知负载均衡器摘除节点
   stopAuditLogMaintenance?.();
   stopAuditLogMaintenance = null;
+  stopFeishuIdentityReconciler();
 
   // 1. 停止接收新的 TCP 连接
   if (httpServer) {

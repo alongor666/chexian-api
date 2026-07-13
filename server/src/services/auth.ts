@@ -15,6 +15,7 @@ import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
 import { ensurePresetUser, getUserByUsername, setUserPasswordByUsername } from './access-control.js';
 import type { AccessUser } from './access-control.js';
+import { assertPasswordAllowed, credentialSetupRequired } from './credential-policy.js';
 import { isIpAllowed as isIpAllowedShared } from '../utils/ip.js';
 
 /**
@@ -41,6 +42,11 @@ export interface UserCredential {
    * authMiddleware 按 JWT/Cookie 会话的 pns 声明拦截，设密成功后重发无 pns 会话解锁。
    */
   mustChangePassword?: boolean;
+  /** 飞书部门个人账号需要按稳定身份自动开户。 */
+  authProvisioning?: 'personal_feishu';
+  subjectUserId?: string;
+  authMethod?: 'password' | 'feishu';
+  identityId?: string;
 }
 
 /**
@@ -149,6 +155,7 @@ class AuthService {
     if (!user.active) {
       throw new AppError(403, 'Account disabled');
     }
+    await assertPasswordAllowed(user.id);
     const allowedIpsOverride = ALLOWED_IP_OVERRIDES[normalizedUsername];
     const userCredential: UserCredential = {
       ...user,
@@ -158,7 +165,10 @@ class AuthService {
       visibleBranches: getPresetVisibleBranches(normalizedUsername),
       // pns：尚未自设专属密码（且不豁免）→ 本次会话强制设密。
       // 存量账号旧密码（USER_PASSWORDS/preset 哈希）由此降级为一次性激活凭据：登录成功即被拦去设密。
-      mustChangePassword: this.isPasswordNotSet(normalizedUsername, user) || undefined,
+      mustChangePassword: (
+        !PNS_EXEMPT_USERNAMES.has(normalizedUsername)
+        && await credentialSetupRequired(user.id)
+      ) || undefined,
     };
 
     if (!this.isIpAllowed(clientIp, userCredential.allowedIps)) {
@@ -215,14 +225,6 @@ class AuthService {
   }
 
   /**
-   * pns（password-not-set）判定：password_changed_at 为空 且 username 不在豁免清单（仅 admin）。
-   * 覆盖密码登录与飞书登录两条链路；不做存量 backfill —— 存量账号下次登录成功即被强制设密。
-   */
-  isPasswordNotSet(normalizedUsername: string, user: AccessUser): boolean {
-    return !user.passwordChangedAt && !PNS_EXEMPT_USERNAMES.has(normalizedUsername);
-  }
-
-  /**
    * 按用户名做 pns 判定（飞书扫码 callback 用）。
    * store 无该账号时尝试物化 preset；两者皆无（如纯飞书裸 ID 身份）→ 非 pns
    * （没有可设密的账号实体，强制设密无意义）。
@@ -234,7 +236,8 @@ class AuthService {
       user = await ensurePresetUser(normalizedUsername);
     }
     if (!user) return false;
-    return this.isPasswordNotSet(normalizedUsername, user);
+    if (PNS_EXEMPT_USERNAMES.has(normalizedUsername)) return false;
+    return credentialSetupRequired(user.id);
   }
 
   /**
@@ -278,6 +281,7 @@ class AuthService {
     if (!user || !user.active) {
       throw new AppError(401, 'Invalid username or password');
     }
+    await assertPasswordAllowed(user.id);
 
     let normalizedOld: string | undefined;
     if (this.hasUsablePassword(normalizedUsername, user)) {
@@ -340,13 +344,16 @@ class AuthService {
     sessionId: string;
   } {
     const payload: JwtPayload = {
-      userId: user.username,
+      userId: user.subjectUserId ?? user.username,
+      sub: user.subjectUserId ?? user.username,
       username: user.username,
       role: user.role,
       organization: user.organization,
       branchCode: user.branchCode,
       // pns 随 cookie 会话下发（密码登录与飞书扫码共用本出口）
       ...(user.mustChangePassword ? { pns: true } : {}),
+      ...(user.authMethod ? { amr: [user.authMethod] } : {}),
+      ...(user.identityId ? { identityId: user.identityId } : {}),
     };
     const sessionId = `sid_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const refreshTtlSec = this.parseDurationToSeconds(authConfig.jwtRefreshExpiresIn, 7 * 24 * 3600);
@@ -453,6 +460,9 @@ class AuthService {
       branchCode: decoded.branchCode,
       // pns 必须随刷新透传：否则「刷新一次 token」就能绕过强制设密拦截
       ...(decoded.pns ? { pns: true } : {}),
+      ...(decoded.sub ? { sub: decoded.sub } : {}),
+      ...(Array.isArray(decoded.amr) ? { amr: decoded.amr } : {}),
+      ...(decoded.identityId ? { identityId: decoded.identityId } : {}),
     };
     const next = this.issueCookieSession({
       username: payload.username,
@@ -461,6 +471,9 @@ class AuthService {
       organization: payload.organization,
       branchCode: payload.branchCode,
       mustChangePassword: decoded.pns ? true : undefined,
+      subjectUserId: decoded.sub ?? decoded.userId,
+      authMethod: Array.isArray(decoded.amr) ? decoded.amr[0] : undefined,
+      identityId: decoded.identityId,
     });
     return {
       ...next,

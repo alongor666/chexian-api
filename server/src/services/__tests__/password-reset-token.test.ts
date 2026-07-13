@@ -51,10 +51,18 @@ const mockSetUserPasswordByUsername = vi.fn(
     passwordChangedAt: new Date().toISOString(),
   })
 );
+let passwordAllowed = true;
 
 vi.mock('../access-control.js', () => ({
   getUserById: (id: string) => mockGetUserById(id),
   setUserPasswordByUsername: (u: string, h: string) => mockSetUserPasswordByUsername(u, h),
+}));
+
+vi.mock('../credential-policy.js', () => ({
+  assertPasswordAllowed: async () => {
+    if (!passwordAllowed) throw Object.assign(new Error('AUTH_METHOD_NOT_ALLOWED'), { statusCode: 403 });
+    return { userId: activeUser.id, passwordHash: 'hash', state: 'active' };
+  },
 }));
 
 import {
@@ -76,6 +84,7 @@ beforeEach(() => {
   mockGetUserById.mockClear();
   mockSetUserPasswordByUsername.mockClear();
   mockGetUserById.mockResolvedValue(activeUser);
+  passwordAllowed = true;
   if (fs.existsSync(storePath)) fs.unlinkSync(storePath);
 });
 
@@ -84,6 +93,14 @@ afterEach(() => {
 });
 
 describe('createPasswordResetToken', () => {
+  it('飞书-only 账号不能签发重置令牌', async () => {
+    passwordAllowed = false;
+    await expect(createPasswordResetToken({
+      userId: activeUser.id,
+      username: activeUser.username,
+      createdBy: 'admin',
+    })).rejects.toMatchObject({ statusCode: 403, message: 'AUTH_METHOD_NOT_ALLOWED' });
+  });
   it('返回 cx_rst_<id8>.<secret> 明文；持久层只存 bcrypt(secret) + kind=reset，明文不落盘', async () => {
     const created = await createPasswordResetToken({
       userId: activeUser.id,

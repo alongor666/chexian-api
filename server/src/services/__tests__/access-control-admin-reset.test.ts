@@ -22,9 +22,13 @@ vi.mock('../../config/paths.js', () => ({
 }));
 
 const executedSql: string[] = [];
+let passwordCredentialExists = true;
 const mockQuery = vi.fn(async (sql: string): Promise<Record<string, unknown>[]> => {
   executedSql.push(sql);
   const normalized = sql.trim();
+  if (normalized.startsWith('SELECT user_id FROM PasswordCredential')) {
+    return passwordCredentialExists ? [{ user_id: 'uid-1' }] : [];
+  }
   // updateUser 尾部回读：SELECT * FROM UserAccount WHERE id = '...'
   if (normalized.startsWith('SELECT * FROM UserAccount') && normalized.includes('WHERE id =')) {
     return [{
@@ -48,6 +52,7 @@ import { updateUser } from '../access-control.js';
 
 beforeEach(() => {
   executedSql.length = 0;
+  passwordCredentialExists = true;
   mockQuery.mockClear();
 });
 
@@ -83,5 +88,18 @@ describe('updateUser · 管理员重置密码 → 强制设密（pns）', () => 
     const sql = findUpdateSql();
     expect(sql).not.toContain('password_hash');
     expect(sql).not.toContain('password_changed_at');
+  });
+
+  it('纯飞书账号无 PasswordCredential：管理员不能静默升级为密码账号', async () => {
+    passwordCredentialExists = false;
+
+    await expect(updateUser('uid-1', {
+      displayName: '飞书用户',
+      passwordHash: '$2b$04$adminTempHash00000000000000000000000000000000000000000',
+      role: 'org_user',
+    })).rejects.toMatchObject({ statusCode: 403, message: 'AUTH_METHOD_NOT_ALLOWED' });
+
+    expect(executedSql.some((sql) => sql.trim().startsWith('UPDATE UserAccount'))).toBe(false);
+    expect(executedSql.some((sql) => sql.includes('INSERT INTO PasswordCredential'))).toBe(false);
   });
 });

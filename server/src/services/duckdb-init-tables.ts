@@ -79,6 +79,31 @@ export async function initDuckDBTables(db: DuckDBQueryable): Promise<void> {
     )
   `);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS AuthIdentity (
+      id VARCHAR PRIMARY KEY,
+      user_id VARCHAR NOT NULL,
+      provider VARCHAR NOT NULL,
+      provider_subject VARCHAR NOT NULL,
+      enabled BOOLEAN NOT NULL,
+      last_verified_at VARCHAR,
+      created_at VARCHAR NOT NULL,
+      updated_at VARCHAR NOT NULL,
+      UNIQUE(provider, provider_subject)
+    )
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_auth_identity_user ON AuthIdentity(user_id)`);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS PasswordCredential (
+      user_id VARCHAR PRIMARY KEY,
+      password_hash VARCHAR NOT NULL,
+      state VARCHAR NOT NULL CHECK(state IN ('bootstrap_required', 'active')),
+      changed_at VARCHAR,
+      updated_at VARCHAR NOT NULL
+    )
+  `);
+
   // Personal Access Token：只读 API 长期令牌
   // token_hash = bcrypt(secret)，secret 仅在创建时返回明文一次
   await db.query(`

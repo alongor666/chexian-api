@@ -13,10 +13,13 @@
 
 import { getDb, withTransaction } from './state-db.js';
 import type { AccessUser, AccessRole } from './access-control.js';
+import type { AuthIdentityRecord, PasswordCredentialRecord } from './auth-model.js';
 
 export interface AccessControlSnapshot {
   users: AccessUser[];
   roles: AccessRole[];
+  identities: AuthIdentityRecord[];
+  passwordCredentials: PasswordCredentialRecord[];
 }
 
 function serializeArray(value: string[] | null | undefined): string | null {
@@ -45,6 +48,8 @@ function parseArray(raw: unknown): string[] | undefined {
  */
 export function replaceAll(snapshot: AccessControlSnapshot): void {
   withTransaction((db) => {
+    db.exec('DELETE FROM auth_identities');
+    db.exec('DELETE FROM password_credentials');
     db.exec('DELETE FROM access_users');
     db.exec('DELETE FROM access_roles');
 
@@ -91,6 +96,33 @@ export function replaceAll(snapshot: AccessControlSnapshot): void {
         defaultRoute: role.defaultRoute ?? null,
       });
     }
+
+    const insertIdentity = db.prepare(`
+      INSERT INTO auth_identities
+        (id, user_id, provider, provider_subject, enabled, last_verified_at, created_at, updated_at)
+      VALUES
+        (@id, @userId, @provider, @providerSubject, @enabled, @lastVerifiedAt, @createdAt, @updatedAt)
+    `);
+    for (const identity of snapshot.identities) {
+      insertIdentity.run({
+        ...identity,
+        enabled: identity.enabled ? 1 : 0,
+        lastVerifiedAt: identity.lastVerifiedAt ?? null,
+      });
+    }
+
+    const insertPasswordCredential = db.prepare(`
+      INSERT INTO password_credentials
+        (user_id, password_hash, state, changed_at, updated_at)
+      VALUES
+        (@userId, @passwordHash, @state, @changedAt, datetime('now'))
+    `);
+    for (const credential of snapshot.passwordCredentials) {
+      insertPasswordCredential.run({
+        ...credential,
+        changedAt: credential.changedAt ?? null,
+      });
+    }
   });
 }
 
@@ -105,6 +137,12 @@ export function readAll(): AccessControlSnapshot {
     .all() as Array<Record<string, unknown>>;
   const roleRows = db
     .prepare('SELECT * FROM access_roles ORDER BY role ASC')
+    .all() as Array<Record<string, unknown>>;
+  const identityRows = db
+    .prepare('SELECT * FROM auth_identities ORDER BY provider, provider_subject')
+    .all() as Array<Record<string, unknown>>;
+  const credentialRows = db
+    .prepare('SELECT * FROM password_credentials ORDER BY user_id')
     .all() as Array<Record<string, unknown>>;
 
   const users: AccessUser[] = userRows.map((row) => ({
@@ -134,7 +172,25 @@ export function readAll(): AccessControlSnapshot {
     defaultRoute: row.default_route ? String(row.default_route) : undefined,
   }));
 
-  return { users, roles };
+  const identities: AuthIdentityRecord[] = identityRows.map((row) => ({
+    id: String(row.id),
+    userId: String(row.user_id),
+    provider: String(row.provider) as AuthIdentityRecord['provider'],
+    providerSubject: String(row.provider_subject),
+    enabled: row.enabled === 1 || row.enabled === true,
+    lastVerifiedAt: row.last_verified_at ? String(row.last_verified_at) : undefined,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  }));
+
+  const passwordCredentials: PasswordCredentialRecord[] = credentialRows.map((row) => ({
+    userId: String(row.user_id),
+    passwordHash: String(row.password_hash),
+    state: String(row.state) as PasswordCredentialRecord['state'],
+    changedAt: row.changed_at ? String(row.changed_at) : undefined,
+  }));
+
+  return { users, roles, identities, passwordCredentials };
 }
 
 /**

@@ -111,7 +111,17 @@ function main(): void {
         '[admin-import] state.db 已存在 access_users 数据但 marker lock 缺失（异常状态）。手工核查后再决定是否清表。',
       );
     }
-    accessControlStore.replaceAll({ users: parsed.users, roles: parsed.roles });
+    accessControlStore.replaceAll({
+      users: parsed.users,
+      roles: parsed.roles,
+      identities: [],
+      passwordCredentials: parsed.users.map((user) => ({
+        userId: user.id,
+        passwordHash: user.passwordHash,
+        state: user.passwordChangedAt ? 'active' as const : 'bootstrap_required' as const,
+        changedAt: user.passwordChangedAt,
+      })),
+    });
   } catch (err) {
     exitWith(1, `[admin-import] SQLite 写入失败: ${err instanceof Error ? err.message : String(err)}`);
   } finally {

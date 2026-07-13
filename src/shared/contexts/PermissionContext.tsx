@@ -12,6 +12,16 @@ import { Logger } from '@/shared/utils/logger';
 
 const logger = new Logger('PermissionContext');
 
+export function normalizeAuthCapabilities(input: {
+  authMethods?: Array<'password' | 'feishu'>;
+  canChangePassword?: boolean;
+}) {
+  return {
+    authMethods: input.authMethods ?? ['password'] as Array<'password' | 'feishu'>,
+    canChangePassword: input.canChangePassword !== false,
+  };
+}
+
 interface PermissionContextValue {
   /** 当前用户权限 */
   userPermission: UserPermission | null;
@@ -39,6 +49,8 @@ interface PermissionContextValue {
   mustChangePassword: boolean;
   /** 账号是否存在可验证的旧密码凭据（false → 设密页「首次设密」模式，免填当前密码） */
   hasPassword: boolean;
+  authMethods: Array<'password' | 'feishu'>;
+  canChangePassword: boolean;
   /** 用户本人设密/改密；成功后 mustChangePassword 复位，会话自动换发。oldPassword 首次设密可缺省 */
   changePassword: (oldPassword: string | undefined, newPassword: string) => Promise<void>;
   /** 登出 */
@@ -61,6 +73,8 @@ const PermissionContext = createContext<PermissionContextValue>({
   restoreSession: async () => false,
   mustChangePassword: false,
   hasPassword: true,
+  authMethods: ['password'],
+  canChangePassword: true,
   changePassword: async () => { },
   logout: () => { },
   canView: () => true,
@@ -82,6 +96,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
   const [mustChangePassword, setMustChangePassword] = useState(false);
   // 账号是否存在可验证旧凭据：决定设密页是「改密模式」（要求当前密码）还是「首次设密模式」
   const [hasPassword, setHasPassword] = useState(true);
+  const [authMethods, setAuthMethods] = useState<Array<'password' | 'feishu'>>(['password']);
+  const [canChangePassword, setCanChangePassword] = useState(true);
 
   const buildPermission = useCallback((user: {
     username: string;
@@ -93,8 +109,11 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     allowedRoutes?: string[];
     defaultRoute?: string;
     specialFeatures?: string[];
+    authMethods?: Array<'password' | 'feishu'>;
+    canChangePassword?: boolean;
   }): UserPermission => {
     const localPermission = getPermissionByUsername(user.username);
+    const capabilities = normalizeAuthCapabilities(user);
     return {
       username: user.username,
       displayName: user.displayName || localPermission?.displayName || user.username,
@@ -110,6 +129,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       allowedRoutes: user.allowedRoutes || localPermission?.allowedRoutes,
       defaultRoute: user.defaultRoute || localPermission?.defaultRoute,
       specialFeatures: user.specialFeatures,
+      ...capabilities,
     };
   }, []);
 
@@ -125,11 +145,16 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       setUserPermission(permission);
       setMustChangePassword(me.mustChangePassword === true);
       setHasPassword(me.hasPassword !== false);
+      const capabilities = normalizeAuthCapabilities(me);
+      setAuthMethods(capabilities.authMethods);
+      setCanChangePassword(capabilities.canChangePassword);
       return true;
     } catch {
       setUserPermission(null);
       setMustChangePassword(false);
       setHasPassword(true);
+      setAuthMethods(['password']);
+      setCanChangePassword(true);
       apiClient.clearToken();
       return false;
     }
@@ -196,6 +221,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       setMustChangePassword(authResult.user.mustChangePassword === true);
       // 密码登录成功 = 刚用旧密码验证通过 → 该账号必有可验证旧凭据（设密页走改密模式）
       setHasPassword(true);
+      setAuthMethods(['password']);
+      setCanChangePassword(true);
 
       // 3. 触发登录事件（通知 DataContext 刷新数据）
       window.dispatchEvent(new Event('auth-login'));
@@ -214,6 +241,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     await apiClient.changePassword(oldPassword, newPassword);
     setMustChangePassword(false);
     setHasPassword(true);
+    setAuthMethods(['password']);
+    setCanChangePassword(true);
   }, []);
 
   /** 登出 */
@@ -258,6 +287,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       restoreSession,
       mustChangePassword,
       hasPassword,
+      authMethods,
+      canChangePassword,
       changePassword,
       logout,
       canView,
@@ -276,6 +307,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       restoreSession,
       mustChangePassword,
       hasPassword,
+      authMethods,
+      canChangePassword,
       changePassword,
       logout,
       canView,

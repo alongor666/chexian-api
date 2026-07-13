@@ -318,6 +318,8 @@ export const feishuEnv = {
    * 显式设 'true' 才启用。
    */
   FEISHU_SALESMAN_FALLBACK: process.env.FEISHU_SALESMAN_FALLBACK ?? '',
+  /** 飞书部门个人账号灰度开关；仅显式 true 启用 */
+  FEISHU_DEPARTMENT_PERSONAL_ACCOUNTS_ENABLED: process.env.FEISHU_DEPARTMENT_PERSONAL_ACCOUNTS_ENABLED ?? '',
   /**
    * 开发环境扫码回调后的前端回跳源（仅 NODE_ENV !== 'production' 生效）。
    * dev 下后端(3000)不托管 SPA，回调若相对重定向 '/#/...' 会落在后端 404 页；

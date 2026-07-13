@@ -53,6 +53,14 @@ const unrevokePatSpy = vi.fn(async (_id: string) => {});
 const deletePatSpy = vi.fn(async (_id: string) => {});
 const updateLastUsedBatchSpy = vi.fn(async (_u: unknown) => {});
 const reloadMirrorSpy = vi.fn(async () => {});
+let passwordAllowed = true;
+
+vi.mock('../credential-policy.js', () => ({
+  assertPatAllowed: async () => {
+    if (!passwordAllowed) throw Object.assign(new Error('AUTH_METHOD_NOT_ALLOWED'), { statusCode: 403 });
+    return { userId: 'u-1', passwordHash: 'hash', state: 'active' };
+  },
+}));
 
 vi.mock('../personal-access-token-store.js', () => ({
   saveApiTokens: () => saveApiTokensSpy(),
@@ -113,6 +121,7 @@ const defaultUser = {
 };
 
 beforeEach(() => {
+  passwordAllowed = true;
   resetQueries();
   _clearVerifyCacheForTest();
   setMockedUser(defaultUser);
@@ -129,6 +138,11 @@ beforeEach(() => {
 });
 
 describe('createPat', () => {
+  it('飞书-only 账号不能创建 PAT', async () => {
+    passwordAllowed = false;
+    await expect(createPat({ userId: 'u-1', username: 'alice', name: 'cli', ttlDays: 90 }))
+      .rejects.toMatchObject({ statusCode: 403, message: 'AUTH_METHOD_NOT_ALLOWED' });
+  });
   it('生成格式 cx_pat_<id8>.<secret43> 的明文，DB 仅存哈希', async () => {
     setQueryImpl(async () => []);
     const result = await createPat({

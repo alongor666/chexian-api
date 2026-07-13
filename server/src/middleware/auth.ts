@@ -32,6 +32,7 @@ function decorateVisibleBranches(user: JwtPayload): void {
  */
 export interface JwtPayload {
   userId: string;
+  sub?: string;
   username: string;
   role: string;
   organization?: string;
@@ -50,6 +51,8 @@ export interface JwtPayload {
    * 都会注入；authMiddleware 据此拦截非设密白名单路由；设密成功后重发不含 pns 的会话即解锁。
    */
   pns?: boolean;
+  amr?: Array<'password' | 'feishu'>;
+  identityId?: string;
 }
 
 /**
