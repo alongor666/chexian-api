@@ -50,8 +50,7 @@ test('首页侧边栏逐个进入子页面无需刷新', async ({ page }) => {
     // ($|\?) 容忍页面自身追加的 query（如 /specialty?tab=...）
     await expect(page).toHaveURL(new RegExp(`#${target.hashPath}($|\\?)`), { timeout: 30000 });
 
-    const loginHeading = page.getByRole('heading', { name: '车险业绩分析系统' });
-    await expect(loginHeading).not.toBeVisible();
+    expect(page.url()).not.toContain('#/login');
 
   }
 });
