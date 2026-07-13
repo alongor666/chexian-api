@@ -95,6 +95,9 @@ coverage/
 .env.production
 .env.health-check
 server/.env
+# .env 的任意备份/快照（如 .env.bak-YYYYMMDD-*）也含密钥，一律忽略
+.env.bak*
+*.env.bak*
 
 # 密码文档（禁止提交）
 PASSWORDS.txt
