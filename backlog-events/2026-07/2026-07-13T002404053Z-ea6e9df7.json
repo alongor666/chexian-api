@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-codex-18f851","kind":"status","ts":"2026-07-13","actor":"@cto-orchestrator","status":"DONE","evidence":"权限纠偏后完成：39bf48de/c273f239；/home 与 /data-import 独立可配置，legacy / 仅映射数据管理；Task3 规格与质量审计 APPROVED，最终全分支审计 APPROVED；定向 9 文件 80/80、全量 368 文件 5362/5362、typecheck/build、governance 58/58 + coverage + harness 全通过。","at":"2026-07-13T00:24:04.053Z","eid":"ea6e9df7"}
