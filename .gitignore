@@ -95,6 +95,10 @@ coverage/
 .env.production
 .env.health-check
 server/.env
+# .env 的任意备份/快照（如 .env.bak-YYYYMMDD-*）也含密钥，一律忽略
+# （旧规则 *.bak.* 匹配不到 .env.bak- 这种连字符命名，曾漏放 server/.env.bak-20260712-governance-fix）
+.env.bak*
+*.env.bak*
 
 # 密码文档（禁止提交）
 PASSWORDS.txt
