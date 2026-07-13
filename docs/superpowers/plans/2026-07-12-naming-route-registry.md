@@ -36,45 +36,13 @@
 - Create: `backlog-events/2026-07/*.json`（仅通过脚本）
 - Verify locally generated ignored views: `BACKLOG.md`, `BACKLOG_ARCHIVE.md`（不得强制加入 Git）
 
-- [ ] **Step 1: 登记父任务**
+- [ ] **Step 1: 登记父任务和 Task 2–5 子任务**
 
-```bash
-bun scripts/backlog.mjs add \
-  --actor @codex \
-  --priority P1 \
-  --section "架构治理/命名体系" \
-  --desc "统一车险经营分析平台产品命名，建立 productMetadata + routeRegistry，迁移侧栏/权限/文档并增加防漂移治理闸" \
-  --docs "docs/superpowers/specs/2026-07-12-naming-route-registry-design.md,docs/superpowers/plans/2026-07-12-naming-route-registry.md" \
-  --code "src/shared/config/productMetadata.ts,src/shared/config/routeRegistry.ts,src/components/layout/SidebarNavigation.tsx,src/features/admin/AccessControlPage.tsx"
-```
+通过 `bun scripts/backlog.mjs add` 登记一个 P1 父任务及四个 P2 子任务，分别覆盖注册表、消费者、文档治理和最终收口；关联本设计/计划与核心代码路径，不手写事件文件。
 
-Expected: 输出 `✅ 新增任务 uid=...`，并自动刷新两个派生视图。
+- [ ] **Step 2: 校验并提交事件日志**
 
-- [ ] **Step 2: 为 Task 2–5 各登记一个 P2 子任务**
-
-分别使用以下描述调用同一 `add` 命令：
-
-```text
-建立产品元数据和路由注册表契约
-迁移品牌、导航与权限消费者
-纠偏 README/ARCHITECTURE/功能索引并增加治理闸
-完成全量验证、独立审计、PR 与 CI 收口
-```
-
-Expected: 4 个新 uid；不得手写或修改既有事件文件。
-
-- [ ] **Step 3: 校验日志与派生视图**
-
-Run: `bun scripts/governance-backlog-curate.mjs`
-
-Expected: 事件日志无错误，`BACKLOG.md` 与 `BACKLOG_ARCHIVE.md` 已是最新。
-
-- [ ] **Step 4: 提交 backlog 登记**
-
-```bash
-git add -- backlog-events/2026-07
-git commit -m "chore(backlog): register naming registry rollout"
-```
+运行 `bun scripts/governance-backlog-curate.mjs`，确认事件日志和 ignored 派生视图一致；仅提交 `backlog-events/2026-07`。
 
 ## Task 2：以 TDD 建立产品元数据与路由注册表
 
@@ -86,24 +54,7 @@ git commit -m "chore(backlog): register naming registry rollout"
 
 - [ ] **Step 1: claim 对应 backlog 子任务后写失败测试**
 
-测试至少包含：
-
-```ts
-expect(PRODUCT_METADATA.productName).toBe('车险经营分析平台');
-expect(PRODUCT_METADATA.mobileName).toBe('车险经营');
-expect(PRODUCT_METADATA.aiAssistantName).toBe('经营副驾');
-expect(formatDocumentTitle('成本分析')).toBe('成本分析｜车险经营分析平台');
-
-expect(new Set(ROUTES.map(r => r.id)).size).toBe(ROUTES.length);
-expect(new Set(ROUTES.map(r => r.path)).size).toBe(ROUTES.length);
-expect(getPermissionRoutes().every(r => r.kind === 'canonical')).toBe(true);
-expect(getPermissionRoutes().map(r => r.path)).not.toEqual(
-  expect.arrayContaining(['/renewal', '/truck', '/cross-sell', '/comparison']),
-);
-expect(getNavigationGroups().map(g => g.label)).toEqual([
-  '经营总览', '增长达成', '成本质量', '客户经营', '专项资源', '平台管理',
-]);
-```
+测试锁定产品主名、移动简称、AI 名称和标题格式；路由侧锁定 id/path 唯一、权限仅含 canonical path、alias 不进入权限选项，以及六个决策域的顺序。
 
 - [ ] **Step 2: 运行测试并确认 RED**
 
@@ -113,32 +64,11 @@ Expected: FAIL，原因是两个模块尚不存在。
 
 - [ ] **Step 3: 实现最小产品元数据**
 
-```ts
-export const PRODUCT_METADATA = {
-  productName: '车险经营分析平台',
-  mobileName: '车险经营',
-  aiAssistantName: '经营副驾',
-} as const;
-
-export function formatDocumentTitle(pageName?: string): string {
-  return pageName ? `${pageName}｜${PRODUCT_METADATA.productName}` : PRODUCT_METADATA.productName;
-}
-```
+导出只读 `PRODUCT_METADATA`（产品主名、移动简称、AI 名称）与 `formatDocumentTitle`，不混入页面或路由信息。
 
 - [ ] **Step 4: 实现最小路由注册表**
 
-定义 `DecisionDomainId`、`RouteId`、`RouteDefinition`，登记当前 canonical 页面；redirect aliases 与 canonical 定义放在同一条记录的 `aliases` 字段。派生函数只返回新数组，不暴露可变引用：
-
-```ts
-export const getPermissionRoutes = () =>
-  ROUTES.filter(route => route.permissionConfigurable);
-
-export const getNavigationGroups = () =>
-  DECISION_DOMAINS.map(domain => ({
-    ...domain,
-    routes: ROUTES.filter(route => route.navigationDomain === domain.id),
-  })).filter(group => group.routes.length > 0);
-```
+定义域、路由 id 和 route definition，登记 canonical 页面及 alias；权限与导航选择器均返回新数组，不暴露可变引用。
 
 `/home` 是 canonical 首页；`/` 仅为容器/入口跳转，不作为第二个首页权限项。保留 `/premium-report`、`/marketing-report`、`/truck`、`/cross-sell`、`/comparison`、`/comprehensive-analysis`、`/old-dashboard` aliases。
 
