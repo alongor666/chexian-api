@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { DEFAULT_E2E_PASSWORD, DEFAULT_E2E_USERNAME } from './helpers/credentials';
+import { ROUTES } from '../../src/shared/config/routeRegistry';
 
 // These tests use independent login (not the shared admin session)
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -55,7 +56,11 @@ test.describe('Permission Verification', () => {
     await expect(sidebar).toBeVisible({ timeout: 15000 });
 
     // Admin should see core pages
-    const expectedPages = ['业绩分析', '增长与对比'];
+    const expectedPages = ['/performance-analysis', '/growth'].map((path) => {
+      const route = ROUTES.find((candidate) => candidate.path === path);
+      if (!route) throw new Error(`Missing E2E permission route registry entry: ${path}`);
+      return route.label;
+    });
     for (const pageName of expectedPages) {
       const link = page.getByRole('link', { name: pageName });
       await expect(link).toBeVisible({ timeout: 10000 });
