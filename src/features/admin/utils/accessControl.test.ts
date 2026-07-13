@@ -91,6 +91,7 @@ describe('toggleSelection · 复选不可变更新', () => {
     expect(isRouteSelected(['/truck'], '/specialty')).toBe(true);
     expect(isRouteSelected(['/comparison'], '/growth')).toBe(true);
     expect(isRouteSelected(['/renewal'], '/renewal-tracker')).toBe(true);
-    expect(isRouteSelected(['/'], '/home')).toBe(true);
+    expect(isRouteSelected(['/'], '/data-import')).toBe(true);
+    expect(isRouteSelected(['/'], '/home')).toBe(false);
   });
 });

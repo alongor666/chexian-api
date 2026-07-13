@@ -137,9 +137,16 @@ describe('Organizations Config', () => {
       ['/truck', '/specialty'],
       ['/comparison', '/growth'],
       ['/renewal', '/renewal-tracker'],
-      ['/', '/home'],
+      ['/', '/data-import'],
     ])('treats stored %s as access to canonical %s', (stored, canonical) => {
       expect(canAccessRoute(permissionFor(stored), canonical)).toBe(true);
+    });
+
+    it('separates home from data management permissions', () => {
+      expect(canAccessRoute(permissionFor('/home'), '/data-import')).toBe(false);
+      expect(canAccessRoute(permissionFor('/data-import'), '/data-import')).toBe(true);
+      expect(canAccessRoute(permissionFor('/'), '/data-import')).toBe(true);
+      expect(canAccessRoute(permissionFor('/'), '/home')).toBe(false);
     });
   });
 

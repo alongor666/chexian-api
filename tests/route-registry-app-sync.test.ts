@@ -38,6 +38,24 @@ function appRoutes(): Map<string, string | undefined> {
   return routes;
 }
 
+function routeAccessGuardPath(routePath: string): string | undefined {
+  let guardPath: string | undefined;
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(sourceFile) === 'Route'
+      && jsxAttribute(node.attributes, 'path') === routePath) {
+      node.forEachChild(function findGuard(child) {
+        if (ts.isJsxOpeningElement(child) && child.tagName.getText(sourceFile) === 'RouteAccessGuard') {
+          guardPath = jsxAttribute(child.attributes, 'routePath');
+        }
+        child.forEachChild(findGuard);
+      });
+    }
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  return guardPath;
+}
+
 describe('route registry and App route synchronization', () => {
   it('keeps all 17 canonical pages as explicit App routes', () => {
     const declared = appRoutes();
@@ -56,5 +74,9 @@ describe('route registry and App route synchronization', () => {
 
     expect(redirects).toHaveLength(7);
     expect(declaredRedirects).toEqual(new Map(redirects.map((redirect) => [redirect.path, redirect.to])));
+  });
+
+  it('guards data management with its own canonical permission path', () => {
+    expect(routeAccessGuardPath('data-import')).toBe('/data-import');
   });
 });

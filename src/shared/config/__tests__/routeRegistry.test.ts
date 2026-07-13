@@ -75,7 +75,7 @@ describe('route registry contract', () => {
       expect(permissionPaths).not.toContain(legacyPath);
     }
     expect(permissionPaths).toEqual([
-      '/home',
+      '/data-import',
       '/dashboard',
       '/performance-analysis',
       '/reports',

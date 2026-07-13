@@ -56,7 +56,7 @@ function freezeRoutes(routes: RouteDefinition[]): readonly RouteDefinition[] {
 }
 
 export const ROUTES: readonly RouteDefinition[] = freezeRoutes([
-  { kind: 'canonical', id: 'home', path: '/home', label: '首页', shortLabel: '首页', iconKey: 'home', navigationDomain: 'overview', navigationOrder: 10, showInNavigation: true, permissionConfigurable: true },
+  { kind: 'canonical', id: 'home', path: '/home', label: '首页', shortLabel: '首页', iconKey: 'home', navigationDomain: 'overview', navigationOrder: 10, showInNavigation: true, permissionConfigurable: false },
   { kind: 'canonical', id: 'dashboard', path: '/dashboard', label: '经营看板', shortLabel: '看板', iconKey: 'gauge', navigationDomain: 'overview', navigationOrder: 20, showInNavigation: true, permissionConfigurable: true, redirects: [{ path: '/old-dashboard', to: '/dashboard' }] },
   { kind: 'canonical', id: 'chart-ledger', path: '/chart-ledger', label: '图表账本', shortLabel: '账本', iconKey: 'layout-grid', navigationDomain: 'overview', navigationOrder: 30, showInNavigation: true, permissionConfigurable: false },
 
@@ -76,16 +76,18 @@ export const ROUTES: readonly RouteDefinition[] = freezeRoutes([
   { kind: 'canonical', id: 'specialty', path: '/specialty', label: '驾意险与货车', shortLabel: '专项', iconKey: 'gift', navigationDomain: 'specialty', navigationOrder: 10, showInNavigation: true, permissionConfigurable: true, redirects: [{ path: '/truck', to: '/specialty?tab=truck' }, { path: '/cross-sell', to: '/specialty?tab=cross-sell' }] },
   { kind: 'canonical', id: 'repair', path: '/repair', label: '维修资源', shortLabel: '维修', iconKey: 'wrench', navigationDomain: 'specialty', navigationOrder: 20, showInNavigation: true, permissionConfigurable: false },
 
-  { kind: 'canonical', id: 'data-import', path: '/data-import', label: '数据管理', shortLabel: '数据', iconKey: 'database', navigationDomain: 'platform', navigationOrder: 10, showInNavigation: true, permissionConfigurable: false },
+  { kind: 'canonical', id: 'data-import', path: '/data-import', label: '数据管理', shortLabel: '数据', iconKey: 'database', navigationDomain: 'platform', navigationOrder: 10, showInNavigation: true, permissionConfigurable: true },
   { kind: 'canonical', id: 'access-control', path: '/admin/access-control', label: '权限管理', shortLabel: '权限', iconKey: 'shield', navigationDomain: 'platform', navigationOrder: 20, showInNavigation: true, permissionConfigurable: false },
 ]);
 
 export function getPermissionRoutes(): readonly RouteDefinition[] {
-  return ROUTES.filter((route) => route.permissionConfigurable);
+  return ROUTES
+    .filter((route) => route.permissionConfigurable)
+    .sort((left, right) => Number(right.id === 'data-import') - Number(left.id === 'data-import'));
 }
 
 export const LEGACY_PERMISSION_ALIASES: readonly RouteRedirect[] = freezeObjects([
-  { path: '/', to: '/home' },
+  { path: '/', to: '/data-import' },
   { path: '/renewal', to: '/renewal-tracker' },
 ]);
 

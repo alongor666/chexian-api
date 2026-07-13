@@ -212,7 +212,7 @@ function App() {
                   <Route
                     path="data-import"
                     element={
-                      <RouteAccessGuard routePath="/">
+                      <RouteAccessGuard routePath="/data-import">
                         <DataImportPage />
                       </RouteAccessGuard>
                     }
