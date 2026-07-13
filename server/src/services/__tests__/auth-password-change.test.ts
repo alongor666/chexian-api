@@ -52,11 +52,28 @@ const mockEnsurePresetUser = vi.fn(async (_username: string): Promise<AccessUser
 const mockSetUserPasswordByUsername = vi.fn(
   async (_username: string, _hash: string): Promise<AccessUser | null> => null
 );
+const credentialStateByUserId = new Map<string, 'bootstrap_required' | 'active'>();
 
 vi.mock('../access-control.js', () => ({
   getUserByUsername: (u: string) => mockGetUserByUsername(u),
   ensurePresetUser: (u: string) => mockEnsurePresetUser(u),
-  setUserPasswordByUsername: (u: string, h: string) => mockSetUserPasswordByUsername(u, h),
+  setUserPasswordByUsername: async (u: string, h: string) => {
+    const result = await mockSetUserPasswordByUsername(u, h);
+    if (result) credentialStateByUserId.set(result.id, 'active');
+    return result;
+  },
+}));
+
+vi.mock('../credential-policy.js', () => ({
+  assertPasswordAllowed: async (userId: string) => {
+    if (!credentialStateByUserId.has(userId)) {
+      throw Object.assign(new Error('AUTH_METHOD_NOT_ALLOWED'), { statusCode: 403 });
+    }
+    return { userId, passwordHash: 'hash', state: credentialStateByUserId.get(userId) };
+  },
+  credentialSetupRequired: async (userId: string) => (
+    credentialStateByUserId.get(userId) === 'bootstrap_required'
+  ),
 }));
 
 import { authService } from '../auth.js';
@@ -66,7 +83,7 @@ import { PRESET_USERS, SELF_SERVICE_PASSWORD_ONLY_USERS } from '../../config/pre
 /** 构造 store 镜像用户 */
 function makeUser(username: string, overrides: Partial<AccessUser> = {}): AccessUser {
   const preset = PRESET_USERS[username];
-  return {
+  const user = {
     id: `test-id-${username}`,
     username,
     displayName: preset?.displayName ?? username,
@@ -82,12 +99,18 @@ function makeUser(username: string, overrides: Partial<AccessUser> = {}): Access
     passwordChangedAt: undefined,
     ...overrides,
   };
+  credentialStateByUserId.set(
+    user.id,
+    user.passwordChangedAt ? 'active' : 'bootstrap_required'
+  );
+  return user;
 }
 
 beforeEach(() => {
   mockGetUserByUsername.mockReset();
   mockEnsurePresetUser.mockReset();
   mockSetUserPasswordByUsername.mockReset();
+  credentialStateByUserId.clear();
 });
 
 describe('前置：preset 配置（6 个自助设密账号 + test_org_user 停用）', () => {
@@ -214,6 +237,20 @@ describe('pns 判定与会话声明', () => {
     expect(decoded.pns).toBe(true);
   });
 
+  it('飞书会话及 refresh 保留稳定 sub、amr 与 identityId，且不带 pns', () => {
+    const session = authService.issueCookieSession({
+      username: 'zhangwei_abc123', displayName: '张伟', role: 'org_user', organization: '运城', branchCode: 'SX',
+      subjectUserId: 'user-uuid', authMethod: 'feishu', identityId: 'identity-uuid',
+    });
+    const first = jwt.verify(session.accessToken, 'test-secret') as Record<string, unknown>;
+    expect(first).toMatchObject({ sub: 'user-uuid', userId: 'user-uuid', amr: ['feishu'], identityId: 'identity-uuid' });
+    expect(first.pns).toBeUndefined();
+    const next = authService.refreshCookieSession(session.refreshToken);
+    const refreshed = jwt.verify(next.accessToken, 'test-secret') as Record<string, unknown>;
+    expect(refreshed).toMatchObject({ sub: 'user-uuid', userId: 'user-uuid', amr: ['feishu'], identityId: 'identity-uuid' });
+    expect(refreshed.pns).toBeUndefined();
+  });
+
   it('isPasswordNotSetForUsername：store 命中未设密账号 → true；store/preset 双缺 → false', async () => {
     mockGetUserByUsername.mockResolvedValueOnce(makeUser('leshan'));
     await expect(authService.isPasswordNotSetForUsername('leshan')).resolves.toBe(true);
@@ -225,6 +262,14 @@ describe('pns 判定与会话声明', () => {
 });
 
 describe('changePassword 双模式', () => {
+  it('飞书-only 账号拒绝密码登录与改密', async () => {
+    const user = makeUser('feishu-only');
+    credentialStateByUserId.delete(user.id);
+    mockGetUserByUsername.mockResolvedValue(user);
+    await expect(authService.login(user.username, 'anything')).rejects.toMatchObject({ statusCode: 403 });
+    await expect(authService.changePassword(user.username, undefined, 'BrandNew#2026'))
+      .rejects.toMatchObject({ statusCode: 403 });
+  });
   it('存量账号：旧密码错误 → 401（供路由计入爆破锁定），不写库', async () => {
     mockGetUserByUsername.mockResolvedValueOnce(makeUser('leshan'));
     const error = await authService

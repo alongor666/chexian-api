@@ -102,6 +102,8 @@ export interface UserPermission {
   defaultRoute?: string;
   /** 特殊功能权限（如 cost, moto_cost） */
   specialFeatures?: string[];
+  authMethods?: Array<'password' | 'feishu'>;
+  canChangePassword?: boolean;
 }
 
 /**

@@ -47,6 +47,11 @@ vi.mock('../access-control.js', () => ({
   ensurePresetUser: (_username: string) => mockEnsurePresetUser(_username),
 }));
 
+vi.mock('../credential-policy.js', () => ({
+  assertPasswordAllowed: async () => ({ userId: 'test', passwordHash: 'hash', state: 'active' }),
+  credentialSetupRequired: async () => false,
+}));
+
 // ── 被测模块（在 mock 注册后 import）────────────────────────────────────
 import { authService } from '../auth.js';
 import { AppError } from '../../middleware/error.js';

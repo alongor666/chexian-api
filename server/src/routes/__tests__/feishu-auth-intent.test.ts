@@ -79,6 +79,15 @@ vi.mock('../../services/access-control.js', () => ({
   ensurePresetUser: (u: string) => mockEnsurePresetUser(u),
 }));
 
+vi.mock('../../services/auth-identity.js', () => ({
+  findFeishuAccount: async () => null,
+  findOrCreateFeishuAccount: async () => ({
+    user: storeUser,
+    identity: { id: 'identity-1', userId: storeUser.id, provider: 'feishu', providerSubject: 'u1', enabled: true },
+    created: true,
+  }),
+}));
+
 const mockCreateResetToken = vi.fn(async (_input: unknown) => ({
   plaintext: 'cx_rst_AAAA1111.' + 's'.repeat(43),
   tokenId: 'AAAA1111',

@@ -34,6 +34,7 @@ import {
   reloadApiTokenMirrorFromSqlite,
   type PatRecord,
 } from './personal-access-token-store.js';
+import { assertPatAllowed } from './credential-policy.js';
 
 const TOKEN_PREFIX = 'cx_pat_';
 const TOKEN_ID_LEN = 8;
@@ -229,6 +230,7 @@ export async function createPat(input: {
   name: string;
   ttlDays: TtlDays;
 }): Promise<CreatedToken> {
+  await assertPatAllowed(input.userId);
   if (!VALID_TTL_DAYS.has(input.ttlDays)) {
     throw new AppError(400, 'Invalid ttlDays');
   }

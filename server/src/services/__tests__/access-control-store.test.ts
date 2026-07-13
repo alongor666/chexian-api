@@ -79,7 +79,7 @@ describe('access-control-store schema', () => {
 });
 
 describe('access-control-store replaceAll / readAll', () => {
-  const buildSnapshot = (): { users: AccessUser[]; roles: AccessRole[] } => ({
+  const buildSnapshot = (): store.AccessControlSnapshot => ({
     users: [
       {
         id: 'u-1',
@@ -124,6 +124,26 @@ describe('access-control-store replaceAll / readAll', () => {
         defaultRoute: undefined,
       },
     ],
+    identities: [
+      {
+        id: 'identity-1',
+        userId: 'u-2',
+        provider: 'feishu',
+        providerSubject: 'feishu-user-2',
+        enabled: true,
+        lastVerifiedAt: '2026-07-13T00:00:00.000Z',
+        createdAt: '2026-07-13T00:00:00.000Z',
+        updatedAt: '2026-07-13T00:00:00.000Z',
+      },
+    ],
+    passwordCredentials: [
+      {
+        userId: 'u-1',
+        passwordHash: '$2b$10$hash-admin',
+        state: 'active',
+        changedAt: '2026-07-13T00:00:00.000Z',
+      },
+    ],
   });
 
   it('replaceAll 写入后 readAll 全字段一致', () => {
@@ -133,6 +153,8 @@ describe('access-control-store replaceAll / readAll', () => {
 
     expect(read.users).toHaveLength(2);
     expect(read.roles).toHaveLength(2);
+    expect(read.identities).toEqual(buildSnapshot().identities);
+    expect(read.passwordCredentials).toEqual(buildSnapshot().passwordCredentials);
 
     const admin = read.users.find((u) => u.username === 'admin');
     expect(admin).toBeDefined();
@@ -173,6 +195,8 @@ describe('access-control-store replaceAll / readAll', () => {
         },
       ],
       roles: [],
+      identities: [],
+      passwordCredentials: [],
     });
 
     const read = store.readAll();
@@ -192,6 +216,8 @@ describe('access-control-store replaceAll / readAll', () => {
         { ...before.users[0], id: 'u-dup-2' }, // 同 username='admin'
       ],
       roles: before.roles,
+      identities: before.identities,
+      passwordCredentials: before.passwordCredentials,
     };
 
     expect(() => store.replaceAll(broken)).toThrow(/UNIQUE constraint/);
@@ -206,7 +232,7 @@ describe('access-control-store replaceAll / readAll', () => {
     expect(store.hasData()).toBe(false);
     store.replaceAll(buildSnapshot());
     expect(store.hasData()).toBe(true);
-    store.replaceAll({ users: [], roles: [] });
+    store.replaceAll({ users: [], roles: [], identities: [], passwordCredentials: [] });
     expect(store.hasData()).toBe(false);
   });
 });

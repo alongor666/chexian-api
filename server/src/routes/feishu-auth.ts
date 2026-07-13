@@ -7,6 +7,7 @@ import { getUserByUsername, ensurePresetUser } from '../services/access-control.
 import { createPasswordResetToken } from '../services/activation-token.js';
 import { auditAuthEvent } from '../middleware/audit.js';
 import { resetInitLimiter } from '../middleware/rateLimiter.js';
+import { findFeishuAccount, findOrCreateFeishuAccount } from '../services/auth-identity.js';
 
 const router = Router();
 
@@ -155,11 +156,10 @@ async function handleResetIntent(req: Request, res: Response, code: string): Pro
 
         // 定位 store 账号实体（与登录链路同一归一化口径）；preset 未落库则先物化。
         // 纯飞书裸 ID 身份（无账号实体）没有可重置的密码 → 统一失败。
+        const identityAccount = userInfo.user_id ? await findFeishuAccount(userInfo.user_id) : null;
         const normalizedUsername = userCredential.username.normalize('NFKC').trim().toLowerCase();
-        let user = await getUserByUsername(normalizedUsername);
-        if (!user) {
-            user = await ensurePresetUser(normalizedUsername);
-        }
+        let user = identityAccount?.user ?? await getUserByUsername(normalizedUsername);
+        if (!user && !userCredential.authProvisioning) user = await ensurePresetUser(normalizedUsername);
         if (!user || !user.active) {
             console.warn('[Feishu Reset] No active store account for mapped identity.');
             return unifiedFail();
@@ -240,18 +240,37 @@ export async function feishuCallbackHandler(req: Request, res: Response): Promis
             return res.redirect(buildFrontendRedirect('/#/login?error=feishu_auth_denied'));
         }
 
-        // 4. pns 判定（全员密码闭环：飞书扫码是激活便捷通道，不是设密豁免通道）——
-        //    对应 store 账号尚未自设密码且不豁免 → 会话带 pns 声明，登录后被强制引导设密。
-        //    store 无对应账号实体（纯飞书裸 ID 身份）→ 非 pns（无可设密的账号）。
-        const mustChangePassword = await authService.isPasswordNotSetForUsername(userCredential.username);
+        let sessionCredential = userCredential;
+        if (userCredential.authProvisioning === 'personal_feishu') {
+            if (!userInfo.user_id || userCredential.role !== 'org_user' || !userCredential.organization || !userCredential.branchCode) {
+                return res.redirect(buildFrontendRedirect('/#/login?error=feishu_auth_denied'));
+            }
+            const account = await findOrCreateFeishuAccount({
+                feishuUserId: userInfo.user_id,
+                displayName: userCredential.displayName,
+                role: 'org_user',
+                organization: userCredential.organization,
+                branchCode: userCredential.branchCode,
+            });
+            sessionCredential = {
+                ...userCredential,
+                username: account.user.username,
+                displayName: account.user.displayName,
+                subjectUserId: account.user.id,
+                authMethod: 'feishu',
+                identityId: account.identity.id,
+            };
+        } else {
+            const mustChangePassword = await authService.isPasswordNotSetForUsername(userCredential.username);
+            sessionCredential = { ...userCredential, mustChangePassword: mustChangePassword || undefined };
+        }
 
         // 5. 签发 cookie 会话（access+refresh）
         const secure = process.env.NODE_ENV === 'production';
         const accessMaxAge = parseDurationToMs(authEnv.JWT_EXPIRES_IN, 4 * 60 * 60 * 1000);
         const refreshMaxAge = parseDurationToMs(authEnv.JWT_REFRESH_EXPIRES_IN, 7 * 24 * 60 * 60 * 1000);
         const session = authService.issueCookieSession({
-            ...userCredential,
-            mustChangePassword: mustChangePassword || undefined,
+            ...sessionCredential,
         });
 
         res.cookie(ACCESS_COOKIE, session.accessToken, {

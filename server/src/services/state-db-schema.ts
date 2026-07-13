@@ -122,6 +122,37 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE activation_tokens ADD COLUMN kind TEXT NOT NULL DEFAULT 'activation';
     `,
   },
+  {
+    id: 8,
+    description: 'auth identities for external login providers (2026-07-13)',
+    sql: `
+      CREATE TABLE IF NOT EXISTS auth_identities (
+        id               TEXT PRIMARY KEY,
+        user_id          TEXT NOT NULL,
+        provider         TEXT NOT NULL,
+        provider_subject TEXT NOT NULL,
+        enabled          INTEGER NOT NULL DEFAULT 1,
+        last_verified_at TEXT,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL,
+        UNIQUE(provider, provider_subject)
+      );
+      CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id);
+    `,
+  },
+  {
+    id: 9,
+    description: 'password credentials separated from access users (2026-07-13)',
+    sql: `
+      CREATE TABLE IF NOT EXISTS password_credentials (
+        user_id       TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        state         TEXT NOT NULL CHECK(state IN ('bootstrap_required', 'active')),
+        changed_at    TEXT,
+        updated_at    TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 /**

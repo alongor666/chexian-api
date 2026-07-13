@@ -52,6 +52,7 @@ import {
 import { notifyPasswordEvent } from '../services/notify.js';
 import { QUERY_ROUTE_METADATA } from '../config/query-routes-metadata.js';
 import { assertStaticReportAccess, shouldEnforceStaticReportPolicy } from './reports.js';
+import { getAuthMethods, getPasswordCredential } from '../services/credential-policy.js';
 
 const router = Router();
 
@@ -923,17 +924,29 @@ router.get(
     }
     // mustChangePassword 按会话声明（pns）回传而非按 store 重算：
     // 会话签发时点已判定（密码登录/飞书扫码两条链路都会置位），设密成功换发会话即消失。
-    const mustChangePassword = req.user.pns === true || undefined;
-    // hasPassword：账号当前是否存在可验证的密码凭据 —— 前端设密页据此决定
-    // 显示「改密模式」（要求输入当前密码）还是「首次设密模式」（tombstone 账号免验旧密）。
-    const hasPassword = user ? authService.hasUsablePassword(username, user) : true;
+    const mustChangePassword = req.user.pns === true;
+    const credentialUserId = user?.id ?? req.user.userId;
+    const [authMethods, passwordCredential] = await Promise.all([
+      getAuthMethods(credentialUserId),
+      getPasswordCredential(credentialUserId),
+    ]);
+    const canChangePassword = authMethods.includes('password');
+    const hasPassword = passwordCredential?.state === 'active';
     if (user) {
       const { passwordHash: _pw, ...rest } = user;
       // visibleBranches 由 auth 中间件按 username 从 PRESET_USERS 派生（store 不持久化该字段），
       // 随 /me 回前端，保证刷新/恢复会话后切省下拉仍可见（codex 闸-1 P1-3）。
       res.json({
         success: true,
-        data: { ...rest, visibleBranches, tokenType, mustChangePassword, hasPassword },
+        data: {
+          ...rest,
+          visibleBranches,
+          tokenType,
+          mustChangePassword,
+          hasPassword,
+          authMethods,
+          canChangePassword,
+        },
       });
       return;
     }
@@ -948,6 +961,8 @@ router.get(
         tokenType,
         mustChangePassword,
         hasPassword,
+        authMethods,
+        canChangePassword,
       },
     });
   })

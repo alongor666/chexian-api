@@ -3,6 +3,8 @@ import { UserCredential } from './auth.js';
 import { getSalesmanMappingPaths, getFeishuRoleMappingPath } from '../config/paths.js';
 import { feishuEnv } from '../config/env.js';
 import { resolveBranchCode, getDeploymentBranchCode, isValidBranchCodeFormat } from '../config/sql-federation-policy.js';
+import { FEISHU_DEPARTMENT_ENTITLEMENTS, type FeishuDepartmentEntitlement } from '../config/feishu-department-entitlements.js';
+import { feishuAppGetJson } from './feishu-app-client.js';
 
 /** 角色映射文件中的单条授权（feishu 内任一标识匹配即命中） */
 interface FeishuRoleMappingEntry {
@@ -57,6 +59,12 @@ export interface FeishuUserInfo {
 
 const FEISHU_OAUTH_TOKEN_URL = 'https://open.feishu.cn/open-apis/authen/v2/oauth/token';
 const FEISHU_USER_INFO_URL = 'https://open.feishu.cn/open-apis/authen/v1/user_info';
+const FEISHU_CONTACT_USER_URL = 'https://open.feishu.cn/open-apis/contact/v3/users';
+
+export type DepartmentEntitlementResolution =
+    | { status: 'member'; entitlement: FeishuDepartmentEntitlement }
+    | { status: 'not_member' }
+    | { status: 'unavailable'; reason: string };
 
 /** 归一化手机号：去掉 +86 前缀与空白，便于与白名单/映射表比对 */
 function normalizeMobile(mobile: string): string {
@@ -140,6 +148,28 @@ class FeishuService {
             return false;
         }
         return Boolean(tenantKey) && tenantKey === allowed;
+    }
+
+    async resolveDepartmentEntitlement(userId: string | undefined): Promise<DepartmentEntitlementResolution> {
+        if (feishuEnv.FEISHU_DEPARTMENT_PERSONAL_ACCOUNTS_ENABLED !== 'true' || !userId) {
+            return { status: 'not_member' };
+        }
+        try {
+            const url = `${FEISHU_CONTACT_USER_URL}/${encodeURIComponent(userId)}`
+                + '?department_id_type=open_department_id&user_id_type=user_id';
+            const response = await feishuAppGetJson<{
+                code: number;
+                data?: { user?: { department_ids?: unknown } };
+            }>({ appId: this.config.appId, appSecret: this.config.appSecret, url });
+            const departmentIds = response.data?.user?.department_ids;
+            if (!Array.isArray(departmentIds) || !departmentIds.every(id => typeof id === 'string')) {
+                return { status: 'unavailable', reason: '飞书通讯录返回的 department_ids 非法' };
+            }
+            const entitlement = FEISHU_DEPARTMENT_ENTITLEMENTS.find(item => departmentIds.includes(item.feishuDeptId));
+            return entitlement ? { status: 'member', entitlement } : { status: 'not_member' };
+        } catch (error) {
+            return { status: 'unavailable', reason: error instanceof Error ? error.message : String(error) };
+        }
     }
 
     /**
@@ -230,7 +260,24 @@ class FeishuService {
             };
         }
 
-        // 2. 检查超级管理员白名单（支持 user_id / open_id / 手机号 / 邮箱）
+        // 部门个人账号：通讯录故障必须 fail-closed，不能降级到管理员或姓名兜底。
+        const department = await this.resolveDepartmentEntitlement(userInfo.user_id);
+        if (department.status === 'unavailable') {
+            console.warn(`[FeishuService] 部门授权解析不可用：${department.reason}`);
+            return null;
+        }
+        if (department.status === 'member') {
+            return {
+                username,
+                displayName: name || username,
+                role: department.entitlement.role,
+                organization: department.entitlement.organization,
+                branchCode: department.entitlement.branchCode,
+                authProvisioning: 'personal_feishu',
+            };
+        }
+
+        // 3. 检查超级管理员白名单（支持 user_id / open_id / 手机号 / 邮箱）
         const adminIds = feishuEnv.FEISHU_ADMIN_USERIDS
             .split(',')
             .map(id => id.trim())

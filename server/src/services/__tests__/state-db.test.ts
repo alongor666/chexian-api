@@ -82,6 +82,25 @@ describe('state-db', () => {
     expect(rows.length).toBeGreaterThanOrEqual(1);
     expect(rows[0].id).toBe(1);
     expect(rows[0].description).toMatch(/schema_migrations/);
+
+    const migrationIds = rows.map((row) => row.id);
+    expect(migrationIds).toContain(8);
+    expect(migrationIds).toContain(9);
+
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+      .all() as Array<{ name: string }>;
+    expect(tables.map((table) => table.name)).toEqual(
+      expect.arrayContaining(['auth_identities', 'password_credentials']),
+    );
+
+    const insertIdentity = db.prepare(`
+      INSERT INTO auth_identities
+        (id, user_id, provider, provider_subject, enabled, created_at, updated_at)
+      VALUES (?, ?, 'feishu', 'same-subject', 1, datetime('now'), datetime('now'))
+    `);
+    insertIdentity.run('identity-1', 'user-1');
+    expect(() => insertIdentity.run('identity-2', 'user-2')).toThrow(/UNIQUE constraint/);
   });
 
   it('重复 init() 幂等（不抛错，不重复 migration）', () => {
