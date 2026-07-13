@@ -67,6 +67,7 @@ import { runBranchRlsEnabledCheck } from './governance/branch-rls-enabled.mjs';
 import { runPatReadonlyCoverageCheck } from './governance/pat-readonly-coverage.mjs';
 import { governanceCheckChunkInvariants } from './check-chunk-invariants.mjs';
 import { checkNamingAndRouteGovernance } from './governance/check-naming-route.mjs';
+import { isArchivedLegacyChange } from './governance/pr-size-archive-classification.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1398,6 +1399,12 @@ function checkPrSizeLimit() {
       continue;
     }
 
+    const content = readText(path.join(ROOT_DIR, change.file));
+    if (isArchivedLegacyChange(change.file, content)) {
+      ignoredChanges.push({ ...change, reason: 'retired-legacy-reference' });
+      continue;
+    }
+
     // Pure deletions (cleanup) — don't count toward PR size limit
     if (change.added === 0 && change.deleted > 0) {
       ignoredChanges.push({ ...change, reason: 'pure-deletion' });
@@ -1420,7 +1427,7 @@ function checkPrSizeLimit() {
   }
 
   if (ignoredChanges.length > 0) {
-    info(`PR 体量已忽略 ${ignoredChanges.length} 个归档类变更（archive/legacy-code 或等内容归档迁移）`);
+    info(`PR 体量已忽略 ${ignoredChanges.length} 个归档类变更（archive/legacy-code 或带退役标记的 reference/legacy-*.md）`);
   }
 
   if (totalLines > 2000) {
