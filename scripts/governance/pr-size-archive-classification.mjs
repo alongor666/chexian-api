@@ -3,7 +3,9 @@
  * 防止普通 reference 或代码文件绕过 PR 体量门禁。
  */
 export function isArchivedLegacyChange(file, content) {
-  return /^reference\/legacy-[^/]+\.md$/.test(file)
+  const allowed = new Set(['reference/legacy-python-subproject-convention.md']);
+  const header = typeof content === 'string' ? content.split('\n').slice(0, 5).join('\n') : '';
+  return allowed.has(file)
     && typeof content === 'string'
-    && /(?:历史状态\s*[：:]\s*)?已退役/.test(content);
+    && header.includes('> **已退役，仅供历史追溯。**');
 }

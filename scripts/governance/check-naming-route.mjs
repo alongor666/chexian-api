@@ -18,10 +18,19 @@ export function checkProductNaming(root) {
   const currentEntryFiles = [
     'src/components/layout/TopNavigation.tsx',
     'src/features/auth/LoginPage.tsx',
+    'src/features/copilot/CopilotDrawer.tsx',
   ];
   const obsoleteNames = ['车险业绩分析系统', '车险经营分析系统'];
   for (const relativePath of currentEntryFiles) {
     const content = read(root, relativePath);
+    const importsMetadata = /import\s*{[^}]*\bPRODUCT_METADATA\b[^}]*}\s*from/.test(content);
+    const metadataReferences = content.match(/\bPRODUCT_METADATA\b/g)?.length ?? 0;
+    if (!importsMetadata || metadataReferences < 2) {
+      errors.push(`${relativePath} 必须 import 并实际引用 PRODUCT_METADATA`);
+    }
+    if (productName && new RegExp(`['\"]${productName}['\"]`).test(content)) {
+      errors.push(`${relativePath} 不得硬编码当前产品主名：${productName}`);
+    }
     for (const name of obsoleteNames) {
       if (content.includes(name)) errors.push(`${relativePath} 不得硬编码旧产品名：${name}`);
     }
@@ -44,10 +53,31 @@ function property(object, name) {
   return member && ts.isPropertyAssignment(member) ? member.initializer : undefined;
 }
 
+function assertSupportedObject(node, label) {
+  if (!ts.isObjectLiteralExpression(node)) throw new Error(`${label} 必须是 object literal`);
+  for (const member of node.properties) {
+    if (ts.isSpreadAssignment(member)) throw new Error(`${label} 不支持 spread`);
+    if (!ts.isPropertyAssignment(member)) throw new Error(`${label} 仅支持 property assignment`);
+    if (ts.isComputedPropertyName(member.name)) {
+      throw new Error(`${label} 不支持 computed property`);
+    }
+  }
+  return node;
+}
+
+function requiredString(object, name, label) {
+  const node = property(object, name);
+  const value = node && literalText(node);
+  if (value === undefined) throw new Error(`${label}.${name} 必须是 string literal`);
+  return value;
+}
+
 function findArray(file, variableName) {
   let result;
+  let found = false;
   const visit = (node) => {
     if (ts.isVariableDeclaration(node) && node.name.getText(file) === variableName) {
+      found = true;
       const initializer = node.initializer;
       result = ts.isArrayLiteralExpression(initializer)
         ? initializer
@@ -58,31 +88,42 @@ function findArray(file, variableName) {
     node.forEachChild(visit);
   };
   visit(file);
+  if (found && !result) throw new Error(`${variableName} 必须使用 array literal 初始化`);
   return result;
 }
 
-function parseAliasArray(array) {
-  return array?.elements.filter(ts.isObjectLiteralExpression).map((alias) => ({
-    path: literalText(property(alias, 'path')),
-    to: literalText(property(alias, 'to')),
-  })) ?? [];
+function parseAliasArray(array, label) {
+  if (!array) return [];
+  return array.elements.map((element, index) => {
+    const alias = assertSupportedObject(element, `${label}[${index}]`);
+    return {
+      path: requiredString(alias, 'path', `${label}[${index}]`),
+      to: requiredString(alias, 'to', `${label}[${index}]`),
+    };
+  });
 }
 
 function parseRegistry(source) {
   const file = ts.createSourceFile('routeRegistry.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  if (file.parseDiagnostics.length > 0) {
+    throw new Error(`TypeScript 语法错误：${ts.flattenDiagnosticMessageText(file.parseDiagnostics[0].messageText, ' ')}`);
+  }
   const routesArray = findArray(file, 'ROUTES');
   if (!routesArray) throw new Error('无法解析 ROUTES 数组');
-  const routes = routesArray.elements.filter(ts.isObjectLiteralExpression).map((route) => {
+  const routes = routesArray.elements.map((element, index) => {
+    const route = assertSupportedObject(element, `ROUTES[${index}]`);
     const redirectsNode = property(route, 'redirects');
-    const redirects = redirectsNode && ts.isArrayLiteralExpression(redirectsNode)
-      ? redirectsNode.elements.filter(ts.isObjectLiteralExpression).map((redirect) => ({
-        path: literalText(property(redirect, 'path')),
-        to: literalText(property(redirect, 'to')),
-      }))
-      : [];
-    return { id: literalText(property(route, 'id')), path: literalText(property(route, 'path')), redirects };
+    if (redirectsNode && !ts.isArrayLiteralExpression(redirectsNode)) {
+      throw new Error(`ROUTES[${index}].redirects 必须是 array literal`);
+    }
+    const redirects = parseAliasArray(redirectsNode, `ROUTES[${index}].redirects`);
+    return {
+      id: requiredString(route, 'id', `ROUTES[${index}]`),
+      path: requiredString(route, 'path', `ROUTES[${index}]`),
+      redirects,
+    };
   });
-  return { routes, permissionAliases: parseAliasArray(findArray(file, 'LEGACY_PERMISSION_ALIASES')) };
+  return { routes, permissionAliases: parseAliasArray(findArray(file, 'LEGACY_PERMISSION_ALIASES'), 'LEGACY_PERMISSION_ALIASES') };
 }
 
 function duplicates(values) {
@@ -107,11 +148,19 @@ export function checkRouteRegistry(root) {
   for (const redirectPath of new Set(redirectPaths)) {
     if (canonical.has(redirectPath)) errors.push(`redirect 与 canonical path 冲突：${redirectPath}`);
   }
+  for (const redirect of routes.flatMap((route) => route.redirects)) {
+    const target = redirect.to.split('?')[0];
+    if (!canonical.has(target)) errors.push(`browser redirect target 未登记 canonical：${target}`);
+  }
   const permissionPaths = permissionAliases.map((alias) => alias.path);
   for (const aliasPath of duplicates(permissionPaths)) errors.push(`重复 permission alias path：${aliasPath}`);
   for (const aliasPath of new Set(permissionPaths)) {
     if (canonical.has(aliasPath)) errors.push(`permission alias 与 canonical path 冲突：${aliasPath}`);
     if (redirectPaths.includes(aliasPath)) errors.push(`permission alias 与 browser redirect 冲突：${aliasPath}`);
+  }
+  for (const alias of permissionAliases) {
+    const target = alias.to.split('?')[0];
+    if (!canonical.has(target)) errors.push(`permission alias target 未登记 canonical：${target}`);
   }
   return errors;
 }
@@ -133,8 +182,26 @@ export function checkDocumentationTruth(root) {
   const errors = [];
   const readme = read(root, 'README.md');
   if (README_STALE_COUNT_PATTERNS.some((pattern) => pattern.test(readme))) errors.push('README 含易腐快照计数');
+  const currentStart = readme.indexOf('## 1) 项目概述');
+  const currentEnd = readme.indexOf('## 2) 技术栈');
+  const currentCapabilities = currentStart >= 0 && currentEnd > currentStart
+    ? readme.slice(currentStart, currentEnd)
+    : '';
   for (const retired of ['marketing-report', 'coefficient']) {
-    if (readme.includes(retired)) errors.push(`README 不得把 ${retired} 声明为当前能力`);
+    if (currentCapabilities.includes(retired)) errors.push(`README 不得把 ${retired} 声明为当前能力`);
+  }
+  try {
+    const { routes } = parseRegistry(read(root, 'src/shared/config/routeRegistry.ts'));
+    const canonical = new Set(routes.map((route) => route.path));
+    const pageHeading = currentCapabilities.indexOf('### 前端页面');
+    const pageSection = pageHeading >= 0 ? currentCapabilities.slice(pageHeading) : '';
+    const documented = new Set([...pageSection.matchAll(/`(\/[^`?]+)`/g)].map((match) => match[1]));
+    const missingRoutes = [...canonical].filter((routePath) => !documented.has(routePath));
+    const extraRoutes = [...documented].filter((routePath) => !canonical.has(routePath));
+    if (missingRoutes.length) errors.push(`README 前端页面路由缺少：${missingRoutes.join('、')}`);
+    if (extraRoutes.length) errors.push(`README 前端页面路由多出：${extraRoutes.join('、')}`);
+  } catch (error) {
+    errors.push(`README 路由对账失败：${error.message}`);
   }
   const legacy = read(root, 'reference/legacy-python-subproject-convention.md');
   const missing = LEGACY_ANCHORS.filter((anchor) => !legacy.includes(anchor));

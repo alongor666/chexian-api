@@ -84,9 +84,9 @@ export function getPermissionRoutes(): readonly RouteDefinition[] {
   return ROUTES.filter((route) => route.permissionConfigurable);
 }
 
-export const LEGACY_PERMISSION_ALIASES: readonly RouteRedirect[] = Object.freeze([
-  Object.freeze({ path: '/', to: '/home' }),
-  Object.freeze({ path: '/renewal', to: '/renewal-tracker' }),
+export const LEGACY_PERMISSION_ALIASES: readonly RouteRedirect[] = freezeObjects([
+  { path: '/', to: '/home' },
+  { path: '/renewal', to: '/renewal-tracker' },
 ]);
 
 const ALL_ROUTE_ALIASES = [...ROUTES.flatMap((route) => route.redirects ?? []), ...LEGACY_PERMISSION_ALIASES];
