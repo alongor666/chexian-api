@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-codex-8ca942","kind":"status","ts":"2026-07-13","actor":"@cto-orchestrator","status":"DONE","evidence":"方案 B 已完成并交付 PR #1096：产品命名、routeRegistry 六域导航、canonical 权限与 legacy 兼容、文档及 fail-closed 治理全部落地；全量测试/构建/治理/多 Agent 审计及 required CI 全绿；PR MERGEABLE/CLEAN、无未解决 review thread。方案 C 保留为未来理想态，未混入本 PR。","at":"2026-07-13T02:25:15.573Z","eid":"e40f27bc"}
