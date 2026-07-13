@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-codex-972f74","kind":"create","ts":"2026-07-12","actor":"@codex","section":"架构治理/命名体系","priority":"P2","desc":"建立产品元数据和路由注册表契约","docs":"docs/superpowers/plans/2026-07-12-naming-route-registry.md#task-2以-tdd-建立产品元数据与路由注册表","code":"src/shared/config/productMetadata.ts,src/shared/config/routeRegistry.ts","at":"2026-07-12T23:21:23.694Z","eid":"766cfefe"}

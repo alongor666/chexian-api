@@ -1,7 +1,7 @@
 {
-  "name": "chexian-yjfx-server",
+  "name": "@chexian/server",
   "version": "1.0.0",
-  "description": "车险业绩分析系统 - 后端服务（前后端分离架构）",
+  "description": "车险经营分析平台 - 后端服务（前后端分离架构）",
   "type": "module",
   "main": "dist/app.js",
   "scripts": {

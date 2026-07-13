@@ -7,7 +7,7 @@ const attachScreenshot = async (page: Page, name: string) => {
   await test.info().attach(name, { body: buffer, contentType: 'image/png' });
 };
 
-test('仪表盘加载、视角切换与趋势视图切换', async ({ page }: { page: Page }) => {
+test('经营看板加载、视角切换与趋势视图切换', async ({ page }: { page: Page }) => {
   if (!await skipWhenNoData(page)) {
     return;
   }

@@ -19,6 +19,7 @@ import { ApprovalActions } from './components/ApprovalActions';
 import { ForecastBaselinePanel } from './components/ForecastBaselinePanel';
 import { apiClient } from '../../shared/api/client';
 import type { ApprovalState, CopilotStepView } from './types';
+import { PRODUCT_METADATA } from '../../shared/config/productMetadata';
 
 type CopilotMode = 'patrol' | 'forecast';
 
@@ -115,7 +116,7 @@ export function CopilotDrawer() {
         <div className="fixed inset-y-0 right-0 z-50 w-full max-w-xl bg-white dark:bg-neutral-900 shadow-2xl border-l border-neutral-200 dark:border-subtle flex flex-col">
           <header className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-subtle">
             <div>
-              <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">经营 Copilot</h2>
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{PRODUCT_METADATA.aiAssistantName}</h2>
               <p className="text-xs text-neutral-500">
                 {mode === 'patrol' ? 'auto-risk-control-v1（5 步 workflow）' : '已发生事实 + 4 变量假设（无 LLM / 无 SQL）'}
               </p>

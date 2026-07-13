@@ -46,7 +46,7 @@ async function openCopilotAndStart(
   await page.getByRole('button', { name: '打开 Copilot' }).evaluate((el) => {
     (el as HTMLButtonElement).click();
   });
-  await expect(page.getByRole('heading', { name: '经营 Copilot' })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('heading', { name: '经营副驾' })).toBeVisible({ timeout: 5000 });
 
   const startDateInput = page.getByLabel('起始日期');
   const endDateInput = page.getByLabel('截止日期');

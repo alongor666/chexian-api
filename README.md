@@ -1,8 +1,8 @@
-# 车险数据分析平台（chexian-api）
+# 车险经营分析平台（chexian-api）
 
 > 面向车险经营分析的 API-only 数据平台：React 客户端 + Express REST API + DuckDB native 后端。
 > 当前系统不包含浏览器 DuckDB-WASM / Local 模式，前端所有数据访问都通过 `/api/*`。
-> 519+ commits | 97 API 端点 | 15 数据域 | 35 SQL 生成器 | 77 测试文件
+> 页面、API、数据域、SQL 生成器和测试规模均持续演进；当前数量以对应注册表与目录为准。
 
 ## 1) 项目概述
 
@@ -10,8 +10,8 @@
 
 - **经营看板**：KPI 总览、保费趋势、结构分析、机构排名
 - **专题分析**：增长分析、成本分析、续保漏斗、交叉销售、报价转化、费用发展趋势、赔案明细、客户流向、维修资源
-- **保费管理**：保费计划达成、保费报表、营销战报
-- **数据治理**：15 域 ETL 管道、分片架构、字段/指标注册表、21 项治理检查
+- **保费管理**：保费计划达成、机构与业务员保费报表
+- **数据治理**：分域 ETL 管道、分片架构、字段/指标注册表与自动治理检查
 - **权限与安全**：RBAC + 行级数据过滤、企业微信 SSO、三级限流
 - **AI 能力**：趋势解读（OpenRouter 主路由 + 智谱兜底）
 
@@ -19,15 +19,22 @@
 
 | 页面 | 路由 | 说明 |
 |------|------|------|
-| 经营仪表盘 | `/dashboard` | KPI + 趋势 + 排名 + 结构 |
+| 首页 | `/home` | 报告门户与快捷入口 |
+| 经营看板 | `/dashboard` | KPI + 趋势 + 排名 + 结构 |
+| 图表账本 | `/chart-ledger` | 经营图表方法与真实数据联动 |
 | 业绩分析 | `/performance-analysis` | 业务员/机构绩效 + 热力图 |
-| 增长分析 | `/growth` | 同比/环比 + 机构对比 |
+| 保费计划达成 | `/reports` | 计划达成 + 机构/业务员报表 |
+| 增长对比 | `/growth` | 同比/环比 + 机构对比 |
 | 成本分析 | `/cost` | 综合成本率 + 赔付 + 费用（含综合分析视图） |
-| 系数分析 | `/coefficient` | 自主定价系数分布 + 趋势 |
-| 保费达成 | `/reports` | 保费计划达成 + 保费报表 + 营销战报 |
-| 专项分析 | `/specialty` | 驾意险交叉销售 + 续保 + 货车（Tab 合并） |
-| 赔案明细 | `/claims-detail` | 赔案下钻 + 品牌车型 |
-| 数据导入 | `/data-import` | Parquet 文件上传与管理 |
+| 赔案分析 | `/claims-detail` | 赔案下钻 + 品牌车型 |
+| 费用率发展 | `/expense-development` | 费用率发展分析（特性授权） |
+| 摩意成本 | `/moto-cost` | 摩托车成本模型（特性授权） |
+| 续保追踪 | `/renewal-tracker` | 商业险续保到期窗口盯盘 |
+| 报价转化 | `/quote-conversion` | 报价转化分析 |
+| 客户流向 | `/customer-flow` | 客户来源去向分析 |
+| 驾意险与货车 | `/specialty` | 驾意险交叉销售与货车专项 |
+| 维修资源 | `/repair` | 维修资源分析 |
+| 数据管理 | `/data-import` | Parquet 文件上传与管理 |
 | 权限管理 | `/admin/access-control` | 用户/角色/权限配置 |
 
 ## 2) 技术栈
@@ -62,8 +69,8 @@
 | Bun | 包管理与运行时 |
 | Vitest | 单元/集成测试 |
 | Playwright 1.58 | E2E 测试 |
-| GitHub Actions | CI/CD（6 条 pipeline） |
-| 治理检查 | 21 项自动校验 |
+| GitHub Actions | CI/CD（工作流数量以 `.github/workflows/` 为准） |
+| 治理检查 | `bun run governance` 自动校验 |
 
 ## 3) 目录结构
 
@@ -71,13 +78,13 @@
 chexian-api/
 ├── src/                             # 前端应用
 │   ├── app/                         #   应用入口、路由、布局
-│   ├── features/                    #   22 个业务功能模块
+│   ├── features/                    #   业务功能模块（以目录与 INDEX 为准）
 │   │   ├── dashboard/               #     经营仪表盘
 │   │   ├── cost/                    #     成本分析 + 综合分析
 │   │   ├── growth/                  #     增长分析 + 机构对比
 │   │   ├── claims-detail/           #     赔案明细
 │   │   ├── quote-conversion/        #     报价转化
-│   │   └── ...                      #     （共 22 个模块）
+│   │   └── ...                      #     其他模块见 src/features/INDEX.md
 │   ├── widgets/                     #   图表/表格/KPI 复用组件
 │   ├── shared/                      #   API 客户端、上下文、样式、工具、类型
 │   │   ├── api/                     #     API 路由定义 + HTTP 客户端
@@ -87,17 +94,17 @@ chexian-api/
 │
 ├── server/                          # 后端 API 服务
 │   ├── src/
-│   │   ├── app.ts                   #   启动入口（198 行，已拆分）
+│   │   ├── app.ts                   #   启动入口
 │   │   ├── routes/                  #   路由层
 │   │   │   ├── query.ts             #     查询路由注册器
-│   │   │   ├── query/               #     17 个查询子路由模块
+│   │   │   ├── query/               #     查询子路由模块（以目录为准）
 │   │   │   ├── auth.ts              #     认证路由
 │   │   │   ├── data.ts              #     数据管理路由
 │   │   │   ├── ai.ts                #     AI 路由
 │   │   │   ├── filters.ts           #     筛选器路由
 │   │   │   └── wecom-auth.ts        #     企业微信路由
 │   │   ├── services/                #   服务层（模块化拆分）
-│   │   │   ├── duckdb.ts            #     查询执行（498 行）
+│   │   │   ├── duckdb.ts            #     查询执行
 │   │   │   ├── duckdb-infra.ts      #     连接与基础设施
 │   │   │   ├── duckdb-domain-loaders.ts  # 分域数据加载
 │   │   │   ├── duckdb-materialization.ts # 预聚合物化
@@ -105,27 +112,27 @@ chexian-api/
 │   │   │   ├── access-control.ts    #     权限控制
 │   │   │   ├── route-cache.ts       #     路由级缓存
 │   │   │   └── ...                  #     auth/wecom/openrouter/zhipu
-│   │   ├── sql/                     #   35 个 SQL 生成器
+│   │   ├── sql/                     #   SQL 生成器（以目录为准）
 │   │   ├── middleware/              #   认证、权限、限流、审计、异常
 │   │   ├── config/                  #   配置中心
 │   │   │   ├── metric-registry/     #     指标注册表（数量见 validate.ts）
-│   │   │   ├── field-registry/      #     字段注册表（56 个字段）
-│   │   │   ├── env.ts               #     环境变量（20+ 变量）
+│   │   │   ├── field-registry/      #     字段注册表（以注册表为准）
+│   │   │   ├── env.ts               #     环境变量事实源
 │   │   │   └── api-routes.ts        #     路由常量
 │   │   └── normalize/               #   列映射与字段标准化（codegen 生成）
 │   └── data/                        #   运行时数据目录
 │
 ├── 数据管理/                         # 数据 ETL 管道
 │   ├── daily.mjs                    #   智能增量 ETL 入口
-│   ├── data-sources.json            #   15 域元数据注册表
+│   ├── data-sources.json            #   数据域元数据注册表
 │   ├── shard-config.json            #   分片配置
 │   ├── pipelines/                   #   ETL 转换脚本（Python）
 │   ├── warehouse/                   #   本地数据仓库
-│   │   ├── fact/                    #     8 个事实域（policy/claims/quotes/...）
-│   │   └── dim/                     #     7 个维度表（salesman/plan/brand/...）
+│   │   ├── fact/                    #     事实域（以目录为准）
+│   │   └── dim/                     #     维度表（以目录为准）
 │   └── knowledge/                   #   数据知识库
 │
-├── tests/                           # 测试（77 个文件）
+├── tests/                           # 测试（以测试目录与 runner 输出为准）
 │   ├── api/                         #   API 测试
 │   ├── components/                  #   组件测试
 │   ├── comprehensive/               #   综合分析测试
@@ -133,9 +140,9 @@ chexian-api/
 │   ├── integration/                 #   集成测试（需 DuckDB 原生）
 │   └── shared/                      #   共享工具测试
 │
-├── scripts/                         # 37 个工程脚本
+├── scripts/                         # 工程脚本（见 scripts/INDEX.md）
 ├── deploy/                          # VPS 部署（Nginx + PM2 + Docker）
-├── .github/workflows/               # 6 条 CI/CD pipeline
+├── .github/workflows/               # CI/CD workflows（以目录为准）
 ├── 开发文档/                         # 架构、规范、索引
 └── 数据管理/knowledge/               # 数据知识库
 ```
@@ -178,14 +185,13 @@ chexian-api/
 | DELETE | `/api/data/clear` | 清空数据 |
 | GET/PUT | `/api/data/kpi-plan-config` | 计划值配置 |
 
-### 业务查询（`/api/query`）— 17 个子路由模块
+### 业务查询（`/api/query`）
 
 | 模块 | 主要端点 | 路由文件 |
 |------|----------|----------|
 | KPI | `kpi`, `kpi-detail` | `query/kpi.ts` |
 | 趋势 | `trend`, `quality-business-trend` | `query/trend.ts` |
 | 增长 | `growth` | `query/growth.ts` |
-| 系数 | `coefficient` | `query/coefficient.ts` |
 | 成本 | `cost` | `query/cost.ts` |
 | 综合分析 | `comprehensive-bundle`, `comprehensive-analysis-bundle` | `query/comprehensive.ts` |
 | 续保 | `renewal`, `renewal-drilldown` | `query/renewal.ts` |
@@ -198,7 +204,7 @@ chexian-api/
 | 费用发展 | `expense-development` | `query/expense-development.ts` |
 | 维修资源 | `repair-*` | `query/repair.ts` |
 | 货车 | `truck` | `query/truck.ts` |
-| 报表 | `marketing-report`, `premium-report/plan`, `dashboard-bundle` 等 | `query/report.ts` |
+| 报表 | `premium-report/plan`, `dashboard-bundle` 等 | `query/report.ts` |
 
 ### 筛选器（`/api/filters`）
 
@@ -227,11 +233,11 @@ React 页面/Hook
 
 前端不直接执行 SQL，不加载 DuckDB-WASM，不再维护浏览器 Local 模式。
 
-### 数据域注册表（11 个活跃域）
+### 数据域注册表
 
 | 域 ID | 名称 | 类型 | 状态 |
 |--------|------|------|------|
-| premium | 保费 | fact | 活跃 — 350 万+ 行 |
+| premium | 保费 | fact | 活跃（规模以 warehouse 元数据为准） |
 | claims_detail | 赔案明细 | fact | 活跃 |
 | cross_sell | 交叉销售 | fact | 活跃 |
 | quotes_conversion | 报价转化 | fact | 活跃 |
@@ -279,7 +285,7 @@ React 页面/Hook
 | `ZHIPU_API_KEY` | 智谱兜底 Key | — |
 | `WECOM_CORP_ID` | 企业微信 ID（可选） | — |
 
-完整变量列表见 `server/src/config/env.ts`（20+ 变量，6 个分组）。
+完整变量与分组以 `server/src/config/env.ts` 为准。
 
 ## 7) 运行与部署
 
@@ -313,7 +319,7 @@ bun run test              # 单元测试（Vitest）
 bun run test:integration  # 集成测试（需本地 DuckDB 原生二进制）
 bun run test:e2e          # E2E 测试（Playwright，需先 dev:full）
 bun run test:coverage     # 覆盖率报告
-bun run governance        # 21 项治理检查
+bun run governance        # 运行当前全部治理检查
 bun run typecheck         # TypeScript 类型检查
 bun run verify:quick      # 快速验证（preflight + governance + typecheck）
 bun run verify:full       # 完整验证（quick + test）

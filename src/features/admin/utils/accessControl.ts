@@ -9,6 +9,8 @@
  * 行为与原组件内联实现逐字符一致。
  */
 
+import { canonicalizeRoutePath, getEquivalentRoutePaths } from '../../../shared/config/routeRegistry';
+
 /** IP 白名单输入串 → 数组：按英文逗号 / 中文逗号 / 换行分隔，去空格、滤空项 */
 export const splitIpList = (value: string): string[] =>
   value.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean);
@@ -29,3 +31,18 @@ export const toggleSelection = (
   item: string,
   checked: boolean
 ): string[] => (checked ? [...selected, item] : selected.filter((x) => x !== item));
+
+export const isRouteSelected = (selected: string[], route: string): boolean =>
+  selected.some((value) => canonicalizeRoutePath(value) === canonicalizeRoutePath(route));
+
+export const toggleRouteSelection = (
+  selected: string[],
+  route: string,
+  checked: boolean,
+): string[] => {
+  if (checked) {
+    return isRouteSelected(selected, route) ? [...selected] : [...selected, canonicalizeRoutePath(route)];
+  }
+  const equivalents = new Set(getEquivalentRoutePaths(route));
+  return selected.filter((value) => !equivalents.has(value));
+};

@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "chexian-yjfx-server",
+      "name": "@chexian/server",
       "dependencies": {
         "@duckdb/node-api": "1.4.4-r.1",
         "bcrypt": "^5.1.1",

@@ -1,8 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SidebarNavigation } from '../src/components/layout/SidebarNavigation';
+
+const sidebarState = vi.hoisted(() => ({ isMobile: false }));
+
+afterEach(() => {
+  sidebarState.isMobile = false;
+});
 
 vi.mock('../src/components/layout/SidebarLayout', () => ({
   DESKTOP_SIDEBAR_WIDTH: 96,
@@ -11,7 +17,7 @@ vi.mock('../src/components/layout/SidebarLayout', () => ({
     toggle: vi.fn(),
     mobileOpen: false,
     setMobileOpen: vi.fn(),
-    isMobile: false,
+    isMobile: sidebarState.isMobile,
     sidebarWidth: 96,
     setSidebarWidth: vi.fn(),
     isDragging: false,
@@ -61,5 +67,25 @@ describe('SidebarNavigation compact rail', () => {
     expect(screen.getByText('业绩')).toBeTruthy();
     expect(sidebar.getAttribute('style')).toContain('width: 96px');
     expect(screen.queryByRole('button', { name: /收起侧边栏|展开侧边栏/ })).toBeNull();
+  });
+
+  it('renders the six registry decision domains and their canonical entries on mobile', () => {
+    sidebarState.isMobile = true;
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/home']}>
+          <SidebarNavigation />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    for (const domain of ['经营总览', '增长达成', '成本质量', '客户经营', '专项资源', '平台管理']) {
+      expect(screen.getByText(domain)).toBeTruthy();
+    }
+    expect(screen.getByRole('link', { name: '经营看板' }).getAttribute('href')).toBe('/dashboard');
+    expect(screen.getByRole('link', { name: '赔案分析' }).getAttribute('href')).toBe('/claims-detail');
+    expect(screen.getByRole('link', { name: '数据管理' }).getAttribute('href')).toBe('/data-import');
   });
 });

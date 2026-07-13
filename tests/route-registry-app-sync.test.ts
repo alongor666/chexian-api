@@ -1,0 +1,82 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import ts from 'typescript';
+import { describe, expect, it } from 'vitest';
+import { ROUTES } from '../src/shared/config/routeRegistry';
+
+const appSource = readFileSync(resolve(process.cwd(), 'src/app/App.tsx'), 'utf8');
+const sourceFile = ts.createSourceFile('App.tsx', appSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+
+function jsxAttribute(node: ts.JsxAttributes, name: string): string | undefined {
+  const attribute = node.properties.find((property): property is ts.JsxAttribute => (
+    ts.isJsxAttribute(property) && property.name.getText(sourceFile) === name
+  ));
+  return attribute?.initializer && ts.isStringLiteral(attribute.initializer)
+    ? attribute.initializer.text
+    : undefined;
+}
+
+function appRoutes(): Map<string, string | undefined> {
+  const routes = new Map<string, string | undefined>();
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(sourceFile) === 'Route') {
+      const path = jsxAttribute(node.attributes, 'path');
+      if (path) {
+        let destination: string | undefined;
+        node.forEachChild(function findNavigate(child) {
+          if (ts.isJsxSelfClosingElement(child) && child.tagName.getText(sourceFile) === 'Navigate') {
+            destination = jsxAttribute(child.attributes, 'to');
+          }
+          child.forEachChild(findNavigate);
+        });
+        routes.set(path.startsWith('/') ? path : `/${path}`, destination);
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  return routes;
+}
+
+function routeAccessGuardPath(routePath: string): string | undefined {
+  let guardPath: string | undefined;
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(sourceFile) === 'Route'
+      && jsxAttribute(node.attributes, 'path') === routePath) {
+      node.forEachChild(function findGuard(child) {
+        if (ts.isJsxOpeningElement(child) && child.tagName.getText(sourceFile) === 'RouteAccessGuard') {
+          guardPath = jsxAttribute(child.attributes, 'routePath');
+        }
+        child.forEachChild(findGuard);
+      });
+    }
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  return guardPath;
+}
+
+describe('route registry and App route synchronization', () => {
+  it('keeps all 17 canonical pages as explicit App routes', () => {
+    const declared = appRoutes();
+    expect(ROUTES).toHaveLength(17);
+    for (const route of ROUTES) {
+      expect(declared.has(route.path), `missing explicit Route for ${route.id}: ${route.path}`).toBe(true);
+    }
+  });
+
+  it('derives every explicit legacy redirect path and destination from the registry', () => {
+    const declared = appRoutes();
+    const redirects = ROUTES.flatMap((route) => route.redirects ?? []);
+    const declaredRedirects = new Map(
+      [...declared].filter((entry): entry is [string, string] => entry[1] !== undefined),
+    );
+
+    expect(redirects).toHaveLength(7);
+    expect(declaredRedirects).toEqual(new Map(redirects.map((redirect) => [redirect.path, redirect.to])));
+  });
+
+  it('guards data management with its own canonical permission path', () => {
+    expect(routeAccessGuardPath('data-import')).toBe('/data-import');
+  });
+});

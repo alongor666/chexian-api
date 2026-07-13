@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-codex-18f851","kind":"note","ts":"2026-07-13","actor":"@codex","text":"【最终审查纠偏】原DONE证据中的permission scope unchanged不成立：legacy '/' 被误映射/home且/data-import守卫仍用'/'，形成首页权限进入数据管理的扩大；回到DOING修复并复审","at":"2026-07-13T00:13:22.193Z","eid":"af0ee4fb"}

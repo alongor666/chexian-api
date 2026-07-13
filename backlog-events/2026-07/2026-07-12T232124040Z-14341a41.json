@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-codex-2fe6aa","kind":"create","ts":"2026-07-12","actor":"@codex","section":"架构治理/命名体系","priority":"P2","desc":"完成全量验证、独立审计、PR 与 CI 收口","docs":"docs/superpowers/plans/2026-07-12-naming-route-registry.md#task-5全量审计backlog-收口与-pr","code":"backlog-events/,BACKLOG.md,BACKLOG_ARCHIVE.md","at":"2026-07-12T23:21:24.040Z","eid":"14341a41"}

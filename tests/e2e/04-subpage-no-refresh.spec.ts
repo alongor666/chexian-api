@@ -1,21 +1,19 @@
 import { test, expect } from '@playwright/test';
 import { ensureDataLoaded } from './helpers/session';
+import { ROUTES } from '../../src/shared/config/routeRegistry';
 
 // 与 src/components/layout 当前真实侧边栏对齐（2026-06-12 校准）。
 // 旧清单（营业货车/续保分析/数据对比/系数监控等）是导航重组前的路由，
 // 在 E2E 静默 skip 时代（PR #583 前）从未真跑暴露。
-const sidebarTargets: Array<{ label: string; hashPath: string }> = [
-  { label: '仪表盘', hashPath: '/dashboard' },
-  { label: '业绩分析', hashPath: '/performance-analysis' },
-  { label: '保费达成', hashPath: '/reports' },
-  { label: '专项分析', hashPath: '/specialty' },
-  { label: '增长与对比', hashPath: '/growth' },
-  { label: '成本综合', hashPath: '/cost' },
-  { label: '续保追踪', hashPath: '/renewal-tracker' },
-  { label: '报价转化', hashPath: '/quote-conversion' },
-  { label: '赔案明细', hashPath: '/claims-detail' },
-  { label: '客户来源', hashPath: '/customer-flow' },
-];
+const sidebarTargetPaths = [
+  '/dashboard', '/performance-analysis', '/reports', '/specialty', '/growth',
+  '/cost', '/renewal-tracker', '/quote-conversion', '/claims-detail', '/customer-flow',
+] as const;
+const sidebarTargets = sidebarTargetPaths.map((hashPath) => {
+  const route = ROUTES.find((candidate) => candidate.path === hashPath);
+  if (!route) throw new Error(`Missing E2E sidebar route registry entry: ${hashPath}`);
+  return { label: route.label, hashPath };
+});
 
 test('首页侧边栏逐个进入子页面无需刷新', async ({ page }) => {
   const hasData = await ensureDataLoaded(page);
@@ -52,8 +50,7 @@ test('首页侧边栏逐个进入子页面无需刷新', async ({ page }) => {
     // ($|\?) 容忍页面自身追加的 query（如 /specialty?tab=...）
     await expect(page).toHaveURL(new RegExp(`#${target.hashPath}($|\\?)`), { timeout: 30000 });
 
-    const loginHeading = page.getByRole('heading', { name: '车险业绩分析系统' });
-    await expect(loginHeading).not.toBeVisible();
+    expect(page.url()).not.toContain('#/login');
 
   }
 });

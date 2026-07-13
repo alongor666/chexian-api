@@ -1,9 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { DEFAULT_E2E_PASSWORD, DEFAULT_E2E_USERNAME } from './credentials';
+import { ROUTES } from '../../../src/shared/config/routeRegistry';
 
 const E2E_USERNAME = process.env.E2E_USERNAME ?? DEFAULT_E2E_USERNAME;
 const E2E_PASSWORD = process.env.E2E_PASSWORD ?? DEFAULT_E2E_PASSWORD;
 const API_BASE = 'http://localhost:3000';
+const DASHBOARD_LABEL = ROUTES.find((route) => route.path === '/dashboard')?.label;
+if (!DASHBOARD_LABEL) throw new Error('Missing dashboard route registry entry');
 
 export const waitForBackendReady = async (page: Page) => {
   // CI cold start is slower — allow up to 60s (40 attempts × 1.5s)
@@ -147,7 +150,7 @@ export const ensureDataLoaded = async (page: Page): Promise<boolean> => {
   }
 
   // Data is loaded — try navigating to dashboard to confirm
-  const dashboardNav = page.getByRole('link', { name: '仪表盘', exact: true });
+  const dashboardNav = page.getByRole('link', { name: DASHBOARD_LABEL, exact: true });
   if (await dashboardNav.isVisible().catch(() => false)) {
     await dashboardNav.click();
     await page.waitForURL(/#\/dashboard/, { timeout: 5000 }).catch(() => null);
@@ -169,8 +172,7 @@ export const skipWhenNoData = async (page: Page): Promise<boolean> => {
   await page.goto('/#/');
   await page.waitForLoadState('domcontentloaded');
 
-  const loginHeading = page.getByRole('heading', { name: '车险业绩分析系统' });
-  if (await loginHeading.isVisible().catch(() => false)) {
+  if (page.url().includes('#/login')) {
     await login(page);
     await page.goto('/#/');
     await page.waitForLoadState('domcontentloaded');

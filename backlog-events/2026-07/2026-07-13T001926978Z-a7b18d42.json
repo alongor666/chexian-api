@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-codex-18f851","kind":"note","ts":"2026-07-13","actor":"@cto-orchestrator","text":"【第二次纠偏】最终全分支复审确认首页仍由 RouteAccessGuard('/home') 与显式白名单保护；将 /home 从 permissionConfigurable 移除会导致管理员无法修复授权。保持任务 DOING，要求 /home 与 /data-import 均为独立 canonical 权限项，legacy / 仍仅映射数据管理。","at":"2026-07-13T00:19:26.978Z","eid":"a7b18d42"}

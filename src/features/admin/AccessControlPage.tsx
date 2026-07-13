@@ -14,22 +14,13 @@ import {
   useConfirmDialog,
 } from '../../shared/ui';
 import { ApiTokensPanel } from './ApiTokensPanel';
-import { splitIpList, joinList, toggleSelection } from './utils/accessControl';
+import { splitIpList, joinList, toggleSelection, isRouteSelected, toggleRouteSelection } from './utils/accessControl';
+import { getPermissionRoutes } from '../../shared/config/routeRegistry';
 
 /**
  * 所有可通过路由白名单配置的路由列表。
  */
-const ALL_ROUTES = [
-  { path: '/', label: '首页' },
-  { path: '/dashboard', label: '仪表盘' },
-  { path: '/performance-analysis', label: '业绩分析' },
-  { path: '/reports', label: '保费达成' },
-  { path: '/truck', label: '营业货车' },
-  { path: '/renewal', label: '续保分析' },
-  { path: '/cross-sell', label: '驾意险推介率' },
-  { path: '/growth', label: '增长分析' },
-  { path: '/comparison', label: '数据对比' },
-];
+const PERMISSION_ROUTES = getPermissionRoutes().map(({ path, label }) => ({ path, label }));
 
 /**
  * 成本分析（'cost'）已对全员开放，用户面权限开关已下掉（2026-07-06-claude-286f55）。
@@ -88,21 +79,21 @@ const RouteCheckboxGroup: React.FC<{
   onChange: (routes: string[]) => void;
 }> = ({ selected, onChange }) => {
   const toggle = (path: string, checked: boolean) => {
-    onChange(toggleSelection(selected, path, checked));
+    onChange(toggleRouteSelection(selected, path, checked));
   };
 
   return (
     <div className="mt-1 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
       <p className="text-xs text-neutral-400 dark:text-neutral-500 mb-2">不勾选任何路由 = 允许访问所有路由</p>
       <div className="grid grid-cols-2 gap-1">
-        {ALL_ROUTES.map(route => (
+        {PERMISSION_ROUTES.map(route => (
           <label
             key={route.path}
             className="flex items-center gap-2 cursor-pointer rounded px-2 py-1 hover:bg-white dark:hover:bg-neutral-700 transition-colors"
           >
             <input
               type="checkbox"
-              checked={selected.includes(route.path)}
+              checked={isRouteSelected(selected, route.path)}
               onChange={e => toggle(route.path, e.target.checked)}
               className="w-4 h-4 rounded accent-primary cursor-pointer"
             />

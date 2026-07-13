@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitIpList, joinList, toggleSelection } from './accessControl';
+import { splitIpList, joinList, toggleSelection, isRouteSelected, toggleRouteSelection } from './accessControl';
 
 describe('splitIpList · IP 白名单解析', () => {
   it('空串 → []', () => {
@@ -65,5 +65,49 @@ describe('toggleSelection · 复选不可变更新', () => {
     toggleSelection(input, 'c', true);
     toggleSelection(input, 'a', false);
     expect(input).toEqual(['a', 'b']);
+  });
+
+  it('切换 canonical 路由时保留已有 legacy alias', () => {
+    const existingRoutes = ['/truck', '/comparison', '/dashboard'];
+
+    expect(toggleSelection(existingRoutes, '/growth', true)).toEqual([
+      '/truck',
+      '/comparison',
+      '/dashboard',
+      '/growth',
+    ]);
+    expect(toggleSelection(existingRoutes, '/dashboard', false)).toEqual([
+      '/truck',
+      '/comparison',
+    ]);
+    expect(existingRoutes).toEqual(['/truck', '/comparison', '/dashboard']);
+  });
+
+  it('取消 canonical 路由时移除其等价 legacy alias', () => {
+    expect(toggleRouteSelection(['/truck', '/cross-sell', '/growth'], '/specialty', false)).toEqual(['/growth']);
+  });
+
+  it('legacy alias 会让对应 canonical 复选框显示已选', () => {
+    expect(isRouteSelected(['/truck'], '/specialty')).toBe(true);
+    expect(isRouteSelected(['/comparison'], '/growth')).toBe(true);
+    expect(isRouteSelected(['/renewal'], '/renewal-tracker')).toBe(true);
+    expect(isRouteSelected(['/'], '/data-import')).toBe(true);
+    expect(isRouteSelected(['/'], '/home')).toBe(false);
+  });
+
+  it('可独立授予和撤销 home 与 data-import', () => {
+    const withHome = toggleRouteSelection([], '/home', true);
+    expect(withHome).toEqual(['/home']);
+    expect(isRouteSelected(withHome, '/home')).toBe(true);
+    expect(isRouteSelected(withHome, '/data-import')).toBe(false);
+
+    const withBoth = toggleRouteSelection(withHome, '/data-import', true);
+    expect(withBoth).toEqual(['/home', '/data-import']);
+    expect(toggleRouteSelection(withBoth, '/home', false)).toEqual(['/data-import']);
+    expect(toggleRouteSelection(withBoth, '/data-import', false)).toEqual(['/home']);
+  });
+
+  it('取消 data-import 清除 legacy / 但不影响 home', () => {
+    expect(toggleRouteSelection(['/', '/home'], '/data-import', false)).toEqual(['/home']);
   });
 });

@@ -72,7 +72,7 @@ const PAGES: PageSpec[] = [
     ],
   },
   {
-    name: 'claims-detail 赔案明细页（claims_detail 半连接；BACKLOG d0cd4b 复发哨兵）',
+    name: 'claims-detail 赔案分析页（claims_detail 半连接；BACKLOG d0cd4b 复发哨兵）',
     url: '/#/claims-detail',
     hiddenChips: [],
     visibleChips: ['交/商', '油/气/电'],

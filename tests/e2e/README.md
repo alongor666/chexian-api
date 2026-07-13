@@ -1,6 +1,6 @@
 # E2E 测试说明 (Playwright)
 
-本目录包含车险业绩分析系统的端到端（E2E）测试，使用 [Playwright](https://playwright.dev/) 框架。
+本目录包含车险经营分析平台的端到端（E2E）测试，使用 [Playwright](https://playwright.dev/) 框架。
 
 ## 快速开始
 
@@ -33,7 +33,7 @@ bunx playwright show-report
 
 | 文件 | 场景 | 覆盖范围 |
 |------|------|----------|
-| `01-dashboard-flow.spec.ts` | 仪表盘核心流程 | 登录→仪表盘加载→视角切换→趋势视图 |
+| `01-dashboard-flow.spec.ts` | 经营看板核心流程 | 登录→经营看板加载→视角切换→趋势视图 |
 | `02-filter-sql.spec.ts` | 筛选器与SQL查询 | 保费报表筛选→SQL编辑器执行→结果渲染 |
 | `03-cleanup-zero-downtime-gate.spec.ts` | 清理门禁回归 | 关键页面可达→筛选/查询/图表→CSV/Excel/PDF导出→401/200 鉴权 |
 | `auth.setup.ts` | 认证预热 | 登录一次并缓存 storage state，供后续用例复用 |
@@ -49,7 +49,7 @@ bunx playwright show-report
 tests/e2e/
 ├── README.md              # 本文件
 ├── auth.setup.ts               # 复用登录态 setup
-├── 01-dashboard-flow.spec.ts   # 仪表盘流程测试（B128）
+├── 01-dashboard-flow.spec.ts   # 经营看板流程测试（B128）
 ├── 02-filter-sql.spec.ts       # 筛选器+SQL测试（B129）
 ├── 03-cleanup-zero-downtime-gate.spec.ts # API-only 清理门禁测试（B208）
 ├── 04-subpage-no-refresh.spec.ts # 子页面无刷新回归（B216）
