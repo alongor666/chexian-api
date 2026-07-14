@@ -555,6 +555,16 @@
     "auth": true,
     "dedupe": "GET:/query/salesman-ranking?limit=20"
   },
+  "getSalesTeamPerformance": {
+    "verb": "GET",
+    "path": "/query/sales-team-performance",
+    "params": [
+      "dimension"
+    ],
+    "bodyKeys": null,
+    "auth": true,
+    "dedupe": "GET:/query/sales-team-performance?dimension=salesman"
+  },
   "getTrend": {
     "verb": "GET",
     "path": "/query/trend",

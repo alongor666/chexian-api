@@ -469,6 +469,23 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
     tags: ['renewal'],
   },
 
+  // ── 销售队伍业绩（标保） ────────────────────────
+  {
+    key: 'SALES_TEAM_PERFORMANCE', path: '/sales-team-performance', method: 'GET',
+    summary: '销售队伍业绩（标保）',
+    description: '山西直营保单标保口径汇总：按业务员/销售团队/机构/险种大类聚合实收保费与修复后标保（口径 SSOT=sales_team_rules.sql，见 sales_portrait ADR-006）。admin-only。',
+    parameters: [
+      { name: 'dimension', type: 'string', description: '聚合维度', enum: ['salesman', 'team', 'org', 'insurance_class'] },
+      { name: 'start', type: 'date', description: '承保确认时间范围起 YYYY-MM-DD（可选）' },
+      { name: 'end', type: 'date', description: '承保确认时间范围止 YYYY-MM-DD（可选）' },
+      { name: 'limit', type: 'number', description: '返回行数上限（默认 200，最大 10000）' },
+    ],
+    timeWindow: 'window',
+    timeWindowNote: 'start/end 为【承保确认时间】窗口（标保考核口径），非签单日期窗口',
+    dataScope: 'any',
+    tags: ['sales-team'],
+  },
+
   // ── PIVOT 维度×指标交叉聚合 ──────────────────────
   {
     key: 'PIVOT', path: '/pivot', method: 'GET',

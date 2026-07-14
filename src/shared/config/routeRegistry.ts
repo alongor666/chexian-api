@@ -4,7 +4,8 @@ export type RouteId =
   | 'performance-analysis' | 'reports' | 'growth'
   | 'cost' | 'claims-detail' | 'expense-development' | 'moto-cost'
   | 'renewal-tracker' | 'quote-conversion' | 'customer-flow'
-  | 'specialty' | 'repair' | 'data-import' | 'access-control';
+  | 'specialty' | 'repair' | 'data-import' | 'access-control'
+  | 'sales-team-performance';
 export type IconKey =
   | 'home' | 'gauge' | 'layout-grid' | 'trending-up' | 'dollar-sign' | 'bar-chart'
   | 'calculator' | 'file-warning' | 'trending-down' | 'bike' | 'refresh' | 'target'
@@ -63,6 +64,7 @@ export const ROUTES: readonly RouteDefinition[] = freezeRoutes([
   { kind: 'canonical', id: 'performance-analysis', path: '/performance-analysis', label: '业绩分析', shortLabel: '业绩', iconKey: 'trending-up', navigationDomain: 'growth', navigationOrder: 10, showInNavigation: true, permissionConfigurable: true },
   { kind: 'canonical', id: 'reports', path: '/reports', label: '保费计划达成', shortLabel: '保费', iconKey: 'dollar-sign', navigationDomain: 'growth', navigationOrder: 20, showInNavigation: true, permissionConfigurable: true, redirects: [{ path: '/premium-report', to: '/reports' }, { path: '/marketing-report', to: '/reports' }] },
   { kind: 'canonical', id: 'growth', path: '/growth', label: '增长对比', shortLabel: '增长', iconKey: 'bar-chart', navigationDomain: 'growth', navigationOrder: 30, showInNavigation: true, permissionConfigurable: true, redirects: [{ path: '/comparison', to: '/growth' }] },
+  { kind: 'canonical', id: 'sales-team-performance', path: '/sales-team-performance', label: '销售队伍业绩', shortLabel: '队伍', iconKey: 'trending-up', navigationDomain: 'growth', navigationOrder: 40, showInNavigation: true, permissionConfigurable: false },
 
   { kind: 'canonical', id: 'cost', path: '/cost', label: '成本分析', shortLabel: '成本', iconKey: 'calculator', navigationDomain: 'cost', navigationOrder: 10, showInNavigation: true, permissionConfigurable: false, redirects: [{ path: '/comprehensive-analysis', to: '/cost?view=comprehensive' }] },
   { kind: 'canonical', id: 'claims-detail', path: '/claims-detail', label: '赔案分析', shortLabel: '赔案', iconKey: 'file-warning', navigationDomain: 'cost', navigationOrder: 20, showInNavigation: true, permissionConfigurable: false },

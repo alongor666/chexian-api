@@ -1,0 +1,1 @@
+export { SalesTeamPerformancePage } from './SalesTeamPerformancePage';

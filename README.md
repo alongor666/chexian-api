@@ -25,6 +25,7 @@
 | 业绩分析 | `/performance-analysis` | 业务员/机构绩效 + 热力图 |
 | 保费计划达成 | `/reports` | 计划达成 + 机构/业务员报表 |
 | 增长对比 | `/growth` | 同比/环比 + 机构对比 |
+| 销售队伍业绩 | `/sales-team-performance` | 山西直营标保口径汇总（admin-only） |
 | 成本分析 | `/cost` | 综合成本率 + 赔付 + 费用（含综合分析视图） |
 | 赔案分析 | `/claims-detail` | 赔案下钻 + 品牌车型 |
 | 费用率发展 | `/expense-development` | 费用率发展分析（特性授权） |

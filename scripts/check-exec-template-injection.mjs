@@ -81,7 +81,7 @@ function info(message) {
 // ============================================================
 const KNOWN_SAFE_INTERPOLATIONS = {
   'scripts/api-wire-conservation.mjs': [
-    { line: 157, reason: 'spec 来自脚本内硬编码 BASELINE_COMMIT 或 CLI --spec 固定 git 引用格式，非任意外部输入' },
+    { line: 159, reason: 'spec 来自脚本内硬编码 BASELINE_COMMIT 或 CLI --spec 固定 git 引用格式，非任意外部输入' },
   ],
   'scripts/benchmark-key-routes-soak.mjs': [
     { line: 131, reason: 'Number(pid) 强制转换为数字，非数字值转换后为 NaN 已被上一行 Number.isFinite 拦截' },

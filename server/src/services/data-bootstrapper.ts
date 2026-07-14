@@ -29,6 +29,7 @@ import {
   getCustomerFlowPaths,
   getNewEnergyClaimsPaths,
   getRenewalTrackerPaths,
+  getSalesTeamPerformancePaths,
   getValidationRootDir,
   getBranchValidationDimPath,
   getBranchValidationFactPath,
@@ -697,7 +698,16 @@ export class DataBootstrapper {
       console.timeEnd('[Bootstrap:Lazy] RenewalTracker');
     });
 
-    console.log('[Bootstrap] Lazy domains registered: ClaimsDetail, ClaimsAgg, CrossSell, RepairDim, BrandDim, CustomerFlow, NewEnergyClaims, QuoteConversion, RenewalTracker');
+    // SalesTeamPerformance（销售队伍业绩·标保，仅该页；山西直营单源，无分省 extras）
+    this.lazyRegistry.register('SalesTeamPerformance', async () => {
+      const p = getSalesTeamPerformancePaths().find(p => fs.existsSync(p));
+      if (!p) { console.warn('[Bootstrap:Lazy] SalesTeamPerformance: no file found'); return; }
+      console.time('[Bootstrap:Lazy] SalesTeamPerformance');
+      await domainLoaders.loadSalesTeamPerformance(db, p);
+      console.timeEnd('[Bootstrap:Lazy] SalesTeamPerformance');
+    });
+
+    console.log('[Bootstrap] Lazy domains registered: ClaimsDetail, ClaimsAgg, CrossSell, RepairDim, BrandDim, CustomerFlow, NewEnergyClaims, QuoteConversion, RenewalTracker, SalesTeamPerformance');
   }
 
   // ============================================

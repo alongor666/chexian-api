@@ -276,6 +276,16 @@ export function getRenewalTrackerPaths(): string[] {
   ];
 }
 
+// ── 销售队伍业绩（标保）Parquet 路径 ──
+
+/** 规则层算好的保单级明细（sales_team_etl.py 产物，口径见 sales_portrait ADR-006） */
+export function getSalesTeamPerformancePaths(): string[] {
+  return [
+    path.resolve(SERVER_ROOT, '../数据管理/warehouse/fact/sales_team_performance/biaobao_enriched.parquet'),
+    path.resolve(getDataDir(), 'fact/sales_team_performance/biaobao_enriched.parquet'),
+  ];
+}
+
 // ── HTML 报告托管目录 ──────────────────────────────────────────────────────
 
 /** HTML 报告托管目录：server/data/reports/，由 /api/reports/:filename 路由 serve */

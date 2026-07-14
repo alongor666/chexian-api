@@ -1127,3 +1127,25 @@ export async function loadRenewalTracker(
   const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM RenewalTrackerFact');
   console.log(`[DuckDB] RenewalTrackerFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
 }
+
+/**
+ * 加载销售队伍业绩（标保）Parquet → SalesTeamPerformanceFact VIEW
+ *
+ * 数据源：warehouse/fact/sales_team_performance/biaobao_enriched.parquet
+ * （数据管理/pipelines/sales_team_etl.py 产物：标保 A:K 原样 + 规则层复算的
+ * 险种系数/一司一策/最终系数/标保，口径 SSOT = pipelines/sales_team_rules.sql，
+ * 迁移对账见 sales_portrait 仓库 ADR-006——194,191 行与 Excel 宽表逐行零差异）。
+ *
+ * 保持中文列名（与 PolicyFact premium 域同风格）；山西直营单源，
+ * 不做分省 UNION（同 BrandDim 的省份无关决策）。无 org_level_3/branch_code/
+ * is_telemarketing 标准 RLS 列 → 路由层 requireBranchAdmin admin-only 兜底。
+ */
+export async function loadSalesTeamPerformance(db: DuckDBQueryable, parquetPath: string): Promise<void> {
+  const safePath = escapeSqlValue(parquetPath.replace(/\\/g, '/'));
+  await db.query(`
+    CREATE OR REPLACE VIEW SalesTeamPerformanceFact AS
+    SELECT * FROM read_parquet('${safePath}', union_by_name=true)
+  `);
+  const countResult = await db.query<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM SalesTeamPerformanceFact');
+  console.log(`[DuckDB] SalesTeamPerformanceFact view loaded: ${countResult[0]?.cnt ?? 0} rows from ${parquetPath}`);
+}

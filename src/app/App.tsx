@@ -138,6 +138,9 @@ const ExpenseDevelopmentPage = lazy(() =>
 const RenewalTrackerPage = lazy(() =>
   import('../features/renewal-tracker').then((m) => ({ default: m.RenewalTrackerPage }))
 );
+const SalesTeamPerformancePage = lazy(() =>
+  import('../features/sales-team-performance').then((m) => ({ default: m.SalesTeamPerformancePage }))
+);
 const ChartLedgerPage = lazy(() =>
   import('../features/chart-ledger').then((m) => ({ default: m.ChartLedgerPage }))
 );
@@ -322,6 +325,16 @@ function App() {
                     element={
                       <RouteAccessGuard routePath="/quote-conversion">
                         <LazyRoute><QuoteConversionPage /></LazyRoute>
+                      </RouteAccessGuard>
+                    }
+                  />
+
+                  {/* 销售队伍业绩（标保）- 独立数据源，API admin-only */}
+                  <Route
+                    path="sales-team-performance"
+                    element={
+                      <RouteAccessGuard routePath="/sales-team-performance">
+                        <LazyRoute><SalesTeamPerformancePage /></LazyRoute>
                       </RouteAccessGuard>
                     }
                   />
