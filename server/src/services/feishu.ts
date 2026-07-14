@@ -3,7 +3,11 @@ import { UserCredential } from './auth.js';
 import { getSalesmanMappingPaths, getFeishuRoleMappingPath } from '../config/paths.js';
 import { feishuEnv } from '../config/env.js';
 import { resolveBranchCode, getDeploymentBranchCode, isValidBranchCodeFormat } from '../config/sql-federation-policy.js';
-import { FEISHU_DEPARTMENT_ENTITLEMENTS, type FeishuDepartmentEntitlement } from '../config/feishu-department-entitlements.js';
+import {
+    FEISHU_DEPARTMENT_ENTITLEMENTS,
+    selectMinimalPrivilegeEntitlement,
+    type FeishuDepartmentEntitlement,
+} from '../config/feishu-department-entitlements.js';
 import { feishuAppGetJson } from './feishu-app-client.js';
 
 /** 角色映射文件中的单条授权（feishu 内任一标识匹配即命中） */
@@ -165,8 +169,21 @@ class FeishuService {
             if (!Array.isArray(departmentIds) || !departmentIds.every(id => typeof id === 'string')) {
                 return { status: 'unavailable', reason: '飞书通讯录返回的 department_ids 非法' };
             }
-            const entitlement = FEISHU_DEPARTMENT_ENTITLEMENTS.find(item => departmentIds.includes(item.feishuDeptId));
-            return entitlement ? { status: 'member', entitlement } : { status: 'not_member' };
+            // 一人可能同时挂多个授权部门：收集全部命中，按最小权限原则确定性选择一条
+            // （禁止并集/升权；唯一例外走个人映射条目，不在此硬编码人名）。
+            const matches = FEISHU_DEPARTMENT_ENTITLEMENTS.filter(item => departmentIds.includes(item.feishuDeptId));
+            if (matches.length === 0) {
+                return { status: 'not_member' };
+            }
+            const entitlement = selectMinimalPrivilegeEntitlement(matches);
+            if (matches.length > 1) {
+                const hitList = matches.map(m => `${m.feishuDeptName}/${m.organization}`).join('、');
+                console.warn(
+                    `[FeishuService] 用户 ${userId} 命中多个飞书部门授权（${hitList}），`
+                    + `按最小权限规则选中机构「${entitlement.organization}」。如归属不符请为该用户配置个人映射条目。`
+                );
+            }
+            return { status: 'member', entitlement };
         } catch (error) {
             return { status: 'unavailable', reason: error instanceof Error ? error.message : String(error) };
         }

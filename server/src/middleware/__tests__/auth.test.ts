@@ -284,3 +284,44 @@ describe('authMiddleware: pns 强制设密拦截', () => {
     expect((err as AppError).statusCode).toBe(403);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// visibleBranches 派生对登录方式不敏感（2026-07-14-claude-ec5dba 核实结论）
+//
+// issueCookieSession()（server/src/services/auth.ts）签发 JWT 时，无论密码登录还是飞书扫码，
+// payload 构造都只列出 userId/sub/username/role/organization/branchCode/pns/amr/identityId
+// 固定字段，**从不写入 visibleBranches**——该字段单一事实源在 PRESET_USERS，由本文件顶部
+// decorateVisibleBranches() 在 authMiddleware 内按已验证 token 的 username 统一派生注入
+// （codex 闸-1 P1-3），覆盖 JWT/PAT/cookie 全部出口，与签发时用的是密码登录还是飞书登录无关。
+// 下面两个用例直接模拟「飞书扫码签发的 JWT（同样不含 visibleBranches 字段）」，验证该机制
+// 已经覆盖飞书登录路径：全国超管映射用户名（xuechenglong）应派生 visibleBranches；
+// 飞书部门个人账号（authProvisioning=personal_feishu，username 非 PRESET_USERS 已注册键）应保持
+// undefined，不误得全国超管切省能力。
+// ─────────────────────────────────────────────────────────────────────────────
+describe('authMiddleware: visibleBranches 派生覆盖飞书登录路径（回归锁）', () => {
+  it('模拟飞书扫码签发的 JWT（全国超管映射用户名 xuechenglong，JWT 本身不含 visibleBranches）→ 仍派生 [SC,SX]', async () => {
+    // 与 issueCookieSession 的 payload 字段集合一致：故意不写 visibleBranches，
+    // 复现飞书登录后签发的真实 JWT 形态。
+    const token = jwt.sign(
+      { userId: 'xuechenglong', sub: 'xuechenglong', username: 'xuechenglong', role: 'branch_admin', branchCode: 'SC', amr: ['feishu'] },
+      'test-secret',
+      { expiresIn: '1h' },
+    );
+    const req = makeReq({ authorization: `Bearer ${token}` });
+    const err = await runMiddleware(req);
+    expect(err).toBeUndefined();
+    expect(req.user.visibleBranches).toEqual(['SC', 'SX']);
+  });
+
+  it('飞书部门个人账号（org_user，username 非 PRESET_USERS 已注册键）→ visibleBranches 保持 undefined，不误得切省能力', async () => {
+    const token = jwt.sign(
+      { userId: 'feishu-open-id-xyz', sub: 'feishu-open-id-xyz', username: 'ou_feishu_dept_member', role: 'org_user', organization: '运城', branchCode: 'SX', amr: ['feishu'] },
+      'test-secret',
+      { expiresIn: '1h' },
+    );
+    const req = makeReq({ authorization: `Bearer ${token}` });
+    const err = await runMiddleware(req);
+    expect(err).toBeUndefined();
+    expect(req.user.visibleBranches).toBeUndefined();
+  });
+});
