@@ -14,6 +14,12 @@ export const FEISHU_DEPARTMENT_ENTITLEMENTS: readonly FeishuDepartmentEntitlemen
   role: 'org_user',
   organization: '运城',
   branchCode: 'SX',
+}, {
+  feishuDeptId: 'od-521363a381f03a6dc7ee461cfd75fa12',
+  feishuDeptName: '山分太原二部',
+  role: 'org_user',
+  organization: '太原二部',
+  branchCode: 'SX',
 }];
 
 const ids = new Set<string>();
