@@ -183,6 +183,11 @@ export const ROUTE_PARAM_CONTRACTS: Record<string, RouteParamContract> = {
     ],
   },
 
+  // ── 销售队伍业绩（sales-team-performance.ts 散读） ──────
+  '/sales-team-performance': {
+    extraKeys: ['dimension', 'start', 'end', 'limit'],
+  },
+
   // ── 保单地理 ────────────────────────────────────
   '/policy-geo/province': { useCommon: true },
   '/policy-geo/city': { useCommon: true, extraKeys: ['province'] },

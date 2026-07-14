@@ -1,0 +1,1 @@
+{"uid":"2026-07-14-claude-8ba910","kind":"note","ts":"2026-07-14","actor":"@claude","text":"实施完成待PR：filter收集全部命中+selectMinimalPrivilegeEntitlement确定性最小选择（角色等级升序+organization码点序）+多命中中文告警；新增4测试用例，全量5394测试+governance 58项通过","at":"2026-07-14T05:12:32.291Z","eid":"27ad42e2"}

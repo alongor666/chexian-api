@@ -113,6 +113,9 @@ export const QUERY_ROUTES = {
   // 续保追踪
   RENEWAL_TRACKER: 'renewal-tracker',
 
+  // 销售队伍业绩（标保，admin-only）
+  SALES_TEAM_PERFORMANCE: 'sales-team-performance',
+
   // 赔案明细
   CLAIMS_DETAIL: {
     PENDING_OVERVIEW: 'claims-detail/pending-overview',

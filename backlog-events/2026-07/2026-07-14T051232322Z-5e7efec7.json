@@ -1,0 +1,1 @@
+{"uid":"2026-07-14-claude-ec5dba","kind":"note","ts":"2026-07-14","actor":"@claude","text":"核实结论：问题不存在——visibleBranches由authMiddleware decorateVisibleBranches()对每次请求按username从PRESET_USERS单点派生（JWT/cookie与PAT出口均覆盖，与登录方式无关），薛成龙扫码登录本就有全国超管切省能力；issueCookieSession payload白名单本就不含该字段，在feishu-auth.ts加字段=死代码。已补2条回归测试锁防未来误改","at":"2026-07-14T05:12:32.322Z","eid":"5e7efec7"}

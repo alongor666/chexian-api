@@ -295,6 +295,15 @@ class ApiClient extends ApiClientCore {
       meta?: { exposure_row_count: number; distinct_vehicle_count: number; distinct_source_policy_count: number; latest_data_date: string | null } | null;
     }>(`/query/${QUERY_ROUTES.RENEWAL_TRACKER}${query ? `?${query}` : ''}`);
   }
+
+  async getSalesTeamPerformance(params: Record<string, string>) {
+    const query = this.buildQueryString(params);
+    return this.request<{
+      dimension: string;
+      rows: Array<{ dim_value: string; policy_count: number; received_premium: number; standard_premium: number }>;
+      total: { policy_count: number; received_premium: number; standard_premium: number; latest_confirm_date: string | null } | null;
+    }>(`/query/${QUERY_ROUTES.SALES_TEAM_PERFORMANCE}${query ? `?${query}` : ''}`);
+  }
 }
 
 // 导出单例

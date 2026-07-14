@@ -57,9 +57,9 @@ function routeAccessGuardPath(routePath: string): string | undefined {
 }
 
 describe('route registry and App route synchronization', () => {
-  it('keeps all 17 canonical pages as explicit App routes', () => {
+  it('keeps all 18 canonical pages as explicit App routes', () => {
     const declared = appRoutes();
-    expect(ROUTES).toHaveLength(17);
+    expect(ROUTES).toHaveLength(18);
     for (const route of ROUTES) {
       expect(declared.has(route.path), `missing explicit Route for ${route.id}: ${route.path}`).toBe(true);
     }

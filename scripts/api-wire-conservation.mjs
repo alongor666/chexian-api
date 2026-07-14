@@ -80,6 +80,8 @@ const POST_SPLIT_ADDITIONS = [
   { name: 'changePassword', pr: 'branch claude/feishu-login-auth-error-2c12f7' },
   // 全员密码闭环阶段二（找回双通道）：凭一次性重置令牌重设密码（未认证端点，无会话状态 → auth 命名空间）
   { name: 'auth.resetPassword', pr: 'backlog 2026-07-11-claude-3ac77b' },
+  // 销售队伍业绩域 phase 2（标保口径聚合，admin-only；见 sales_portrait ADR-006）
+  { name: 'getSalesTeamPerformance', pr: 'branch: 销售队伍业绩域接入 2026-07-14' },
 ];
 
 /**

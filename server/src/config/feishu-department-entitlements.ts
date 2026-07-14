@@ -8,6 +8,35 @@ export interface FeishuDepartmentEntitlement {
   branchCode: string;
 }
 
+/**
+ * 角色特权等级表：数字越大权限越宽。一人挂多个飞书部门授权时，命中多条须按「最小权限」原则
+ * 确定性选择，而非并集/升权（用户决议：多部门命中禁止升权，唯一例外走个人映射条目，不硬编码人名）。
+ * 当前 FEISHU_DEPARTMENT_ENTITLEMENT.role 只有 'org_user' 一种取值，故本表暂只登记一档；
+ * 未来若新增更宽角色（如 branch_admin），追加更高数字即可，选择时等级更高者排后（不被优先选中）。
+ */
+const ROLE_PRIVILEGE_RANK: Readonly<Record<string, number>> = {
+  org_user: 0,
+};
+
+/**
+ * 从「同一用户命中的多条部门授权」里，按确定性规则选出权限最小的一条：
+ *   1. 先按角色特权等级升序（等级越低越靠前）；
+ *   2. 同级再按 organization 字符串码点序（`<` / `>`，非 localeCompare——避免不同运行环境 ICU
+ *      排序规则差异导致同一输入在不同机器上选出不同结果）。
+ * 取排序后第一条。调用方须保证 matches 非空。
+ */
+export function selectMinimalPrivilegeEntitlement(
+  matches: readonly FeishuDepartmentEntitlement[]
+): FeishuDepartmentEntitlement {
+  return [...matches].sort((a, b) => {
+    const rankDiff = (ROLE_PRIVILEGE_RANK[a.role] ?? 0) - (ROLE_PRIVILEGE_RANK[b.role] ?? 0);
+    if (rankDiff !== 0) return rankDiff;
+    if (a.organization < b.organization) return -1;
+    if (a.organization > b.organization) return 1;
+    return 0;
+  })[0];
+}
+
 export const FEISHU_DEPARTMENT_ENTITLEMENTS: readonly FeishuDepartmentEntitlement[] = [{
   feishuDeptId: 'od-395bce9db9d4acccae3e6da8d25cb672',
   feishuDeptName: '运城',

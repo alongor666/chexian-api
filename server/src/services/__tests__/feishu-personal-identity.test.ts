@@ -41,3 +41,54 @@ describe('飞书部门个人账号授权', () => {
     expect(appGet).not.toHaveBeenCalled();
   });
 });
+
+describe('飞书部门个人账号授权：多部门命中最小权限确定性选择（2026-07-14-claude-8ba910）', () => {
+  // 运城 / 临汾两部门授权 role 同级（均 org_user），须按 organization 码点序确定性选择。
+  // '临汾' < '运城'（码点序），故命中两者时必选中「临汾」，不得并集/升权/随机。
+  const YUNCHENG_DEPT_ID = 'od-395bce9db9d4acccae3e6da8d25cb672';
+  const LINFEN_DEPT_ID = 'od-8e26a9b703f7976f4590970af4564a51';
+
+  it('一人挂运城+临汾两个授权部门 → 确定性选中码点序靠前的「临汾」', async () => {
+    appGet.mockResolvedValue({
+      code: 0,
+      data: { user: { department_ids: [YUNCHENG_DEPT_ID, LINFEN_DEPT_ID] } },
+    });
+    await expect(feishuService.resolveDepartmentEntitlement('multi-dept-user')).resolves.toEqual({
+      status: 'member',
+      entitlement: expect.objectContaining({ organization: '临汾', branchCode: 'SX' }),
+    });
+  });
+
+  it('命中顺序调换不影响结果（department_ids 顺序无关，仍确定性选中「临汾」）', async () => {
+    appGet.mockResolvedValue({
+      code: 0,
+      data: { user: { department_ids: [LINFEN_DEPT_ID, YUNCHENG_DEPT_ID] } },
+    });
+    await expect(feishuService.resolveDepartmentEntitlement('multi-dept-user-2')).resolves.toEqual({
+      status: 'member',
+      entitlement: expect.objectContaining({ organization: '临汾', branchCode: 'SX' }),
+    });
+  });
+
+  it('多部门命中时发出中文告警，列出全部命中与最终选中机构', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    appGet.mockResolvedValue({
+      code: 0,
+      data: { user: { department_ids: [YUNCHENG_DEPT_ID, LINFEN_DEPT_ID] } },
+    });
+    await feishuService.resolveDepartmentEntitlement('multi-dept-user');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('multi-dept-user'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('运城'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('临汾'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('个人映射条目'));
+    warnSpy.mockRestore();
+  });
+
+  it('单部门命中时不发出多命中告警（回归：单部门行为不变）', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    appGet.mockResolvedValue({ code: 0, data: { user: { department_ids: [YUNCHENG_DEPT_ID] } } });
+    await feishuService.resolveDepartmentEntitlement('single-dept-user');
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
