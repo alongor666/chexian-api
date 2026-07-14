@@ -132,13 +132,7 @@ export const SidebarNavigation: React.FC = () => {
           });
         }
         break;
-      case '/growth':
-        queryClient.prefetchQuery({
-          queryKey: queryKeys.comprehensiveBundle(params),
-          queryFn: () => apiClient.getComprehensiveBundle(params),
-        });
-        break;
-      // cost/reports/renewal/claims/repair/customer-flow 需要页面内部参数（analysisType/planYear/groupBy 等），不适合简单 prefetch
+      // growth/cost/reports/renewal/claims/repair/customer-flow 需要页面内部参数（analysisType/planYear/groupBy 等），不适合简单 prefetch
     }
   }, [filters, isOrgUser, userOrg, queryClient]);
 

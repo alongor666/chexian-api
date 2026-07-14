@@ -2139,3 +2139,19 @@ expires: 2026-07-26
 
 ### needs_automation: false
 （拦截已代码化为 base_converter step 3 + governance 覆盖的 pytest，非 prompt 规则；"先证伪源列再下沉"是本次一次性方法，无重复失败模式需升级为闸。）
+
+---
+
+## 2026-07-14 · org_user 角色两处误报 403（增长导航错误预取 + 前后端 allowedRoutes 清单漂移）
+
+- **触发**：用户反馈飞书部门新授权账号（太原一/二部）登录后浏览器控制台大量 `/api/query/pivot`、`/api/query/comprehensive-bundle` 403，怀疑非个例。
+- **根因一**：`src/components/layout/SidebarNavigation.tsx` 鼠标划过侧边栏"增长"导航项的 hover 预取误抄了"成本分析"页专属接口 `getComprehensiveBundle`（增长页实际只用 `getGrowthAnalysis`，不存在任何"增长 bundle"聚合接口），org_user 不可见成本分析页，后端正确拦截返回 403（纯噪声，非真实越权）。
+- **根因二**：前端本地兜底路由清单 `ORG_USER_DEFAULT_ALLOWED_ROUTES`（`src/shared/config/organizations.ts`，仅在后端未下发 `allowedRoutes` 时才生效）比后端权威清单 `ORG_ROLE_ALLOWED_ROUTES`（`server/src/config/preset-users.ts`）多出 `/chart-ledger` 一项。新接入飞书部门授权账号在数据库记录里 `allowedRoutes` 字段为空时，前端落到这份多一项的兜底清单，误放行进入图表账本页，页面查询被后端按权威清单正确拦截，403。
+- **修复**：① 删除 `SidebarNavigation.tsx` 里错误的 `/growth` 预取分支；② 前端兜底清单删掉多出的 `/chart-ledger`，与后端对齐；③ 新增 `resolveAllowedRoutes(role, allowedRoutes)`（`preset-users.ts`），在登录响应（`auth.ts`）与会话恢复响应（`GET /api/auth/me`）里为空 `allowedRoutes` 按角色回填，消除"后端下发为空"这个触发条件本身；④ 新增 governance 一致性检查 `scripts/governance/org-user-allowed-routes-consistency.mjs`，两份清单未来再分叉即 CI 报错。
+- **对抗评审**：按用户显式要求跑 codex CLI 单源对抗（`codex exec --sandbox read-only`）。判定 Request Changes，抓 1 HIGH + 1 MEDIUM + 1 LOW：
+  - HIGH/MEDIUM 均指向同一个**既有**架构缺口——管理面 `AccessControlPage` 允许配置用户级/角色级 `allowedRoutes` 覆盖值，前端 `canAccessRoute` 与本次新增的 `resolveAllowedRoutes` 都会采信这个覆盖值并下发给前端，但后端 `permissionMiddleware.getAllowedRoutesForRole()`（`permission.ts:216`，本次未改动的既有代码）只读源码静态 `PRESET_ROLES`，完全不查运行时 `RoleConfig` store，导致管理面的用户级/角色级覆盖配置前端看得见、后端不执行。经核实：`permissionMiddleware` 这个只读静态角色默认值的行为在本次改动之前就是如此（`getAllowedRoutesForRole` 未被本次 diff 触碰），本次新增的 `resolveAllowedRoutes` 只是在"字段为空"这一种情况下按同样的静态角色默认值回填，并未扩大这个既有缺口的影响面。判定为**预置技术债，非本次改动引入**，按项目"权限模型/热路径分离登记 BACKLOG"的既定红线（`feedback_audit_fix_scope_boundary`）处理，未在本 PR 内扩大范围修复：已登记 `BACKLOG uid=2026-07-14-claude-a69509`（P2），交由后续单独 PR 做产品/架构决策（用户级覆盖到底该不该是正式能力，若是则后端要与前端共用同一个 effective allowlist resolver）。
+  - LOW（治理检查正则遇数组内联 `// [legacy]` 这类含方括号的行内注释会误判提前截断）已当场修复：`extractRoutes()` 提取前先 `.replace(/\/\/.*$/gm, '')` 剥离行内注释。
+- **验证**：`bun run governance` 59/59（含新检查项，已用临时注入分歧值做负向证伪，确认闸真的会拦、不是恒真通过）、`bun run typecheck` 零报错、`git diff --stat` 改动范围核对为预期的 6 个改动文件 + 1 个新增治理模块文件，无意外波及。
+
+### needs_automation: false
+（前后端两份权限清单的一致性已由本次新增的 governance 闸自动拦截，不再依赖人工发现；codex 揪出的既有覆盖机制"前端看得见、后端不执行"缺口已登记 BACKLOG 交给独立决策 + 实现，不属于"文档规则没人守"的可自动化缺口。）

@@ -51,6 +51,7 @@ import {
 } from '../services/activation-token.js';
 import { notifyPasswordEvent } from '../services/notify.js';
 import { QUERY_ROUTE_METADATA } from '../config/query-routes-metadata.js';
+import { resolveAllowedRoutes } from '../config/preset-users.js';
 import { assertStaticReportAccess, shouldEnforceStaticReportPolicy } from './reports.js';
 import { getAuthMethods, getPasswordCredential } from '../services/credential-policy.js';
 
@@ -940,6 +941,8 @@ router.get(
         success: true,
         data: {
           ...rest,
+          // allowedRoutes 为空/未定义时按角色回填，避免前端回退到本地兜底清单（前后端口径漂移根因）。
+          allowedRoutes: resolveAllowedRoutes(rest.role, rest.allowedRoutes),
           visibleBranches,
           tokenType,
           mustChangePassword,

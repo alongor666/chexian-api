@@ -78,6 +78,18 @@ export const PRESET_ROLES: PresetRole[] = [
 ];
 
 /**
+ * 按角色回填 allowedRoutes：用户记录自带值优先，为空/未定义时用 PRESET_ROLES 的角色默认值兜底。
+ * 唯一事实源是 PRESET_ROLES；找不到对应角色默认值则返回 undefined（不注入任何魔法路由列表）。
+ */
+export function resolveAllowedRoutes(
+  role: string,
+  allowedRoutes?: string[] | null
+): string[] | undefined {
+  if (allowedRoutes && allowedRoutes.length > 0) return allowedRoutes;
+  return PRESET_ROLES.find((r) => r.role === role)?.allowedRoutes;
+}
+
+/**
  * 全局不变量（RED LINE · 安全审查 H1，preset-users.test.ts「全局 tombstone 不变量」锁死）：
  * **所有** 账号的 passwordHash 必须是构造式 tombstone（含 "Tombstone" 标记、60 字符、bcrypt.compare
  * 对任意明文恒 false）——源码永不保留真实可登录哈希。真实凭据只有两条来源：
