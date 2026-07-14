@@ -51,6 +51,7 @@ import {
 } from '../数据管理/pipelines/quick_reference.mjs';
 import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 import { runSelfServicePasswordIsolationCheck } from './governance/self-service-password-isolation.mjs';
+import { runOrgUserAllowedRoutesConsistencyCheck } from './governance/org-user-allowed-routes-consistency.mjs';
 import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
 import { listPolicyCurrentShards, collectValidationDimFileEntries, collectValidationFactFileEntries } from './lib/policy-current-shards.mjs';
 import {
@@ -3519,6 +3520,7 @@ const CODE_GOVERNANCE_CHECKS = [
     fn: checkProvincePrefixMapConsistency,
     retireWhen: 'B3 子目录隔离落地后随前缀防线退役（BACKLOG 2026-06-23-claude-801409 退役清单）',
   },
+  { name: 'org_user默认路由前后端一致', fn: () => runOrgUserAllowedRoutesConsistencyCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   { name: '企微引擎省份隔离', fn: checkWecomEngineBranchIsolation },
   { name: '上传上限对齐', fn: checkUploadSizeLimitConsistency },
   { name: 'Loop自进化闭环完整性', fn: checkLoopSelfEvolutionIntegrity },
