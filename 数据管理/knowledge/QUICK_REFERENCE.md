@@ -8,7 +8,7 @@
 |------|------|------|
 | 原始记录 | ~448 万行 | policy/current UNION ALL 行数 |
 | 唯一保单 | ~435 万 | COUNT DISTINCT policy_no |
-| 2024+ 活跃 | ~193 万行 | policy_date >= 2024-01-01 |
+| 2024+ 活跃 | ~194 万行 | policy_date >= 2024-01-01 |
 
 ## 域全景速览
 
