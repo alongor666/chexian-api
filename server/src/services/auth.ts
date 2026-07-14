@@ -9,7 +9,7 @@ import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
 import { authEnv } from '../config/env.js';
-import { PRESET_USERS, getPresetVisibleBranches, SELF_SERVICE_PASSWORD_ONLY_USERS } from '../config/preset-users.js';
+import { PRESET_USERS, getPresetVisibleBranches, SELF_SERVICE_PASSWORD_ONLY_USERS, resolveAllowedRoutes } from '../config/preset-users.js';
 import { validatePasswordPolicy } from '../config/password-policy.js';
 import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
@@ -200,6 +200,8 @@ class AuthService {
 
     // 4. 返回Token和用户信息（不包含密码）
     const { passwordHash, ...userInfo } = userCredential;
+    // allowedRoutes 为空/未定义时按角色回填，避免前端回退到本地兜底清单（前后端口径漂移根因）。
+    userInfo.allowedRoutes = resolveAllowedRoutes(userCredential.role, userCredential.allowedRoutes);
     return {
       token,
       user: userInfo,

@@ -164,7 +164,6 @@ export const ORG_USER_DEFAULT_ALLOWED_ROUTES: readonly string[] = [
   '/performance-analysis',
   '/growth',
   '/specialty',
-  '/chart-ledger',
 ];
 
 /**
