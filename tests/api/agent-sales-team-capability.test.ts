@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { agentDataCapabilityRegistry, agentDataCapabilityRegistryMeta } from '../../server/src/agent/registry/agent-data-capability-registry';
 import { agentMetricRegistry, agentMetricRegistryMeta } from '../../server/src/agent/registry/agent-metric-registry';
+import { metricCapabilityMapping } from '../../server/src/agent/registry/metric-capability-mapping';
+import { routeAgentQuestion } from '../../server/src/agent/services/agent-question-router-service';
 import { agentToolRegistry } from '../../server/src/agent/tools/tool-registry';
 
 describe('销售队伍业绩 Agent 可发现性', () => {
@@ -29,5 +31,19 @@ describe('销售队伍业绩 Agent 可发现性', () => {
     expect(rowCount?.formula).toBe('COUNT(*)');
     expect(rowCount?.cautionNotes.join(' ')).toContain('不是保单去重件数');
     expect(agentMetricRegistryMeta.version).toBe('1.2.0');
+  });
+
+  it('自然语言问题与三个指标均能确定性路由到销售队伍 typed tool', () => {
+    for (const metricId of ['standard_premium', 'received_premium', 'sales_team_row_count']) {
+      expect(metricCapabilityMapping[metricId]).toContain('sales_team_performance_analysis');
+    }
+
+    expect(routeAgentQuestion({ question: '销售队伍标保排名怎么样？' })).toMatchObject({
+      blocked: false,
+      status: 'supported',
+      matchedCapabilityId: 'sales_team_performance_analysis',
+      recommendedMetrics: ['standard_premium', 'received_premium', 'sales_team_row_count'],
+      recommendedTools: ['sales_team_performance.query'],
+    });
   });
 });

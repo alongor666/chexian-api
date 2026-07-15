@@ -249,6 +249,18 @@ export function routeAgentQuestion(input: RouteQuestionInput): RouteQuestionResu
     });
   }
 
+  if (includesAny(normalized, ['销售队伍', '销售团队', '标保', '折标保费', '团队实收保费'])) {
+    return parseResult({
+      blocked: false,
+      status: 'supported',
+      matchedCapabilityId: 'sales_team_performance_analysis',
+      recommendedMetrics: ['standard_premium', 'received_premium', 'sales_team_row_count'],
+      recommendedTools: toolIdsForCapability('sales_team_performance_analysis'),
+      warnings: ['仅适用于 branch_admin；标保口径以 sales_team_rules.sql 为唯一事实源。'],
+      replacementSuggestions: [],
+    });
+  }
+
   return parseResult({
     blocked: false,
     status: 'caution',

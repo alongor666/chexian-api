@@ -69,6 +69,7 @@ import { runPatReadonlyCoverageCheck } from './governance/pat-readonly-coverage.
 import { governanceCheckChunkInvariants } from './check-chunk-invariants.mjs';
 import { checkNamingAndRouteGovernance } from './governance/check-naming-route.mjs';
 import { isArchivedLegacyChange } from './governance/pr-size-archive-classification.mjs';
+import { buildStandardSyncTasks, collectTaskParquetEntries } from './sync-vps.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1878,50 +1879,9 @@ function checkDataDrift() {
     return true;
   }
 
-  // 扫描当前本地文件
-  const syncVpsPath = path.join(ROOT_DIR, 'scripts/sync-vps.mjs');
-  let syncContent;
-  try {
-    syncContent = fs.readFileSync(syncVpsPath, 'utf8');
-  } catch {
-    return true;
-  }
-
-  // 提取目录映射：从 writeSyncManifest 的 dirs 数组
-  const dirMappings = [
-    { label: 'policy/current', rel: '数据管理/warehouse/fact/policy/current' },
-    { label: 'dim/salesman', rel: '数据管理/warehouse/dim/salesman' },
-    { label: 'dim/plan', rel: '数据管理/warehouse/dim/plan' },
-    { label: 'dim/brand', rel: '数据管理/warehouse/dim/brand' },
-    { label: 'fact/renewal_tracker', rel: '数据管理/warehouse/fact/renewal_tracker' },
-    { label: 'fact/quotes_conversion', rel: '数据管理/warehouse/fact/quotes_conversion' },
-    { label: 'fact/claims_detail', rel: '数据管理/warehouse/fact/claims_detail' },
-    { label: 'fact/cross_sell', rel: '数据管理/warehouse/fact/cross_sell' },
-    { label: 'fact/customer_flow', rel: '数据管理/warehouse/fact/customer_flow' },
-    { label: 'fact/new_energy_claims', rel: '数据管理/warehouse/fact/new_energy_claims' },
-    { label: 'dim/repair', rel: '数据管理/warehouse/dim/repair' },
-    { label: 'dim/plate_region', rel: '数据管理/warehouse/dim/plate_region' },
-  ];
-  const currentFiles = {};
-  for (const dir of dirMappings) {
-    const absPath = path.join(ROOT_DIR, dir.rel);
-    if (!fs.existsSync(absPath)) continue;
-    // B3：policy/current 用共享 helper 枚举子目录，key 规则与 writeSyncManifest 同源（codex 闸-1 P1-1）。
-    if (dir.label === 'policy/current') {
-      for (const shard of listPolicyCurrentShards(absPath)) {
-        const key = shard.branch ? `${dir.label}/${shard.branch}/${shard.name}` : `${dir.label}/${shard.name}`;
-        const stat = fs.statSync(shard.path);
-        currentFiles[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
-      }
-      continue;
-    }
-    const parquets = fs.readdirSync(absPath).filter(f => f.endsWith('.parquet'));
-    for (const f of parquets) {
-      const key = `${dir.label}/${f}`;
-      const stat = fs.statSync(path.join(absPath, f));
-      currentFiles[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
-    }
-  }
+  // 与 writeSyncManifest 共用“同步任务 → manifest key”枚举，禁止在 governance
+  // 再维护一份静态域清单；否则新增域会在同步后被误判成远端残留文件。
+  const currentFiles = collectTaskParquetEntries(buildStandardSyncTasks('', ''));
 
   Object.assign(currentFiles, collectValidationDimFileEntries(path.join(ROOT_DIR, '数据管理/warehouse/validation')));
   // validation 事实域副本（claims_detail/quotes_conversion/...）：与 sync-vps buildValidationBranchSyncTasks

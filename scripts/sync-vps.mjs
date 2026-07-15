@@ -1363,21 +1363,34 @@ function readExistingSyncManifest(manifestPath) {
   }
 }
 
-function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DEFAULTS.frontendDistDir), runConfig = { domains: [] }) {
+/**
+ * 从实际同步任务枚举 Parquet 指纹键。
+ * writeSyncManifest 与 governance 漂移检查必须共用本函数，避免新增同步域后
+ * 一端写入 manifest、另一端仍用静态旧清单而把文件误报为“VPS 仍有旧文件”。
+ */
+function collectTaskParquetEntries(tasks, { includeHash = false } = {}) {
   const files = {};
-  // B3：每个 task 的 local 已是具体目录（扁平 policy/current 根 / 子目录 current/<省>/），readdir 该目录即得本省文件。
-  // key=`${task.label}/${f}` 随 label 自然成扁平 `policy/current/<f>` 或子目录 `policy/current/<省>/<f>` 形态，
-  // 与 governance #21 checkDataDrift（同用 listPolicyCurrentShards 枚举 + 同 key 规则）保持一致（codex 闸-1 P1-1）。
-  for (const dir of tasks.map(task => ({ label: task.label, path: task.local }))) {
-    if (!existsSync(dir.path)) continue;
-    const parquets = readdirSync(dir.path).filter(f => f.endsWith('.parquet'));
-    for (const f of parquets) {
-      const fullPath = join(dir.path, f);
+  for (const task of tasks) {
+    if (!existsSync(task.local)) continue;
+    const parquets = readdirSync(task.local).filter((file) => file.endsWith('.parquet'));
+    for (const file of parquets) {
+      const fullPath = join(task.local, file);
       const stat = statSync(fullPath);
-      const key = `${dir.label}/${f}`;
-      files[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs), sha256: createHash('sha256').update(readFileSync(fullPath)).digest('hex') };
+      const entry = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
+      if (includeHash) {
+        entry.sha256 = createHash('sha256').update(readFileSync(fullPath)).digest('hex');
+      }
+      files[`${task.label}/${file}`] = entry;
     }
   }
+  return files;
+}
+
+function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DEFAULTS.frontendDistDir), runConfig = { domains: [] }) {
+  // B3：每个 task 的 local 已是具体目录（扁平 policy/current 根 / 子目录 current/<省>/），readdir 该目录即得本省文件。
+  // key=`${task.label}/${f}` 随 label 自然成扁平 `policy/current/<f>` 或子目录 `policy/current/<省>/<f>` 形态，
+  // 与 governance #21 checkDataDrift 逐字复用 collectTaskParquetEntries，避免 key 规则或域清单漂移。
+  const files = collectTaskParquetEntries(tasks, { includeHash: true });
 
   const manifestPath = join(ROOT_DIR, '.last-sync-manifest.json');
   const existing = readExistingSyncManifest(manifestPath);
@@ -1535,6 +1548,7 @@ export {
   resolveRunConfig,
   buildDomainSyncTasks,
   buildStandardSyncTasks,
+  collectTaskParquetEntries,
   assertRequiredLocalTasks,
   buildValidationBranchSyncTasks,
   validationBranchSyncEnabled,

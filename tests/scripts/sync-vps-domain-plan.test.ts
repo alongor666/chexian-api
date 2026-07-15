@@ -5,11 +5,12 @@ import {
   buildDomainSyncTasks,
   buildStandardSyncTasks,
   buildSyncTasks,
+  collectTaskParquetEntries,
   parseArgs,
   resolveRunConfig,
   rsyncLatestAtomically,
 } from '../../scripts/sync-vps.mjs';
-import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -96,5 +97,22 @@ describe('sync-vps domain scoped plan', () => {
   it('governance drift check does not skip unrelated domains for scoped manifests', () => {
     const source = readFileSync('scripts/check-governance.mjs', 'utf-8');
     expect(source).not.toContain('checkedLabels');
+  });
+
+  it('同步清单与 governance 漂移扫描复用同一任务文件枚举，销售队伍域不会写入后被误报删除', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sync-vps-manifest-entries-'));
+    try {
+      writeFileSync(join(dir, 'biaobao_enriched.parquet'), 'fixture');
+      const entries = collectTaskParquetEntries([
+        { label: 'fact/sales_team_performance', local: dir },
+      ]);
+      expect(entries).toHaveProperty('fact/sales_team_performance/biaobao_enriched.parquet');
+
+      const governanceSource = readFileSync('scripts/check-governance.mjs', 'utf-8');
+      expect(governanceSource).toContain('collectTaskParquetEntries(');
+      expect(governanceSource).toContain('buildStandardSyncTasks(');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
