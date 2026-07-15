@@ -29,6 +29,10 @@ CN_TO_EN = {
     '车架号': 'vehicle_frame_no',
     '险类': 'insurance_type',
     '三级机构': 'org_level_3',
+    # 山西 2026-07-15 新口径列（BACKLOG 2026-07-15-user-e04971）：单元级短名，normalize_org_level_3
+    # 内优先消费后 drop，不落 parquet。截至 2026-07-15 上游 02 导出组件尚未含此列（待卡主补），
+    # 存在与否两态均兼容。
+    '三级机构新': 'org_level_3_new',
     '险别组合': 'coverage_combination',
     '客户类别': 'customer_category',
     '货车吨位分段': 'tonnage_segment',
@@ -95,13 +99,41 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None) -> 'pd.Data
     if mapping_path.exists():
         cfg = json.loads(mapping_path.read_text(encoding='utf-8'))
         org_map = cfg.get('org_to_unit', {})
-        src_orgs = set(df['org_level_3'].dropna().unique())
-        unmapped = sorted(src_orgs - set(org_map.keys()))
+        units = set(cfg.get('units', []))
+        new_norm = cfg.get('org_new_normalization')
         df = df.copy()
-        df['org_level_3'] = df['org_level_3'].map(lambda v: org_map.get(v, v) if pd.notna(v) else v)
-        print(f"   🏢 [{branch}] 机构规范化: {len(src_orgs)} 原始机构 → {df['org_level_3'].nunique()} 经营单元（映射表 {len(org_map)} 条）")
-        if unmapped:
-            print(f"   ⚠️ {len(unmapped)} 个机构未在映射表中，保留原始值（需补 {branch}.json）：{unmapped[:5]}{'...' if len(unmapped) > 5 else ''}")
+        if new_norm is not None and 'org_level_3_new' in df.columns:
+            # ── 新口径（对齐 transform.py normalize_branch_org）：org_level_3_new（三级机构新）优先；
+            # 空/「其他」行按编码列 org_to_unit 回退；回退结果不在 units 白名单（如旧合并值）→ 保留「其他」。
+            normalized = df['org_level_3_new'].map(lambda v: new_norm.get(v, v) if pd.notna(v) else v)
+            as_str = normalized.astype('string').str.strip()
+            # string dtype 对 NaN 的比较产出 NA，直接进 mask 会抛错，必须 fillna(False)
+            needs_fb = normalized.isna() | (as_str == '').fillna(False) | (as_str == '其他').fillna(False)
+            fallback = df['org_level_3'].map(lambda v: org_map.get(v) if pd.notna(v) else None)
+            fb_valid = fallback.where(fallback.isin(units))
+            resolved = normalized.mask(needs_fb, fb_valid)
+            df['org_level_3'] = resolved.where(resolved.notna(), '其他')
+            df = df.drop(columns=['org_level_3_new'])
+            n_fb = int(needs_fb.sum())
+            n_rec = int((needs_fb & fb_valid.notna()).sum())
+            print(f"   🏢 [{branch}] 机构规范化（新口径·三级机构新 优先）: "
+                  f"{df['org_level_3'].nunique()} 经营单元（白名单 {len(units)}），"
+                  f"回退 {n_fb} 行（恢复 {n_rec} / 保留「其他」{n_fb - n_rec}）")
+        else:
+            if new_norm is not None:
+                # 报价源缺新口径列 = 过渡态（上游 02 导出组件待补列）：沿旧路径产出（含旧合并值），
+                # 响亮告警但不硬失败——与 transform.py（premium 缺列即 exit 1）刻意不同：
+                # 报价历史单日文件替换有时间差，重建后 parquet 值域验收兜底（BACKLOG e04971）。
+                print(f"   🔴 [{branch}] 报价源缺「三级机构新」列（上游 02 导出组件待补），沿旧合并口径过渡产出——"
+                      f"经代/车商/重客拆分对报价域尚未生效")
+            if 'org_level_3_new' in df.columns:
+                df = df.drop(columns=['org_level_3_new'])
+            src_orgs = set(df['org_level_3'].dropna().unique())
+            unmapped = sorted(src_orgs - set(org_map.keys()))
+            df['org_level_3'] = df['org_level_3'].map(lambda v: org_map.get(v, v) if pd.notna(v) else v)
+            print(f"   🏢 [{branch}] 机构规范化: {len(src_orgs)} 原始机构 → {df['org_level_3'].nunique()} 经营单元（映射表 {len(org_map)} 条）")
+            if unmapped:
+                print(f"   ⚠️ {len(unmapped)} 个机构未在映射表中，保留原始值（需补 {branch}.json）：{unmapped[:5]}{'...' if len(unmapped) > 5 else ''}")
     else:
         print(f"   ⚠️ [{branch}] 机构规范化跳过：无映射文件 {mapping_path}（保留原始机构值）")
     # 出口守卫：机构维度塌缩检测（覆盖已映射 / 无映射两条非 SC 路径）

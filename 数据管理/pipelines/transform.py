@@ -29,6 +29,13 @@ import os
 import sys
 import time
 
+# pipelines.* 包导入自举（对齐 quote_etl.py）：daily.mjs 会注入 PYTHONPATH=数据管理，
+# 但直跑 `python3 数据管理/pipelines/transform.py` 时 sys.path[0] 是 pipelines/ 目录，
+# `from pipelines.xxx import` 会 ModuleNotFoundError——此处自举兜底两种调用方式。
+_DATA_ROOT = str(Path(__file__).resolve().parent.parent)
+if _DATA_ROOT not in sys.path:
+    sys.path.insert(0, _DATA_ROOT)
+
 # Excel 引擎（calamine 比 openpyxl 快 5-10x；与 etl_validation.EXCEL_ENGINE 保持同步）
 EXCEL_ENGINE = 'calamine'
 
@@ -124,68 +131,20 @@ def normalize_input_columns(df):
     return df
 
 def normalize_branch_org(df):
-    """多省机构值规范化（G5）：BRANCH_CODE != 'SC' 时，按
-    config/branch-org-mapping/<BRANCH_CODE>.json 把「三级机构」原始值（编码全称）
-    映射到经营单元短名。SC（默认）→ 原样返回（四川字节级安全）；无映射文件 → 保留
-    原始机构值。未在映射表中的机构保留原始值并告警（不静默丢数据）。
+    """多省机构值规范化（G5）薄 wrapper：读 BRANCH_CODE + 定位映射目录，实现下沉在
+    pipelines/org_normalize.py（transform.py 模块级跑 argparse 无法被单测 import，
+    参照 org_collapse.py 先例把逻辑独立成可测模块）。
 
-    出口守卫（缺口 B005-2026-07-09）：非 SC 省在此对「三级机构」做维度塌缩检测——
-    归一化后若坍缩成占位值（其他/NULL/空）即告警（ORG_COLLAPSE_FAIL=1 时中止），
-    堵住上游导出退化致 org_level_3 静默失效。判定见 pipelines/org_collapse.py。"""
+    新口径（2026-07-15，BACKLOG 2026-07-15-user-e04971）：「三级机构新」优先 +
+    行级回退 + SX 缺列硬失败 + 塌缩守卫，详见 org_normalize.normalize_branch_org_df
+    docstring。SC（默认）→ 原样返回（四川字节级安全）。"""
     branch = os.environ.get('BRANCH_CODE', 'SC')
-    if branch == 'SC' or '三级机构' not in df.columns:
+    if branch == 'SC':
         return df
-    mapping_path = Path(__file__).resolve().parent.parent / 'config' / 'branch-org-mapping' / f'{branch}.json'
-    if mapping_path.exists():
-        cfg = json.loads(mapping_path.read_text(encoding='utf-8'))
-        org_map = cfg.get('org_to_unit', {})
-        src_orgs = set(df['三级机构'].dropna().unique())
-        unmapped = sorted(src_orgs - set(org_map.keys()))
-        df = df.copy()
-        df['三级机构'] = df['三级机构'].map(lambda v: org_map.get(v, v) if pd.notna(v) else v)
-        print(f"\n   🏢 [{branch}] 机构规范化: {len(src_orgs)} 原始机构 → {df['三级机构'].nunique()} 经营单元（映射表 {len(org_map)} 条）")
-        if unmapped:
-            print(f"   ⚠️ {len(unmapped)} 个机构未在映射表中，保留原始值（需补 {branch}.json）：{unmapped[:5]}{'...' if len(unmapped) > 5 else ''}")
-    else:
-        print(f"\n   ⚠️ [{branch}] 机构规范化跳过：无映射文件 {mapping_path}（保留原始机构值）")
-    # 出口守卫：机构维度塌缩检测（单一检查点，覆盖已映射 / 无映射两条非 SC 路径）
-    warn_if_org_collapsed(df, branch)
-    return df
+    from pipelines.org_normalize import normalize_branch_org_df
+    mapping_dir = Path(__file__).resolve().parent.parent / 'config' / 'branch-org-mapping'
+    return normalize_branch_org_df(df, branch, mapping_dir)
 
-
-def warn_if_org_collapsed(df, branch):
-    """非 SC 省落盘前守卫：三级机构维度若塌缩为占位值（其他/NULL/空 合计 ≥ 阈值）
-    则红字告警；ORG_COLLAPSE_FAIL=1 时升级为抛错中止（fail-closed）。
-
-    缺口 B005-2026-07-09：上游山西 01 签单导出退化致 org_level_3 全「其他」静默产出
-    5+ 天。判定纯函数与阈值/开关解析见 pipelines/org_collapse.py（含单测）。
-    与 branch_assert.assert_single_branch（跨省混入）互补：一个防「省混」、一个防
-    「维度塌缩」。此处 lazy import，保持 transform.py 直跑时的导入安全。"""
-    if '三级机构' not in df.columns:
-        return
-    from pipelines.org_collapse import (
-        OrgDimensionCollapseError,
-        evaluate_org_collapse,
-        org_collapse_should_fail,
-        resolve_org_collapse_threshold,
-    )
-    counts = df['三级机构'].value_counts(dropna=False).to_dict()
-    threshold = resolve_org_collapse_threshold()
-    verdict = evaluate_org_collapse(counts, threshold=threshold)
-    if not verdict.collapsed:
-        return
-    dom = '（NULL/空）' if verdict.dominant_value is None else repr(verdict.dominant_value)
-    msg = (
-        f"[{branch}] 机构维度塌缩：三级机构 {verdict.placeholder_share:.1%} 为占位值"
-        f"（主值 {dom} 占 {verdict.dominant_share:.1%}，distinct={verdict.distinct}，"
-        f"总 {verdict.total:,} 行，阈值 {threshold:.0%}）。疑似上游导出退化"
-        f"（机构列坍缩为单一占位值），org_level_3 分析维度失效。"
-    )
-    if org_collapse_should_fail():
-        raise OrgDimensionCollapseError(msg)
-    print(f"\n   🔴 {msg}")
-    print("      → 若确为合法机构集中可忽略；设 ORG_COLLAPSE_FAIL=1 升级为中止，"
-          "ORG_COLLAPSE_WARN_THRESHOLD 调整阈值。")
 
 RENEWAL_TYPE_ALIASES = ['续保业务类型', '续保类型', '业务类型', '续保分类']
 
