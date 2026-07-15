@@ -466,6 +466,13 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     expect((err as AppError).statusCode).toBe(403);
   });
 
+  it('org_user 访问 /sales-team-performance → 403（销售队伍业绩不在白名单）', async () => {
+    const req = makeReqWithPath(orgUser, '/sales-team-performance');
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
   // ─── 白名单内路由 → 通过 ───
   it('org_user 访问 /kpi → 通过（基础路由不在映射表，不受限）', async () => {
     const req = makeReqWithPath(orgUser, '/kpi');
@@ -676,6 +683,7 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     expect(API_ROUTE_TO_PAGE_MAP['/quote-conversion']).toBe('/quote-conversion');
     expect(API_ROUTE_TO_PAGE_MAP['/expense-development']).toBe('/expense-development');
     expect(API_ROUTE_TO_PAGE_MAP['/renewal-tracker']).toBe('/renewal-tracker');
+    expect(API_ROUTE_TO_PAGE_MAP['/sales-team-performance']).toBe('/sales-team-performance');
     // 一对多映射：/pivot 单值字符串（历史写法兼容）；/performance-org-heatmap 数组（多页共用）
     expect(API_ROUTE_TO_PAGE_MAP['/pivot']).toBe('/chart-ledger');
     expect(API_ROUTE_TO_PAGE_MAP['/performance-org-heatmap']).toEqual([

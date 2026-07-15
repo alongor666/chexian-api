@@ -71,6 +71,9 @@ export const API_ROUTE_TO_PAGE_MAP: Record<string, string | string[]> = {
   // /renewal-tracker 页面（续保跟踪）—— org_user 不可见
   '/renewal-tracker': '/renewal-tracker',
 
+  // /sales-team-performance 页面（销售队伍业绩）—— v1 仅 branch_admin 可见
+  '/sales-team-performance': '/sales-team-performance',
+
   // /pivot（维度×指标交叉聚合）仅被图表账本页 chart-ledger 消费
   // （src/features/chart-ledger/hooks/useChartLedgerData.ts 内 6 处 apiClient.getPivot 调用，
   //  grep 实证：src/ 内无其他 feature 调用 getPivot）
