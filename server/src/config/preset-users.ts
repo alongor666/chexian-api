@@ -48,6 +48,45 @@ export const SELF_SERVICE_PASSWORD_ONLY_USERS: readonly string[] = [
   'houyabing',
 ];
 
+/** 权限管理模块的前端页面路径（routeRegistry 'access-control' 的 path 镜像常量） */
+export const ACCESS_CONTROL_PAGE = '/admin/access-control';
+
+/**
+ * 模块负面清单（RED LINE · 2026-07-15 用户指令：总经理室/车险部全员开放全部板块，
+ * 唯「权限管理」模块收紧到指名白名单）。
+ *
+ * 语义：
+ *   - 键 = 前端页面路径（与 routeRegistry path 对齐）；值 = 允许访问该模块的用户名白名单。
+ *   - 未列入本表的模块对所有用户开放（org_user 仍受角色 allowedRoutes 白名单约束，两层独立）。
+ *   - 列入本表的模块**只有**白名单内用户可用 —— fail-closed：新增账号默认进不了受限模块，
+ *     防止「新发 branch_admin 账号天然拿到权限管理」的越权回潮。
+ *   - 派生方式与 visibleBranches 同款：按 username 每请求从本表派生（不进 JWT、不进 store），
+ *     改名单即生效、免重登、免 re-seed。
+ *
+ * 当前唯一条目：权限管理模块仅 薛成龙 / 杨杰 / 林霞 三位业务管理员 + admin（系统运维兜底账号，
+ * 非"员工"，供发布链脚本 / E2E / 应急重置使用；如需一并收掉，删除数组中的 'admin' 即可）。
+ */
+export const RESTRICTED_MODULES: Readonly<Record<string, readonly string[]>> = {
+  [ACCESS_CONTROL_PAGE]: ['admin', 'xuechenglong', 'yangjie0621', 'linxia'],
+};
+
+/**
+ * 该用户是否可访问某受限模块。未登记在 RESTRICTED_MODULES 的页面恒 true（负面清单语义）。
+ */
+export function canAccessRestrictedModule(username: string, pagePath: string): boolean {
+  const allowlist = RESTRICTED_MODULES[pagePath];
+  return !allowlist || allowlist.includes(username);
+}
+
+/**
+ * 按用户名列出其被负面清单拒绝的模块页面路径（随 /login、/me 回前端驱动导航隐藏与页面守卫）。
+ */
+export function getDeniedModules(username: string): string[] {
+  return Object.entries(RESTRICTED_MODULES)
+    .filter(([, allowlist]) => !allowlist.includes(username))
+    .map(([pagePath]) => pagePath);
+}
+
 export interface PresetRole {
   role: string;
   name: string;

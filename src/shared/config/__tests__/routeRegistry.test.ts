@@ -27,6 +27,7 @@ const CANONICAL_APP_PATHS = [
   '/renewal-tracker',
   '/chart-ledger',
   '/sales-team-performance',
+  '/my-tokens',
 ];
 
 describe('route registry contract', () => {

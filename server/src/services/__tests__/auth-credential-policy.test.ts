@@ -9,6 +9,7 @@ vi.mock('../duckdb.js', () => ({
 
 import {
   assertPasswordAllowed,
+  assertPatAllowed,
   credentialSetupRequired,
   getAuthMethods,
   getPasswordCredential,
@@ -65,5 +66,31 @@ describe('credential policy', () => {
     expect(methods).toHaveLength(2);
     expect(methods[0]).not.toBe('feishu');
     expect(methods[1]).toBe('feishu');
+  });
+});
+
+describe('assertPatAllowed — PAT 会话 userId=用户名 与 PasswordCredential.user_id=uuid 的键解析（2026-07-15 修复）', () => {
+  it('user_id 直接命中（历史行/单测行）→ 放行，不做第二次查询', async () => {
+    queryMock.mockResolvedValueOnce([
+      { user_id: 'u-uuid-1', password_hash: 'hash', state: 'active', changed_at: '2026-07-11' },
+    ]);
+    await expect(assertPatAllowed('u-uuid-1')).resolves.toBeUndefined();
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('原值未命中 → 经 UserAccount.username JOIN 解析命中 → 放行（修复前此路径恒 403）', async () => {
+    queryMock
+      .mockResolvedValueOnce([]) // getPasswordCredential('chexianbu') 未命中（uuid 键）
+      .mockResolvedValueOnce([{ user_id: 'u-uuid-2' }]); // JOIN UserAccount.username 命中
+    await expect(assertPatAllowed('chexianbu')).resolves.toBeUndefined();
+    expect(queryMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('两级均未命中（如纯飞书账号无密码凭据）→ 403 AUTH_METHOD_NOT_ALLOWED', async () => {
+    queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await expect(assertPatAllowed('feishu-only')).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'AUTH_METHOD_NOT_ALLOWED',
+    });
   });
 });

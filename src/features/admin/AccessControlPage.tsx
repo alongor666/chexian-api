@@ -10,10 +10,8 @@ import {
   Input,
   Select,
   Table,
-  Tabs,
   useConfirmDialog,
 } from '../../shared/ui';
-import { ApiTokensPanel } from './ApiTokensPanel';
 import { splitIpList, joinList, toggleSelection, isRouteSelected, toggleRouteSelection } from './utils/accessControl';
 import { getPermissionRoutes } from '../../shared/config/routeRegistry';
 
@@ -140,7 +138,7 @@ const SpecialFeaturesCheckboxGroup: React.FC<{
 };
 
 export const AccessControlPage: React.FC = () => {
-  const { isBranchAdmin } = usePermission();
+  const { isBranchAdmin, userPermission } = usePermission();
   const [users, setUsers] = useState<AccessUser[]>([]);
   const [roles, setRoles] = useState<AccessRole[]>([]);
   const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm);
@@ -148,7 +146,6 @@ export const AccessControlPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [activeTab, setActiveTab] = useState<'config' | 'tokens'>('config');
 
   // 删除确认对话框
   const deleteUserConfirm = useConfirmDialog();
@@ -369,7 +366,9 @@ export const AccessControlPage: React.FC = () => {
     }
   };
 
-  if (!isBranchAdmin) {
+  // 模块负面清单（RESTRICTED_MODULES · 2026-07-15）：权限管理仅限指名白名单管理员；
+  // 其余 branch_admin（总经理室/车险部员工）保留全部业务板块，本页不可入。后端管理端点同源 403 兜底。
+  if (!isBranchAdmin || userPermission?.deniedModules?.includes('/admin/access-control')) {
     return <Navigate to="/" replace />;
   }
 
@@ -397,18 +396,8 @@ export const AccessControlPage: React.FC = () => {
         </div>
       )}
 
-      <Tabs
-        items={[
-          { key: 'config', label: '用户与角色' },
-          { key: 'tokens', label: '我的 API Token' },
-        ]}
-        activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'config' | 'tokens')}
-      />
-
-      {activeTab === 'tokens' && <ApiTokensPanel />}
-
-      {activeTab === 'config' && (<>
+      {/* 「我的 API Token」页签已迁出为独立页 /my-tokens（全员可用，PAT 权限继承本人账号） */}
+      <>
 
       {/* 用户管理 */}
       <Card
@@ -748,7 +737,7 @@ export const AccessControlPage: React.FC = () => {
         </div>
       </ConfirmDialog>
 
-      </>)}
+      </>
     </div>
   );
 };

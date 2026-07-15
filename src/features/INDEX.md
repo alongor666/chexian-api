@@ -60,7 +60,8 @@
 | 模块 | 路由 | 职责 | 关键入口 |
 |------|------|------|---------|
 | `home/` | `/data-import` | 数据管理与导入 | `DataImportPage.tsx` |
-| `admin/` | `/admin/access-control` | 用户、角色与页面权限配置 | `AccessControlPage.tsx` |
+| `admin/` | `/admin/access-control` | 用户、角色与页面权限配置（模块负面清单白名单管理员专属） | `AccessControlPage.tsx` |
+| `admin/` | `/my-tokens` | API 令牌（PAT）自助管理（全部已登录用户可用） | `MyTokensPage.tsx` |
 
 ### 支撑模块（非分析页面）
 
@@ -69,7 +70,7 @@
 | `pages/` | 页面容器装配（筛选 preset + 面板 + 锚点骨架） | `PremiumDashboardPage` / `PerformanceAnalysisPage` / `GrowthPage` / `CostPage` / `ReportsPage` / `SpecialtyPage` / `ClaimsDetailPage` / `ComprehensiveAnalysisPage` |
 | `filters/` | 筛选面板（页面容器/高级筛选/日期口径/页面标题栏） | `PageFilterPanel.tsx` · `AdvancedFilterPanel.tsx` · `FilterLayoutV2.tsx` · `PageHeaderBar.tsx` |
 | `auth/` | 登录 + 会话 + 路由权限守卫 | `LoginPage` · `AuthGuard` · `RouteAccessGuard` |
-| `admin/` | 权限管理（分公司管理员专属） | `AccessControlPage.tsx` |
+| `admin/` | 权限管理（RESTRICTED_MODULES 白名单管理员专属）+ PAT 自助页 | `AccessControlPage.tsx` · `MyTokensPage.tsx` |
 | `copilot/` | 经营副驾抽屉（预测基线/情景推演） | `CopilotDrawer.tsx`（经 `copilot` slot 由 App 注入 `SidebarLayout`） |
 | `file/` | 文件菜单弹窗（导入/导出/报表模板） | `FileMenu.tsx` · `DataImportModal` / `ExportModal` / `ReportTemplatesModal`（经 `fileMenu` slot 由 App 注入顶栏） |
 
