@@ -2,13 +2,13 @@ export type SalesTeamDimension = 'salesman' | 'team' | 'org' | 'insurance_class'
 
 export interface SalesTeamPerformanceRow {
   dim_value: string;
-  policy_count: number;
+  sales_team_row_count: number;
   received_premium: number;
   standard_premium: number;
 }
 
 export interface SalesTeamPerformanceTotal {
-  policy_count: number;
+  sales_team_row_count: number;
   received_premium: number;
   standard_premium: number;
   latest_confirm_date: string | null;

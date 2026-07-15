@@ -9,8 +9,9 @@
 --   1. 险种系数
 --      a. 信用保证险：恒 0.65（原 Excel 为硬编码单元格值）
 --      b. 车险：按车险折标因子分类映射（原标保!L 车险行公式，
---         VLOOKUP 重复保单号取首条）；未匹配 → 1（原 Excel 15 行负保费
---         冲销单为手工修补值 1，此处显式化为兜底规则）
+--         VLOOKUP 重复保单号取首条）；未匹配 → 1。2026-07-14 全量中未匹配
+--         15 行涉及 14 个保单：14 行负保费冲销、1 行正保费；此处按工作簿值 1 显式兜底。
+--         非空但未登记的分类不兜底，保留 NULL 供 ETL fail-fast，防新增枚举静默按 1 计算。
 --      c. 其他非车险：按承保确认时间三段 × 险种简称映射（原标保!L2 公式，
 --         阈值 2026-04-01 / 2026-05-07）
 --   2. 一司一策系数：按一司一策分类（大同1.05→1.05，吕梁0.95→0.95，
@@ -22,7 +23,8 @@
 -- ============================================================================
 
 WITH coeff_first AS (
-  -- VLOOKUP 语义：重复保单号取首条（源表 251 个重复保单号取值不一致，已接受）
+  -- VLOOKUP 语义：重复保单号取首条。源表共 4,505 个重复保单号（4,613 个额外行），
+  -- 其中 251 个重复保单号的系数取值不一致；工作簿同样取首条，已按迁移口径接受。
   SELECT 保单号,
          arg_min(车险折标因子, src_row) AS 折标分类,
          arg_min(一司一策系数, src_row) AS 一司一策分类
@@ -33,12 +35,15 @@ rules AS (
     CASE
       WHEN f.险种大类 = '信用保证险' THEN 0.65
       WHEN f.险种大类 = '车险' THEN
-        coalesce(CASE cf.折标分类
-          WHEN '目标业务1.3' THEN 1.3 WHEN '目标业务1.2' THEN 1.2 WHEN '目标业务1.1' THEN 1.1
-          WHEN '目标业务1.5' THEN 1.5 WHEN '目标业务1.05' THEN 1.05 WHEN '目标业务1' THEN 1
-          WHEN '普通业务1' THEN 1 WHEN '普通业务1新' THEN 1 WHEN '普通业务0.95' THEN 0.95
-          WHEN '管控业务0.5' THEN 0.5 WHEN '清亏业务0.3' THEN 0.3 WHEN '清亏业务0.1' THEN 0.1
-          WHEN '清亏业务0' THEN 0 WHEN '清亏业务0.2' THEN 0.2 END, 1)
+        CASE WHEN cf.折标分类 IS NULL THEN 1 ELSE
+          CASE cf.折标分类
+            WHEN '目标业务1.3' THEN 1.3 WHEN '目标业务1.2' THEN 1.2 WHEN '目标业务1.1' THEN 1.1
+            WHEN '目标业务1.5' THEN 1.5 WHEN '目标业务1.05' THEN 1.05 WHEN '目标业务1' THEN 1
+            WHEN '普通业务1' THEN 1 WHEN '普通业务1新' THEN 1 WHEN '普通业务0.95' THEN 0.95
+            WHEN '管控业务0.5' THEN 0.5 WHEN '清亏业务0.3' THEN 0.3 WHEN '清亏业务0.1' THEN 0.1
+            WHEN '清亏业务0' THEN 0 WHEN '清亏业务0.2' THEN 0.2
+          END
+        END
       ELSE
         CASE
           WHEN f.承保确认时间 IS NULL OR f.承保确认时间 < DATE '2026-04-01' THEN

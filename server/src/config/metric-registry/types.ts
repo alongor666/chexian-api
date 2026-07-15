@@ -17,7 +17,8 @@ export type MetricCategory =
   | 'repair'       // 维修资源：修保比、本地资源占比、合作启用率
   | 'plan'         // 计划达成：年度计划/时间进度达成率
   | 'structure'    // 业务结构：客户类别占比、车型占比
-  | 'renewal';     // 续保分析：应续/报价/已续/未报价/流失件数、续保影响度（数据源 RenewalTrackerFact 派生域）
+  | 'renewal'      // 续保分析：应续/报价/已续/未报价/流失件数、续保影响度（数据源 RenewalTrackerFact 派生域）
+  | 'sales_team';  // 销售队伍业绩：标保/实收保费/明细行数（数据源 SalesTeamPerformanceFact 独立域）
 
 /** 格式化函数 ID（与 src/shared/utils/formatters.ts 对应） */
 export type FormatterId =

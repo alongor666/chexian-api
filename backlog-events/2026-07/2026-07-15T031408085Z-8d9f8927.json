@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-158feb","kind":"status","ts":"2026-07-15","actor":"@claude","status":"DONE","evidence":"PR #1106；路由 Zod schema 与 route-param-contracts 共用；handler 契约测试通过","at":"2026-07-15T03:14:08.085Z","eid":"8d9f8927"}

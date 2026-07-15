@@ -31,6 +31,7 @@ export const AgentMetricCategorySchema = z.enum([
   'plan',
   'performance',
   'risk',
+  'sales_team',
 ]);
 
 export const AgentMetricDefinitionSchema = z.object({

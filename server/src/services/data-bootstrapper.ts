@@ -701,7 +701,12 @@ export class DataBootstrapper {
     // SalesTeamPerformance（销售队伍业绩·标保，仅该页；山西直营单源，无分省 extras）
     this.lazyRegistry.register('SalesTeamPerformance', async () => {
       const p = getSalesTeamPerformancePaths().find(p => fs.existsSync(p));
-      if (!p) { console.warn('[Bootstrap:Lazy] SalesTeamPerformance: no file found'); return; }
+      if (!p) {
+        const err = new Error('销售队伍业绩数据文件尚未发布，请稍后重试');
+        (err as Error & { statusCode: number }).statusCode = 503;
+        console.warn('[Bootstrap:Lazy] SalesTeamPerformance: no file found');
+        throw err;
+      }
       console.time('[Bootstrap:Lazy] SalesTeamPerformance');
       await domainLoaders.loadSalesTeamPerformance(db, p);
       console.timeEnd('[Bootstrap:Lazy] SalesTeamPerformance');

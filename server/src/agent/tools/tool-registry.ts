@@ -32,6 +32,7 @@ export const agentToolRegistry = AgentToolDefinitionSchema.array().parse([
   { id: 'quote_conversion.drilldown', status: 'available', endpoint: '/api/query/quote-conversion/drilldown', capabilityId: 'quote_conversion_diagnosis', metrics: ['quote_conversion_rate'] },
   { id: 'quote_conversion.trend', status: 'available', endpoint: '/api/query/quote-conversion/trend', capabilityId: 'quote_conversion_diagnosis', metrics: ['quote_conversion_rate'] },
   { id: 'renewal_tracker.query', status: 'available', endpoint: '/api/query/renewal-tracker', capabilityId: 'renewal_tracker_diagnosis', metrics: ['renewal_tracker_metrics'] },
+  { id: 'sales_team_performance.query', status: 'available', endpoint: '/api/query/sales-team-performance', capabilityId: 'sales_team_performance_analysis', metrics: ['standard_premium', 'received_premium', 'sales_team_row_count'], note: 'branch_admin-only；必须走 typed endpoint。' },
   { id: 'claims_detail.pending_overview', status: 'available', endpoint: '/api/query/claims-detail/pending-overview', capabilityId: 'claims_risk_diagnosis', metrics: ['reported_claims', 'claim_cases'] },
   { id: 'claims_detail.cause_analysis', status: 'available', endpoint: '/api/query/claims-detail/cause-analysis', capabilityId: 'claims_risk_diagnosis', metrics: ['reported_claims', 'claim_cases'] },
   { id: 'claims_detail.frequency_yoy', status: 'available', endpoint: '/api/query/claims-detail/frequency-yoy', capabilityId: 'claims_risk_diagnosis', metrics: ['earned_loss_frequency', 'claim_cases'] },
