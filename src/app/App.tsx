@@ -123,6 +123,9 @@ const RepairPage = lazy(() =>
 const CustomerFlowPage = lazy(() =>
   import('../features/customer-flow/CustomerFlowPage').then((m) => ({ default: m.CustomerFlowPage }))
 );
+const MyTokensPage = lazy(() =>
+  import('../features/admin/MyTokensPage').then((m) => ({ default: m.MyTokensPage }))
+);
 const AccessControlPage = lazy(() =>
   import('../features/admin/AccessControlPage').then((m) => ({ default: m.AccessControlPage }))
 );
@@ -251,6 +254,16 @@ function App() {
                     element={
                       <LazyRoute>
                         <AccessControlPage />
+                      </LazyRoute>
+                    }
+                  />
+                  {/* API 令牌（PAT）自助管理 - 全部已登录用户可用（routeRegistry PERSONAL_ROUTES），
+                      后端 /api/auth/tokens 对所有会话用户开放，PAT 权限完全继承用户本人 */}
+                  <Route
+                    path="my-tokens"
+                    element={
+                      <LazyRoute>
+                        <MyTokensPage />
                       </LazyRoute>
                     }
                   />

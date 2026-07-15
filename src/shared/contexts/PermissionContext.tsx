@@ -109,6 +109,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     allowedRoutes?: string[];
     defaultRoute?: string;
     specialFeatures?: string[];
+    deniedModules?: string[];
     authMethods?: Array<'password' | 'feishu'>;
     canChangePassword?: boolean;
   }): UserPermission => {
@@ -129,6 +130,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       allowedRoutes: user.allowedRoutes || localPermission?.allowedRoutes,
       defaultRoute: user.defaultRoute || localPermission?.defaultRoute,
       specialFeatures: user.specialFeatures,
+      // 模块负面清单（服务端按 RESTRICTED_MODULES 派生）：驱动导航隐藏与路由守卫，命中即拒绝。
+      deniedModules: user.deniedModules,
       ...capabilities,
     };
   }, []);

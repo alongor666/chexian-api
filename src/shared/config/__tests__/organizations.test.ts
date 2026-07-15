@@ -6,6 +6,7 @@ import {
   QUICK_LOGIN_USERS_BY_BRANCH,
   UserRole,
   getVisibleOrganizations,
+  canAccessRoute,
   type UserPermission,
 } from '../organizations';
 
@@ -132,5 +133,44 @@ describe('QUICK_LOGIN_USERS_BY_BRANCH — 快速切换用户按省（阶段3）'
       .filter((u) => u.role === UserRole.ORG_USER)
       .map((u) => u.displayName.replace(/机构$/, ''));
     expect(sxOrgUserDisplayNames).toEqual([...SX_ORGANIZATIONS]);
+  });
+});
+
+describe('canAccessRoute — 模块负面清单 deniedModules（2026-07-15）', () => {
+  const baseAdmin: UserPermission = {
+    username: 'liangchunfan',
+    displayName: '山西管理员（梁春帆）',
+    role: UserRole.BRANCH_ADMIN,
+    branchCode: 'SX',
+  };
+
+  it('branch_admin 命中负面清单的模块被拒（负面清单优先于"管理员不受白名单限制"）', () => {
+    const denied: UserPermission = { ...baseAdmin, deniedModules: ['/admin/access-control'] };
+    expect(canAccessRoute(denied, '/admin/access-control')).toBe(false);
+  });
+
+  it('负面清单只拒命中的模块，其余板块照常放行', () => {
+    const denied: UserPermission = { ...baseAdmin, deniedModules: ['/admin/access-control'] };
+    for (const path of ['/cost', '/dashboard', '/reports', '/renewal-tracker', '/my-tokens']) {
+      expect(canAccessRoute(denied, path), path).toBe(true);
+    }
+  });
+
+  it('无负面清单的 branch_admin（白名单管理员）可访问权限管理', () => {
+    const allowlisted: UserPermission = { ...baseAdmin, username: 'xuechenglong', deniedModules: [] };
+    expect(canAccessRoute(allowlisted, '/admin/access-control')).toBe(true);
+  });
+
+  it('/my-tokens 是个人自助路由：org_user 即使不在 allowedRoutes 白名单也放行', () => {
+    const orgUser: UserPermission = {
+      username: 'leshan',
+      displayName: '乐山机构',
+      role: UserRole.ORG_USER,
+      organization: '乐山',
+      allowedRoutes: ['/home', '/performance-analysis'],
+    };
+    expect(canAccessRoute(orgUser, '/my-tokens')).toBe(true);
+    // 白名单外的普通页面仍被拒（个人路由是精确豁免，不放大白名单）
+    expect(canAccessRoute(orgUser, '/cost')).toBe(false);
   });
 });

@@ -4,7 +4,7 @@
  * 定义机构层级结构和用户权限规则
  */
 
-import { canonicalizeRoutePath } from './routeRegistry';
+import { canonicalizeRoutePath, PERSONAL_ROUTES } from './routeRegistry';
 
 /**
  * 三级机构列表（12个，四川 SC）
@@ -102,6 +102,11 @@ export interface UserPermission {
   defaultRoute?: string;
   /** 特殊功能权限（如 cost, moto_cost） */
   specialFeatures?: string[];
+  /**
+   * 模块负面清单：该用户不可访问的前端页面路径（服务端按 RESTRICTED_MODULES 派生回传）。
+   * 语义与 allowedRoutes 相反且优先级更高——命中即拒绝，对所有角色（含 branch_admin）生效。
+   */
+  deniedModules?: string[];
   authMethods?: Array<'password' | 'feishu'>;
   canChangePassword?: boolean;
 }
@@ -430,10 +435,18 @@ export function getPermissionByUsername(username: string): UserPermission | null
  * 注：BRANCH_ADMIN 始终拥有完整路由访问权，allowedRoutes 仅对 ORG_USER/TELEMARKETING_USER 生效。
  */
 export function canAccessRoute(permission: UserPermission, pathname: string): boolean {
+  const normalizedPathname = canonicalizeRoutePath(pathname);
+
+  // 模块负面清单优先（对所有角色生效，含 branch_admin）：命中即拒绝。
+  if (permission.deniedModules?.some((denied) => canonicalizeRoutePath(denied) === normalizedPathname)) {
+    return false;
+  }
+
+  // 个人自助功能路由（如 /my-tokens）对所有已登录用户开放，不受角色白名单限制。
+  if (PERSONAL_ROUTES.includes(normalizedPathname)) return true;
+
   // 分公司管理员不受路由白名单限制
   if (permission.role === UserRole.BRANCH_ADMIN) return true;
-
-  const normalizedPathname = canonicalizeRoutePath(pathname);
 
   const effectiveAllowedRoutes =
     permission.allowedRoutes && permission.allowedRoutes.length > 0

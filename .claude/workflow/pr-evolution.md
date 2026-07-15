@@ -2236,3 +2236,13 @@ expires: 2026-09-15
 - `bun run typecheck` 报绿 ≠ 覆盖了你改的代码（要看它到底编译哪个 tsconfig）；
 - 测试全过 ≠ 锁住了行为（mock 层级决定了它能断言什么）。
 唯一可靠的验证是**变异**：把你以为被保护的那行删掉/改坏，闸必须红。本次两处都是靠"红一次"才确认闸是真的——`typecheck.mjs` 装上当场抓到一处真实 TS2345（我自己新写测试里的类型错误），集成测试注入变异后精确报红。**新增任何"防回归"闸，都要在同一个 PR 里让它红一次给人看**，否则你交付的可能只是一层新的假绿。
+
+## 2026-07-15 · GitGuardian 把单测 mock 字面量 password_hash: 'hash' 误报为 Generic Password（PR #1115）
+
+- **现象**：PR #1115 被 GitGuardian 标记 1 secret（incident 34854315），指向新增单测 `auth-credential-policy.test.ts` 的 mock 行 `password_hash: 'hash'`。
+- **根因**：Generic Password 检测器对「password 语义字段 + 短字符串字面量」形态启发式命中；同文件既有同款 mock 未被扫只因其在旧提交里。非真实凭据，无泄漏。
+- **修复**：mock 值改显式假值 `unit-test-fake-hash` + 行内注释（b182b891）；PR 评论留核查结论；面板 incident 由所有者标 false positive。
+- **预防（§3.4 自审加一问）**：新增测试给凭据语义字段（password/token/secret/hash）赋 mock 值时，用一眼可辨的假值（`unit-test-fake-*`），不用 'hash'/'password'/'123456' 这类会触发扫描器的通用短词。
+
+### needs_automation: false
+（首次出现；若同类误报再发生第 2 次，升级为 pre-commit 对测试文件凭据字段值的形态 lint。）

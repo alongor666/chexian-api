@@ -57,7 +57,20 @@ export async function assertPasswordAllowed(userId: string): Promise<PasswordCre
 }
 
 export async function assertPatAllowed(userId: string): Promise<void> {
-  await assertPasswordAllowed(userId);
+  // PAT 会话的 userId = JWT userId（= 用户名，见 auth.ts login / issueCookieSession），
+  // 而全员密码改造（2026-07-11）后 PasswordCredential.user_id 存的是 UserAccount.id（uuid）。
+  // 只按原值查会键不匹配 → 所有密码登录用户创建 PAT 恒 403（2026-07-15 本地实测发现）。
+  // 修复：先按原值查（兼容 user_id 直接命中，如单测/历史行），未命中再经 UserAccount.username 解析。
+  const direct = await getPasswordCredential(userId);
+  if (direct) return;
+  const rows = await duckdbService.query(`
+    SELECT pc.user_id
+    FROM PasswordCredential pc
+    JOIN UserAccount ua ON ua.id = pc.user_id
+    WHERE ua.username = '${escapeSqlValue(userId)}'
+    LIMIT 1
+  `);
+  if (rows.length === 0) throw new AppError(403, 'AUTH_METHOD_NOT_ALLOWED');
 }
 
 export async function credentialSetupRequired(userId: string): Promise<boolean> {

@@ -11,6 +11,10 @@ import {
   getPresetVisibleBranches,
   ORG_ROLE_ALLOWED_ROUTES,
   ORG_ROLE_DEFAULT_ROUTE,
+  RESTRICTED_MODULES,
+  ACCESS_CONTROL_PAGE,
+  canAccessRestrictedModule,
+  getDeniedModules,
 } from '../preset-users.js';
 
 describe('getAllBranchCodes', () => {
@@ -181,6 +185,8 @@ describe('总部超管 + 市州一把手（2026-07-12 发放）', () => {
     }
   });
 
+  // timeout 30s：本测试自身只做字符串断言，但全量套件（5000+ 测试）满载时同文件 bcrypt 测试
+  // 抢占 worker CPU，默认 5s 会被饿死超时（2026-07-15 本机全量复现两次）。与本文件既有先例一致放宽。
   it('5 账号密码均为「构造式 tombstone」占位（bcrypt 60 字符格式 + 含 Tombstone 标记 → fail-safe）', () => {
     for (const username of ['zongbu', ...CITY_HEADS.map((c) => c.username)]) {
       const u = PRESET_USERS[username];
@@ -193,7 +199,7 @@ describe('总部超管 + 市州一把手（2026-07-12 发放）', () => {
         expect(bcrypt.compareSync(pwd, u.passwordHash)).toBe(false);
       }
     }
-  });
+  }, 30000);
 });
 
 describe('全国超管 visibleBranches（切省 + 全国合并视图）', () => {
@@ -265,7 +271,8 @@ describe('全局 tombstone 不变量（H1）', () => {
   it(
     '每个账号 bcrypt.compare 对代表性明文恒 false 且不抛（行为闸）',
     () => {
-      // cost=10 × N 账号 × 3 明文，默认 5s 超时在全量套件下会 flaky，显式放宽到 30s。
+      // cost=10 × N 账号 × 4 明文，默认 5s 超时在全量套件下会 flaky。曾放宽到 30s 仍在
+      // 5000+ 测试满载时超时（2026-07-15 本机全量复现两次，单文件跑仅 ~16s）→ 再放宽到 60s。
       const candidates = ['', 'Chexian@2026', 'password'];
       for (const [username, user] of entries) {
         for (const pw of [username, ...candidates]) {
@@ -273,11 +280,48 @@ describe('全局 tombstone 不变量（H1）', () => {
         }
       }
     },
-    30000,
+    60000,
   );
 
   it('所有 tombstone 唯一（防 codemod 生成碰撞）', () => {
     const hashes = entries.map(([, u]) => u.passwordHash);
     expect(new Set(hashes).size).toBe(hashes.length);
+  });
+});
+
+/**
+ * 模块负面清单（RESTRICTED_MODULES · 2026-07-15 用户指令 · RED LINE）：
+ * 权限管理模块仅限 薛成龙/杨杰/林霞 三位业务管理员 + admin（系统运维兜底），
+ * 其余账号（总经理室/车险部员工在内）一律拒绝——fail-closed，新增账号默认无权限管理。
+ */
+describe('模块负面清单 RESTRICTED_MODULES', () => {
+  const ACCESS_CONTROL_ALLOWLIST = ['admin', 'xuechenglong', 'yangjie0621', 'linxia'];
+
+  it('权限管理模块白名单锁死为 admin + 薛成龙 + 杨杰 + 林霞（改名单须过本测试）', () => {
+    expect([...RESTRICTED_MODULES[ACCESS_CONTROL_PAGE]].sort()).toEqual(
+      [...ACCESS_CONTROL_ALLOWLIST].sort(),
+    );
+  });
+
+  it('白名单内用户可访问权限管理，其余全部 PRESET_USERS 账号被拒', () => {
+    for (const username of Object.keys(PRESET_USERS)) {
+      const expected = ACCESS_CONTROL_ALLOWLIST.includes(username);
+      expect(canAccessRestrictedModule(username, ACCESS_CONTROL_PAGE)).toBe(expected);
+    }
+  });
+
+  it('未登记在负面清单的模块对任意用户恒放行（负面清单语义）', () => {
+    expect(canAccessRestrictedModule('liangchunfan', '/cost')).toBe(true);
+    expect(canAccessRestrictedModule('unknown-user', '/dashboard')).toBe(true);
+  });
+
+  it('getDeniedModules：白名单外用户回传权限管理页路径，白名单内为空', () => {
+    expect(getDeniedModules('liangchunfan')).toEqual([ACCESS_CONTROL_PAGE]);
+    expect(getDeniedModules('chexianbu')).toEqual([ACCESS_CONTROL_PAGE]);
+    expect(getDeniedModules('sxAdmin')).toEqual([ACCESS_CONTROL_PAGE]);
+    expect(getDeniedModules('xuechenglong')).toEqual([]);
+    expect(getDeniedModules('yangjie0621')).toEqual([]);
+    expect(getDeniedModules('linxia')).toEqual([]);
+    expect(getDeniedModules('admin')).toEqual([]);
   });
 });

@@ -8,7 +8,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from './error.js';
 import { dbEnv } from '../config/env.js';
-import { PRESET_ROLES } from '../config/preset-users.js';
+import { PRESET_ROLES, canAccessRestrictedModule } from '../config/preset-users.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('permission');
@@ -279,7 +279,25 @@ export function permissionMiddleware(
       throw new AppError(401, 'Authentication required');
     }
 
-    const { role, organization, branchCode, visibleBranches } = req.user;
+    const { role, organization, branchCode, visibleBranches, username } = req.user;
+
+    // 1.5 模块负面清单（RESTRICTED_MODULES · 2026-07-15）：对**所有角色**（含 branch_admin）生效。
+    // 受管域（governed）的 API 路径映射到前端页面后，若全部候选页面都被该用户的负面清单拒绝 → 403。
+    // 当前唯一受限模块（权限管理）的后端面在 /api/auth/users|roles（由 requireAccessControlModule 把守），
+    // 本检查为负面清单机制在查询域的通用强制点：未来把任何业务板块列入负面清单即自动生效。
+    {
+      const mountPolicyForDeny = resolveMountWhitelistPolicy((req as { baseUrl?: unknown }).baseUrl);
+      const pageRoutesForDeny = mountPolicyForDeny.governed
+        ? resolvePageRoutes(req.path as string | undefined)
+        : undefined;
+      if (
+        pageRoutesForDeny !== undefined &&
+        typeof username === 'string' &&
+        !pageRoutesForDeny.some((p) => canAccessRestrictedModule(username, p))
+      ) {
+        throw new AppError(403, `无访问权限：该模块（${req.path}）已列入您的功能负面清单`);
+      }
+    }
 
     // 2. 路由级白名单校验（纵深防御 —— 第二层，数据已有 RLS 为第一层）
     // 仅对 org_user 生效；admin / branch_admin 不受限。

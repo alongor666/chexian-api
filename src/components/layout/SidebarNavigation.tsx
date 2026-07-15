@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Home,
   LayoutGrid,
+  KeyRound,
 } from 'lucide-react';
 import { SidebarUserPanel } from './SidebarUserPanel';
 import { usePermission } from '../../shared/contexts/PermissionContext';
@@ -47,7 +48,7 @@ const ICONS: Record<IconKey, LucideIcon> = {
   'dollar-sign': DollarSign, 'bar-chart': BarChart3, calculator: Calculator,
   'file-warning': FileWarning, 'trending-down': TrendingDown, bike: Bike,
   refresh: RefreshCw, target: Target, 'arrow-left-right': ArrowLeftRight,
-  gift: Gift, wrench: Wrench, database: Database, shield: Shield,
+  gift: Gift, wrench: Wrench, database: Database, shield: Shield, key: KeyRound,
 };
 
 const toNavItem = (route: RouteDefinition): NavItem => ({
@@ -140,6 +141,10 @@ export const SidebarNavigation: React.FC = () => {
   const isCompactRail = !isMobile;
 
   const isRouteVisible = (route: RouteDefinition) => {
+    // 模块负面清单（服务端 RESTRICTED_MODULES 派生）：命中直接从导航隐藏，不渲染灰态。
+    if (userPermission?.deniedModules?.includes(route.path)) {
+      return false;
+    }
     if (route.specialFeature === 'moto_cost') {
       return canAccessMotoCost(userPermission?.username, userPermission?.specialFeatures);
     }
