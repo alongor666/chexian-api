@@ -72,7 +72,8 @@ describe('credential policy', () => {
 describe('assertPatAllowed — PAT 会话 userId=用户名 与 PasswordCredential.user_id=uuid 的键解析（2026-07-15 修复）', () => {
   it('user_id 直接命中（历史行/单测行）→ 放行，不做第二次查询', async () => {
     queryMock.mockResolvedValueOnce([
-      { user_id: 'u-uuid-1', password_hash: 'hash', state: 'active', changed_at: '2026-07-11' },
+      // password_hash 为显式假值（GitGuardian 曾把 'hash' 字面量误报为 Generic Password）
+      { user_id: 'u-uuid-1', password_hash: 'unit-test-fake-hash', state: 'active', changed_at: '2026-07-11' },
     ]);
     await expect(assertPatAllowed('u-uuid-1')).resolves.toBeUndefined();
     expect(queryMock).toHaveBeenCalledTimes(1);
