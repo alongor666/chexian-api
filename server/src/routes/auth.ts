@@ -53,7 +53,7 @@ import { notifyPasswordEvent } from '../services/notify.js';
 import { QUERY_ROUTE_METADATA } from '../config/query-routes-metadata.js';
 import { resolveAllowedRoutes } from '../config/preset-users.js';
 import { assertStaticReportAccess, shouldEnforceStaticReportPolicy } from './reports.js';
-import { getAuthMethods, getPasswordCredential } from '../services/credential-policy.js';
+import { getAuthMethods } from '../services/credential-policy.js';
 
 const router = Router();
 
@@ -927,12 +927,16 @@ router.get(
     // 会话签发时点已判定（密码登录/飞书扫码两条链路都会置位），设密成功换发会话即消失。
     const mustChangePassword = req.user.pns === true;
     const credentialUserId = user?.id ?? req.user.userId;
-    const [authMethods, passwordCredential] = await Promise.all([
+    // hasPassword 必须与 changePassword 的验旧密闸同源（authService.hasUsablePassword）：
+    // 前端据此决定是否显示「当前密码」框并回传 oldPassword。曾用 PasswordCredential.state
+    // === 'active' 判定，它只表示「已自设密码」，漏掉 USER_PASSWORDS 覆盖 / 非 tombstone
+    // store 哈希这两种「有旧密可验」的账号 —— 前端因此藏掉输入框、后端却仍验旧密，
+    // 这些账号（存量临时密码 + 首登强制改密路径）被永久锁死在设密页。
+    const [authMethods, hasPassword] = await Promise.all([
       getAuthMethods(credentialUserId),
-      getPasswordCredential(credentialUserId),
+      authService.hasUsablePasswordForUsername(username),
     ]);
     const canChangePassword = authMethods.includes('password');
-    const hasPassword = passwordCredential?.state === 'active';
     if (user) {
       const { passwordHash: _pw, ...rest } = user;
       // visibleBranches 由 auth 中间件按 username 从 PRESET_USERS 派生（store 不持久化该字段），

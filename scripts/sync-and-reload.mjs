@@ -8,7 +8,8 @@
  *   0.   node scripts/pull-bi-exports.mjs                    （拉取 VPS auto_loadbi 上游导出 → 校验 → 分发；
  *                                                              full_snapshot 单域模式自动跳过，--skip-pull 手动跳过）
  *   1.   node 数据管理/daily.mjs <subcommand>                （默认 all；可传 premium/claims_detail 等）
- *   1.5. python3 ~/.claude/skills/diagnose-period-trend/lib/cli.py --view v1  （生成驾驶舱 HTML）
+ *   1.5. node 数据管理/daily.mjs report --no-sync            （短中长期对照报告：省级 + branches/<省>
+ *                                                              镜像 + 各注册省机构级 orgs/<省>/<机构>/）
  *   2.   bun run governance                                   （24+ 项校验，失败则中止）
  *   2.8. ssh 备份 state.db（PAT/用户/角色权威数据）到 VPS 独立目录，保留最近 N 份；
  *                                                              失败只告警不阻塞（STATE_DB_BACKUP_ENABLED=0 可关）
@@ -42,7 +43,6 @@ import { spawn } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import os from 'os';
 import { recordEvent, LEDGER_PATH } from './etl-ledger/record.mjs';
 import { writeReport, loadEvents } from './etl-ledger/render.mjs';
 // 多省 B2 分省编排：遍历注册的非 SC 省逐域生成 daily.mjs 步骤（省份枚举单一来源 source-file-routing）
@@ -204,7 +204,10 @@ function buildEtlCommands(dailyArgs, fullSnapshotDomains) {
       args: ['数据管理/daily.mjs', domain, '--no-sync', '--skip-report'],
     }));
   }
-  // sync-and-reload 自有 period-trend 报告生成阶段（Stage 1.5），daily.mjs 内部跳过避免重复
+  // 报告由 Stage 1.5 统一跑一次（node 数据管理/daily.mjs report），故各 ETL 命令一律带
+  // --skip-report 关掉 daily.mjs 内部的第 9 步，避免多域 / 分省 ETL 各自重复生成同一批报告。
+  // ⚠ 前提：Stage 1.5 走的是 daily.mjs report（含机构级 orgs/ 循环）。若把 Stage 1.5 改回裸调
+  // skill cli.py，机构级报告将无人生成 —— 这正是各机构/各部门报告长期停更的原历史根因。
   const args = dailyArgs.includes('--no-sync') ? [...dailyArgs] : [...dailyArgs, '--no-sync'];
   if (!args.includes('--skip-report')) args.push('--skip-report');
   return [{ label: 'ETL', args: ['数据管理/daily.mjs', ...args] }];
@@ -397,18 +400,26 @@ async function main() {
     } catch { /* 读回失败不阻断，仅丢失文案增强 */ }
   }
 
-  // Stage 1.5: 生成周期趋势诊断报告（V1 驾驶舱）——ETL 完成后数据最新
-  const skillCli = join(os.homedir(), '.claude/skills/diagnose-period-trend/lib/cli.py');
-  if (existsSync(skillCli)) {
-    await runCmd(
-      'period-trend report',
-      'python3',
-      [skillCli, '--view', 'all', '--project-root', ROOT_DIR],
-      { dryRun: opts.dryRun, timeoutMs: 3 * 60 * 1000 }
-    );
-  } else {
-    log('yellow', `\n⚠ 跳过报告生成（技能文件不存在：${skillCli}）`);
-  }
+  // Stage 1.5: 生成短中长期对照报告 — ETL 完成后数据最新。
+  // 覆盖省级根目录 + branches/<省>/ 镜像 + 各注册省机构级 orgs/<省>/<机构>/。
+  //
+  // 必须走 daily.mjs report，不可直接调 skill cli.py：裸调 cli.py（不带 --org/--branch）只产出
+  // 根目录省级那一份。本阶段此前正是裸调 cli.py，而所有 ETL 命令又统一带 --skip-report 关掉了
+  // daily.mjs 内含机构级循环的第 9 步（runPeriodTrendReport）——两者叠加使 B004/B346 的机构级
+  // 报告自落地起从未进入日常发布链：省级天天更新，各机构/各部门用户的报告却长期冻结在最后一次
+  // 人工补跑 `daily.mjs report` 的日期。报告生成的唯一实现在 runPeriodTrendReport，此处不再另起
+  // 影子实现（ETL 命令保留 --skip-report，避免多域/分省 ETL 各自重复生成，报告统一在此跑一次）。
+  //
+  // --no-sync：报告同步由 Stage 3 的 sync-vps（public_reports 任务）统一负责，不在此重复 rsync。
+  // 超时放宽至 30 分钟：覆盖全部注册省 × 全部机构（当前 SC 14 + SX 11），远超原省级单次调用。
+  // skill 缺失 / 版本能力闸未过由 daily.mjs 自行判定（前者告警跳过，后者 exit 1 阻断发布——
+  // 不把陈旧机构报告静默同步上线，见 daily.mjs shouldAbortReportSync）。
+  await runCmd(
+    'period-trend report',
+    'node',
+    ['数据管理/daily.mjs', 'report', '--no-sync'],
+    { dryRun: opts.dryRun, timeoutMs: 30 * 60 * 1000 }
+  );
 
 
   // Stage 1.7: 数据就绪校验（pre-sync）— ETL 完成后、sync-vps 前
