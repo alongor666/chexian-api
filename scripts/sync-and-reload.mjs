@@ -421,6 +421,17 @@ async function main() {
     { dryRun: opts.dryRun, timeoutMs: 30 * 60 * 1000 }
   );
 
+  // Stage 1.6: 报告 scope 新鲜度一致性闸。daily.mjs 的逐机构生成失败目前仅告警，
+  // 因此子进程 exit 0 仍不足以证明 branches/orgs 全部更新；这里按配置 SSOT 枚举全部
+  // 应生成 scope，并以真实磁盘产物 + manifest 对账。任一缺失/日期不一致即非零阻断，
+  // 绝不进入后续 sync-vps 把“根目录新、部分 scope 旧”的混合批次推上线。
+  await runCmd(
+    'report scope freshness gate',
+    'node',
+    ['scripts/report-scope-freshness-gate.mjs'],
+    { dryRun: opts.dryRun }
+  );
+
 
   // Stage 1.7: 数据就绪校验（pre-sync）— ETL 完成后、sync-vps 前
   // 只跑 Parquet 重叠 / Claims 去重 / 知识库规模；同步漂移留到 Stage 3.5（sync-vps 后）
