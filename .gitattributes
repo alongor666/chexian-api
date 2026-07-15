@@ -20,6 +20,10 @@ BACKLOG_LOG.jsonl merge=union
 # loop-quality-ledger.jsonl 是 Loop v2 质量账本（append-only，每任务收尾追加一行 JSON 指标）。
 # 多会话并行各自追加不同行 → merge=union 自动并、不冲突（同 BACKLOG_LOG.jsonl）。见 .claude/rules/loop-orchestration.md §3。
 .claude/workflow/loop-quality-ledger.jsonl merge=union
+# user-rework-log.jsonl 是 owner 返工 sink（E2 外部真相线之一，append-only，owner 表达"重做/不是我
+# 要的"时由会话 append 一行）。与质量账本同为多会话追加型 → merge=union。见 loop-orchestration.md §3
+# 「E2 注入外部真相」。2026-07-15 首次落地建档时补登（此前 sink 从未存在，故 gitattributes 亦缺此行）。
+.claude/workflow/user-rework-log.jsonl merge=union
 # ETL 流转台账：每行一个 JSON 事件、按内容唯一 → merge=union 自动并入多分支新增（同 BACKLOG_LOG.jsonl）。
 # 派生视图 数据管理/ledger/数据流转台账.md 全量重渲染、非纯追加 → 不设 union，冲突时重跑 render.mjs。
 数据管理/ledger/etl-ledger.jsonl merge=union
