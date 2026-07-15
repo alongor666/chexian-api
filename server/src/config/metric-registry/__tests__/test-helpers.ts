@@ -26,6 +26,10 @@ export const L4_METRIC_IDS: ReadonlySet<string> = new Set([
   'renewal_unquoted_count',
   'renewal_lost_count',
   'renewal_impact_rate',
+  // 销售队伍业绩指标：独立 SalesTeamPerformanceFact 域，由 typed SQL 生成器实现
+  'standard_premium',
+  'received_premium',
+  'sales_team_row_count',
 ]);
 
 /** L4 ID 数组形式（用于 it.each） */

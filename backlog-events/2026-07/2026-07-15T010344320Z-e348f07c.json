@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-d89eeb","kind":"create","ts":"2026-07-15","actor":"@claude","section":"销售队伍业绩","priority":"P2","desc":"修复日期自然日校验：共享 isValidDateFormat 仅正则，2026-02-30 可进入 DuckDB；补真实日历/闰年月末校验并让本域稳定返回中文 400（sql-sanitizer.ts:9-14；sales-team-performance 路由:61-70）。","docs":"N/A","code":"N/A","at":"2026-07-15T01:03:44.320Z","eid":"e348f07c"}

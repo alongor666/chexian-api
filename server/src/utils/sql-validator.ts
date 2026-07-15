@@ -80,7 +80,20 @@ const FORBIDDEN_FUNCTIONS = [
 /**
  * 禁止访问的表/视图
  */
-const FORBIDDEN_TABLES = ['raw_parquet'];
+const FORBIDDEN_TABLES = [
+  'raw_parquet',
+  // 本域缺标准 RLS 列，只允许 typed admin-only 路由访问。显式禁止关系名还能覆盖
+  // DuckDB 逗号联表等轻量关系收集器未识别的语法，纵深保证 /api/query/sql 不可旁路。
+  'SalesTeamPerformanceFact',
+  // DuckDB 内部身份/凭据表永不属于分析 SQL 能力面。即使未来关系解析器回归，
+  // 结构串全局拒绝也会阻止哈希或账号元数据被聚合外带。
+  'UserAccount',
+  'RoleConfig',
+  'AuthIdentity',
+  'PasswordCredential',
+  'ApiToken',
+  'KpiPlanConfig',
+];
 
 /**
  * 隐私保护:禁止选择的字段 (保单明细)
@@ -118,24 +131,80 @@ function sqlForStructuralChecks(sql: string): string {
   return maskStringLiterals(removeSqlComments(sql));
 }
 
+const SQL_IDENTIFIER_PART = String.raw`(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_]*)`;
+
+function normalizeSqlIdentifier(identifier: string): string {
+  return identifier
+    .replace(/"((?:[^"]|"")*)"/g, (_match, inner: string) => inner.replace(/""/g, '"'))
+    .replace(/\s*\.\s*/g, '.');
+}
+
 function collectCteAliases(sql: string): Set<string> {
   const aliases = new Set<string>();
-  const ctePattern = /(?:\bWITH|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s+AS\s*\(/gi;
+  const ctePattern = new RegExp(`(?:\\bWITH|,)\\s+(${SQL_IDENTIFIER_PART})\\s+AS\\s*\\(`, 'gi');
   let match: RegExpExecArray | null;
   while ((match = ctePattern.exec(sql)) !== null) {
-    aliases.add(match[1].toUpperCase());
+    aliases.add(normalizeSqlIdentifier(match[1]).toUpperCase());
   }
   return aliases;
 }
 
 function collectReferencedRelations(sql: string): string[] {
   const refs: string[] = [];
-  const relationPattern = /\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_.]*)/gi;
+  const relationPattern = new RegExp(
+    `\\b(?:FROM|JOIN)\\s+(${SQL_IDENTIFIER_PART}(?:\\s*\\.\\s*${SQL_IDENTIFIER_PART})*)`,
+    'gi',
+  );
   let match: RegExpExecArray | null;
   while ((match = relationPattern.exec(sql)) !== null) {
-    refs.push(match[1]);
+    refs.push(normalizeSqlIdentifier(match[1]));
   }
   return refs;
+}
+
+/**
+ * DuckDB 支持 `FROM a, b` 隐式 CROSS JOIN；权限注入器也把逗号视为关系位置。
+ * 轻量关系收集器无法在不引入完整解析器时可靠提取任意第 2+ 表，因此用户 SQL
+ * 对逗号联表 fail-closed，要求改写为显式 JOIN。扫描按括号深度跟踪 FROM 子句，
+ * 不误伤 SELECT 列表、GROUP BY、函数参数或嵌套子查询中的普通逗号。
+ */
+function hasCommaSeparatedFromSource(sql: string): boolean {
+  const tokens = sql.match(/"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_]*|[(),;\[\]{}]/g) ?? [];
+  const activeFromDepths = new Set<number>();
+  const clauseBoundaries = new Set([
+    'WHERE', 'GROUP', 'HAVING', 'QUALIFY', 'WINDOW', 'ORDER', 'LIMIT',
+    'UNION', 'EXCEPT', 'INTERSECT', 'OFFSET', 'FETCH', 'RETURNING',
+  ]);
+  let depth = 0;
+
+  for (const token of tokens) {
+    if (token === '(' || token === '[' || token === '{') {
+      depth++;
+      continue;
+    }
+    if (token === ')' || token === ']' || token === '}') {
+      activeFromDepths.delete(depth);
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (token === ';') {
+      activeFromDepths.delete(depth);
+      continue;
+    }
+    if (token === ',') {
+      if (activeFromDepths.has(depth)) return true;
+      continue;
+    }
+
+    const keyword = token.toUpperCase();
+    if (keyword === 'FROM') {
+      activeFromDepths.add(depth);
+    } else if (clauseBoundaries.has(keyword)) {
+      activeFromDepths.delete(depth);
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -148,6 +217,12 @@ function collectReferencedRelations(sql: string): string[] {
  * 行为兼容：开关关闭时退化为「仅 PolicyFact」，报错文案与历史一致。
  */
 function validateRelationBoundary(sql: string): ValidationResult | null {
+  if (hasCommaSeparatedFromSource(sql)) {
+    return {
+      valid: false,
+      error: '禁止逗号联表，请使用显式 JOIN (访问边界限制)',
+    };
+  }
   const cteAliases = collectCteAliases(sql);
   const relations = collectReferencedRelations(sql);
   let hasAllowedBaseRelation = false;

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertRequiredLocalTasks,
   buildDomainSyncTasks,
+  buildStandardSyncTasks,
   buildSyncTasks,
+  collectTaskParquetEntries,
   parseArgs,
   resolveRunConfig,
   rsyncLatestAtomically,
 } from '../../scripts/sync-vps.mjs';
-import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -43,6 +46,40 @@ describe('sync-vps domain scoped plan', () => {
     expect(tasks.map(task => task.label)).toEqual(['fact/customer_flow', 'public_reports']);
   });
 
+  it('sales_team_performance 域模式会原子同步完整目录，且缺失时阻断发布', () => {
+    const tasks = buildDomainSyncTasks(
+      '/var/www/chexian/server/data',
+      '/var/www/chexian/frontend/dist',
+      ['sales_team_performance'],
+    );
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0]).toMatchObject({
+      label: 'fact/sales_team_performance',
+      remote: '/var/www/chexian/server/data/fact/sales_team_performance',
+      critical: true,
+      atomic: true,
+      requiredLocal: true,
+      domain: 'sales_team_performance',
+    });
+    expect(() => assertRequiredLocalTasks(tasks, () => false)).toThrow(
+      /fact\/sales_team_performance/,
+    );
+  });
+
+  it('标准全量同步计划包含 sales_team_performance，且按 critical 处理', () => {
+    const tasks = buildStandardSyncTasks(
+      '/var/www/chexian/server/data',
+      '/var/www/chexian/frontend/dist',
+    );
+    expect(tasks).toContainEqual(expect.objectContaining({
+      label: 'fact/sales_team_performance',
+      remote: '/var/www/chexian/server/data/fact/sales_team_performance',
+      critical: true,
+      atomic: true,
+      requiredLocal: true,
+    }));
+  });
+
   it('treats missing latest.parquet as sync failure in atomic domain mode', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'sync-vps-missing-latest-'));
     try {
@@ -60,5 +97,22 @@ describe('sync-vps domain scoped plan', () => {
   it('governance drift check does not skip unrelated domains for scoped manifests', () => {
     const source = readFileSync('scripts/check-governance.mjs', 'utf-8');
     expect(source).not.toContain('checkedLabels');
+  });
+
+  it('同步清单与 governance 漂移扫描复用同一任务文件枚举，销售队伍域不会写入后被误报删除', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sync-vps-manifest-entries-'));
+    try {
+      writeFileSync(join(dir, 'biaobao_enriched.parquet'), 'fixture');
+      const entries = collectTaskParquetEntries([
+        { label: 'fact/sales_team_performance', local: dir },
+      ]);
+      expect(entries).toHaveProperty('fact/sales_team_performance/biaobao_enriched.parquet');
+
+      const governanceSource = readFileSync('scripts/check-governance.mjs', 'utf-8');
+      expect(governanceSource).toContain('collectTaskParquetEntries(');
+      expect(governanceSource).toContain('buildStandardSyncTasks(');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

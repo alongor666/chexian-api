@@ -23,11 +23,11 @@ describe('sales-team-performance route contract', () => {
 
   it('locks query-param validation: dimension whitelist + optional YYYY-MM-DD dates + bounded limit', () => {
     const route = readSource('server/src/routes/query/sales-team-performance.ts');
-    expect(route).toContain('Object.prototype.hasOwnProperty.call(SALES_TEAM_DIMENSIONS, dimensionRaw)');
-    expect(route).toContain('isValidDateFormat(start)');
-    expect(route).toContain('isValidDateFormat(end)');
-    expect(route).toContain("'start' must be <= 'end'");
-    expect(route).toContain('Number.isInteger(limit)');
+    expect(route).toContain('salesTeamPerformanceQuerySchema.safeParse(req.query)');
+    expect(route).toContain("z.enum(SALES_TEAM_DIMENSION_IDS)");
+    expect(route).toContain("optionalNaturalDate('开始日期')");
+    expect(route).toContain("optionalNaturalDate('结束日期')");
+    expect(route).toContain(".max(10000, '返回行数不能超过 10000')");
   });
 
   it('keeps route constants aligned between backend and frontend registries', () => {
@@ -44,7 +44,8 @@ describe('sales-team-performance route contract', () => {
 
     const contracts = readSource('server/src/config/route-param-contracts.ts');
     expect(contracts).toContain("'/sales-team-performance': {");
-    expect(contracts).toContain("extraKeys: ['dimension', 'start', 'end', 'limit']");
+    expect(contracts).toContain('schemas: [salesTeamPerformanceQuerySchema]');
+    expect(contracts).not.toContain("extraKeys: ['dimension', 'start', 'end', 'limit']");
   });
 
   it('uses lazy domain middleware + hotspot cache + ETag envelope', () => {

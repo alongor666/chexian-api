@@ -18,6 +18,9 @@ export const metricCapabilityMapping: Record<string, string[]> = {
   renewal_tracker_metrics: ['renewal_tracker_diagnosis', 'business_patrol_diagnosis'],
   customer_inflow: ['customer_flow_diagnosis'],
   customer_outflow: ['customer_flow_diagnosis'],
+  standard_premium: ['sales_team_performance_analysis'],
+  received_premium: ['sales_team_performance_analysis'],
+  sales_team_row_count: ['sales_team_performance_analysis'],
   comprehensive_expense_ratio: ['comprehensive_cost_indicator_review'],
   expense_development_metrics: ['cost_indicator_diagnosis'],
 };

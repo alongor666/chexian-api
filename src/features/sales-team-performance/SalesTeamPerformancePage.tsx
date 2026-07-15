@@ -6,7 +6,20 @@
  */
 
 import { useState } from 'react';
-import { colorClasses } from '../../shared/styles';
+import {
+  badgeStyles,
+  buttonStyles,
+  cardStyles,
+  cn,
+  colorClasses,
+  fontStyles,
+  inputStyles,
+  tableStyles,
+  textStyles,
+} from '../../shared/styles';
+import { EmptyState } from '../../shared/ui/EmptyState';
+import { ErrorState } from '../../shared/ui/ErrorState';
+import { TableSkeleton } from '../../shared/ui/Skeleton';
 import { useSalesTeamPerformance } from './hooks/useSalesTeamPerformance';
 import { DIMENSION_LABELS, type SalesTeamDimension } from './types';
 
@@ -36,7 +49,7 @@ export function SalesTeamPerformancePage() {
       <div>
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className={`text-lg font-bold ${colorClasses.text.neutralBlack}`}>销售队伍业绩（标保）</h1>
-          <span className={`inline-flex items-center rounded-full bg-warning-bg px-2 py-0.5 text-[11px] font-medium ${colorClasses.text.warning}`}>
+          <span className={cn(badgeStyles.base, badgeStyles.warning)}>
             仅管理员
           </span>
         </div>
@@ -48,38 +61,40 @@ export function SalesTeamPerformancePage() {
 
       {/* 筛选：维度 + 时间窗 */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="inline-flex rounded-lg border border-neutral-200 overflow-hidden">
+        <div className={cn(cardStyles.base, 'inline-flex overflow-hidden')}>
           {DIMENSIONS.map(d => (
             <button
               key={d}
               type="button"
               onClick={() => setDimension(d)}
-              className={`px-3 py-1.5 text-sm ${
-                dimension === d
-                  ? 'bg-primary text-white'
-                  : `bg-white ${colorClasses.text.neutralMuted} hover:bg-neutral-50`
-              }`}
+              className={cn(
+                buttonStyles.base,
+                buttonStyles.sizeSmall,
+                dimension === d ? buttonStyles.primary : buttonStyles.ghost,
+              )}
             >
               {DIMENSION_LABELS[d]}
             </button>
           ))}
         </div>
-        <label className={`text-xs ${colorClasses.text.neutralMuted}`}>
+        <label className={textStyles.caption}>
           起
           <input
             type="date"
             value={start}
+            max={end || undefined}
             onChange={e => setStart(e.target.value)}
-            className="ml-1 rounded border border-neutral-200 px-2 py-1 text-sm"
+            className={cn(inputStyles.base, inputStyles.default, 'ml-1 w-auto px-2 py-1')}
           />
         </label>
-        <label className={`text-xs ${colorClasses.text.neutralMuted}`}>
+        <label className={textStyles.caption}>
           止
           <input
             type="date"
             value={end}
+            min={start || undefined}
             onChange={e => setEnd(e.target.value)}
-            className="ml-1 rounded border border-neutral-200 px-2 py-1 text-sm"
+            className={cn(inputStyles.base, inputStyles.default, 'ml-1 w-auto px-2 py-1')}
           />
         </label>
       </div>
@@ -87,65 +102,67 @@ export function SalesTeamPerformancePage() {
       {/* 汇总卡 */}
       {total && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="rounded-lg border border-neutral-200 bg-white p-3">
+          <div className={cardStyles.compact}>
             <div className={`text-xs ${colorClasses.text.neutralMuted}`}>标保合计（万元）</div>
-            <div className={`text-xl font-bold ${colorClasses.text.neutralBlack}`}>{toWan(total.standard_premium)}</div>
+            <div className={cn('text-xl font-bold', fontStyles.kpi, colorClasses.text.neutralBlack)}>{toWan(total.standard_premium)}</div>
           </div>
-          <div className="rounded-lg border border-neutral-200 bg-white p-3">
+          <div className={cardStyles.compact}>
             <div className={`text-xs ${colorClasses.text.neutralMuted}`}>实收保费合计（万元）</div>
-            <div className={`text-xl font-bold ${colorClasses.text.neutralBlack}`}>{toWan(total.received_premium)}</div>
+            <div className={cn('text-xl font-bold', fontStyles.kpi, colorClasses.text.neutralBlack)}>{toWan(total.received_premium)}</div>
           </div>
-          <div className="rounded-lg border border-neutral-200 bg-white p-3">
-            <div className={`text-xs ${colorClasses.text.neutralMuted}`}>保单行数</div>
-            <div className={`text-xl font-bold ${colorClasses.text.neutralBlack}`}>{total.policy_count.toLocaleString('zh-CN')}</div>
+          <div className={cardStyles.compact}>
+            <div className={`text-xs ${colorClasses.text.neutralMuted}`}>明细行数</div>
+            <div className={cn('text-xl font-bold', fontStyles.kpi, colorClasses.text.neutralBlack)}>{total.sales_team_row_count.toLocaleString('zh-CN')}</div>
           </div>
-          <div className="rounded-lg border border-neutral-200 bg-white p-3">
+          <div className={cardStyles.compact}>
             <div className={`text-xs ${colorClasses.text.neutralMuted}`}>最新承保确认日</div>
-            <div className={`text-xl font-bold ${colorClasses.text.neutralBlack}`}>{total.latest_confirm_date ?? '—'}</div>
+            <div className={cn('text-xl font-bold', fontStyles.kpi, colorClasses.text.neutralBlack)}>{total.latest_confirm_date ?? '—'}</div>
           </div>
         </div>
       )}
 
       {/* 明细表 */}
-      {isLoading && <p className={`text-sm ${colorClasses.text.neutralMuted}`}>加载中…</p>}
+      {isLoading && <TableSkeleton rows={5} columns={5} />}
       {error && (
-        <p className={`text-sm ${colorClasses.text.warning}`}>
-          加载失败：{error instanceof Error ? error.message : '未知错误'}（本页仅对分公司管理员开放）
-        </p>
+        <ErrorState
+          title="销售队伍业绩暂不可用"
+          message="请稍后重试或联系系统管理员；本页面仅向分公司管理员开放。"
+        />
       )}
-      {!isLoading && !error && (
-        <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white">
+      {!isLoading && !error && rows.length === 0 && (
+        <div className={cardStyles.standard}>
+          <EmptyState
+            title="当前筛选条件下暂无销售队伍业绩数据"
+            description="请调整聚合维度或承保确认时间窗口后重试。"
+          />
+        </div>
+      )}
+      {!isLoading && !error && rows.length > 0 && (
+        <div className={cn(tableStyles.container, 'overflow-x-auto')}>
           <table className="w-full text-sm">
             <thead>
-              <tr className={`border-b border-neutral-200 text-left ${colorClasses.text.neutralMuted}`}>
-                <th className="px-3 py-2 font-medium">{DIMENSION_LABELS[dimension]}</th>
-                <th className="px-3 py-2 font-medium text-right">保单行数</th>
-                <th className="px-3 py-2 font-medium text-right">实收保费（万元）</th>
-                <th className="px-3 py-2 font-medium text-right">标保（万元）</th>
-                <th className="px-3 py-2 font-medium text-right">标保占比</th>
+              <tr className={tableStyles.header}>
+                <th className={tableStyles.headerCell}>{DIMENSION_LABELS[dimension]}</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>明细行数</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>实收保费（万元）</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>标保（万元）</th>
+                <th className={cn(tableStyles.headerCell, 'text-right')}>标保占比</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(row => (
-                <tr key={row.dim_value} className="border-b border-neutral-100 last:border-0">
-                  <td className={`px-3 py-2 ${colorClasses.text.neutralBlack}`}>{row.dim_value}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{row.policy_count.toLocaleString('zh-CN')}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{toWan(row.received_premium)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-medium">{toWan(row.standard_premium)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                <tr key={row.dim_value} className={tableStyles.row}>
+                  <td className={tableStyles.cell}>{row.dim_value}</td>
+                  <td className={tableStyles.cellNumeric}>{row.sales_team_row_count.toLocaleString('zh-CN')}</td>
+                  <td className={tableStyles.cellNumeric}>{toWan(row.received_premium)}</td>
+                  <td className={cn(tableStyles.cellNumeric, 'font-medium')}>{toWan(row.standard_premium)}</td>
+                  <td className={tableStyles.cellNumeric}>
                     {total && total.standard_premium !== 0
                       ? `${((row.standard_premium / total.standard_premium) * 100).toFixed(1)}%`
                       : '—'}
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={5} className={`px-3 py-6 text-center ${colorClasses.text.neutralMuted}`}>
-                    无数据
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

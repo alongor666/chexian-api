@@ -68,6 +68,10 @@ module.exports = {
         // 全绿（见 pr-evolution.md 2026-06-19 两条记分卡）。
         // 回滚：删除本行 revert PR，或 VPS 上改 'false' + sudo /usr/local/bin/deploy-chexian-api reload。
         SQL_FEDERATION_ENABLED: 'true',
+        // 多省实例的基准源是 SC：标准 dim/fact 路径装四川，validation/SX 装山西隔离副本。
+        // 必须显式声明，禁止依赖 getDeploymentBranchCode() 的告警回退；销售队伍业绩的山西
+        // 单源不读取此变量。不要改为 SX，否则无 branch_code 的四川主计划会被误标为山西。
+        BRANCH_CODE: 'SC',
         // 多分公司行级安全（山西 cutover · 2026-06-25 开启）：按用户 branchCode 注入 branch_code 过滤。
         // 派生视图 branch_code 列就绪进度：PolicyFact / claims_detail / RepairDim / QuoteConversion /
         // CustomerFlow / CrossSellDailyAgg / RenewalTrackerFact 均已含列（RenewalTrackerFact 自 P3-C #765

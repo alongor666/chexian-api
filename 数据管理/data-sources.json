@@ -470,7 +470,7 @@
       "source_pattern": "标保核对表（新版）.xlsx sheet「标保」A:K（BI 系统直营保单明细原样）+ sheet「车险折标因子」A:C（规则表）；后续可切换为 BI 直接导出文件",
       "etl_entry": "python3 数据管理/pipelines/sales_team_etl.py -i <xlsx>",
       "etl_script": "pipelines/sales_team_etl.py",
-      "output": "warehouse/fact/sales_team_performance/biaobao_policy.parquet",
+      "output": "warehouse/fact/sales_team_performance/biaobao_enriched.parquet",
       "update_cadence": "manual_full_refresh",
       "key_fields": [
         "保单号",
@@ -482,10 +482,12 @@
         "销售团队",
         "实收保费"
       ],
-      "duckdb_relation": "未接入（phase 1 仅数据层）",
-      "api_routes": [],
-      "frontend_page": null,
-      "notes": "自 sales_portrait《标保核对表》迁移（2026-07-14，见该仓库 ADR-006）。标保口径由 pipelines/sales_team_rules.sql 规则层复算（险种系数三套规则+一司一策+大同封顶），2026-07-14 与 Excel 宽表 194,191 行逐行对账零差异，总额基准 150,327,494.46。配套维表 warehouse/dim/standard_coeff_factor/（车险折标因子 214,621 行，251 个重复保单号取首条）。保单号非唯一（一单多险种/多次实收）。API/前端接入为 phase 2。"
+      "duckdb_relation": "SalesTeamPerformanceFact (VIEW)",
+      "api_routes": [
+        "/api/query/sales-team-performance"
+      ],
+      "frontend_page": "sales-team-performance",
+      "notes": "自 sales_portrait《标保核对表》迁移（2026-07-14，见该仓库 ADR-006）。标保口径由 pipelines/sales_team_rules.sql 规则层复算（险种系数三套规则+一司一策+大同封顶），2026-07-14 与 Excel 宽表 194,191 行全覆盖逐行对账零差异，总额基准 150,327,494.46。配套维表 warehouse/dim/standard_coeff_factor/：4,505 个重复保单号中 251 个系数取值不一致，按 Excel VLOOKUP 首条语义取值。保单号非唯一（一单多险种/多次实收）。运行时由 SalesTeamPerformanceFact 惰性 VIEW 加载，typed API 与 hash 页面均为 branch_admin-only。"
     }
   ]
 }

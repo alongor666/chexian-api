@@ -12,14 +12,15 @@
 import { isValidDateFormat } from '../utils/sql-sanitizer.js';
 
 /** 维度白名单：API 维度 id → 视图中文列名 */
-export const SALES_TEAM_DIMENSIONS = {
+export const SALES_TEAM_DIMENSION_IDS = ['salesman', 'team', 'org', 'insurance_class'] as const;
+export type SalesTeamDimension = typeof SALES_TEAM_DIMENSION_IDS[number];
+
+export const SALES_TEAM_DIMENSIONS: Readonly<Record<SalesTeamDimension, string>> = {
   salesman: '业务员',
   team: '销售团队',
   org: '机构',
   insurance_class: '险种大类',
 } as const;
-
-export type SalesTeamDimension = keyof typeof SALES_TEAM_DIMENSIONS;
 
 export interface SalesTeamPerformanceQueryParams {
   /** 聚合维度（白名单 id） */
@@ -61,7 +62,7 @@ export function generateSalesTeamPerformanceQuery(params: SalesTeamPerformanceQu
   return `
     SELECT
       coalesce("${column}", '(未指定)') AS dim_value,
-      COUNT(*) AS policy_count,
+      COUNT(*) AS sales_team_row_count,
       ROUND(SUM("实收保费"), 2) AS received_premium,
       ROUND(SUM("标保"), 2) AS standard_premium
     FROM SalesTeamPerformanceFact
@@ -81,7 +82,7 @@ export function generateSalesTeamPerformanceTotalQuery(
   const where = buildDateWhere(params.start, params.end);
   return `
     SELECT
-      COUNT(*) AS policy_count,
+      COUNT(*) AS sales_team_row_count,
       ROUND(SUM("实收保费"), 2) AS received_premium,
       ROUND(SUM("标保"), 2) AS standard_premium,
       CAST(MAX("承保确认时间") AS VARCHAR) AS latest_confirm_date

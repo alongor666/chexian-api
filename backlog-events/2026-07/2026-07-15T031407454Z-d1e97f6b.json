@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-296012","kind":"status","ts":"2026-07-15","actor":"@claude","status":"DONE","evidence":"PR #1106；未知非空折标分类 fail-fast、NULL 分类仍按 1；pytest 3/3","at":"2026-07-15T03:14:07.454Z","eid":"d1e97f6b"}

@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-334ed6","kind":"create","ts":"2026-07-15","actor":"@claude","section":"销售队伍业绩","priority":"P3","desc":"前端日期控件补 start/end min/max 或联动校正，并清理对外 RLS/BACKLOG/英文参数错误等内部术语，改善人工误授权进入页面时的 403/400 体验（页面:67-83；shared.ts:97-104）。","docs":"N/A","code":"N/A","at":"2026-07-15T01:03:44.919Z","eid":"9286479c"}

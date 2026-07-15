@@ -28,6 +28,7 @@
  *   数据管理/warehouse/fact/cross_sell/           →  data/fact/cross_sell/
  *   数据管理/warehouse/fact/customer_flow/        →  data/fact/customer_flow/
  *   数据管理/warehouse/fact/renewal_tracker/      →  data/fact/renewal_tracker/
+ *   数据管理/warehouse/fact/sales_team_performance/ → data/fact/sales_team_performance/
  *   server/data/reports/                          →  data/reports/  （追加同步，不删除远端历史报告；后端鉴权访问）
  *   public/reports/                               →  frontend/dist/reports/  （追加同步；Nginx 静态托管，浏览器 /reports/* 可直达）
  *
@@ -102,6 +103,7 @@ const LOCAL_CROSS_SELL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/cross_s
 const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
 const LOCAL_NEW_ENERGY_CLAIMS_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/new_energy_claims');
 const LOCAL_RENEWAL_TRACKER_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_tracker');
+const LOCAL_SALES_TEAM_PERFORMANCE_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/sales_team_performance');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_region');
 const LOCAL_HTML_REPORTS_DIR = join(ROOT_DIR, 'server/data/reports');
@@ -855,6 +857,7 @@ function collectCheckDirs() {
     { label: 'dim/plan',       path: LOCAL_PLAN_DIR },
     { label: 'dim/brand',     path: LOCAL_BRAND_DIR },
     { label: 'fact/quotes_conversion', path: LOCAL_QUOTES_CONVERSION_DIR },
+    { label: 'fact/sales_team_performance', path: LOCAL_SALES_TEAM_PERFORMANCE_DIR },
   ];
 
   return dirs.map(({ label, path }) => {
@@ -883,6 +886,7 @@ function printHelp() {
   数据管理/warehouse/dim/plan/                  →  data/dim/plan/
   数据管理/warehouse/dim/brand/                 →  data/dim/brand/
   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/  (存在时)
+  数据管理/warehouse/fact/sales_team_performance/ → data/fact/sales_team_performance/
   server/data/reports/                          →  data/reports/  (不使用 --delete，保留历史报告；后端鉴权访问)
   public/reports/                               →  frontend/dist/reports/  (不使用 --delete；Nginx 静态托管)
 
@@ -894,7 +898,7 @@ function printHelp() {
   --key <path>         覆盖私钥路径
   --remote-dir <path>  覆盖远端数据根目录
   --health-url <url>   覆盖健康检查地址
-  --domain <ids>       仅同步指定数据域（逗号分隔），如 customer_flow,new_energy_claims
+  --domain <ids>       仅同步指定数据域（逗号分隔），如 customer_flow,sales_team_performance
 `);
 }
 
@@ -1041,6 +1045,7 @@ function buildStandardSyncTasks(remote, frontendDist, opts = {}) {
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
     { label: 'fact/new_energy_claims', local: LOCAL_NEW_ENERGY_CLAIMS_DIR, remote: `${remote}/fact/new_energy_claims`, critical: false },
     { label: 'fact/renewal_tracker', local: LOCAL_RENEWAL_TRACKER_DIR,    remote: `${remote}/fact/renewal_tracker`,  critical: false },
+    { label: 'fact/sales_team_performance', local: LOCAL_SALES_TEAM_PERFORMANCE_DIR, remote: `${remote}/fact/sales_team_performance`, critical: true, atomic: true, requiredLocal: true },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',     local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
     { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${remote}/reports`,               critical: false, deleteRemote: false },
@@ -1058,6 +1063,7 @@ function buildDomainSyncTasks(remote, frontendDist, domainIds) {
   const domainTaskMap = {
     customer_flow: { label: 'fact/customer_flow', local: LOCAL_CUSTOMER_FLOW_DIR, remote: `${remote}/fact/customer_flow`, critical: true, atomicLatest: true },
     new_energy_claims: { label: 'fact/new_energy_claims', local: LOCAL_NEW_ENERGY_CLAIMS_DIR, remote: `${remote}/fact/new_energy_claims`, critical: true, atomicLatest: true },
+    sales_team_performance: { label: 'fact/sales_team_performance', local: LOCAL_SALES_TEAM_PERFORMANCE_DIR, remote: `${remote}/fact/sales_team_performance`, critical: true, atomic: true, requiredLocal: true },
   };
   const tasks = domainIds.map((domainId) => {
     const task = domainTaskMap[domainId];
@@ -1077,6 +1083,16 @@ function buildSyncTasks(runConfig) {
     return buildDomainSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir, runConfig.domains);
   }
   return buildStandardSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir);
+}
+
+/**
+ * 对不能被“目录不存在则跳过”降级的发布产物做 fail-loud 前置检查。
+ * 仅由任务显式 requiredLocal=true 启用，避免改变历史 optional/critical 目录的兼容行为。
+ */
+function assertRequiredLocalTasks(tasks, pathExists = existsSync) {
+  const missing = tasks.filter((task) => task.requiredLocal === true && !pathExists(task.local));
+  if (missing.length === 0) return;
+  throw new Error(`关键本地目录不存在，拒绝发布: ${missing.map((task) => task.label).join(', ')}`);
 }
 
 function printDryRun(sshConfig, runConfig) {
@@ -1187,10 +1203,11 @@ async function runReportsCleanup(runConfig) {
 async function runStandardMode(sshConfig, runConfig) {
   const alias = sshConfig.alias;
 
+  const syncTasks = buildSyncTasks(runConfig);
+  assertRequiredLocalTasks(syncTasks);
+
   // 同步前清理本地 reports（与 html_reports/public_reports deleteRemote:false 累积问题配套）
   await runReportsCleanup(runConfig);
-
-  const syncTasks = buildSyncTasks(runConfig);
 
   // 过滤不存在的目录
   const activeTasks = [];
@@ -1346,21 +1363,34 @@ function readExistingSyncManifest(manifestPath) {
   }
 }
 
-function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DEFAULTS.frontendDistDir), runConfig = { domains: [] }) {
+/**
+ * 从实际同步任务枚举 Parquet 指纹键。
+ * writeSyncManifest 与 governance 漂移检查必须共用本函数，避免新增同步域后
+ * 一端写入 manifest、另一端仍用静态旧清单而把文件误报为“VPS 仍有旧文件”。
+ */
+function collectTaskParquetEntries(tasks, { includeHash = false } = {}) {
   const files = {};
-  // B3：每个 task 的 local 已是具体目录（扁平 policy/current 根 / 子目录 current/<省>/），readdir 该目录即得本省文件。
-  // key=`${task.label}/${f}` 随 label 自然成扁平 `policy/current/<f>` 或子目录 `policy/current/<省>/<f>` 形态，
-  // 与 governance #21 checkDataDrift（同用 listPolicyCurrentShards 枚举 + 同 key 规则）保持一致（codex 闸-1 P1-1）。
-  for (const dir of tasks.map(task => ({ label: task.label, path: task.local }))) {
-    if (!existsSync(dir.path)) continue;
-    const parquets = readdirSync(dir.path).filter(f => f.endsWith('.parquet'));
-    for (const f of parquets) {
-      const fullPath = join(dir.path, f);
+  for (const task of tasks) {
+    if (!existsSync(task.local)) continue;
+    const parquets = readdirSync(task.local).filter((file) => file.endsWith('.parquet'));
+    for (const file of parquets) {
+      const fullPath = join(task.local, file);
       const stat = statSync(fullPath);
-      const key = `${dir.label}/${f}`;
-      files[key] = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs), sha256: createHash('sha256').update(readFileSync(fullPath)).digest('hex') };
+      const entry = { size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) };
+      if (includeHash) {
+        entry.sha256 = createHash('sha256').update(readFileSync(fullPath)).digest('hex');
+      }
+      files[`${task.label}/${file}`] = entry;
     }
   }
+  return files;
+}
+
+function writeSyncManifest(tasks = buildStandardSyncTasks(DEFAULTS.remoteDir, DEFAULTS.frontendDistDir), runConfig = { domains: [] }) {
+  // B3：每个 task 的 local 已是具体目录（扁平 policy/current 根 / 子目录 current/<省>/），readdir 该目录即得本省文件。
+  // key=`${task.label}/${f}` 随 label 自然成扁平 `policy/current/<f>` 或子目录 `policy/current/<省>/<f>` 形态，
+  // 与 governance #21 checkDataDrift 逐字复用 collectTaskParquetEntries，避免 key 规则或域清单漂移。
+  const files = collectTaskParquetEntries(tasks, { includeHash: true });
 
   const manifestPath = join(ROOT_DIR, '.last-sync-manifest.json');
   const existing = readExistingSyncManifest(manifestPath);
@@ -1518,6 +1548,8 @@ export {
   resolveRunConfig,
   buildDomainSyncTasks,
   buildStandardSyncTasks,
+  collectTaskParquetEntries,
+  assertRequiredLocalTasks,
   buildValidationBranchSyncTasks,
   validationBranchSyncEnabled,
   buildPolicyCurrentTasks,

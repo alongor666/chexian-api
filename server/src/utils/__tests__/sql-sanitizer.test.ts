@@ -11,6 +11,13 @@ describe('isValidDateFormat', () => {
     expect(isValidDateFormat('not-a-date')).toBe(false);
     expect(isValidDateFormat('')).toBe(false);
   });
+
+  it('rejects impossible calendar dates and accepts leap day', () => {
+    expect(isValidDateFormat('2026-02-30')).toBe(false);
+    expect(isValidDateFormat('2025-02-29')).toBe(false);
+    expect(isValidDateFormat('2024-02-29')).toBe(true);
+    expect(isValidDateFormat('2026-13-01')).toBe(false);
+  });
 });
 
 describe('validateDateRange', () => {

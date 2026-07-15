@@ -41,6 +41,7 @@ import {
 import { crossSellBundleSchema } from '../routes/query/bundles/cross-sell.js';
 import { dashboardBundleSchema } from '../routes/query/bundles/dashboard.js';
 import { performanceBundleSchema } from '../routes/query/bundles/performance.js';
+import { salesTeamPerformanceQuerySchema } from '../routes/query/sales-team-performance.js';
 
 export interface RouteParamContract {
   /** 路由专属 zod schema（运行时真实对象） */
@@ -185,7 +186,7 @@ export const ROUTE_PARAM_CONTRACTS: Record<string, RouteParamContract> = {
 
   // ── 销售队伍业绩（sales-team-performance.ts 散读） ──────
   '/sales-team-performance': {
-    extraKeys: ['dimension', 'start', 'end', 'limit'],
+    schemas: [salesTeamPerformanceQuerySchema],
   },
 
   // ── 保单地理 ────────────────────────────────────

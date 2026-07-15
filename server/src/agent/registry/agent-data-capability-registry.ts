@@ -5,7 +5,7 @@ import { AgentRegistryMetaSchema } from '../schemas/agent-registry-meta.schema.j
 // 表级版本：任何条目变更必须 bump version 并追加 changelog（governance「Agent注册表版本」强制）
 export const agentDataCapabilityRegistryMeta = AgentRegistryMetaSchema.parse({
   registryId: 'agent-data-capability',
-  version: '1.1.0',
+  version: '1.2.0',
   changelog: [
     {
       version: '1.0.0',
@@ -19,6 +19,11 @@ export const agentDataCapabilityRegistryMeta = AgentRegistryMetaSchema.parse({
       changes:
         'comprehensive_cost_indicator_review 的 coreMetrics 去除旧 id comprehensive_cost_ratio：' +
         'SQL 别名统一到指标注册表 id 后双档案合并，统一为 comprehensive_expense_ratio（BACKLOG 2026-07-05-claude-49e3fd）。',
+    },
+    {
+      version: '1.2.0',
+      date: '2026-07-15',
+      changes: '新增 branch_admin-only 销售队伍业绩分析能力，挂接标保、实收保费、明细行数与 typed endpoint。',
     },
   ],
 });
@@ -148,6 +153,22 @@ export const agentDataCapabilityRegistry = AgentCapabilityDefinitionSchema.array
     allowedUseCases: ['续保追踪', '到期车辆追踪', '机构/业务员续保差异'],
     cautionNotes: ['不使用已下线 renewal funnel/v2。'],
     forbiddenOutputs: ['承保利润', '财务盈利', '财务亏损'],
+  },
+  {
+    id: 'sales_team_performance_analysis',
+    name: '销售队伍业绩分析',
+    supportLevel: 'supported',
+    description: '按业务员、销售团队、机构或险种大类分析山西直营实收保费与修复后标保。',
+    coreMetrics: ['standard_premium', 'received_premium', 'sales_team_row_count'],
+    sourceEndpoints: ['/api/query/sales-team-performance'],
+    sourceTools: ['sales_team_performance.query'],
+    allowedUseCases: ['销售队伍标保排名', '团队实收保费对比', '机构或险种大类标保结构分析'],
+    cautionNotes: [
+      '仅 branch_admin 可访问；不得为 org_user 绕过 typed endpoint 或改走 SQL 直通。',
+      'sales_team_row_count 是明细行数，不是保单号去重件数。',
+      '标保口径以 sales_team_rules.sql 为唯一事实源。',
+    ],
+    forbiddenOutputs: ['承保利润', '财务盈利', '财务亏损', '保单去重件数'],
   },
   {
     id: 'claims_risk_diagnosis',

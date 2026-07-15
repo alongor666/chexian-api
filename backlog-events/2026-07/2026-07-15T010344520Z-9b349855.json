@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-394157","kind":"create","ts":"2026-07-15","actor":"@claude","section":"销售队伍业绩","priority":"P2","desc":"更新 数据管理/VPS同步配置.md 到当前腾讯云 chexian-vps-deploy、sync-vps/sync-and-reload/reload/health 发布链；现文档仍是 Windows→阿里云手工 scp 旧流程，易误导本域上线操作。","docs":"N/A","code":"N/A","at":"2026-07-15T01:03:44.520Z","eid":"9b349855"}

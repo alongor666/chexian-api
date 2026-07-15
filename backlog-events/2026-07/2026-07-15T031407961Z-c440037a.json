@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-b10c65","kind":"status","ts":"2026-07-15","actor":"@claude","status":"DONE","evidence":"PR #1106；requireBranchAdmin 先于惰性加载；真实 Express 权限测试确认 org_user 403 且不触发 loader","at":"2026-07-15T03:14:07.961Z","eid":"c440037a"}

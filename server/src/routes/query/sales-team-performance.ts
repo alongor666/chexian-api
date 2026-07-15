@@ -11,6 +11,7 @@
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import {
   asyncHandler,
   AppError,
@@ -26,14 +27,22 @@ import {
 import {
   generateSalesTeamPerformanceQuery,
   generateSalesTeamPerformanceTotalQuery,
-  SALES_TEAM_DIMENSIONS,
-  type SalesTeamDimension,
+  SALES_TEAM_DIMENSION_IDS,
 } from '../../sql/sales-team-performance.js';
 
 const router = Router();
 
-// 惰性加载 SalesTeamPerformance 域（首次访问触发）
-router.use(createDomainMiddleware('SalesTeamPerformance'));
+const optionalNaturalDate = (label: string) => z.string().refine(isValidDateFormat, {
+  message: `${label}必须是有效自然日（YYYY-MM-DD）`,
+}).optional();
+
+/** 运行时参数契约；route-param-contracts 直接复用，避免目录枚举与 handler 漂移。 */
+export const salesTeamPerformanceQuerySchema = z.object({
+  dimension: z.enum(SALES_TEAM_DIMENSION_IDS).default('salesman'),
+  start: optionalNaturalDate('开始日期'),
+  end: optionalNaturalDate('结束日期'),
+  limit: z.coerce.number().int('返回行数必须是整数').min(1, '返回行数不能小于 1').max(10000, '返回行数不能超过 10000').default(200),
+});
 
 /**
  * GET /api/query/sales-team-performance
@@ -47,71 +56,62 @@ router.use(createDomainMiddleware('SalesTeamPerformance'));
 router.get(
   '/sales-team-performance',
   requireBranchAdmin,
+  // 权限校验必须先于磁盘探测/惰性加载，未授权请求不得触发域 I/O。
+  createDomainMiddleware('SalesTeamPerformance'),
   withRouteCache('sales-team-performance'),
   asyncHandler(async (req, res) => {
-    const dimensionRaw = typeof req.query.dimension === 'string' ? req.query.dimension : 'salesman';
-    if (!Object.prototype.hasOwnProperty.call(SALES_TEAM_DIMENSIONS, dimensionRaw)) {
-      throw new AppError(
-        400,
-        `Invalid 'dimension' (expected one of: ${Object.keys(SALES_TEAM_DIMENSIONS).join(', ')})`
-      );
+    const parsed = salesTeamPerformanceQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw new AppError(400, `参数错误：${parsed.error.issues[0]?.message ?? '请求参数无效'}`);
     }
-    const dimension = dimensionRaw as SalesTeamDimension;
-
-    const { start, end } = req.query;
-    if (start !== undefined && (typeof start !== 'string' || !isValidDateFormat(start))) {
-      throw new AppError(400, `Invalid 'start' (expected YYYY-MM-DD)`);
-    }
-    if (end !== undefined && (typeof end !== 'string' || !isValidDateFormat(end))) {
-      throw new AppError(400, `Invalid 'end' (expected YYYY-MM-DD)`);
-    }
-    if (typeof start === 'string' && typeof end === 'string' && start > end) {
-      throw new AppError(400, `'start' must be <= 'end'`);
-    }
-
-    let limit: number | undefined;
-    if (req.query.limit !== undefined) {
-      limit = Number(req.query.limit);
-      if (!Number.isInteger(limit) || limit < 1 || limit > 10000) {
-        throw new AppError(400, `Invalid 'limit' (expected integer 1~10000)`);
-      }
+    const { dimension, start, end, limit } = parsed.data;
+    if (start && end && start > end) {
+      throw new AppError(400, '开始日期不能晚于结束日期');
     }
 
     const rowsSql = generateSalesTeamPerformanceQuery({
       dimension,
-      start: start as string | undefined,
-      end: end as string | undefined,
+      start,
+      end,
       limit,
     });
     const rows = await duckdbService.query<{
       dim_value: string;
-      policy_count: number;
+      sales_team_row_count: number;
       received_premium: number;
       standard_premium: number;
     }>(rowsSql, QUERY_CACHE.hotspotShort);
 
     const totalSql = generateSalesTeamPerformanceTotalQuery({
-      start: start as string | undefined,
-      end: end as string | undefined,
+      start,
+      end,
     });
     const totals = await duckdbService.query<{
-      policy_count: number;
+      sales_team_row_count: number;
       received_premium: number;
       standard_premium: number;
       latest_confirm_date: string | null;
     }>(totalSql, QUERY_CACHE.hotspotShort);
 
     // 数值规范化（DuckDB BIGINT 可能返回 BigInt）
-    const normalizedRows = rows.map(r => ({
-      dim_value: r.dim_value,
-      policy_count: Number(r.policy_count) || 0,
-      received_premium: Number(r.received_premium) || 0,
-      standard_premium: Number(r.standard_premium) || 0,
-    }));
+    const normalizedRows = rows.map(r => {
+      const rowCount = Number(r.sales_team_row_count) || 0;
+      return {
+        dim_value: r.dim_value,
+        sales_team_row_count: rowCount,
+        // 已部署 v1 兼容别名；新调用方必须使用语义明确的 sales_team_row_count。
+        policy_count: rowCount,
+        received_premium: Number(r.received_premium) || 0,
+        standard_premium: Number(r.standard_premium) || 0,
+      };
+    });
     const t = totals[0];
+    const totalRowCount = t ? Number(t.sales_team_row_count) || 0 : 0;
     const normalizedTotal = t
       ? {
-          policy_count: Number(t.policy_count) || 0,
+          sales_team_row_count: totalRowCount,
+          // 已部署 v1 兼容别名，保留到正式弃用窗口结束。
+          policy_count: totalRowCount,
           received_premium: Number(t.received_premium) || 0,
           standard_premium: Number(t.standard_premium) || 0,
           latest_confirm_date: t.latest_confirm_date ?? null,

@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-992f1b","kind":"status","ts":"2026-07-15","actor":"@claude","status":"DONE","evidence":"PR #1106；缺 Parquet 返回 503 且状态复位可重试；missing-file 测试通过","at":"2026-07-15T03:14:07.518Z","eid":"19db0051"}

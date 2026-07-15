@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-14babd","kind":"create","ts":"2026-07-15","actor":"@claude","section":"销售队伍业绩","priority":"P2","desc":"补本域行为测试族谱：真实 handler 参数/两次查询/ETag/空合计，原生 DuckDB 中文列与日期边界，前端 loading/empty/403/维度切换，以及缺文件恢复；现有契约 8 项主要为源码字符串，新补权限附件和 loader 仍未覆盖这些路径。","docs":"N/A","code":"N/A","at":"2026-07-15T01:03:44.215Z","eid":"17d7b672"}

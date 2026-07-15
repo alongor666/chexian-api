@@ -38,6 +38,7 @@ const CATEGORY_LABELS: Record<MetricCategory, string> = {
   plan: '计划达成指标',
   structure: '业务结构指标',
   renewal: '续保分析指标',
+  sales_team: '销售队伍业绩指标',
 };
 
 const metrics = getAllMetrics();
