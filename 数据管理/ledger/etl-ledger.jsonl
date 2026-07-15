@@ -587,3 +587,41 @@
 {"ts":"2026-07-14T12:39:24.419+08:00","run_id":"20260714-043019","status":"success","backfilled":false,"stage":"pipeline","step":"WeCom 电销5-7月续保 sync","duration_ms":9688}
 {"ts":"2026-07-14T12:40:08.728+08:00","run_id":"20260714-043019","status":"success","backfilled":false,"stage":"pipeline","step":"WeCom renewal sync","duration_ms":54000}
 {"ts":"2026-07-14T12:40:08.729+08:00","run_id":"20260714-043019","status":"success","backfilled":false,"stage":"run","step":"end","trigger":"watcher","duration_ms":589251}
+{"ts":"2026-07-15T12:00:39.334+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"run","step":"start","trigger":"watcher","note":"--wecom"}
+{"ts":"2026-07-15T12:02:07.105+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"pull:bi-exports","duration_ms":87770}
+{"ts":"2026-07-15T12:02:35.917+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"etl","step":"premium_transform","domain":"premium","row_count":2640539}
+{"ts":"2026-07-15T12:02:47.793+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"etl","step":"claims_detail_transform","domain":"claims_detail","row_count":292594,"field_count":41}
+{"ts":"2026-07-15T12:03:16.767+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"etl","step":"quotes_conversion_transform","domain":"quotes_conversion","row_count":963725,"field_count":33}
+{"ts":"2026-07-15T12:03:22.583+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"etl","step":"brand_transform","domain":"brand","row_count":371359,"field_count":15}
+{"ts":"2026-07-15T12:03:37.106+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"etl","step":"repair_resource_transform","domain":"repair_resource","row_count":6820,"field_count":14}
+{"ts":"2026-07-15T12:03:39.108+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"validate","step":"new_energy_claims_validate","domain":"new_energy_claims","row_count":901}
+{"ts":"2026-07-15T12:03:39.269+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"etl","step":"new_energy_claims_transform","domain":"new_energy_claims","row_count":901,"field_count":11}
+{"ts":"2026-07-15T12:03:40.257+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"etl","step":"renewal_tracker_transform","domain":"renewal_tracker","row_count":128184,"field_count":24}
+{"ts":"2026-07-15T12:03:47.331+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"ETL","duration_ms":100226}
+{"ts":"2026-07-15T12:03:58.902+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"ETL:SX:premium","duration_ms":11570}
+{"ts":"2026-07-15T12:04:08.913+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"ETL:SX:claims_detail","duration_ms":10011}
+{"ts":"2026-07-15T12:04:27.969+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"ETL:SX:quotes","duration_ms":19056}
+{"ts":"2026-07-15T12:04:28.880+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"ETL:SX:repair","duration_ms":911}
+{"ts":"2026-07-15T12:04:29.801+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"ETL:SX:renewal_tracker","duration_ms":921}
+{"ts":"2026-07-15T12:04:29.964+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"claims 新鲜度巡检","duration_ms":163}
+{"ts":"2026-07-15T12:05:20.524+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"period-trend report","duration_ms":50558}
+{"ts":"2026-07-15T12:05:22.721+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"data-readiness:pre","duration_ms":2195}
+{"ts":"2026-07-15T12:05:25.155+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"governance","duration_ms":2434}
+{"ts":"2026-07-15T12:05:25.427+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"prepublish-gate","duration_ms":272}
+{"ts":"2026-07-15T12:05:27.037+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"vps_sync","step":"sx_auto_promote"}
+{"ts":"2026-07-15T12:06:15.527+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"vps_sync","step":"rsync_all"}
+{"ts":"2026-07-15T12:06:15.530+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"VPS sync","duration_ms":50103}
+{"ts":"2026-07-15T12:06:15.692+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"data-readiness:post","duration_ms":161}
+{"ts":"2026-07-15T12:06:20.591+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"lark archive","duration_ms":4899}
+{"ts":"2026-07-15T12:06:21.162+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"state.db backup","duration_ms":553}
+{"ts":"2026-07-15T12:07:13.290+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"PM2 reload","duration_ms":52128}
+{"ts":"2026-07-15T12:07:13.291+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"reload","step":"pm2_reload"}
+{"ts":"2026-07-15T12:07:49.045+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"health","step":"health_check","data_version":null}
+{"ts":"2026-07-15T12:07:49.046+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"frontend","step":"data_version_readback","data_version":null,"note":"VPS 当前对外版本=前端将消费版本"}
+{"ts":"2026-07-15T12:07:52.665+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"WeCom 山西邮政 sync","duration_ms":3613}
+{"ts":"2026-07-15T12:07:53.481+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"WeCom postal sync","duration_ms":4430}
+{"ts":"2026-07-15T12:07:56.622+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"WeCom 电销5-7月续保 sync","duration_ms":7573}
+{"ts":"2026-07-15T12:08:28.353+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"pipeline","step":"WeCom renewal sync","duration_ms":39307}
+{"ts":"2026-07-15T12:08:28.353+08:00","run_id":"20260715-040039","status":"success","backfilled":false,"stage":"run","step":"end","trigger":"watcher","duration_ms":469020}
+{"ts":"2026-07-15T13:35:29.511+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"vps_sync","step":"sx_auto_promote"}
+{"ts":"2026-07-15T13:35:32.390+08:00","run_id":"adhoc","status":"success","backfilled":false,"stage":"vps_sync","step":"rsync_all"}
