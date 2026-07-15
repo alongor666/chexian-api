@@ -246,8 +246,13 @@ describe('真仓对账：branch-org-mapping ↔ 注册表 ↔ 预置账号', () 
     }
   });
 
-  it('每个预置 org_user 的 organization ∈ 本省 units（账号必有对应机构级报告目录）', () => {
-    const orgUsers = Object.values(PRESET_USERS).filter((u) => u.role === 'org_user');
+  it('每个活跃预置 org_user 的 organization ∈ 本省 units（账号必有对应机构级报告目录）', () => {
+    // active:false 的退役墓碑账号（如 sx_jdcszk，其 organization 是已拆除的旧合并值
+    // 「经代、车商、重客」，2026-07-15 拆分为 经代/车商/重客）不参与对账——
+    // 墓碑保留是防 preset 兜底写回复活，不代表该机构仍需报告目录。
+    const orgUsers = Object.values(PRESET_USERS).filter(
+      (u) => u.role === 'org_user' && u.active !== false
+    );
     expect(orgUsers.length).toBeGreaterThan(0);
     for (const u of orgUsers) {
       expect(u.branchCode, `org_user ${u.username} 缺 branchCode`).toMatch(/^[A-Z]{2}$/);

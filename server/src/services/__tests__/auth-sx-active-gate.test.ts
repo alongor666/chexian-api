@@ -197,8 +197,9 @@ describe('批量 SX 账号 — active 闸全覆盖', () => {
     .filter((u) => u.branchCode === 'SX')
     .map((u) => u.username);
 
-  it('SX 账号数量应为 19（sxAdmin + yangjie0621 + 6 车险部个人 + 11 org_user）', () => {
-    expect(sxUsernames).toHaveLength(19);
+  it('SX 账号数量应为 22（sxAdmin + yangjie0621 + 6 车险部个人 + 13 活跃 org_user + 1 退役墓碑）', () => {
+    // 2026-07-15 经代/车商/重客 拆分（BACKLOG e04971）：+3 新 org_user，sx_jdcszk 转 active:false 墓碑保留
+    expect(sxUsernames).toHaveLength(22);
   });
 
   for (const username of sxUsernames) {

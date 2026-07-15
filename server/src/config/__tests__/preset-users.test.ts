@@ -55,10 +55,13 @@ describe('getAllBranchCodes', () => {
 describe('山西分公司（SX）账号 — G7 多省接入', () => {
   // 权威经营单元名：数据管理/config/branch-org-mapping/SX.json 的 "units"
   // （= ETL 规范化后的 org_level_3 值）。新增/改名须与该文件同步。
+  // 2026-07-15 经代/车商/重客 拆分（BACKLOG 2026-07-15-user-e04971）：11 → 13。
   const SX_UNITS = [
     '太原一部',
     '太原二部',
-    '经代、车商、重客',
+    '经代',
+    '车商',
+    '重客',
     '大同',
     '阳泉',
     '长治',
@@ -68,6 +71,8 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
     '临汾',
     '吕梁',
   ];
+  // 已退役合并账号（active:false 墓碑保留，防 preset 兜底写回复活）
+  const RETIRED_SX_ORG_USERS = ['sx_jdcszk'];
 
   it('山西超管 sxAdmin 存在且 role=branch_admin / branchCode=SX / specialFeatures 含 cost+moto_cost', () => {
     const admin = PRESET_USERS.sxAdmin;
@@ -90,13 +95,13 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
     expect(admin.organization).toBeUndefined();
   });
 
-  it('11 个山西经营单元 org_user 全部存在、branchCode=SX、organization 与 SX.json 一致', () => {
+  it('13 个山西经营单元活跃 org_user 全部存在、branchCode=SX、organization 与 SX.json 一致', () => {
     const sxOrgUsers = Object.values(PRESET_USERS).filter(
-      (u) => u.branchCode === 'SX' && u.role === 'org_user'
+      (u) => u.branchCode === 'SX' && u.role === 'org_user' && u.active !== false
     );
-    // 数量 = 11 经营单元
+    // 数量 = 13 经营单元（退役墓碑账号 active:false 不计入）
     expect(sxOrgUsers).toHaveLength(SX_UNITS.length);
-    // organization 集合严格等于 SX.json 的 11 单元
+    // organization 集合严格等于 SX.json 的 13 单元
     const orgs = sxOrgUsers.map((u) => u.organization).sort();
     expect(orgs).toEqual([...SX_UNITS].sort());
     // 每个 org_user 结构镜像 SC：allowedRoutes/defaultRoute 来自 ORG_ROLE 常量
@@ -106,10 +111,23 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
     }
   });
 
+  it('退役合并账号 sx_jdcszk 保留为 active:false 墓碑（经代/车商/重客拆分，防 preset 兜底写回复活）', () => {
+    for (const username of RETIRED_SX_ORG_USERS) {
+      const u = PRESET_USERS[username];
+      expect(u, username).toBeDefined();
+      expect(u.active).toBe(false);
+      // 退役账号的 organization 是已拆除的旧合并值——不得出现在现行 units 里
+      expect(SX_UNITS).not.toContain(u.organization);
+      // 仍是 tombstone（不可登录）
+      expect(u.passwordHash).toMatch(/Tombstone/i);
+    }
+  });
+
   it('SX 账号密码均为「构造式 tombstone」占位（bcrypt 格式 + 含 Tombstone 标记 → fail-safe，绝非真实凭据）', () => {
     const sxUsers = Object.values(PRESET_USERS).filter((u) => u.branchCode === 'SX');
-    // sxAdmin + yangjie0621（2 超管）+ 6 车险部个人 branch_admin（2026-07-11 统一初始密码发放）+ 11 org_user = 19
-    expect(sxUsers).toHaveLength(19);
+    // sxAdmin + yangjie0621（2 超管）+ 6 车险部个人 branch_admin（2026-07-11 发放）
+    // + 13 活跃 org_user + 1 退役墓碑（sx_jdcszk，2026-07-15 拆分）= 22
+    expect(sxUsers).toHaveLength(22);
     for (const u of sxUsers) {
       // 1) bcrypt 60 字符格式（可被 bcrypt.compare 解析而不抛错）
       expect(u.passwordHash).toMatch(/^\$2[aby]\$\d{2}\$/);
@@ -139,10 +157,13 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
     }
   }, 30000);
 
-  it('SX 账号全部 active:true — 山西已于 2026-06-26 完成 cutover 步⑥发账号上线', () => {
-    const sxUsers = Object.values(PRESET_USERS).filter((u) => u.branchCode === 'SX');
+  it('SX 账号除退役墓碑外全部 active:true — 山西已于 2026-06-26 完成 cutover 步⑥发账号上线', () => {
+    const sxUsers = Object.values(PRESET_USERS).filter(
+      (u) => u.branchCode === 'SX' && !RETIRED_SX_ORG_USERS.includes(u.username)
+    );
     // 山西上线后预置表 active 翻 true（passwordHash 仍 tombstone：见上一条 tombstone 行为闸，
     // 即便 re-seed 也需生产 USER_PASSWORDS 真凭据才能登录，源码本身永不成后门）。
+    // 退役墓碑账号（RETIRED_SX_ORG_USERS）由专项用例断言 active:false。
     expect(sxUsers.length).toBeGreaterThan(0);
     for (const u of sxUsers) {
       expect(u.active).toBe(true);

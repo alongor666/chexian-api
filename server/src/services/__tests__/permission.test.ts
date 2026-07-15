@@ -111,9 +111,10 @@ describe('getVisibleOrganizations 全国超管 effectiveBranch（切省 + 全国
 });
 
 describe('BRANCH_ORGANIZATIONS 漂移守卫', () => {
-  it('山西机构列表与 PRESET_USERS 的 SX org_user organization 集合严格一致（SSOT 对账）', () => {
+  it('山西机构列表与 PRESET_USERS 的活跃 SX org_user organization 集合严格一致（SSOT 对账）', () => {
+    // active:false 退役墓碑（sx_jdcszk，旧合并值「经代、车商、重客」2026-07-15 拆分）不参与对账
     const fromPreset = Object.values(PRESET_USERS)
-      .filter((u) => u.branchCode === 'SX' && u.role === 'org_user')
+      .filter((u) => u.branchCode === 'SX' && u.role === 'org_user' && u.active !== false)
       .map((u) => u.organization)
       .filter((o): o is string => Boolean(o))
       .sort();

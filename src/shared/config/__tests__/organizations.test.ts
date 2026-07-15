@@ -19,8 +19,12 @@ describe('BRANCH_ORGANIZATIONS', () => {
     expect(BRANCH_ORGANIZATIONS.SX).toBe(SX_ORGANIZATIONS);
   });
 
-  it('SX 经营单元为 11 个（镜像 server BRANCH_ORGANIZATIONS）', () => {
-    expect(SX_ORGANIZATIONS).toHaveLength(11);
+  it('SX 经营单元为 13 个（2026-07-15 经代/车商/重客 拆分；镜像 server BRANCH_ORGANIZATIONS）', () => {
+    expect(SX_ORGANIZATIONS).toHaveLength(13);
+    expect(SX_ORGANIZATIONS).toContain('经代');
+    expect(SX_ORGANIZATIONS).toContain('车商');
+    expect(SX_ORGANIZATIONS).toContain('重客');
+    expect(SX_ORGANIZATIONS).not.toContain('经代、车商、重客');
   });
 });
 
@@ -120,9 +124,9 @@ describe('QUICK_LOGIN_USERS_BY_BRANCH — 快速切换用户按省（阶段3）'
     ]);
   });
 
-  it('SX 清单为 sxAdmin + 11 经营单元账号（回归前山西用户看到的是四川账号列表）', () => {
+  it('SX 清单为 sxAdmin + 13 经营单元账号（回归前山西用户看到的是四川账号列表）', () => {
     const sx = QUICK_LOGIN_USERS_BY_BRANCH.SX;
-    expect(sx).toHaveLength(12);
+    expect(sx).toHaveLength(14);
     expect(sx[0]).toEqual({ username: 'sxAdmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN });
     expect(sx.map((u) => u.username)).not.toContain('admin');
     expect(sx.map((u) => u.username)).not.toContain('leshan');
