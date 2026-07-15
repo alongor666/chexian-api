@@ -2217,3 +2217,22 @@ expires: 2026-09-15
 - **教训（复用既有 memory，非新发现）**：`audit-agent-findings-are-leads-not-conclusions` —— 审查代理的**定位**（这行有类型错误）精确，但**定性**（严重度/后果链）是它的推断，须独立复核。我复核了"错误真实存在"却没复核"后果真是一路绿到 CI"，等于只做了一半。下次拿到 CRITICAL，除了复现问题本身，还要复现它声称的后果链。
 
 已登记 BACKLOG uid=2026-07-15-claude-1cbed5（P2）：把 server tsc 纳入 `scripts/typecheck.mjs` / `verify:quick`，使**自查命令**与提交闸、CI 闸同口径，并修正 `CLAUDE.md §5` 对 `bun run typecheck` 的「仅类型检查」表述（当前读起来像全仓覆盖）。**在此之前，改动 `server/` 时自查阶段应直接跑 `cd server && bun run build`，别信 `bun run typecheck` 的绿。**
+
+---
+
+## 2026-07-15 · 追加（同 PR #1111）：测试"看起来锁住了"其实没锁 + 自查闸补齐（uid=1cbed5）
+
+- **触发**：评审指出 `access-control-preset-reconcile.test.ts` 只记录 UPDATE SQL、不把变更应用回 mock 表，因此**删掉 `persistToFile()` 那 6 个用例仍全绿**。
+- **变异实测确认属实**（没有照单全收，也没有当场反驳——先跑）：注释掉 `await persistToFile()` → 6/6 依旧绿。该缺口通向最坏的静默失败：**回填了但没落盘**——进程内看着已修复，PM2 reload 后 store 仍缺 `branch_code`，账号继续 401/403，而日志还在打印"已持久化"。
+- **修复**：新增 `duckdb-access-control-preset-reconcile.test.ts`（真实 DuckDB `:memory:` + 真实临时 `user_store.json`）。命名 `duckdb-*` 是按 `CLAUDE.md §5` 分层协议走既有轨道——jsdom 单测 config 已排除该模式、`vitest.integration.config.ts` 已收录、CI 的 production-gate 已跑它，**不新建第二套测试基建**。锁 5 件事：读**磁盘上的** store 断言回填落盘 / 二次启动幂等（UPDATE 次数=0 且 `exportedAt` 不变）/ 运行时自设凭据零变化 / 全量 passwordHash 零变化 / store 已有值不被覆盖。
+- **锁经变异验证**（关键，否则等于又加了一层假绿）：注入同一变异后 3/5 精确报红——`tianfu 应已按 preset 回填并落盘: expected undefined to be 'SC'`、`二次启动不应再回填: expected 2 to be +0`；还原后 5/5 绿。原 mock 单测保留为廉价的"SQL 列边界"锁，文件头写明其能力边界与两层互补，防后人把它的绿当端到端证据。
+- **顺带闭掉 uid=1cbed5**：`scripts/typecheck.mjs` 改为 `PROJECTS` 数组逐工程检查（前端根 tsconfig + `server/tsconfig.json`），不 fail-fast、跑完汇总，工程配置缺失显式报错而非静默跳过。`verify:quick` 经 `typecheck` 自动继承。`scripts/hooks/pre-commit` 的两步收敛为一条 `bun run typecheck`（两处各写一份正是漂移温床）。`CLAUDE.md §5` 表述同步订正。
+
+### needs_automation: false
+
+两条缺口本次都已长成**代码闸**而非文档条款：server 类型检查进了 `typecheck.mjs` 的 `PROJECTS`（新增子包 tsconfig 只需加一行，且缺失即报错）；持久化行为进了带变异验证的集成测试（CI production-gate 已跑）。
+
+**留给后人的判断法则（本次两个教训是同一个）**：**绿灯不等于有锁**。
+- `bun run typecheck` 报绿 ≠ 覆盖了你改的代码（要看它到底编译哪个 tsconfig）；
+- 测试全过 ≠ 锁住了行为（mock 层级决定了它能断言什么）。
+唯一可靠的验证是**变异**：把你以为被保护的那行删掉/改坏，闸必须红。本次两处都是靠"红一次"才确认闸是真的——`typecheck.mjs` 装上当场抓到一处真实 TS2345（我自己新写测试里的类型错误），集成测试注入变异后精确报红。**新增任何"防回归"闸，都要在同一个 PR 里让它红一次给人看**，否则你交付的可能只是一层新的假绿。

@@ -572,7 +572,10 @@ export async function seedAccessControlData(): Promise<void> {
       warnPresetUserDrift(preset, effective);
     }
     if (backfilled > 0) {
-      // 落盘一次即可（逐用户 persist 会放大启动 IO）
+      // 落盘一次即可（逐用户 persist 会放大启动 IO）。
+      // ⚠️ 删掉这行 → duckdb-access-control-preset-reconcile.test.ts 必红（已变异验证）：
+      //    不落盘 = 进程内看着已修复、reload 后 store 仍缺 branch_code，账号继续 401/403，
+      //    而日志还在打印"已持久化" —— 最坏的静默失败。
       await persistToFile();
       log.warn(`preset 对账：共回填 ${backfilled} 个账号的 branch_code 并已持久化`);
     }

@@ -138,7 +138,7 @@
 bun install && bun run dev:full    # 安装+启动
 bun run hooks:install              # 首次 clone 后装 git hooks（worktree 依赖自愈）
 bun run build                      # 类型检查+构建
-bun run typecheck                  # 仅类型检查
+bun run typecheck                  # 仅类型检查（前端 + server 两个 tsconfig，工程清单见 scripts/typecheck.mjs PROJECTS）
 bun run test --run                 # 单元测试一次性运行（⚠️ 不是 bun test；不带 --run 进 vitest watch）
 bun run test --run <文件路径>      # 跑单个测试文件
 bun run test:integration           # 集成测试（DuckDB 原生绑定，node 环境；CI production-gate + 本地）

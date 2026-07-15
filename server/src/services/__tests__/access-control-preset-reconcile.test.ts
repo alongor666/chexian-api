@@ -13,7 +13,14 @@
  *   3. 凭据 / 授权 / 生命周期字段 → 绝不回填（回填 = 破坏凭据链或提权）
  *
  * 测试层级：mock duckdbService 捕获 SQL（不依赖真实 DuckDB / 落盘目录指向 tmp），
- * 与 access-control-admin-reset.test.ts 同款harness。
+ * 与 access-control-admin-reset.test.ts 同款 harness。
+ *
+ * ⚠️ 本层的**能力边界**（评审指出 + 变异实测确认）：mock 只记录 SQL 文本、不把 UPDATE 应用
+ * 回内存表，故本文件只能锁「发出的 SQL 对不对」（写了哪些列、没写哪些列），**锁不住**
+ * 「回填有没有真的落盘」——把 access-control.ts 里 `await persistToFile()` 整行删掉，
+ * 本文件 6 个用例仍然全绿。落盘与「二次启动幂等」由真实 DuckDB + 真实落盘的
+ * duckdb-access-control-preset-reconcile.test.ts 锁死（该文件已做变异验证：删掉 persistToFile
+ * 必红）。两层是互补关系，别把本文件的绿当成端到端证据。
  */
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import fs from 'fs';
