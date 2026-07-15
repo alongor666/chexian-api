@@ -2193,4 +2193,5 @@ expires: 2026-09-15
 - **教训**：「省级报告天天更新」这个**局部健康信号**掩盖了「机构级从未生成」——巡检/告警只看了根目录 latest，没有按 scope 分别核对。同一 slug 下多 scope 产物，任一 scope 停更都该独立告警。
 
 ### needs_automation: true
+expires: 2026-08-15
 （本次靠人工比对目录时间戳才发现"根目录 07-13 vs orgs/ 07-08"。应加一条 governance/巡检检查：`public/reports/<slug>/` 的根目录 latest 与各 `branches/<省>/`、`orgs/<省>/<机构>/` 的 latest 若不一致即告警，防止任一 scope 静默停更重演。已在 backlog uid=2026-07-15-claude-362531 记为 follow-up。）
