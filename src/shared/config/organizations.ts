@@ -30,7 +30,7 @@ export const ORGANIZATIONS = [
 // ── SC-ORG-MIRROR-END ──
 
 /**
- * 山西（SX）经营单元列表（11个）。
+ * 山西（SX）经营单元列表（13个，2026-07-15 经代/车商/重客 拆分后口径，BACKLOG 2026-07-15-user-e04971）。
  * SSOT：数据管理/config/branch-org-mapping/SX.json 的 "units"；与
  * server/src/services/permission.ts 的 SX_ORGANIZATIONS 镜像一致
  * （前后端独立编译域，禁止 import，逐条对齐）。governance「省份映射前后端镜像」锚点对账。
@@ -39,7 +39,9 @@ export const ORGANIZATIONS = [
 export const SX_ORGANIZATIONS = [
   '太原一部',
   '太原二部',
-  '经代、车商、重客',
+  '经代',
+  '车商',
+  '重客',
   '大同',
   '阳泉',
   '长治',
@@ -149,7 +151,11 @@ export const QUICK_LOGIN_USERS_BY_BRANCH: Record<string, readonly QuickLoginUser
     { username: 'sxAdmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN },
     { username: 'sx_taiyuan1', displayName: '太原一部机构', role: UserRole.ORG_USER },
     { username: 'sx_taiyuan2', displayName: '太原二部机构', role: UserRole.ORG_USER },
-    { username: 'sx_jdcszk', displayName: '经代、车商、重客机构', role: UserRole.ORG_USER },
+    // 2026-07-15 拆分（BACKLOG e04971）：sx_jdcszk（经代、车商、重客合并账号）退役（preset active:false），
+    // 由以下三个各看各的账号替代
+    { username: 'sx_jingdai', displayName: '经代机构', role: UserRole.ORG_USER },
+    { username: 'sx_cheshang', displayName: '车商机构', role: UserRole.ORG_USER },
+    { username: 'sx_zhongke', displayName: '重客机构', role: UserRole.ORG_USER },
     { username: 'sx_datong', displayName: '大同机构', role: UserRole.ORG_USER },
     { username: 'sx_yangquan', displayName: '阳泉机构', role: UserRole.ORG_USER },
     { username: 'sx_changzhi', displayName: '长治机构', role: UserRole.ORG_USER },

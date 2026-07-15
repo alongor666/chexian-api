@@ -31,16 +31,18 @@ export const ORGANIZATIONS = [
 // ── SC-ORG-MIRROR-END ──
 
 /**
- * 山西（SX）经营单元列表（11）。
+ * 山西（SX）经营单元列表（13，2026-07-15 经代/车商/重客 拆分后口径，BACKLOG 2026-07-15-user-e04971）。
  * SSOT：数据管理/config/branch-org-mapping/SX.json 的 "units"（= ETL 规范化后的 org_level_3 值），
- * 与 preset-users.ts 的 11 个 SX org_user `organization` 字段一致。漂移由 permission.test.ts 对账 PRESET_USERS 锁定。
+ * 与 preset-users.ts 的 13 个 SX org_user `organization` 字段一致。漂移由 permission.test.ts 对账 PRESET_USERS 锁定。
  * governance「省份映射前后端镜像」锚点对账。
  */
 // ── SX-ORG-MIRROR-BEGIN（governance 对账锚点：前后端两份镜像逐字一致）──
 export const SX_ORGANIZATIONS = [
   '太原一部',
   '太原二部',
-  '经代、车商、重客',
+  '经代',
+  '车商',
+  '重客',
   '大同',
   '阳泉',
   '长治',

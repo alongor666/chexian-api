@@ -497,12 +497,52 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     active: true,
   },
   sx_jdcszk: {
-    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
+    // 2026-07-15 退役（BACKLOG 2026-07-15-user-e04971）：经代/车商/重客 拆分为三个独立单元，
+    // 本合并账号显式 active:false 墓碑保留（防 preset 兜底写回复活，参 multi-branch-day1-sop §4.0）。
+    // ⚠️ 生产 store 存量行不会随 preset 自动停用（loadFromStore 不读 preset），须部署后经
+    // 权限管理 API 显式停用并验证登录被拒。organization 保留旧值仅作历史标识——重建后
+    // parquet 已无该 org_level_3 值，即使误活跃 RLS 等值匹配也恒 0 行（无数据泄露面）。
     username: 'sx_jdcszk',
     passwordHash: '$2b$10$SxJdcszkTombstone00000000000000000000000000000000000u',
-    displayName: '经代、车商、重客机构',
+    displayName: '经代、车商、重客机构（已拆分停用）',
     role: 'org_user',
     organization: '经代、车商、重客',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+    active: false,
+  },
+  sx_jingdai: {
+    // 2026-07-15 新增（拆分自 sx_jdcszk，各看各的）；真实凭据仅在生产 USER_PASSWORDS / 飞书个人映射
+    username: 'sx_jingdai',
+    passwordHash: '$2b$10$SxJingdaiTombstone0000000000000000000000000000000000u',
+    displayName: '经代机构',
+    role: 'org_user',
+    organization: '经代',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+    active: true,
+  },
+  sx_cheshang: {
+    // 2026-07-15 新增（拆分自 sx_jdcszk，各看各的）；真实凭据仅在生产 USER_PASSWORDS / 飞书个人映射
+    username: 'sx_cheshang',
+    passwordHash: '$2b$10$SxCheshangTombstone000000000000000000000000000000000u',
+    displayName: '车商机构',
+    role: 'org_user',
+    organization: '车商',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+    active: true,
+  },
+  sx_zhongke: {
+    // 2026-07-15 新增（拆分自 sx_jdcszk，各看各的）；真实凭据仅在生产 USER_PASSWORDS / 飞书个人映射
+    username: 'sx_zhongke',
+    passwordHash: '$2b$10$SxZhongkeTombstone0000000000000000000000000000000000u',
+    displayName: '重客机构',
+    role: 'org_user',
+    organization: '重客',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',

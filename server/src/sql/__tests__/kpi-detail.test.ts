@@ -42,17 +42,22 @@ describe('generateKpiDetailQuery — 同城机构名单省份感知 (G6)', () =>
   // ————————————————————————————————————————————————————
   // (b) 传 'SX' → 太原口径，不含成都机构
   // ————————————————————————————————————————————————————
-  it('(b) 传 SX 时 SQL 含太原三机构', () => {
+  it('(b) 传 SX 时 SQL 含太原五机构（2026-07-15 经代/车商/重客 拆分）', () => {
     const sql = generateKpiDetailQuery('1=1', false, 'SX');
     expect(sql).toContain("'太原一部'");
     expect(sql).toContain("'太原二部'");
-    // 中文顿号精确匹配
-    expect(sql).toContain("'经代、车商、重客'");
+    expect(sql).toContain("'经代'");
+    expect(sql).toContain("'车商'");
+    expect(sql).toContain("'重客'");
+    // 旧合并值（含中文顿号）已退役，不得再出现
+    expect(sql).not.toContain("'经代、车商、重客'");
   });
 
-  it('(b) 传 SX 时 SQL 不含成都机构', () => {
+  it('(b) 传 SX 时 SQL 不含成都机构（「重客」为两省同名机构，豁免）', () => {
     const sql = generateKpiDetailQuery('1=1', false, 'SX');
     for (const org of SAME_CITY_ORGS_BY_BRANCH.SC) {
+      // 「重客」自 2026-07-15 拆分起在 SC/SX 各有同名独立机构（branch_code 隔离，非串省）
+      if (org === '重客') continue;
       expect(sql).not.toContain(`'${org}'`);
     }
   });
@@ -99,12 +104,15 @@ describe('generateKpiDetailQuery — 同城机构名单省份感知 (G6)', () =>
     expect(SAME_CITY_ORGS).toHaveLength(7);
   });
 
-  it('SAME_CITY_ORGS_BY_BRANCH.SX 含太原 3 机构', () => {
+  it('SAME_CITY_ORGS_BY_BRANCH.SX 含太原 5 机构（2026-07-15 经代/车商/重客 拆分）', () => {
     const sx = SAME_CITY_ORGS_BY_BRANCH.SX;
     expect(sx).toContain('太原一部');
     expect(sx).toContain('太原二部');
-    expect(sx).toContain('经代、车商、重客');
-    expect(sx).toHaveLength(3);
+    expect(sx).toContain('经代');
+    expect(sx).toContain('车商');
+    expect(sx).toContain('重客');
+    expect(sx).not.toContain('经代、车商、重客');
+    expect(sx).toHaveLength(5);
   });
 });
 

@@ -38,7 +38,8 @@ class TestIsOrgPlaceholder(unittest.TestCase):
                 self.assertTrue(is_org_placeholder(v), f"{v!r} 应判为占位值")
 
     def test_real_org_names_are_not_placeholders(self):
-        for v in ["太原一部", "太原二部", "大同", "运城", "经代、车商、重客"]:
+        # 含 2026-07-15 拆分后的新单元（经代/车商/重客）与已退役旧合并值（历史 parquet 仍可能出现）
+        for v in ["太原一部", "太原二部", "大同", "运城", "经代", "车商", "重客", "经代、车商、重客"]:
             with self.subTest(v=v):
                 self.assertFalse(is_org_placeholder(v), f"{v!r} 是真实机构名，不应判为占位值")
 
@@ -55,16 +56,17 @@ class TestEvaluateOrgCollapse(unittest.TestCase):
         self.assertAlmostEqual(v.placeholder_share, 1.0)
 
     def test_healthy_multi_org_not_collapsed(self):
-        """正常 SX 11 经营单元分布 → 不塌缩。"""
+        """正常 SX 13 经营单元分布（2026-07-15 经代/车商/重客 拆分后口径）→ 不塌缩。"""
         counts = {
-            "太原一部": 4000, "太原二部": 3500, "经代、车商、重客": 3000,
+            "太原一部": 4000, "太原二部": 3500,
+            "经代": 1800, "车商": 1000, "重客": 200,
             "大同": 1200, "阳泉": 900, "长治": 800, "晋城": 700,
             "晋中": 650, "运城": 600, "临汾": 550, "吕梁": 500,
             "其他": 120,  # 少量兜底，合法
         }
         v = evaluate_org_collapse(counts)
         self.assertFalse(v.collapsed)
-        self.assertEqual(v.distinct, 12)
+        self.assertEqual(v.distinct, 14)
         self.assertLess(v.placeholder_share, 0.05)
 
     def test_legit_single_org_concentration_not_collapsed(self):

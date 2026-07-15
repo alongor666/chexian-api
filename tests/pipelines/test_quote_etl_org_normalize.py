@@ -101,5 +101,54 @@ class NormalizeOrgLevel3Test(unittest.TestCase):
         self.assertEqual((out["org_level_3"] == SX_EXPECTED_UNIT).sum(), 90)
 
 
+class NormalizeOrgLevel3NewCaliberTest(unittest.TestCase):
+    """新口径（BACKLOG 2026-07-15-user-e04971）：org_level_3_new（三级机构新）优先。
+
+    与 transform.py 的差异（刻意）：报价源缺新列只告警不硬失败——历史单日文件
+    替换有时间差（上游 02 导出组件截至 2026-07-15 尚未含该列），过渡期沿旧合并
+    口径产出，重建后以 parquet 值域验收兜底。
+    """
+    RETIRED_BUCKET_CODE = "0118010204山西分公司本部（渠道重客）"  # org_to_unit → 旧合并值（白名单外）
+
+    def test_new_column_preferred_normalized_and_dropped(self):
+        df = pd.DataFrame({
+            "org_level_3_new": ["太原业务二部", "经代", "车商", "重客"],
+            "org_level_3": [SX_CODED_ORG] * 4,
+        })
+        out = normalize_org_level_3(df, "SX")
+        self.assertEqual(out["org_level_3"].tolist(), ["太原二部", "经代", "车商", "重客"])
+        self.assertNotIn("org_level_3_new", out.columns)
+
+    def test_other_rows_fall_back_via_coded_org(self):
+        df = pd.DataFrame({
+            "org_level_3_new": ["其他", "晋中"],
+            "org_level_3": [SX_CODED_ORG, SX_CODED_ORG],
+        })
+        out = normalize_org_level_3(df, "SX")
+        self.assertEqual(out["org_level_3"].tolist(), [SX_EXPECTED_UNIT, "晋中"])
+
+    def test_fallback_to_retired_bucket_keeps_placeholder(self):
+        # 回退命中旧合并值（白名单外）→ 保留「其他」，不产出退役值
+        df = pd.DataFrame({
+            "org_level_3_new": ["其他", "晋中"],
+            "org_level_3": [self.RETIRED_BUCKET_CODE, SX_CODED_ORG],
+        })
+        out = normalize_org_level_3(df, "SX")
+        self.assertEqual(out["org_level_3"].tolist(), ["其他", "晋中"])
+        self.assertNotIn("经代、车商、重客", set(out["org_level_3"]))
+
+    def test_missing_new_column_transitional_old_path(self):
+        # 过渡态：缺新列 → 告警 + 沿旧路径映射（不硬失败，与 transform.py 不同）
+        df = pd.DataFrame({"org_level_3": [SX_CODED_ORG] * 3})
+        out = normalize_org_level_3(df, "SX")
+        self.assertEqual(out["org_level_3"].tolist(), [SX_EXPECTED_UNIT] * 3)
+
+    def test_sc_untouched_even_with_new_column(self):
+        df = pd.DataFrame({"org_level_3": ["天府"], "org_level_3_new": ["晋中"]})
+        out = normalize_org_level_3(df, "SC")
+        self.assertEqual(out["org_level_3"].tolist(), ["天府"])
+        self.assertIn("org_level_3_new", out.columns)
+
+
 if __name__ == "__main__":
     unittest.main()
