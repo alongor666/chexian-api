@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-8129a3","pr":1111,"count":1,"reason":"owner 评审判 Request changes：新增的 access-control-preset-reconcile.test.ts 只记录 UPDATE SQL、不把变更应用回 mock 表，故删掉 access-control.ts 的 persistToFile 后 6 个用例仍全绿——核心「持久化回填」未被测试锁定。要求让 mock 真正应用 UPDATE 或改用内存 DuckDB，并断言临时 user_store.json 已写入 branchCode、二次启动无重复 UPDATE、凭据字段不变。已按第二方案落地并做变异验证","ts":"2026-07-15"}
