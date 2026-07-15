@@ -183,6 +183,8 @@ export function runReportScopeFreshnessGate({
   const checkedSlugs = [...candidateSlugs].sort();
   for (const slug of checkedSlugs) {
     const slugDir = join(reportsRoot, slug);
+    // Stage 1.5 只生成 period-trend；其他报告可合法保留历史版本，仍只做磁盘/manifest 对账。
+    const scopeNotBeforeMs = slug === PERIOD_TREND_SLUG ? notBeforeMs : null;
     const expected = slug === PERIOD_TREND_SLUG
       ? expectedPeriodTrend
       : { branches: [], orgs: [] };
@@ -199,7 +201,7 @@ export function runReportScopeFreshnessGate({
       slug,
       expectedScope: null,
       rootLatest: null,
-      notBeforeMs,
+      notBeforeMs: scopeNotBeforeMs,
       errors,
     });
     for (const branch of branches) {
@@ -209,7 +211,7 @@ export function runReportScopeFreshnessGate({
         slug,
         expectedScope: { branch },
         rootLatest,
-        notBeforeMs,
+        notBeforeMs: scopeNotBeforeMs,
         errors,
       });
     }
@@ -220,7 +222,7 @@ export function runReportScopeFreshnessGate({
         slug,
         expectedScope: { branch, org },
         rootLatest,
-        notBeforeMs,
+        notBeforeMs: scopeNotBeforeMs,
         errors,
       });
     }

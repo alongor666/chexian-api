@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from 'fs';
 import { tmpdir } from 'os';
@@ -120,6 +121,28 @@ describe('report scope freshness gate', () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors.join('\n')).toContain('未在本批次刷新');
+  });
+
+  it('其他报告类型可保留历史产物，不受 period-trend 本批次时间约束', () => {
+    const { reportsRoot, configDir } = makeFixture();
+    writeMapping(configDir, 'SC', ['乐山']);
+    writeCompletePeriodTrend(reportsRoot, '2026-07-15', { SC: ['乐山'] });
+    const historicalDir = join(reportsRoot, 'diagnose-loss-development');
+    writeReport(historicalDir, '2026-07-01');
+    const historicalFile = join(historicalDir, '2026-07-01-dashboard.html');
+    utimesSync(historicalFile, new Date(1_000), new Date(1_000));
+
+    const result = runReportScopeFreshnessGate({
+      reportsRoot,
+      configDir,
+      notBeforeMs: 2_000,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.checkedSlugs).toEqual([
+      'diagnose-loss-development',
+      'diagnose-period-trend',
+    ]);
   });
 
   it('文件名匹配但实际为目录时不视为报告产物', () => {
