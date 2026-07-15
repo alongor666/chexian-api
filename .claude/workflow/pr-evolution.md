@@ -2155,3 +2155,29 @@ expires: 2026-07-26
 
 ### needs_automation: false
 （前后端两份权限清单的一致性已由本次新增的 governance 闸自动拦截，不再依赖人工发现；codex 揪出的既有覆盖机制"前端看得见、后端不执行"缺口已登记 BACKLOG 交给独立决策 + 实现，不属于"文档规则没人守"的可自动化缺口。）
+
+---
+
+## 2026-07-14 · 首登强制设密页永久死锁（前后端两套口径，PR #1108）
+
+- **触发**：用户报告某账号飞书扫码登录后被弹到强制设密页，401「当前密码不正确」+ 业务接口 403，完全进不去系统。
+- **根因**：同一语义「这账号有没有密码」在两处独立实现且判定相反——`/api/auth/me` 用 `PasswordCredential.state === 'active'`（只表示"已自设"），`changePassword` 用 `hasUsablePassword()`（还认 USER_PASSWORDS 覆盖 + 非 tombstone store 哈希）。对「有旧密可验但尚未自设」的账号：前端据 `hasPassword=false` 藏掉「当前密码」输入框、不发 `oldPassword`；后端据 `hasUsablePassword=true` 仍验旧密 → 401 → **账号无法自救**（`pns` 会话同时被拦掉全部业务接口 = 那个 403，属设计内行为）。`ChangePasswordPage` 本就实现了双模式（其 35-36 行注释即描述该设计），只是被 `/me` 喂错了值。
+- **修复**：`/me` 改用同源函数 `authService.hasUsablePasswordForUsername()`，与验旧密闸共用 `hasUsablePassword` 内核——结构性同源，非再加一层校验。后端闸未动，未放松鉴权（`hasPassword=true` 变多只是让前端在后端本来就会索要旧密的场景显示输入框，修假阴性）。
+- **oracle / 回归门**：新增 4 条回归锁，含逐账号原型对拍（`hasUsablePasswordForUsername` ≡ `changePassword` 是否验旧密）。**锁经变异验证**：把实现改回旧口径，锁精确报出「当前密码不正确」而非空过——确认不是恒真通过。本地真实后端 A/B：不发 `oldPassword`→401 复现用户报错；发→200 且新 token 无 `pns`；业务接口 403→200。typecheck / governance 59-59 / 单测 5413 passed / security-reviewer 0 issue。
+- **诚实边界**：① 用户报错发生在 02:18，而生产在 10:03 部署、10:06 重启，**服务他那次请求的进程已不存在**，其环境与当时库状态无法直接观测；「那一刻 `hasUsablePassword` 必为 true」是由"抛出该 401 的唯一代码路径"反推的，非直接观测。② 回归锁锁的是 service 层不变量，**不覆盖"`/me` 必须调用该函数"**——未来若有人在 `/me` 里重新自行计算 `hasPassword`，现有测试抓不到（见下 needs_automation）。
+
+### needs_automation: true
+
+**同类失败已第 2 次**（铁律触发）：本次「前后端两处同语义独立实现 → 判定漂移 → 线上故障」与**同日** PR #1104「前端 `ORG_USER_DEFAULT_ALLOWED_ROUTES` vs 后端 `ORG_ROLE_ALLOWED_ROUTES` 两份清单漂移 → org_user 误报 403」是同一失败类。#1104 的对策是给那一对清单加了专项 governance 闸（点状），本次是把两处收敛到同一函数（结构性）——**两次都是事后一事一治，没有针对"该类"的通用防线**。
+
+缺口：现无机制阻止「后端已有权威判定函数，却在 API 响应层另写一份等价逻辑喂给前端」这一模式复发。已登记 BACKLOG 交独立 PR 处理（本 PR 不扩大范围，遵 `feedback_audit_fix_scope_boundary`：权限模型相关不搭车修）。
+
+## 2026-07-14 · 自身流程失误：把生产账号活状态写进公开仓库 commit message（同 PR #1108）
+
+- **现象**：`git push` 被权限闸拦下（Out-of-Place Publication / Excess Sensitive Detail）。commit message 里逐个列出了经生产 `state.db` 只读探针取得的、**当时处于未设密被锁状态**的一批账号名，而 `alongor666/chexian-api` 是 **PUBLIC** 仓库（已 `gh repo view` 核实 `isPrivate:false`）。
+- **根因**：把"调查过程中掌握的全部事实"直接当成"该写进产物的事实"。账号名本身早在公开的 `preset-users.ts` 里（非新信息），但「这些具名账号此刻在生产处于什么状态」是**活的运维状态**，公开后对攻击者有提示价值——两者敏感度不同，我当时未做区分。
+- **修复**：`git commit --amend` 剥掉账号清单与探针来源，只留工程实质（口径不一致 + 修复 + 验证）与不具名的影响面描述（"命中『有旧密可验但尚未自设』的存量账号"）。详细名单只留在与用户的对话里（用户是系统所有者且授权了该次生产只读）。
+- **预防（§3.4 自审新增一问）**：产物（commit message / PR body / 公开文档）若含**生产环境取得的运行时状态**——账号状态、真实数据分布、内部拓扑——先答两问：① 目标仓库是 public 还是 private（`gh repo view --json isPrivate` 核实，别凭印象）？② 该细节是"读者理解此改动所必需"还是"我恰好知道"？非必需即删。授权范围也不传递：「授权读生产」≠「授权把读到的内容发布到公开处」。
+
+### needs_automation: false
+（本次为一次性判断失误，已被现有权限闸实时拦下——闸本身就是自动防线且生效了；升级为项目级脚本闸性价比低。预防已落到 §3.4 自审问句，若再犯第 2 次则升级为 pre-push 敏感串扫描规则。）
