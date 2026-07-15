@@ -2195,3 +2195,44 @@ expires: 2026-09-15
 ### needs_automation: true
 expires: 2026-08-15
 （本次靠人工比对目录时间戳才发现"根目录 07-13 vs orgs/ 07-08"。应加一条 governance/巡检检查：`public/reports/<slug>/` 的根目录 latest 与各 `branches/<省>/`、`orgs/<省>/<机构>/` 的 latest 若不一致即告警，防止任一 scope 静默停更重演。已在 backlog uid=2026-07-15-claude-362531 记为 follow-up。）
+
+---
+
+## 2026-07-15 · preset↔store 用户字段静默漂移（uid=2026-07-15-claude-8129a3）
+
+- **触发**：排查「各机构账号首页报告链接打开没数据」时撞见的独立隐患（主因是另一件事，已由 #1110 修）。`ensureUserFromPreset` 为 `if (existing) return existing`，只在用户行**不存在**时按 `PRESET_USERS` 建行；此后 preset 新增/修正的任何字段对**已存在的行**永不生效 → 源码与运行时 store 静默漂移，且无任何告警。
+- **根因**：`seedAccessControlData` 有账号级对账（缺账号补建），无**字段级**对账。`branchCode` 2026-06-05 才进 preset，早于此 seed 的行至今无该字段 → 登录 JWT 缺 branchCode → 报告门户 `resolvePortalScope` fail-closed 403。生产未炸只因 `permission.ts` 对缺 branchCode 的 token 直接 401 —— **漂移被另一条 fail-closed 掩盖，机制本身完好**，下一个新增字段（尤其没有 401 兜底的）会静默重演。
+- **修复与边界**：仅 `branch_code` 自愈，且仅当 store 侧为空。可自愈字段须同时满足三条（写进代码注释，新增字段照此论证）：① 约束型而非授权型（回填至多恢复 preset 既定范围，不可能提权）；② 缺失即 fail-closed（下界是"当前完全不可用"，无新增暴露面）；③ 空值绝非运维意图（`updateUser` 显式不在未传参时清空 `branch_code`）。`organization` 满足 ①② 但不满足 ③（管理面改 role 后清空是合法态）→ 只告警。凭据/授权/生命周期字段（`passwordHash`/`active`/`specialFeatures`/`allowedRoutes`/`defaultRoute`）登记进 `RECONCILE_IGNORED_PRESET_FIELDS` 并**逐条注明理由**——其中 `allowedRoutes` 被排除的理由正是"已有两处兜底（`permission.ts getAllowedRoutesForRole` + `auth.ts resolveAllowedRoutes`），再加一处即第三套事实源"，即主动不踩 2026-07-14 两次"同语义多处实现"的坑。
+- **通用防线**：未登记到忽略清单的 preset 字段，缺失时**默认告警**（fail-loud），下一个新增字段会自己叫出来而非静默重演。告警一律 `log.warn` 而非 `log.info`——`logger.ts:33` 生产默认 level=`warn`，`info` 在生产不可见（既有那行 `log.info('preset 对账：补齐 store 缺失账号')` 实际上生产从来没人看见过）。
+- **验证**：本机开发 store 副本端到端实跑（主仓原文件只读未改）——17 个缺 branchCode 的账号全部按 preset 回填、`admin` 的 store 值未被 preset 覆盖（证"已有值不覆盖"边界）、passwordHash 变化 0 条。6 条 RED LINE 单测锁边界 + 全量 5427 单测 + governance 59/59 + server `tsc`。code-reviewer / security-reviewer 双审：0 Critical/High/Medium。
+
+### needs_automation: true
+expires: 2026-09-15
+
+**缺口在"迭代期自查命令"这一层，不在提交闸**（下方结论经两次修正，过程本身即教训，故完整留痕）：
+
+- **观测**：本次我按 `CLAUDE.md §5` 跑 `bun run typecheck` 得到"✅ 类型检查通过"、5427 单测全绿、governance 59/59 全绿，**但 `cd server && bun run build` 直接编译失败**（TS2352）。根 `tsconfig.json` 的 `include` 仅 `["src"]`（前端），服务端类型检查不在其中；`verify:quick` = preflight + governance + typecheck 三者也都不含服务端 tsc；vitest 走 esbuild 转译不做类型检查，同样掩盖问题。**这部分经我独立复现，是观测。**
+- **修正一（我先信了错的严重度）**：code-reviewer 把它判为 CRITICAL 并称"会一路绿到 CI、push 到 main 会挡住部署"。我照单采信写进了本条目初稿。**实际不成立**——`scripts/hooks/pre-commit:55-56` 明确跑 `npx tsc --noEmit --project server/tsconfig.json`，我这次 commit 时它真实执行并打印了「运行 server 类型检查」。也就是说提交闸本来就会拦，错误根本到不了 CI。**是 commit 动作本身证伪了这个判断，不是我事先想到的。**
+- **修正二（缺口的真实形状）**：真问题不是"没有闸"，而是**迭代期用来自查的命令（`bun run typecheck` / `verify:quick`）覆盖面与其名字/文档承诺不符**——照着 `CLAUDE.md §5` 做会拿到假绿，人在写代码的那 30 分钟里以为是对的，直到 commit 才被打脸。外加一层：pre-commit 依赖 `bun run hooks:install`（`CLAUDE.md §5` 明列，clone 后需手动装），**未装钩子的检出连这道闸也没有**。
+- **教训（复用既有 memory，非新发现）**：`audit-agent-findings-are-leads-not-conclusions` —— 审查代理的**定位**（这行有类型错误）精确，但**定性**（严重度/后果链）是它的推断，须独立复核。我复核了"错误真实存在"却没复核"后果真是一路绿到 CI"，等于只做了一半。下次拿到 CRITICAL，除了复现问题本身，还要复现它声称的后果链。
+
+已登记 BACKLOG uid=2026-07-15-claude-1cbed5（P2）：把 server tsc 纳入 `scripts/typecheck.mjs` / `verify:quick`，使**自查命令**与提交闸、CI 闸同口径，并修正 `CLAUDE.md §5` 对 `bun run typecheck` 的「仅类型检查」表述（当前读起来像全仓覆盖）。**在此之前，改动 `server/` 时自查阶段应直接跑 `cd server && bun run build`，别信 `bun run typecheck` 的绿。**
+
+---
+
+## 2026-07-15 · 追加（同 PR #1111）：测试"看起来锁住了"其实没锁 + 自查闸补齐（uid=1cbed5）
+
+- **触发**：评审指出 `access-control-preset-reconcile.test.ts` 只记录 UPDATE SQL、不把变更应用回 mock 表，因此**删掉 `persistToFile()` 那 6 个用例仍全绿**。
+- **变异实测确认属实**（没有照单全收，也没有当场反驳——先跑）：注释掉 `await persistToFile()` → 6/6 依旧绿。该缺口通向最坏的静默失败：**回填了但没落盘**——进程内看着已修复，PM2 reload 后 store 仍缺 `branch_code`，账号继续 401/403，而日志还在打印"已持久化"。
+- **修复**：新增 `duckdb-access-control-preset-reconcile.test.ts`（真实 DuckDB `:memory:` + 真实临时 `user_store.json`）。命名 `duckdb-*` 是按 `CLAUDE.md §5` 分层协议走既有轨道——jsdom 单测 config 已排除该模式、`vitest.integration.config.ts` 已收录、CI 的 production-gate 已跑它，**不新建第二套测试基建**。锁 5 件事：读**磁盘上的** store 断言回填落盘 / 二次启动幂等（UPDATE 次数=0 且 `exportedAt` 不变）/ 运行时自设凭据零变化 / 全量 passwordHash 零变化 / store 已有值不被覆盖。
+- **锁经变异验证**（关键，否则等于又加了一层假绿）：注入同一变异后 3/5 精确报红——`tianfu 应已按 preset 回填并落盘: expected undefined to be 'SC'`、`二次启动不应再回填: expected 2 to be +0`；还原后 5/5 绿。原 mock 单测保留为廉价的"SQL 列边界"锁，文件头写明其能力边界与两层互补，防后人把它的绿当端到端证据。
+- **顺带闭掉 uid=1cbed5**：`scripts/typecheck.mjs` 改为 `PROJECTS` 数组逐工程检查（前端根 tsconfig + `server/tsconfig.json`），不 fail-fast、跑完汇总，工程配置缺失显式报错而非静默跳过。`verify:quick` 经 `typecheck` 自动继承。`scripts/hooks/pre-commit` 的两步收敛为一条 `bun run typecheck`（两处各写一份正是漂移温床）。`CLAUDE.md §5` 表述同步订正。
+
+### needs_automation: false
+
+两条缺口本次都已长成**代码闸**而非文档条款：server 类型检查进了 `typecheck.mjs` 的 `PROJECTS`（新增子包 tsconfig 只需加一行，且缺失即报错）；持久化行为进了带变异验证的集成测试（CI production-gate 已跑）。
+
+**留给后人的判断法则（本次两个教训是同一个）**：**绿灯不等于有锁**。
+- `bun run typecheck` 报绿 ≠ 覆盖了你改的代码（要看它到底编译哪个 tsconfig）；
+- 测试全过 ≠ 锁住了行为（mock 层级决定了它能断言什么）。
+唯一可靠的验证是**变异**：把你以为被保护的那行删掉/改坏，闸必须红。本次两处都是靠"红一次"才确认闸是真的——`typecheck.mjs` 装上当场抓到一处真实 TS2345（我自己新写测试里的类型错误），集成测试注入变异后精确报红。**新增任何"防回归"闸，都要在同一个 PR 里让它红一次给人看**，否则你交付的可能只是一层新的假绿。

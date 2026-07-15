@@ -437,6 +437,115 @@ async function ensureUserFromPreset(user: PresetUser): Promise<AccessUser> {
   return created;
 }
 
+/**
+ * 用户字段对账时**跳过**的字段，逐条理由（新增字段前先判断是否属于以下任一类，属于则登记到此）：
+ *  - username：对账主键本身，不参与比对。
+ *  - displayName：管理面 updateUser 可改名，store 权威。
+ *  - passwordHash：凭据三级优先级链（auth.ts resolveEffectiveHash）的第 3 级。
+ *    multi-branch-day1-sop.md Step 4.0 明确「源码把占位改成 tombstone 不会也不得覆盖
+ *    store 里已落地的哈希」——回填即破坏该不变量。
+ *  - active：账号生命周期归管理面 / 激活流程，preset 的 active 只是初始值。
+ *  - allowedRoutes / defaultRoute：**用户行上的值不参与后端鉴权**——路由白名单由
+ *    PRESET_ROLES 按 role 派生（permission.ts getAllowedRoutesForRole、
+ *    auth.ts 登录响应 resolveAllowedRoutes），已有两处兜底；再加一处即第三套事实源。
+ *  - specialFeatures：授权型字段，管理面清空 = 有意收回（如撤 cost 成本权限），
+ *    回填等于把管理员撤掉的权限自动还回去 —— 提权。
+ *  - visibleBranches：非 store 列（UserAccount 无此字段），登录时由 PRESET_USERS
+ *    经 getPresetVisibleBranches 派生，本就不存在漂移。
+ */
+const RECONCILE_IGNORED_PRESET_FIELDS: ReadonlySet<keyof PresetUser> = new Set([
+  'username',
+  'displayName',
+  'passwordHash',
+  'active',
+  'allowedRoutes',
+  'defaultRoute',
+  'specialFeatures',
+  'visibleBranches',
+]);
+
+/**
+ * 自动回填 store 缺失的 branch_code（**唯一**可自愈字段 · RED LINE 边界）。
+ *
+ * 只有同时满足以下三条的字段才可加入自愈范围，新增前须逐条论证并补不变量测试：
+ *  1. **约束型而非授权型**：该字段只收窄可见范围。回填至多把账号恢复到 preset 既定范围，
+ *     绝不可能授予 preset 未声明的权限。
+ *  2. **缺失即 fail-closed**：缺失时账号本就被拒——RLS 开启时 permission.ts 对无 branchCode
+ *     的 token 直接 401；报告门户 reports.ts resolvePortalScope 要求 branch 合法否则 403。
+ *     故回填的下界是「当前完全不可用」，不存在因回填新增的暴露面。
+ *  3. **空值绝非运维意图**：updateUser 显式「branch_code 仅在传入时更新，未传则保留原值」
+ *     （见该函数注释），即管理面不存在「有意把 branchCode 置空」的路径 ⇒ store 侧为空
+ *     只可能是 preset 演进漂移（branchCode 于 2026-06-05 多省改造才进 preset，早于此
+ *     seed 的 store 行没有该字段）。
+ *
+ * organization 满足 1、2 但**不**满足 3（管理面把 org_user 改成 branch_admin 后清空
+ * organization 是合法态），故只告警不回填，交人工判断。
+ *
+ * 已有值一律不覆盖：store 侧的值可能是管理面有意改的（本机 store 实测 admin=SX 而 preset=SC），
+ * 覆盖会把运维决策悄悄回滚。值冲突只告警，见 warnPresetUserDrift。
+ *
+ * @returns 是否实际写入（调用方据此决定是否落盘）
+ */
+async function backfillMissingBranchCode(
+  preset: PresetUser,
+  existing: AccessUser
+): Promise<boolean> {
+  if (!preset.branchCode || existing.branchCode) return false;
+  await duckdbService.query(`
+    UPDATE UserAccount
+    SET branch_code = ${toSqlString(preset.branchCode)},
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = '${escapeSqlValue(existing.id)}'
+  `);
+  log.warn(
+    `preset 对账：账号 ${preset.username} 的 branch_code 缺失（store 早于 branchCode 引入），` +
+      `已按 preset 回填为 ${preset.branchCode}。RLS 开启时该账号此前恒 401 / 报告门户 403。`
+  );
+  return true;
+}
+
+/**
+ * store ↔ 源码 preset 的用户字段漂移告警（只警告不自动改，与 warnRoleRouteDrift 同一口径）。
+ *
+ * 覆盖两类：
+ *  1. preset 声明了值而 store 侧为空 —— 即「preset 新增字段对存量行永不生效」这一漂移类本身。
+ *     默认对**所有**未登记在 RECONCILE_IGNORED_PRESET_FIELDS 的字段生效（fail-loud 默认），
+ *     故下一个新增的 preset 字段会在启动日志里自己叫出来，而不是静默重演 branchCode 那次。
+ *  2. branchCode 值冲突（两侧都有值且不等）—— store 权威不覆盖，但跨省字段冲突须让人看见。
+ */
+function warnPresetUserDrift(preset: PresetUser, existing: AccessUser): void {
+  // 按字段名动态取值：AccessUser 无索引签名，故须经 unknown 中转（本对账刻意是「字段无关」的
+  // 通用扫描——正是它让未来新增的 preset 字段默认被检查到，不必逐个手写 accessor）。
+  const readStoreField = (key: keyof PresetUser): unknown =>
+    (existing as unknown as Record<string, unknown>)[key];
+
+  for (const key of Object.keys(preset) as (keyof PresetUser)[]) {
+    if (RECONCILE_IGNORED_PRESET_FIELDS.has(key)) continue;
+    const presetValue = preset[key];
+    if (presetValue === undefined || presetValue === null) continue;
+    const storeValue = readStoreField(key);
+    const storeEmpty =
+      storeValue === undefined ||
+      storeValue === null ||
+      storeValue === '' ||
+      (Array.isArray(storeValue) && storeValue.length === 0);
+    if (storeEmpty) {
+      log.warn(
+        `preset 对账：账号 ${preset.username} 的 ${key} 在 store 中缺失，而源码 preset 声明为 ` +
+          `${JSON.stringify(presetValue)}。store 是运维权威故不自动改写；若非管理面有意为之，` +
+          `请在用户管理面补齐（该字段缺失可能导致该账号被 fail-closed 拒绝）。`
+      );
+    }
+  }
+  if (preset.branchCode && existing.branchCode && preset.branchCode !== existing.branchCode) {
+    log.warn(
+      `preset 对账：账号 ${preset.username} 的 branch_code store=${existing.branchCode} ` +
+        `≠ preset=${preset.branchCode}。store 权威故保留 store 值；若非管理面有意改省，` +
+        `请核对——该字段决定跨省数据隔离范围。`
+    );
+  }
+}
+
 export async function seedAccessControlData(): Promise<void> {
   const store = loadStoreFromFile();
   if (store) {
@@ -444,12 +553,31 @@ export async function seedAccessControlData(): Promise<void> {
     // 对账：store 已存在时补齐 preset 新增账号（存量行一律不动）。
     // 否则新 preset 账号（如自助设密 6 账号）要等首次密码登录才 lazy 落库；
     // 而 tombstone 账号根本无法密码登录 → 管理员在管理面看不到它、发不了激活令牌（死锁）。
+    //
+    // 存量行则做**字段级**对账：ensureUserFromPreset 只在账号不存在时建行，此后 preset 里
+    // 新增/修正的字段对已存在的行永不生效 → 源码与 store 静默漂移（branchCode 即实证）。
+    // 边界见 backfillMissingBranchCode：仅 branch_code 自愈，其余一律只告警。
+    let backfilled = 0;
     for (const preset of Object.values(PRESET_USERS)) {
       const existing = await getUserByUsername(preset.username);
       if (!existing) {
         await ensureUserFromPreset(preset);
         log.info(`preset 对账：补齐 store 缺失账号 ${preset.username}`);
+        continue;
       }
+      const didBackfill = await backfillMissingBranchCode(preset, existing);
+      if (didBackfill) backfilled++;
+      // 回填后的有效视图（不可变更新，不改动 existing 本身）
+      const effective = didBackfill ? { ...existing, branchCode: preset.branchCode } : existing;
+      warnPresetUserDrift(preset, effective);
+    }
+    if (backfilled > 0) {
+      // 落盘一次即可（逐用户 persist 会放大启动 IO）。
+      // ⚠️ 删掉这行 → duckdb-access-control-preset-reconcile.test.ts 必红（已变异验证）：
+      //    不落盘 = 进程内看着已修复、reload 后 store 仍缺 branch_code，账号继续 401/403，
+      //    而日志还在打印"已持久化" —— 最坏的静默失败。
+      await persistToFile();
+      log.warn(`preset 对账：共回填 ${backfilled} 个账号的 branch_code 并已持久化`);
     }
   } else {
     await seedFromPreset();
