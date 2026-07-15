@@ -94,16 +94,24 @@ router.get(
     }>(totalSql, QUERY_CACHE.hotspotShort);
 
     // 数值规范化（DuckDB BIGINT 可能返回 BigInt）
-    const normalizedRows = rows.map(r => ({
-      dim_value: r.dim_value,
-      sales_team_row_count: Number(r.sales_team_row_count) || 0,
-      received_premium: Number(r.received_premium) || 0,
-      standard_premium: Number(r.standard_premium) || 0,
-    }));
+    const normalizedRows = rows.map(r => {
+      const rowCount = Number(r.sales_team_row_count) || 0;
+      return {
+        dim_value: r.dim_value,
+        sales_team_row_count: rowCount,
+        // 已部署 v1 兼容别名；新调用方必须使用语义明确的 sales_team_row_count。
+        policy_count: rowCount,
+        received_premium: Number(r.received_premium) || 0,
+        standard_premium: Number(r.standard_premium) || 0,
+      };
+    });
     const t = totals[0];
+    const totalRowCount = t ? Number(t.sales_team_row_count) || 0 : 0;
     const normalizedTotal = t
       ? {
-          sales_team_row_count: Number(t.sales_team_row_count) || 0,
+          sales_team_row_count: totalRowCount,
+          // 已部署 v1 兼容别名，保留到正式弃用窗口结束。
+          policy_count: totalRowCount,
           received_premium: Number(t.received_premium) || 0,
           standard_premium: Number(t.standard_premium) || 0,
           latest_confirm_date: t.latest_confirm_date ?? null,

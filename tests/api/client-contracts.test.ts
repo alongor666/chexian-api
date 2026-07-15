@@ -272,8 +272,8 @@ describe('API client contract coverage', () => {
         success: true,
         data: {
           dimension: 'salesman',
-          rows: [{ dim_value: '甲', sales_team_row_count: 2, received_premium: 100, standard_premium: 120 }],
-          total: { sales_team_row_count: 2, received_premium: 100, standard_premium: 120, latest_confirm_date: '2026-07-14' },
+          rows: [{ dim_value: '甲', sales_team_row_count: 2, policy_count: 2, received_premium: 100, standard_premium: 120 }],
+          total: { sales_team_row_count: 2, policy_count: 2, received_premium: 100, standard_premium: 120, latest_confirm_date: '2026-07-14' },
         },
       }),
     });
@@ -288,7 +288,7 @@ describe('API client contract coverage', () => {
     expect(calledUrl).toContain('start=2026-01-01');
     expect(calledUrl).toContain('end=2026-07-14');
     expect(response.rows[0]?.sales_team_row_count).toBe(2);
-    expect('policy_count' in response.rows[0]!).toBe(false);
+    expect(response.rows[0]?.policy_count).toBe(2);
   });
 
   it('comprehensive bundle endpoint preserves granularity and cutoffDate', async () => {

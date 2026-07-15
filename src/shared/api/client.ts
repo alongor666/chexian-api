@@ -300,8 +300,8 @@ class ApiClient extends ApiClientCore {
     const query = this.buildQueryString(params);
     return this.request<{
       dimension: string;
-      rows: Array<{ dim_value: string; sales_team_row_count: number; received_premium: number; standard_premium: number }>;
-      total: { sales_team_row_count: number; received_premium: number; standard_premium: number; latest_confirm_date: string | null } | null;
+      rows: Array<{ dim_value: string; sales_team_row_count: number; policy_count: number; received_premium: number; standard_premium: number }>;
+      total: { sales_team_row_count: number; policy_count: number; received_premium: number; standard_premium: number; latest_confirm_date: string | null } | null;
     }>(`/query/${QUERY_ROUTES.SALES_TEAM_PERFORMANCE}${query ? `?${query}` : ''}`);
   }
 }

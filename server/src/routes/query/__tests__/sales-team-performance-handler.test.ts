@@ -63,8 +63,8 @@ describe('sales-team-performance handler 行为', () => {
       const etag = first.headers.get('etag');
       expect(etag).toBeTruthy();
       const body = await first.json() as any;
-      expect(body.data.rows[0]).toMatchObject({ sales_team_row_count: 2, standard_premium: 360 });
-      expect(body.data.total).toMatchObject({ sales_team_row_count: 2, latest_confirm_date: '2026-06-02' });
+      expect(body.data.rows[0]).toMatchObject({ sales_team_row_count: 2, policy_count: 2, standard_premium: 360 });
+      expect(body.data.total).toMatchObject({ sales_team_row_count: 2, policy_count: 2, latest_confirm_date: '2026-06-02' });
       expect(queryMock).toHaveBeenCalledTimes(2);
       expect(queryMock.mock.calls[0]?.[0]).toContain("DATE '2026-06-01'");
       expect(queryMock.mock.calls[0]?.[0]).toContain('LIMIT 10');
