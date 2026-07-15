@@ -412,8 +412,9 @@ async function main() {
   //
   // --no-sync：报告同步由 Stage 3 的 sync-vps（public_reports 任务）统一负责，不在此重复 rsync。
   // 超时放宽至 30 分钟：覆盖全部注册省 × 全部机构（当前 SC 14 + SX 11），远超原省级单次调用。
-  // skill 缺失 / 版本能力闸未过由 daily.mjs 自行判定（前者告警跳过，后者 exit 1 阻断发布——
-  // 不把陈旧机构报告静默同步上线，见 daily.mjs shouldAbortReportSync）。
+  // skill 缺失时 daily.mjs 目前只告警跳过；版本能力闸未过则 exit 1。前者由紧随其后的
+  // Stage 1.6 “本批次必须刷新”约束补齐 fail-loud，后者由 runCmd 直接阻断。
+  const reportGenerationStartedAt = Date.now();
   await runCmd(
     'period-trend report',
     'node',
@@ -423,12 +424,16 @@ async function main() {
 
   // Stage 1.6: 报告 scope 新鲜度一致性闸。daily.mjs 的逐机构生成失败目前仅告警，
   // 因此子进程 exit 0 仍不足以证明 branches/orgs 全部更新；这里按配置 SSOT 枚举全部
-  // 应生成 scope，并以真实磁盘产物 + manifest 对账。任一缺失/日期不一致即非零阻断，
+  // 应生成 scope，并以真实磁盘产物 + manifest 对账。任一缺失/日期不一致/本批次未刷新即非零阻断，
   // 绝不进入后续 sync-vps 把“根目录新、部分 scope 旧”的混合批次推上线。
   await runCmd(
     'report scope freshness gate',
     'node',
-    ['scripts/report-scope-freshness-gate.mjs'],
+    [
+      'scripts/report-scope-freshness-gate.mjs',
+      '--not-before-epoch-ms',
+      String(reportGenerationStartedAt),
+    ],
     { dryRun: opts.dryRun }
   );
 

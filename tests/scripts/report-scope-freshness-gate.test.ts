@@ -10,7 +10,10 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { spawnSync } from 'child_process';
 
-import { runReportScopeFreshnessGate } from '../../scripts/report-scope-freshness-gate.mjs';
+import {
+  runReportScopeFreshnessGate,
+  scanActualLatest,
+} from '../../scripts/report-scope-freshness-gate.mjs';
 
 const created: string[] = [];
 const PROJECT_ROOT = process.cwd();
@@ -107,6 +110,26 @@ describe('report scope freshness gate', () => {
     expect(result.errors.join('\n')).toContain('2026-07-15');
   });
 
+  it('所有 scope 虽同日但未在本批次刷新时失败', () => {
+    const { reportsRoot, configDir } = makeFixture();
+    writeMapping(configDir, 'SC', ['乐山']);
+    writeCompletePeriodTrend(reportsRoot, '2026-07-15', { SC: ['乐山'] });
+    const notBeforeMs = Date.now() + 1_000;
+
+    const result = runReportScopeFreshnessGate({ reportsRoot, configDir, notBeforeMs });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join('\n')).toContain('未在本批次刷新');
+  });
+
+  it('文件名匹配但实际为目录时不视为报告产物', () => {
+    const { reportsRoot } = makeFixture();
+    const slugDir = periodTrendDir(reportsRoot);
+    mkdirSync(join(slugDir, '2026-07-15-dashboard.html'), { recursive: true });
+
+    expect(scanActualLatest(slugDir)).toBeNull();
+  });
+
   it('应生成的 branch 与 org scope 缺失时逐项列出并失败', () => {
     const { reportsRoot, configDir } = makeFixture();
     writeMapping(configDir, 'SC', ['乐山']);
@@ -148,6 +171,13 @@ describe('report scope freshness gate', () => {
     expect(`${result.stdout}\n${result.stderr}`).toContain('diagnose-period-trend/branches/SC');
   });
 
+  it('CLI 参数缺值时直接报错，不把当前目录当作路径', () => {
+    const result = spawnSync('node', [GATE_CLI, '--reports-root'], { encoding: 'utf8' });
+
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('--reports-root 缺少值');
+  });
+
   it('发布编排把 scope 闸放在报告生成之后、VPS sync 之前', () => {
     const source = readFileSync(
       join(PROJECT_ROOT, 'scripts', 'sync-and-reload.mjs'),
@@ -156,9 +186,14 @@ describe('report scope freshness gate', () => {
     const reportIndex = source.indexOf("'period-trend report'");
     const scopeGateIndex = source.indexOf("'report scope freshness gate'");
     const syncIndex = source.indexOf("'VPS sync'");
+    const batchStartIndex = source.indexOf('const reportGenerationStartedAt = Date.now()');
+    const notBeforeArgIndex = source.indexOf("'--not-before-epoch-ms'");
 
     expect(reportIndex).toBeGreaterThan(-1);
+    expect(batchStartIndex).toBeGreaterThan(-1);
+    expect(batchStartIndex).toBeLessThan(reportIndex);
     expect(scopeGateIndex).toBeGreaterThan(reportIndex);
+    expect(notBeforeArgIndex).toBeGreaterThan(scopeGateIndex);
     expect(scopeGateIndex).toBeLessThan(syncIndex);
   });
 });

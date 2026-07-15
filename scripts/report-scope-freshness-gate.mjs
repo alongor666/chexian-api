@@ -43,10 +43,18 @@ export function scanActualLatest(dir) {
   for (const name of readdirSync(dir)) {
     const match = REPORT_FILE_RE.exec(name);
     if (!match) continue;
+    let stat;
+    try {
+      stat = statSync(join(dir, name));
+    } catch {
+      continue;
+    }
+    if (!stat.isFile()) continue;
     const candidate = {
       date: match[1],
       file: name,
       isDashboard: Boolean(match[2]),
+      mtimeMs: stat.mtimeMs,
     };
     if (
       latest === null
@@ -56,7 +64,7 @@ export function scanActualLatest(dir) {
       latest = candidate;
     }
   }
-  return latest ? { date: latest.date, file: latest.file } : null;
+  return latest ? { date: latest.date, file: latest.file, mtimeMs: latest.mtimeMs } : null;
 }
 
 function readManifest(dir) {
@@ -76,7 +84,7 @@ function sameScope(actual, expected) {
     && (expected.org === undefined ? actual.org === undefined : actual.org === expected.org);
 }
 
-function inspectScope({ dir, label, slug, expectedScope, rootLatest, errors }) {
+function inspectScope({ dir, label, slug, expectedScope, rootLatest, notBeforeMs, errors }) {
   const actual = scanActualLatest(dir);
   const { manifest, error: manifestError } = readManifest(dir);
 
@@ -110,6 +118,12 @@ function inspectScope({ dir, label, slug, expectedScope, rootLatest, errors }) {
 
   if (rootLatest && actual.date !== rootLatest.date) {
     errors.push(`${label}: 磁盘 latest=${actual.date}，根目录基准=${rootLatest.date}`);
+  }
+  if (notBeforeMs !== null && actual.mtimeMs < notBeforeMs) {
+    errors.push(
+      `${label}: 最新报告 ${actual.file} 未在本批次刷新`
+      + `（mtime=${new Date(actual.mtimeMs).toISOString()}，批次开始=${new Date(notBeforeMs).toISOString()}）`,
+    );
   }
   return actual;
 }
@@ -149,7 +163,11 @@ function scopeKey(scope) {
 export function runReportScopeFreshnessGate({
   reportsRoot = DEFAULT_REPORTS_ROOT,
   configDir = DEFAULT_CONFIG_DIR,
+  notBeforeMs = null,
 } = {}) {
+  if (notBeforeMs !== null && (!Number.isFinite(notBeforeMs) || notBeforeMs < 0)) {
+    throw new Error(`notBeforeMs 必须是非负有限数，收到 ${JSON.stringify(notBeforeMs)}`);
+  }
   // 复用现有 manifest schema/合并语义；随后仍以磁盘扫描复核，避免旧 entries 自证成功。
   const summaries = generateReportsManifests(reportsRoot);
   const errors = [];
@@ -181,6 +199,7 @@ export function runReportScopeFreshnessGate({
       slug,
       expectedScope: null,
       rootLatest: null,
+      notBeforeMs,
       errors,
     });
     for (const branch of branches) {
@@ -190,6 +209,7 @@ export function runReportScopeFreshnessGate({
         slug,
         expectedScope: { branch },
         rootLatest,
+        notBeforeMs,
         errors,
       });
     }
@@ -200,6 +220,7 @@ export function runReportScopeFreshnessGate({
         slug,
         expectedScope: { branch, org },
         rootLatest,
+        notBeforeMs,
         errors,
       });
     }
@@ -216,9 +237,19 @@ function parseCliArgs(argv) {
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === '--reports-root') options.reportsRoot = resolve(argv[++i] ?? '');
-    else if (arg === '--config-dir') options.configDir = resolve(argv[++i] ?? '');
-    else throw new Error(`未知参数：${arg}`);
+    if (arg === '--reports-root' || arg === '--config-dir' || arg === '--not-before-epoch-ms') {
+      const value = argv[i + 1];
+      if (!value || value.startsWith('--')) throw new Error(`${arg} 缺少值`);
+      i++;
+      if (arg === '--reports-root') options.reportsRoot = resolve(value);
+      else if (arg === '--config-dir') options.configDir = resolve(value);
+      else {
+        options.notBeforeMs = Number(value);
+        if (!Number.isFinite(options.notBeforeMs) || options.notBeforeMs < 0) {
+          throw new Error(`${arg} 必须是非负有限数，收到 ${JSON.stringify(value)}`);
+        }
+      }
+    } else throw new Error(`未知参数：${arg}`);
   }
   return options;
 }
