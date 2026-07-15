@@ -257,6 +257,25 @@ class AuthService {
   }
 
   /**
+   * 按用户名判定账号是否存在可验证的密码凭据（/me 回传 hasPassword 用）。
+   *
+   * 必须与 changePassword 的验旧密闸同源（都走 hasUsablePassword）：前端按 hasPassword
+   * 决定是否显示「当前密码」输入框并回传 oldPassword，后端按同一口径决定是否验旧密。
+   * 两处口径一旦漂移，用户会被永久锁死在设密页——PasswordCredential.state 只反映
+   * 「是否已自设」（= password_changed_at 非空），不含 USER_PASSWORDS 覆盖与非 tombstone
+   * store 哈希这两种「有旧密可验」的情形，故不能拿来当 hasPassword。
+   */
+  async hasUsablePasswordForUsername(username: string): Promise<boolean> {
+    const normalizedUsername = this.normalizeUsername(username);
+    let user = await getUserByUsername(normalizedUsername);
+    if (!user && PRESET_USER_KEYS.has(normalizedUsername)) {
+      user = await ensurePresetUser(normalizedUsername);
+    }
+    if (!user) return false;
+    return this.hasUsablePassword(normalizedUsername, user);
+  }
+
+  /**
    * 新密码强度校验（返回违规原因，null = 通过）。
    * 口径收口于 config/password-policy.ts（change-password 与 activate 共用）。
    */

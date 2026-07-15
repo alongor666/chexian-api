@@ -261,6 +261,53 @@ describe('pns 判定与会话声明', () => {
   });
 });
 
+/**
+ * 设密页死锁回归锁（2026-07-14 · 杨杰飞书扫码首登事故）
+ *
+ * 事故：/me 用 PasswordCredential.state === 'active' 算 hasPassword，changePassword 用
+ * hasUsablePassword 决定是否验旧密。两者对「USER_PASSWORDS 覆盖但未自设」的账号判定相反
+ * （前者 false、后者 true）→ 前端藏掉「当前密码」框、不发 oldPassword → 后端 401
+ * 「当前密码不正确」→ 账号被永久锁死在设密页，无法自救。
+ *
+ * 不变量：/me 回传的 hasPassword 必须恒等于 changePassword 的验旧密闸口径。
+ */
+describe('设密页 hasPassword 与验旧密闸同源（死锁回归锁）', () => {
+  it('存量账号（USER_PASSWORDS 覆盖 + 未自设）：pns=true 且 hasPassword=true —— 必须给用户「当前密码」输入框', async () => {
+    mockGetUserByUsername.mockResolvedValue(makeUser('leshan'));
+    // 被强制设密
+    await expect(authService.isPasswordNotSetForUsername('leshan')).resolves.toBe(true);
+    // 且 /me 必须承认「有旧密可验」，否则前端不发 oldPassword → 死锁
+    await expect(authService.hasUsablePasswordForUsername('leshan')).resolves.toBe(true);
+  });
+
+  it('自助设密账号（tombstone、无 env 覆盖）：pns=true 且 hasPassword=false —— 首次设密免验旧密', async () => {
+    mockGetUserByUsername.mockResolvedValue(makeUser('liangchunfan'));
+    await expect(authService.isPasswordNotSetForUsername('liangchunfan')).resolves.toBe(true);
+    await expect(authService.hasUsablePasswordForUsername('liangchunfan')).resolves.toBe(false);
+  });
+
+  it('口径同源：hasUsablePasswordForUsername ≡ changePassword 是否验旧密（逐账号对拍）', async () => {
+    for (const username of ['leshan', 'liangchunfan', 'tianfu']) {
+      const user = makeUser(username);
+      mockGetUserByUsername.mockResolvedValue(user);
+      mockSetUserPasswordByUsername.mockResolvedValue(user);
+
+      const hasPassword = await authService.hasUsablePasswordForUsername(username);
+      // 前端严格按 hasPassword 决定发不发 oldPassword
+      const error = await authService
+        .changePassword(username, hasPassword ? LEGACY_PASSWORD : undefined, 'BrandNew#2026')
+        .catch((e) => e);
+      // 同源 ⇒ 按 hasPassword 提交必然不会撞「当前密码不正确」
+      expect(error, `${username} 设密被拒`).not.toBeInstanceOf(AppError);
+    }
+  });
+
+  it('store 无该账号（纯飞书裸 ID 身份）→ hasPassword=false，不索要旧密', async () => {
+    mockGetUserByUsername.mockResolvedValue(null);
+    await expect(authService.hasUsablePasswordForUsername('ou_feishu_raw_id')).resolves.toBe(false);
+  });
+});
+
 describe('changePassword 双模式', () => {
   it('飞书-only 账号拒绝密码登录与改密', async () => {
     const user = makeUser('feishu-only');
