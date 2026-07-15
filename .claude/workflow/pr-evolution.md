@@ -2182,3 +2182,16 @@ expires: 2026-09-15
 
 ### needs_automation: false
 （本次为一次性判断失误，已被现有权限闸实时拦下——闸本身就是自动防线且生效了；升级为项目级脚本闸性价比低。预防已落到 §3.4 自审问句，若再犯第 2 次则升级为 pre-push 敏感串扫描规则。）
+## 2026-07-15 · 机构级报告自落地起从未进入日常发布链（各机构/各部门报告长期停更）
+
+- **触发**：用户反馈「各部门、各机构对应权限下，首页的报告链接打开后没有数据」。
+- **根因（两处叠加，缺一不成灾）**：① `sync-and-reload.mjs` Stage 1.5 裸调 skill `cli.py --view all`，**不带 `--org/--branch`** → 只产出根目录省级那一份；② 同文件 `buildEtlCommands` 给所有 ETL 命令硬加 `--skip-report`，关掉 `daily.mjs` 内**唯一**含机构级循环的第 9 步 `runPeriodTrendReport`。两者叠加 → B004/B346 的 `orgs/<省>/<机构>/` 与 `branches/<省>/` 镜像**从未**进入日常发布链。
+- **时间线是关键证据**：`--skip-report` 于 2026-06-03（B322 流程优化）加入，**早于**机构级报告能力（7 月初做进 `daily.mjs`）。新功能挂在了一条日常发布早就绕开的路径上 → 从落地第一天就是死的，且**零告警**（省级天天更新，看起来一切正常）。实测：省级 2026-07-13，机构级冻结在 2026-07-08（当初开发时人工跑 `daily.mjs report` 的痕迹）。
+- **修复**：Stage 1.5 改调 `node 数据管理/daily.mjs report --no-sync`，报告生成回归 `runPeriodTrendReport` 单一实现，消灭影子实现；ETL 的 `--skip-report` **保留**（其正当作用是防多域/分省 ETL 重复生成，报告统一在 Stage 1.5 跑一次）。
+- **排查中撞见的独立隐患（未在本 PR 修）**：`access-control.ts:397` `ensureUserFromPreset` 为 `if (existing) return existing` → **preset 新增字段永不回填已存在的 store 行**。`branchCode` 2026-06-05 才进 preset，早于此 seed 的本地 store 里 org_user 至今无该字段 → JWT 缺 `branchCode` → 报告门户 `resolvePortalScope` fail-closed 403（本地实测，补齐后 200）。生产未中招仅因 RLS-on 时 `permission.ts:341` 缺 `branchCode` 直接 401 —— **漂移只是被另一条 fail-closed 掩盖，机制仍在**。按「权限模型改动分离登记」红线（`feedback_audit_fix_scope_boundary`）登记 `uid=2026-07-15-claude-8129a3`（P2）+ 派任务卡，不在本 PR 扩大范围。
+- **验证**：主仓实跑 `daily.mjs report --no-sync` exit=0 → SC 14/14 + SX 11/11 共 25 机构产出 `2026-07-14-dashboard.html`（19–24 万字节非空）+ 两省 `branches/` 镜像齐全；`gen-reports-manifest` 复算 25 机构 + 2 省 latest 均 = 2026-07-14；起本地 server 用天府 `org_user` 走门户实测：manifest 200（`scope={branch:SC,org:天府}`、latest=07-14）、报告 200（22.6 万字节，标题含「天府」，「天府」37 次 / 高新·宜宾·乐山 各 0 次 → 机构隔离正确，2438 个千分位数字 → 有真实数据）。单测 5/5、governance 59/59。
+- **教训**：「省级报告天天更新」这个**局部健康信号**掩盖了「机构级从未生成」——巡检/告警只看了根目录 latest，没有按 scope 分别核对。同一 slug 下多 scope 产物，任一 scope 停更都该独立告警。
+
+### needs_automation: true
+expires: 2026-08-15
+（本次靠人工比对目录时间戳才发现"根目录 07-13 vs orgs/ 07-08"。应加一条 governance/巡检检查：`public/reports/<slug>/` 的根目录 latest 与各 `branches/<省>/`、`orgs/<省>/<机构>/` 的 latest 若不一致即告警，防止任一 scope 静默停更重演。已在 backlog uid=2026-07-15-claude-362531 记为 follow-up。）
