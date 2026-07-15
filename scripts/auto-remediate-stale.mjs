@@ -28,6 +28,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
 import { classifyReleaseFailure, decideRemediation, nextRemediateState } from '../数据管理/lib/auto-remediate-decision.mjs';
+import { resolveLaunchdNodeBin } from '../数据管理/lib/launchd-node-bin.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(dirname(__filename), '..');
@@ -116,7 +117,10 @@ function installLaunchd() {
     process.exit(1);
   }
   const interval = parseInt(process.env.AUTO_REMEDIATE_INTERVAL_SEC || '', 10) || 1800; // 默认 30 分钟
-  const nodeBin = process.execPath;
+  // 稳定别名优先：钉 Cellar 实路径会在 Homebrew 升级 node 后静默 exec 失败（见 launchd-node-bin.mjs）
+  const resolved = resolveLaunchdNodeBin();
+  if (!resolved.ok) { log('❌ 找不到 node 可执行文件（launchd 需要绝对路径）'); process.exit(1); }
+  const nodeBin = resolved.path;
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
