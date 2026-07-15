@@ -5,7 +5,7 @@
       "Read(./node_modules/**)",
       "Read(./dist/**)",
       "Read(./server/data/**)",
-      "Read(./logs/**)",
+      "Read(/logs/**)",
       "Read(./public/reports/**)",
       "Bash(rm -rf ./数据管理/warehouse/**)",
       "Bash(rm -rf ./.git/**)",
