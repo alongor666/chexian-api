@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-36cc2b","kind":"create","ts":"2026-07-15","actor":"@claude","section":"销售队伍业绩","priority":"P3","desc":"补内部 Agent/首页 AI 能力注册：指标完成后在 capability、agent metric/data/tool registry 登记本域并声明 branch_admin 限制；CLI/MCP 已由 route catalog 动态可见，无需手写命令。","docs":"N/A","code":"N/A","at":"2026-07-15T01:03:44.720Z","eid":"5ac91af1"}

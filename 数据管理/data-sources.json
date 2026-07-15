@@ -470,7 +470,7 @@
       "source_pattern": "标保核对表（新版）.xlsx sheet「标保」A:K（BI 系统直营保单明细原样）+ sheet「车险折标因子」A:C（规则表）；后续可切换为 BI 直接导出文件",
       "etl_entry": "python3 数据管理/pipelines/sales_team_etl.py -i <xlsx>",
       "etl_script": "pipelines/sales_team_etl.py",
-      "output": "warehouse/fact/sales_team_performance/biaobao_policy.parquet",
+      "output": "warehouse/fact/sales_team_performance/biaobao_enriched.parquet",
       "update_cadence": "manual_full_refresh",
       "key_fields": [
         "保单号",

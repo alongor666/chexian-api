@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-92dd40","kind":"create","ts":"2026-07-15","actor":"@claude","section":"销售队伍业绩","priority":"P3","desc":"校准规则血缘措辞与重复维表说明：未匹配 15 行实际为 14 负+1 正冲销相关记录（14 保单），维表为 4505 个重复保单、其中 251 个取值不一致；更新 sales_team_rules.sql:12-13 与 data-sources notes，不改计算规则。","docs":"N/A","code":"N/A","at":"2026-07-15T01:03:45.018Z","eid":"c026a7f1"}

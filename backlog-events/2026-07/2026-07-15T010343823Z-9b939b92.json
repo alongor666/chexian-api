@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-296012","kind":"create","ts":"2026-07-15","actor":"@claude","section":"销售队伍业绩","priority":"P2","desc":"销售队伍规则有限枚举 fail-fast：sales_team_rules.sql 对非空未知折标分类/一司一策分类会静默 COALESCE/ELSE 为 1；保留 NULL 兜底=1，未知非空值须在 COPY 前阻断并补合成回归（sales_team_rules.sql:36-41,64）。","docs":"N/A","code":"N/A","at":"2026-07-15T01:03:43.823Z","eid":"9b939b92"}

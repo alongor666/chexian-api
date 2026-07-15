@@ -28,6 +28,7 @@
  *   数据管理/warehouse/fact/cross_sell/           →  data/fact/cross_sell/
  *   数据管理/warehouse/fact/customer_flow/        →  data/fact/customer_flow/
  *   数据管理/warehouse/fact/renewal_tracker/      →  data/fact/renewal_tracker/
+ *   数据管理/warehouse/fact/sales_team_performance/ → data/fact/sales_team_performance/
  *   server/data/reports/                          →  data/reports/  （追加同步，不删除远端历史报告；后端鉴权访问）
  *   public/reports/                               →  frontend/dist/reports/  （追加同步；Nginx 静态托管，浏览器 /reports/* 可直达）
  *
@@ -102,6 +103,7 @@ const LOCAL_CROSS_SELL_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/cross_s
 const LOCAL_CUSTOMER_FLOW_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/customer_flow');
 const LOCAL_NEW_ENERGY_CLAIMS_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/new_energy_claims');
 const LOCAL_RENEWAL_TRACKER_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/renewal_tracker');
+const LOCAL_SALES_TEAM_PERFORMANCE_DIR = join(ROOT_DIR, '数据管理/warehouse/fact/sales_team_performance');
 const LOCAL_REPAIR_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/repair');
 const LOCAL_PLATE_REGION_DIR = join(ROOT_DIR, '数据管理/warehouse/dim/plate_region');
 const LOCAL_HTML_REPORTS_DIR = join(ROOT_DIR, 'server/data/reports');
@@ -855,6 +857,7 @@ function collectCheckDirs() {
     { label: 'dim/plan',       path: LOCAL_PLAN_DIR },
     { label: 'dim/brand',     path: LOCAL_BRAND_DIR },
     { label: 'fact/quotes_conversion', path: LOCAL_QUOTES_CONVERSION_DIR },
+    { label: 'fact/sales_team_performance', path: LOCAL_SALES_TEAM_PERFORMANCE_DIR },
   ];
 
   return dirs.map(({ label, path }) => {
@@ -883,6 +886,7 @@ function printHelp() {
   数据管理/warehouse/dim/plan/                  →  data/dim/plan/
   数据管理/warehouse/dim/brand/                 →  data/dim/brand/
   数据管理/warehouse/fact/quotes_conversion/    →  data/fact/quotes_conversion/  (存在时)
+  数据管理/warehouse/fact/sales_team_performance/ → data/fact/sales_team_performance/
   server/data/reports/                          →  data/reports/  (不使用 --delete，保留历史报告；后端鉴权访问)
   public/reports/                               →  frontend/dist/reports/  (不使用 --delete；Nginx 静态托管)
 
@@ -894,7 +898,7 @@ function printHelp() {
   --key <path>         覆盖私钥路径
   --remote-dir <path>  覆盖远端数据根目录
   --health-url <url>   覆盖健康检查地址
-  --domain <ids>       仅同步指定数据域（逗号分隔），如 customer_flow,new_energy_claims
+  --domain <ids>       仅同步指定数据域（逗号分隔），如 customer_flow,sales_team_performance
 `);
 }
 
@@ -1041,6 +1045,7 @@ function buildStandardSyncTasks(remote, frontendDist, opts = {}) {
     { label: 'fact/customer_flow',   local: LOCAL_CUSTOMER_FLOW_DIR,      remote: `${remote}/fact/customer_flow`,    critical: false },
     { label: 'fact/new_energy_claims', local: LOCAL_NEW_ENERGY_CLAIMS_DIR, remote: `${remote}/fact/new_energy_claims`, critical: false },
     { label: 'fact/renewal_tracker', local: LOCAL_RENEWAL_TRACKER_DIR,    remote: `${remote}/fact/renewal_tracker`,  critical: false },
+    { label: 'fact/sales_team_performance', local: LOCAL_SALES_TEAM_PERFORMANCE_DIR, remote: `${remote}/fact/sales_team_performance`, critical: true, atomic: true, requiredLocal: true },
     { label: 'dim/repair',           local: LOCAL_REPAIR_DIR,             remote: `${remote}/dim/repair`,            critical: false },
     { label: 'dim/plate_region',     local: LOCAL_PLATE_REGION_DIR,       remote: `${remote}/dim/plate_region`,      critical: false },
     { label: 'html_reports',         local: LOCAL_HTML_REPORTS_DIR,       remote: `${remote}/reports`,               critical: false, deleteRemote: false },
@@ -1058,6 +1063,7 @@ function buildDomainSyncTasks(remote, frontendDist, domainIds) {
   const domainTaskMap = {
     customer_flow: { label: 'fact/customer_flow', local: LOCAL_CUSTOMER_FLOW_DIR, remote: `${remote}/fact/customer_flow`, critical: true, atomicLatest: true },
     new_energy_claims: { label: 'fact/new_energy_claims', local: LOCAL_NEW_ENERGY_CLAIMS_DIR, remote: `${remote}/fact/new_energy_claims`, critical: true, atomicLatest: true },
+    sales_team_performance: { label: 'fact/sales_team_performance', local: LOCAL_SALES_TEAM_PERFORMANCE_DIR, remote: `${remote}/fact/sales_team_performance`, critical: true, atomic: true, requiredLocal: true },
   };
   const tasks = domainIds.map((domainId) => {
     const task = domainTaskMap[domainId];
@@ -1077,6 +1083,16 @@ function buildSyncTasks(runConfig) {
     return buildDomainSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir, runConfig.domains);
   }
   return buildStandardSyncTasks(runConfig.remoteDir, runConfig.frontendDistDir);
+}
+
+/**
+ * 对不能被“目录不存在则跳过”降级的发布产物做 fail-loud 前置检查。
+ * 仅由任务显式 requiredLocal=true 启用，避免改变历史 optional/critical 目录的兼容行为。
+ */
+function assertRequiredLocalTasks(tasks, pathExists = existsSync) {
+  const missing = tasks.filter((task) => task.requiredLocal === true && !pathExists(task.local));
+  if (missing.length === 0) return;
+  throw new Error(`关键本地目录不存在，拒绝发布: ${missing.map((task) => task.label).join(', ')}`);
 }
 
 function printDryRun(sshConfig, runConfig) {
@@ -1187,10 +1203,11 @@ async function runReportsCleanup(runConfig) {
 async function runStandardMode(sshConfig, runConfig) {
   const alias = sshConfig.alias;
 
+  const syncTasks = buildSyncTasks(runConfig);
+  assertRequiredLocalTasks(syncTasks);
+
   // 同步前清理本地 reports（与 html_reports/public_reports deleteRemote:false 累积问题配套）
   await runReportsCleanup(runConfig);
-
-  const syncTasks = buildSyncTasks(runConfig);
 
   // 过滤不存在的目录
   const activeTasks = [];
@@ -1518,6 +1535,7 @@ export {
   resolveRunConfig,
   buildDomainSyncTasks,
   buildStandardSyncTasks,
+  assertRequiredLocalTasks,
   buildValidationBranchSyncTasks,
   validationBranchSyncEnabled,
   buildPolicyCurrentTasks,

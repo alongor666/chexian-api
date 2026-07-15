@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-b10c65","kind":"create","ts":"2026-07-15","actor":"@claude","section":"销售队伍业绩","priority":"P3","desc":"调整本域中间件顺序为 requireBranchAdmin→惰性加载→缓存→handler，避免非管理员首次请求触发读盘和 count 后才 403；补 loader 零调用断言（sales-team-performance 路由:35-50）。","docs":"N/A","code":"N/A","at":"2026-07-15T01:03:44.619Z","eid":"e8d4dc64"}

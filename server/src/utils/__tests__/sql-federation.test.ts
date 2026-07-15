@@ -184,6 +184,51 @@ describe('validateSQL — 联邦感知访问边界', () => {
     expect(r.error).toContain('边界');
   });
 
+  it('开关开启：双引号包裹的未登记关系仍拒绝，不能借已授权关系掩盖', () => {
+    enableFederation();
+    const r = validateSQL(
+      'SELECT COUNT(*) FROM PolicyFact p JOIN "SalesTeamPerformanceFact" s ON TRUE',
+    );
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('边界');
+  });
+
+  it.each([
+    'SELECT COUNT(*) FROM PolicyFact p, SalesTeamPerformanceFact s',
+    'SELECT COUNT(*) FROM PolicyFact p, "SalesTeamPerformanceFact" s',
+  ])('销售队伍业绩视图经逗号联表也必须拒绝：%s', (sql) => {
+    enableFederation();
+    const r = validateSQL(sql);
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('边界');
+  });
+
+  it.each([
+    'SELECT COUNT(*), MAX(x.password_hash) FROM PolicyFact p, UserAccount x',
+    'SELECT COUNT(*), MAX(x.token_hash) FROM PolicyFact p, "ApiToken" x',
+  ])('凭据表不能借逗号联表绕过访问边界：%s', (sql) => {
+    enableFederation();
+    const r = validateSQL(sql);
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('边界');
+  });
+
+  it('SELECT 列表与 GROUP BY 的普通逗号不应被误判为逗号联表', () => {
+    enableFederation();
+    const r = validateSQL(
+      'SELECT org_level_3, COUNT(*), SUM(premium) FROM PolicyFact GROUP BY org_level_3, salesman_name',
+    );
+    expect(r.valid).toBe(true);
+  });
+
+  it.each([
+    'SELECT COUNT(*) FROM PolicyFact p JOIN BrandDim b ON [1,2] = [1,2]',
+    "SELECT COUNT(*) FROM PolicyFact p JOIN BrandDim b ON {'a':1,'b':2} = {'a':1,'b':2}",
+  ])('显式 JOIN 条件内复合字面量的逗号不应被误判：%s', (sql) => {
+    enableFederation();
+    expect(validateSQL(sql).valid).toBe(true);
+  });
+
   it('开关开启：raw_parquet 仍拒绝（既被边界又被黑名单拦截）', () => {
     enableFederation();
     expect(validateSQL('SELECT SUM(x) FROM raw_parquet').valid).toBe(false);
