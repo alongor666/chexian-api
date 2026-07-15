@@ -43,7 +43,7 @@ import {
   existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync,
   statSync, unlinkSync, openSync, closeSync,
 } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 
@@ -51,6 +51,7 @@ import { beijingDayOf, evaluateRemoteManifest } from '../数据管理/lib/bi-exp
 import {
   DEFAULT_WINDOW, DEFAULT_MAX_ATTEMPTS, isValidHHMM, decideTickAction, nextState,
 } from '../数据管理/lib/auto-release-decision.mjs';
+import { resolveLaunchdNodeBin } from '../数据管理/lib/launchd-node-bin.mjs';
 import { evaluateLedgerUncommittedBulk, LEDGER_TRACKED_FILES } from './etl-ledger/governance-check.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -275,11 +276,9 @@ function remindLedgerUncommitted() {
 // ── launchd 安装 / 卸载 ──
 
 function resolveNodeBin() {
-  if (basename(process.execPath) === 'node') return process.execPath;
-  const r = spawnSync('sh', ['-lc', 'command -v node'], { encoding: 'utf-8' });
-  const p = (r.stdout || '').trim();
-  if (!p) { log('red', '❌ 找不到 node 可执行文件（launchd 需要绝对路径）'); process.exit(1); }
-  return p;
+  const r = resolveLaunchdNodeBin();
+  if (!r.ok) { log('red', '❌ 找不到 node 可执行文件（launchd 需要绝对路径）'); process.exit(1); }
+  return r.path;
 }
 
 function installLaunchd() {
