@@ -190,8 +190,9 @@ describe('permissionMiddleware: preset 用户标签验证', () => {
     const users = Object.values(PRESET_USERS);
     const scUsers = users.filter((u) => u.branchCode === 'SC');
     const noBranchCode = users.filter((u) => !u.branchCode);
-    // 20 存量 SC 用户 + 2026-07-12 新增 5 个（1 全国超管 zongbu + 4 市州一把手）= 25
-    expect(scUsers.length).toBe(25); // 全部 25 个 SC 用户都标 SC
+    // 20 存量 SC 用户 + 2026-07-12 新增 5 个（1 全国超管 zongbu + 4 市州一把手）
+    //   − 2026-07-16 移除 chexianbu / scdianxiao 两个停用账号 = 23
+    expect(scUsers.length).toBe(23); // 全部 SC 用户都标 SC
     expect(noBranchCode.length).toBe(0); // 无人缺 branchCode（fail-closed 前提）
   });
 });
