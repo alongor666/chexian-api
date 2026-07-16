@@ -83,7 +83,7 @@ def resolve_org_column_variant(df: 'pd.DataFrame') -> 'pd.DataFrame':
 
 
 def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=None,
-                          window_start=None) -> 'pd.DataFrame':
+                          quote_years: 'pd.Series | None' = None) -> 'pd.DataFrame':
     """多省机构值规范化 + 塌缩守卫（B006，对齐 transform.py normalize_branch_org G5 语义）。
 
     branch != 'SC' 时按 config/branch-org-mapping/<branch>.json 的 org_to_unit 把
@@ -93,9 +93,10 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=
     policy_dir（BACKLOG e04971 报价侧「其他」清分）：给定签单域 parquet 目录时，
     规范化后仍为「其他」的行按 业务员↔机构 对照（每日随最新签单数据派生，
     salesman_org_fallback.py）二次解析——上游报价卡太原片区整体落「其他」，
-    业务员归属是唯一可用的行级线索。window_start 给定时映射只统计
-    policy_date >= window_start 的签单行（报价窗口对齐，防调动业务员被
-    历史机构投票错归——评审实测全历史投票波及 9.17% 报价行）。
+    业务员归属是唯一可用的行级线索。quote_years（与 df 同索引的报价年份
+    Series）给定时按年分桶：**当年报价用当年签单映射**（用户裁定：跨年太原
+    组织架构会调整，同一业务员不同年份归属可以不同），当年缺席按邻年
+    （±1 年）就近兜底。
 
     fail-closed 清分闸（评审 P1，2026-07-16）：非 SC 时，无论哪条分支产出，
     最终「其他」占比 > 5% 即抛 QuoteOrgResolutionError 阻断（依赖缺失如
@@ -158,25 +159,27 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=
     # 刻意**不**拆姓名：工号天然区分同名业务员（重名跨机构错归风险归零），且签单域
     # salesman_name 本就带工号前缀，拆名匹配反而键对不上。
     from pipelines.salesman_org_fallback import (
-        build_salesman_org_map, enforce_resolution_gate, resolve_other_by_salesman,
+        build_salesman_org_maps_by_year, enforce_resolution_gate, resolve_other_by_salesman_yearly,
     )
     gate_reason = None
-    if policy_dir is not None and units and 'salesman_raw' in df.columns:
-        org_map = build_salesman_org_map(policy_dir, units, since=window_start)
-        if org_map:
+    if policy_dir is not None and units and 'salesman_raw' in df.columns and quote_years is not None:
+        year_maps = build_salesman_org_maps_by_year(policy_dir, units)
+        if year_maps:
             keys = df['salesman_raw'].astype('string').str.strip()
-            resolved, n_other, n_hit = resolve_other_by_salesman(df['org_level_3'], keys, org_map, units)
+            resolved, n_other, n_hit = resolve_other_by_salesman_yearly(
+                df['org_level_3'], keys, quote_years, year_maps, units)
             df['org_level_3'] = resolved
-            print(f"   🧭 [{branch}] 业务员回退清分:「其他」{n_other:,} 行 → 解析 {n_hit:,}"
-                  f"（映射 {len(org_map)} 人{f'，窗口 >= {window_start}' if window_start is not None else ''}，"
-                  f"剩「其他」{n_other - n_hit:,}）")
-            gate_reason = '业务员对照已应用但残留超阈（近窗签单对照覆盖不足？）'
+            years_desc = ','.join(f'{y}:{len(m)}人' for y, m in sorted(year_maps.items()))
+            print(f"   🧭 [{branch}] 业务员回退清分（按年）:「其他」{n_other:,} 行 → 解析 {n_hit:,}"
+                  f"（分年映射 {years_desc}，剩「其他」{n_other - n_hit:,}）")
+            gate_reason = '业务员按年对照已应用但残留超阈（当年+邻年对照覆盖不足？）'
         else:
             print(f"   🔴 [{branch}] 业务员回退清分不可用：{policy_dir} 无可用签单 parquet 映射")
-            gate_reason = f'签单域映射为空（policy_dir={policy_dir}，窗口 {window_start}）'
+            gate_reason = f'签单域分年映射为空（policy_dir={policy_dir}）'
     else:
         missing = ('salesman_raw 列缺失' if 'salesman_raw' not in df.columns
-                   else ('policy_dir 未提供' if policy_dir is None else 'units 白名单为空'))
+                   else ('policy_dir 未提供' if policy_dir is None
+                         else ('quote_years 未提供' if quote_years is None else 'units 白名单为空')))
         gate_reason = f'清分依赖缺失（{missing}）'
 
     # 出口守卫：机构维度塌缩检测（覆盖已映射 / 无映射两条非 SC 路径）
@@ -437,13 +440,12 @@ def main():
     policy_dir = args.policy_dir
     if policy_dir is None and declared_branch != 'SC':
         policy_dir = output_dir.parent
-    # 映射窗口 = 报价数据自身的最早报价时间（步骤 7 才做正式 datetime 转换，这里
-    # 只为取 min 做一次容错解析）；解析不出 → None（映射退回全量，仍受清分闸兜底）
-    window_start = None
+    # 报价年份序列（按年分桶映射用；步骤 7 才做正式 datetime 转换，这里做一次
+    # 容错解析取年份）；解析不出的行年份为 NaN → 查表落空保留「其他」，交清分闸兜底
+    quote_years = None
     if declared_branch != 'SC' and 'quote_time' in df.columns:
-        qt_min = pd.to_datetime(df['quote_time'], errors='coerce').min()
-        window_start = None if pd.isna(qt_min) else qt_min.normalize()
-    df = normalize_org_level_3(df, declared_branch, policy_dir=policy_dir, window_start=window_start)
+        quote_years = pd.to_datetime(df['quote_time'], errors='coerce').dt.year
+    df = normalize_org_level_3(df, declared_branch, policy_dir=policy_dir, quote_years=quote_years)
 
     # 6. 风险等级 COALESCE 合并
     grade_cols = ['_grade_1', '_grade_2', '_grade_3']
