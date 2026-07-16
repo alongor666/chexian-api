@@ -14,11 +14,16 @@
  *      src/shared/sql、src/shared/normalize、裸 BACKLOG.md（同行有「派生视图/gitignored」
  *      说明则放行——那是对派生视图机制的合法描述）。
  *
- * 归一化：剥 #锚点、剥 :行号 后缀。R1 链接按 markdown 语义解析（`/` 开头锚定仓库根、
- * 相对路径相对索引文件目录）；R2 token 只做仓库根锚定，且**首段必须是仓库顶层条目**
- * （动态读 rootDir，无人工清单）——索引表格里大量「子目录简写」（如 `routes/`、`cube/`，
- * 依上下文挂在某父目录下）无法机械判定，不在校验范围。
- * 硬跳过：glob（* ? { }）、模板（< >）、占位（YYYY、${）、~ 开头、URL、worktrees 路径。
+ * 归一化：剥 #锚点、剥 :行号 后缀、剥链接 title（`(x.md "标题")`）。判定语义（2026-07-16
+ * 评审返工后收紧，无静默绿灯）：
+ *   - R1 链接严格按 GitHub markdown 语义：`/` 开头锚定仓库根，否则相对本文档目录，
+ *     **无仓库根兜底**；越出仓库的相对路径（../..）一律报错——外部资源必须写完整 URL。
+ *   - R2 token 做仓库根锚定：首段是仓库顶层条目 → 校验存在性；首段未知且 token 是
+ *     强路径断言（≥2 段或带扩展名）→ **报错**（改写 canonical 路径或 governance-allow 豁免）；
+ *     仅单段目录简写（`routes/`、`cube/`）视为上下文速记跳过（弱断言，无从校验）。
+ * 硬跳过：glob（* ? { }）、模板（< >）、a|b 择一简写（仅限单个 token）、占位（YYYY、${）、
+ * ~ 开头、URL、worktrees 路径。fenced code block 逐行 token 扫描（管道符按分隔符处理，
+ * 不因整行含 | 而跳过）。
  * 豁免两层：
  *   ① gitignored 派生/数据产物：路径在 git ignore 规则内（git check-ignore）→ 视为
  *      「本地产物，存在性机器相关」，不报死链（BACKLOG.md 派生视图、warehouse 数据均由此覆盖）；
@@ -76,9 +81,15 @@ export function runIndexDocLinksCheck({ rootDir, io, isGitIgnored = defaultIsGit
     const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
 
     let prevLine = '';
+    let inFence = false;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNo = i + 1;
+      if (/^\s*(```|~~~)/.test(line)) {
+        inFence = !inFence;
+        prevLine = line;
+        continue;
+      }
       const exempted = line.includes(ALLOW_MARKER) || prevLine.includes(ALLOW_MARKER);
       prevLine = line;
       if (exempted) continue;
@@ -97,7 +108,7 @@ export function runIndexDocLinksCheck({ rootDir, io, isGitIgnored = defaultIsGit
       }
 
       // R1 + R2 路径提取
-      for (const ref of extractRefs(line)) {
+      for (const ref of extractRefs(line, inFence)) {
         scannedRefs++;
         const verdict = checkTarget(ref, rel, rootDir, isGitIgnored, topLevelEntries);
         if (verdict) problems.push(`${rel}:${lineNo}: ${verdict}`);
@@ -114,14 +125,24 @@ export function runIndexDocLinksCheck({ rootDir, io, isGitIgnored = defaultIsGit
 }
 
 /** 从一行中提取待验证的引用（R1 markdown 链接 + R2 反引号/代码行路径 token），带 kind 标记 */
-export function extractRefs(line) {
+export function extractRefs(line, inFence = false) {
   const refs = [];
 
-  // R1: [text](target)
+  // fenced code block 内：整行按 token 扫（shell 管道符 ` | ` 当分隔符，不整行跳过）。
+  // 树形目录图行（├└│ 绘图符）跳过：树的叶 token 天然相对父行，无从锚定；层级根应写在树图首行。
+  if (inFence) {
+    if (/[├└│▼]/.test(line)) return refs;
+    for (const t of extractPathTokens(line.split(/\s+\|+\s+/).join(' '))) {
+      refs.push({ target: t, kind: 'token' });
+    }
+    return refs;
+  }
+
+  // R1: [text](target) / [text](target "title")
   const linkRe = /\[[^\]]*\]\(([^)]+)\)/g;
   let m;
   while ((m = linkRe.exec(line)) !== null) {
-    refs.push({ target: m[1].trim(), kind: 'link' });
+    refs.push({ target: stripLinkTitle(m[1].trim()), kind: 'link' });
   }
 
   // R2: 反引号内联 span 中的路径 token
@@ -130,14 +151,18 @@ export function extractRefs(line) {
     for (const t of extractPathTokens(m[1])) refs.push({ target: t, kind: 'token' });
   }
 
-  // R2 补充：整行是代码（fenced block 内容或缩进代码）时按 token 扫。
-  // 索引文件的 fenced block 都是 bash/路径示例，直接对非反引号残余文本做 token 提取
-  // 会把表格里的中文说明误扫，故仅当行不含 `|`（非表格）且含 `/` 时做整行 token 提取。
+  // R2 补充：无反引号/链接的纯文本行按 token 扫（排除表格行——中文说明列会误扫）。
   if (!line.includes('|') && !line.includes('](') && !line.includes('`') && line.includes('/')) {
     for (const t of extractPathTokens(line)) refs.push({ target: t, kind: 'token' });
   }
 
   return refs;
+}
+
+/** 剥 markdown 链接的可选 title：`x.md "标题"` / `x.md '标题'` → `x.md` */
+function stripLinkTitle(target) {
+  const m = target.match(/^(\S+)\s+["'].*["']$/);
+  return m ? m[1] : target;
 }
 
 /** 从任意文本片段提取形如路径的 token（含 / 且以已知扩展名或 / 结尾） */
@@ -146,6 +171,7 @@ function extractPathTokens(text) {
   for (let word of text.split(/[\s，、；：（）()【】]+/)) {
     word = word.replace(/^[#'"“”‘’]+|['"“”‘’.,;:!?]+$/g, '');
     if (!word.includes('/')) continue;
+    if (/^\/\//.test(word) || word.replace(/\//g, '') === '') continue; // 代码注释 // 与纯斜杠
     const stripped = stripSuffixes(word);
     if (KNOWN_EXTENSIONS.test(stripped) || stripped.endsWith('/')) tokens.push(word);
   }
@@ -175,29 +201,35 @@ function checkTarget(ref, indexRel, rootDir, isGitIgnored, topLevelEntries) {
 
   let resolvedRel;
   if (kind === 'link') {
-    // markdown 语义：/ 开头 = 仓库根；否则相对索引文件目录
+    // 严格 GitHub markdown 语义：/ 开头 = 仓库根；否则相对本文档目录。无仓库根兜底——
+    // 兜底会让「本文档目录下不存在、恰好仓库根存在」的链接假绿（GitHub 上实际 404）。
     resolvedRel = target.startsWith('/')
       ? target.slice(1)
       : path.normalize(path.join(path.dirname(indexRel), target));
-    if (resolvedRel.startsWith('..')) return null; // 越出仓库，无法校验，放行
+    if (resolvedRel.startsWith('..')) {
+      return `相对链接「${ref.target}」越出仓库——仓外资源必须写完整 https:// URL`;
+    }
     // 链接目标若无扩展名且不含 /，可能是纯文本（如「§2」）——跳过
     if (!resolvedRel.includes('/') && !KNOWN_EXTENSIONS.test(resolvedRel)) return null;
   } else {
-    // token：仅校验「仓库根锚定」写法——首段必须是仓库顶层条目，否则视为上下文简写跳过
+    // token：仓库根锚定语义
     resolvedRel = path.normalize(target.replace(/^\.?\//, ''));
-    if (resolvedRel.startsWith('..')) return null;
-    const firstSegment = resolvedRel.split('/')[0];
-    if (!topLevelEntries.has(firstSegment)) return null;
+    if (resolvedRel.startsWith('..')) {
+      return `路径 token「${ref.target}」越出仓库——仓外资源必须写完整 https:// URL`;
+    }
+    const segments = resolvedRel.split('/').filter(Boolean);
+    if (!topLevelEntries.has(segments[0])) {
+      // 仅单段目录简写（`routes/`、`cube/`）视为上下文速记：弱断言，无从校验，跳过。
+      if (segments.length === 1 && !KNOWN_EXTENSIONS.test(resolvedRel)) return null;
+      // ≥2 段或带扩展名 = 强路径断言：未知首段不静默放行。
+      return `路径「${ref.target}」无法从仓库根解析（首段「${segments[0]}」非顶层条目）——改写为 canonical 全路径，或历史文本加 <!-- ${ALLOW_MARKER} 理由 -->`;
+    }
   }
 
   if (fs.existsSync(path.join(rootDir, resolvedRel))) return null;
 
-  // 链接的相对解析失败时，退一步试仓库根锚定（索引里存在「仓库根相对」写法不带前导 /）
-  if (kind === 'link' && !target.startsWith('/') && fs.existsSync(path.join(rootDir, target))) return null;
-  const rootRel = target.startsWith('/') ? resolvedRel : path.normalize(target);
-
   // gitignored 产物（派生视图 / 本地数据）：存在性机器相关，不报死链
-  if (isGitIgnored(rootDir, resolvedRel) || isGitIgnored(rootDir, rootRel)) return null;
+  if (isGitIgnored(rootDir, resolvedRel)) return null;
 
   return `死链「${ref.target}」（解析为 ${resolvedRel}，仓库内不存在且不在 gitignore 规则内）`;
 }

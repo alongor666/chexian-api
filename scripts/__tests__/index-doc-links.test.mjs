@@ -61,10 +61,27 @@ describe('R1 — markdown 链接存在性', () => {
     expect(run()).toBe(false);
   });
 
-  it('绿：不带前导 / 的仓库根相对链接（索引常见写法）', () => {
-    writeRepoFile('server/src/sql/kpi.ts');
+  it('红：不带前导 / 的「仓库根相对」链接——GitHub 按文档目录解析实为 404，无仓库根兜底', () => {
+    writeRepoFile('server/src/sql/kpi.ts'); // 仓库根真实存在也不放行
+    writeIndex('- [口径](server/src/sql/kpi.ts)\n');
+    expect(run()).toBe(false);
+  });
+
+  it('绿：文档目录下真实存在的同形链接通过（对照组）', () => {
+    writeRepoFile('开发文档/00_index/server/src/sql/kpi.ts');
     writeIndex('- [口径](server/src/sql/kpi.ts)\n');
     expect(run()).toBe(true);
+  });
+
+  it('绿：带 title 的标准 markdown 链接正确剥离 title', () => {
+    writeRepoFile('开发文档/00_index/CODE_INDEX.md');
+    writeIndex('- [代码索引](./CODE_INDEX.md "核心模块入口")\n');
+    expect(run()).toBe(true);
+  });
+
+  it('红：带 title 的死链同样被抓', () => {
+    writeIndex('- [幽灵](./GHOST.md "不存在")\n');
+    expect(run()).toBe(false);
   });
 
   it('绿：纯锚点与 URL 跳过', () => {
@@ -72,9 +89,9 @@ describe('R1 — markdown 链接存在性', () => {
     expect(run()).toBe(true);
   });
 
-  it('绿：越出仓库的相对路径放行（无法校验）', () => {
+  it('红：越出仓库的相对路径报错——仓外资源必须写完整 URL', () => {
     writeIndex('- [上游](../../../outside/thing.md)\n');
-    expect(run()).toBe(true);
+    expect(run()).toBe(false);
   });
 });
 
@@ -91,9 +108,14 @@ describe('R2 — 反引号与 fenced code block 内路径 token', () => {
     expect(run()).toBe(true);
   });
 
-  it('绿：上下文简写 token（首段非顶层条目）跳过', () => {
+  it('绿：仅单段目录简写 token（`routes/`）视为上下文速记跳过', () => {
     writeIndex('| 路由 | `routes/` + `query/*.ts` 子路由 | 说明 |\n');
     expect(run()).toBe(true);
+  });
+
+  it('红：未知首段的强路径断言（≥2 段/带扩展名）不静默放行', () => {
+    writeIndex('| 幽灵 | `ghost/path.md` | 说明 |\n');
+    expect(run()).toBe(false);
   });
 
   it('红：fenced code block 内的死路径命令', () => {
@@ -102,13 +124,31 @@ describe('R2 — 反引号与 fenced code block 内路径 token', () => {
     expect(run()).toBe(false);
   });
 
+  it('红：fenced block 内含 shell 管道的行不整行跳过', () => {
+    writeRepoFile('scripts/keep.mjs');
+    writeIndex('```bash\ncat scripts/missing.mjs | sed s/a/b/\n```\n');
+    expect(run()).toBe(false);
+  });
+
+  it('绿：fenced block 内树形目录图行（├└│▼）跳过', () => {
+    writeIndex('```\n数据管理/\n├── warehouse/fact/ghost.parquet\n└── pipelines/ghost.py\n```\n');
+    fs.mkdirSync(path.join(tmp, '数据管理'), { recursive: true });
+    expect(run()).toBe(true);
+  });
+
+  it('绿：fenced block 内代码注释 // 不被当作路径', () => {
+    writeIndex('```typescript\n// 场景1: 精确匹配优先\nconst x = 1\n```\n');
+    expect(run()).toBe(true);
+  });
+
   it('绿：fenced code block 内存在的路径 + glob 跳过', () => {
     writeRepoFile('scripts/backlog.mjs');
     writeIndex('```bash\nbun scripts/backlog.mjs\nduckdb -c "SELECT 1 FROM \'数据管理/warehouse/fact/*.parquet\'"\n```\n');
     expect(run()).toBe(true);
   });
 
-  it('绿：模板/占位/家目录 token 跳过', () => {
+  it('绿：模板/占位/家目录 token 跳过（命令本体路径需真实存在）', () => {
+    writeRepoFile('数据管理/daily.mjs');
     writeIndex('```bash\nnode 数据管理/daily.mjs <域>\ncat 数据管理/release-manifests/YYYY-MM-DD.json\nls ~/.claude/skills/\n```\n');
     expect(run()).toBe(true);
   });
