@@ -1,6 +1,6 @@
 # 数据管理知识库 & 工具体系索引 (v3.0)
 
-**最后更新**: 2026-04-09
+**最后更新**: 2026-07-16（知识体系审计核对：引用路径抽样验证通过，warehouse 路径以主仓为准——worktree 内数据目录 gitignored 不存在属正常）
 **维护者**: @claude
 
 ---
@@ -9,7 +9,7 @@
 
 | 我想... | 用什么 | 命令 |
 |---------|--------|------|
-| 更新每日数据 | daily.mjs | `node 数据管理/daily.mjs` |
+| 更新每日数据 | daily.mjs | `node 数据管理/daily.mjs all`（⚠️ 无参会跌落 premium 单域） |
 | 强制更新赔付数据 | daily.mjs claims | `node 数据管理/daily.mjs claims` |
 | 强制更新报价数据 | daily.mjs quotes | `node 数据管理/daily.mjs quotes` |
 | 全量更新（保费+赔付+报价） | daily.mjs all | `node 数据管理/daily.mjs all` |
