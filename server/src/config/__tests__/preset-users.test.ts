@@ -74,8 +74,8 @@ describe('山西分公司（SX）账号 — G7 多省接入', () => {
   // 已退役合并账号（active:false 墓碑保留，防 preset 兜底写回复活）
   const RETIRED_SX_ORG_USERS = ['sx_jdcszk'];
 
-  it('山西超管 sxAdmin 存在且 role=branch_admin / branchCode=SX / specialFeatures 含 cost+moto_cost', () => {
-    const admin = PRESET_USERS.sxAdmin;
+  it('山西超管 sxadmin 存在且 role=branch_admin / branchCode=SX / specialFeatures 含 cost+moto_cost', () => {
+    const admin = PRESET_USERS.sxadmin;
     expect(admin).toBeDefined();
     expect(admin.role).toBe('branch_admin');
     expect(admin.branchCode).toBe('SX');
@@ -235,7 +235,7 @@ describe('全国超管 visibleBranches（切省 + 全国合并视图）', () => 
   it('普通用户 visibleBranches 为 undefined（行为不变）', () => {
     // 抽样若干普通用户（SC org_user / SX 超管 / 系统 admin）
     expect(PRESET_USERS.leshan.visibleBranches).toBeUndefined();
-    expect(PRESET_USERS.sxAdmin.visibleBranches).toBeUndefined();
+    expect(PRESET_USERS.sxadmin.visibleBranches).toBeUndefined();
     expect(PRESET_USERS.admin.visibleBranches).toBeUndefined();
     expect(PRESET_USERS.tianfu.visibleBranches).toBeUndefined();
   });
@@ -262,7 +262,7 @@ describe('全国超管 visibleBranches（切省 + 全国合并视图）', () => 
   it('getPresetVisibleBranches: 超管返回省集合，普通用户返回 undefined', () => {
     expect(getPresetVisibleBranches('xuechenglong')).toEqual(['SC', 'SX']);
     expect(getPresetVisibleBranches('leshan')).toBeUndefined();
-    expect(getPresetVisibleBranches('sxAdmin')).toBeUndefined();
+    expect(getPresetVisibleBranches('sxadmin')).toBeUndefined();
     expect(getPresetVisibleBranches('不存在的用户')).toBeUndefined();
   });
 
@@ -338,8 +338,8 @@ describe('模块负面清单 RESTRICTED_MODULES', () => {
 
   it('getDeniedModules：白名单外用户回传权限管理页路径，白名单内为空', () => {
     expect(getDeniedModules('liangchunfan')).toEqual([ACCESS_CONTROL_PAGE]);
-    expect(getDeniedModules('chexianbu')).toEqual([ACCESS_CONTROL_PAGE]);
-    expect(getDeniedModules('sxAdmin')).toEqual([ACCESS_CONTROL_PAGE]);
+    expect(getDeniedModules('leshan')).toEqual([ACCESS_CONTROL_PAGE]);
+    expect(getDeniedModules('sxadmin')).toEqual([ACCESS_CONTROL_PAGE]);
     expect(getDeniedModules('xuechenglong')).toEqual([]);
     expect(getDeniedModules('yangjie0621')).toEqual([]);
     expect(getDeniedModules('linxia')).toEqual([]);

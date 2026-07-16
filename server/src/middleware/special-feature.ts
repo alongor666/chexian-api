@@ -37,7 +37,7 @@ export type SpecialFeature = 'cost' | 'moto_cost';
 export const SUPER_USERS: readonly string[] = ['admin', 'xuechenglong'];
 
 /** 镜像自前端 COST_ALLOWED_USERS（specialFeatures 未定义时的静态回退白名单） */
-const COST_FALLBACK_USERS: readonly string[] = ['chexianbu', 'linxia', 'xuechenglong', 'admin'];
+const COST_FALLBACK_USERS: readonly string[] = ['linxia', 'xuechenglong', 'admin'];
 
 export function isSuperUser(username: string | undefined): boolean {
   if (!username) return false;

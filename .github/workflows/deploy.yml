@@ -61,9 +61,14 @@ jobs:
           # 必须有 lockfile 才能保证 VPS 安装的依赖版本与 CI 构建一致。
           # 加入 deploy/vps-wrapper/deploy-chexian-api.sh：供 wrapper self-update
           # 子命令自我替换，避免每次 wrapper 改动都要手工 root sync（B294）。
+          # 加入 server/src：生产端 ops 工具（如 scripts/ops/verify-credential-rotation.mjs
+          # --preset /var/www/chexian/server/src/config/preset-users.ts）解析源码取花名册。
+          # 此前 bundle 不含 src → 生产 src 长期停在旧快照、与仓库脱节，工具读到过时花名册（20 vs 37）。
+          # 运行时只用 dist，故 src 仅供工具解析，非运行依赖。
           tar -czf deploy-bundle.tar.gz \
             dist/ \
             server/dist/ \
+            server/src/ \
             server/package.json \
             server/package-lock.json \
             server/ecosystem.config.cjs \
@@ -252,6 +257,12 @@ jobs:
 
             rm -rf /var/www/chexian/server/dist
             mv "${STAGING_DIR}/server/dist" /var/www/chexian/server/dist
+            # server/src 随 bundle 更新（供生产端 ops 工具解析源码，非运行时依赖）。
+            # 运行时用 dist，故此处无需原子换轨；rm + mv 足够。
+            if [ -d "${STAGING_DIR}/server/src" ]; then
+              rm -rf /var/www/chexian/server/src
+              mv "${STAGING_DIR}/server/src" /var/www/chexian/server/src
+            fi
             cp "${STAGING_DIR}/server/package.json" /var/www/chexian/server/package.json
             cp "${STAGING_DIR}/server/package-lock.json" /var/www/chexian/server/package-lock.json
             cp "${STAGING_DIR}/server/ecosystem.config.cjs" /var/www/chexian/server/ecosystem.config.cjs

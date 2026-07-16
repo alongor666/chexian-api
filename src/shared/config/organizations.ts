@@ -148,7 +148,7 @@ export const QUICK_LOGIN_USERS_BY_BRANCH: Record<string, readonly QuickLoginUser
     { username: 'gaoxin', displayName: '高新机构', role: UserRole.ORG_USER },
   ],
   SX: [
-    { username: 'sxAdmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN },
+    { username: 'sxadmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN },
     { username: 'sx_taiyuan1', displayName: '太原一部机构', role: UserRole.ORG_USER },
     { username: 'sx_taiyuan2', displayName: '太原二部机构', role: UserRole.ORG_USER },
     // 2026-07-15 拆分（BACKLOG e04971）：sx_jdcszk（经代、车商、重客合并账号）退役（preset active:false），
@@ -367,12 +367,6 @@ export const DEFAULT_USER_PERMISSIONS: UserPermission[] = [
     displayName: '高新机构',
     role: UserRole.ORG_USER,
     organization: '高新',
-  },
-  // 电销用户
-  {
-    username: 'scdianxiao',
-    displayName: '四川电销',
-    role: UserRole.TELEMARKETING_USER,
   },
 ];
 
