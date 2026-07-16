@@ -82,12 +82,17 @@ def resolve_org_column_variant(df: 'pd.DataFrame') -> 'pd.DataFrame':
     return df.rename(columns={'机构': '三级机构'})
 
 
-def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None) -> 'pd.DataFrame':
+def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=None) -> 'pd.DataFrame':
     """多省机构值规范化 + 塌缩守卫（B006，对齐 transform.py normalize_branch_org G5 语义）。
 
     branch != 'SC' 时按 config/branch-org-mapping/<branch>.json 的 org_to_unit 把
     org_level_3 原始值（编码全称）映射到经营单元短名；SC → 原样返回（四川字节级安全）；
     无映射文件 → 保留原始值。未在映射表中的机构保留原始值并告警（不静默丢数据）。
+
+    policy_dir（BACKLOG e04971 报价侧「其他」清分）：给定签单域 parquet 目录时，
+    规范化后仍为「其他」的行按 业务员↔机构 对照（每日随最新签单数据派生，
+    salesman_org_fallback.py）二次解析——上游报价卡太原片区整体落「其他」，
+    业务员归属是唯一可用的行级线索。None → 跳过（过渡态/单测/SC 不需要）。
 
     出口守卫（B005/B006 同款）：非 SC 省归一化后若 org_level_3 坍缩成占位值
     （其他/NULL/空 合计 ≥ 阈值）即红字告警，ORG_COLLAPSE_FAIL=1 时抛错中止——
@@ -136,6 +141,23 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None) -> 'pd.Data
                 print(f"   ⚠️ {len(unmapped)} 个机构未在映射表中，保留原始值（需补 {branch}.json）：{unmapped[:5]}{'...' if len(unmapped) > 5 else ''}")
     else:
         print(f"   ⚠️ [{branch}] 机构规范化跳过：无映射文件 {mapping_path}（保留原始机构值）")
+        units = set()
+
+    # ── 业务员回退清分（BACKLOG e04971 报价侧）：规范化后仍「其他」的行，按最新签单域
+    # 业务员↔机构对照解析（上游报价卡太原片区整体落「其他」）。白名单双保险：映射构建与
+    # 应用各过一遍 units；解析不出保留「其他」。salesman_raw 在步骤 5 已重命名到位。
+    if policy_dir is not None and units and 'salesman_raw' in df.columns:
+        from pipelines.salesman_org_fallback import build_salesman_org_map, resolve_other_by_salesman
+        org_map = build_salesman_org_map(policy_dir, units)
+        if org_map:
+            _, names = split_salesman_columns(df['salesman_raw'])
+            resolved, n_other, n_hit = resolve_other_by_salesman(df['org_level_3'], names, org_map, units)
+            df['org_level_3'] = resolved
+            print(f"   🧭 [{branch}] 业务员回退清分:「其他」{n_other:,} 行 → 解析 {n_hit:,}"
+                  f"（映射 {len(org_map)} 人，剩「其他」{n_other - n_hit:,}）")
+        else:
+            print(f"   ⚠️ [{branch}] 业务员回退清分跳过：{policy_dir} 无可用签单 parquet 映射")
+
     # 出口守卫：机构维度塌缩检测（覆盖已映射 / 无映射两条非 SC 路径）
     from pipelines.org_collapse import (
         OrgDimensionCollapseError,
@@ -306,6 +328,12 @@ def main():
              'prefix_map 派生 + 校验，缺失行兜底 declared）；声明省 != SC 时跳过 data-sources.json '
              '写入。SC 默认链路与原"loader 注入部署省常量"逐字节等价。',
     )
+    parser.add_argument(
+        '--policy-dir', default=None,
+        help='签单域 parquet 目录（BACKLOG e04971：报价「其他」按业务员↔机构对照清分）。'
+             '缺省时非 SC 省自动取输出目录的上一级（validation/<省>/，premium 产物所在），'
+             '显式传入可覆盖；SC 不启用。',
+    )
     args = parser.parse_args()
 
     # 1. 定位输入文件
@@ -375,7 +403,12 @@ def main():
     # 非 SC 省对 org_level_3 做 org_to_unit 映射 + 塌缩守卫。SC 原样（四川字节级安全）。
     from pipelines.derived_fields import resolve_declared_branch
     declared_branch = resolve_declared_branch(args) or 'SC'
-    df = normalize_org_level_3(df, declared_branch)
+    # 业务员回退清分的签单域来源：显式 --policy-dir 优先；非 SC 省默认取输出目录上一级
+    # （branchOutputRoot 布局下即 validation/<省>/，premium 产物顶层所在）；SC 不启用。
+    policy_dir = args.policy_dir
+    if policy_dir is None and declared_branch != 'SC':
+        policy_dir = output_dir.parent
+    df = normalize_org_level_3(df, declared_branch, policy_dir=policy_dir)
 
     # 6. 风险等级 COALESCE 合并
     grade_cols = ['_grade_1', '_grade_2', '_grade_3']
