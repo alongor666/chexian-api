@@ -146,12 +146,15 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=
     # ── 业务员回退清分（BACKLOG e04971 报价侧）：规范化后仍「其他」的行，按最新签单域
     # 业务员↔机构对照解析（上游报价卡太原片区整体落「其他」）。白名单双保险：映射构建与
     # 应用各过一遍 units；解析不出保留「其他」。salesman_raw 在步骤 5 已重命名到位。
+    # 匹配键 =「工号+姓名」原始全串（两域同格式，2026-07-16 实测行覆盖 99.8%）——
+    # 刻意**不**拆姓名：工号天然区分同名业务员（重名跨机构错归风险归零），且签单域
+    # salesman_name 本就带工号前缀，拆名匹配反而键对不上。
     if policy_dir is not None and units and 'salesman_raw' in df.columns:
         from pipelines.salesman_org_fallback import build_salesman_org_map, resolve_other_by_salesman
         org_map = build_salesman_org_map(policy_dir, units)
         if org_map:
-            _, names = split_salesman_columns(df['salesman_raw'])
-            resolved, n_other, n_hit = resolve_other_by_salesman(df['org_level_3'], names, org_map, units)
+            keys = df['salesman_raw'].astype('string').str.strip()
+            resolved, n_other, n_hit = resolve_other_by_salesman(df['org_level_3'], keys, org_map, units)
             df['org_level_3'] = resolved
             print(f"   🧭 [{branch}] 业务员回退清分:「其他」{n_other:,} 行 → 解析 {n_hit:,}"
                   f"（映射 {len(org_map)} 人，剩「其他」{n_other - n_hit:,}）")

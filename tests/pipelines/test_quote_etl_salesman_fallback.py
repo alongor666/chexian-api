@@ -73,24 +73,35 @@ class ResolveTest(unittest.TestCase):
 
 
 class NormalizeIntegrationTest(unittest.TestCase):
-    """经 normalize_org_level_3 集成：报价源准确值 + 其他行 → 业务员清分。"""
+    """经 normalize_org_level_3 集成：报价源准确值 + 其他行 → 业务员清分。
+
+    fixture 用生产真实格式（回归锁）：两域业务员均为「工号+姓名」全串
+    （签单域 salesman_name 本就带工号前缀），匹配键 = 原始全串不拆姓名——
+    2026-07-16 曾因拆名匹配（键对不上）静默解析 0 行，靠真实格式 fixture 拦住。
+    """
 
     def _quotes_df(self):
         return pd.DataFrame({
-            'org_level_3': ['其他', '经代', '其他', '大同'],
-            'salesman_raw': ['110031100张三', '110031101赵六', '110031102无名氏', '110031103张三'],
+            'org_level_3': ['其他', '经代', '其他', '大同', '其他'],
+            'salesman_raw': ['110031100张三', '110031101赵六', '110031102无名氏',
+                             '110031103张三', '110031104张三'],
         })
 
-    def test_sx_with_policy_dir_resolves_other(self):
+    def test_sx_with_policy_dir_resolves_other_by_full_raw_key(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
-            d = _write_policy(Path(t), [('张三', '太原一部'), ('张三', '太原一部')])
+            # 签单域姓名带工号前缀（生产实况）；110031104张三 是同名不同工号的另一人，
+            # 属车商——全串匹配必须把两个「张三」分别归对，不许串
+            d = _write_policy(Path(t), [
+                ('110031100张三', '太原一部'), ('110031100张三', '太原一部'),
+                ('110031104张三', '车商'),
+            ])
             out = normalize_org_level_3(self._quotes_df(), 'SX', env={}, policy_dir=d)
-        self.assertEqual(list(out['org_level_3']), ['太原一部', '经代', '其他', '大同'])
+        self.assertEqual(list(out['org_level_3']), ['太原一部', '经代', '其他', '大同', '车商'])
 
     def test_policy_dir_none_keeps_other(self):
         out = normalize_org_level_3(self._quotes_df(), 'SX', env={}, policy_dir=None)
-        self.assertEqual(list(out['org_level_3']), ['其他', '经代', '其他', '大同'])
+        self.assertEqual(list(out['org_level_3']), ['其他', '经代', '其他', '大同', '其他'])
 
     def test_sc_untouched(self):
         df = self._quotes_df()
