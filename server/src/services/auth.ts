@@ -13,7 +13,7 @@ import { PRESET_USERS, getPresetVisibleBranches, getDeniedModules, SELF_SERVICE_
 import { validatePasswordPolicy } from '../config/password-policy.js';
 import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
-import { ensurePresetUser, getUserByUsername, setUserPasswordByUsername } from './access-control.js';
+import { canonicalizeUsername, ensurePresetUser, getUserByUsername, setUserPasswordByUsername } from './access-control.js';
 import type { AccessUser } from './access-control.js';
 import { assertPasswordAllowed, credentialSetupRequired } from './credential-policy.js';
 import { isIpAllowed as isIpAllowedShared } from '../utils/ip.js';
@@ -124,7 +124,8 @@ class AuthService {
   private refreshTokenStore = new Map<string, { userId: string; expiresAt: number }>();
 
   private normalizeUsername(input: string): string {
-    return input.normalize('NFKC').trim().toLowerCase();
+    // 复用 access-control 的唯一 canonical 口径（NFKC+trim+lowercase），杜绝登录与写入/查询边界口径漂移。
+    return canonicalizeUsername(input);
   }
 
   private normalizePassword(input: string): string {

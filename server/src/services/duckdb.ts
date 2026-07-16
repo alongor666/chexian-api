@@ -152,6 +152,48 @@ export class DuckDBService implements DuckDBQueryable {
     }
   }
 
+  /**
+   * 在**单一连接**内以事务方式顺序执行多条写语句（BEGIN → … → COMMIT，出错 ROLLBACK）。
+   *
+   * 追加方法（非改已有 query 逻辑）：写路径若把「先 DELETE 再 INSERT 同主键」拆成多次
+   * `query()` 调用，会各自 `pool.acquire()` 落到不同连接、无事务边界 —— 一旦中间步失败，
+   * 表被留在半写状态（实测：setUserPasswordByUsername 的 DELETE/INSERT 拆连接后偶发
+   * `Duplicate key … violates primary key`，账号被写坏到下次 reseed）。本方法保证这组语句
+   * 要么全部提交、要么全部回滚，且都在同一连接顺序执行（DELETE 对 INSERT 立即可见）。
+   *
+   * 仅供内部写路径使用；不缓存、不返回行。出错时日志记原始错误（含 reqId），对外抛脱敏 AppError。
+   */
+  async transaction(statements: string[]): Promise<void> {
+    if (!this.connectionPool) throw new AppError(500, 'DuckDB not initialized');
+    if (statements.length === 0) return;
+    const pool = this.connectionPool;
+    const conn = await pool.acquire();
+    const startTime = Date.now();
+    try {
+      await conn.run('BEGIN TRANSACTION');
+      try {
+        for (const sql of statements) {
+          await conn.run(sql);
+        }
+        await conn.run('COMMIT');
+      } catch (innerErr) {
+        try { await conn.run('ROLLBACK'); } catch { /* rollback 失败不掩盖原错误 */ }
+        throw innerErr;
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      const ctx = getRequestContext();
+      const errorId = ctx?.requestId ?? Math.random().toString(36).slice(2, 10);
+      console.error(`[DuckDB] [${errorId}] Transaction error (${Date.now() - startTime}ms):`, message);
+      throw new AppError(
+        process.env.NODE_ENV === 'production' ? 500 : 500,
+        process.env.NODE_ENV === 'production' ? `事务执行失败 [${errorId}]` : `事务执行失败: ${message}`,
+      );
+    } finally {
+      pool.release(conn);
+    }
+  }
+
   async loadParquet(filePath: string, tableName: string = 'raw_parquet'): Promise<{ versionToken: string }> {
     await this.dropRelationIfExists(sanitizeTableName(tableName));
     await this.query(`CREATE OR REPLACE TABLE ${sanitizeTableName(tableName)} AS SELECT * FROM read_parquet('${escapeSqlValue(filePath)}')`);
