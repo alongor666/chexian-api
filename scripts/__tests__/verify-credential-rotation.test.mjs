@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import crypto from 'crypto';
-import { classifyCredentials } from '../ops/verify-credential-rotation.mjs';
+import { classifyCredentials } from '../lib/verify-credential-rotation-core.mjs';
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 

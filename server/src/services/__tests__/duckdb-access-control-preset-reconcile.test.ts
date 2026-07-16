@@ -29,7 +29,9 @@ vi.mock('../../config/paths.js', () => ({
 }));
 
 const { duckdbService } = await import('../duckdb.js');
-const { seedAccessControlData } = await import('../access-control.js');
+const { seedAccessControlData, createUser, getUserByUsername, canonicalizeUsername } = await import(
+  '../access-control.js'
+);
 const { PRESET_USERS, PRESET_ROLES } = await import('../../config/preset-users.js');
 
 /** 早于 branchCode 引入（2026-06-05）的存量行：整个 branchCode 键都不存在 */
@@ -172,6 +174,57 @@ describe('preset 对账 · 真实 DuckDB + 真实落盘', () => {
       .filter((u) => before.get(u.username as string) !== u.passwordHash)
       .map((u) => u.username);
     expect(changed, '对账不得改动任何账号的 passwordHash').toEqual([]);
+  });
+
+  it('【RED LINE】用户名大小写：store 存量大写行不产生重复行（根治 sxAdmin/sxadmin 分裂）', async () => {
+    // 造存量非规范行：把 store 里 sxadmin 的 username 改成历史大写形态 'SxAdmin'
+    const store = JSON.parse(fs.readFileSync(storePath, 'utf-8'));
+    const row = store.users.find((u: StoreUser) => u.username === 'sxadmin');
+    expect(row, 'preset 应含 sxadmin（本用例的前置）').toBeDefined();
+    row.username = 'SxAdmin';
+    fs.writeFileSync(storePath, JSON.stringify(store, null, 2), 'utf-8');
+    expect(PRESET_USERS.sxadmin.username).toBe('sxadmin'); // preset 是 canonical 小写
+
+    await seedAccessControlData();
+
+    // ★ 核心：reconcile 不得因大小写差异把 sxadmin 再建一行。
+    // 修复前 getUserByUsername 大小写敏感 → 查 'sxadmin' 找不到 'SxAdmin' → ensureUserFromPreset 重建 → 2 行。
+    const matches = readStore().users.filter(
+      (u) => canonicalizeUsername(String(u.username)) === 'sxadmin'
+    );
+    expect(matches.map((u) => u.username), 'sxadmin 只应有一行（大小写不敏感去重）').toHaveLength(1);
+  });
+
+  it('【RED LINE】用户名大小写：管理面建 NewUser 后按 newuser 可查到，且大小写变体建号被拒', async () => {
+    await seedAccessControlData();
+
+    // 管理面 schema 接受任意大小写 → 服务层必须落 canonical，否则登录（查小写）恒找不到
+    const created = await createUser({
+      username: 'NewUser',
+      displayName: '大小写测试账号',
+      passwordHash: '$2b$10$CaseTestTombstone00000000000000000000000000000000000u',
+      role: 'org_user',
+      organization: '天府',
+      branchCode: 'SC',
+    });
+    expect(created.username, '落库用户名必须是 canonical 小写').toBe('newuser');
+
+    // 登录路径按 canonical 查（auth.ts normalizeUsername → 小写）：必须命中
+    await expect(getUserByUsername('newuser')).resolves.toMatchObject({ username: 'newuser' });
+    // 原样大写也命中（查询大小写不敏感）
+    await expect(getUserByUsername('NewUser')).resolves.toMatchObject({ username: 'newuser' });
+
+    // 大小写变体不得绕过唯一性建出第二个账号
+    await expect(
+      createUser({
+        username: 'NEWUSER',
+        displayName: '重复账号',
+        passwordHash: '$2b$10$CaseTestTombstone00000000000000000000000000000000000u',
+        role: 'org_user',
+        organization: '天府',
+        branchCode: 'SC',
+      })
+    ).rejects.toThrow('用户名已存在');
   });
 
   it('store 已有值不被覆盖：store=SX 而 preset=SC 时保留 SX（运维权威）', async () => {

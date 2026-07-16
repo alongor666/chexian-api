@@ -1,0 +1,1 @@
+{"uid":"2026-07-16-claude-8f4036","kind":"status","ts":"2026-07-16","actor":"@claude","status":"DONE","evidence":"PR #1120：duckdb.ts 追加 transaction()（BEGIN/COMMIT/显式 ROLLBACK，单连接顺序执行）；setUserPasswordByUsername 改用之。验证：typecheck ✓ · governance 59/59 ✓ · 单测 389 文件/5487 ✓ · 集成测试 30/285 ✓（含真实 DuckDB reconcile）","at":"2026-07-16T06:58:06.328Z","eid":"f1a63f7c"}

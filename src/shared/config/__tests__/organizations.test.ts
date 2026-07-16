@@ -124,10 +124,10 @@ describe('QUICK_LOGIN_USERS_BY_BRANCH — 快速切换用户按省（阶段3）'
     ]);
   });
 
-  it('SX 清单为 sxAdmin + 13 经营单元账号（回归前山西用户看到的是四川账号列表）', () => {
+  it('SX 清单为 sxadmin + 13 经营单元账号（回归前山西用户看到的是四川账号列表）', () => {
     const sx = QUICK_LOGIN_USERS_BY_BRANCH.SX;
     expect(sx).toHaveLength(14);
-    expect(sx[0]).toEqual({ username: 'sxAdmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN });
+    expect(sx[0]).toEqual({ username: 'sxadmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN });
     expect(sx.map((u) => u.username)).not.toContain('admin');
     expect(sx.map((u) => u.username)).not.toContain('leshan');
   });

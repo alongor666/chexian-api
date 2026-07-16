@@ -43,6 +43,8 @@ const mockGetUserByUsername = vi.fn(async (_username: string): Promise<AccessUse
 const mockEnsurePresetUser = vi.fn(async (_username: string): Promise<AccessUser | null> => null);
 
 vi.mock('../access-control.js', () => ({
+  // 纯函数，用真实实现（auth.ts normalizeUsername 委托给它）
+  canonicalizeUsername: (u: string) => u.normalize('NFKC').trim().toLowerCase(),
   getUserByUsername: (_username: string) => mockGetUserByUsername(_username),
   ensurePresetUser: (_username: string) => mockEnsurePresetUser(_username),
 }));

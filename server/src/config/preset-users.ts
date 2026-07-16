@@ -306,21 +306,6 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     branchCode: 'SC',
     specialFeatures: ['cost'],
   },
-  chexianbu: {
-    username: 'chexianbu',
-    passwordHash: '$2b$10$ChexianbuTombstone0000000000000000000000000000000000u',
-    displayName: '车险部',
-    role: 'branch_admin',
-    branchCode: 'SC',
-    specialFeatures: ['cost'],
-  },
-  scdianxiao: {
-    username: 'scdianxiao',
-    passwordHash: '$2b$10$ScdianxiaoTombstone000000000000000000000000000000000u',
-    displayName: '四川电销',
-    role: 'telemarketing_user',
-    branchCode: 'SC',
-  },
   // ===== 总部超管 + 市州一把手（2026-07-12 发放）=====
   // 1 全国超管 zongbu + 4 市州机构负责人（宜宾/乐山/达州/泸州，只读看本机构）。
   // passwordHash 均为「构造式 tombstone」占位（标准 bcrypt 60 字符格式、含 "Tombstone" 可辨标记，
@@ -400,9 +385,11 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   //   已激活并逐账号隔离验证）。passwordHash 保持 tombstone 不变：即便 store 被 re-seed，无 env 真凭据仍无法登录。
   //   auth.ts: if (!user.active) throw new AppError(403, 'Account disabled')
   // organization 取自 数据管理/config/branch-org-mapping/SX.json 的 11 经营单元（= ETL 规范化后 org_level_3），禁臆造。
-  sxAdmin: {
+  sxadmin: {
     // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
-    username: 'sxAdmin',
+    // username 用小写 'sxadmin'：与生产 USER_PASSWORDS 键、既有 store 行、登录归一化口径一致。
+    // 历史大小写 'sxAdmin' 会因 reconcile 大小写敏感的 getUserByUsername 每次 reload 重生成重复行（已修）。
+    username: 'sxadmin',
     // tombstone 占位（不可登录）：山西超管凭据仅由 USER_PASSWORDS 环境变量提供。
     // 以下为标准 bcrypt 格式 tombstone（60 字符，无对应明文，bcrypt.compare 必然返回 false）
     passwordHash: '$2b$10$SxAdminTombstone000000000000000000000000000000000000u',
