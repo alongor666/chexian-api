@@ -13,16 +13,25 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / '数据管理'))
 
-from pipelines.salesman_org_fallback import build_salesman_org_map, resolve_other_by_salesman
+from pipelines.salesman_org_fallback import (
+    QuoteOrgResolutionError,
+    build_salesman_org_map,
+    enforce_resolution_gate,
+    resolve_other_by_salesman,
+)
 from pipelines.quote_etl import normalize_org_level_3
 
 UNITS = {'太原一部', '太原二部', '经代', '车商', '重客', '大同'}
 
 
-def _write_policy(tmp_path: Path, rows: list[tuple[str, str]]) -> Path:
+def _write_policy(tmp_path: Path, rows: list[tuple], with_date: bool = False) -> Path:
     d = tmp_path / 'validation_SX'
     d.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows, columns=['salesman_name', 'org_level_3']).to_parquet(d / 'policy.parquet')
+    cols = ['salesman_name', 'org_level_3'] + (['policy_date'] if with_date else [])
+    df = pd.DataFrame(rows, columns=cols)
+    if with_date:
+        df['policy_date'] = pd.to_datetime(df['policy_date'])
+    df.to_parquet(d / 'policy.parquet')
     return d
 
 
@@ -52,6 +61,40 @@ class BuildMapTest(unittest.TestCase):
         self.assertEqual(build_salesman_org_map('/nonexistent/xxx', UNITS), {})
         with tempfile.TemporaryDirectory() as t:
             self.assertEqual(build_salesman_org_map(t, UNITS), {})
+
+    def test_since_window_excludes_stale_history(self):
+        # 评审锁定：调动业务员——历史签单量大于现单元，全历史投票会错归旧单元；
+        # since 窗口对齐后只看近窗行，归现单元
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            d = _write_policy(Path(t), [
+                ('110031100张三', '大同', '2024-03-01'),
+                ('110031100张三', '大同', '2024-04-01'),
+                ('110031100张三', '大同', '2024-05-01'),
+                ('110031100张三', '太原一部', '2026-01-10'),
+            ], with_date=True)
+            full = build_salesman_org_map(d, UNITS)
+            windowed = build_salesman_org_map(d, UNITS, since='2025-12-01')
+        self.assertEqual(full['110031100张三'], '大同')        # 全历史投票 → 旧单元（错）
+        self.assertEqual(windowed['110031100张三'], '太原一部')  # 窗口对齐 → 现单元（对）
+
+
+class ResolutionGateTest(unittest.TestCase):
+    """清分闸（评审 P1 · fail-closed）：残留「其他」超阈默认抛错，显式降级才放行。"""
+
+    def test_over_threshold_raises_by_default(self):
+        with self.assertRaises(QuoteOrgResolutionError):
+            enforce_resolution_gate(100, 32, reason='单测', env={})
+
+    def test_explicit_degraded_env_downgrades_to_warning(self):
+        enforce_resolution_gate(100, 32, reason='单测',
+                                env={'QUOTE_ORG_FALLBACK_ALLOW_DEGRADED': '1'})  # 不抛
+
+    def test_under_threshold_passes(self):
+        enforce_resolution_gate(100, 3, reason='单测', env={})  # 3% < 5%，不抛
+
+    def test_empty_frame_noop(self):
+        enforce_resolution_gate(0, 0, reason='单测', env={})
 
 
 class ResolveTest(unittest.TestCase):
@@ -83,7 +126,7 @@ class NormalizeIntegrationTest(unittest.TestCase):
     def _quotes_df(self):
         return pd.DataFrame({
             'org_level_3': ['其他', '经代', '其他', '大同', '其他'],
-            'salesman_raw': ['110031100张三', '110031101赵六', '110031102无名氏',
+            'salesman_raw': ['110031100张三', '110031101赵六', '110031102李壹',
                              '110031103张三', '110031104张三'],
         })
 
@@ -94,13 +137,32 @@ class NormalizeIntegrationTest(unittest.TestCase):
             # 属车商——全串匹配必须把两个「张三」分别归对，不许串
             d = _write_policy(Path(t), [
                 ('110031100张三', '太原一部'), ('110031100张三', '太原一部'),
+                ('110031102李壹', '经代'),
                 ('110031104张三', '车商'),
             ])
             out = normalize_org_level_3(self._quotes_df(), 'SX', env={}, policy_dir=d)
-        self.assertEqual(list(out['org_level_3']), ['太原一部', '经代', '其他', '大同', '车商'])
+        self.assertEqual(list(out['org_level_3']), ['太原一部', '经代', '经代', '大同', '车商'])
 
-    def test_policy_dir_none_keeps_other(self):
-        out = normalize_org_level_3(self._quotes_df(), 'SX', env={}, policy_dir=None)
+    def test_partial_coverage_over_threshold_blocked(self):
+        # 对照缺人 → 残留「其他」超阈（1/5=20% > 5%）→ 清分闸默认阻断
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            d = _write_policy(Path(t), [
+                ('110031100张三', '太原一部'),
+                ('110031104张三', '车商'),
+            ])  # 110031102李壹 缺席
+            with self.assertRaises(QuoteOrgResolutionError):
+                normalize_org_level_3(self._quotes_df(), 'SX', env={}, policy_dir=d)
+
+    def test_policy_dir_none_blocked_by_default(self):
+        # 评审 P1：清分依赖缺失不再静默续跑——默认阻断
+        with self.assertRaises(QuoteOrgResolutionError):
+            normalize_org_level_3(self._quotes_df(), 'SX', env={}, policy_dir=None)
+
+    def test_policy_dir_none_degraded_env_keeps_other(self):
+        out = normalize_org_level_3(self._quotes_df(), 'SX',
+                                    env={'QUOTE_ORG_FALLBACK_ALLOW_DEGRADED': '1'},
+                                    policy_dir=None)
         self.assertEqual(list(out['org_level_3']), ['其他', '经代', '其他', '大同', '其他'])
 
     def test_sc_untouched(self):

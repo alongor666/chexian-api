@@ -25,6 +25,7 @@ if str(DATA_ROOT) not in sys.path:
     sys.path.insert(0, str(DATA_ROOT))
 
 from pipelines.org_collapse import OrgDimensionCollapseError  # noqa: E402
+from pipelines.salesman_org_fallback import QuoteOrgResolutionError  # noqa: E402
 from pipelines.quote_etl import (  # noqa: E402
     normalize_org_level_3,
     resolve_org_column_variant,
@@ -83,10 +84,16 @@ class NormalizeOrgLevel3Test(unittest.TestCase):
         normalize_org_level_3(df, "SX")
         self.assertEqual(df["org_level_3"].tolist(), [SX_CODED_ORG])
 
-    def test_collapsed_warn_mode_no_raise(self):
-        # B006 现状：全「其他」→ 默认告警不中断（与 transform.py 守卫同语义）
+    def test_collapsed_default_now_blocked_by_resolution_gate(self):
+        # 2026-07-16 评审 P1 语义变更：全「其他」默认不再放行——清分闸 fail-closed 阻断
         df = pd.DataFrame({"org_level_3": ["其他"] * 100})
-        out = normalize_org_level_3(df, "SX", env={})
+        with self.assertRaises(QuoteOrgResolutionError):
+            normalize_org_level_3(df, "SX", env={})
+
+    def test_collapsed_warn_mode_passes_only_with_explicit_degraded(self):
+        # 塌缩守卫默认告警不中断的既有语义仍在，但须显式降级授权才能走完出口
+        df = pd.DataFrame({"org_level_3": ["其他"] * 100})
+        out = normalize_org_level_3(df, "SX", env={"QUOTE_ORG_FALLBACK_ALLOW_DEGRADED": "1"})
         self.assertEqual(out["org_level_3"].nunique(), 1)
 
     def test_collapsed_fail_mode_raises(self):
@@ -95,10 +102,11 @@ class NormalizeOrgLevel3Test(unittest.TestCase):
             normalize_org_level_3(df, "SX", env={"ORG_COLLAPSE_FAIL": "1"})
 
     def test_healthy_distribution_no_raise_even_fail_mode(self):
-        # 真实机构集中不是塌缩：映射后全为经营单元短名，FAIL=1 也不触发
-        df = pd.DataFrame({"org_level_3": [SX_CODED_ORG] * 90 + ["其他"] * 10})
+        # 真实机构集中不是塌缩：映射后全为经营单元短名，FAIL=1 也不触发；
+        # 「其他」3% 低于清分闸阈值（5%），默认也放行
+        df = pd.DataFrame({"org_level_3": [SX_CODED_ORG] * 97 + ["其他"] * 3})
         out = normalize_org_level_3(df, "SX", env={"ORG_COLLAPSE_FAIL": "1"})
-        self.assertEqual((out["org_level_3"] == SX_EXPECTED_UNIT).sum(), 90)
+        self.assertEqual((out["org_level_3"] == SX_EXPECTED_UNIT).sum(), 97)
 
 
 class NormalizeOrgLevel3NewCaliberTest(unittest.TestCase):
@@ -128,12 +136,13 @@ class NormalizeOrgLevel3NewCaliberTest(unittest.TestCase):
         self.assertEqual(out["org_level_3"].tolist(), [SX_EXPECTED_UNIT, "晋中"])
 
     def test_fallback_to_retired_bucket_keeps_placeholder(self):
-        # 回退命中旧合并值（白名单外）→ 保留「其他」，不产出退役值
+        # 回退命中旧合并值（白名单外）→ 保留「其他」，不产出退役值。
+        # fixture「其他」占比 50% 会触发清分闸，此处显式降级只验行级语义
         df = pd.DataFrame({
             "org_level_3_new": ["其他", "晋中"],
             "org_level_3": [self.RETIRED_BUCKET_CODE, SX_CODED_ORG],
         })
-        out = normalize_org_level_3(df, "SX")
+        out = normalize_org_level_3(df, "SX", env={"QUOTE_ORG_FALLBACK_ALLOW_DEGRADED": "1"})
         self.assertEqual(out["org_level_3"].tolist(), ["其他", "晋中"])
         self.assertNotIn("经代、车商、重客", set(out["org_level_3"]))
 

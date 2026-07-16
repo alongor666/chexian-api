@@ -82,7 +82,8 @@ def resolve_org_column_variant(df: 'pd.DataFrame') -> 'pd.DataFrame':
     return df.rename(columns={'机构': '三级机构'})
 
 
-def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=None) -> 'pd.DataFrame':
+def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=None,
+                          window_start=None) -> 'pd.DataFrame':
     """多省机构值规范化 + 塌缩守卫（B006，对齐 transform.py normalize_branch_org G5 语义）。
 
     branch != 'SC' 时按 config/branch-org-mapping/<branch>.json 的 org_to_unit 把
@@ -92,7 +93,14 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=
     policy_dir（BACKLOG e04971 报价侧「其他」清分）：给定签单域 parquet 目录时，
     规范化后仍为「其他」的行按 业务员↔机构 对照（每日随最新签单数据派生，
     salesman_org_fallback.py）二次解析——上游报价卡太原片区整体落「其他」，
-    业务员归属是唯一可用的行级线索。None → 跳过（过渡态/单测/SC 不需要）。
+    业务员归属是唯一可用的行级线索。window_start 给定时映射只统计
+    policy_date >= window_start 的签单行（报价窗口对齐，防调动业务员被
+    历史机构投票错归——评审实测全历史投票波及 9.17% 报价行）。
+
+    fail-closed 清分闸（评审 P1，2026-07-16）：非 SC 时，无论哪条分支产出，
+    最终「其他」占比 > 5% 即抛 QuoteOrgResolutionError 阻断（依赖缺失如
+    policy_dir=None/映射为空/salesman_raw 缺列，都会以此表现兜底拦截）；
+    仅显式设 QUOTE_ORG_FALLBACK_ALLOW_DEGRADED=1 降级为红字告警续跑。
 
     出口守卫（B005/B006 同款）：非 SC 省归一化后若 org_level_3 坍缩成占位值
     （其他/NULL/空 合计 ≥ 阈值）即红字告警，ORG_COLLAPSE_FAIL=1 时抛错中止——
@@ -146,20 +154,30 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=
     # ── 业务员回退清分（BACKLOG e04971 报价侧）：规范化后仍「其他」的行，按最新签单域
     # 业务员↔机构对照解析（上游报价卡太原片区整体落「其他」）。白名单双保险：映射构建与
     # 应用各过一遍 units；解析不出保留「其他」。salesman_raw 在步骤 5 已重命名到位。
-    # 匹配键 =「工号+姓名」原始全串（两域同格式，2026-07-16 实测行覆盖 99.8%）——
+    # 匹配键 =「工号+姓名」原始全串（两域同格式，2026-07-16 实测行覆盖 99.7%+）——
     # 刻意**不**拆姓名：工号天然区分同名业务员（重名跨机构错归风险归零），且签单域
     # salesman_name 本就带工号前缀，拆名匹配反而键对不上。
+    from pipelines.salesman_org_fallback import (
+        build_salesman_org_map, enforce_resolution_gate, resolve_other_by_salesman,
+    )
+    gate_reason = None
     if policy_dir is not None and units and 'salesman_raw' in df.columns:
-        from pipelines.salesman_org_fallback import build_salesman_org_map, resolve_other_by_salesman
-        org_map = build_salesman_org_map(policy_dir, units)
+        org_map = build_salesman_org_map(policy_dir, units, since=window_start)
         if org_map:
             keys = df['salesman_raw'].astype('string').str.strip()
             resolved, n_other, n_hit = resolve_other_by_salesman(df['org_level_3'], keys, org_map, units)
             df['org_level_3'] = resolved
             print(f"   🧭 [{branch}] 业务员回退清分:「其他」{n_other:,} 行 → 解析 {n_hit:,}"
-                  f"（映射 {len(org_map)} 人，剩「其他」{n_other - n_hit:,}）")
+                  f"（映射 {len(org_map)} 人{f'，窗口 >= {window_start}' if window_start is not None else ''}，"
+                  f"剩「其他」{n_other - n_hit:,}）")
+            gate_reason = '业务员对照已应用但残留超阈（近窗签单对照覆盖不足？）'
         else:
-            print(f"   ⚠️ [{branch}] 业务员回退清分跳过：{policy_dir} 无可用签单 parquet 映射")
+            print(f"   🔴 [{branch}] 业务员回退清分不可用：{policy_dir} 无可用签单 parquet 映射")
+            gate_reason = f'签单域映射为空（policy_dir={policy_dir}，窗口 {window_start}）'
+    else:
+        missing = ('salesman_raw 列缺失' if 'salesman_raw' not in df.columns
+                   else ('policy_dir 未提供' if policy_dir is None else 'units 白名单为空'))
+        gate_reason = f'清分依赖缺失（{missing}）'
 
     # 出口守卫：机构维度塌缩检测（覆盖已映射 / 无映射两条非 SC 路径）
     from pipelines.org_collapse import (
@@ -184,6 +202,14 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=
         print(f"\n   🔴 {msg}")
         print("      → 若确为合法机构集中可忽略；设 ORG_COLLAPSE_FAIL=1 升级为中止，"
               "ORG_COLLAPSE_WARN_THRESHOLD 调整阈值。")
+
+    # ── 清分闸（评审 P1，fail-closed）：最终「其他」占比超阈即阻断——依赖缺失
+    # （policy_dir/映射/salesman_raw）或对照覆盖不足都会以此表现，统一在出口拦。
+    # 塌缩守卫（≥95%，防上游导出退化）在前保持既有语义；本闸阈值 5%，专拦
+    # 「清分能力静默失效」（正常态实测残留 ≈0.2%，失效态 ≈29%）。
+    n_other_final = int((df['org_level_3'].astype('string') == '其他').fillna(False).sum())
+    enforce_resolution_gate(len(df), n_other_final,
+                            reason=gate_reason or '未知场景', env=env)
     return df
 
 
@@ -411,7 +437,13 @@ def main():
     policy_dir = args.policy_dir
     if policy_dir is None and declared_branch != 'SC':
         policy_dir = output_dir.parent
-    df = normalize_org_level_3(df, declared_branch, policy_dir=policy_dir)
+    # 映射窗口 = 报价数据自身的最早报价时间（步骤 7 才做正式 datetime 转换，这里
+    # 只为取 min 做一次容错解析）；解析不出 → None（映射退回全量，仍受清分闸兜底）
+    window_start = None
+    if declared_branch != 'SC' and 'quote_time' in df.columns:
+        qt_min = pd.to_datetime(df['quote_time'], errors='coerce').min()
+        window_start = None if pd.isna(qt_min) else qt_min.normalize()
+    df = normalize_org_level_3(df, declared_branch, policy_dir=policy_dir, window_start=window_start)
 
     # 6. 风险等级 COALESCE 合并
     grade_cols = ['_grade_1', '_grade_2', '_grade_3']
