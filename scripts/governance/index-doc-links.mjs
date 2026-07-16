@@ -38,6 +38,12 @@ export const INDEX_FILES = [
   '开发文档/00_index/CODE_INDEX.md',
   '开发文档/00_index/DATA_INDEX.md',
   '开发文档/00_index/PROGRESS_INDEX.md',
+  // 二期（2026-07-16）：导航型活文档纳入。刻意排除 PROGRESS.md——它已声明为
+  // 「历史里程碑存档」，其证据引用记录的是当时存在的文件（实测 25 处“死链”全为
+  // 历史快照语义），扫描它只会制造成片豁免噪声；活的接力指针已迁 PROGRESS_INDEX。
+  'AGENTS.md',
+  '.claude/AGENTS.md',
+  '数据管理/knowledge/INDEX.md',
 ];
 
 const ALLOW_MARKER = 'governance-allow: index-doc-links';
@@ -58,7 +64,7 @@ const KNOWN_EXTENSIONS = /\.(md|ts|tsx|js|mjs|cjs|py|json|jsonl|html|png|sh|ya?m
 
 export function runIndexDocLinksCheck({ rootDir, io, isGitIgnored = defaultIsGitIgnored }) {
   const { info, success, error } = io;
-  info('检查 00_index 四索引内部引用死链（知识体系审计闸）...');
+  info('检查索引/导航文档内部引用死链（知识体系审计闸）...');
 
   const problems = [];
   let scannedRefs = 0;
@@ -100,7 +106,7 @@ export function runIndexDocLinksCheck({ rootDir, io, isGitIgnored = defaultIsGit
   }
 
   if (problems.length === 0) {
-    success(`索引死链检查通过（4 索引，${scannedRefs} 条路径引用）`);
+    success(`索引死链检查通过（${INDEX_FILES.length} 个文档，${scannedRefs} 条路径引用）`);
     return true;
   }
   problems.forEach((p) => error(p));
@@ -158,7 +164,7 @@ function checkTarget(ref, indexRel, rootDir, isGitIgnored, topLevelEntries) {
   // 硬跳过
   if (/^(https?|mailto|ftp):/i.test(target)) return null;
   if (target.startsWith('#')) return null; // 纯锚点
-  if (/[*?{}<>]/.test(target)) return null; // glob / 模板
+  if (/[*?{}<>|]/.test(target)) return null; // glob / 模板 / a|b 择一简写
   if (target.includes('YYYY') || target.includes('${')) return null; // 占位
   if (target.startsWith('~')) return null; // home 路径
   if (target.includes('.claude/worktrees/')) return null;

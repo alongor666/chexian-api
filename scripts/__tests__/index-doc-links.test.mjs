@@ -164,6 +164,18 @@ describe('豁免边界 — governance-allow 标记', () => {
   });
 });
 
+describe('二期扩面 — 导航型活文档', () => {
+  it('红：AGENTS.md 中的死链同样被扫描', () => {
+    fs.writeFileSync(path.join(tmp, 'AGENTS.md'), '- 见 [幽灵](./GHOST.md)\n');
+    expect(run()).toBe(false);
+  });
+
+  it('绿：a|b 择一简写不当作路径校验', () => {
+    fs.writeFileSync(path.join(tmp, 'AGENTS.md'), '- 不维护 `.claude/commands|agents|skills/README.md` 索引\n');
+    expect(run()).toBe(true);
+  });
+});
+
 describe('gitignored 派生/数据产物', () => {
   it('绿：gitignored 路径不报死链（注入 stub）', () => {
     writeIndex('- [看板](/BACKLOG_ARCHIVE.md)\n');

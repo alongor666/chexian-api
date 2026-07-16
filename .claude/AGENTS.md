@@ -63,7 +63,6 @@ node 数据管理/daily.mjs all            # 全部重跑（完整域清单见 d
 | `server/src/sql/*.ts` | SQL 生成器（数量以目录为准，全景见 `server/src/sql/INDEX.md`） |
 | `数据管理/daily.mjs` | 分域 ETL 入口（须显式指定域） |
 | `数据管理/pipelines/transform.py` | Excel→Parquet 转换（`--domain`/`--after-date`） |
-| `数据管理/pipelines/split_existing.py` | ~~一次性迁移脚本~~（已废弃，迁移已完成） |
 | `数据管理/pipelines/merge_parquet.py` | Parquet 合并工具 |
 
 ## 红线规则
