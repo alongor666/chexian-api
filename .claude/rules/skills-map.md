@@ -61,7 +61,7 @@
 | **investigate** | 系统性 debug 四阶段，铁律"无根因不修复" |
 | **claude-api** | 修改本项目 Anthropic SDK 调用（智谱→真 Claude、prompt caching 调优） |
 | **sql-pro** | DuckDB 复杂 SQL 优化（窗口函数 / CTE / 执行计划） |
-| **chexian-crystallize-skill** | "沉淀成 skill / 固化成技能" → 五步流水线。铁律「改在仓库·装到本地·本地只读」，详见 memory `project_skills_maintenance_model` |
+| **crystallize-skill** | "沉淀成 skill / 固化成技能" → 五步流水线。铁律「改在仓库·装到本地·本地只读」，详见 memory `project_skills_maintenance_model`（曾名 chexian-crystallize-skill，2026-07-16 实测该名不可调，勘正） |
 | **cleanup-worktrees** | "清理/回收 worktree" → 安全回收器，默认只删零损失（`--dry-run` 盘点 / `--archive` 备份后清理） |
 | **/chexian-evidence-loop**（基座 `evidence-loop-core`） | "按证据闭环做 / evidence loop / 先建 harness 再动手" → 三阶段（harness 报告 → loop checkpoint → verifier 证伪）。本项目 §4 表见 `.claude/rules/evidence-loop.md`；**跨任务并行调度**先 `bun run loop:dispatch`（Loop v2，见 `.claude/rules/loop-orchestration.md`） |
 
@@ -78,6 +78,6 @@
 
 ## 维护协议
 
-- **新增 skill**：走 `chexian-crystallize-skill` 流水线（共享 skill 改仓库 + 装软链；项目级放 `.claude/skills/*.md`）。**禁止在 `~/.claude/skills/` 直接建实体目录**；创建后同会话内把"本项目用法"补登到对应小节
+- **新增 skill**：走 `crystallize-skill` 流水线（共享 skill 改仓库 + 装软链；项目级放 `.claude/skills/*.md`）。**禁止在 `~/.claude/skills/` 直接建实体目录**；创建后同会话内把"本项目用法"补登到对应小节
 - **skill 弃用**：表格行尾标注 `[DEPRECATED YYYY-MM]`
 - **eager-load 体积监控**：本表保持 ≤ 6KB。再涨先压顶部治理 blockquote（已入 memory/BACKLOG 的留一行指针即可），再裁 D 段低频条目；**skill 名指针一律不可删**
