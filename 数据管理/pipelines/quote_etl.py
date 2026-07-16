@@ -82,12 +82,26 @@ def resolve_org_column_variant(df: 'pd.DataFrame') -> 'pd.DataFrame':
     return df.rename(columns={'机构': '三级机构'})
 
 
-def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None) -> 'pd.DataFrame':
+def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None, policy_dir=None,
+                          quote_years: 'pd.Series | None' = None) -> 'pd.DataFrame':
     """多省机构值规范化 + 塌缩守卫（B006，对齐 transform.py normalize_branch_org G5 语义）。
 
     branch != 'SC' 时按 config/branch-org-mapping/<branch>.json 的 org_to_unit 把
     org_level_3 原始值（编码全称）映射到经营单元短名；SC → 原样返回（四川字节级安全）；
     无映射文件 → 保留原始值。未在映射表中的机构保留原始值并告警（不静默丢数据）。
+
+    policy_dir（BACKLOG e04971 报价侧「其他」清分）：给定签单域 parquet 目录时，
+    规范化后仍为「其他」的行按 业务员↔机构 对照（每日随最新签单数据派生，
+    salesman_org_fallback.py）二次解析——上游报价卡太原片区整体落「其他」，
+    业务员归属是唯一可用的行级线索。quote_years（与 df 同索引的报价年份
+    Series）给定时按年分桶：**当年报价用当年签单映射**（用户裁定：跨年太原
+    组织架构会调整，同一业务员不同年份归属可以不同），当年缺席按邻年
+    （±1 年）就近兜底。
+
+    fail-closed 清分闸（评审 P1，2026-07-16）：非 SC 时，无论哪条分支产出，
+    最终「其他」占比 > 5% 即抛 QuoteOrgResolutionError 阻断（依赖缺失如
+    policy_dir=None/映射为空/salesman_raw 缺列，都会以此表现兜底拦截）；
+    仅显式设 QUOTE_ORG_FALLBACK_ALLOW_DEGRADED=1 降级为红字告警续跑。
 
     出口守卫（B005/B006 同款）：非 SC 省归一化后若 org_level_3 坍缩成占位值
     （其他/NULL/空 合计 ≥ 阈值）即红字告警，ORG_COLLAPSE_FAIL=1 时抛错中止——
@@ -136,6 +150,38 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None) -> 'pd.Data
                 print(f"   ⚠️ {len(unmapped)} 个机构未在映射表中，保留原始值（需补 {branch}.json）：{unmapped[:5]}{'...' if len(unmapped) > 5 else ''}")
     else:
         print(f"   ⚠️ [{branch}] 机构规范化跳过：无映射文件 {mapping_path}（保留原始机构值）")
+        units = set()
+
+    # ── 业务员回退清分（BACKLOG e04971 报价侧）：规范化后仍「其他」的行，按最新签单域
+    # 业务员↔机构对照解析（上游报价卡太原片区整体落「其他」）。白名单双保险：映射构建与
+    # 应用各过一遍 units；解析不出保留「其他」。salesman_raw 在步骤 5 已重命名到位。
+    # 匹配键 =「工号+姓名」原始全串（两域同格式，2026-07-16 实测行覆盖 99.7%+）——
+    # 刻意**不**拆姓名：工号天然区分同名业务员（重名跨机构错归风险归零），且签单域
+    # salesman_name 本就带工号前缀，拆名匹配反而键对不上。
+    from pipelines.salesman_org_fallback import (
+        build_salesman_org_maps_by_year, enforce_resolution_gate, resolve_other_by_salesman_yearly,
+    )
+    gate_reason = None
+    if policy_dir is not None and units and 'salesman_raw' in df.columns and quote_years is not None:
+        year_maps = build_salesman_org_maps_by_year(policy_dir, units)
+        if year_maps:
+            keys = df['salesman_raw'].astype('string').str.strip()
+            resolved, n_other, n_hit = resolve_other_by_salesman_yearly(
+                df['org_level_3'], keys, quote_years, year_maps, units)
+            df['org_level_3'] = resolved
+            years_desc = ','.join(f'{y}:{len(m)}人' for y, m in sorted(year_maps.items()))
+            print(f"   🧭 [{branch}] 业务员回退清分（按年）:「其他」{n_other:,} 行 → 解析 {n_hit:,}"
+                  f"（分年映射 {years_desc}，剩「其他」{n_other - n_hit:,}）")
+            gate_reason = '业务员按年对照已应用但残留超阈（当年+邻年对照覆盖不足？）'
+        else:
+            print(f"   🔴 [{branch}] 业务员回退清分不可用：{policy_dir} 无可用签单 parquet 映射")
+            gate_reason = f'签单域分年映射为空（policy_dir={policy_dir}）'
+    else:
+        missing = ('salesman_raw 列缺失' if 'salesman_raw' not in df.columns
+                   else ('policy_dir 未提供' if policy_dir is None
+                         else ('quote_years 未提供' if quote_years is None else 'units 白名单为空')))
+        gate_reason = f'清分依赖缺失（{missing}）'
+
     # 出口守卫：机构维度塌缩检测（覆盖已映射 / 无映射两条非 SC 路径）
     from pipelines.org_collapse import (
         OrgDimensionCollapseError,
@@ -159,6 +205,14 @@ def normalize_org_level_3(df: 'pd.DataFrame', branch: str, env=None) -> 'pd.Data
         print(f"\n   🔴 {msg}")
         print("      → 若确为合法机构集中可忽略；设 ORG_COLLAPSE_FAIL=1 升级为中止，"
               "ORG_COLLAPSE_WARN_THRESHOLD 调整阈值。")
+
+    # ── 清分闸（评审 P1，fail-closed）：最终「其他」占比超阈即阻断——依赖缺失
+    # （policy_dir/映射/salesman_raw）或对照覆盖不足都会以此表现，统一在出口拦。
+    # 塌缩守卫（≥95%，防上游导出退化）在前保持既有语义；本闸阈值 5%，专拦
+    # 「清分能力静默失效」（正常态实测残留 ≈0.2%，失效态 ≈29%）。
+    n_other_final = int((df['org_level_3'].astype('string') == '其他').fillna(False).sum())
+    enforce_resolution_gate(len(df), n_other_final,
+                            reason=gate_reason or '未知场景', env=env)
     return df
 
 
@@ -306,6 +360,12 @@ def main():
              'prefix_map 派生 + 校验，缺失行兜底 declared）；声明省 != SC 时跳过 data-sources.json '
              '写入。SC 默认链路与原"loader 注入部署省常量"逐字节等价。',
     )
+    parser.add_argument(
+        '--policy-dir', default=None,
+        help='签单域 parquet 目录（BACKLOG e04971：报价「其他」按业务员↔机构对照清分）。'
+             '缺省时非 SC 省自动取输出目录的上一级（validation/<省>/，premium 产物所在），'
+             '显式传入可覆盖；SC 不启用。',
+    )
     args = parser.parse_args()
 
     # 1. 定位输入文件
@@ -375,7 +435,17 @@ def main():
     # 非 SC 省对 org_level_3 做 org_to_unit 映射 + 塌缩守卫。SC 原样（四川字节级安全）。
     from pipelines.derived_fields import resolve_declared_branch
     declared_branch = resolve_declared_branch(args) or 'SC'
-    df = normalize_org_level_3(df, declared_branch)
+    # 业务员回退清分的签单域来源：显式 --policy-dir 优先；非 SC 省默认取输出目录上一级
+    # （branchOutputRoot 布局下即 validation/<省>/，premium 产物顶层所在）；SC 不启用。
+    policy_dir = args.policy_dir
+    if policy_dir is None and declared_branch != 'SC':
+        policy_dir = output_dir.parent
+    # 报价年份序列（按年分桶映射用；步骤 7 才做正式 datetime 转换，这里做一次
+    # 容错解析取年份）；解析不出的行年份为 NaN → 查表落空保留「其他」，交清分闸兜底
+    quote_years = None
+    if declared_branch != 'SC' and 'quote_time' in df.columns:
+        quote_years = pd.to_datetime(df['quote_time'], errors='coerce').dt.year
+    df = normalize_org_level_3(df, declared_branch, policy_dir=policy_dir, quote_years=quote_years)
 
     # 6. 风险等级 COALESCE 合并
     grade_cols = ['_grade_1', '_grade_2', '_grade_3']
