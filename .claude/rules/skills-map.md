@@ -57,6 +57,7 @@
 | **review** | Pre-landing PR review（SQL 安全 / LLM 信任边界 / 条件副作用） |
 | **security-review** | 处理用户输入 / 鉴权 / 敏感数据时强制触发 |
 | **tech-stack-audit** | 技术栈只读审计 + 治理热启动 prompt（"审计技术栈/依赖审计/技术栈体检"触发）。首次产出见 开发文档/reviews/2026-06-12-技术栈审计.md |
+| **knowledge-system-audit** | 知识体系审计（"审计知识体系/文档腐化检查"触发）。golden 范例=开发文档/审计/2026-07-16-知识体系审计.md；发现的判定型问题喂 governance 闸（索引死链/skill frontmatter 两闸即其产物） |
 | **investigate** | 系统性 debug 四阶段，铁律"无根因不修复" |
 | **claude-api** | 修改本项目 Anthropic SDK 调用（智谱→真 Claude、prompt caching 调优） |
 | **sql-pro** | DuckDB 复杂 SQL 优化（窗口函数 / CTE / 执行计划） |
