@@ -279,3 +279,15 @@ staging-then-rename 原子性 / leftover preflight）完全未动；人工 `--rl
 **单测**：`tests/sx-promote-gate.test.ts`（纯判定函数三态）+
 `scripts/__tests__/sync-vps-sx-auto-promote.test.mjs`（`runSxAutoPromote()` 编排逻辑，
 依赖注入 mock RLS 查询与晋升子进程，不连真实网络/生产）。
+
+## 山西机构口径：13 经营单元 + 报价域业务员按年清分（2026-07-16 起）
+
+山西 `org_level_3` = **13 经营单元**（经代/车商/重客为独立单元，旧合并值「经代、车商、重客」已退役）。
+**业务口径完整定义（含证据链）见 `数据管理/knowledge/rules/车险数据业务规则字典.md`「山西（SX）三级机构口径」节**；
+机器可读 SSOT = `数据管理/config/branch-org-mapping/SX.json`。管道要点：
+
+- **保单域**：源列「三级机构新」直读（`org_normalize.py`，缺列硬失败防上游退化）；编码列 `org_to_unit` 行级回退。
+- **报价域**：上游卡「三级机构」城市/经代/车商/重客已准，太原片区落「其他」→ **业务员按年对照清分**
+  （`salesman_org_fallback.py`：键=「工号+姓名」全串；当年报价用当年签单映射，邻年 ±1 兜底）。
+  **fail-closed 清分闸**：产出「其他」> 5% 中止发布；应急降级须显式 `QUOTE_ORG_FALLBACK_ALLOW_DEGRADED=1`。
+- 直查验收基线：保单零「经代、车商、重客」残留；报价「其他」≈0.3%（98.8% 即坏长窗回归，见 staging `.xlsx-archive/20260716-b006-oldcal/`）。
