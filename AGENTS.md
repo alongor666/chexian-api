@@ -21,7 +21,7 @@
 ## 3. 先看这些文档
 
 - 架构总览：[`ARCHITECTURE.md`](./ARCHITECTURE.md)
-- 业务与进展：[`BACKLOG.md`](./BACKLOG.md)、[`PROGRESS.md`](./PROGRESS.md)
+- 业务与进展：需求账本真相 [`BACKLOG_LOG.jsonl`](./BACKLOG_LOG.jsonl) + `backlog-events/`（`BACKLOG.md` 为 gitignored 派生视图，`bun run backlog:render` 生成）、[`PROGRESS.md`](./PROGRESS.md)
 - 技术与规范：[`开发文档/TECH_STACK.md`](./开发文档/TECH_STACK.md)、[`开发文档/DEVELOPER_CONVENTIONS.md`](./开发文档/DEVELOPER_CONVENTIONS.md)
 - 数据与知识：[`数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md`](./数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md)、[`数据管理/knowledge/rules/车险数据业务规则字典.md`](./数据管理/knowledge/rules/车险数据业务规则字典.md)
 - 需要更细的约束时，进入对应子目录的 `AGENTS.md`。

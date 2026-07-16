@@ -45,7 +45,7 @@ node scripts/rollback-multi-branch.mjs --apply
 
 脚本会：
 1. 修改 `ecosystem.config.cjs` 把 `BRANCH_RLS_ENABLED: 'true'` 改为 `'false'`
-2. 调用 `sudo /usr/local/bin/deploy-chexian-api reload` 让 PM2 重载 env
+2. 调用部署 wrapper `reload` 让 PM2 重载 env（命令 SSOT：`deploy-chain-sop.md`）
 
 ### Step 3 — 验证
 
@@ -93,7 +93,7 @@ env: {
 
 然后：
 ```bash
-sudo /usr/local/bin/deploy-chexian-api reload
+sudo /usr/local/bin/deploy-chexian-api reload   # 命令 SSOT：deploy-chain-sop.md（应急块保留可执行副本）
 ```
 
 再跑 Step 3 验证脚本，确认 SC + 山西用户各自只看到本分公司数据。

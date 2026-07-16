@@ -1,8 +1,10 @@
 # 进展账本 (PROGRESS)
 
-**状态机思维**：记录里程碑、阻塞点、下一步接力入口。详细任务追踪请查看 [BACKLOG.md](./BACKLOG.md)。
+**状态机思维**：记录里程碑、阻塞点、下一步接力入口。详细任务追踪见需求账本真相日志 `BACKLOG_LOG.jsonl` + `backlog-events/`（本地看板 `bun run backlog:render` 生成 gitignored 的 `BACKLOG.md` 视图）。
 
-**最后更新时间**: 2026-04-17（成本分析铁律对齐）
+**最后更新时间**: 2026-07-16（知识体系审计校准）
+
+> ⚠️ **定位声明（2026-07-16）**：2026-05-18 后本文件的里程碑**不再逐条人工维护**——任务级真相以事件账本为准（月均 200+ 事件，人工汇总必然滞后）。本文件保留为**历史里程碑存档 + 接力指针**，其中带日期的小节均为当时快照，不代表现状。详见 `开发文档/审计/2026-07-16-知识体系审计.md`。
 
 ---
 
@@ -88,7 +90,7 @@
 |----|----------|----------|----------|--------|----------|
 | - | （暂无阻塞） | - | - | - | - |
 
-**说明**：若任务在 BACKLOG.md 中标记为 `BLOCKED`，必须在此处补充详细信息。
+**说明**：阻塞状态以需求账本事件（`bun scripts/backlog.mjs status ... BLOCKED`）为准，此表为历史格式存档。
 
 ---
 
@@ -102,11 +104,11 @@
 3. [PROGRESS_INDEX](./开发文档/00_index/PROGRESS_INDEX.md) - 任务状态、接力规则
 
 **选择任务**：
-1. 查看 [BACKLOG.md](./BACKLOG.md)，筛选 `状态=TRIAGED` 且 `归属对象=Backlog` 的任务
-2. 更新任务状态为 `IN_PROGRESS`，填写 `归属对象` 为自己
-3. 开始开发，**完成后必须填写验收/证据**
+1. `bun run backlog:render` 生成本地看板视图，筛选待办任务
+2. 领取先 `bun scripts/backlog.mjs claim`（防重复派发），再走 status 事件推进
+3. 开始开发，**完成（DONE）必须附验收证据**（governance `BACKLOG证据链` 强制）
 
-### 3.2 当前待开发任务（优先级排序）
+### 3.2 当前待开发任务（历史快照 2026-03，现状以需求账本为准）
 
 | 优先级 | 任务 ID | 描述 | 状态 | 入口文件 |
 |--------|---------|------|------|----------|
@@ -225,20 +227,19 @@ Phase 3: 保留 SqlQueryPage 使用前端 DuckDB，其余移除
 ## 附录：快速命令
 
 ```bash
-# 查看待办任务
+# 先渲染本地看板视图（BACKLOG.md 是 gitignored 派生视图，不渲染则不存在）
+bun run backlog:render
+
+# 再查看待办 / 开发中 / 已完成任务
 grep "PROPOSED\|TRIAGED" BACKLOG.md
-
-# 查看开发中任务
 grep "IN_PROGRESS" BACKLOG.md
-
-# 查看已完成任务
 grep "DONE" BACKLOG.md
 
 # 运行治理校验
-bun run scripts/check-governance.mjs
+bun run governance
 
-# 运行测试
-bun test
+# 运行单元测试（⚠️ 不是 bun test）
+bun run test --run
 
 # 查看 Git 提交历史
 git log --oneline -20
@@ -250,4 +251,4 @@ git log --oneline -20
 - 里程碑更新：仅记录重大节点（如版本发布、核心功能上线）
 - 阻塞登记：必须在 24 小时内提出解决路径或升级
 - 接力入口：每完成一个里程碑后更新"下一步"
-- **同步要求**：每次 Git 提交或 PR 合并后，必须同步更新 BACKLOG.md 和 PROGRESS.md
+- **同步要求（2026-07-16 修订）**：任务级同步走需求账本事件（`bun scripts/backlog.mjs`）；本文件仅在重大里程碑时更新，不再要求每次提交同步
