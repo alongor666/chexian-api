@@ -66,6 +66,7 @@ import { checkUploadSizeLimitConsistency as runUploadSizeCheck } from './governa
 import { checkDualLockConsistency as runDualLockConsistencyCheck, checkBranchMappingMirror as runBranchMappingMirrorCheck } from './governance/dual-lock-and-branch-mirror-checks.mjs';
 import { runBranchRlsEnabledCheck } from './governance/branch-rls-enabled.mjs';
 import { runSkillFrontmatterCheck } from './governance/skill-frontmatter.mjs';
+import { runIndexDocLinksCheck } from './governance/index-doc-links.mjs';
 import { runPatReadonlyCoverageCheck } from './governance/pat-readonly-coverage.mjs';
 import { governanceCheckChunkInvariants } from './check-chunk-invariants.mjs';
 import { checkNamingAndRouteGovernance } from './governance/check-naming-route.mjs';
@@ -3457,6 +3458,7 @@ const CODE_GOVERNANCE_CHECKS = [
   { name: '省份映射前后端镜像', fn: () => runBranchMappingMirrorCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   { name: 'RLS总闸必开', fn: () => runBranchRlsEnabledCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   { name: 'Skill frontmatter契约', fn: () => runSkillFrontmatterCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
+  { name: '索引死链', fn: () => runIndexDocLinksCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   { name: 'PAT只读端点覆盖', fn: () => runPatReadonlyCoverageCheck({ rootDir: ROOT_DIR, io: { info, success, error } }) },
   patternCheck('Bundle路由开关合规'),
   { name: 'QueryCatalog对账', fn: checkQueryCatalogConsistency },
