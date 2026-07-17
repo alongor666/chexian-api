@@ -1,6 +1,6 @@
 ---
 name: ncd-pricing-diagnosis
-description: NCD 定价诊断 — 横向分析商业/交强 NCD 档位的赔付表现与折扣扭曲，识别应提系数/健康/结构性风险三类；与 incident-rate-development(纵向发展) 形成互补
+description: NCD 定价诊断 — 横向分析商业/交强 NCD 档位的赔付表现与折扣扭曲，识别应提系数/健康/结构性风险三类；与 incident-rate-development(纵向发展) 形成互补。Use when 用户说"NCD 诊断/无赔款优待定价/NCD 档位赔付分析"时。
 version: 1.1.0
 ---
 

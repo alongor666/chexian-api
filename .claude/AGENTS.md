@@ -18,10 +18,10 @@ React + TypeScript + Vite 前端，Express + DuckDB 后端。生产环境 `https
 
 ## 数据架构
 
-数据统一存放于 `policy/current/`（4 个分片文件），服务器直接加载：
+数据统一存放于 `数据管理/warehouse/fact/policy/current/`（4 个分片文件），服务器直接加载：
 
 ```
-warehouse/fact/
+数据管理/warehouse/fact/
 ├── policy/current/*.parquet            # 保单+保费（3层分片：static/weekly/daily）
 ├── claims_detail/claims_*.parquet      # 赔案明细（年度分区；claims 聚合域已删除）
 └── quotes_conversion/latest.parquet    # 报价状态
@@ -57,13 +57,12 @@ node 数据管理/daily.mjs all            # 全部重跑（完整域清单见 d
 | 文件 | 职责 |
 |------|------|
 | `server/src/app.ts` | 服务器入口，域拆分检测 |
-| `server/src/services/duckdb.ts` | DuckDB 服务，加载 `policy/current/` 分片 |
+| `server/src/services/duckdb.ts` | DuckDB 服务，加载 `server/data/fact/policy/current/` 分片 |
 | `server/src/config/paths.ts` | 路径配置，`getPolicyCurrentDir()` 等 |
 | `server/src/normalize/mapping.ts` | 中文→英文列名映射 |
 | `server/src/sql/*.ts` | SQL 生成器（数量以目录为准，全景见 `server/src/sql/INDEX.md`） |
 | `数据管理/daily.mjs` | 分域 ETL 入口（须显式指定域） |
 | `数据管理/pipelines/transform.py` | Excel→Parquet 转换（`--domain`/`--after-date`） |
-| `数据管理/pipelines/split_existing.py` | ~~一次性迁移脚本~~（已废弃，迁移已完成） |
 | `数据管理/pipelines/merge_parquet.py` | Parquet 合并工具 |
 
 ## 红线规则

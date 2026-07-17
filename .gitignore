@@ -116,6 +116,9 @@ PASSWORDS.local.txt
 # user-only 写入授权哨兵（AGENTS.md §8.3 可授权档，仅用户本人 touch/rm，本地状态不入库）
 .claude/.user-only-write-ok
 
+# 调度运行时 lock（AGENTS.md §8.3 硬锁清单声称 gitignore，2026-07-16 索引死链闸 CI 实测发现从未接线，补齐）
+.claude/scheduled_tasks.lock
+
 # sync-vps 同步清单（本地状态，不提交）
 .last-sync-manifest.json
 

@@ -299,7 +299,7 @@ SELECT SUM(ABS(保费)) as 毛保费 FROM PolicyFact
 
 ### 商车自主定价系数的NULL值
 
-**口径事实源**: 业务规则字典 § C.9；类型契约 `server/src/normalize/validator.ts`（codegen 自 `field-registry/fields.json`）
+**口径事实源**: 业务规则字典 § C.9；类型契约 `server/src/normalize/validator.ts`（codegen 自 `server/src/config/field-registry/fields.json`）
 
 **业务规则**:
 - NULL值表示未使用自主定价系数
@@ -358,7 +358,7 @@ WHERE COALESCE(商车自主定价系数, 1.0) > 1.0
 
 ### 多别名支持的边界条件
 
-**口径事实源**: `server/src/normalize/mapping.ts`（codegen 自 `field-registry/fields.json`，勿手改）
+**口径事实源**: `server/src/normalize/mapping.ts`（codegen 自 `server/src/config/field-registry/fields.json`，勿手改）
 
 **业务规则**:
 - 精确匹配优先: 第一个匹配项被选中

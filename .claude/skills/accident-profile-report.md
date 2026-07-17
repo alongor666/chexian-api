@@ -27,8 +27,8 @@ python3 数据管理/scripts/accident_profile_report.py --config 数据管理/sc
 python3 数据管理/scripts/accident_profile_report.py --config 数据管理/scripts/accident_profile_configs.json --segment all
 ```
 
-## 报告结构（每份报告 9 个章节）
-1. 基线（件数/中位赔/P90/P99/大额率/人伤率）
+## 报告结构（基线摘要 + 9 个分析章节）
+1. 基线摘要（件数/中位赔/P90/P99/大额率/人伤率）
 2. 时段 × 路段热力图（件数+人伤率）
 3. 碰撞对象构成（件数/占比/中位赔/人伤率）
 4. 事故场景构成

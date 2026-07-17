@@ -8,12 +8,14 @@
  * 都找不到它）。审计评审明确否决"新建人工索引登记"方案（人工清单必腐），改为本闸：
  * 按文件系统动态扫描，无人工清单，不会腐化。
  *
- * 口径：`.claude/skills/` 下每个 .md 文件必须
- *   1. 以 `---` frontmatter 块开头；
- *   2. 块内含非空的 `description:`。
- * `name:` 与文件名一致性属编辑期规范（skill-prefix.md），暂不强制。
+ * 口径（兑现 `.claude/rules/skill-prefix.md`「Frontmatter 必填」契约，2026-07-16 评审返工收紧）：
+ * `.claude/skills/` 下每个 .md 文件必须
+ *   1. 以可解析的 `---` frontmatter 块开头（未闭合/缺失 = 损坏，报错）；
+ *   2. `name:` 非空且与文件名 stem 一致；
+ *   3. `description:` 非空且含触发语义标记之一：Use when / 当用户 / 触发 / 适用于。
  *
  * 调用方：scripts/check-governance.mjs（io 注入模式，与 branch-rls-enabled 同构）。
+ * 红绿夹具测试：scripts/__tests__/skill-frontmatter.test.mjs。
  */
 
 import fs from 'fs';
@@ -36,17 +38,27 @@ export function runSkillFrontmatterCheck({ rootDir, io }) {
     .filter((f) => f.endsWith('.md'))
     .sort();
 
+  const TRIGGER_MARKERS = ['Use when', '当用户', '触发', '适用于'];
   const problems = [];
   for (const file of files) {
     const content = fs.readFileSync(path.join(skillsDir, file), 'utf-8');
     const fm = extractFrontmatter(content);
     if (fm === null) {
-      problems.push(`${SKILLS_REL}/${file}: 缺 frontmatter 块（须以 --- 开头）——无 description 的 skill 无法被自动发现`);
+      problems.push(`${SKILLS_REL}/${file}: frontmatter 块缺失或未闭合（须以 --- 开头、--- 结束）——无法被自动发现`);
       continue;
+    }
+    const stem = file.replace(/\.md$/, '');
+    const name = matchFrontmatterValue(fm, 'name');
+    if (!name) {
+      problems.push(`${SKILLS_REL}/${file}: frontmatter 缺非空 name（skill-prefix.md 必填契约）`);
+    } else if (name !== stem) {
+      problems.push(`${SKILLS_REL}/${file}: name「${name}」与文件名 stem「${stem}」不一致（skill-prefix.md 要求同名）`);
     }
     const desc = matchFrontmatterValue(fm, 'description');
     if (!desc) {
       problems.push(`${SKILLS_REL}/${file}: frontmatter 缺非空 description`);
+    } else if (!TRIGGER_MARKERS.some((t) => desc.includes(t))) {
+      problems.push(`${SKILLS_REL}/${file}: description 缺触发语义（须含 ${TRIGGER_MARKERS.join(' / ')} 之一，skill-prefix.md 契约）`);
     }
   }
 
