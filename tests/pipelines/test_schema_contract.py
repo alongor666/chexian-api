@@ -71,9 +71,15 @@ class EnforceSchemaContractTest(unittest.TestCase):
 
 
 def _write_repair_xlsx(path: Path, extra_col: bool = False, n: int = 3) -> None:
-    """写最小维修资源源 xlsx；extra_col=True 时注入一个未声明列「幽灵列」。"""
+    """写最小维修资源源 xlsx；extra_col=True 时注入一个未声明列「幽灵列」。
+
+    「修理厂归属中支」是 RepairConverter 的必需列（省份归属断言的判据列），本组用例
+    只关心 schema 契约对未声明列的处置，故填四川本部占位；n=3 远低于断言样本下限，
+    断言走跳过分支，与本组用例正交。
+    """
     data = {
         "修理厂名称": [f"测试维修厂_{i:02d}有限公司" for i in range(n)],
+        "修理厂归属中支": ["011001四川分公司（本部）"] * n,
         "统计时间": ["2026-06-01"] * n,
     }
     if extra_col:
