@@ -178,6 +178,35 @@ def build_where(filters: dict[str, Any]) -> tuple[str, list[Any]]:
 # 存量 parquet 无此列，直接 SELECT 会让全部实例（含无关实例）抽数报错。
 OPTIONAL_SOURCE_COLUMNS = ("customer_category", "previous_insurer", "applicant_name")
 
+# 敏感源字段（个人信息，隐私红线）：dry-run 的 sample_records（stdout 打印 + logs/ 落盘）
+# 必须脱敏后输出；真实 webhook 写入不受影响。与 server 侧注册表 sensitive: true 对齐。
+SENSITIVE_SOURCE_FIELDS = ("applicant_name",)
+
+
+def mask_pii(value: Any) -> Any:
+    """个人信息脱敏：保留首字符 + 固定两个全角星号（定长，不泄漏原文长度）。"""
+    text = _to_text(value)
+    if not text:
+        return value
+    return text[0] + "＊＊"
+
+
+def mask_sample_values(values: dict[str, Any], sensitive_field_ids: set[str]) -> dict[str, Any]:
+    """对 sample_records 单条 values 做敏感字段脱敏（返回新 dict，不改原对象）。"""
+    return {
+        fid: (mask_pii(v) if fid in sensitive_field_ids else v)
+        for fid, v in values.items()
+    }
+
+
+def sensitive_field_ids_of(instance: "InstanceConfig") -> set[str]:
+    """实例映射中敏感源字段对应的智能表 field_id 集合。"""
+    return {
+        instance.field_mapping[src]
+        for src in SENSITIVE_SOURCE_FIELDS
+        if src in instance.field_mapping
+    }
+
 
 def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
     where, params = build_where(instance.filters)
@@ -633,9 +662,12 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     }
 
     if dry_run:
-        # 打印前 3 条 sample，便于肉眼检查
+        # 打印前 3 条 sample，便于肉眼检查。
+        # 敏感字段（如投保人 applicant_name）脱敏后才进 stdout / logs 落盘（隐私红线）。
+        sensitive_fids = sensitive_field_ids_of(instance)
         summary["sample_records"] = [
-            {"values": r["values"]} for r in add_records[:3]
+            {"values": mask_sample_values(r["values"], sensitive_fids)}
+            for r in add_records[:3]
         ]
         log_path = write_log(instance, summary)
         summary["log_path"] = str(log_path)

@@ -51,7 +51,7 @@ field_mapping:
   policy_date:           f04Gwj      # 出单日期（DATE_TIME, 毫秒 ts）
   policy_no:             ftQMc5      # 保单号（TEXT）
   plate_no:              ftk5Tx      # 车牌号（TEXT）
-  applicant_name:        ffFwIh      # 投保人（TEXT，源=上游新增列「投保人名称」）
+  applicant_name:        ffFwIh      # 投保人（TEXT，源=上游 47 列导出新增列「投保人」）
   premium:               fn8TJd      # 保费（NUMBER，批单聚合后净额）
   insurance_type:        frjAN4      # 险种大类（SINGLE_SELECT：商业保险/交强险）
   customer_category:     f5UJGN      # 客户类别（SINGLE_SELECT，11 类）

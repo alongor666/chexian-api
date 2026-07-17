@@ -180,6 +180,15 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'branch_code',
 ]);
 
+/**
+ * 敏感字段（个人信息，隐私红线）— fields.json `sensitive: true` 的字段集合。
+ * 仅限台账/明细类授权同步场景使用；分析查询面（NL2SQL SQL 校验、字段发现、
+ * 字段画像）必须统一消费本集合，拒绝 SELECT / GROUP BY / ORDER BY。
+ */
+export const SENSITIVE_FIELDS: ReadonlySet<DomainField> = new Set([
+  'applicant_name',
+]);
+
 export interface ColumnMapping {
   policy_no: string; // 保单号
   premium: string; // 保费
