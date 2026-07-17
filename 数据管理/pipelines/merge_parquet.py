@@ -212,6 +212,13 @@ def _reassert_dim_branch_constant(df, label, declared_branch):
     if allowed and declared_branch not in allowed:
         print(f"   ❌ {label} declared-branch '{declared_branch}' 不在已注册省份 {sorted(allowed)} — fail-fast")
         sys.exit(1)
+    # 省份归属复验（codex 对抗审查 P1-1，2026-07-17）：分片各自通过断言，不等于合并去重
+    # 后的最终产物仍通过——重复的本省网点被 dedup 压掉、各分片唯一的外省网点全数保留时，
+    # 主体前缀可能在合并后才翻转。故在这里（dim 表重赋常量的唯一入口）对最终 df 再断一次，
+    # 与 convert_repair.validate_business_rules 两处独立、语义一致（同 #861 设计模式）。
+    # 无 org_level_3 列的 dim 表（brand 等）由断言内部跳过，不受影响。
+    from pipelines.derived_fields import assert_org_majority_branch
+    assert_org_majority_branch(df, "org_level_3", declared_branch, f"{label}（合并产物）")
     df = df.copy()
     df["branch_code"] = declared_branch
     print(
