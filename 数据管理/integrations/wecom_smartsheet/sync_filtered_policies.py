@@ -173,13 +173,62 @@ def build_where(filters: dict[str, Any]) -> tuple[str, list[Any]]:
     return where, params
 
 
+# 可选源列：仅当 parquet schema 实际含该列时才 SELECT，否则补 NULL 占位。
+# 场景：applicant_name（投保人名称）2026-07-17 起上游签单清单才新增，
+# 存量 parquet 无此列，直接 SELECT 会让全部实例（含无关实例）抽数报错。
+OPTIONAL_SOURCE_COLUMNS = ("customer_category", "previous_insurer", "applicant_name")
+
+# 敏感源字段（个人信息，隐私红线）：dry-run 的 sample_records（stdout 打印 + logs/ 落盘）
+# 必须脱敏后输出；真实 webhook 写入不受影响。与 server 侧注册表 sensitive: true 对齐。
+SENSITIVE_SOURCE_FIELDS = ("applicant_name",)
+
+
+def mask_pii(value: Any) -> Any:
+    """个人信息脱敏：保留首字符 + 固定两个全角星号（定长，不泄漏原文长度）。"""
+    text = _to_text(value)
+    if not text:
+        return value
+    return text[0] + "＊＊"
+
+
+def mask_sample_values(values: dict[str, Any], sensitive_field_ids: set[str]) -> dict[str, Any]:
+    """对 sample_records 单条 values 做敏感字段脱敏（返回新 dict，不改原对象）。"""
+    return {
+        fid: (mask_pii(v) if fid in sensitive_field_ids else v)
+        for fid, v in values.items()
+    }
+
+
+def sensitive_field_ids_of(instance: "InstanceConfig") -> set[str]:
+    """实例映射中敏感源字段对应的智能表 field_id 集合。"""
+    return {
+        instance.field_mapping[src]
+        for src in SENSITIVE_SOURCE_FIELDS
+        if src in instance.field_mapping
+    }
+
+
 def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
     where, params = build_where(instance.filters)
     pk = instance.primary_key
 
+    con = duckdb.connect(":memory:")
+    # 列探测（LIMIT 0 零扫描，仅取 union_by_name 合并后的 schema，不读数据行；
+    # 省份隔离由下方主查询 extra_where + 出口 assert_single_branch 承担）
+    available = set(
+        con.execute(
+            f"SELECT * FROM read_parquet('{instance.policy_glob}', union_by_name=true) LIMIT 0"
+        ).fetchdf().columns
+    )
+    optional_selects = ",\n      ".join(
+        col if col in available else f"NULL AS {col}"
+        for col in OPTIONAL_SOURCE_COLUMNS
+    )
+
     # 抽数 SQL：SELECT 所有注册表字段 + 派生 vehicle_age_group / vehicle_price_segment
     sql = f"""
     SELECT
+      {optional_selects},
       org_level_3,
       salesman_name,
       policy_date,
@@ -228,7 +277,6 @@ def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
     WHERE {where}
     ORDER BY policy_date DESC, policy_no
     """
-    con = duckdb.connect(":memory:")
     df = con.execute(sql, params).fetchdf()
     # 防线④ 出口零信任断言：企微写入前强制单省体检，跨省混入（如山西 SX 邮政保单
     # 混进四川企微表）即 fail-closed 中止。df 无 branch_code 列（SELECT 是业务投影），
@@ -384,6 +432,9 @@ def aggregate_rows(rows: list[dict[str, Any]], instance: InstanceConfig) -> list
             "first_registration_date",
             "agent_name",
             "agent_short_name",
+            "customer_category",
+            "previous_insurer",
+            "applicant_name",
             "policy_no",
             "vehicle_frame_no",
             "vehicle_price_segment",
@@ -611,9 +662,12 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     }
 
     if dry_run:
-        # 打印前 3 条 sample，便于肉眼检查
+        # 打印前 3 条 sample，便于肉眼检查。
+        # 敏感字段（如投保人 applicant_name）脱敏后才进 stdout / logs 落盘（隐私红线）。
+        sensitive_fids = sensitive_field_ids_of(instance)
         summary["sample_records"] = [
-            {"values": r["values"]} for r in add_records[:3]
+            {"values": mask_sample_values(r["values"], sensitive_fids)}
+            for r in add_records[:3]
         ]
         log_path = write_log(instance, summary)
         summary["log_path"] = str(log_path)

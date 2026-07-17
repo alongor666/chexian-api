@@ -63,6 +63,7 @@ export type DomainField =
   | 'vehicle_age_group'
   | 'previous_insurer'
   | 'next_insurer'
+  | 'applicant_name'
   | 'branch_code';
 
 export interface ColumnAliasConfig {
@@ -127,6 +128,7 @@ export const COLUMN_ALIASES: ColumnAliasConfig = {
   vehicle_age_group: ['vehicle_age_group', 'vehicleAgeGroup', '车龄分段', '车龄分组'],
   previous_insurer: ['previous_insurer', 'previousInsurer'],
   next_insurer: ['next_insurer', 'nextInsurer'],
+  applicant_name: ['applicant_name', 'applicantName'],
   branch_code: ['branch_code', 'branchCode'],
 };
 
@@ -174,7 +176,17 @@ export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
   'vehicle_age_group',
   'previous_insurer',
   'next_insurer',
+  'applicant_name',
   'branch_code',
+]);
+
+/**
+ * 敏感字段（个人信息，隐私红线）— fields.json `sensitive: true` 的字段集合。
+ * 仅限台账/明细类授权同步场景使用；分析查询面（NL2SQL SQL 校验、字段发现、
+ * 字段画像）必须统一消费本集合，拒绝 SELECT / GROUP BY / ORDER BY。
+ */
+export const SENSITIVE_FIELDS: ReadonlySet<DomainField> = new Set([
+  'applicant_name',
 ]);
 
 export interface ColumnMapping {
@@ -235,6 +247,7 @@ export interface ColumnMapping {
   vehicle_age_group?: string; // 车龄分段
   previous_insurer?: string; // 上年承保主体
   next_insurer?: string; // 次年保险公司
+  applicant_name?: string; // 投保人名称
   branch_code?: string; // 分公司编码
 }
 
@@ -349,6 +362,7 @@ export const DEFAULT_MAPPING: ColumnMapping = {
   vehicle_age_group: 'vehicle_age_group',
   previous_insurer: 'previous_insurer',
   next_insurer: 'next_insurer',
+  applicant_name: 'applicant_name',
   branch_code: 'branch_code',
 };
 
@@ -420,5 +434,6 @@ export const FIELD_IDS = [
   'vehicle_age_group',
   'previous_insurer',
   'next_insurer',
+  'applicant_name',
   'branch_code',
 ] as const satisfies ReadonlyArray<DomainField>;

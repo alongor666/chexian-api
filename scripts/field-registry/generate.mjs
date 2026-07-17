@@ -47,6 +47,11 @@ function generateMapping() {
 
   const optionalFieldEntries = optional.map(f => `  '${f.id}',`).join('\n');
 
+  const sensitiveFieldEntries = fields
+    .filter(f => f.sensitive)
+    .map(f => `  '${f.id}',`)
+    .join('\n');
+
   const columnMappingEntries = fields.map(f => {
     const opt = f.required ? '' : '?';
     return `  ${f.id}${opt}: string; // ${f.label}`;
@@ -78,6 +83,15 @@ ${aliasEntries}
 
 export const OPTIONAL_FIELDS: Set<DomainField> = new Set([
 ${optionalFieldEntries}
+]);
+
+/**
+ * 敏感字段（个人信息，隐私红线）— fields.json \`sensitive: true\` 的字段集合。
+ * 仅限台账/明细类授权同步场景使用；分析查询面（NL2SQL SQL 校验、字段发现、
+ * 字段画像）必须统一消费本集合，拒绝 SELECT / GROUP BY / ORDER BY。
+ */
+export const SENSITIVE_FIELDS: ReadonlySet<DomainField> = new Set([
+${sensitiveFieldEntries}
 ]);
 
 export interface ColumnMapping {
