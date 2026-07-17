@@ -350,4 +350,16 @@ describe('模块负面清单 RESTRICTED_MODULES', () => {
     expect(canAccessRestrictedModule('admin', ACCESS_CONTROL_PAGE)).toBe(false);
     expect(getDeniedModules('admin')).toEqual([ACCESS_CONTROL_PAGE]);
   });
+
+  it('三人白名单 × 省域隔离绑定（底层设计 2026-07-17）：薛=全国、杨=山西、林=四川', () => {
+    // 管理面省域收敛由 permission.ts getManageableBranchScope 按下列 preset 字段派生
+    // （visibleBranches 非空 → 该集合；否则本人 branchCode 单省），机制测试见
+    // permission.test.ts「用户管理面按省隔离」。本测试把三位管理员的 preset 绑定锁死：
+    // 改动任何一人的 branchCode / visibleBranches 都等于改动权限管理的省域边界，必须过此闸。
+    expect(PRESET_USERS.xuechenglong.visibleBranches).toEqual(['SC', 'SX']); // 可管全部省
+    expect(PRESET_USERS.yangjie0621.branchCode).toBe('SX'); // 仅山西
+    expect(PRESET_USERS.yangjie0621.visibleBranches).toBeUndefined();
+    expect(PRESET_USERS.linxia.branchCode).toBe('SC'); // 仅四川
+    expect(PRESET_USERS.linxia.visibleBranches).toBeUndefined();
+  });
 });

@@ -102,11 +102,15 @@ export function getDeniedModules(username: string): string[] {
  * 只加负面清单不声明后端覆盖、或声明的路由缺守卫 → 测试红。
  */
 export interface RestrictedModuleBackendGuard {
-  /** 路由源码文件（相对 server/src），静态契约测试读取它对账 */
-  sourceFile: string;
+  /**
+   * 允许承载该模块路由的源码文件（相对 server/src，可多文件）。
+   * 契约测试双向对账：声明文件内命中前缀的路由必须挂守卫；**未声明**文件出现
+   * 同前缀路由 → 测试红（防"第二个文件悄悄新增入口"绕过覆盖声明）。
+   */
+  sourceFiles: readonly string[];
   /** 挂载内路由路径前缀：router.<method>('<path>') 的 path 精确等于前缀、或以 `${前缀}/` 开头即命中 */
   routePrefixes: readonly string[];
-  /** 守卫中间件函数名（命中路由的声明块内必须出现） */
+  /** 守卫中间件函数名（命中路由声明块内必须以真实实参形态出现，注释/字符串提及不算） */
   guardName: string;
 }
 
@@ -114,7 +118,7 @@ export const RESTRICTED_MODULE_BACKEND_GUARDS: Readonly<
   Record<string, RestrictedModuleBackendGuard>
 > = {
   [ACCESS_CONTROL_PAGE]: {
-    sourceFile: 'routes/auth.ts',
+    sourceFiles: ['routes/auth.ts'],
     routePrefixes: ['/users', '/roles'],
     guardName: 'requireAccessControlModule',
   },
