@@ -1,0 +1,80 @@
+# 太原二部 任卫军 签单明细 → 企业微信智能表「业务台账」（任卫军车险签单台账）
+#
+# 业务规则：branch_code = 'SX' AND salesman_name = '118046126任卫军'（太原二部）
+#   源 salesman_name 已含「代码+姓名」，duckdb 直查 2026-07-17 实证仅此一个匹配业务员。
+#   窗口：policy_date >= 2026-01-01（本年台账；2026 年约 354 源行 / 347 张保单）。
+#   如需回溯更早年份，改 policy_date_from 后须 --rebuild-state 评估增量。
+#
+# 省份隔离（RED LINE data-pipeline.md）：policy_glob 仅扫 current/SX/ 子目录 + extra_where
+#   branch_code='SX' 双保险；引擎 fetch_rows 出口另有 assert_single_branch 零信任断言。
+#
+# 去重：复合主键 = 保单号 + 车架号；同组源行（批单）聚合为一条，保费组内求和（add-only + state）。
+#
+# 目标表 schema（10 字段）与本同步的覆盖关系：
+#   自动导入 7 字段：出单日期 / 保单号 / 车牌号 / 保费 / 险种大类 / 客户类别 / 上年保险公司
+#   不写入 3 字段（原因各异，人工维护）：
+#     fD9EyK 业务员（user 型：需企微成员 user_id，引擎不支持 user 型写入，表内人工批量填）
+#     foG7hq 手机号码（phone 型：按业务约定由业务员自行填写）
+#     ffFwIh 投保人（user 型：上游给的是「投保人名称」文本，与企微成员字段类型不匹配；
+#       若把表内该字段改为「文本」型，可启用下方注释掉的 applicant_name 映射自动导入。
+#       ETL 侧 applicant_name 字段已注册（fields.json 2026-07-17），上游签单清单带出
+#       「投保人名称」列后随每日 ETL 落 parquet，缺列期间引擎自动补 NULL 不报错）
+
+instance_name: shanxi-taiyuan2-renweijun
+script: sync_filtered_policies.py        # daily.mjs 据此路由到非续保引擎
+
+webhook_env: WECOM_SMARTSHEET_WEBHOOK_TY2_RENWEIJUN
+
+# 仅扫描山西分片（性能辅助），branch_code 过滤才是隔离保证
+policy_glob: 数据管理/warehouse/fact/policy/current/SX/*.parquet
+
+batch_size: 100
+sheet_records_per_minute_limit: 3000
+
+filters:
+  policy_date_from: "2026-01-01"
+  extra_where: "branch_code = 'SX' AND salesman_name = '118046126任卫军'"
+
+primary_key: policy_no
+
+# 聚合规则：同一保单号 + 车架号只写一条，保费为组内源行求和。
+# 修改本字段后必须跑 --rebuild-state 重建 state.json。
+aggregate_key:
+  - policy_no
+  - vehicle_frame_no
+
+# 复合主键：按保单号 + 车架号作为幂等键（防重复 RED LINE）。
+composite_key:
+  - policy_no
+  - vehicle_frame_no
+
+# 字段映射：SQL 输出列名（en） → 智能表 field_id
+field_mapping:
+  policy_date:           f04Gwj      # 出单日期（DATE_TIME, 毫秒 ts）
+  policy_no:             ftQMc5      # 保单号（TEXT）
+  plate_no:              ftk5Tx      # 车牌号（TEXT）
+  premium:               fn8TJd      # 保费（NUMBER，批单聚合后净额）
+  insurance_type:        frjAN4      # 险种大类（SINGLE_SELECT：商业保险/交强险）
+  customer_category:     f5UJGN      # 客户类别（SINGLE_SELECT，11 类）
+  previous_insurer:      fKRUlL      # 上年保险公司（SINGLE_SELECT，源=上年承保主体）
+  # applicant_name:      ffFwIh     # 投保人：表内字段现为 user 型，改文本型后取消本行注释
+
+# 智能表字段类型（用于格式化值）
+field_types:
+  f04Gwj: DATE_TIME
+  ftQMc5: TEXT
+  ftk5Tx: TEXT
+  fn8TJd: NUMBER
+  frjAN4: SINGLE_SELECT
+  f5UJGN: SINGLE_SELECT
+  fKRUlL: SINGLE_SELECT
+
+# 智能表字段中文 label（供 webhook payload 中 schema 字段使用）
+field_labels:
+  f04Gwj: 出单日期
+  ftQMc5: 保单号
+  ftk5Tx: 车牌号
+  fn8TJd: 保费
+  frjAN4: 险种大类
+  f5UJGN: 客户类别
+  fKRUlL: 上年保险公司

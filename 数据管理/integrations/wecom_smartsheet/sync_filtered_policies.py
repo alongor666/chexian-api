@@ -173,13 +173,33 @@ def build_where(filters: dict[str, Any]) -> tuple[str, list[Any]]:
     return where, params
 
 
+# 可选源列：仅当 parquet schema 实际含该列时才 SELECT，否则补 NULL 占位。
+# 场景：applicant_name（投保人名称）2026-07-17 起上游签单清单才新增，
+# 存量 parquet 无此列，直接 SELECT 会让全部实例（含无关实例）抽数报错。
+OPTIONAL_SOURCE_COLUMNS = ("customer_category", "previous_insurer", "applicant_name")
+
+
 def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
     where, params = build_where(instance.filters)
     pk = instance.primary_key
 
+    con = duckdb.connect(":memory:")
+    # 列探测（LIMIT 0 零扫描，仅取 union_by_name 合并后的 schema，不读数据行；
+    # 省份隔离由下方主查询 extra_where + 出口 assert_single_branch 承担）
+    available = set(
+        con.execute(
+            f"SELECT * FROM read_parquet('{instance.policy_glob}', union_by_name=true) LIMIT 0"
+        ).fetchdf().columns
+    )
+    optional_selects = ",\n      ".join(
+        col if col in available else f"NULL AS {col}"
+        for col in OPTIONAL_SOURCE_COLUMNS
+    )
+
     # 抽数 SQL：SELECT 所有注册表字段 + 派生 vehicle_age_group / vehicle_price_segment
     sql = f"""
     SELECT
+      {optional_selects},
       org_level_3,
       salesman_name,
       policy_date,
@@ -228,7 +248,6 @@ def fetch_rows(instance: InstanceConfig) -> list[dict[str, Any]]:
     WHERE {where}
     ORDER BY policy_date DESC, policy_no
     """
-    con = duckdb.connect(":memory:")
     df = con.execute(sql, params).fetchdf()
     # 防线④ 出口零信任断言：企微写入前强制单省体检，跨省混入（如山西 SX 邮政保单
     # 混进四川企微表）即 fail-closed 中止。df 无 branch_code 列（SELECT 是业务投影），
@@ -384,6 +403,9 @@ def aggregate_rows(rows: list[dict[str, Any]], instance: InstanceConfig) -> list
             "first_registration_date",
             "agent_name",
             "agent_short_name",
+            "customer_category",
+            "previous_insurer",
+            "applicant_name",
             "policy_no",
             "vehicle_frame_no",
             "vehicle_price_segment",

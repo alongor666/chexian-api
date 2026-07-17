@@ -58,7 +58,8 @@
     "高速风险等级",
     "车险分分数",
     "上年承保主体",
-    "次年保险公司"
+    "次年保险公司",
+    "投保人名称"
   ],
   "cn_to_en_mapping": {
     "保单号": "policy_no",
@@ -115,6 +116,7 @@
     "高速风险等级": "highway_risk_level",
     "车险分分数": "insurance_score",
     "上年承保主体": "previous_insurer",
-    "次年保险公司": "next_insurer"
+    "次年保险公司": "next_insurer",
+    "投保人名称": "applicant_name"
   }
 }

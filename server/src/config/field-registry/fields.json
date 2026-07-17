@@ -547,6 +547,15 @@
       "description": "下一保单年度承保该客户的保险公司（2026-06-10 上游签单清单 40→44 列新增。流失去向分析；与停更 customer_flow 域的 next_insurer 同义，口径等价性未验证）。历史分片无此列，union_by_name 下为 NULL"
     },
     {
+      "id": "applicant_name",
+      "label": "投保人名称",
+      "sourceColumn": "投保人名称",
+      "required": false,
+      "dataTypes": ["VARCHAR", "TEXT", "STRING"],
+      "aliases": ["applicant_name", "applicantName"],
+      "description": "投保人名称（2026-07-17 上游签单清单 46→47 列新增，太原二部业务员台账企微同步需求）。个人客户为姓名、单位客户为单位全称，属个人敏感信息，仅限台账/明细类场景使用，禁止进聚合分析口径。历史分片无此列，union_by_name 下为 NULL"
+    },
+    {
       "id": "branch_code",
       "label": "分公司编码",
       "sourceColumn": null,
@@ -580,7 +589,7 @@
       "乘客险保额", "车牌号码", "座位数", "被保险人年龄分组", "初次登记年月", "燃料种类",
       "保险止期", "被保险人性别", "货车类型", "吨位数", "无赔款优待记录",
       "交强险NCD", "商业险NCD", "高速风险等级", "车险分分数",
-      "上年承保主体", "次年保险公司"
+      "上年承保主体", "次年保险公司", "投保人名称"
     ]
   }
 }
