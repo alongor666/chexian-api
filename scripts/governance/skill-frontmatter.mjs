@@ -1,29 +1,29 @@
 /**
- * 治理检查：项目本地 skill 的 frontmatter 契约（2026-07-16 知识体系审计；
- * 2026-07-16 存量迁移收口时扩展支持目录/软链形态）
+ * 治理检查：项目本地 skill 契约（2026-07-16 知识体系审计新建；
+ * 2026-07-16 存量迁移收口扩展目录/软链形态；同日 PR #1126 评审返工升级为「实体必红灯」）
  *
- * 背景：本项目为 AI-native——`.claude/skills/*.md` 不维护人工 README/INDEX 索引，
- * 全靠各文件 frontmatter 的 `description` 自动注入上下文被发现（AGENTS.md「AI-native」
+ * 背景：本项目为 AI-native——`.claude/skills/` 不维护人工 README/INDEX 索引，
+ * 全靠各 skill frontmatter 的 `description` 自动注入上下文被发现（AGENTS.md「AI-native」
  * 约定 + `.claude/rules/skill-prefix.md`「Frontmatter 必填」）。缺 frontmatter 的 skill
- * 是不可被发现的孤岛（实证：accident-profile-report.md 裸标题开头，任何索引/自动发现
- * 都找不到它）。审计评审明确否决"新建人工索引登记"方案（人工清单必腐），改为本闸：
- * 按文件系统动态扫描，无人工清单，不会腐化。
+ * 是不可被发现的孤岛。审计评审明确否决"新建人工索引登记"方案（人工清单必腐），
+ * 改为本闸：按文件系统动态扫描，无人工清单，不会腐化。
  *
- * 2026-07-16 铁律更新：所有技能须建在 alongor666-skills 仓库、项目侧改软链消费
- * （见 `.claude/rules/skill-prefix.md` [policy-override] 段）。原 14 个项目内扁平
- * 存量技能已迁出，`.claude/skills/` 目前预期为空目录。本闸保留并扩展，防止未来
- * 有人绕过铁律往项目里塞实体技能时闸失效：
+ * 2026-07-16 铁律（`.claude/rules/skill-prefix.md` [policy-override] 段）：所有技能
+ * 必须建在 alongor666-skills 仓库，项目与 Agent 一律经 sync-skills 软链消费，
+ * 项目内禁止实体技能。原 14 个项目内扁平存量技能已迁出（PR #1126），
+ * `.claude/skills/` 预期为空。本闸执行政策语义（PR #1126 评审 P1-3 收紧）：
  *   - 目录为空或不存在 → 优雅通过（绿）。
- *   - 仍支持扁平 `<name>.md` 形态（历史兼容，不鼓励新增）。
- *   - 新支持 `<name>/SKILL.md` 目录形态（含软链目录——`fs.statSync` 天然解析
- *     软链指向的真实类型，覆盖 sync-skills 直连软链场景）。
+ *   - **实体条目必红灯**：`fs.lstatSync` 区分实体与软链——实体目录、实体 `.md`
+ *     文件一律报错（绕铁律往项目里塞实体技能的唯一入口，直接拦）。
+ *   - 软链条目 → 解析目标：悬空链报错；目标为 `.md` 文件（扁平形态）或含
+ *     `SKILL.md` 的目录（sync-skills 直连标准形态）→ 校验 frontmatter 契约；
+ *     目录无 SKILL.md → 跳过（非技能目录）。
+ *   - 实体非 `.md` 杂项文件（.gitkeep 等）→ 跳过（技能发现机制不识别，无绕闸面）。
  *
- * 口径（兑现 `.claude/rules/skill-prefix.md`「Frontmatter 必填」契约）：
- * 每个被识别的 skill（扁平 `<name>.md` 或目录 `<name>/SKILL.md`）必须
+ * frontmatter 契约（兑现 `.claude/rules/skill-prefix.md`「Frontmatter 必填」）：
  *   1. 以可解析的 `---` frontmatter 块开头（未闭合/缺失 = 损坏，报错）；
  *   2. `name:` 非空且与文件名/目录名 stem 一致；
  *   3. `description:` 非空且含触发语义标记之一：Use when / 当用户 / 触发 / 适用于。
- * 目录条目若不含 `SKILL.md`（非技能目录，如杂项子目录）→ 跳过，不视为违规。
  *
  * 调用方：scripts/check-governance.mjs（io 注入模式，与 branch-rls-enabled 同构）。
  * 红绿夹具测试：scripts/__tests__/skill-frontmatter.test.mjs。
@@ -36,7 +36,7 @@ const SKILLS_REL = '.claude/skills';
 
 export function runSkillFrontmatterCheck({ rootDir, io }) {
   const { info, success, error } = io;
-  info('检查项目本地 skill frontmatter（AI-native 自动发现契约）...');
+  info('检查项目本地 skill 契约（禁实体技能 + AI-native frontmatter）...');
 
   const skillsDir = path.join(rootDir, SKILLS_REL);
   if (!fs.existsSync(skillsDir)) {
@@ -46,14 +46,29 @@ export function runSkillFrontmatterCheck({ rootDir, io }) {
 
   const entries = fs.readdirSync(skillsDir).sort();
   const TRIGGER_MARKERS = ['Use when', '当用户', '触发', '适用于'];
+  const IRON_RULE_HINT =
+    '违反 2026-07-16 铁律：技能必须建在 alongor666-skills 仓、经 sync-skills 软链消费' +
+    '（见 .claude/rules/skill-prefix.md [policy-override] 段）';
   const problems = [];
   let checked = 0;
 
   for (const entry of entries) {
     const fullPath = path.join(skillsDir, entry);
+    const lst = fs.lstatSync(fullPath);
+
+    if (!lst.isSymbolicLink()) {
+      // 实体条目：技能形态（目录 / .md 文件）一律红灯
+      if (lst.isDirectory()) {
+        problems.push(`${SKILLS_REL}/${entry}/: 实体目录——${IRON_RULE_HINT}`);
+      } else if (lst.isFile() && entry.endsWith('.md')) {
+        problems.push(`${SKILLS_REL}/${entry}: 实体 skill 文件——${IRON_RULE_HINT}`);
+      }
+      continue;
+    }
+
+    // 软链条目：解析目标真实类型
     let stat;
     try {
-      // statSync 跟随软链解析真实类型——覆盖 sync-skills 直连软链场景
       stat = fs.statSync(fullPath);
     } catch {
       problems.push(`${SKILLS_REL}/${entry}: 软链目标不存在（悬空链接）`);
@@ -63,17 +78,17 @@ export function runSkillFrontmatterCheck({ rootDir, io }) {
     let stem;
     let contentPath;
     if (stat.isFile() && entry.endsWith('.md')) {
-      // 扁平形态（历史兼容；2026-07-16 铁律后不再新增，见 skill-prefix.md）
+      // 软链扁平形态 <name>.md
       stem = entry.replace(/\.md$/, '');
       contentPath = fullPath;
     } else if (stat.isDirectory()) {
-      // 目录/软链形态：<name>/SKILL.md（技能仓 sync-skills 直连消费的标准形态）
+      // 软链目录形态 <name>/SKILL.md（sync-skills 直连标准形态）
       const skillMdPath = path.join(fullPath, 'SKILL.md');
       if (!fs.existsSync(skillMdPath)) continue; // 非技能目录，跳过
       stem = entry;
       contentPath = skillMdPath;
     } else {
-      continue; // 既非 .md 文件也非目录，跳过
+      continue;
     }
 
     checked += 1;
@@ -99,7 +114,7 @@ export function runSkillFrontmatterCheck({ rootDir, io }) {
   }
 
   if (problems.length === 0) {
-    success(`项目本地 skill frontmatter 契约通过（${checked} 个）`);
+    success(`项目本地 skill 契约通过（软链技能 ${checked} 个，实体技能 0 个）`);
     return true;
   }
   problems.forEach((p) => error(p));
