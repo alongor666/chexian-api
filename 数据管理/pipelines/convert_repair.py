@@ -18,6 +18,7 @@ if _DATA_ROOT not in sys.path:
     sys.path.insert(0, _DATA_ROOT)
 
 from pipelines.base_converter import BaseConverter
+from pipelines.derived_fields import assert_org_majority_branch
 from pipelines.etl_validation import PLACEHOLDER_STRS, safe_pct, to_bool
 
 
@@ -45,7 +46,10 @@ class RepairConverter(BaseConverter):
         }
 
     def get_required_columns(self) -> list:
-        return ["修理厂名称"]
+        # 「修理厂归属中支」是省份归属断言的权威判据列（见 validate_business_rules）。
+        # 列为必需 → 缺列在 base_converter step 2 即 abort，早于 --force 能放行的 schema
+        # 契约（step 3）；否则上游改列名 + --force 会让断言看到缺列静默跳过，错省文件照落。
+        return ["修理厂名称", "修理厂归属中支"]
 
     def get_str_force_cols(self) -> dict:
         return {}
@@ -93,7 +97,22 @@ class RepairConverter(BaseConverter):
         # reapply 常量赋值兜底，两处独立且语义一致）。
         #
         # SC 默认链路（declared=None）回退 'SC'，四川产物逐字节等价。
+        #
+        # ⚠ 本行按「声明」落省码、不从数据派生：org_level_3 有空值（2026-07-16 实测源文件
+        # 四川 15,713/174,915 = 9.0% 空；落盘后 dim/repair/latest.parquet 41.9% 空），
+        # 派生不出完整省码。故声明错了整份文件会被整体标成错省，省份归属的真实校验交给
+        # validate_business_rules() 的主体前缀断言（2026-07-16 跨省误收事故补强）。
         df["branch_code"] = self._declared_branch or "SC"
+        return df
+
+    def validate_business_rules(self, df: pd.DataFrame) -> pd.DataFrame:
+        # 省份归属断言：branch_code 按声明落常量（见 transform_rows），声明本身无从自检。
+        # 权威归属字段 = 「修理厂归属中支」(org_level_3)，机构编码主体前缀 四川 0110 /
+        # 山西 0118（SSOT = config/branch-org-mapping/<省>.json org_code_prefix）。
+        # 禁用「修理厂所在省」或文件体量作判据——四川分公司在山西开的网点归属仍是 0110。
+        assert_org_majority_branch(
+            df, "org_level_3", self._declared_branch or "SC", self.get_title()
+        )
         return df
 
     def post_write_hook(self, df: pd.DataFrame, output_file: Path) -> None:

@@ -1,5 +1,7 @@
 {
   "branch_code": "SC",
+  "org_code_prefix": "0110",
+  "org_code_prefix_note": "四川机构编码主体前缀（4 位）。用于对无 policy_no 的维度表源文件（如 03 维修资源）做省份归属断言：非空「修理厂归属中支」(org_level_3) 的主体前缀须为本值，翻转即声明省与实际数据不符。四川源合法含少量非主体前缀（0100 总公司 33 行 / 0108 无锡 1 行，2026-07-16 实测），故判据是「主体前缀」而非「全部前缀」。",
   "description": "四川三级机构清单（org_level_3 规范值，同城 7 + 异地 7，分组权威定义见 src/shared/config/org-groups.ts ORG_GROUPS_BY_BRANCH.SC）。注意：SC 不做 ETL 机构归一化——transform.py normalize_branch_org 对 BRANCH_CODE=SC 在读本文件前即原样返回（四川字节级安全），故本文件无 rules/org_to_unit；units 仅作机构清单 SSOT，供机构级报告生成（daily.mjs 第 9 步循环 diagnose-period-trend --org，缺口 B004）与 org_user 归属对账（preset-users org_user.organization ⊆ units）使用。",
   "units": [
     "天府",
