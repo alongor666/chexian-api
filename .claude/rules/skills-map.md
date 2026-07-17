@@ -76,6 +76,6 @@
 
 ## 维护协议
 
-- **新增 skill**：走 `crystallize-skill` 流水线（共享改仓库+装软链；项目级放 `.claude/skills/*.md`），**禁止在 `~/.claude/skills/` 直接建实体目录**；创建后当场补登本表
+- **新增 skill**：走 `crystallize-skill` 流水线（一切技能改仓库+装软链，项目内禁实体技能），**禁止在 `~/.claude/skills/` 直接建实体目录**；创建后当场补登本表
 - **skill 弃用**：表格行尾标注 `[DEPRECATED YYYY-MM]`
 - **eager-load 体积监控**：本表保持 ≤ 6KB。再涨先压顶部治理 blockquote（已入 memory/BACKLOG 的留一行指针即可），再裁 D 段低频条目；**skill 名指针一律不可删**

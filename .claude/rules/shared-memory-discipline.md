@@ -24,7 +24,7 @@ policy: append-only
 |---------|------|------|
 | 失败教训 / 复盘 / scorecard / PR 校准账 | `.claude/workflow/pr-evolution.md`（append-only entry） | 跨 PR 检索方便；`commit-push-pr-core` / evidence-loop 的标准 sink 位置 |
 | 跨项目可复用知识 / skill 内容 | `~/.claude/skills/`（共享 skills 仓 `alongor666-skills`） | 通过 skill 维护流水线（`chexian-crystallize-skill`）发布 |
-| 项目级 skill | `.claude/skills/`（本项目内） | frontmatter description 自动注入上下文 |
+| 任意 skill | alongor666-skills 仓 + sync-skills 软链 | 2026-07-16 铁律禁项目内实体技能（[policy-override] 修订本行，授权见 skill-prefix.md 同名段 / PR #1126） |
 | 本项目新增护栏规则 | `.claude/rules/`（append-only 新文件） | AGENTS.md §8.2 path-tier policy 显式允许 |
 | 频繁演进的知识 / 状态 | `BACKLOG_LOG.jsonl`（append-only event log） | event-log 模型见 `.claude/rules/backlog-eventlog.md` |
 

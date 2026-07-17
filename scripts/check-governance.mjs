@@ -32,7 +32,7 @@
  *    - 必须使用 load_excel_all_sheets() 自动合并续表，防止 Excel 拆分后静默丢数据
  * 25. 空 catch 块禁令（静默失败 Law 1）：
  *    - server/src + src 禁止纯空 catch 块（catch {} / catch (e) {}）
- *    - 空 catch 吞异常且无痕迹，是最典型的静默失败；配套 .claude/skills/silent-failure-guard.md
+ *    - 空 catch 吞异常且无痕迹，是最典型的静默失败；配套 skill `silent-failure-guard`（alongor666-skills 仓，本地经 ~/.claude/skills/silent-failure-guard 软链）
  *
  * 退出码：
  * - 0: 所有检查通过
@@ -3001,8 +3001,8 @@ function checkSharedMemoryUserOnly() {
   error('');
   error('  备选路径建议（按内容类型）：');
   error('    教训/复盘/scorecard       → .claude/workflow/pr-evolution.md（append-only entry）');
-  error('    跨项目可复用知识 / skill  → ~/.claude/skills/（共享 skills 仓 alongor666-skills）');
-  error('    项目级 skill            → .claude/skills/');
+  error('    任意 skill（含项目专属）  → alongor666-skills 仓 skills/<name>/SKILL.md，本地经 ~/.claude/skills/ 软链消费');
+  error('      （2026-07-16 铁律：技能一律建在 skills 仓，禁止在项目内新建实体 .claude/skills/*.md，见 .claude/rules/skill-prefix.md）');
   error('    本项目 rule（新增护栏） → .claude/rules/（append-only）');
   error('');
   error('  user 本人手动操作授权绕过：SHARED_MEMORY_USER_WRITE=1 bun run governance');
