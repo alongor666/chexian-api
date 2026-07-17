@@ -79,20 +79,27 @@ class RepairBranchCodeTest(unittest.TestCase):
             os.environ.pop("BRANCH_CODE", None)
         self._tmp.cleanup()
 
+    def _rewrite_as_sx(self):
+        """SX 声明用例的源：归属中支须为山西（小样本也不豁免主体前缀检查）。"""
+        _write_source_xlsx(self.xlsx, n=3, orgs=["011801山西分公司（本部）"] * 3)
+
     def test_branch_code_arg_sx_yields_sx(self):
         """--branch-code SX（短路路径会直接落此产物）→ branch_code 全 'SX'。"""
+        self._rewrite_as_sx()
         df = _run_converter(self.xlsx, self.out, ["--branch-code", "SX"])
         self.assertEqual(set(df["branch_code"].unique()), {"SX"})
         self.assertEqual(len(df), 3)
 
     def test_branch_code_env_sx_yields_sx(self):
         """CLI 未给 --branch-code 但 BRANCH_CODE=SX env → branch_code 全 'SX'。"""
+        self._rewrite_as_sx()
         os.environ["BRANCH_CODE"] = "SX"
         df = _run_converter(self.xlsx, self.out)
         self.assertEqual(set(df["branch_code"].unique()), {"SX"})
 
     def test_branch_code_arg_lowercase_normalized(self):
         """--branch-code sx 归一化为大写 'SX'（resolve_declared_branch upper）。"""
+        self._rewrite_as_sx()
         df = _run_converter(self.xlsx, self.out, ["--branch-code", "sx"])
         self.assertEqual(set(df["branch_code"].unique()), {"SX"})
 
@@ -154,9 +161,19 @@ class OrgMajorityBranchAssertTest(unittest.TestCase):
             _org_df(["0110"] * 150 + [None] * 100), "org_level_3", "SC", "测试"
         )
 
-    def test_small_file_below_min_sample_skips(self):
-        """整个文件都小（总行数 < 下限）→ 无从判定，告警跳过而非误判。"""
-        assert_org_majority_branch(_org_df(["0118"] * 5), "org_level_3", "SC", "测试")
+    def test_small_file_all_wrong_province_fails(self):
+        """小文件全错省 → 同样 fail-fast（PR #1127 复审发现 2：主体前缀检查不因小样本豁免）。"""
+        with self.assertRaises(SystemExit) as cm:
+            assert_org_majority_branch(_org_df(["0118"] * 5), "org_level_3", "SC", "测试")
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_small_file_matching_province_passes(self):
+        """小文件主体前缀正确 → 放行（占比闸小样本上无统计意义，跳过并告警）。"""
+        assert_org_majority_branch(_org_df(["0110"] * 5), "org_level_3", "SC", "测试")
+
+    def test_small_file_all_empty_orgs_skips(self):
+        """小文件且归属全空 → 真无从判定，跳过（区别于大文件全空的掏空 fail）。"""
+        assert_org_majority_branch(_org_df([None] * 5), "org_level_3", "SC", "测试")
 
     def test_large_file_with_hollow_orgs_fails(self):
         """总行数够大却几乎全空归属 → 判据被掏空，fail-fast。
@@ -179,13 +196,35 @@ class OrgMajorityBranchAssertTest(unittest.TestCase):
         """主体前缀正确但占比低于下限 → 半量混省，fail-fast。
 
         codex 对抗审查 P1-2：floor 若只告警，接近一半错省的数据仍会发布。
-        实测四川主体占比 99.98%、山西 100%，离 80% 下限极远，硬闸不误杀。
         """
         with self.assertRaises(SystemExit) as cm:
             assert_org_majority_branch(
                 _org_df(["0110"] * 120 + ["0118"] * 80), "org_level_3", "SC", "测试"
             )
         self.assertEqual(cm.exception.code, 1)
+
+    def test_floor_boundary_96pct_passes_94pct_fails(self):
+        """占比闸边界（省配置 floor=0.95）：96% 放行、94% 拦截。
+
+        PR #1127 复审发现 3：原 0.8 容忍 20% 错省行，比四川真实异省基线 0.02%
+        高三个数量级；现收紧至 0.95（真实主体占比 SC 99.98% / SX 100%，不误杀）。
+        """
+        assert_org_majority_branch(
+            _org_df(["0110"] * 960 + ["0118"] * 40), "org_level_3", "SC", "测试"
+        )
+        with self.assertRaises(SystemExit) as cm:
+            assert_org_majority_branch(
+                _org_df(["0110"] * 940 + ["0118"] * 60), "org_level_3", "SC", "测试"
+            )
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_floor_read_from_province_config(self):
+        """majority_floor 缺省时从省配置 org_code_majority_floor 读取（SSOT）。"""
+        from pipelines.derived_fields import _org_mapping_config
+        for branch in ("SC", "SX"):
+            cfg = _org_mapping_config(branch)
+            self.assertEqual(cfg.get("org_code_majority_floor"), 0.95,
+                             f"{branch}.json 应显式声明 org_code_majority_floor=0.95")
 
     def test_unregistered_province_fails_closed(self):
         """省配置缺 org_code_prefix → fail-closed，禁止静默放行未知省。"""
@@ -225,6 +264,26 @@ class RepairConverterOrgAssertE2ETest(unittest.TestCase):
         df = _run_converter(self.xlsx, self.out)
         self.assertEqual(set(df["branch_code"].unique()), {"SC"})
         self.assertEqual(len(df), 200)
+
+    def test_dropped_rows_cannot_vote_for_assertion(self):
+        """将被必填过滤丢弃的行不得给断言"充票"（PR #1127 复审发现 1）。
+
+        800 行 0110 但修理厂名称为空（6b 过滤丢弃）+ 200 行有效但归属 0118：
+        断言若在过滤前跑会以 80% 通过、最终写出 200 行全 0118 标 SC。
+        断言已移至 pre_write_hook（过滤后、写盘前）→ 最终 df 主体是 0118 → fail。
+        """
+        df = pd.DataFrame({
+            "修理厂名称": [None] * 800
+            + [f"14000{i:03d}山西某修理厂{i}" for i in range(200)],
+            "修理厂归属中支": ["011001四川分公司（本部）"] * 800
+            + ["011801山西分公司（本部）"] * 200,
+            "统计时间": ["2026-06-01"] * 1000,
+        })
+        df.to_excel(self.xlsx, index=False, engine="openpyxl")
+        with self.assertRaises(SystemExit) as cm:
+            _run_converter(self.xlsx, self.out)
+        self.assertEqual(cm.exception.code, 1)
+        self.assertFalse(self.out.exists(), "充票场景不得留下 parquet 产物")
 
     def test_missing_org_column_aborts_even_with_force(self):
         """上游改列名致归属列缺失 → 即便 --force 也 abort（不得静默跳过省份判据）。"""

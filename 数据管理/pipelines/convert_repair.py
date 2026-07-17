@@ -105,15 +105,20 @@ class RepairConverter(BaseConverter):
         df["branch_code"] = self._declared_branch or "SC"
         return df
 
-    def validate_business_rules(self, df: pd.DataFrame) -> pd.DataFrame:
+    def pre_write_hook(self, df: pd.DataFrame, output_file: Path) -> None:
         # 省份归属断言：branch_code 按声明落常量（见 transform_rows），声明本身无从自检。
         # 权威归属字段 = 「修理厂归属中支」(org_level_3)，机构编码主体前缀 四川 0110 /
         # 山西 0118（SSOT = config/branch-org-mapping/<省>.json org_code_prefix）。
         # 禁用「修理厂所在省」或文件体量作判据——四川分公司在山西开的网点归属仍是 0110。
+        #
+        # 挂在 pre_write_hook（6d，去重 6a + 必填过滤 6b 之后、写盘之前）而非
+        # validate_business_rules（5）：断言必须作用于「最终写盘的 df」。复审实证
+        # （PR #1127 review 发现 1）：断言若在过滤前跑，800 行 0110 但修理厂名称为空
+        # （将被 6b 丢弃）+ 200 行有效 0118 的输入，会以 80% 通过断言、随后过滤掉
+        # 全部 0110 行，最终写出 200 行全 0118 却标 SC——被丢弃的行给断言"充票"。
         assert_org_majority_branch(
             df, "org_level_3", self._declared_branch or "SC", self.get_title()
         )
-        return df
 
     def post_write_hook(self, df: pd.DataFrame, output_file: Path) -> None:
         print("\n   === 数据概览 ===")

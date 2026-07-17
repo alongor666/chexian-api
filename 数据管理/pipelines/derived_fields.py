@@ -148,6 +148,16 @@ def assert_guarded_prefix_field(df, fid, source, prefix_len, mapping,
         sys.exit(1)
 
 
+def _org_mapping_config(branch_code):
+    """读某省的 branch-org-mapping 配置 dict；文件不存在时 None。"""
+    path = (Path(__file__).resolve().parent.parent / 'config' /
+            'branch-org-mapping' / f'{branch_code}.json')
+    if not path.exists():
+        return None
+    with open(path) as f:
+        return json.load(f) or {}
+
+
 def org_code_prefix(branch_code):
     """读某省的机构编码主体前缀（如 SC → '0110'、SX → '0118'）。
 
@@ -156,16 +166,12 @@ def org_code_prefix(branch_code):
     Returns:
         str | None: 该省前缀；省配置文件不存在或未声明该字段时 None。
     """
-    path = (Path(__file__).resolve().parent.parent / 'config' /
-            'branch-org-mapping' / f'{branch_code}.json')
-    if not path.exists():
-        return None
-    with open(path) as f:
-        return (json.load(f) or {}).get('org_code_prefix')
+    cfg = _org_mapping_config(branch_code)
+    return cfg.get('org_code_prefix') if cfg else None
 
 
 def assert_org_majority_branch(df, col, declared_branch, domain_label,
-                               min_sample=100, majority_floor=0.8):
+                               min_sample=100, majority_floor=None):
     """断言维度表的机构归属主体前缀与声明省一致（不一致 → sys.exit(1)）。
 
     为无 policy_no 的维度表（repair 等）补上省份归属校验——这类域不走 6c 的
@@ -178,24 +184,36 @@ def assert_org_majority_branch(df, col, declared_branch, domain_label,
     会误杀正常数据。同理禁用「修理厂所在省」作判据：四川分公司在山西开的网点
     （如 14050400 晋城市城区景宏配件部）归属中支仍是 011001 四川分公司（本部）。
 
-    两道闸（codex 对抗审查 P1-2/P1-3 加固，2026-07-17）：
-    ① 主体前缀 ≠ 期望 → fail（账号弄反的整份翻转）
-    ② 主体前缀正确但占比 < majority_floor → 同样 fail（半量混省：主体没翻转、错省行却
-       大量混入。实测四川主体占比 99.98%、山西 100%，离 80% 下限极远，不会误杀合法数据）
+    ⚠ 调用位置要求：必须作用于「最终写盘的 df」（去重 + 必填过滤之后），否则将被
+    丢弃的行会给断言"充票"（PR #1127 review 发现 1 实证：800 行 0110 空名 + 200 行
+    有效 0118，过滤前断言 80% 通过，最终写出 200 行全 0118 标 SC）。repair 域挂在
+    pre_write_hook；merge_parquet 对合并产物复验。
+
+    两道闸（codex 对抗审查 + PR #1127 复审加固，2026-07-17）：
+    ① 主体前缀 ≠ 期望 → fail（账号弄反的整份翻转）。只要有任一非空归属即执行，
+       小样本不豁免——「5 行全 0118 声明 SC」也必须拦（复审发现 2：原实现小样本
+       无条件跳过，全错省小文件被明确放行）。
+    ② 主体前缀正确但占比 < majority_floor → fail（混省）。默认 0.95，可被省配置
+       org_code_majority_floor 覆盖（复审发现 3：原 0.8 容忍 20% 错省行，比四川真实
+       异省基线 0.02% 高三个数量级；实测四川主体占比 99.98%、山西 100%，0.95 仍有余量）。
+       占比闸仅在样本 ≥ min_sample 时执行——小样本上占比无统计意义，闸 ① 仍兜底。
 
     Args:
         col: 归属列名（repair 域 = org_level_3，源列「修理厂归属中支」）
         declared_branch: 生效声明省（调用方已做 None → 'SC' 回退）
         domain_label: 打印用域名
-        min_sample: 非空样本下限。总行数也低于此值 → 小样本，无从判定，告警跳过；
-                    总行数够大却非空不足 → 判据被掏空，fail（防「99 行非空 + 10 万行空」旁路）
-        majority_floor: 主体占比下限，低于即 fail（混省）
+        min_sample: 占比闸的样本下限；零非空时按总行数分档：小文件跳过（真无从判定）、
+                    大文件 fail（判据被掏空，防「近全空归属」旁路）
+        majority_floor: 主体占比下限；None → 省配置 org_code_majority_floor，再缺省 0.95
     """
     expected = org_code_prefix(declared_branch)
     if not expected:
         print(f"   ❌ {domain_label} 省份归属校验：省 {declared_branch} 未在 "
               f"config/branch-org-mapping/{declared_branch}.json 声明 org_code_prefix — fail-fast")
         sys.exit(1)
+    if majority_floor is None:
+        cfg = _org_mapping_config(declared_branch) or {}
+        majority_floor = float(cfg.get('org_code_majority_floor', 0.95))
     if col not in df.columns:
         # repair 域已把源列「修理厂归属中支」列入 get_required_columns()，缺列在 base_converter
         # step 2 就 abort（早于 --force 生效的 schema 契约）。此处仅为其他无该列的 dim 表留通道。
@@ -203,11 +221,15 @@ def assert_org_majority_branch(df, col, declared_branch, domain_label,
         return
     vals = df[col].dropna().astype(str).str.strip()
     vals = vals[vals != '']
-    if len(vals) < min_sample:
+    if len(vals) == 0:
         if len(df) < min_sample:
-            print(f"   ⚠ {domain_label} 省份归属校验跳过：{col} 非空样本 {len(vals):,} "
-                  f"< {min_sample}（总行数 {len(df):,} 同样偏小），无从判定主体前缀")
+            print(f"   ⚠ {domain_label} 省份归属校验跳过：{col} 全空且总行数 {len(df):,} "
+                  f"< {min_sample}，无从判定主体前缀")
             return
+        print(f"   ❌ {domain_label} 省份归属校验失败：总行数 {len(df):,} 但 {col} 全空 — "
+              f"归属判据被掏空，无法核实省份归属，fail-fast")
+        sys.exit(1)
+    if len(vals) < min_sample and len(df) >= min_sample:
         print(f"   ❌ {domain_label} 省份归属校验失败：总行数 {len(df):,} 但 {col} 非空仅 "
               f"{len(vals):,} < {min_sample} — 归属判据被掏空，无法核实省份归属，fail-fast")
         sys.exit(1)
@@ -221,9 +243,14 @@ def assert_org_majority_branch(df, col, declared_branch, domain_label,
               f"= {share:.1%}）— 疑似跨省误收 / 导出账号弄反，fail-fast")
         print(f"      前缀分布(top5): {counts.head(5).to_dict()}")
         sys.exit(1)
+    if len(vals) < min_sample:
+        # 小样本：主体前缀已核对一致，但占比闸缺乏统计意义 → 放行并留告警供人工留意
+        print(f"   ⚠ {domain_label} 省份归属校验（小样本 {len(vals):,} < {min_sample}）：主体前缀 "
+              f"{majority} 与声明省 {declared_branch} 一致，占比闸跳过")
+        return
     if share < majority_floor:
         print(f"   ❌ {domain_label} 省份归属校验失败：主体前缀 {majority} 与声明省 "
-              f"{declared_branch} 一致，但仅占 {share:.1%}（< {majority_floor:.0%}）— 疑似半量混省，fail-fast")
+              f"{declared_branch} 一致，但仅占 {share:.1%}（< {majority_floor:.0%}）— 疑似混省，fail-fast")
         print(f"      前缀分布(top5): {counts.head(5).to_dict()}")
         sys.exit(1)
     print(f"   ✓ {domain_label} 省份归属校验通过：{col} 主体前缀 {majority} "
