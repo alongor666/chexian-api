@@ -1,0 +1,1 @@
+{"uid":"2026-07-17-claude-454a31","kind":"note","ts":"2026-07-17","actor":"@claude","text":"评审二轮 Request changes 三 findings 已修复（commit deaf5777）：基线 skipped 语义+旧 manifest 兼容、契约防注释假绿+多文件+全仓扫描、三人省域绑定锁；全量 5571/5571","at":"2026-07-17T23:13:15.571Z","eid":"d54cab9d"}
