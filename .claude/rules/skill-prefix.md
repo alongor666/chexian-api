@@ -43,7 +43,13 @@ paths: [".claude/skills/**", ".claude/agents/**", ".claude/commands/**"]
 
 `bash ~/.claude/audits/scripts/{T1,T2,T4}.sh` 出基线 TSV。完整方法论与流程见 `~/.claude/plans/claude-dode-slash-agent-refactored-crane.md`。
 
+## 项目内不再新建实体 skill（[policy-override] 2026-07-16）
+
+> **授权来源**：用户 2026-07-16 铁律指令（"所有技能必须创建在 alongor666-skills 仓库，不同项目和 Agent 通过软链使用"）+ backlog uid `2026-07-16-claude-10446a` 登记。本条修改本文件下方"项目级 skill 放 `.claude/skills/*.md`"一类既有口径的**主体**，属 AGENTS.md §8.2 append-only 例外场景，授权与落地见 PR「refactor(skills): [policy-override] 14 个存量项目技能迁入 skills 仓，项目侧改软链消费」。
+
+新铁律：**所有 skill（含仅本项目使用的车险业务 skill）一律建在 `alongor666-skills` 仓库 `skills/<name>/SKILL.md`，项目侧不再新建实体 `.claude/skills/*.md` 文件**，改为经 `sync-skills` 装到 `~/.claude/skills/<name>` 的软链消费（与 chexian-daily-loop / chexian-ir-diagnosis 等既有共享 skill 消费方式一致）。原 14 个扁平存量项目 skill（`accident-profile-report` / `adr-tiered-response` / `agent-system-design-principles` / `chexian-bug-hunt` / `chexian-refactor-audit-execute` / `chexian-refactor-audit-review` / `chexian-sentinel-attribution` / `code-search-routing` / `dev-stop-on-mismatch` / `incident-rate-development` / `ncd-pricing-diagnosis` / `pr-review-playbook` / `rule-promotion-gate` / `silent-failure-guard`）已按此迁出。`.claude/skills/` 目录预期为空/不存在；`scripts/governance/skill-frontmatter.mjs` 闸对此优雅通过，并扩展支持 `<name>/SKILL.md` 目录/软链形态，防止未来有人绕铁律往项目里塞实体技能时闸失效。
+
 ## 关联
 
 - 全局 skill 速查与"本项目用法"：[skills-map.md](./skills-map.md)
-- 项目级 skill（`.claude/skills/*.md`）由各自 frontmatter `description` 自动注入上下文被发现（AI-native，不维护 README 索引）
+- ~~项目级 skill（`.claude/skills/*.md`）由各自 frontmatter `description` 自动注入上下文被发现（AI-native，不维护 README 索引）~~ — 2026-07-16 起该口径被上方「项目内不再新建实体 skill」取代；本项目仍是 AI-native（不维护人工 README 索引），但发现机制改为 Skill 工具扫描 `~/.claude/skills/`（skills 仓软链目标），不再扫描项目内路径

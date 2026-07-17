@@ -1,5 +1,6 @@
 /**
- * 治理检查：项目本地 skill 的 frontmatter 契约（2026-07-16 知识体系审计）
+ * 治理检查：项目本地 skill 的 frontmatter 契约（2026-07-16 知识体系审计；
+ * 2026-07-16 存量迁移收口时扩展支持目录/软链形态）
  *
  * 背景：本项目为 AI-native——`.claude/skills/*.md` 不维护人工 README/INDEX 索引，
  * 全靠各文件 frontmatter 的 `description` 自动注入上下文被发现（AGENTS.md「AI-native」
@@ -8,11 +9,21 @@
  * 都找不到它）。审计评审明确否决"新建人工索引登记"方案（人工清单必腐），改为本闸：
  * 按文件系统动态扫描，无人工清单，不会腐化。
  *
- * 口径（兑现 `.claude/rules/skill-prefix.md`「Frontmatter 必填」契约，2026-07-16 评审返工收紧）：
- * `.claude/skills/` 下每个 .md 文件必须
+ * 2026-07-16 铁律更新：所有技能须建在 alongor666-skills 仓库、项目侧改软链消费
+ * （见 `.claude/rules/skill-prefix.md` [policy-override] 段）。原 14 个项目内扁平
+ * 存量技能已迁出，`.claude/skills/` 目前预期为空目录。本闸保留并扩展，防止未来
+ * 有人绕过铁律往项目里塞实体技能时闸失效：
+ *   - 目录为空或不存在 → 优雅通过（绿）。
+ *   - 仍支持扁平 `<name>.md` 形态（历史兼容，不鼓励新增）。
+ *   - 新支持 `<name>/SKILL.md` 目录形态（含软链目录——`fs.statSync` 天然解析
+ *     软链指向的真实类型，覆盖 sync-skills 直连软链场景）。
+ *
+ * 口径（兑现 `.claude/rules/skill-prefix.md`「Frontmatter 必填」契约）：
+ * 每个被识别的 skill（扁平 `<name>.md` 或目录 `<name>/SKILL.md`）必须
  *   1. 以可解析的 `---` frontmatter 块开头（未闭合/缺失 = 损坏，报错）；
- *   2. `name:` 非空且与文件名 stem 一致；
+ *   2. `name:` 非空且与文件名/目录名 stem 一致；
  *   3. `description:` 非空且含触发语义标记之一：Use when / 当用户 / 触发 / 适用于。
+ * 目录条目若不含 `SKILL.md`（非技能目录，如杂项子目录）→ 跳过，不视为违规。
  *
  * 调用方：scripts/check-governance.mjs（io 注入模式，与 branch-rls-enabled 同构）。
  * 红绿夹具测试：scripts/__tests__/skill-frontmatter.test.mjs。
@@ -33,37 +44,62 @@ export function runSkillFrontmatterCheck({ rootDir, io }) {
     return true;
   }
 
-  const files = fs
-    .readdirSync(skillsDir)
-    .filter((f) => f.endsWith('.md'))
-    .sort();
-
+  const entries = fs.readdirSync(skillsDir).sort();
   const TRIGGER_MARKERS = ['Use when', '当用户', '触发', '适用于'];
   const problems = [];
-  for (const file of files) {
-    const content = fs.readFileSync(path.join(skillsDir, file), 'utf-8');
-    const fm = extractFrontmatter(content);
-    if (fm === null) {
-      problems.push(`${SKILLS_REL}/${file}: frontmatter 块缺失或未闭合（须以 --- 开头、--- 结束）——无法被自动发现`);
+  let checked = 0;
+
+  for (const entry of entries) {
+    const fullPath = path.join(skillsDir, entry);
+    let stat;
+    try {
+      // statSync 跟随软链解析真实类型——覆盖 sync-skills 直连软链场景
+      stat = fs.statSync(fullPath);
+    } catch {
+      problems.push(`${SKILLS_REL}/${entry}: 软链目标不存在（悬空链接）`);
       continue;
     }
-    const stem = file.replace(/\.md$/, '');
+
+    let stem;
+    let contentPath;
+    if (stat.isFile() && entry.endsWith('.md')) {
+      // 扁平形态（历史兼容；2026-07-16 铁律后不再新增，见 skill-prefix.md）
+      stem = entry.replace(/\.md$/, '');
+      contentPath = fullPath;
+    } else if (stat.isDirectory()) {
+      // 目录/软链形态：<name>/SKILL.md（技能仓 sync-skills 直连消费的标准形态）
+      const skillMdPath = path.join(fullPath, 'SKILL.md');
+      if (!fs.existsSync(skillMdPath)) continue; // 非技能目录，跳过
+      stem = entry;
+      contentPath = skillMdPath;
+    } else {
+      continue; // 既非 .md 文件也非目录，跳过
+    }
+
+    checked += 1;
+    const label = contentPath === fullPath ? `${SKILLS_REL}/${entry}` : `${SKILLS_REL}/${entry}/SKILL.md`;
+    const content = fs.readFileSync(contentPath, 'utf-8');
+    const fm = extractFrontmatter(content);
+    if (fm === null) {
+      problems.push(`${label}: frontmatter 块缺失或未闭合（须以 --- 开头、--- 结束）——无法被自动发现`);
+      continue;
+    }
     const name = matchFrontmatterValue(fm, 'name');
     if (!name) {
-      problems.push(`${SKILLS_REL}/${file}: frontmatter 缺非空 name（skill-prefix.md 必填契约）`);
+      problems.push(`${label}: frontmatter 缺非空 name（skill-prefix.md 必填契约）`);
     } else if (name !== stem) {
-      problems.push(`${SKILLS_REL}/${file}: name「${name}」与文件名 stem「${stem}」不一致（skill-prefix.md 要求同名）`);
+      problems.push(`${label}: name「${name}」与文件名/目录名「${stem}」不一致（skill-prefix.md 要求同名）`);
     }
     const desc = matchFrontmatterValue(fm, 'description');
     if (!desc) {
-      problems.push(`${SKILLS_REL}/${file}: frontmatter 缺非空 description`);
+      problems.push(`${label}: frontmatter 缺非空 description`);
     } else if (!TRIGGER_MARKERS.some((t) => desc.includes(t))) {
-      problems.push(`${SKILLS_REL}/${file}: description 缺触发语义（须含 ${TRIGGER_MARKERS.join(' / ')} 之一，skill-prefix.md 契约）`);
+      problems.push(`${label}: description 缺触发语义（须含 ${TRIGGER_MARKERS.join(' / ')} 之一，skill-prefix.md 契约）`);
     }
   }
 
   if (problems.length === 0) {
-    success(`项目本地 skill frontmatter 契约通过（${files.length} 个文件）`);
+    success(`项目本地 skill frontmatter 契约通过（${checked} 个）`);
     return true;
   }
   problems.forEach((p) => error(p));

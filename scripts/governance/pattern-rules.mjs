@@ -100,7 +100,7 @@ export const PATTERN_RULES = [
     errorHeader: '发现空 catch 块（吞异常无痕迹）',
     fixHints: [
       '修复：catch 内至少记日志（含上下文），并重抛或返回带错误标记的结果',
-      '依据：.claude/skills/silent-failure-guard.md 五律 Law 1',
+      '依据：skill `silent-failure-guard` 五律 Law 1（alongor666-skills 仓，本地经 ~/.claude/skills/silent-failure-guard 软链）',
     ],
   },
 
