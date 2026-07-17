@@ -183,8 +183,8 @@ const ENDPOINT_DEFINITIONS = [
 
   // ── /api/auth（GET only）─────────────────
   { slug: 'auth-me', path: '/api/auth/me', params: {}, deprecated: false },
-  { slug: 'auth-users', path: '/api/auth/users', params: {}, deprecated: false },
-  { slug: 'auth-roles', path: '/api/auth/roles', params: {}, deprecated: false },
+  // auth-users / auth-roles 已摘除（2026-07-17）：权限管理模块白名单收口为
+  // 薛成龙/杨杰/林霞 三人（preset-users.ts RESTRICTED_MODULES），基线账号 admin 访问恒 403。
 
   // ── /api/ai（GET only）───────────────────
   { slug: 'ai-capabilities', path: '/api/ai/capabilities', params: {}, deprecated: false },

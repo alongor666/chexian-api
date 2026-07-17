@@ -87,9 +87,18 @@ describe('assertPatAllowed — PAT 会话 userId=用户名 与 PasswordCredentia
     expect(queryMock).toHaveBeenCalledTimes(2);
   });
 
-  it('两级均未命中（如纯飞书账号无密码凭据）→ 403 AUTH_METHOD_NOT_ALLOWED', async () => {
-    queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-    await expect(assertPatAllowed('feishu-only')).rejects.toMatchObject({
+  it('无密码凭据但有启用的飞书身份（纯飞书账号）→ 放行（PAT 全员自助，2026-07-17 评审 P1 收口）', async () => {
+    queryMock
+      .mockResolvedValueOnce([]) // getPasswordCredential 未命中
+      .mockResolvedValueOnce([]) // PasswordCredential JOIN UserAccount 未命中
+      .mockResolvedValueOnce([{ provider: 'feishu' }]); // AuthIdentity 启用身份命中
+    await expect(assertPatAllowed('feishu-only')).resolves.toBeUndefined();
+    expect(queryMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('密码凭据与启用身份均不存在 → 403 AUTH_METHOD_NOT_ALLOWED', async () => {
+    queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await expect(assertPatAllowed('ghost-user')).rejects.toMatchObject({
       statusCode: 403,
       message: 'AUTH_METHOD_NOT_ALLOWED',
     });

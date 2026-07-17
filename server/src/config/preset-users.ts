@@ -63,11 +63,13 @@ export const ACCESS_CONTROL_PAGE = '/admin/access-control';
  *   - 派生方式与 visibleBranches 同款：按 username 每请求从本表派生（不进 JWT、不进 store），
  *     改名单即生效、免重登、免 re-seed。
  *
- * 当前唯一条目：权限管理模块仅 薛成龙 / 杨杰 / 林霞 三位业务管理员 + admin（系统运维兜底账号，
- * 非"员工"，供发布链脚本 / E2E / 应急重置使用；如需一并收掉，删除数组中的 'admin' 即可）。
+ * 当前唯一条目：权限管理模块仅 薛成龙 / 杨杰 / 林霞 三位业务管理员。
+ * admin 曾以"运维兜底"名义在列，属规格外扩权（2026-07-15 用户指令原文即仅此三人），
+ * 2026-07-17 评审 P1 收口移除：应急重置走三位管理员账号；发布链/基线脚本不再抓
+ * 用户/角色管理接口（golden-baseline.mjs 已同步摘除 auth-users / auth-roles 端点）。
  */
 export const RESTRICTED_MODULES: Readonly<Record<string, readonly string[]>> = {
-  [ACCESS_CONTROL_PAGE]: ['admin', 'xuechenglong', 'yangjie0621', 'linxia'],
+  [ACCESS_CONTROL_PAGE]: ['xuechenglong', 'yangjie0621', 'linxia'],
 };
 
 /**
@@ -86,6 +88,37 @@ export function getDeniedModules(username: string): string[] {
     .filter(([, allowlist]) => !allowlist.includes(username))
     .map(([pagePath]) => pagePath);
 }
+
+/**
+ * 受限模块的后端入口覆盖声明（2026-07-17 评审 P2 收口 · 契约）。
+ *
+ * 背景：RESTRICTED_MODULES 的通用运行时强制点只覆盖 governed 域（目前仅 /api/query，
+ * 见 permission.ts MOUNT_WHITELIST_POLICY），"只改一处即可限制任意模块"对后端并不天然
+ * 成立——若未来把 /data-import 等页面加进负面清单，页面会隐藏，但其 API 可能仍可直连。
+ *
+ * 契约：RESTRICTED_MODULES 每新增一个受限页面，必须同时在此声明其后端入口覆盖——
+ * sourceFile 内所有路径命中 routePrefixes 的 router.<method> 路由声明都必须挂 guardName
+ * 守卫中间件。静态契约测试 restricted-module-backend-coverage.test.ts 逐条对账：
+ * 只加负面清单不声明后端覆盖、或声明的路由缺守卫 → 测试红。
+ */
+export interface RestrictedModuleBackendGuard {
+  /** 路由源码文件（相对 server/src），静态契约测试读取它对账 */
+  sourceFile: string;
+  /** 挂载内路由路径前缀：router.<method>('<path>') 的 path 精确等于前缀、或以 `${前缀}/` 开头即命中 */
+  routePrefixes: readonly string[];
+  /** 守卫中间件函数名（命中路由的声明块内必须出现） */
+  guardName: string;
+}
+
+export const RESTRICTED_MODULE_BACKEND_GUARDS: Readonly<
+  Record<string, RestrictedModuleBackendGuard>
+> = {
+  [ACCESS_CONTROL_PAGE]: {
+    sourceFile: 'routes/auth.ts',
+    routePrefixes: ['/users', '/roles'],
+    guardName: 'requireAccessControlModule',
+  },
+};
 
 export interface PresetRole {
   role: string;

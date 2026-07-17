@@ -70,7 +70,20 @@ export async function assertPatAllowed(userId: string): Promise<void> {
     WHERE ua.username = '${escapeSqlValue(userId)}'
     LIMIT 1
   `);
-  if (rows.length === 0) throw new AppError(403, 'AUTH_METHOD_NOT_ALLOWED');
+  if (rows.length > 0) return;
+  // 纯飞书账号（仅 UserAccount + AuthIdentity，无密码凭据）同样允许自助 PAT：
+  // /my-tokens 声明为对全部会话用户开放（routeRegistry PERSONAL_ROUTES），tokens 端点又强制
+  // requireSessionAuth（PAT 不能管 PAT），飞书扫码会话的身份保障与密码会话等同。
+  // 此前无此分支 → 纯飞书用户进得了页面、点创建必 403（2026-07-17 评审 P1 收口）。
+  const identities = await duckdbService.query(`
+    SELECT ai.provider
+    FROM AuthIdentity ai
+    JOIN UserAccount ua ON ua.id = ai.user_id
+    WHERE ai.enabled = true
+      AND (ua.username = '${escapeSqlValue(userId)}' OR ai.user_id = '${escapeSqlValue(userId)}')
+    LIMIT 1
+  `);
+  if (identities.length === 0) throw new AppError(403, 'AUTH_METHOD_NOT_ALLOWED');
 }
 
 export async function credentialSetupRequired(userId: string): Promise<boolean> {

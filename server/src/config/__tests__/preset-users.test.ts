@@ -312,13 +312,14 @@ describe('全局 tombstone 不变量（H1）', () => {
 
 /**
  * 模块负面清单（RESTRICTED_MODULES · 2026-07-15 用户指令 · RED LINE）：
- * 权限管理模块仅限 薛成龙/杨杰/林霞 三位业务管理员 + admin（系统运维兜底），
- * 其余账号（总经理室/车险部员工在内）一律拒绝——fail-closed，新增账号默认无权限管理。
+ * 权限管理模块仅限 薛成龙/杨杰/林霞 三位业务管理员，
+ * 其余账号（admin、总经理室/车险部员工在内）一律拒绝——fail-closed，新增账号默认无权限管理。
+ * admin 曾在列（"运维兜底"），属规格外扩权，2026-07-17 评审 P1 收口移除。
  */
 describe('模块负面清单 RESTRICTED_MODULES', () => {
-  const ACCESS_CONTROL_ALLOWLIST = ['admin', 'xuechenglong', 'yangjie0621', 'linxia'];
+  const ACCESS_CONTROL_ALLOWLIST = ['xuechenglong', 'yangjie0621', 'linxia'];
 
-  it('权限管理模块白名单锁死为 admin + 薛成龙 + 杨杰 + 林霞（改名单须过本测试）', () => {
+  it('权限管理模块白名单锁死为 薛成龙 + 杨杰 + 林霞 三人（改名单须过本测试）', () => {
     expect([...RESTRICTED_MODULES[ACCESS_CONTROL_PAGE]].sort()).toEqual(
       [...ACCESS_CONTROL_ALLOWLIST].sort(),
     );
@@ -343,6 +344,10 @@ describe('模块负面清单 RESTRICTED_MODULES', () => {
     expect(getDeniedModules('xuechenglong')).toEqual([]);
     expect(getDeniedModules('yangjie0621')).toEqual([]);
     expect(getDeniedModules('linxia')).toEqual([]);
-    expect(getDeniedModules('admin')).toEqual([]);
+  });
+
+  it('admin 不在权限管理白名单内（2026-07-17 评审 P1：规格外扩权收口，防回潮）', () => {
+    expect(canAccessRestrictedModule('admin', ACCESS_CONTROL_PAGE)).toBe(false);
+    expect(getDeniedModules('admin')).toEqual([ACCESS_CONTROL_PAGE]);
   });
 });

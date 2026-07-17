@@ -184,7 +184,8 @@ function requireSessionAuth(req: Request): void {
 /**
  * 权限管理模块门禁（模块负面清单 · 2026-07-15）：
  * 用户/角色管理端点在 requireRole(BRANCH_ADMIN) 之上再收一层——调用者 username 必须在
- * RESTRICTED_MODULES['/admin/access-control'] 白名单内（薛成龙/杨杰/林霞 + admin 运维兜底）。
+ * RESTRICTED_MODULES['/admin/access-control'] 白名单内（仅 薛成龙/杨杰/林霞 三人；
+ * admin 的"运维兜底"席位属规格外扩权，2026-07-17 评审 P1 收口移除）。
  * 其余 branch_admin（总经理室/车险部员工）保留全部业务板块与 PAT 自助，但无权限管理面。
  * fail-closed：白名单外一律 403，与前端导航隐藏/页面守卫同源（preset-users.ts SSOT）。
  */
