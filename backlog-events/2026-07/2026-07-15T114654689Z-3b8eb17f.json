@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-362531","kind":"note","ts":"2026-07-15","actor":"@claude","text":"【认领·派发登记】codex-agent-report-scope 于 2026-07-15T11:46:54.689Z 接手（派发即登记，防重复派发）；指挥枢纽派发：仅实现报告多 scope 新鲜度一致性闸；避开 scripts/check-governance.mjs 与所有活跃权限/认证分支","at":"2026-07-15T11:46:54.689Z","eid":"3b8eb17f"}
