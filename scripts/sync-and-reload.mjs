@@ -489,6 +489,24 @@ async function main() {
     } catch { /* 读回失败不阻断，仅丢失文案增强 */ }
   }
 
+  // Stage 1.45: 非 SC 省晋升（validation/<省> → current/<省>）——必须早于 Stage 1.5 报告生成。
+  // 根因（2026-07-18 发布死锁）：非 SC 省 premium ETL 产物落 warehouse/validation/<省>（Stage 1.1），
+  // 而晋升到 fact/policy/current/<省> 原本只发生在 Stage 3 的 sync-vps.runSxAutoPromote()——晚于
+  // 报告生成（Stage 1.5）与报告 scope 新鲜度闸（Stage 1.6）。period-trend 报告的省级/机构级取数
+  // 走 current/<省>（skill query.policy_glob），故报告读到的是上一周期晋升的旧 current/<省>：当四川
+  // 根基准前进到新一天、而 current/<省> 还停在旧日，freshness gate 判「磁盘 latest ≠ 根基准」中止，
+  // 又阻断了本能修复它的 Stage 3 晋升 → 死锁。此处提前把晋升做掉，让报告读到已晋升的当日数据。
+  // 复用 sync-vps --promote-only（同一 RLS 实时核实 + sx-promote 安全内核）；与 Stage 3 的
+  // runSxAutoPromote 幂等（sha256 一致自动 skip），不重复搬运。仅在本批要生成报告时才需要。
+  if (opts.runReport) {
+    await runCmd(
+      '非 SC 省晋升（报告前）',
+      'node',
+      ['scripts/sync-vps.mjs', '--promote-only'],
+      { dryRun: opts.dryRun }
+    );
+  }
+
   // Stage 1.5: 生成短中长期对照报告 — ETL 完成后数据最新。
   // 覆盖省级根目录 + branches/<省>/ 镜像 + 各注册省机构级 orgs/<省>/<机构>/。
   //
