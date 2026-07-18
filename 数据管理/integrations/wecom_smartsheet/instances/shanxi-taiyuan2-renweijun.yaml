@@ -67,9 +67,7 @@ composite_key:
 
 # 字段映射：SQL 输出列名（en） → 智能表 field_id
 field_mapping:
-  # salesman_name:       fTODO_业务员文本列id   # 业务员（TEXT，源值代码+姓名）：
-  #   用户在表端建好文本型「业务员」列后填 field_id 取消注释（含 update_sync.fields 同名行），
-  #   成员列/行权限由表端 AI 转换承担
+  salesman_name:         fNy4a6      # 业务员（TEXT，源值代码+姓名；成员列/行权限由表端 AI 转换承担）
   policy_date:           f04Gwj      # 出单日期（DATE_TIME, 毫秒 ts）
   policy_no:             ftQMc5      # 保单号（TEXT）
   plate_no:              ftk5Tx      # 车牌号（TEXT）
@@ -83,6 +81,7 @@ field_mapping:
 
 # 智能表字段类型（用于格式化值）
 field_types:
+  fNy4a6: TEXT
   f04Gwj: DATE_TIME
   ftQMc5: TEXT
   ftk5Tx: TEXT
@@ -96,6 +95,7 @@ field_types:
 
 # 智能表字段中文 label（供 webhook payload 中 schema 字段使用）
 field_labels:
+  fNy4a6: 业务员
   f04Gwj: 出单日期
   ftQMc5: 保单号
   ftk5Tx: 车牌号
@@ -128,7 +128,7 @@ update_sync:
   state: state/shanxi-taiyuan2-renweijun_record_map.json
   fields:
     applicant_name:          {field_id: ffFwIh, type: TEXT,          label: 投保人, sensitive: true}
-    # salesman_name:         {field_id: fTODO_业务员文本列id, type: TEXT, label: 业务员}  # 建列后取消注释（存量回填）
+    salesman_name:           {field_id: fNy4a6, type: TEXT,          label: 业务员}
     renewal_is_quoted:       {field_id: fGkRjv, type: SINGLE_SELECT, label: 是否报价-续保}
     renewal_insurance_grade: {field_id: fp6zIf, type: SINGLE_SELECT, label: 风险等级-续保}
     renewal_pricing_factor:  {field_id: fKo7sD, type: NUMBER,        label: 定价-续保}

@@ -315,7 +315,11 @@ def derive_update_values(row: dict[str, Any]) -> dict[str, Any]:
     applicant = _to_text(row.get("applicant_name"))
     if applicant:
         values["applicant_name"] = applicant
-    # 成员列回填（机构级单表）：花名册解析出的企微 user_id，有值才写
+    # 业务员列回填（方案 B：文本列，成员列由表端 AI 转换）：有值才写
+    salesman = _to_text(row.get("salesman_name"))
+    if salesman:
+        values["salesman_name"] = salesman
+    # 成员列回填（USER 型备用路径）：花名册解析出的企微 user_id，有值才写
     salesman_uid = _to_text(row.get("salesman_user_id"))
     if salesman_uid:
         values["salesman_user_id"] = salesman_uid
