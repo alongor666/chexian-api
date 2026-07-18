@@ -1788,7 +1788,14 @@ async function main() {
         // new_energy_claims 的 policy_no 100% 为 NULL；通过 vehicle_frame_no JOIN policy 回填 org_level_3。
         // SC 分支：branchOutputRoot 返回 warehouse/fact/policy/current（即 policy 分片所在目录）。
         // 数组传参时 Python argparse 直接收到裸路径，禁止在此手工加引号（加了 Path.exists() 会失败）。
-        const necPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), BRANCH_CODE);
+        // 用 __branchSub（本分支上文 1767 行已解析）而非 BRANCH_CODE：后者是同函数作用域内
+        // main/premium 流程才声明的 const（本文件 main() 内另一处），子命令模式此刻尚未执行到
+        // 该声明行，引用会命中暂时性死区（TDZ）抛 ReferenceError——2026-06-22(fa4c98d6)引入的
+        // 潜伏 bug，因 new_energy_claims 此前从未被直接子命令调用（daily.mjs new_energy_claims）
+        // 而未暴露，2026-07-18 双批发布拆分（#1143）首次让晚批以此方式调用该域才必现触发。
+        // new_energy_claims 不在 __branchReadyDomains 白名单（非 SC 已在上方 1769 行硬拦截），
+        // 故此处 __branchSub 恒为 'SC'，与原意图一致。
+        const necPolicyDir = branchOutputRoot(join(scriptDir, 'warehouse'), __branchSub);
         runStandardDomain(
           python, scriptDir, loadDomainManifest(scriptDir, 'new_energy_claims'),
           ['--policy-dir', necPolicyDir],
