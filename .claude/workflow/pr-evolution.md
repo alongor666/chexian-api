@@ -38,6 +38,8 @@
 1. **回填登记表**：命中已有 pattern → 发作 +1、更新拦截层 / 债；新 pattern 起一行（这是把本文件「机制已在、执行缺位」洞察落到自身结构的动作；系统性校准在 meta-review）。
 2. **配套 ledger**：`loop-quality-ledger.jsonl` 追加一行量化指标（schema 见 `loop-orchestration.md §3`）。本文件 = **定性教训**，ledger = **量化指标**，二者同步写。
 
+> **本约定自 2026-07-12 起由 governance 强制（F1 · 治账本断档）**：`check-governance.mjs` 的「Loop自进化闭环完整性」闸新增 ④ entry↔ledger 一致检查——本次新增 entry（git diff 对照 origin/main 判定，main 存量断档条目不受影响）若标题日期晚于 `loop-quality-ledger.jsonl` 最新 `ts`（取全表 max，容忍 union 合并乱序）超过 3 天 → `error`。2026-07-03→07-11 曾发生 8 天断档、9 条 entry 零记账（详见 `开发文档/loop-v3-进化规划.md` D1），此前只有本节文字约定、无执行力；本闸补齐"从今往后不再断流"的强制力，历史断档由本条目起补录的 `backfill-*` ledger 行清偿。
+
 ---
 
 ## 失败记录
@@ -2246,3 +2248,15 @@ expires: 2026-09-15
 
 ### needs_automation: false
 （首次出现；若同类误报再发生第 2 次，升级为 pre-commit 对测试文件凭据字段值的形态 lint。）
+
+---
+
+## 2026-07-18 · F1 账本断档修复 + entry↔ledger 一致闸（loop v3 F1，uid 2026-07-12-claude-59ac3a）
+
+- **场景**：`开发文档/loop-v3-进化规划.md` D1「量化账本断档」——`loop-quality-ledger.jsonl` 2026-07-03 后 8 天零新行，同期 `pr-evolution.md` 新增 9 条 entry（07-04 rules 瘦身、07-05 #928×#929、07-08 #977/#993、07-09 #1015、07-10 #1021/#1030、07-11 #1068/#1069），账本对 7 月工作不可见、北极星冻结在旧样本。F1 是三并行 loop 任务之一（另两个各在 `server/src/routes` / `server/src/services/auth.ts` 域，本任务只碰 `scripts/`+`.claude/workflow/`，零文件重叠）。
+- **动作**：① 补录 9 条 entry 对应 ledger 行——每行 `ts`=entry 标题日期、`pr`=该条目关联 PR 号、`verdict`/`governance_pass` 均据 `gh pr view`（state=MERGED + statusCheckRollup 两必需检查 SUCCESS）与 `git -E -i --grep='(revert|回滚|hotfix)'` 反查（零命中）核实，未仪表化字段（`rounds_to_green`/`codex_plan` 等）如实留空、不臆造；② `check-governance.mjs`「Loop自进化闭环完整性」闸新增 ④ entry↔ledger 一致检查：本次新增（committed∪working diff 对照 origin/main，判定法复用 `checkPrEvolutionExpired` 既有两级 grandfather 模式）的 entry 若标题日期晚于账本最新 `ts`（`ledgerMaxTs` 取全表 max 而非最后一行，容忍 `merge=union` 并发 append 乱序）超过 3 天 → `error`；main 存量断档条目不受影响，避免历史债务把每条无关 PR 拖红；③ `quality-report.mjs` 新增 `rework_data_collected` 字段区分「owner 返工 sink 未采集」与「采集到真实 0%」（F4 配套，此前两者在数值上都是 `post_rework_rate=0` 无法区分）。
+- **oracle**：`loop:quality` 样本 84→93（+9 backfill）；负向注入——临时在 `pr-evolution.md` 追加一条 `## 2099-01-01` 无对应 ledger 行的 entry → `bun run governance` 报错「pr-evolution.md 本次新增 1 条 entry（如「2099-01-01」）晚于账本最新 ts「2026-07-15」超过 3 天」+ 进程 exit 1；还原后 61/61 恢复全绿（exit 0）。`bun run verify:full` 全绿（含新增 26 项纯函数单测：`extractPrEvolutionEntryDates`/`ledgerMaxTs`/`isEntryLedgerStale`/`rework_data_collected` 各 4-6 例边界）。
+- **诚实边界**：本闸只防"从今往后再断流"（对本次 diff 新增 entry 生效），不追溯清理 2026-07-12→07-15 期间已提交到 main、同样缺 ledger 行的存量 entry（那属 `checkPrEvolutionExpired` 的 `needs_automation`/`expires` 存量催办闸职责，非 F1 范围）；`ledgerMaxTs` 依赖账本行 `ts` 字段真实反映"何时完成"，若未来出现大量 backfill 行 `ts` 早于实际提交日期，闸的"3 天缓冲"语义会随之漂移（本次 backfill 刻意用 entry 标题日期而非提交日期，与该字段既有语义一致）。
+
+### needs_automation: false
+（本条目即"防再断流"机制的落地本身；闸已用负向注入证明有拦截力，无需再登记自动化待办。若未来出现"新 entry 有 ledger 但仍被误判断档"或"该闸被绕过后再次断档 >3 天"，按登记表惯例升级为登记表新行。）
