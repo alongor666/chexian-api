@@ -53,7 +53,7 @@ import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 import { runSelfServicePasswordIsolationCheck } from './governance/self-service-password-isolation.mjs';
 import { runOrgUserAllowedRoutesConsistencyCheck } from './governance/org-user-allowed-routes-consistency.mjs';
 import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
-import { listPolicyCurrentShards, collectValidationDimFileEntries, collectValidationFactFileEntries } from './lib/policy-current-shards.mjs';
+import { collectValidationDimFileEntries, collectValidationFactFileEntries } from './lib/policy-current-shards.mjs';
 import {
   loadLog, fold, validateLog, displayId, TERMINAL_STATUSES,
 } from './backlog/lib.mjs';
