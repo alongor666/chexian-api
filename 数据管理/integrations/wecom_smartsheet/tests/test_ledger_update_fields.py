@@ -85,19 +85,24 @@ def test_renewal_row_maps_quoted_flag_and_attrs():
     assert values["renewal_commercial_ncd"] == 0.7
 
 
-def test_renewal_row_not_quoted_maps_no_and_suppresses_attrs():
-    # 底册判"未报价"时即便车架号能关联到旧报价，也不得写报价属性（防口径打架）
+def test_renewal_row_not_quoted_maps_no_and_clears_attrs():
+    # "是→否"回退：报价属性必须显式清空（评审 #1134-4），不得留旧值残影，
+    # 也不得把窗口外旧报价（如促成签单的报价）当续保属性写入
+    from sync_ledger_update_fields import CLEAR
+
     row = {"policy_no": "618X", "in_renewal_universe": True, "has_renewal_quote": False,
            "renewal_insurance_grade_raw": "A", "renewal_pricing_factor": 1.0,
            "renewal_commercial_ncd": 0.9}
     values = derive_update_values(row)
     assert values["renewal_is_quoted"] == "否"
-    assert "renewal_insurance_grade" not in values
-    assert "renewal_pricing_factor" not in values
-    assert "renewal_commercial_ncd" not in values
+    assert values["renewal_insurance_grade"] == CLEAR
+    assert values["renewal_pricing_factor"] == CLEAR
+    assert values["renewal_commercial_ncd"] == CLEAR
 
 
-def test_invalid_grade_and_nan_skipped():
+def test_invalid_grade_and_nan_become_clear():
+    from sync_ledger_update_fields import CLEAR
+
     row = {
         "policy_no": "618X",
         "in_renewal_universe": True,
@@ -107,9 +112,65 @@ def test_invalid_grade_and_nan_skipped():
         "renewal_commercial_ncd": None,
     }
     values = derive_update_values(row)
-    assert "renewal_insurance_grade" not in values
-    assert "renewal_pricing_factor" not in values
-    assert "renewal_commercial_ncd" not in values
+    assert values["renewal_insurance_grade"] == CLEAR
+    assert values["renewal_pricing_factor"] == CLEAR
+    assert values["renewal_commercial_ncd"] == CLEAR
+
+
+def test_format_update_values_clear_payload_by_type():
+    from sync_ledger_update_fields import CLEAR
+
+    out = format_update_values(
+        {"renewal_is_quoted": "否", "renewal_insurance_grade": CLEAR,
+         "renewal_pricing_factor": CLEAR, "applicant_name": CLEAR},
+        SPECS,
+    )
+    assert out["fGkRjv"] == [{"text": "否"}]
+    assert out["fp6zIf"] == []      # SINGLE_SELECT 清空
+    assert out["fKo7sD"] is None    # NUMBER 清空（JSON null）
+    assert out["ffFwIh"] == ""      # TEXT 清空
+
+
+def test_row_business_key_composite_matches_add_engine():
+    from sync_ledger_update_fields import row_business_key
+    from sync_filtered_policies import _row_key, InstanceConfig as AddCfg
+
+    cfg = make_config(composite_key=("policy_no", "vehicle_frame_no"))
+    row = {"policy_no": "618P", "vehicle_frame_no": "VIN01"}
+    key = row_business_key(row, cfg)
+    assert key == "618P|VIN01"
+    # 与 add 引擎复合键完全同构（record map 捕获与更新查找必须同键）
+    add_cfg = AddCfg(
+        instance_name="t", webhook_env="W", batch_size=1, sheet_rpm=1, filters={},
+        primary_key="policy_no", composite_key=("policy_no", "vehicle_frame_no"),
+        field_mapping={}, field_types={}, field_labels={}, policy_glob="g", script=None,
+    )
+    assert _row_key({"policy_no": "618P", "vehicle_frame_no": "VIN01"}, add_cfg) == key
+
+
+def test_add_engine_rejects_multi_target_explicit_record_map(tmp_path):
+    import pytest
+    from sync_filtered_policies import load_instances
+
+    p = tmp_path / "multi.yaml"
+    p.write_text("""
+instance_name: x
+webhook_env: W
+field_mapping: { policy_no: fA }
+targets:
+  - name: a
+  - name: b
+update_sync:
+  sheet_id: s
+  key_field_id: fA
+  renewal_tracker_glob: rt
+  quotes_glob: q
+  state: state/shared.json
+  fields:
+    applicant_name: {field_id: fB, type: TEXT}
+""", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        load_instances(p)
 
 
 def test_format_update_values_shapes_by_type():

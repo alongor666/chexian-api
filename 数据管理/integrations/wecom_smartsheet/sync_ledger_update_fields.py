@@ -60,6 +60,7 @@ from sync_filtered_policies import (  # noqa: E402  复用：where 拼装 / 值�
     mask_pii,
     _to_text,
 )
+from lib.idempotent_smartsheet import stable_value as _stable_value  # noqa: E402  复合键口径与 add state 同源
 from sync_may_renewal_fields import (  # noqa: E402  复用：wecom-cli 读表 / 响应解包
     get_records_with_wecom_cli,
     iter_records,
@@ -67,6 +68,16 @@ from sync_may_renewal_fields import (  # noqa: E402  复用：wecom-cli 读表 /
 from pipelines.branch_assert import assert_single_branch, is_national_view  # noqa: E402
 
 VALID_GRADES = {"A", "B", "C", "D", "E", "F"}
+
+# 显式清空哨兵（评审 #1134-4）：应续行的报价属性"有值写值、无值清空"，
+# 杜绝"是→否"后旧风险等级/定价/NCD 残留误导。清空报文按字段类型取空形态。
+CLEAR = "__CLEAR__"
+CLEAR_PAYLOADS: dict[str, Any] = {
+    "SINGLE_SELECT": [],
+    "NUMBER": None,
+    "TEXT": "",
+    "USER": [],
+}
 
 
 # ---------- Config ----------
@@ -96,6 +107,9 @@ class UpdateConfig:
     state_path: Path
     fields: tuple[UpdateFieldSpec, ...] = field(default_factory=tuple)
     roster: str | None = None  # 工号→企微 user_id 花名册（成员列回填用，语义同 add 引擎）
+    # 复合键（与 add 引擎/state 同源，评审 #1134-2 修复）：record map 与更新粒度均按
+    # 复合键（如 保单号|车架号），杜绝"一保单多车架"时任意 VIN 的报价被扇出到所有记录
+    composite_key: tuple[str, ...] | None = None
 
 
 def _build_update_config(raw: dict[str, Any], block: dict[str, Any], target: dict[str, Any] | None = None) -> UpdateConfig:
@@ -119,6 +133,7 @@ def _build_update_config(raw: dict[str, Any], block: dict[str, Any], target: dic
         for src, spec in dict(block["fields"]).items()
     )
     state_rel = Path(block.get("state") or f"state/{instance_name}_record_map.json")
+    composite_raw = raw.get("composite_key")
     return UpdateConfig(
         instance_name=instance_name,
         webhook_env=target.get("webhook_env") or raw["webhook_env"],
@@ -133,6 +148,7 @@ def _build_update_config(raw: dict[str, Any], block: dict[str, Any], target: dic
         state_path=state_rel if state_rel.is_absolute() else HERE / state_rel,
         fields=specs,
         roster=raw.get("roster"),
+        composite_key=tuple(composite_raw) if composite_raw else None,
     )
 
 
@@ -153,6 +169,12 @@ def load_update_configs(instance_path: Path) -> list[UpdateConfig]:
 
 def load_update_config(instance_path: Path) -> UpdateConfig:
     return load_update_configs(instance_path)[0]
+
+
+def row_business_key(row: dict[str, Any], config: UpdateConfig) -> str:
+    """行业务键：与 add 引擎 state / record map 同源同构（复合键 `|` 拼接稳定化值）。"""
+    fields = config.composite_key or (config.key_source_field,)
+    return "|".join(_stable_value(row.get(f)) for f in fields)
 
 
 # ---------- State ----------
@@ -195,26 +217,30 @@ def fetch_source_rows(config: UpdateConfig) -> list[dict[str, Any]]:
     #   会把自己的促成签单报价误判成"已续保报价"（2026-07-17 实测 18 命中里 16 张假阳性）。
     #   本表口径 = 用户原话「从报价域筛选」：是否报价-续保 与报价属性同源同判
     #   （存在签单日+30天后的续保报价 ⟺ 是，且属性可写），自洽无打架。
+    # 粒度 = 复合键（保单号+车架号，与 add 引擎/state 同源；评审 #1134-2）：
+    #   一保单多车架时各记录按自身车架取报价，杜绝任意 VIN 扇出。
+    # 报价窗口有上下界（评审 #1134-5）：签单日+30 天 < 报价时间 ≤ 到期日+30 天——
+    #   下界排除促成本单的签单报价，上界杜绝同车架"下一保单年度"的报价倒灌进本单。
     sql = f"""
     WITH ledger AS (
       SELECT
         policy_no,
+        COALESCE(vehicle_frame_no, '') AS vehicle_frame_no,
         ANY_VALUE(applicant_name) FILTER (
           WHERE applicant_name IS NOT NULL AND applicant_name != ''
         ) AS applicant_name,
         ANY_VALUE(salesman_name) FILTER (
           WHERE salesman_name IS NOT NULL AND salesman_name != ''
         ) AS salesman_name,
-        ANY_VALUE(vehicle_frame_no) FILTER (
-          WHERE vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
-        ) AS vehicle_frame_no,
-        MIN(CAST(policy_date AS DATE)) AS sign_date
+        MIN(CAST(policy_date AS DATE)) AS sign_date,
+        MIN(CAST(insurance_end_date AS DATE)) AS end_date
       FROM (
-        SELECT policy_no, vehicle_frame_no, policy_date, salesman_name, {applicant_expr}
+        SELECT policy_no, vehicle_frame_no, policy_date, insurance_end_date,
+               salesman_name, {applicant_expr}
         FROM read_parquet('{config.policy_glob}', union_by_name=true)
         WHERE {where}
       )
-      GROUP BY policy_no
+      GROUP BY policy_no, COALESCE(vehicle_frame_no, '')
     ),
     rt AS (
       SELECT * EXCLUDE rn FROM (
@@ -239,6 +265,7 @@ def fetch_source_rows(config: UpdateConfig) -> list[dict[str, Any]]:
     )
     SELECT
       ledger.policy_no,
+      ledger.vehicle_frame_no,
       ledger.applicant_name,
       ledger.salesman_name,
       rt.source_policy_no IS NOT NULL AS in_renewal_universe,
@@ -249,14 +276,16 @@ def fetch_source_rows(config: UpdateConfig) -> list[dict[str, Any]]:
     FROM ledger
     LEFT JOIN rt ON ledger.policy_no = rt.source_policy_no
     LEFT JOIN q
-      ON q.q_vin = COALESCE(rt.rt_vin, ledger.vehicle_frame_no)
+      ON q.q_vin = NULLIF(ledger.vehicle_frame_no, '')
       AND ledger.sign_date IS NOT NULL
       AND CAST(q.quote_time AS DATE) > ledger.sign_date + INTERVAL 30 DAY
+      AND (ledger.end_date IS NULL
+           OR CAST(q.quote_time AS DATE) <= ledger.end_date + INTERVAL 30 DAY)
     QUALIFY ROW_NUMBER() OVER (
-      PARTITION BY ledger.policy_no
+      PARTITION BY ledger.policy_no, ledger.vehicle_frame_no
       ORDER BY q.quote_time DESC NULLS LAST
     ) = 1
-    ORDER BY ledger.policy_no
+    ORDER BY ledger.policy_no, ledger.vehicle_frame_no
     """
     df = con.execute(sql, params).fetchdf()
     # 出口零信任断言：与 add 引擎同款，从 policy_no 前缀派生省份，跨省混入即中止
@@ -295,30 +324,39 @@ def derive_update_values(row: dict[str, Any]) -> dict[str, Any]:
         raw_flag = row.get("has_renewal_quote")
         quoted = bool(raw_flag) if (raw_flag is not None and raw_flag == raw_flag) else False
         values["renewal_is_quoted"] = "是" if quoted else "否"
-        # 是否报价与报价属性同源同判（见 fetch_source_rows 口径注释），天然自洽
-        if quoted:
-            grade = _to_text(row.get("renewal_insurance_grade_raw"))
-            if grade in VALID_GRADES:
-                values["renewal_insurance_grade"] = grade
-            for key in ("renewal_pricing_factor", "renewal_commercial_ncd"):
-                v = row.get(key)
-                try:
-                    if v is not None and float(v) == float(v):  # 非 NaN
-                        values[key] = float(v)
-                except (TypeError, ValueError):
-                    continue
+        # 是否报价与报价属性同源同判（见 fetch_source_rows 口径注释），天然自洽。
+        # 应续行 4 个报价字段"有值写值、无值显式清空"（评审 #1134-4）：
+        # "是→否"回退、报价撤回、风险等级失效（非 A-F）时旧值一律清掉，不留残影。
+        grade = _to_text(row.get("renewal_insurance_grade_raw")) if quoted else None
+        values["renewal_insurance_grade"] = grade if grade in VALID_GRADES else CLEAR
+        for key in ("renewal_pricing_factor", "renewal_commercial_ncd"):
+            v = row.get(key) if quoted else None
+            try:
+                if v is not None and float(v) == float(v):  # 非 NaN
+                    values[key] = float(v)
+                else:
+                    values[key] = CLEAR
+            except (TypeError, ValueError):
+                values[key] = CLEAR
     return values
 
 
 def format_update_values(
     business_values: dict[str, Any], specs: Iterable[UpdateFieldSpec]
 ) -> dict[str, Any]:
-    """业务值 → 智能表 values（field_id → 格式化值；复用 add 引擎 format_value）。"""
+    """业务值 → 智能表 values（field_id → 格式化值；复用 add 引擎 format_value）。
+
+    CLEAR 哨兵 → 按字段类型取显式空形态（评审 #1134-4），不会被"空值不写"逻辑吞掉。
+    """
     out: dict[str, Any] = {}
     for spec in specs:
         if spec.source not in business_values:
             continue
-        formatted = format_value(spec.field_type, business_values[spec.source])
+        value = business_values[spec.source]
+        if value is CLEAR or value == CLEAR:
+            out[spec.field_id] = CLEAR_PAYLOADS.get(spec.field_type, "")
+            continue
+        formatted = format_value(spec.field_type, value)
         if formatted is None:
             continue
         out[spec.field_id] = formatted
@@ -340,8 +378,8 @@ def build_plan(
     missing_in_state: list[str] = []
 
     for row in rows:
-        key = _to_text(row.get(config.key_source_field))
-        if not key:
+        key = row_business_key(row, config)
+        if not key or not key.strip("|"):
             continue
         entry = state_records.get(key)
         if not entry or not entry.get("record_ids"):
@@ -457,7 +495,9 @@ def run_sync(config: UpdateConfig, *, execute: bool, force: bool) -> dict[str, A
     if not state.get("records"):
         if execute:
             raise RuntimeError(
-                f"state 为空，不能更新现有表。先执行 prime-state 建立 保单号→record_id 映射：{config.state_path}"
+                "record map 为空，不能更新现有表。record_id 映射由 add 引擎写入时从 webhook 响应"
+                f"自动捕获——请先完成（重）导入：{config.state_path}"
+                "（通道铁律：不依赖机器人「文档」授权；prime-state 仅历史兜底，本表禁用）"
             )
         rows = fetch_source_rows(config)
         summary = {
@@ -468,7 +508,7 @@ def run_sync(config: UpdateConfig, *, execute: bool, force: bool) -> dict[str, A
             "source_rows": len(rows),
             "state_records": 0,
             "to_update": 0,
-            "message": "state 为空；真实更新前必须先 prime-state（wecom-cli 读表）",
+            "message": "record map 为空；由 add 引擎（重）导入时自动捕获后即可更新（不依赖机器人授权）",
         }
         log_path = write_log(config, summary)
         summary["log_path"] = str(log_path)
@@ -504,6 +544,13 @@ def run_sync(config: UpdateConfig, *, execute: bool, force: bool) -> dict[str, A
     batches: list[dict[str, Any]] = []
     records_state = state["records"]
     chunk: list[dict[str, Any]] = []
+    # hash 提交时序（评审 #1134-3）：同一业务键可能对应多条记录且被分批切开——
+    # 只有该键的全部记录都成功推送后才落 payload_hash，否则中途失败重试时
+    # 未送达的记录会被"hash 未变"跳过而永久漏更。
+    key_totals: dict[str, int] = {}
+    for r in plan["update_records"]:
+        key_totals[r["_key"]] = key_totals.get(r["_key"], 0) + 1
+    key_sent: dict[str, int] = {}
 
     def flush(chunk_records: list[dict[str, Any]]) -> None:
         payload = [{"record_id": r["record_id"], "values": r["values"]} for r in chunk_records]
@@ -512,11 +559,15 @@ def run_sync(config: UpdateConfig, *, execute: bool, force: bool) -> dict[str, A
             raise RuntimeError(f"企业微信更新失败: {resp}")
         now = datetime.now(timezone.utc).isoformat()
         for r in chunk_records:
-            records_state[r["_key"]] = {
-                **records_state.get(r["_key"], {}),
-                "payload_hash": r["_payload_hash"],
-                "updated_at": now,
-            }
+            key_sent[r["_key"]] = key_sent.get(r["_key"], 0) + 1
+        for r in chunk_records:
+            key = r["_key"]
+            if key_sent.get(key) == key_totals.get(key):  # 该键全部记录已成功
+                records_state[key] = {
+                    **records_state.get(key, {}),
+                    "payload_hash": r["_payload_hash"],
+                    "updated_at": now,
+                }
         save_state(config.state_path, state)
         batches.append({"op": "update", "sent": len(chunk_records), "errcode": resp.get("errcode")})
 

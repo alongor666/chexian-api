@@ -145,6 +145,10 @@ def load_instances(path: Path) -> list[InstanceConfig]:
     targets = raw.get("targets") or []
     if not targets:
         return [_build_instance(raw)]
+    # 多 targets 禁共用显式 record map（评审 #1134-1，与 update 引擎同规则）：
+    # 不同智能表的 record_id 混入同一 state 会让更新引擎写错表，必须按目标名派生。
+    if len(targets) > 1 and (raw.get("update_sync") or {}).get("state"):
+        raise SystemExit("多 targets 时 update_sync.state 不可显式声明（record_id 会跨表混入同一文件），请删除让其按目标名派生")
     return [_build_instance(raw, target) for target in targets]
 
 
@@ -743,9 +747,9 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
         values = build_record_values(row, instance.field_mapping, instance.field_types)
         add_records.append({
             "values": values,
+            # 同一复合键同时用于 add state 去重与 record map 捕获（评审 #1134-2：
+            # 与更新引擎 row_business_key 同源同构，一保单多车架各记录各归各键）
             "_primary_key": _row_key(row, instance),
-            # update_sync 联动键（如 policy_no）：add 响应捕获 record_id 时按此键落 record map
-            "_record_map_key": _to_text(row.get(instance.record_map_key_field)),
         })
 
     summary: dict[str, Any] = {
@@ -827,8 +831,8 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
             harvested = []
             for src, ret in zip(batch_src, returned):
                 rid = ret.get("record_id") or ret.get("id")
-                if rid and src.get("_record_map_key"):
-                    harvested.append((src["_record_map_key"], str(rid)))
+                if rid and src.get("_primary_key"):
+                    harvested.append((src["_primary_key"], str(rid)))
             if harvested:
                 merge_record_map(rm_state, harvested)
                 rm_path.parent.mkdir(parents=True, exist_ok=True)
