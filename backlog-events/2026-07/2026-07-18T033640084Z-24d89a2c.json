@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-59ac3a","kind":"status","ts":"2026-07-18","actor":"claude/loop-59ac3a","status":"DONE","evidence":"PR 待创建；验收：loop:quality 样本84→93→94(自身)，负向注入exit1→还原exit0（governance 61/61），bun run verify:full 全绿（5600 单测/typecheck/governance）","at":"2026-07-18T03:36:40.084Z","eid":"24d89a2c"}

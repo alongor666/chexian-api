@@ -58,7 +58,10 @@ import {
   loadLog, fold, validateLog, displayId, TERMINAL_STATUSES,
 } from './backlog/lib.mjs';
 import { SHADOW_KEYS, MAIN_CUBES, CUBE_STATE_NAMES } from './shared/cube-routes.mjs';
-import { parseLedger as parseLoopLedger, normalizeVerdict as normalizeLoopVerdict } from './loop/quality-report.mjs';
+import {
+  parseLedger as parseLoopLedger, normalizeVerdict as normalizeLoopVerdict,
+  ledgerMaxTs as loopLedgerMaxTs, extractPrEvolutionEntryDates, isEntryLedgerStale,
+} from './loop/quality-report.mjs';
 import { scanEntries as scanAutomationEntries, verifyMechanisms as verifyAutomationMechanisms } from './loop/automation-due.mjs';
 import { buildPatternChecks } from './governance/pattern-engine.mjs';
 import { PATTERN_RULES } from './governance/pattern-rules.mjs';
@@ -3507,9 +3510,17 @@ const CODE_GOVERNANCE_CHECKS = [
  *   ③ automation 真升级校验：pr-evolution.md 中声明了 mechanism 的 needs_automation 项，其
  *      机制必须真实存在（仓库相对路径存在，或 governance:<检查名> 在本文件中）——识别
  *      「处置=又写一条文档」的假处置（E4 动作②，automation-due 同源纯函数复用）。
+ *   ④ entry↔ledger 一致闸（F1·治 D1 账本断档，uid 2026-07-12-claude-59ac3a）：pr-evolution.md
+ *      本次新增（committed∪working diff 对照 origin/main，判定法同 checkPrEvolutionExpired 两级
+ *      grandfather）的 entry，若标题日期晚于账本最新 ts 超过 FRESHNESS_MAX_LAG_DAYS 天 → error。
+ *      main 存量断档条目（历史债务）不在本闸新增职责——checkPrEvolutionExpired 的 expires 闸已负责
+ *      存量催办，本闸只防"从今往后再断流"（loop 与非 loop 路径一视同仁，2026-07-03→07-11 断档 8 天
+ *      9 条 entry 零记账即因常规 PR 路径无此类闸而漏检）。
  */
+const FRESHNESS_MAX_LAG_DAYS = 3;
+
 function checkLoopSelfEvolutionIntegrity() {
-  info('检查 Loop v2 账本 verdict 规范集 + 失败记账维度 + automation 真升级（E6 元闸）...');
+  info('检查 Loop v2 账本 verdict 规范集 + 失败记账维度 + automation 真升级 + entry↔ledger 一致（E6 元闸）...');
   const CANONICAL = new Set(['pass', 'partial', 'reverted', 'abandoned', 'orphaned', 'blocked']);
   const problems = [];
 
@@ -3547,12 +3558,33 @@ function checkLoopSelfEvolutionIntegrity() {
     }
   }
 
+  // ④ entry↔ledger 一致闸（F1·治 D1 账本断档）：仅对「本次新增」的 pr-evolution entry 生效
+  // （git diff 都失败/无 git → addedLines=null → 跳过本闸，不误判；main 存量断档不在此闸职责）。
+  // ledger 最新 ts 取全表 max（ledgerMaxTs，非最后一行）——账本 merge=union append-only，多会话
+  // 并发 append 会产生乱序 ts，本闸须容忍该乱序而非假设行序即时序。
+  if (fs.existsSync(prEvoPath)) {
+    const ledgerRowsForFreshness = fs.existsSync(ledgerPath)
+      ? parseLoopLedger(fs.readFileSync(ledgerPath, 'utf-8').split('\n'))
+      : [];
+    const maxTs = loopLedgerMaxTs(ledgerRowsForFreshness);
+    if (maxTs) {
+      const addedPrEvoLines = collectAddedPrEvolutionLines();
+      if (addedPrEvoLines !== null) {
+        const newEntryDates = extractPrEvolutionEntryDates(addedPrEvoLines.join('\n'));
+        const staleNew = newEntryDates.filter((d) => isEntryLedgerStale(d, maxTs, FRESHNESS_MAX_LAG_DAYS));
+        if (staleNew.length) {
+          problems.push(`pr-evolution.md 本次新增 ${staleNew.length} 条 entry（如「${staleNew[0]}」）晚于账本最新 ts「${maxTs}」超过 ${FRESHNESS_MAX_LAG_DAYS} 天——须同批补 loop-quality-ledger.jsonl 对应行（backfill 标注亦可），禁止账本再断档（F1）`);
+        }
+      }
+    }
+  }
+
   if (problems.length) {
     error(`Loop 自进化闭环完整性 ${problems.length} 处违规：`);
     for (const p of problems) error(`  - ${p}`);
     return false;
   }
-  success('Loop 账本 verdict 规范、失败记账维度在位、无 automation 假处置');
+  success('Loop 账本 verdict 规范、失败记账维度在位、entry↔ledger 一致、无 automation 假处置');
   return true;
 }
 
@@ -3788,6 +3820,38 @@ function checkEtlLedgerFreshness() {
   return true; // warn 级：防漏记是提示，不阻断 governance（对标 checkPrEvolutionExpired）
 }
 
+/**
+ * git diff 新增行提取（PR #662 起 checkPrEvolutionExpired 的两级 grandfather 判定基础设施；
+ * F1 entry↔ledger 一致闸复用同一模式，避免重复实现·uid 2026-07-12-claude-59ac3a）。
+ * cmd 失败（无 git / origin/main 不可用，如 CI 浅克隆）→ 返回 null（调用方应视为"无法判定新旧"，
+ * 不得误判为"无新增"）。
+ * @param {string} cmd
+ * @returns {string[]|null}
+ */
+function collectGitDiffAddedLines(cmd) {
+  try {
+    const diff = execSync(cmd, { cwd: ROOT_DIR, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return diff.split('\n')
+      .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+      .map((l) => l.slice(1).trim())
+      .filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `.claude/workflow/pr-evolution.md` 本次新增的行（committed range ∪ 工作树，与
+ * checkPrEvolutionExpired 同款两级 grandfather 判定）。两条 diff 都失败 → null（无法判定新旧）。
+ * @returns {string[]|null}
+ */
+function collectAddedPrEvolutionLines() {
+  const committed = collectGitDiffAddedLines('git diff origin/main...HEAD -- .claude/workflow/pr-evolution.md');
+  const working = collectGitDiffAddedLines('git diff HEAD -- .claude/workflow/pr-evolution.md');
+  if (committed === null && working === null) return null;
+  return [...new Set([...(committed || []), ...(working || [])])];
+}
+
 function checkPrEvolutionExpired() {
   info('检查 pr-evolution.md needs_automation 的 expires 字段（PR #662 + 2026-06-20 expires 静默漏校准）...');
 
@@ -3803,19 +3867,8 @@ function checkPrEvolutionExpired() {
   // 本次变更新增的行（committed range ∪ 工作树），用于区分"缺 expires"是本 PR 新引入（→ error）
   // 还是 main 存量（→ warning grandfather）。两条 git diff 都失败（无 git / origin/main 不可用，
   // 如 CI 浅克隆）→ addedLines=null → 无法判定新旧 → 缺 expires 一律降级为 warning，不硬 fail。
-  const collectAdded = (cmd) => {
-    try {
-      const diff = execSync(cmd, { cwd: ROOT_DIR, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-      return diff.split('\n')
-        .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
-        .map((l) => l.slice(1).trim())
-        .filter(Boolean);
-    } catch {
-      return null;
-    }
-  };
-  const committed = collectAdded('git diff origin/main...HEAD -- .claude/workflow/pr-evolution.md');
-  const working = collectAdded('git diff HEAD -- .claude/workflow/pr-evolution.md');
+  const committed = collectGitDiffAddedLines('git diff origin/main...HEAD -- .claude/workflow/pr-evolution.md');
+  const working = collectGitDiffAddedLines('git diff HEAD -- .claude/workflow/pr-evolution.md');
   const addedLines = (committed === null && working === null)
     ? null
     : new Set([...(committed || []), ...(working || [])]);
