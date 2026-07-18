@@ -42,6 +42,37 @@ const _jwtSecret = process.env.JWT_SECRET ?? 'change-me-in-production';
 // 生产环境禁止使用默认占位符密钥
 requireInProduction('JWT_SECRET', _jwtSecret, 'change-me-in-production');
 
+/**
+ * PAT 调用 GET /api/query/sql（DuckDB SELECT/WITH 自由直通端点）的策略
+ * （安全审查 M5，backlog uid=2026-07-12-claude-4b93ea）。
+ *
+ * 背景：readonlyMiddleware 只拦截 PAT 的非 GET 方法，该 SQL 直通端点仍对 PAT 全量放开
+ * （虽仍受行级权限 RLS 强制注入约束，但暴露面偏宽）。已确认 `cx sql`（CLI，见
+ * cli/src/commands/sql.ts）与部分 MCP agent 工具（route-catalog 动态转 tool）都依赖此端点
+ * 用 PAT 鉴权调用，故不可默认一刀切拒绝——会破坏既有合法消费方。
+ *
+ * 三态取值：
+ * - 'allow'：不做任何额外处理，仅走 middleware/audit.ts 既有的通用 /api/query/* 审计
+ *   （auth_kind=pat + token_id 已覆盖）。
+ * - 'audit'（默认）：放行调用 + 在路由层新增一条独立「重点审计」console.warn（tag
+ *   pat-sql-audit，含 tokenId / sql 摘要 / 命中派生域），供日志监控单独 grep/告警规则识别，
+ *   不阻断调用方。默认档刻意选择"不破坏现状"，进一步收紧到表/字段级留给后续产品决策。
+ * - 'deny'：直接 403 拒绝 PAT 调用该端点，收紧到仅会话 Token 可用。切换前必须先确认
+ *   `cx sql` CLI 与相关 MCP 工具已无 PAT 依赖，否则会破坏现有能力。
+ *
+ * 非法取值（既非空也不在三态内）fallback 到安全默认 'audit' 并打印一次启动期告警。
+ */
+function resolvePatSqlPolicy(): 'allow' | 'audit' | 'deny' {
+  const raw = (process.env.PAT_SQL_POLICY ?? '').trim().toLowerCase();
+  if (!raw) return 'audit';
+  if (raw === 'allow' || raw === 'audit' || raw === 'deny') return raw;
+  console.warn(
+    `[env] PAT_SQL_POLICY 非法取值 "${process.env.PAT_SQL_POLICY}"（仅接受 allow|audit|deny），已回退默认 'audit'`
+  );
+  return 'audit';
+}
+const _patSqlPolicy = resolvePatSqlPolicy();
+
 export const authEnv = {
   /** JWT 签名密钥 */
   JWT_SECRET: _jwtSecret,
@@ -79,6 +110,8 @@ export const authEnv = {
   PASSWORD_NOTIFY_APP_ID: process.env.PASSWORD_NOTIFY_APP_ID ?? '',
   /** 密码事件通知专用飞书应用 App Secret（可选；缺省回落 FEISHU_APP_SECRET；禁止打进日志） */
   PASSWORD_NOTIFY_APP_SECRET: process.env.PASSWORD_NOTIFY_APP_SECRET ?? '',
+  /** PAT 调用 GET /api/query/sql 的策略：allow|audit（默认）|deny，见上方 resolvePatSqlPolicy 注释 */
+  PAT_SQL_POLICY: _patSqlPolicy,
 } as const;
 
 // 生产环境未配置 USER_PASSWORDS → 默认 fail-fast（拒绝带预置弱口令哈希启动）。
