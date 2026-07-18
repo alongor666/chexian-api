@@ -95,6 +95,62 @@ export function ledgerUid(row) {
   return (row && (row.uid || row.backlog_uid)) || null;
 }
 
+// ============ F1 账本↔pr-evolution entry 一致闸支持函数（治 D1 账本断档·2026-07-12）============
+// loop-v3-进化规划.md F1：pr-evolution.md 新增 entry 若长期无对应 loop-quality-ledger.jsonl 行
+// （2026-07-03→07-11 断档 8 天、9 条 entry 零记账实证），北极星冻结在旧样本上、当月工作对自进化
+// 引擎不可见。governance「Loop自进化闭环完整性」④ 消费本节纯函数做「entry↔ledger 一致闸」。
+
+/**
+ * 从 pr-evolution.md 内容里提取所有 entry 标题日期（`## YYYY-MM-DD ...` / `### YYYY-MM-DD ...`，
+ * 与 check-governance.mjs checkPrEvolutionExpired 同款正则 `/^#{2,3}\s+(\d{4}-\d{2}-\d{2})/`，
+ * 保持两处判定口径一致）。纯函数，按行扫描，不排序不去重（调用方按需处理）。
+ * @param {string} content
+ * @returns {string[]}
+ */
+export function extractPrEvolutionEntryDates(content) {
+  const dates = [];
+  const lines = String(content == null ? '' : content).split('\n');
+  for (const line of lines) {
+    const m = line.match(/^#{2,3}\s+(\d{4}-\d{2}-\d{2})/);
+    if (m) dates.push(m[1]);
+  }
+  return dates;
+}
+
+/**
+ * 账本行集合中所有合法 `ts`（YYYY-MM-DD 前缀）的最大值（字典序比较对定长日期字符串等价数值比较）。
+ * **必须取全表 max，不能假设"最后一行=最新"**——ledger 是 append-only、`merge=union`，多会话并发
+ * append 会产生乱序 ts（本任务 2026-07-12 同批即观测到派发会话在另一分支追加的孤儿/阻塞记账行乱序
+ * 写入，union 合并后行序与时间不再对应）。空集合 / 全无合法 ts → null（无基线，调用方不应误判）。
+ * @param {object[]} rows 已解析的 ledger 行
+ * @returns {string|null}
+ */
+export function ledgerMaxTs(rows) {
+  let max = null;
+  for (const r of (rows || [])) {
+    const ts = r && typeof r.ts === 'string' ? r.ts : null;
+    if (ts && /^\d{4}-\d{2}-\d{2}/.test(ts) && (max === null || ts.slice(0, 10) > max)) max = ts.slice(0, 10);
+  }
+  return max;
+}
+
+/**
+ * entry↔ledger 断档判据（纯函数）：entry 标题日期相对账本最新 ts 的滞后天数是否超过 maxLagDays（默认 3，
+ * 与 F1 规划文档建议值一致）。用真实日历天数差（非字符串字典序近似），非法/缺失日期一律不判违规（不诬告）。
+ * @param {string} entryDate YYYY-MM-DD
+ * @param {string|null} ledgerMaxTsVal ledgerMaxTs() 的返回值
+ * @param {number} [maxLagDays=3]
+ * @returns {boolean}
+ */
+export function isEntryLedgerStale(entryDate, ledgerMaxTsVal, maxLagDays = 3) {
+  if (!ledgerMaxTsVal || !entryDate) return false;
+  const d1 = new Date(`${String(entryDate).slice(0, 10)}T00:00:00Z`);
+  const d2 = new Date(`${String(ledgerMaxTsVal).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime())) return false;
+  const diffDays = (d1.getTime() - d2.getTime()) / 86400000;
+  return diffDays > maxLagDays;
+}
+
 // ============ E2 注入外部真相①：git 史反查「事后回滚」（治自指闭环·2026-06-27）============
 
 /** 引号段（英文直引号 + 中文弯引号/直角引号）——GitHub/git revert 标题里「被回滚原 PR 号」在引号内。 */
@@ -559,6 +615,11 @@ export function aggregate(rawRows, opts = {}) {
     orphan_rate: +(breakdown.orphaned / n).toFixed(3),
     blocked_rate: +(breakdown.blocked / n).toFixed(3),
     // E2② owner 返工（外部 sink·任务维度）：post_rework_rate 分母 = task_count（去重任务数·owner 口径）。
+    // F4 配套（治「返工 0 = 无采集的 0」误读·2026-07-12）：rework_data_collected 标 sink 是否有过任何行——
+    // 空/不存在的 sink 与"确认零返工"的 sink 在数值上都是 post_rework_rate=0，但语义天差地别（D3：14 天
+    // 零行是"从未激活"而非"验证过无返工"）。字段只反映"sink 是否有数据"，不改动 post_rework_rate 本身的
+    // 计算口径（向后兼容·codex 闸-1 同款「读时计算不改历史字段含义」手法），由 render() 据此区分展示文案。
+    rework_data_collected: Array.isArray(opts.reworkRows) && opts.reworkRows.length > 0,
     task_count: taskCount,
     user_rework_total: userReworkTotal,
     user_rework_tasks: userReworkTasks,
@@ -583,7 +644,10 @@ function render(agg) {
   L.push(`- 🛑 **放弃率** ${(agg.abandonment_rate * 100).toFixed(1)}%（abandoned+orphaned）· 孤儿率 ${(agg.orphan_rate * 100).toFixed(1)}% · 阻塞率 ${(agg.blocked_rate * 100).toFixed(1)}%`);
   // E2 外部真相双率（事后回滚 from git 史 · 事后返工 from owner sink）——茧房3 自指闭环的外部校准点。
   L.push(`- 🔁 **事后回滚率** ${((agg.post_revert_rate || 0) * 100).toFixed(1)}%（被 git revert/回滚的 loop PR）· 有效回滚 ${agg.reverted_count || 0}（账本字面 ${agg.ledger_reverted_count || 0} + git 反查 ${agg.post_revert_count || 0}）`);
-  L.push(`- 🙅 **事后返工率** ${((agg.post_rework_rate || 0) * 100).toFixed(1)}%（owner 重做/不是我要的）· 返工 ${agg.user_rework_total || 0} 次 / ${agg.user_rework_tasks || 0} 任务（共 ${agg.task_count || agg.n} 任务）`);
+  // F4 配套：sink 无数据（文件缺失/为空）时不报「0.0%」（会被误读为"验证过无返工"），改报「未采集」。
+  L.push(agg.rework_data_collected
+    ? `- 🙅 **事后返工率** ${((agg.post_rework_rate || 0) * 100).toFixed(1)}%（owner 重做/不是我要的）· 返工 ${agg.user_rework_total || 0} 次 / ${agg.user_rework_tasks || 0} 任务（共 ${agg.task_count || agg.n} 任务）`
+    : `- 🙅 **事后返工率** 未采集（owner 返工 sink \`.claude/workflow/user-rework-log.jsonl\` 缺失或为空——0% 与"未采集"含义不同，勿混读为"验证过无返工"）`);
   const b = agg.verdict_breakdown || {};
   L.push(`- verdict 分布：pass ${b.pass || 0} · partial ${b.partial || 0} · reverted ${b.reverted || 0} · abandoned ${b.abandoned || 0} · orphaned ${b.orphaned || 0} · blocked ${b.blocked || 0}${b.other ? ` · other ${b.other}` : ''}`);
   L.push(`- governance 通过率 ${(agg.governance_pass_rate * 100).toFixed(1)}%（占全部尝试，失败行计未过）`);
