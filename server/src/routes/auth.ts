@@ -223,62 +223,93 @@ async function revokePatsOnCredentialRotation(
 }
 
 /**
+ * 统一的「用户名或密码错误」响应（安全审查 M6）：未知用户 / 密码错误 / 账号禁用 / IP 不允许
+ * 四种登录拒绝场景，对客户端一律返回相同的状态码 + 文案，禁止通过响应差异枚举账号存在性
+ * 或账号状态。真实原因只落审计日志（auditAuthEvent），不进 HTTP 响应体。
+ */
+const GENERIC_LOGIN_FAILURE_MESSAGE = 'Invalid username or password';
+function genericLoginFailure(): AppError {
+  return new AppError(401, GENERIC_LOGIN_FAILURE_MESSAGE);
+}
+
+/**
  * POST /api/auth/login
  * 用户登录，返回JWT Token
+ *
+ * 对外响应统一化（安全审查 M6，2026-07-12 loop 823570）：
+ *   authService.login() 服务层保留原有内部错误契约（403 Account disabled / 403 IP not allowed /
+ *   401 Invalid username or password），供审计记录真实原因、供其他服务层测试锁死行为；
+ *   本路由层是唯一把「真实原因」收窄为「对外统一 401 通用文案」的收口点——未知用户、密码错误、
+ *   账号禁用、IP 不允许四种场景，客户端拿到的响应必须字节级一致，防止通过状态码/文案枚举
+ *   账号是否存在或账号状态。计时侧信道防护（哑 bcrypt 比对 / 先验密码再判定禁用与 IP）
+ *   已在服务层 authService.login() 完成，见 services/auth.ts。
  */
-router.post(
-  '/login',
-  asyncHandler(async (req: Request, res: Response) => {
-    // 1. 验证请求体
-    const parseResult = loginSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      throw new AppError(400, parseResult.error.issues[0].message);
-    }
+export async function loginHandler(req: Request, res: Response): Promise<void> {
+  // 1. 验证请求体
+  const parseResult = loginSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    throw new AppError(400, parseResult.error.issues[0].message);
+  }
 
-    const { username, password } = parseResult.data;
+  const { username, password } = parseResult.data;
 
-    // 2. 检查 IP + 用户名双键锁定状态
-    const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
-    checkAccountLock(clientIp, username);
+  // 2. 检查 IP + 用户名双键锁定状态
+  const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+  checkAccountLock(clientIp, username);
 
-    // 3. 调用认证服务
-    let result;
-    try {
-      result = await authService.login(username, password, clientIp);
-    } catch (err) {
-      if (err instanceof AppError && err.statusCode === 403 && err.message === 'IP not allowed') {
-        auditAuthEvent({ event: 'login_ip_denied', username, ip: clientIp });
-        throw err;
-      }
+  // 3. 调用认证服务
+  let result;
+  try {
+    result = await authService.login(username, password, clientIp);
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 403 && err.message === 'IP not allowed') {
+      // IP 不允许：真实原因入审计（login_ip_denied），对外统一 401 通用文案，
+      // 且计入登录失败锁定（代码审查 P1 修正 2026-07-12：单次响应已四场景字节级一致后，
+      // 若仅此分支不计锁定次数，会残留一条「该用户名从被拒 IP 反复试探永不 429」的多请求
+      // 行为侧信道，可用来区分「IP 受限的真实账号」与「无限制的未知/任意账号」，
+      // 故与账号禁用/密码错误同等对待）。
       recordLoginFailure(clientIp, username);
-      auditAuthEvent({ event: 'login_failure', username, ip: clientIp });
-      throw err;
+      auditAuthEvent({ event: 'login_ip_denied', username, ip: clientIp });
+      throw genericLoginFailure();
     }
+    if (err instanceof AppError && err.statusCode === 403 && err.message === 'Account disabled') {
+      // 账号禁用：真实原因入审计（login_account_disabled），对外统一 401 通用文案，
+      // 且计入登录失败锁定（与密码错误同等对待，防止通过锁定行为差异反推账号已被禁用）。
+      recordLoginFailure(clientIp, username);
+      auditAuthEvent({ event: 'login_account_disabled', username, ip: clientIp });
+      throw genericLoginFailure();
+    }
+    // 未知用户 / 密码错误：服务层本就返回统一的 401 Invalid username or password，原样透传。
+    recordLoginFailure(clientIp, username);
+    auditAuthEvent({ event: 'login_failure', username, ip: clientIp });
+    throw err;
+  }
 
-    // 4. 登录成功：重置失败计数（IP + 用户名） + 审计日志
-    resetLoginAttempts(clientIp, username);
-    auditAuthEvent({
-      event: 'login_success',
-      username,
-      ip: clientIp,
-      role: result.user.role,
-      organization: result.user.organization,
-    });
+  // 4. 登录成功：重置失败计数（IP + 用户名） + 审计日志
+  resetLoginAttempts(clientIp, username);
+  auditAuthEvent({
+    event: 'login_success',
+    username,
+    ip: clientIp,
+    role: result.user.role,
+    organization: result.user.organization,
+  });
 
-    // 5. 生成 cookie 会话并回写
-    const session = authService.issueCookieSession(result.user);
-    setSessionCookies(res, session.accessToken, session.refreshToken);
+  // 5. 生成 cookie 会话并回写
+  const session = authService.issueCookieSession(result.user);
+  setSessionCookies(res, session.accessToken, session.refreshToken);
 
-    // 6. 返回用户信息（保留 token 字段用于兼容旧链路，但前端不再持久化）
-    res.json({
-      success: true,
-      data: {
-        ...result,
-        token: session.accessToken,
-      },
-    });
-  })
-);
+  // 6. 返回用户信息（保留 token 字段用于兼容旧链路，但前端不再持久化）
+  res.json({
+    success: true,
+    data: {
+      ...result,
+      token: session.accessToken,
+    },
+  });
+}
+
+router.post('/login', asyncHandler(loginHandler));
 
 /**
  * POST /api/auth/refresh
