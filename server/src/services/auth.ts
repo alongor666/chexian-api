@@ -178,7 +178,6 @@ class AuthService {
       await this.verifyPassword(normalizedPassword, DUMMY_BCRYPT_HASH);
       throw new AppError(401, 'Invalid username or password');
     }
-    await assertPasswordAllowed(user.id);
     const allowedIpsOverride = ALLOWED_IP_OVERRIDES[normalizedUsername];
     const userCredential: UserCredential = {
       ...user,
@@ -207,6 +206,15 @@ class AuthService {
     if (!user.active) {
       throw new AppError(403, 'Account disabled');
     }
+
+    // 无密码凭据账号（如飞书专属个人账号）尝试密码登录 —— 检查同样必须在 bcrypt 比对之后
+    // （M6 残余面收口，2026-07-18）：此前 assertPasswordAllowed 在 bcrypt 之前执行，
+    // 无凭据账号提前 403 早退跳过 bcrypt，与「密码错误」路径产生可探测的耗时差异；
+    // 这类账号的 store 哈希是构造式 tombstone（合法 bcrypt 格式，compare 恒 false 且全程
+    // 等耗时），故先比对再检查不引入新的快速路径。服务层错误契约不变
+    // （403 AUTH_METHOD_NOT_ALLOWED，credential-policy.ts 共享基础设施原样复用），
+    // 对外统一化在路由层完成（routes/auth.ts loginHandler → 401 通用文案 + 独立审计事件）。
+    await assertPasswordAllowed(user.id);
 
     if (!this.isIpAllowed(clientIp, userCredential.allowedIps)) {
       throw new AppError(403, 'IP not allowed');

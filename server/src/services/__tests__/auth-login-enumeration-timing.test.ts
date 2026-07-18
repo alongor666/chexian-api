@@ -13,8 +13,11 @@
  *     原有的 403（服务层内部错误契约不变，供审计/路由层区分真实原因；对外文案统一化
  *     在路由层完成，见 auth-login-route-uniform-response.test.ts）。
  *   - 密码错误：跑一次真实 bcrypt 比对，抛 401。
- *   - 四种路径（未知用户 / 密码错误 / 账号禁用 / IP 不允许）均恰好调用一次 bcrypt.compare，
- *     防止「有的路径跳过 bcrypt、有的路径不跳过」造成的可观测耗时差异。
+ *   - 无密码凭据账号（如飞书专属个人账号，M6 残余面收口 2026-07-18）：同样先跑一次真实
+ *     bcrypt 比对（store 哈希是合法格式的构造式 tombstone，compare 恒 false 且等耗时），
+ *     再抛出 403 AUTH_METHOD_NOT_ALLOWED（credential-policy 共享契约不变，对外统一化在路由层）。
+ *   - 五种路径（未知用户 / 密码错误 / 账号禁用 / IP 不允许 / 无密码凭据）均恰好调用一次
+ *     bcrypt.compare，防止「有的路径跳过 bcrypt、有的路径不跳过」造成的可观测耗时差异。
  *
  * 测试层级：单元测试（mock access-control.js / credential-policy.js，真实 bcrypt，
  * bcryptSaltRounds=4 只为测试提速；不需要 DuckDB）。
@@ -23,6 +26,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import bcrypt from 'bcrypt';
 import type { AccessUser } from '../access-control.js';
+import { AppError } from '../../middleware/error.js';
 
 vi.mock('../../config/auth.js', () => ({
   authConfig: {
@@ -51,10 +55,17 @@ vi.mock('../access-control.js', () => ({
   ensurePresetUser: (u: string) => mockEnsurePresetUser(u),
 }));
 
+// 凭据语义字段一律用一眼可辨的假值（unit-test-fake-* 前缀），避免通用短词字面量触发
+// GitGuardian Generic Password 扫描器误报（参 pr-evolution.md 2026-07-15 PR #1115）。
+// fn-backed 可控 mock：默认放行；「无密码凭据账号」用例按需 mockRejectedValueOnce。
+const mockAssertPasswordAllowed = vi.fn(async (_userId: string) => ({
+  userId: 'test',
+  passwordHash: 'unit-test-fake-hash',
+  state: 'active',
+}));
+
 vi.mock('../credential-policy.js', () => ({
-  // 凭据语义字段一律用一眼可辨的假值（unit-test-fake-* 前缀），避免通用短词字面量触发
-  // GitGuardian Generic Password 扫描器误报（参 pr-evolution.md 2026-07-15 PR #1115）。
-  assertPasswordAllowed: async () => ({ userId: 'test', passwordHash: 'unit-test-fake-hash', state: 'active' }),
+  assertPasswordAllowed: (userId: string) => mockAssertPasswordAllowed(userId),
   credentialSetupRequired: async () => false,
 }));
 
@@ -87,6 +98,12 @@ describe('登录用户枚举 + 计时侧信道防护（M6）', () => {
   beforeEach(() => {
     mockGetUserByUsername.mockReset();
     mockEnsurePresetUser.mockReset();
+    mockAssertPasswordAllowed.mockReset();
+    mockAssertPasswordAllowed.mockResolvedValue({
+      userId: 'test',
+      passwordHash: 'unit-test-fake-hash',
+      state: 'active',
+    });
     compareSpy = vi.spyOn(bcrypt, 'compare');
   });
 
@@ -150,6 +167,25 @@ describe('登录用户枚举 + 计时侧信道防护（M6）', () => {
     expect(compareSpy).toHaveBeenCalledWith('any-password', REAL_HASH);
   });
 
+  it('无密码凭据账号（飞书专属）：先跑真实 bcrypt 比对再判定 403 AUTH_METHOD_NOT_ALLOWED（M6 残余面收口）', async () => {
+    mockGetUserByUsername.mockResolvedValueOnce(makeUser());
+    mockAssertPasswordAllowed.mockRejectedValueOnce(new AppError(403, 'AUTH_METHOD_NOT_ALLOWED'));
+
+    await expect(authService.login('testuser', 'any-password')).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'AUTH_METHOD_NOT_ALLOWED',
+    });
+
+    // bcrypt 比对必须已执行（恰好一次、针对该账号哈希）——若凭据检查仍在 bcrypt 之前早退，
+    // 此处计数为 0，即残留「无密码账号响应快于密码错误」的计时侧信道
+    expect(compareSpy).toHaveBeenCalledTimes(1);
+    expect(compareSpy).toHaveBeenCalledWith('any-password', REAL_HASH);
+    // 显式锁死执行顺序：bcrypt 比对先于凭据检查
+    expect(compareSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      mockAssertPasswordAllowed.mock.invocationCallOrder[0]
+    );
+  });
+
   it('密码错误（账号存在、启用、IP 允许）：跑一次真实 bcrypt 比对后 401', async () => {
     mockGetUserByUsername.mockResolvedValueOnce(makeUser());
 
@@ -162,7 +198,7 @@ describe('登录用户枚举 + 计时侧信道防护（M6）', () => {
     expect(compareSpy).toHaveBeenCalledWith('wrong-password', REAL_HASH);
   });
 
-  it('四种失败路径（未知用户/密码错误/账号禁用/IP不允许）均恰好各跑一次 bcrypt 比对', async () => {
+  it('五种失败路径（未知用户/密码错误/账号禁用/IP不允许/无密码凭据）均恰好各跑一次 bcrypt 比对', async () => {
     const counts: Record<string, number> = {};
 
     mockGetUserByUsername.mockResolvedValueOnce(null);
@@ -183,12 +219,19 @@ describe('登录用户枚举 + 计时侧信道防护（M6）', () => {
     mockGetUserByUsername.mockResolvedValueOnce(makeUser({ allowedIps: ['10.0.0.1'] }));
     await authService.login('testuser', 'any', '203.0.113.9').catch(() => {});
     counts.ipDenied = compareSpy.mock.calls.length;
+    compareSpy.mockClear();
+
+    mockGetUserByUsername.mockResolvedValueOnce(makeUser());
+    mockAssertPasswordAllowed.mockRejectedValueOnce(new AppError(403, 'AUTH_METHOD_NOT_ALLOWED'));
+    await authService.login('testuser', 'any').catch(() => {});
+    counts.passwordNotAllowed = compareSpy.mock.calls.length;
 
     expect(counts).toEqual({
       unknownUser: 1,
       wrongPassword: 1,
       disabledAccount: 1,
       ipDenied: 1,
+      passwordNotAllowed: 1,
     });
   });
 

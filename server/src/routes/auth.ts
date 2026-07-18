@@ -279,6 +279,15 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
       auditAuthEvent({ event: 'login_account_disabled', username, ip: clientIp });
       throw genericLoginFailure();
     }
+    if (err instanceof AppError && err.statusCode === 403 && err.message === 'AUTH_METHOD_NOT_ALLOWED') {
+      // 无密码凭据账号（如飞书专属个人账号）尝试密码登录（M6 残余面收口，2026-07-18）：
+      // 若把服务层的 403 AUTH_METHOD_NOT_ALLOWED 原样透传，响应差异会泄露「该用户名存在
+      // 且是飞书专属/无密码账号」——与账号禁用/IP 拒绝同类的枚举面。真实原因入审计
+      // （login_password_not_allowed），对外统一 401 通用文案，并计入登录失败锁定。
+      recordLoginFailure(clientIp, username);
+      auditAuthEvent({ event: 'login_password_not_allowed', username, ip: clientIp });
+      throw genericLoginFailure();
+    }
     // 未知用户 / 密码错误：服务层本就返回统一的 401 Invalid username or password，原样透传。
     recordLoginFailure(clientIp, username);
     auditAuthEvent({ event: 'login_failure', username, ip: clientIp });

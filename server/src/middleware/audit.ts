@@ -159,6 +159,9 @@ export type AuthEventKind =
   // 账号被禁用触发的登录拒绝（安全审查 M6）：与 login_failure 区分记录真实原因，
   // 供服务端追溯；对外响应统一改写为与 login_failure 相同的 401（routes/auth.ts loginHandler）。
   | 'login_account_disabled'
+  // 无密码凭据账号（如飞书专属个人账号）尝试密码登录被拒（M6 残余面收口）：与 login_failure
+  // 区分记录真实原因；对外响应同样统一改写为 401 通用文案（routes/auth.ts loginHandler）。
+  | 'login_password_not_allowed'
   | 'pat_created'
   | 'pat_revoked'
   // 凭据轮换（改密/激活/找回/管理员重置）联动批量吊销该用户全部 active PAT（安全审查 M4）
