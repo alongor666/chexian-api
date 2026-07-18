@@ -12,6 +12,9 @@
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+// 双批发布：state 为「批次 × 天」schema，逐批体检（旧扁平 schema 由 selectBatchState 兼容读为早批）
+import { RELEASE_BATCHES } from '../数据管理/lib/release-batches.mjs';
+import { selectBatchState } from '../数据管理/lib/auto-release-decision.mjs';
 
 const ROOT = process.cwd();
 const LOGS_DIR = join(ROOT, '数据管理/logs');
@@ -74,12 +77,21 @@ try {
   if (!existsSync(sf)) { add(Y, '③ 自动发布 watcher', 'state 文件不存在（未装 launchd?）'); }
   else {
     const s = JSON.parse(readFileSync(sf, 'utf8'));
-    const fresh = s.beijingDay === TODAY;
-    if (s.status === 'released') add(G, '③ 自动发布 watcher', `${s.beijingDay} released（今天已自动发布）`);
-    else if (s.status === 'failed') {
-      watcherFailed = true;
-      add(R, '③ 自动发布 watcher', `${s.beijingDay} failed · attempts=${s.attempts} · ${s.note || ''}`);
-    } else add(fresh ? Y : Y, '③ 自动发布 watcher', `${s.beijingDay} ${s.status || '?'} · ${s.note || ''}`);
+    // 逐批体检：任一批今日 failed → 红灯 + 触发真实错误挖掘；任一批今日 released → 至少绿
+    const parts = [];
+    let anyReleasedToday = false;
+    const failedNotes = [];
+    for (const batch of RELEASE_BATCHES) {
+      const slice = selectBatchState(s, batch.id);
+      if (!slice) { parts.push(`${batch.id}=（今日未跑）`); continue; }
+      const fresh = slice.beijingDay === TODAY;
+      const label = fresh ? slice.status : `${slice.status}@${slice.beijingDay}`;
+      parts.push(`${batch.id}=${label}${slice.attempts ? `·att${slice.attempts}` : ''}`);
+      if (fresh && slice.status === 'released') anyReleasedToday = true;
+      if (fresh && slice.status === 'failed') { watcherFailed = true; if (slice.note) failedNotes.push(`${batch.id}:${slice.note}`); }
+    }
+    const light = watcherFailed ? R : (anyReleasedToday ? G : Y);
+    add(light, '③ 自动发布 watcher', `${parts.join(' · ')}${failedNotes.length ? ` · ${failedNotes.join(' / ')}` : ''}`);
   }
 } catch (e) { add(R, '③ 自动发布 watcher', String(e.message || e).split('\n')[0]); }
 
@@ -150,12 +162,12 @@ if (redCount === 0) {
   console.log('  ✅ 全绿。若 watcher=released 则今天已自动发布完成，无需干预。');
 } else if (watcherFailed && dataFresh) {
   console.log('  ✅ 数据其实已刷新到今天（②本地同步 · ④生产 · ⑤企微 均绿）——多为「watcher 失败后人工补发，');
-  console.log('     但 watcher 自身状态未回写」。今天无需再动；watcher 明天 10:35 窗口会自动重置重跑。');
+  console.log('     但 watcher 自身状态未回写」。今天无需再动；watcher 明天双批窗口（早批 07:40 / 晚批 12:00）会自动重置重跑。');
   console.log('  • 若要根治不复发：把上方真实崩溃栈对应的代码修复合并到主仓当前分支即可。');
 } else {
   const up = rows.find((r) => r.name.startsWith('①'));
   if (up && up.light === R) {
-    console.log('  • ① 上游未出表/不可达 → 等上游（北京 10:35 后五张齐）或查 ssh myvps 与 auto_loadbi。');
+    console.log('  • ① 上游未出表/不可达 → 等上游（早批 01/05 约北京 07:35、晚批 02/03/04 约 11:50 出表）或查 ssh myvps 与 auto_loadbi。');
   } else if (watcherFailed) {
     console.log('  • ③ watcher 已停手等人工。看上方真实崩溃栈定位根因 → 修复后手动补发：');
     console.log('      cd <主仓> && bun run release:daily');

@@ -76,11 +76,18 @@ export function beijingDayOf(value) {
  * @param {string[]} [opts.allowStaleCodes=[]] 显式豁免「mtime 非今天」的硬闸 code（应急通道，
  *   如上游某表当天没导但昨天份数据有效仍要发布）。只豁免新鲜度：字节不一致 / 体积骤降仍是 error。
  *   watcher 自动路径不透传本参数——断线闸长期不松。
+ * @param {readonly string[]} [opts.requiredCodes=REQUIRED_REPORT_CODES] 本次要考虑的 code 子集
+ *   （双批发布：早批 ['01','05'] / 晚批 ['02','03','04']）。不在此集内的 code 完全不校验/不分发。
+ *   默认全集 → 与拆批前逐字节一致。
+ * @param {readonly string[]} [opts.optionalCodes=OPTIONAL_REPORT_CODES] requiredCodes 中哪些为可选表。
  * @returns {{ok:boolean, issues:Array<{level:'error'|'warn', code:string|null, message:string}>, reports:Array<object>}}
  *   reports = 应分发的报表（硬闸 code 通过检查者 + 可选 code 完全健康者）；issues 有 error 即 ok=false。
  *   可选 code（04 厂牌）任何异常 → warn + 从 reports 剔除（跳过分发保留本地旧维表），不产生 error。
  */
-export function evaluateManifestReports(manifest, { todayBeijing, statByName, allowStaleCodes = [] }) {
+export function evaluateManifestReports(manifest, {
+  todayBeijing, statByName, allowStaleCodes = [],
+  requiredCodes = REQUIRED_REPORT_CODES, optionalCodes = OPTIONAL_REPORT_CODES,
+}) {
   const issues = [];
   const err = (code, message) => issues.push({ level: 'error', code, message });
   const warn = (code, message) => issues.push({ level: 'warn', code, message });
@@ -94,8 +101,8 @@ export function evaluateManifestReports(manifest, { todayBeijing, statByName, al
   }
 
   const reports = [];
-  for (const code of REQUIRED_REPORT_CODES) {
-    const optional = OPTIONAL_REPORT_CODES.includes(code);
+  for (const code of requiredCodes) {
+    const optional = optionalCodes.includes(code);
     // 可选 code 的问题一律降 warn（告警 + 跳过分发，不阻塞）；硬闸 code 保持 error
     const report = optional ? warn : err;
     const optNote = optional ? '（可选表：跳过分发，保留本地旧维表）' : '';
@@ -154,11 +161,16 @@ export function evaluateManifestReports(manifest, { todayBeijing, statByName, al
  * @param {object} manifest 解析后的 latest-manifest.json
  * @param {object} opts
  * @param {string} opts.todayBeijing 北京时区今天（YYYY-MM-DD）
+ * @param {readonly string[]} [opts.requiredCodes=REQUIRED_REPORT_CODES] 本次要判就绪的 code 子集
+ *   （双批发布：早批只探 ['01','05'] / 晚批只探 ['02','03','04']）。默认全集 → 与拆批前一致。
+ * @param {readonly string[]} [opts.optionalCodes=OPTIONAL_REPORT_CODES] requiredCodes 中哪些为可选表。
  * @returns {{ready:boolean, issues:Array<{level:'error'|'warn', code:string|null, message:string}>, reports:Array<object>}}
- *   ready 只由硬闸 code（HARD_REQUIRED_CODES）决定；可选 code（04 厂牌维表）异常 → warn
+ *   ready 只由硬闸 code（requiredCodes 减 optionalCodes）决定；可选 code（04 厂牌维表）异常 → warn
  *   不拦就绪（否则上游 04 偶发骤降会一直拦住核心事实表的每日发布）。
  */
-export function evaluateRemoteManifest(manifest, { todayBeijing }) {
+export function evaluateRemoteManifest(manifest, {
+  todayBeijing, requiredCodes = REQUIRED_REPORT_CODES, optionalCodes = OPTIONAL_REPORT_CODES,
+}) {
   const issues = [];
 
   if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.reports)) {
@@ -170,8 +182,8 @@ export function evaluateRemoteManifest(manifest, { todayBeijing }) {
   }
 
   const reports = [];
-  for (const code of REQUIRED_REPORT_CODES) {
-    const optional = OPTIONAL_REPORT_CODES.includes(code);
+  for (const code of requiredCodes) {
+    const optional = optionalCodes.includes(code);
     const level = optional ? 'warn' : 'error';
     const optNote = optional ? '（可选表不拦就绪）' : '';
     const push = (message) => issues.push({ level, code, message });
@@ -213,11 +225,15 @@ export function evaluateRemoteManifest(manifest, { todayBeijing }) {
  * @param {string[]} inboxNames inbox 目录文件名清单
  * @param {string[]} currentFiles manifest.reports[].file 全集（含可选 code——04 当前份
  *   即使异常也必须排除，防止被当补导文件从侧门分发）
+ * @param {readonly string[]} [allowedCodes=REQUIRED_REPORT_CODES] 只补导这些 code 的文件
+ *   （双批发布：早批 pull 只分发 ['01','05'] 的补导文件，防止把上游昨日的 02/03 当补导误分发进早批）。
  * @returns {string[]} 应补导分发的文件名（排序稳定）
  */
-export function planBackfillFiles(inboxNames, currentFiles) {
+export function planBackfillFiles(inboxNames, currentFiles, allowedCodes = REQUIRED_REPORT_CODES) {
   const current = new Set(currentFiles || []);
-  const PATTERN = /^\d{8}(-\d{8})?_0[1-5]_.+\.xlsx$/i;
+  // 只匹配 allowedCodes 里的 code，如 ['01','05'] → /_(01|05)_/。code 是两位数字，无正则元字符。
+  const codeAlt = [...allowedCodes].join('|');
+  const PATTERN = new RegExp(`^\\d{8}(-\\d{8})?_(${codeAlt})_.+\\.xlsx$`, 'i');
   return (inboxNames || [])
     .filter((n) => /\.xlsx$/i.test(n))
     .filter((n) => !/\s?\(\d+\)\.xlsx$/i.test(n)) // 浏览器重复下载残留不入 ETL（与 daily.mjs ls() 同规则）

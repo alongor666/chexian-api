@@ -17,11 +17,15 @@
  *   4. 分发：按前缀路由省份（shanxi_→staging/SX、sichuan_/无前缀→数据管理/ 根；04 厂牌全国口径
  *      归根目录），落盘前做区间覆盖归档（旧短窗 xlsx → .xlsx-archive/<日期>/，防 merge 域堆积）
  *
- * 出表时机（上游 README）：北京时间约 09:30 出 01/03/04/05，10:30 出 02 报价；
- * 五张齐全须 10:35 之后拉。提前拉会因 02 新鲜度校验失败而中止（符合"断线告警"契约）。
+ * 出表时机（上游 README，2026-07-18 起双批）：北京时间约 07:35 出早批 01 签单 + 05 理赔；
+ * 约 11:50 出晚批 02 报价 + 03 维修（+ 04 厂牌，每周日更新）。按批拉取（--batch）时只校验本批
+ * code，过早拉会因该批新鲜度校验失败而中止（符合"断线告警"契约）。不带 --batch = 全量拉取
+ *（要求全部 code 今天新鲜，适合 12:00 后手动补一次全量）。
  *
  * 用法：
- *   node scripts/pull-bi-exports.mjs                        # 完整流程
+ *   node scripts/pull-bi-exports.mjs                        # 全量流程（不分批，要求 5 张全新鲜）
+ *   node scripts/pull-bi-exports.mjs --batch early          # 只拉/校验 01 签单 + 05 理赔
+ *   node scripts/pull-bi-exports.mjs --batch late           # 只拉/校验 02 报价 + 03 维修 + 04 厂牌
  *   node scripts/pull-bi-exports.mjs --dry-run              # rsync -n + 只打印校验与分发计划
  *   node scripts/pull-bi-exports.mjs --skip-rsync           # 跳过拉取，用现有 inbox 校验+分发
  *   node scripts/pull-bi-exports.mjs --skip-verify-province # 跳过省份内容核验（应急，红字告警）
@@ -50,6 +54,7 @@ import { fileURLToPath } from 'node:url';
 import { branchSourceDir } from '../数据管理/lib/branch-naming.mjs';
 import {
   REQUIRED_REPORT_CODES,
+  OPTIONAL_REPORT_CODES,
   beijingDayOf,
   evaluateManifestReports,
   routeBranchCode,
@@ -57,6 +62,7 @@ import {
   planCoverageArchive,
   planBackfillFiles,
 } from '../数据管理/lib/bi-export-pull.mjs';
+import { getReleaseBatch, batchAllCodes, RELEASE_BATCH_IDS } from '../数据管理/lib/release-batches.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(__filename, '../..');
@@ -70,13 +76,27 @@ const COLORS = { reset: '\x1b[0m', red: '\x1b[31m', green: '\x1b[32m', yellow: '
 function log(color, msg) { process.stdout.write(`${COLORS[color] || ''}${msg}${COLORS.reset}\n`); }
 
 function parseArgs(argv) {
-  const opts = { dryRun: false, skipRsync: false, skipVerifyProvince: false, force: false, allowStaleCodes: [] };
+  // requiredCodes/optionalCodes 默认全集 → 无 --batch 时与拆批前逐字节一致（全量单批拉取）。
+  const opts = {
+    dryRun: false, skipRsync: false, skipVerifyProvince: false, force: false, allowStaleCodes: [],
+    batch: null, requiredCodes: REQUIRED_REPORT_CODES, optionalCodes: OPTIONAL_REPORT_CODES,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') opts.dryRun = true;
     else if (a === '--skip-rsync') opts.skipRsync = true;
     else if (a === '--skip-verify-province') opts.skipVerifyProvince = true;
     else if (a === '--force') opts.force = true;
+    else if (a === '--batch' || a.startsWith('--batch=')) {
+      // 双批发布：只校验/分发该批的 code 子集（早批 01/05、晚批 02/03/04）。
+      // 不在子集内的 code 完全不参与校验、分发、补导（各批互不干扰）。
+      const id = a.includes('=') ? a.slice('--batch='.length) : argv[++i];
+      let batch;
+      try { batch = getReleaseBatch(id); } catch (e) { log('red', e.message); process.exit(1); }
+      opts.batch = batch.id;
+      opts.requiredCodes = batchAllCodes(batch);
+      opts.optionalCodes = batch.optionalCodes;
+    }
     else if (a === '--allow-stale' || a.startsWith('--allow-stale=')) {
       // 显式豁免指定 code 的「mtime 非今天」硬闸（应急：上游某表当天没导但旧份数据有效仍要发布）。
       // 只豁免新鲜度——字节不一致 / 体积骤降不受影响；watcher 自动路径不透传本参数，断线闸长期不松。
@@ -90,7 +110,8 @@ function parseArgs(argv) {
       opts.allowStaleCodes.push(...codes);
     }
     else if (a === '--help' || a === '-h') {
-      log('cyan', '用法：node scripts/pull-bi-exports.mjs [--dry-run] [--skip-rsync] [--skip-verify-province] [--allow-stale 02[,05]] [--force]');
+      log('cyan', `用法：node scripts/pull-bi-exports.mjs [--batch ${RELEASE_BATCH_IDS.join('|')}] [--dry-run] [--skip-rsync] [--skip-verify-province] [--allow-stale 02[,05]] [--force]`);
+      log('cyan', '  --batch early：只拉/校验 01 签单 + 05 理赔；--batch late：只拉 02 报价 + 03 维修 + 04 厂牌；不带 --batch=全量');
       process.exit(0);
     } else {
       log('red', `未知参数：${a}（--help 查看用法）`);
@@ -132,7 +153,7 @@ function runRsync({ dryRun }) {
 
 // ── Step 2: manifest 校验 ──
 
-function loadManifestAndValidate({ force, allowStaleCodes }) {
+function loadManifestAndValidate({ force, allowStaleCodes, requiredCodes, optionalCodes, batch }) {
   const manifestPath = join(INBOX_DIR, MANIFEST_NAME);
   if (!existsSync(manifestPath)) {
     log('red', `❌ inbox 缺 ${MANIFEST_NAME}（${manifestPath}）——上游断线或从未拉取。`);
@@ -154,9 +175,9 @@ function loadManifestAndValidate({ force, allowStaleCodes }) {
   }
 
   const todayBeijing = beijingDayOf(new Date());
-  const result = evaluateManifestReports(manifest, { todayBeijing, statByName, allowStaleCodes });
+  const result = evaluateManifestReports(manifest, { todayBeijing, statByName, allowStaleCodes, requiredCodes, optionalCodes });
 
-  log('cyan', `\n▶ [2/4] manifest 校验（北京时间今天 = ${todayBeijing}）`);
+  log('cyan', `\n▶ [2/4] manifest 校验（北京时间今天 = ${todayBeijing}${batch ? ` · 批次 ${batch}：code ${requiredCodes.join('/')}` : ''}）`);
   for (const r of result.reports) {
     const tag = r.province ? `[${r.province}] ` : '';
     log('green', `  ✓ code ${r.code} ${tag}${r.reportName} | ${r.sizeMB}MB | mtime北京 ${beijingDayOf(r.mtime)}`);
@@ -166,8 +187,12 @@ function loadManifestAndValidate({ force, allowStaleCodes }) {
   }
   if (!result.ok) {
     const now = beijingNowHHMM();
-    if (now < '10:35') {
-      log('yellow', `  ℹ 当前北京时间 ${now}：上游约 09:30 出 01/03/04/05、10:30 出 02 报价，五张齐全须 10:35 之后拉。`);
+    // 双批出表节奏（2026-07-18 起）：早批 01 签单 + 05 理赔约 07:35 就绪；晚批 02 报价 + 03 维修
+    //（+ 04 厂牌，周日更新）约 11:50 就绪。提前拉会因新鲜度校验拦下（符合断线告警契约）。
+    if (now < '07:40') {
+      log('yellow', `  ℹ 当前北京时间 ${now}：早批（01/05）约 07:35 就绪、晚批（02/03/04）约 11:50 就绪，过早拉取会被新鲜度校验拦下。`);
+    } else if (now < '11:50' && (requiredCodes.includes('02') || requiredCodes.includes('03'))) {
+      log('yellow', `  ℹ 当前北京时间 ${now}：晚批（02 报价 / 03 维修）约 11:50 才两省就绪，此刻拉取晚批多半未出表。`);
     }
     if (force) {
       log('yellow', '  ⚠ --force：校验 error 降级为告警，继续分发（应急通道，事后必须人工核对数据日期）');
@@ -335,7 +360,7 @@ function distributeOne(fileName, label, { dryRun }) {
   return action;
 }
 
-function distribute(reports, manifest, { dryRun }) {
+function distribute(reports, manifest, { dryRun, requiredCodes = REQUIRED_REPORT_CODES }) {
   log('cyan', '\n▶ [4/4] 分发到 ETL 源目录（shanxi_→staging/SX；sichuan_/无前缀→数据管理/ 根）');
   for (const r of reports) {
     distributeOne(r.file, `code ${r.code}`, { dryRun });
@@ -346,7 +371,8 @@ function distribute(reports, manifest, { dryRun }) {
   // 命名模式的一并分发。排除集 = manifest 全部当前份（含被剔除的可选/异常份，防侧门混入）。
   const inboxNames = existsSync(INBOX_DIR) ? readdirSync(INBOX_DIR) : [];
   const currentFiles = (manifest.reports || []).map((r) => r?.file).filter(Boolean);
-  const backfills = planBackfillFiles(inboxNames, currentFiles);
+  // 补导只认本批的 code（早批不会把上游昨日残留的 02/03 当补导误分发进早批）。
+  const backfills = planBackfillFiles(inboxNames, currentFiles, requiredCodes);
   if (backfills.length > 0) {
     log('cyan', `\n▶ [4b] 契约外补导文件（manifest 之外、符合报表命名模式）：${backfills.length} 个`);
     for (const name of backfills) {
@@ -363,6 +389,7 @@ function main() {
   log('cyan', '════════════════════════════════════════════════');
   log('cyan', '  pull-bi-exports：VPS auto_loadbi → inbox → 校验 → 分发');
   log('cyan', `  inbox: ${INBOX_DIR}${opts.dryRun ? '  (dry-run)' : ''}`);
+  log('cyan', `  批次: ${opts.batch ? `${opts.batch}（code ${opts.requiredCodes.join('/')}）` : '全量（不分批）'}`);
   log('cyan', '════════════════════════════════════════════════');
 
   if (opts.skipRsync) log('yellow', '\n⚠ 跳过 rsync（--skip-rsync），使用现有 inbox');
@@ -375,7 +402,7 @@ function main() {
   // 一个 code 现在可能有多省份份数（如 01/02/03/05 各 SC+SX 两份），
   // 分子分母都用「份数」对不上「code 数」会看着像超过 100% —— 拆开报告两个数字更清楚。
   const distinctCodes = new Set(result.reports.map((r) => r.code)).size;
-  log('green', `\n✅ 拉取${opts.dryRun ? '计划打印' : ''}完成：${distinctCodes}/${REQUIRED_REPORT_CODES.length} 张报表（共 ${result.reports.length} 份，含分省）${backfillCount > 0 ? ` + ${backfillCount} 个补导文件` : ''}${opts.dryRun ? '' : '已就位，可跑 ETL（release:daily 或 daily.mjs）'}`);
+  log('green', `\n✅ 拉取${opts.dryRun ? '计划打印' : ''}完成：${distinctCodes}/${opts.requiredCodes.length} 张报表（共 ${result.reports.length} 份，含分省）${backfillCount > 0 ? ` + ${backfillCount} 个补导文件` : ''}${opts.dryRun ? '' : '已就位，可跑 ETL（release:daily 或 daily.mjs）'}`);
 }
 
 main();
