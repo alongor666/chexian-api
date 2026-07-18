@@ -1,6 +1,6 @@
 ---
 name: diagnose-router
-description: 诊断命令总路由 — 先判定业务域、时间口径和专属模型，再转交具体 diagnose 命令或 .claude/skills/ 下的诊断 skill
+description: 诊断命令总路由 — 先判定业务域、时间口径和专属模型，再转交具体 diagnose 命令或 alongor666-skills 仓的诊断 skill（本地经 ~/.claude/skills/ 软链消费，按名触发）
 category: data-analysis
 version: 1.1.0
 author: "@codex"
@@ -17,9 +17,9 @@ dependencies:
   - .claude/commands/diagnose-transfer-location.md
   - .claude/commands/diagnose-lr-projection.md
   - .claude/commands/diagnose-forecast-claim.md
-  - .claude/skills/incident-rate-development.md
-  - .claude/skills/ncd-pricing-diagnosis.md
-  - .claude/skills/accident-profile-report.md
+  - alongor666-skills 仓 skills/incident-rate-development/SKILL.md（本地经 ~/.claude/skills/incident-rate-development 软链，按名触发，非项目内路径）
+  - alongor666-skills 仓 skills/ncd-pricing-diagnosis/SKILL.md（本地经 ~/.claude/skills/ncd-pricing-diagnosis 软链，按名触发，非项目内路径）
+  - alongor666-skills 仓 skills/accident-profile-report/SKILL.md（本地经 ~/.claude/skills/accident-profile-report 软链，按名触发，非项目内路径）
 last_updated: "2026-06-09"
 ---
 
@@ -27,7 +27,7 @@ last_updated: "2026-06-09"
 
 > 先分流，再执行。诊断命令不得平铺混用；专项命令优先，`/diagnose-agent` 只做经营诊断兜底。
 >
-> **视野范围**：本路由覆盖两层入口——命令层（`.claude/commands/diagnose-*.md`，9 个，用 `/` 前缀调用）与 skill 层（`.claude/skills/` 下 3 个散装诊断 skill，无 `/` 前缀，由 AI 直接读取并执行）。路由判断必须同时检视两层，不得只路由到命令层而忽略 skill 层。
+> **视野范围**：本路由覆盖两层入口——命令层（`.claude/commands/diagnose-*.md`，9 个，用 `/` 前缀调用）与 skill 层（`incident-rate-development` / `ncd-pricing-diagnosis` / `accident-profile-report` 3 个诊断 skill，无 `/` 前缀，由 Skill 工具按名触发；2026-07-16 起建在 alongor666-skills 仓、项目内不再存放实体文件，见 `.claude/rules/skill-prefix.md`）。路由判断必须同时检视两层，不得只路由到命令层而忽略 skill 层。
 
 ---
 
@@ -43,9 +43,9 @@ last_updated: "2026-06-09"
 | 2 | 两个 cutoff、3-31 vs 4-30、月末估值对比、同比发展、影响度分解 | `/diagnose-cohort-comparison` | 命令层 | 双 cutoff cohort 专项 |
 | 2 | 全年预期赔付率、年终赔付率预测、平移预测、4 维细分矩阵、业务介入覆盖 | `/diagnose-lr-projection` | 命令层 | 结构性全年预期满期赔付率专项 |
 | 2 | 赔款空间、还能赔多少、新增赔款余地、目标赔付率反推、赔付率推演 | `/diagnose-forecast-claim` | 命令层 | 任意维度筛选下的双向推演（给定目标赔付率求赔款空间 Δ，或给定 Δ 求赔付率） |
-| 2 | NCD 定价、系数诊断、应提系数、定价扭曲、归一赔付率、商业/交强 NCD 档、哪个档赔付率过高、折扣是否合理 | `ncd-pricing-diagnosis` skill | skill 层 | 横向 NCD 档位定价结构分析；读 `.claude/skills/ncd-pricing-diagnosis.md` 执行 |
-| 2 | 出险率同比、发展三角形、不满期对比、等天数出险率、赔案发展 | `incident-rate-development` skill | skill 层 | 纵向时间发展分析（按维度构建三角形）；读 `.claude/skills/incident-rate-development.md` 执行 |
-| 2 | 事故画像、出险经过文本、碰撞对象构成、事故场景、时段×路段热力图、驾驶人年龄分布 | `accident-profile-report` skill | skill 层 | 基于理赔明细文本的事故画像专项；读 `.claude/skills/accident-profile-report.md` 执行 |
+| 2 | NCD 定价、系数诊断、应提系数、定价扭曲、归一赔付率、商业/交强 NCD 档、哪个档赔付率过高、折扣是否合理 | `ncd-pricing-diagnosis` skill | skill 层 | 横向 NCD 档位定价结构分析；用 Skill 工具按名触发 `ncd-pricing-diagnosis`（alongor666-skills 仓，本地经 `~/.claude/skills/ncd-pricing-diagnosis` 软链） |
+| 2 | 出险率同比、发展三角形、不满期对比、等天数出险率、赔案发展 | `incident-rate-development` skill | skill 层 | 纵向时间发展分析（按维度构建三角形）；用 Skill 工具按名触发 `incident-rate-development`（alongor666-skills 仓，本地经 `~/.claude/skills/incident-rate-development` 软链） |
+| 2 | 事故画像、出险经过文本、碰撞对象构成、事故场景、时段×路段热力图、驾驶人年龄分布 | `accident-profile-report` skill | skill 层 | 基于理赔明细文本的事故画像专项；用 Skill 工具按名触发 `accident-profile-report`（alongor666-skills 仓，本地经 `~/.claude/skills/accident-profile-report` 软链） |
 | 3 | 任意车型/客户类别/能源/吨位/WHERE 细分，90/180/270/满期发展 | `/diagnose-segment` | 命令层 | 细分 cohort 专项 |
 | 4 | 机构、经代、经营单元、赚不赚、亏在哪、要不要继续 | `/diagnose-agent` | 命令层 | 总控型经营诊断兜底 |
 
@@ -118,7 +118,7 @@ last_updated: "2026-06-09"
 ### skill 层 vs 命令层（通用说明）
 
 - **命令层**（`/diagnose-*.md`）：用 `/` 前缀调用，有完整的 pre-flight、数据验证、输出格式约束，适合标准化生产输出
-- **skill 层**（`.claude/skills/*.md`）：无 `/` 前缀，AI 直接读取 skill 文档后执行，包含 SQL 模板/Python 脚本/口径框架，适合灵活的临时分析和扩展
+- **skill 层**（`incident-rate-development` / `ncd-pricing-diagnosis` / `accident-profile-report`）：无 `/` 前缀，用 Skill 工具按名触发，实体文件建在 alongor666-skills 仓（本地经 `~/.claude/skills/` 软链消费，项目内不再存放实体文件），包含 SQL 模板/Python 脚本/口径框架，适合灵活的临时分析和扩展
 - 两层不互斥：同一诊断需求可先查路由选 skill 层快速验证，再用命令层做完整报告
 
 ---

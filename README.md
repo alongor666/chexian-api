@@ -36,7 +36,8 @@
 | 驾意险与货车 | `/specialty` | 驾意险交叉销售与货车专项 |
 | 维修资源 | `/repair` | 维修资源分析 |
 | 数据管理 | `/data-import` | Parquet 文件上传与管理 |
-| 权限管理 | `/admin/access-control` | 用户/角色/权限配置 |
+| 权限管理 | `/admin/access-control` | 用户/角色/权限配置（模块负面清单白名单管理员专属） |
+| API 令牌 | `/my-tokens` | 个人访问令牌（PAT）自助管理（全员可用） |
 
 ## 2) 技术栈
 

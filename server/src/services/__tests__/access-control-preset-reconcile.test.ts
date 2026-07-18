@@ -41,11 +41,12 @@ const executedSql: string[] = [];
 const mockQuery = vi.fn(async (sql: string): Promise<Record<string, unknown>[]> => {
   executedSql.push(sql);
   const normalized = sql.trim();
-  // getUserByUsername
-  const byUsername = normalized.match(/SELECT \*\s+FROM UserAccount\s+WHERE username = '([^']*)'/);
+  // getUserByUsername（用户名大小写不敏感：SQL 侧 LOWER(username)=canonical，此处忠实模拟）
+  const byUsername = normalized.match(/SELECT \*\s+FROM UserAccount\s+WHERE LOWER\(username\) = '([^']*)'/);
   if (byUsername) {
-    const row = userRows[byUsername[1]];
-    return row ? [row] : [];
+    const wanted = byUsername[1];
+    const key = Object.keys(userRows).find((k) => k.toLowerCase() === wanted);
+    return key ? [userRows[key]] : [];
   }
   // listUsersInternal（persistToFile 用）
   if (normalized.startsWith('SELECT * FROM UserAccount ORDER BY username')) {

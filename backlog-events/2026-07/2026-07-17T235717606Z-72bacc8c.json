@@ -1,0 +1,1 @@
+{"uid":"2026-07-17-claude-454a31","kind":"status","ts":"2026-07-17","actor":"@claude","status":"DONE","evidence":"PR #1132 已合并（merge commit d312a157，gh API 核实 state=MERGED）：admin 白名单越权/纯飞书 PAT/后端覆盖契约三项收口 + 评审二轮 findings（基线 skipped 语义/契约防注释假绿/三人省域绑定锁）；CI 两轮 5/5 全绿，全量单测 5571/5571","at":"2026-07-17T23:57:17.606Z","eid":"72bacc8c"}

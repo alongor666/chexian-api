@@ -1,0 +1,1 @@
+{"uid":"2026-07-17-claude-454a31","kind":"note","ts":"2026-07-17","actor":"@claude","text":"【认领·派发登记】claude/permission-review-fixes-B1115 于 2026-07-17T22:44:55.462Z 接手（派发即登记，防重复派发）；三项修复已实现并通过全量单测 5547/5547 + verify:quick；本 worktree 分支即将开 PR","at":"2026-07-17T22:44:55.462Z","eid":"0af5a50e"}

@@ -386,7 +386,7 @@ const colorMap = {
   - 新增 `.claude/skills/` 方法论簇（`dev-stop-on-mismatch` / `silent-failure-guard` / `rule-promotion-gate` / `adr-tiered-response` / `code-search-routing` / `agent-system-design-principles`），其中 `silent-failure-guard` 升级为 `check-governance.mjs` #25 硬门。
   - 约束：今后任何"引入外部 agent 框架/skill 仓"的提案，须在本 ADR 的两道闸下评估；跨库上提走 `chexian-crystallize-skill`（见 BACKLOG B321）。
   - 不改动运行时架构（纯方法论/治理层），不触 SQL 口径红线。
-- **代码位置**: `.claude/skills/*.md`（6 个新 skill）· `scripts/check-governance.mjs`（#25 空catch禁令）· `CLAUDE.md` §0（grep→LSP 精化）· PR #469。
+- **代码位置**: 6 个 skill 原建于 `.claude/skills/*.md`，2026-07-16 按用户铁律迁入 alongor666-skills 仓 `skills/<name>/SKILL.md`（本地经 `~/.claude/skills/` 软链消费，见 `.claude/rules/skill-prefix.md`）· `scripts/check-governance.mjs`（#25 空catch禁令）· `CLAUDE.md` §0（grep→LSP 精化）· PR #469。
 
 ---
 

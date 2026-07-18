@@ -57,9 +57,10 @@ function routeAccessGuardPath(routePath: string): string | undefined {
 }
 
 describe('route registry and App route synchronization', () => {
-  it('keeps all 18 canonical pages as explicit App routes', () => {
+  it('keeps all 19 canonical pages as explicit App routes', () => {
     const declared = appRoutes();
-    expect(ROUTES).toHaveLength(18);
+    // 2026-07-15 +1：/my-tokens（PAT 自助管理页，从权限管理页拆出，全员可用）
+    expect(ROUTES).toHaveLength(19);
     for (const route of ROUTES) {
       expect(declared.has(route.path), `missing explicit Route for ${route.id}: ${route.path}`).toBe(true);
     }

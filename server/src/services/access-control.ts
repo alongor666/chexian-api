@@ -395,7 +395,10 @@ async function seedFromPreset(): Promise<void> {
 }
 
 async function ensureUserFromPreset(user: PresetUser): Promise<AccessUser> {
-  const existing = await getUserByUsername(user.username);
+  // canonical 用户名：getUserByUsername 已大小写不敏感，故 preset 里即便写了大写也不会重建重复行；
+  // 落库仍存 canonical，保证 store 用户名规范一致（历史 sxAdmin/sxadmin 分裂根治）。
+  const username = canonicalizeUsername(user.username);
+  const existing = await getUserByUsername(username);
   if (existing) return existing;
   const id = crypto.randomUUID();
   await duckdbService.query(`
@@ -403,7 +406,7 @@ async function ensureUserFromPreset(user: PresetUser): Promise<AccessUser> {
       (id, username, display_name, password_hash, role, organization, branch_code, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
     VALUES (
       '${escapeSqlValue(id)}',
-      '${escapeSqlValue(user.username)}',
+      '${escapeSqlValue(username)}',
       '${escapeSqlValue(user.displayName)}',
       '${escapeSqlValue(user.passwordHash)}',
       '${escapeSqlValue(user.role)}',
@@ -606,11 +609,25 @@ export async function refreshActiveUsernames(): Promise<void> {
 // 查询
 // ============================================
 
+/**
+ * 用户名规范化（唯一 canonical 口径）：NFKC 归一 + 去空白 + 转小写。
+ *
+ * 登录早已用同一口径归一输入（auth.ts normalizeUsername），但**写入与查询边界**历史上
+ * 按原始字符串精确处理 → 用户名大小写分裂：管理面可建 `NewUser`，登录查 `newuser` 找不到；
+ * reconcile 的 getUserByUsername 大小写敏感又会因 `sxAdmin`/`sxadmin` 差异重建重复行。
+ * 根治 = 所有写入存 canonical 用户名 + 查询大小写不敏感匹配（见 getUserByUsername）。
+ */
+export function canonicalizeUsername(input: string): string {
+  return input.normalize('NFKC').trim().toLowerCase();
+}
+
 export async function getUserByUsername(username: string): Promise<AccessUser | null> {
+  // 大小写不敏感匹配：既命中存量非规范行（历史大写用户名），也让 canonical 写入的新行一致命中。
+  // 用 LOWER(username)=canonical 而非 username=canonical，避免存量未迁移的大写行漏配。
   const rows = await duckdbService.query(`
     SELECT *
     FROM UserAccount
-    WHERE username = '${escapeSqlValue(username)}'
+    WHERE LOWER(username) = '${escapeSqlValue(canonicalizeUsername(username))}'
     LIMIT 1
   `);
   if (!rows || rows.length === 0) return null;
@@ -687,7 +704,8 @@ export async function createUser(input: {
   specialFeatures?: string[];
   active?: boolean;
 }): Promise<AccessUser> {
-  const exists = await getUserByUsername(input.username);
+  const username = canonicalizeUsername(input.username);
+  const exists = await getUserByUsername(username);
   if (exists) {
     throw new AppError(409, '用户名已存在');
   }
@@ -697,7 +715,7 @@ export async function createUser(input: {
       (id, username, display_name, password_hash, role, organization, branch_code, allowed_routes, default_route, allowed_ips, special_features, active, created_at, updated_at)
     VALUES (
       '${escapeSqlValue(id)}',
-      '${escapeSqlValue(input.username)}',
+      '${escapeSqlValue(username)}',
       '${escapeSqlValue(input.displayName)}',
       '${escapeSqlValue(input.passwordHash)}',
       '${escapeSqlValue(input.role)}',
@@ -746,7 +764,8 @@ export async function createFeishuUserWithIdentity(input: {
   providerSubject: string;
   verifiedAt: string;
 }): Promise<AccessUser> {
-  const existing = await getUserByUsername(input.username);
+  const username = canonicalizeUsername(input.username);
+  const existing = await getUserByUsername(username);
   if (existing) throw new AppError(409, '用户名已存在');
   const id = crypto.randomUUID();
   await duckdbService.query(`
@@ -754,7 +773,7 @@ export async function createFeishuUserWithIdentity(input: {
       INSERT INTO UserAccount
         (id, username, display_name, password_hash, role, organization, branch_code, active, created_at, updated_at)
       VALUES (
-        '${escapeSqlValue(id)}', '${escapeSqlValue(input.username)}', '${escapeSqlValue(input.displayName)}',
+        '${escapeSqlValue(id)}', '${escapeSqlValue(username)}', '${escapeSqlValue(input.displayName)}',
         '${escapeSqlValue(input.passwordHash)}', '${escapeSqlValue(input.role)}', '${escapeSqlValue(input.organization)}',
         '${escapeSqlValue(input.branchCode)}', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       );
@@ -900,26 +919,27 @@ export async function setUserPasswordByUsername(
   if (!user) {
     throw new AppError(404, '用户不存在');
   }
-  await duckdbService.query(`
-    UPDATE UserAccount
-    SET
-      password_hash = '${escapeSqlValue(passwordHash)}',
-      password_changed_at = '${escapeSqlValue(new Date().toISOString())}',
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = '${escapeSqlValue(user.id)}'
-  `);
   const changedAt = new Date().toISOString();
-  await duckdbService.query(`DELETE FROM PasswordCredential WHERE user_id = '${escapeSqlValue(user.id)}'`);
-  await duckdbService.query(`
-    INSERT INTO PasswordCredential (user_id, password_hash, state, changed_at, updated_at)
-    VALUES (
-      '${escapeSqlValue(user.id)}',
-      '${escapeSqlValue(passwordHash)}',
-      'active',
-      '${escapeSqlValue(changedAt)}',
-      '${escapeSqlValue(changedAt)}'
-    )
-  `);
+  // 原子写：UPDATE UserAccount + 覆盖 PasswordCredential 必须在同一连接的事务里，
+  // 否则拆成多次 query() 落到不同池连接、无事务边界，中间步失败会把账号写成半坏态
+  // （password_changed_at 已置新哈希 + 凭据行已删 → login 恒 403，锁死到下次 reseed；
+  //  DELETE/INSERT 拆连接还偶发 Duplicate key 主键冲突）。见 duckdbService.transaction 头注释。
+  await duckdbService.transaction([
+    `UPDATE UserAccount
+       SET password_hash = '${escapeSqlValue(passwordHash)}',
+           password_changed_at = '${escapeSqlValue(changedAt)}',
+           updated_at = CURRENT_TIMESTAMP
+     WHERE id = '${escapeSqlValue(user.id)}'`,
+    `DELETE FROM PasswordCredential WHERE user_id = '${escapeSqlValue(user.id)}'`,
+    `INSERT INTO PasswordCredential (user_id, password_hash, state, changed_at, updated_at)
+     VALUES (
+       '${escapeSqlValue(user.id)}',
+       '${escapeSqlValue(passwordHash)}',
+       'active',
+       '${escapeSqlValue(changedAt)}',
+       '${escapeSqlValue(changedAt)}'
+     )`,
+  ]);
   await persistToFile();
   const updated = await getUserByUsername(username);
   if (!updated) {

@@ -698,6 +698,18 @@ async function main() {
     ];
     if (opts.wecomDryRun) shanxiPostalArgs.push('--dry-run');
 
+    // 太原二部任卫军「业务台账」（branch_code='SX' AND salesman_name='118046126任卫军'，
+    // 2025-08-01 起）。同引擎、独立 webhook + 独立 state；首量 888 条已于 2026-07-17
+    // 人工导入（--i-checked-wecom-rows），此处仅日常增量 add-only。
+    const ty2RenweijunArgs = [
+      '数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py',
+      '--instance',
+      '数据管理/integrations/wecom_smartsheet/instances/shanxi-taiyuan2-renweijun.yaml',
+      '--mode',
+      'sync',
+    ];
+    if (opts.wecomDryRun) ty2RenweijunArgs.push('--dry-run');
+
     const wecomTasks = [
       {
         label: opts.wecomDryRun ? 'WeCom renewal dry-run' : 'WeCom renewal sync',
@@ -717,6 +729,11 @@ async function main() {
       {
         label: opts.wecomDryRun ? 'WeCom 山西邮政 dry-run' : 'WeCom 山西邮政 sync',
         args: shanxiPostalArgs,
+        timeoutMs: 30 * 60 * 1000,
+      },
+      {
+        label: opts.wecomDryRun ? 'WeCom 任卫军台账 dry-run' : 'WeCom 任卫军台账 sync',
+        args: ty2RenweijunArgs,
         timeoutMs: 30 * 60 * 1000,
       },
     ];

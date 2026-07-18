@@ -27,6 +27,10 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import assert from 'node:assert';
+import {
+  isExcludedFromOracle,
+  resolveComparableEndpoints,
+} from './lib/golden-baseline-excludes.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -54,11 +58,14 @@ function log(color, msg) {
 
 // ── 端点定义 ─────────────────────────────────
 //
-// 格式: { slug, path, params, deprecated }
+// 格式: { slug, path, params, deprecated, volatile?, skipped? }
 // slug: 唯一标识符（用作快照子目录名）
 // path: 完整 API 路径（含 /api/xxx 前缀）
 // params: 默认请求参数（空对象 = 无参数）
 // deprecated: true 表示即将删除，仅用于存档，--compare 跳过
+// volatile: true 表示返回实时戳/会话态，--build/--compare 均跳过
+// skipped: 非空原因字符串 —— 端点保留在清单供 dry-run 审计，但不抓取不对比
+//          （排除语义 SSOT：scripts/lib/golden-baseline-excludes.mjs，vitest 锁定）
 
 const ENDPOINT_DEFINITIONS = [
   // ── /api/query/kpi ────────────────────────
@@ -183,8 +190,12 @@ const ENDPOINT_DEFINITIONS = [
 
   // ── /api/auth（GET only）─────────────────
   { slug: 'auth-me', path: '/api/auth/me', params: {}, deprecated: false },
-  { slug: 'auth-users', path: '/api/auth/users', params: {}, deprecated: false },
-  { slug: 'auth-roles', path: '/api/auth/roles', params: {}, deprecated: false },
+  // skipped（保留定义供 dry-run 审计，--build/--compare 均跳过；语义见 scripts/lib/golden-baseline-excludes.mjs）：
+  // 权限管理模块白名单已收口为 薛成龙/杨杰/林霞 三人（preset-users.ts RESTRICTED_MODULES），
+  // 基线账号 admin 访问恒 403，无法再作 200 行为探针。恢复探针的路径：为两端点配置
+  // 三位管理员之一的独立基线身份（BASELINE_USER + 对应密码），或加"admin→403"负向断言模式。
+  { slug: 'auth-users', path: '/api/auth/users', params: {}, deprecated: false, skipped: '权限管理白名单收口（2026-07-17），基线账号 admin 恒 403' },
+  { slug: 'auth-roles', path: '/api/auth/roles', params: {}, deprecated: false, skipped: '权限管理白名单收口（2026-07-17），基线账号 admin 恒 403' },
 
   // ── /api/ai（GET only）───────────────────
   { slug: 'ai-capabilities', path: '/api/ai/capabilities', params: {}, deprecated: false },
@@ -272,8 +283,10 @@ function runDryRun() {
   const total = ENDPOINT_DEFINITIONS.length;
   const deprecated = ENDPOINT_DEFINITIONS.filter((e) => e.deprecated).length;
   const volatileCount = ENDPOINT_DEFINITIONS.filter((e) => e.volatile).length;
+  const skippedCount = ENDPOINT_DEFINITIONS.filter((e) => e.skipped).length;
+  const oracleCount = ENDPOINT_DEFINITIONS.filter((e) => !isExcludedFromOracle(e)).length;
 
-  log('cyan', `  总端点数: ${total}（含 ${deprecated} 个 deprecated + ${volatileCount} 个 volatile，均不纳入基线）`);
+  log('cyan', `  总端点数: ${total}（含 ${deprecated} 个 deprecated + ${volatileCount} 个 volatile + ${skippedCount} 个 skipped，均不纳入基线）`);
   console.log('');
 
   let idx = 1;
@@ -283,7 +296,8 @@ function runDryRun() {
       ? Object.entries(ep.params).map(([k, v]) => `${k}=${v}`).join('&')
       : '（无参数）';
     const depTag = ep.deprecated ? colors.yellow + ' [DEPRECATED]' + colors.reset
-      : ep.volatile ? colors.yellow + ' [VOLATILE]' + colors.reset : '';
+      : ep.volatile ? colors.yellow + ' [VOLATILE]' + colors.reset
+      : ep.skipped ? colors.yellow + ` [SKIPPED: ${ep.skipped}]` + colors.reset : '';
     console.log(
       `  ${String(idx).padStart(3)}. slug=${ep.slug}  path=${ep.path}  params=${paramsStr}  hash=${paramHash}${depTag}`
     );
@@ -291,7 +305,7 @@ function runDryRun() {
   }
 
   console.log('');
-  log('green', `  共 ${total} 个端点（--build/--compare 仅处理 ${total - deprecated - volatileCount} 个 oracle 端点，跳过 deprecated + volatile）`);
+  log('green', `  共 ${total} 个端点（--build/--compare 仅处理 ${oracleCount} 个 oracle 端点，跳过 deprecated + volatile + skipped）`);
   process.exit(0);
 }
 
@@ -348,10 +362,11 @@ async function runBuild() {
   }
 
   // 3. 限流抓取所有端点。跳过 deprecated（路由已删，抓取必失败）+ volatile（返回实时戳/会话态，
-  //    --compare 必假阳，非 SQL/perf 重构 oracle）。两类都不纳入黄金基线。
-  const buildTargets = ENDPOINT_DEFINITIONS.filter((ep) => !ep.deprecated && !ep.volatile);
+  //    --compare 必假阳，非 SQL/perf 重构 oracle）+ skipped（保留清单供审计但不抓取，
+  //    如权限收口后基线账号恒 403 的端点）。三类都不纳入黄金基线。
+  const buildTargets = ENDPOINT_DEFINITIONS.filter((ep) => !isExcludedFromOracle(ep));
   const skipped = ENDPOINT_DEFINITIONS.length - buildTargets.length;
-  log('yellow', `\n▶ 抓取 ${buildTargets.length} 个端点${skipped ? `（跳过 ${skipped} 个 deprecated/volatile）` : ''}...`);
+  log('yellow', `\n▶ 抓取 ${buildTargets.length} 个端点${skipped ? `（跳过 ${skipped} 个 deprecated/volatile/skipped）` : ''}...`);
   const buildTime = new Date().toISOString();
 
   const fetchResults = await mapSettledWithConcurrency(
@@ -444,13 +459,19 @@ async function runCompare() {
   }
 
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-  // 防旧 manifest：按当前定义剔除 deprecated + volatile（manifest 不带 volatile 标记，需回查定义）
-  const excludedSlugs = new Set(
-    ENDPOINT_DEFINITIONS.filter((e) => e.deprecated || e.volatile).map((e) => e.slug)
+  // 防旧 manifest：排除语义收口到 scripts/lib/golden-baseline-excludes.mjs（vitest 锁定）——
+  // deprecated/volatile/skipped 按当前定义剔除；定义中已消失的 slug（orphaned）警告跳过而非
+  // 整轮失败（否则删除端点定义后旧 manifest 会把 compare 拖红，2026-07-17 评审 P1）。
+  const { comparable: activeEndpoints, excluded, orphaned } = resolveComparableEndpoints(
+    ENDPOINT_DEFINITIONS,
+    manifest.endpoints
   );
-  const activeEndpoints = manifest.endpoints.filter((ep) => !ep.deprecated && !excludedSlugs.has(ep.slug));
 
-  log('cyan', `  加载基线: ${manifest.endpoints.length} 个端点（跳过 ${manifest.endpoints.length - activeEndpoints.length} 个 deprecated）`);
+  log('cyan', `  加载基线: ${manifest.endpoints.length} 个端点（跳过 ${excluded.length} 个 deprecated/volatile/skipped）`);
+  if (orphaned.length > 0) {
+    log('yellow', `  ⚠ ${orphaned.length} 个 slug 在当前定义中已不存在，跳过对比: ${orphaned.join(', ')}`);
+    log('yellow', '    （端点定义被删除后旧基线不再覆盖它们；如需收敛 manifest 请重新 --build）');
+  }
 
   // 2. 检查 server 健康
   try {

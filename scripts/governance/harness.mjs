@@ -15,7 +15,11 @@ const requiredDenyEntries = [
   // Read(./.claude/worktrees/**) 已移除（2026-06-23，PR #778）：与官方 EnterWorktree 默认落点（.claude/worktrees/）
   // 自相矛盾，且与 .gitignore 的 .claude/worktrees/ 冗余（官方推荐 gitignore 兜噪声，非 Read deny）。勿再加回。
   'Read(./server/data/**)',
-  'Read(./logs/**)',
+  // 根锚定（2026-07-15）：`./logs/**` 会 gitignore 式匹配任意深度的 logs/ 段，把
+  // 数据管理/logs/（发布 watcher 状态与台账，routine 必读）一并挡死，且该 deny 会
+  // 并入沙箱 filesystem.denyRead，连带拒掉 Bash 读。`/logs/**` 只锚根目录 logs/。
+  // 实测：改后 logs/audit.log 仍拒绝、数据管理/logs/ 放行。勿改回 './logs/**'。
+  'Read(/logs/**)',
   'Read(./public/reports/**)',
   'Bash(rm -rf ./数据管理/warehouse/**)',
   'Bash(rm -rf ./.git/**)',

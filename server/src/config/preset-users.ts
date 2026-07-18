@@ -48,6 +48,82 @@ export const SELF_SERVICE_PASSWORD_ONLY_USERS: readonly string[] = [
   'houyabing',
 ];
 
+/** 权限管理模块的前端页面路径（routeRegistry 'access-control' 的 path 镜像常量） */
+export const ACCESS_CONTROL_PAGE = '/admin/access-control';
+
+/**
+ * 模块负面清单（RED LINE · 2026-07-15 用户指令：总经理室/车险部全员开放全部板块，
+ * 唯「权限管理」模块收紧到指名白名单）。
+ *
+ * 语义：
+ *   - 键 = 前端页面路径（与 routeRegistry path 对齐）；值 = 允许访问该模块的用户名白名单。
+ *   - 未列入本表的模块对所有用户开放（org_user 仍受角色 allowedRoutes 白名单约束，两层独立）。
+ *   - 列入本表的模块**只有**白名单内用户可用 —— fail-closed：新增账号默认进不了受限模块，
+ *     防止「新发 branch_admin 账号天然拿到权限管理」的越权回潮。
+ *   - 派生方式与 visibleBranches 同款：按 username 每请求从本表派生（不进 JWT、不进 store），
+ *     改名单即生效、免重登、免 re-seed。
+ *
+ * 当前唯一条目：权限管理模块仅 薛成龙 / 杨杰 / 林霞 三位业务管理员。
+ * admin 曾以"运维兜底"名义在列，属规格外扩权（2026-07-15 用户指令原文即仅此三人），
+ * 2026-07-17 评审 P1 收口移除：应急重置走三位管理员账号；发布链/基线脚本不再抓
+ * 用户/角色管理接口（golden-baseline.mjs 已同步摘除 auth-users / auth-roles 端点）。
+ */
+export const RESTRICTED_MODULES: Readonly<Record<string, readonly string[]>> = {
+  [ACCESS_CONTROL_PAGE]: ['xuechenglong', 'yangjie0621', 'linxia'],
+};
+
+/**
+ * 该用户是否可访问某受限模块。未登记在 RESTRICTED_MODULES 的页面恒 true（负面清单语义）。
+ */
+export function canAccessRestrictedModule(username: string, pagePath: string): boolean {
+  const allowlist = RESTRICTED_MODULES[pagePath];
+  return !allowlist || allowlist.includes(username);
+}
+
+/**
+ * 按用户名列出其被负面清单拒绝的模块页面路径（随 /login、/me 回前端驱动导航隐藏与页面守卫）。
+ */
+export function getDeniedModules(username: string): string[] {
+  return Object.entries(RESTRICTED_MODULES)
+    .filter(([, allowlist]) => !allowlist.includes(username))
+    .map(([pagePath]) => pagePath);
+}
+
+/**
+ * 受限模块的后端入口覆盖声明（2026-07-17 评审 P2 收口 · 契约）。
+ *
+ * 背景：RESTRICTED_MODULES 的通用运行时强制点只覆盖 governed 域（目前仅 /api/query，
+ * 见 permission.ts MOUNT_WHITELIST_POLICY），"只改一处即可限制任意模块"对后端并不天然
+ * 成立——若未来把 /data-import 等页面加进负面清单，页面会隐藏，但其 API 可能仍可直连。
+ *
+ * 契约：RESTRICTED_MODULES 每新增一个受限页面，必须同时在此声明其后端入口覆盖——
+ * sourceFile 内所有路径命中 routePrefixes 的 router.<method> 路由声明都必须挂 guardName
+ * 守卫中间件。静态契约测试 restricted-module-backend-coverage.test.ts 逐条对账：
+ * 只加负面清单不声明后端覆盖、或声明的路由缺守卫 → 测试红。
+ */
+export interface RestrictedModuleBackendGuard {
+  /**
+   * 允许承载该模块路由的源码文件（相对 server/src，可多文件）。
+   * 契约测试双向对账：声明文件内命中前缀的路由必须挂守卫；**未声明**文件出现
+   * 同前缀路由 → 测试红（防"第二个文件悄悄新增入口"绕过覆盖声明）。
+   */
+  sourceFiles: readonly string[];
+  /** 挂载内路由路径前缀：router.<method>('<path>') 的 path 精确等于前缀、或以 `${前缀}/` 开头即命中 */
+  routePrefixes: readonly string[];
+  /** 守卫中间件函数名（命中路由声明块内必须以真实实参形态出现，注释/字符串提及不算） */
+  guardName: string;
+}
+
+export const RESTRICTED_MODULE_BACKEND_GUARDS: Readonly<
+  Record<string, RestrictedModuleBackendGuard>
+> = {
+  [ACCESS_CONTROL_PAGE]: {
+    sourceFiles: ['routes/auth.ts'],
+    routePrefixes: ['/users', '/roles'],
+    guardName: 'requireAccessControlModule',
+  },
+};
+
 export interface PresetRole {
   role: string;
   name: string;
@@ -267,21 +343,6 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     branchCode: 'SC',
     specialFeatures: ['cost'],
   },
-  chexianbu: {
-    username: 'chexianbu',
-    passwordHash: '$2b$10$ChexianbuTombstone0000000000000000000000000000000000u',
-    displayName: '车险部',
-    role: 'branch_admin',
-    branchCode: 'SC',
-    specialFeatures: ['cost'],
-  },
-  scdianxiao: {
-    username: 'scdianxiao',
-    passwordHash: '$2b$10$ScdianxiaoTombstone000000000000000000000000000000000u',
-    displayName: '四川电销',
-    role: 'telemarketing_user',
-    branchCode: 'SC',
-  },
   // ===== 总部超管 + 市州一把手（2026-07-12 发放）=====
   // 1 全国超管 zongbu + 4 市州机构负责人（宜宾/乐山/达州/泸州，只读看本机构）。
   // passwordHash 均为「构造式 tombstone」占位（标准 bcrypt 60 字符格式、含 "Tombstone" 可辨标记，
@@ -361,9 +422,11 @@ export const PRESET_USERS: Record<string, PresetUser> = {
   //   已激活并逐账号隔离验证）。passwordHash 保持 tombstone 不变：即便 store 被 re-seed，无 env 真凭据仍无法登录。
   //   auth.ts: if (!user.active) throw new AppError(403, 'Account disabled')
   // organization 取自 数据管理/config/branch-org-mapping/SX.json 的 11 经营单元（= ETL 规范化后 org_level_3），禁臆造。
-  sxAdmin: {
+  sxadmin: {
     // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
-    username: 'sxAdmin',
+    // username 用小写 'sxadmin'：与生产 USER_PASSWORDS 键、既有 store 行、登录归一化口径一致。
+    // 历史大小写 'sxAdmin' 会因 reconcile 大小写敏感的 getUserByUsername 每次 reload 重生成重复行（已修）。
+    username: 'sxadmin',
     // tombstone 占位（不可登录）：山西超管凭据仅由 USER_PASSWORDS 环境变量提供。
     // 以下为标准 bcrypt 格式 tombstone（60 字符，无对应明文，bcrypt.compare 必然返回 false）
     passwordHash: '$2b$10$SxAdminTombstone000000000000000000000000000000000000u',
@@ -458,12 +521,52 @@ export const PRESET_USERS: Record<string, PresetUser> = {
     active: true,
   },
   sx_jdcszk: {
-    // 已激活（cutover 步⑥，2026-06-26）；真实凭据仅在生产 USER_PASSWORDS，passwordHash 保持 tombstone 占位
+    // 2026-07-15 退役（BACKLOG 2026-07-15-user-e04971）：经代/车商/重客 拆分为三个独立单元，
+    // 本合并账号显式 active:false 墓碑保留（防 preset 兜底写回复活，参 multi-branch-day1-sop §4.0）。
+    // ⚠️ 生产 store 存量行不会随 preset 自动停用（loadFromStore 不读 preset），须部署后经
+    // 权限管理 API 显式停用并验证登录被拒。organization 保留旧值仅作历史标识——重建后
+    // parquet 已无该 org_level_3 值，即使误活跃 RLS 等值匹配也恒 0 行（无数据泄露面）。
     username: 'sx_jdcszk',
     passwordHash: '$2b$10$SxJdcszkTombstone00000000000000000000000000000000000u',
-    displayName: '经代、车商、重客机构',
+    displayName: '经代、车商、重客机构（已拆分停用）',
     role: 'org_user',
     organization: '经代、车商、重客',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+    active: false,
+  },
+  sx_jingdai: {
+    // 2026-07-15 新增（拆分自 sx_jdcszk，各看各的）；真实凭据仅在生产 USER_PASSWORDS / 飞书个人映射
+    username: 'sx_jingdai',
+    passwordHash: '$2b$10$SxJingdaiTombstone0000000000000000000000000000000000u',
+    displayName: '经代机构',
+    role: 'org_user',
+    organization: '经代',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+    active: true,
+  },
+  sx_cheshang: {
+    // 2026-07-15 新增（拆分自 sx_jdcszk，各看各的）；真实凭据仅在生产 USER_PASSWORDS / 飞书个人映射
+    username: 'sx_cheshang',
+    passwordHash: '$2b$10$SxCheshangTombstone000000000000000000000000000000000u',
+    displayName: '车商机构',
+    role: 'org_user',
+    organization: '车商',
+    allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
+    defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
+    branchCode: 'SX',
+    active: true,
+  },
+  sx_zhongke: {
+    // 2026-07-15 新增（拆分自 sx_jdcszk，各看各的）；真实凭据仅在生产 USER_PASSWORDS / 飞书个人映射
+    username: 'sx_zhongke',
+    passwordHash: '$2b$10$SxZhongkeTombstone0000000000000000000000000000000000u',
+    displayName: '重客机构',
+    role: 'org_user',
+    organization: '重客',
     allowedRoutes: ORG_ROLE_ALLOWED_ROUTES,
     defaultRoute: ORG_ROLE_DEFAULT_ROUTE,
     branchCode: 'SX',

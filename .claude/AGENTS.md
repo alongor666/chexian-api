@@ -18,14 +18,16 @@ React + TypeScript + Vite 前端，Express + DuckDB 后端。生产环境 `https
 
 ## 数据架构
 
-数据统一存放于 `policy/current/`（4 个分片文件），服务器直接加载：
+数据统一存放于 `数据管理/warehouse/fact/policy/current/`（4 个分片文件），服务器直接加载：
 
 ```
-warehouse/fact/
-├── policy/current/*.parquet          # 保单+保费（3层分片：static/weekly/daily）
-├── claims/latest.parquet             # 赔付+费用（按保单号聚合去重）
-└── quotes/latest.parquet             # 报价状态（续保单号去重）
+数据管理/warehouse/fact/
+├── policy/current/*.parquet            # 保单+保费（3层分片：static/weekly/daily）
+├── claims_detail/claims_*.parquet      # 赔案明细（年度分区；claims 聚合域已删除）
+└── quotes_conversion/latest.parquet    # 报价状态
 ```
+
+> 域清单/路径以 `数据管理/data-sources.json` 与 `.claude/rules/data-pipeline.md` 为准。
 
 ### 数据加载流程
 
@@ -43,11 +45,11 @@ createCrossSellRealtimeView() → CrossSellDailyAgg（按月分批物化）
 ### ETL 命令
 
 ```bash
-node 数据管理/daily.mjs            # 智能检测，自动判断需更新的域
-node 数据管理/daily.mjs premium    # 保单+保费增量追加
-node 数据管理/daily.mjs claims     # 赔付+费用全量替换
-node 数据管理/daily.mjs quotes     # 报价状态全量替换
-node 数据管理/daily.mjs all        # 全部重跑
+# ⚠️ 必须显式指定域：无参会跌落 premium 单域 ETL，并非智能检测
+node 数据管理/daily.mjs premium        # 保单+保费增量追加
+node 数据管理/daily.mjs claims_detail  # 赔案明细（含历史全量快照 CDC 更新）
+node 数据管理/daily.mjs quotes         # 报价状态全量替换
+node 数据管理/daily.mjs all            # 全部重跑（完整域清单见 daily.mjs ALL_DOMAINS）
 ```
 
 ## 关键文件
@@ -55,18 +57,13 @@ node 数据管理/daily.mjs all        # 全部重跑
 | 文件 | 职责 |
 |------|------|
 | `server/src/app.ts` | 服务器入口，域拆分检测 |
-| `server/src/services/duckdb.ts` | DuckDB 服务，加载 `policy/current/` 分片 |
+| `server/src/services/duckdb.ts` | DuckDB 服务，加载 `server/data/fact/policy/current/` 分片 |
 | `server/src/config/paths.ts` | 路径配置，`getPolicyCurrentDir()` 等 |
 | `server/src/normalize/mapping.ts` | 中文→英文列名映射 |
-| `server/src/sql/*.ts` | 24 个 SQL 生成器 |
-| `数据管理/daily.mjs` | 分域 ETL 入口（智能检测） |
+| `server/src/sql/*.ts` | SQL 生成器（数量以目录为准，全景见 `server/src/sql/INDEX.md`） |
+| `数据管理/daily.mjs` | 分域 ETL 入口（须显式指定域） |
 | `数据管理/pipelines/transform.py` | Excel→Parquet 转换（`--domain`/`--after-date`） |
-| `数据管理/pipelines/split_existing.py` | ~~一次性迁移脚本~~（已废弃，迁移已完成） |
 | `数据管理/pipelines/merge_parquet.py` | Parquet 合并工具 |
-
-## 指标注册表
-
-新增/修改指标必须先改 `server/src/config/metric-registry/categories/*.ts`，再改 SQL 生成器。禁止硬编码新指标公式。详见 `metric-registry/types.ts`。
 
 ## 红线规则
 
@@ -76,12 +73,14 @@ node 数据管理/daily.mjs all        # 全部重跑
 4. **VPS 禁止查询原始 PolicyFact**（续保除外），只能查预聚合表
 5. **安全**: JWT 禁止绕过，三级限流禁止降低，`security.ts` 黑名单支持中文
 
+> 以上为冷启动最小集；完整红线与 Pre-flight 以 `CLAUDE.md` §0-§3 为准。
+
 ## 开发命令
 
 ```bash
 bun install && bun run dev:full    # 安装+启动（前后端同时）
 bun run build                      # 类型检查+构建
-bun run test                       # 单元测试
+bun run test --run                 # 单元测试（⚠️ 不是 bun test；不带 --run 进 watch）
 bun run test:e2e                   # E2E（需先 dev:full）
 bun run governance                 # 治理校验（push 前必跑）
 ```
