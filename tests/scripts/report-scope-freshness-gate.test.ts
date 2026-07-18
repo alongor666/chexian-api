@@ -201,6 +201,33 @@ describe('report scope freshness gate', () => {
     expect(`${result.stdout}\n${result.stderr}`).toContain('--reports-root 缺少值');
   });
 
+  it('磁盘上已退役的 org scope（不在 SSOT 白名单）不阻断发布，仅归入 retired 告警', () => {
+    const { reportsRoot, configDir } = makeFixture();
+    writeMapping(configDir, 'SC', ['乐山']);
+    writeCompletePeriodTrend(reportsRoot, '2026-07-15', { SC: ['乐山'] });
+    // 磁盘残留一个已拆分退役的旧合并单元目录（不在白名单），且日期陈旧、未在本批次刷新
+    writeReport(join(periodTrendDir(reportsRoot), 'orgs', 'SC', '经代、车商、重客'), '2026-07-10');
+
+    const result = runReportScopeFreshnessGate({ reportsRoot, configDir });
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.retired).toContain('diagnose-period-trend/orgs/SC/经代、车商、重客');
+  });
+
+  it('发布编排把非 SC 省晋升放在报告生成之前，且用 --promote-only（不 rsync/reload）', () => {
+    const source = readFileSync(
+      join(PROJECT_ROOT, 'scripts', 'sync-and-reload.mjs'),
+      'utf8',
+    );
+    const promoteIndex = source.indexOf("'非 SC 省晋升（报告前）'");
+    const reportIndex = source.indexOf("'period-trend report'");
+    expect(promoteIndex).toBeGreaterThan(-1);
+    expect(reportIndex).toBeGreaterThan(-1);
+    expect(promoteIndex).toBeLessThan(reportIndex);
+    expect(source).toContain("['scripts/sync-vps.mjs', '--promote-only']");
+  });
+
   it('发布编排把 scope 闸放在报告生成之后、VPS sync 之前', () => {
     const source = readFileSync(
       join(PROJECT_ROOT, 'scripts', 'sync-and-reload.mjs'),
