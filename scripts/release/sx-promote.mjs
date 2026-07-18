@@ -65,10 +65,11 @@
  *         数据确不同 → fail-fast（--force 才覆盖）
  *   P1-7a. schema 演进防崩（2026-07-17，backlog 34e06a）：EXCEPT 要求两侧列数一致，上游 BI
  *         导出 schema 演进（如 46→47 列新增 applicant_name 投保人列）会触发 DuckDB Binder
- *         错误崩掉脚本 → 整条 sync-vps 发布链中止。现在 EXCEPT 前先比对两侧列名集合：
- *         不同 → 打清晰中文告警（列数 + 差异列清单）后直接判定内容冲突（走既有 --force
- *         人工流程）；比对过程任何 DuckDB 报错同样按冲突阻断（fail-safe：不确定时宁可
- *         判冲突，绝不静默放行、也不再让 Binder 崩溃）。
+ *         错误崩掉脚本 → 整条 sync-vps 发布链中止。现在 EXCEPT 前先比对两侧 schema
+ *         （列名集合 + 同名列类型，如 premium BIGINT→VARCHAR 的类型演进同样判冲突）：
+ *         不同 → 打清晰中文告警（列数 + 差异列清单 / 类型差异清单）后直接判定内容冲突
+ *         （走既有 --force 人工流程）；比对过程任何 DuckDB 报错同样按冲突阻断
+ *         （fail-safe：不确定时宁可判冲突，绝不静默放行、也不再让 Binder 崩溃）。
  *   P1-8. sha256 流式计算（createReadStream + hash.update）防大 parquet 整文件进内存（P1 第2轮）
  *   P2-9. assertSxSubdirTarget 在 mkdirSync 之前调用（B5 语义反转：原 assertNoSubdirIntent 防子目录，
  *         现要求目标**必须是** current/SX 省份子目录）
@@ -358,18 +359,25 @@ export async function validateBranchCodeSX(parquetPath, { runDuckdb = runDuckdbC
 }
 
 /**
- * 读取 parquet 文件的列名清单（DESCRIBE，只读元数据，不扫描数据行）。
+ * 读取 parquet 文件的列结构清单（DESCRIBE，只读元数据，不扫描数据行）。
+ * 同时保留列名与列类型——schema 等价判定必须双比对：只比列名会把
+ * 「同名列类型变化」（如 premium BIGINT→VARCHAR）误判为 schema 相同。
  * @param {string} parquetPath
  * @param {{ runDuckdb?: Function }} [opts]  注入式，便于单测
- * @returns {Promise<string[]>}
+ * @returns {Promise<Array<{ column_name: string, column_type: string }>>}
  */
-export async function parquetColumnNames(parquetPath, { runDuckdb = runDuckdbCli } = {}) {
+export async function parquetSchemaColumns(parquetPath, { runDuckdb = runDuckdbCli } = {}) {
   const p = parquetPath.replace(/'/g, "''");
   const rows = await runDuckdb(
     `DESCRIBE SELECT * FROM read_parquet('${p}') LIMIT 0`,
     { timeoutMs: 30_000 },
   );
-  return rows.map((r) => r.column_name ?? r['column name']).filter(Boolean);
+  return rows
+    .map((r) => ({
+      column_name: r.column_name ?? r['column name'],
+      column_type: r.column_type ?? r['column type'] ?? '',
+    }))
+    .filter((c) => Boolean(c.column_name));
 }
 
 /**
@@ -383,9 +391,11 @@ export async function parquetColumnNames(parquetPath, { runDuckdb = runDuckdbCli
  * schema 演进防崩（P1-7a，2026-07-17）：EXCEPT 是集合运算，两侧列数不同时 DuckDB 直接
  * 抛 Binder 错误（"Set operations can only apply to expressions with the same number of
  * result columns"）——上游 BI 导出新增列（46→47 列 applicant_name）当天补跑同名旧分片即
- * 崩掉整条发布链。故先比对两侧列名集合：不同 → 打清晰中文告警后返回 false（判定内容
- * 冲突，走既有 --force 人工流程）；列集合相同时按排序后的显式列清单投影再 EXCEPT（免疫
- * 物理列序重排）。整个比对包 try/catch：任何 DuckDB 报错 → 告警 + 返回 false（fail-safe：
+ * 崩掉整条发布链。故先比对两侧 schema：①列名集合不同 → 判冲突；②列名相同但同名列类型
+ * 不同（如 premium BIGINT→VARCHAR，EXCEPT 可隐式转换比出"数据相同"，只比列名会误判等价
+ * 而静默保留旧 schema）→ 同样判冲突。两类差异均打清晰中文告警后返回 false（走既有
+ * --force 人工流程）；schema 完全一致时按排序后的显式列清单投影再 EXCEPT（免疫物理列序
+ * 重排）。整个比对包 try/catch：任何 DuckDB 报错 → 告警 + 返回 false（fail-safe：
  * 不确定时宁可判冲突阻断，绝不静默放行错误数据、也绝不崩进程）。
  *
  * 只在 sha256 已不一致的罕见分支调用；正常路径（sha256 一致）不触发本查询，零额外开销。
@@ -401,11 +411,16 @@ export async function parquetDataIdentical(pathA, pathB, { runDuckdb = runDuckdb
   const b = pathB.replace(/'/g, "''");
 
   try {
-    // Step 0（P1-7a）：列名集合比对——列集合不同则数据必不等价，且直接 EXCEPT 会 Binder 崩溃
-    const [colsA, colsB] = await Promise.all([
-      parquetColumnNames(pathA, { runDuckdb }),
-      parquetColumnNames(pathB, { runDuckdb }),
+    // Step 0（P1-7a）：schema 比对（列名集合 + 同名列类型）——
+    //   列集合不同则数据必不等价，且直接 EXCEPT 会 Binder 崩溃；
+    //   同名列类型变化（如 premium BIGINT→VARCHAR）同样是 schema 演进，只比列名会误判等价
+    //   → skipped_data_identical 静默保留旧 schema，违背 fail-safe。两类差异均判冲突。
+    const [schemaA, schemaB] = await Promise.all([
+      parquetSchemaColumns(pathA, { runDuckdb }),
+      parquetSchemaColumns(pathB, { runDuckdb }),
     ]);
+    const colsA = schemaA.map((c) => c.column_name);
+    const colsB = schemaB.map((c) => c.column_name);
     const setA = new Set(colsA);
     const setB = new Set(colsB);
     const onlyInA = colsA.filter((c) => !setB.has(c));
@@ -415,6 +430,17 @@ export async function parquetDataIdentical(pathA, pathB, { runDuckdb = runDuckdb
       log('warn', `  源列数=${colsA.length}，目标列数=${colsB.length}`);
       if (onlyInA.length > 0) log('warn', `  仅源存在的列: ${onlyInA.join('、')}`);
       if (onlyInB.length > 0) log('warn', `  仅目标存在的列: ${onlyInB.join('、')}`);
+      return false;
+    }
+
+    // 列集合相同 → 逐列比对类型（按列名对齐，与物理列序无关）
+    const typeB = new Map(schemaB.map((c) => [c.column_name, c.column_type]));
+    const typeDiffs = schemaA
+      .filter((c) => typeB.get(c.column_name) !== c.column_type)
+      .map((c) => `${c.column_name}: 源=${c.column_type} / 目标=${typeB.get(c.column_name)}`);
+    if (typeDiffs.length > 0) {
+      log('warn', `[数据级复核] 两侧列名相同但列类型不同，判定为内容冲突——类型演进须走 --force 人工覆盖流程：`);
+      for (const d of typeDiffs) log('warn', `  ${d}`);
       return false;
     }
 
