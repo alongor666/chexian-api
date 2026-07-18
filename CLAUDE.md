@@ -94,7 +94,7 @@
 
 ## 3. 护栏（RED LINE）
 
-**架构协议**：Bun 包管理器（禁止 npm/yarn）· 智谱 API `glm-4.7-flash` · 三级限流（禁止降低）· `security.ts` 危险字符黑名单支持中文
+**架构协议**：智谱 API `glm-4.7-flash` · 三级限流（禁止降低）· `security.ts` 危险字符黑名单支持中文
 
 > 分片架构、VPS 分层查询、数据同步等详细规则见 `.claude/rules/data-pipeline.md`。业务口径护栏见 `.claude/rules/sql-generators.md`。报价口径修正见 BACKLOG B255。
 
@@ -132,13 +132,13 @@
 
 **DONE 判定**：关联文档 + 关联代码 + 验收证据（至少一项）。核心层改动须更新 INDEX.md。提交前：`bun run governance`
 
-**技术栈**：React + TypeScript + Vite + DuckDB + ECharts · Bun 包管理器 · DuckDB CLI（`brew install duckdb`，与 Neo `@duckdb/node-api` minor 兼容，用于源数据直查与口径验证）
+**技术栈**：React + TypeScript + Vite + DuckDB + ECharts · Bun 包管理器（禁止 npm/yarn）· DuckDB CLI（`brew install duckdb`，与 Neo `@duckdb/node-api` minor 兼容，用于源数据直查与口径验证）
 
 ```bash
 bun install && bun run dev:full    # 安装+启动
 bun run hooks:install              # 首次 clone 后装 git hooks（worktree 依赖自愈）
 bun run build                      # 类型检查+构建
-bun run typecheck                  # 仅类型检查
+bun run typecheck                  # 仅类型检查（前端 + server 两个 tsconfig，工程清单见 scripts/typecheck.mjs PROJECTS）
 bun run test --run                 # 单元测试一次性运行（⚠️ 不是 bun test；不带 --run 进 vitest watch）
 bun run test --run <文件路径>      # 跑单个测试文件
 bun run test:integration           # 集成测试（DuckDB 原生绑定，node 环境；CI production-gate + 本地）
@@ -193,7 +193,7 @@ bun run verify:full                # verify:quick + 单元测试
 
 **PR 创建状态**（用户偏好 2026-06-13，覆盖远程执行环境"默认建 draft"约定）：PR 一律以 **ready（非 draft）** 创建，禁止建 draft——用户不想人工标记待审核。部署链 PR 仍按 `.claude/pr-checklist.md` §4 禁 auto-merge（非 draft ≠ auto-merge）。
 
-**生产环境**：腾讯云 4核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist` · **PM2 重启**：deployer 无法直接调 pm2，须 `sudo /usr/local/bin/deploy-chexian-api reload`（或 `restart`/`install`）
+**生产环境**：腾讯云 4核4G `162.14.113.44` · `https://chexian.cretvalu.com` · PM2 `chexian-api` 端口 3000 · Nginx 前端 `/var/www/chexian/frontend/dist` · **PM2 重启**：deployer 无法直接调 pm2，须经部署 wrapper（命令 SSOT 见 `.claude/rules/deploy-chain-sop.md`）
 
 **日常数据发布**：优先用 `bun run release:daily:dry`（只看计划）· `bun run release:daily:check`（ETL/VPS/reload/health，企微 dry-run）· `bun run release:daily`（ETL → VPS → reload → health → 企微同步）。细节见 `数据管理/integrations/wecom_smartsheet/README.md` 与 `scripts/sync-and-reload.mjs --help`
 

@@ -51,7 +51,12 @@ import {
 } from '../services/activation-token.js';
 import { notifyPasswordEvent } from '../services/notify.js';
 import { QUERY_ROUTE_METADATA } from '../config/query-routes-metadata.js';
-import { resolveAllowedRoutes } from '../config/preset-users.js';
+import {
+  resolveAllowedRoutes,
+  canAccessRestrictedModule,
+  getDeniedModules,
+  ACCESS_CONTROL_PAGE,
+} from '../config/preset-users.js';
 import { assertStaticReportAccess, shouldEnforceStaticReportPolicy } from './reports.js';
 import { getAuthMethods } from '../services/credential-policy.js';
 
@@ -174,6 +179,24 @@ function requireSessionAuth(req: Request): void {
   if (req.pat) {
     throw new AppError(403, 'Cannot manage tokens via PAT. Use browser session.');
   }
+}
+
+/**
+ * 权限管理模块门禁（模块负面清单 · 2026-07-15）：
+ * 用户/角色管理端点在 requireRole(BRANCH_ADMIN) 之上再收一层——调用者 username 必须在
+ * RESTRICTED_MODULES['/admin/access-control'] 白名单内（仅 薛成龙/杨杰/林霞 三人；
+ * admin 的"运维兜底"席位属规格外扩权，2026-07-17 评审 P1 收口移除）。
+ * 其余 branch_admin（总经理室/车险部员工）保留全部业务板块与 PAT 自助，但无权限管理面。
+ * fail-closed：白名单外一律 403，与前端导航隐藏/页面守卫同源（preset-users.ts SSOT）。
+ */
+function requireAccessControlModule(req: Request, _res: Response, next: (err?: unknown) => void): void {
+  if (!req.user) {
+    return next(new AppError(401, 'Authentication required'));
+  }
+  if (!canAccessRestrictedModule(req.user.username, ACCESS_CONTROL_PAGE)) {
+    return next(new AppError(403, '无访问权限：权限管理模块仅限指定管理员使用'));
+  }
+  next();
 }
 
 /**
@@ -472,6 +495,7 @@ router.post(
   authMiddleware,
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (req: Request, res: Response) => {
     requireSessionAuth(req);
     if (!req.user) throw new AppError(401, 'Authentication required');
@@ -522,6 +546,7 @@ router.post(
   authMiddleware,
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (req: Request, res: Response) => {
     requireSessionAuth(req);
     if (!req.user) throw new AppError(401, 'Authentication required');
@@ -563,6 +588,7 @@ router.get(
   '/users',
   authMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (req: Request, res: Response) => {
     const users = await listUsers();
     // 管理面按省收敛：单省 branch_admin 只列本省账号，全国超管列全部（RLS 关时 scope=null 列全部）。
@@ -581,6 +607,7 @@ router.post(
   authMiddleware,
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (req: Request, res: Response) => {
     const parseResult = userCreateSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -627,6 +654,7 @@ router.put(
   authMiddleware,
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (req: Request, res: Response) => {
     const parseResult = userUpdateSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -682,6 +710,7 @@ router.delete(
   authMiddleware,
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (req: Request, res: Response) => {
     // 管理面按省收敛：只能删本可管理范围内的账号（RLS 关时 scope=null 放行）。
     const scope = getManageableBranchScope(req.user ?? {});
@@ -701,6 +730,7 @@ router.get(
   '/roles',
   authMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (_req: Request, res: Response) => {
     const roles = await listRoles();
     res.json({ success: true, data: roles });
@@ -712,6 +742,7 @@ router.post(
   authMiddleware,
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (req: Request, res: Response) => {
     // 角色表是全局单表：单省 admin 改角色定义会跨省影响其他省账号，写操作收敛到系统级超管
     if (!isNationalAdmin(req.user ?? {})) {
@@ -731,6 +762,7 @@ router.put(
   authMiddleware,
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (req: Request, res: Response) => {
     if (!isNationalAdmin(req.user ?? {})) {
       throw new AppError(403, '角色定义为全局资产，仅系统级管理员可修改');
@@ -749,6 +781,7 @@ router.delete(
   authMiddleware,
   readonlyMiddleware,
   requireRole(UserRole.BRANCH_ADMIN),
+  requireAccessControlModule,
   asyncHandler(async (req: Request, res: Response) => {
     if (!isNationalAdmin(req.user ?? {})) {
       throw new AppError(403, '角色定义为全局资产，仅系统级管理员可修改');
@@ -948,6 +981,8 @@ router.get(
           // allowedRoutes 为空/未定义时按角色回填，避免前端回退到本地兜底清单（前后端口径漂移根因）。
           allowedRoutes: resolveAllowedRoutes(rest.role, rest.allowedRoutes),
           visibleBranches,
+          // 模块负面清单按 username 派生（SSOT: RESTRICTED_MODULES），刷新/恢复会话后导航隐藏仍生效。
+          deniedModules: getDeniedModules(username),
           tokenType,
           mustChangePassword,
           hasPassword,
@@ -965,6 +1000,7 @@ router.get(
         role,
         organization,
         visibleBranches,
+        deniedModules: getDeniedModules(username),
         tokenType,
         mustChangePassword,
         hasPassword,

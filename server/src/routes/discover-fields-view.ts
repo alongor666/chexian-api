@@ -18,6 +18,8 @@ export interface FieldsJsonEntry {
   sourceColumn?: string | null;
   required?: boolean;
   derived?: boolean;
+  /** 个人敏感字段（如投保人名称）：分析查询面必须拒绝查询/分组，见 mapping.ts SENSITIVE_FIELDS */
+  sensitive?: boolean;
   dataTypes: string[];
   aliases: string[];
   description?: string;
@@ -97,10 +99,16 @@ export function buildFieldsView(
 
   return fields.map((field) => {
     const derived = Boolean(field.derived);
+    const sensitive = Boolean(field.sensitive);
 
     let queryable: boolean | null;
     let actualType: string | null;
-    if (colMap === null) {
+    if (sensitive) {
+      // 敏感字段（个人信息）：即便物理列存在也不对分析查询面暴露可查性，
+      // 与 sql-validator 的 SENSITIVE_FIELDS 拒绝口径保持一致（隐私红线）
+      queryable = false;
+      actualType = null;
+    } else if (colMap === null) {
       queryable = null;
       actualType = null;
     } else if (colMap.has(field.id)) {
@@ -111,10 +119,13 @@ export function buildFieldsView(
       actualType = null;
     }
 
-    const groupable =
-      actualType !== null ? typeIsGroupable(actualType) : declaredGroupable(field.dataTypes);
+    const groupable = sensitive
+      ? false
+      : actualType !== null ? typeIsGroupable(actualType) : declaredGroupable(field.dataTypes);
 
-    const note = computeNote(field, derived, queryable, actualType);
+    const note = sensitive
+      ? '敏感字段（个人信息）：分析查询面禁止 SELECT / GROUP BY / ORDER BY，仅限授权台账同步场景'
+      : computeNote(field, derived, queryable, actualType);
 
     const view: FieldView = {
       column: field.id,

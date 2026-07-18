@@ -9,6 +9,7 @@ vi.mock('../duckdb.js', () => ({
 
 import {
   assertPasswordAllowed,
+  assertPatAllowed,
   credentialSetupRequired,
   getAuthMethods,
   getPasswordCredential,
@@ -65,5 +66,41 @@ describe('credential policy', () => {
     expect(methods).toHaveLength(2);
     expect(methods[0]).not.toBe('feishu');
     expect(methods[1]).toBe('feishu');
+  });
+});
+
+describe('assertPatAllowed — PAT 会话 userId=用户名 与 PasswordCredential.user_id=uuid 的键解析（2026-07-15 修复）', () => {
+  it('user_id 直接命中（历史行/单测行）→ 放行，不做第二次查询', async () => {
+    queryMock.mockResolvedValueOnce([
+      // password_hash 为显式假值（GitGuardian 曾把 'hash' 字面量误报为 Generic Password）
+      { user_id: 'u-uuid-1', password_hash: 'unit-test-fake-hash', state: 'active', changed_at: '2026-07-11' },
+    ]);
+    await expect(assertPatAllowed('u-uuid-1')).resolves.toBeUndefined();
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('原值未命中 → 经 UserAccount.username JOIN 解析命中 → 放行（修复前此路径恒 403）', async () => {
+    queryMock
+      .mockResolvedValueOnce([]) // getPasswordCredential('chexianbu') 未命中（uuid 键）
+      .mockResolvedValueOnce([{ user_id: 'u-uuid-2' }]); // JOIN UserAccount.username 命中
+    await expect(assertPatAllowed('chexianbu')).resolves.toBeUndefined();
+    expect(queryMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('无密码凭据但有启用的飞书身份（纯飞书账号）→ 放行（PAT 全员自助，2026-07-17 评审 P1 收口）', async () => {
+    queryMock
+      .mockResolvedValueOnce([]) // getPasswordCredential 未命中
+      .mockResolvedValueOnce([]) // PasswordCredential JOIN UserAccount 未命中
+      .mockResolvedValueOnce([{ provider: 'feishu' }]); // AuthIdentity 启用身份命中
+    await expect(assertPatAllowed('feishu-only')).resolves.toBeUndefined();
+    expect(queryMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('密码凭据与启用身份均不存在 → 403 AUTH_METHOD_NOT_ALLOWED', async () => {
+    queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await expect(assertPatAllowed('ghost-user')).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'AUTH_METHOD_NOT_ALLOWED',
+    });
   });
 });

@@ -5,6 +5,12 @@
 /BACKLOG.md
 /BACKLOG_ARCHIVE.md
 
+# ETL 台账派生视图（2026-07-15：与上方 BACKLOG 视图同因同治）。真相 = etl-ledger.jsonl
+# （append-only，仍入库）；这份是从它全量重渲的看板，每轮 ETL churn ~30 行且非纯追加，
+# 设计文档 docs/plans/2026-06-27-etl-ledger.md:31 早已认定「不设 union，冲突时重跑 render.mjs」。
+# 按需生成：node scripts/etl-ledger/render.mjs
+/数据管理/ledger/数据流转台账.md
+
 # Claude Code worktrees（本地临时目录，禁止提交为 gitlink）
 .claude/worktrees/
 
@@ -109,6 +115,9 @@ PASSWORDS.local.txt
 
 # user-only 写入授权哨兵（AGENTS.md §8.3 可授权档，仅用户本人 touch/rm，本地状态不入库）
 .claude/.user-only-write-ok
+
+# 调度运行时 lock（AGENTS.md §8.3 硬锁清单声称 gitignore，2026-07-16 索引死链闸 CI 实测发现从未接线，补齐）
+.claude/scheduled_tasks.lock
 
 # sync-vps 同步清单（本地状态，不提交）
 .last-sync-manifest.json
@@ -227,3 +236,4 @@ social-card-sx-renewal/
 # 2419ed：字段覆盖率报告只服务本地 AI 知识库（派生自本地 parquet，克隆环境天然过时），
 # 不入库、不随 VPS 发布；单次刷新 ~2400 行曾撞 PR 体量门禁
 数据管理/knowledge/ai/field-coverage-report.json
+.codebuddy

@@ -5,11 +5,11 @@ export type RouteId =
   | 'cost' | 'claims-detail' | 'expense-development' | 'moto-cost'
   | 'renewal-tracker' | 'quote-conversion' | 'customer-flow'
   | 'specialty' | 'repair' | 'data-import' | 'access-control'
-  | 'sales-team-performance';
+  | 'sales-team-performance' | 'my-tokens';
 export type IconKey =
   | 'home' | 'gauge' | 'layout-grid' | 'trending-up' | 'dollar-sign' | 'bar-chart'
   | 'calculator' | 'file-warning' | 'trending-down' | 'bike' | 'refresh' | 'target'
-  | 'arrow-left-right' | 'gift' | 'wrench' | 'database' | 'shield';
+  | 'arrow-left-right' | 'gift' | 'wrench' | 'database' | 'shield' | 'key';
 
 function freezeObjects<T extends object>(values: T[]): readonly Readonly<T>[] {
   values.forEach((value) => Object.freeze(value));
@@ -80,7 +80,15 @@ export const ROUTES: readonly RouteDefinition[] = freezeRoutes([
 
   { kind: 'canonical', id: 'data-import', path: '/data-import', label: '数据管理', shortLabel: '数据', iconKey: 'database', navigationDomain: 'platform', navigationOrder: 10, showInNavigation: true, permissionConfigurable: true },
   { kind: 'canonical', id: 'access-control', path: '/admin/access-control', label: '权限管理', shortLabel: '权限', iconKey: 'shield', navigationDomain: 'platform', navigationOrder: 20, showInNavigation: true, permissionConfigurable: false },
+  { kind: 'canonical', id: 'my-tokens', path: '/my-tokens', label: 'API 令牌', shortLabel: '令牌', iconKey: 'key', navigationDomain: 'platform', navigationOrder: 30, showInNavigation: true, permissionConfigurable: false },
 ]);
+
+/**
+ * 个人自助功能路由：对所有已登录用户开放，不受角色 allowedRoutes 白名单限制。
+ * /my-tokens（PAT 自助管理）：后端 /api/auth/tokens 本就对全部会话用户开放，
+ * PAT 权限完全继承用户本人（dataScope/allowedRoutes），自助入口无越权面。
+ */
+export const PERSONAL_ROUTES: readonly string[] = Object.freeze(['/my-tokens']);
 
 export function getPermissionRoutes(): readonly RouteDefinition[] {
   return ROUTES

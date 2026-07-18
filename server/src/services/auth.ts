@@ -9,11 +9,11 @@ import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
 import { authEnv } from '../config/env.js';
-import { PRESET_USERS, getPresetVisibleBranches, SELF_SERVICE_PASSWORD_ONLY_USERS, resolveAllowedRoutes } from '../config/preset-users.js';
+import { PRESET_USERS, getPresetVisibleBranches, getDeniedModules, SELF_SERVICE_PASSWORD_ONLY_USERS, resolveAllowedRoutes } from '../config/preset-users.js';
 import { validatePasswordPolicy } from '../config/password-policy.js';
 import { AppError } from '../middleware/error.js';
 import { JwtPayload } from '../middleware/auth.js';
-import { ensurePresetUser, getUserByUsername, setUserPasswordByUsername } from './access-control.js';
+import { canonicalizeUsername, ensurePresetUser, getUserByUsername, setUserPasswordByUsername } from './access-control.js';
 import type { AccessUser } from './access-control.js';
 import { assertPasswordAllowed, credentialSetupRequired } from './credential-policy.js';
 import { isIpAllowed as isIpAllowedShared } from '../utils/ip.js';
@@ -31,6 +31,8 @@ export interface UserCredential {
   branchCode?: string;
   /** 全国超管可见省集合（按 username 从 PRESET_USERS 派生，供前端显示切省下拉）。普通用户 undefined */
   visibleBranches?: string[];
+  /** 模块负面清单（按 username 从 RESTRICTED_MODULES 派生）：该用户不可访问的前端页面路径 */
+  deniedModules?: string[];
   allowedIps?: string[];
   allowedRoutes?: string[];
   defaultRoute?: string;
@@ -122,7 +124,8 @@ class AuthService {
   private refreshTokenStore = new Map<string, { userId: string; expiresAt: number }>();
 
   private normalizeUsername(input: string): string {
-    return input.normalize('NFKC').trim().toLowerCase();
+    // 复用 access-control 的唯一 canonical 口径（NFKC+trim+lowercase），杜绝登录与写入/查询边界口径漂移。
+    return canonicalizeUsername(input);
   }
 
   private normalizePassword(input: string): string {
@@ -163,6 +166,8 @@ class AuthService {
       allowedIps: allowedIpsOverride ?? user.allowedIps,
       // 全国超管可见省集合按 username 从 PRESET_USERS 派生（单一事实源），随登录响应回前端显示切省下拉。
       visibleBranches: getPresetVisibleBranches(normalizedUsername),
+      // 模块负面清单按 username 派生（单一事实源 RESTRICTED_MODULES），随登录响应回前端驱动导航隐藏。
+      deniedModules: getDeniedModules(normalizedUsername),
       // pns：尚未自设专属密码（且不豁免）→ 本次会话强制设密。
       // 存量账号旧密码（USER_PASSWORDS/preset 哈希）由此降级为一次性激活凭据：登录成功即被拦去设密。
       mustChangePassword: (

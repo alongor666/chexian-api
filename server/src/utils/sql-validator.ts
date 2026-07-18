@@ -11,6 +11,7 @@
 
 import type { ValidationResult } from '../types/sql-query.js';
 import { isRelationAllowed, isFederationEnabled } from '../config/sql-federation-policy.js';
+import { SENSITIVE_FIELDS } from '../normalize/mapping.js';
 
 /**
  * SQL 长度限制 (字符)
@@ -96,9 +97,12 @@ const FORBIDDEN_TABLES = [
 ];
 
 /**
- * 隐私保护:禁止选择的字段 (保单明细)
+ * 隐私保护:禁止选择的字段
+ * - policy_no：保单明细（仅允许 COUNT 计数）
+ * - 注册表 sensitive: true 字段（如 applicant_name 投保人名称）：个人信息，
+ *   由 field-registry codegen 的 SENSITIVE_FIELDS 统一驱动，禁止 SELECT/GROUP BY/ORDER BY
  */
-const FORBIDDEN_FIELDS = ['policy_no'];
+const FORBIDDEN_FIELDS = ['policy_no', ...SENSITIVE_FIELDS];
 
 /**
  * 聚合函数列表 (必须出现至少一个)

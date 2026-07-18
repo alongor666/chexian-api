@@ -48,11 +48,11 @@ if [ -n "$REPORT_FILES" ]; then
   exit 1
 fi
 
-# --- 3. 类型检查 ---
-echo "🔍 [pre-commit] 运行前端类型检查..."
+# --- 3. 类型检查（前端 + server，两个工程都在 scripts/typecheck.mjs 的 PROJECTS 里）---
+# 2026-07-15 前这里是「bun run typecheck（当时仅前端）+ 单独一行 server tsc」两步。
+# server tsc 已并入 typecheck.mjs（BACKLOG 2026-07-15-claude-1cbed5：让自查命令与提交闸、
+# CI 同口径），故此处收敛为一条 —— 两处各写一份正是"某处漏检/两处漂移"的温床。
+echo "🔍 [pre-commit] 运行类型检查（前端 + server）..."
 bun run typecheck
-
-echo "🔍 [pre-commit] 运行 server 类型检查..."
-npx tsc --noEmit --project server/tsconfig.json
 
 echo "✅ [pre-commit] 全部检查通过，允许提交"

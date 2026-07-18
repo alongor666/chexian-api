@@ -55,6 +55,15 @@ const FIELDS: FieldsJsonEntry[] = [
     dataTypes: ['VARCHAR'],
     aliases: ['ghost_col'],
   },
+  {
+    id: 'applicant_name',
+    label: '投保人名称',
+    required: false,
+    sensitive: true,
+    dataTypes: ['VARCHAR', 'TEXT'],
+    aliases: ['applicant_name', '投保人'],
+    description: '投保人名称（个人敏感信息）',
+  },
 ];
 
 // PolicyFact 真实 schema：premium/org_level_3/is_renewal/is_commercial_insure 在；
@@ -64,6 +73,8 @@ const DESCRIBE: DescribeColumn[] = [
   { name: 'org_level_3', type: 'VARCHAR' },
   { name: 'is_renewal', type: 'BOOLEAN' },
   { name: 'is_commercial_insure', type: 'VARCHAR' },
+  // applicant_name 物理列真实存在 —— 用于断言 sensitive 屏蔽优先于「可查真值」
+  { name: 'applicant_name', type: 'VARCHAR' },
 ];
 
 function byId(views: ReturnType<typeof buildFieldsView>, id: string) {
@@ -149,5 +160,28 @@ describe('buildFieldsView — ETL 入库元数据仅 verbose 暴露', () => {
     const premium = byId(buildFieldsView(FIELDS, DESCRIBE, { verbose: true }), 'premium');
     expect(premium.ingestAliases).toContain('signed_premium');
     expect(premium.ingestTypes).toContain('DOUBLE');
+  });
+});
+
+describe('buildFieldsView — 敏感字段隐私红线（PR #1129 回归锁）', () => {
+  it('sensitive 字段即便物理列真实存在 → queryable=false + groupable=false + 敏感提示', () => {
+    const v = byId(buildFieldsView(FIELDS, DESCRIBE), 'applicant_name');
+    expect(v.queryable).toBe(false);
+    expect(v.actualType).toBeNull();
+    expect(v.groupable).toBe(false);
+    expect(v.note).toContain('敏感');
+  });
+
+  it('schema 不可用（describeColumns=null）时 sensitive 字段仍不可查不可分组', () => {
+    const v = byId(buildFieldsView(FIELDS, null), 'applicant_name');
+    expect(v.queryable).toBe(false);
+    expect(v.groupable).toBe(false);
+    expect(v.note).toContain('敏感');
+  });
+
+  it('groupable=true 过滤（cx fields --groupable 消费路径）不包含敏感字段', () => {
+    const views = buildFieldsView(FIELDS, DESCRIBE);
+    const groupables = views.filter((f) => f.groupable).map((f) => f.id);
+    expect(groupables).not.toContain('applicant_name');
   });
 });

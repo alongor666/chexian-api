@@ -147,6 +147,37 @@ describe('validateSQL — 隐私保护 policy_no', () => {
   });
 });
 
+describe('validateSQL — 敏感字段 applicant_name（注册表 sensitive: true 驱动，PR #1129 隐私回归锁）', () => {
+  it('SELECT applicant_name（即便带聚合与分组）→ 拒绝（隐私）', () => {
+    const r = validateSQL(
+      'SELECT applicant_name, COUNT(*) FROM PolicyFact GROUP BY applicant_name'
+    );
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('隐私');
+  });
+
+  it('GROUP BY applicant_name → 拒绝（隐私）', () => {
+    const r = validateSQL('SELECT COUNT(*) AS n FROM PolicyFact GROUP BY applicant_name');
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('隐私');
+  });
+
+  it('ORDER BY applicant_name → 拒绝（隐私）', () => {
+    const r = validateSQL('SELECT COUNT(*) AS n FROM PolicyFact ORDER BY applicant_name');
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('隐私');
+  });
+
+  it('COUNT(applicant_name) 纯计数（不返回值）→ 允许', () => {
+    expect(validateSQL('SELECT COUNT(applicant_name) FROM PolicyFact').valid).toBe(true);
+  });
+
+  it('禁令由注册表 SENSITIVE_FIELDS 驱动（fields.json sensitive: true → codegen 联动）', async () => {
+    const { SENSITIVE_FIELDS } = await import('../../normalize/mapping.js');
+    expect(SENSITIVE_FIELDS.has('applicant_name')).toBe(true);
+  });
+});
+
 describe('isReadOnlyQuery', () => {
   it('SELECT 开头 → true', () => {
     expect(isReadOnlyQuery(VALID_BASE)).toBe(true);

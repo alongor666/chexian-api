@@ -57,7 +57,33 @@ export async function assertPasswordAllowed(userId: string): Promise<PasswordCre
 }
 
 export async function assertPatAllowed(userId: string): Promise<void> {
-  await assertPasswordAllowed(userId);
+  // PAT 会话的 userId = JWT userId（= 用户名，见 auth.ts login / issueCookieSession），
+  // 而全员密码改造（2026-07-11）后 PasswordCredential.user_id 存的是 UserAccount.id（uuid）。
+  // 只按原值查会键不匹配 → 所有密码登录用户创建 PAT 恒 403（2026-07-15 本地实测发现）。
+  // 修复：先按原值查（兼容 user_id 直接命中，如单测/历史行），未命中再经 UserAccount.username 解析。
+  const direct = await getPasswordCredential(userId);
+  if (direct) return;
+  const rows = await duckdbService.query(`
+    SELECT pc.user_id
+    FROM PasswordCredential pc
+    JOIN UserAccount ua ON ua.id = pc.user_id
+    WHERE ua.username = '${escapeSqlValue(userId)}'
+    LIMIT 1
+  `);
+  if (rows.length > 0) return;
+  // 纯飞书账号（仅 UserAccount + AuthIdentity，无密码凭据）同样允许自助 PAT：
+  // /my-tokens 声明为对全部会话用户开放（routeRegistry PERSONAL_ROUTES），tokens 端点又强制
+  // requireSessionAuth（PAT 不能管 PAT），飞书扫码会话的身份保障与密码会话等同。
+  // 此前无此分支 → 纯飞书用户进得了页面、点创建必 403（2026-07-17 评审 P1 收口）。
+  const identities = await duckdbService.query(`
+    SELECT ai.provider
+    FROM AuthIdentity ai
+    JOIN UserAccount ua ON ua.id = ai.user_id
+    WHERE ai.enabled = true
+      AND (ua.username = '${escapeSqlValue(userId)}' OR ai.user_id = '${escapeSqlValue(userId)}')
+    LIMIT 1
+  `);
+  if (identities.length === 0) throw new AppError(403, 'AUTH_METHOD_NOT_ALLOWED');
 }
 
 export async function credentialSetupRequired(userId: string): Promise<boolean> {

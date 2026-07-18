@@ -4,7 +4,7 @@
  * 定义机构层级结构和用户权限规则
  */
 
-import { canonicalizeRoutePath } from './routeRegistry';
+import { canonicalizeRoutePath, PERSONAL_ROUTES } from './routeRegistry';
 
 /**
  * 三级机构列表（12个，四川 SC）
@@ -30,7 +30,7 @@ export const ORGANIZATIONS = [
 // ── SC-ORG-MIRROR-END ──
 
 /**
- * 山西（SX）经营单元列表（11个）。
+ * 山西（SX）经营单元列表（13个，2026-07-15 经代/车商/重客 拆分后口径，BACKLOG 2026-07-15-user-e04971）。
  * SSOT：数据管理/config/branch-org-mapping/SX.json 的 "units"；与
  * server/src/services/permission.ts 的 SX_ORGANIZATIONS 镜像一致
  * （前后端独立编译域，禁止 import，逐条对齐）。governance「省份映射前后端镜像」锚点对账。
@@ -39,7 +39,9 @@ export const ORGANIZATIONS = [
 export const SX_ORGANIZATIONS = [
   '太原一部',
   '太原二部',
-  '经代、车商、重客',
+  '经代',
+  '车商',
+  '重客',
   '大同',
   '阳泉',
   '长治',
@@ -102,6 +104,11 @@ export interface UserPermission {
   defaultRoute?: string;
   /** 特殊功能权限（如 cost, moto_cost） */
   specialFeatures?: string[];
+  /**
+   * 模块负面清单：该用户不可访问的前端页面路径（服务端按 RESTRICTED_MODULES 派生回传）。
+   * 语义与 allowedRoutes 相反且优先级更高——命中即拒绝，对所有角色（含 branch_admin）生效。
+   */
+  deniedModules?: string[];
   authMethods?: Array<'password' | 'feishu'>;
   canChangePassword?: boolean;
 }
@@ -141,10 +148,14 @@ export const QUICK_LOGIN_USERS_BY_BRANCH: Record<string, readonly QuickLoginUser
     { username: 'gaoxin', displayName: '高新机构', role: UserRole.ORG_USER },
   ],
   SX: [
-    { username: 'sxAdmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN },
+    { username: 'sxadmin', displayName: '山西分公司管理员', role: UserRole.BRANCH_ADMIN },
     { username: 'sx_taiyuan1', displayName: '太原一部机构', role: UserRole.ORG_USER },
     { username: 'sx_taiyuan2', displayName: '太原二部机构', role: UserRole.ORG_USER },
-    { username: 'sx_jdcszk', displayName: '经代、车商、重客机构', role: UserRole.ORG_USER },
+    // 2026-07-15 拆分（BACKLOG e04971）：sx_jdcszk（经代、车商、重客合并账号）退役（preset active:false），
+    // 由以下三个各看各的账号替代
+    { username: 'sx_jingdai', displayName: '经代机构', role: UserRole.ORG_USER },
+    { username: 'sx_cheshang', displayName: '车商机构', role: UserRole.ORG_USER },
+    { username: 'sx_zhongke', displayName: '重客机构', role: UserRole.ORG_USER },
     { username: 'sx_datong', displayName: '大同机构', role: UserRole.ORG_USER },
     { username: 'sx_yangquan', displayName: '阳泉机构', role: UserRole.ORG_USER },
     { username: 'sx_changzhi', displayName: '长治机构', role: UserRole.ORG_USER },
@@ -357,12 +368,6 @@ export const DEFAULT_USER_PERMISSIONS: UserPermission[] = [
     role: UserRole.ORG_USER,
     organization: '高新',
   },
-  // 电销用户
-  {
-    username: 'scdianxiao',
-    displayName: '四川电销',
-    role: UserRole.TELEMARKETING_USER,
-  },
 ];
 
 /**
@@ -430,10 +435,18 @@ export function getPermissionByUsername(username: string): UserPermission | null
  * 注：BRANCH_ADMIN 始终拥有完整路由访问权，allowedRoutes 仅对 ORG_USER/TELEMARKETING_USER 生效。
  */
 export function canAccessRoute(permission: UserPermission, pathname: string): boolean {
+  const normalizedPathname = canonicalizeRoutePath(pathname);
+
+  // 模块负面清单优先（对所有角色生效，含 branch_admin）：命中即拒绝。
+  if (permission.deniedModules?.some((denied) => canonicalizeRoutePath(denied) === normalizedPathname)) {
+    return false;
+  }
+
+  // 个人自助功能路由（如 /my-tokens）对所有已登录用户开放，不受角色白名单限制。
+  if (PERSONAL_ROUTES.includes(normalizedPathname)) return true;
+
   // 分公司管理员不受路由白名单限制
   if (permission.role === UserRole.BRANCH_ADMIN) return true;
-
-  const normalizedPathname = canonicalizeRoutePath(pathname);
 
   const effectiveAllowedRoutes =
     permission.allowedRoutes && permission.allowedRoutes.length > 0

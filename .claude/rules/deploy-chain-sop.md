@@ -6,6 +6,8 @@ paths: ["deploy/**", ".github/workflows/deploy.yml", "scripts/sync-vps.mjs", "ec
 
 > 来源：PR #379 Phase 1-pre 部署链改造实施过程中沉淀的三条规则。
 > 适用：任何改动 `deploy/`、`.github/workflows/deploy.yml`、`scripts/sync-vps.mjs` 的 PR。
+>
+> **本文件是部署 wrapper 命令的 SSOT（2026-07-16 知识体系审计定点）**：`sudo /usr/local/bin/deploy-chexian-api <reload|restart|install|describe|edit-env|self-update>` 的权威写法与子命令语义以本文件为准；其他文档（CLAUDE.md §8、multi-branch-*-sop）只留指针或带 SSOT 注释的副本，wrapper 路径/子命令变更时**只改这里 + 全局 grep 同步**。
 
 ## 1. Wrapper 源/runtime 同步（B294 已实施：CI 自动）
 

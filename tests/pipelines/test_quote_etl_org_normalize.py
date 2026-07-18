@@ -25,6 +25,7 @@ if str(DATA_ROOT) not in sys.path:
     sys.path.insert(0, str(DATA_ROOT))
 
 from pipelines.org_collapse import OrgDimensionCollapseError  # noqa: E402
+from pipelines.salesman_org_fallback import QuoteOrgResolutionError  # noqa: E402
 from pipelines.quote_etl import (  # noqa: E402
     normalize_org_level_3,
     resolve_org_column_variant,
@@ -83,10 +84,16 @@ class NormalizeOrgLevel3Test(unittest.TestCase):
         normalize_org_level_3(df, "SX")
         self.assertEqual(df["org_level_3"].tolist(), [SX_CODED_ORG])
 
-    def test_collapsed_warn_mode_no_raise(self):
-        # B006 现状：全「其他」→ 默认告警不中断（与 transform.py 守卫同语义）
+    def test_collapsed_default_now_blocked_by_resolution_gate(self):
+        # 2026-07-16 评审 P1 语义变更：全「其他」默认不再放行——清分闸 fail-closed 阻断
         df = pd.DataFrame({"org_level_3": ["其他"] * 100})
-        out = normalize_org_level_3(df, "SX", env={})
+        with self.assertRaises(QuoteOrgResolutionError):
+            normalize_org_level_3(df, "SX", env={})
+
+    def test_collapsed_warn_mode_passes_only_with_explicit_degraded(self):
+        # 塌缩守卫默认告警不中断的既有语义仍在，但须显式降级授权才能走完出口
+        df = pd.DataFrame({"org_level_3": ["其他"] * 100})
+        out = normalize_org_level_3(df, "SX", env={"QUOTE_ORG_FALLBACK_ALLOW_DEGRADED": "1"})
         self.assertEqual(out["org_level_3"].nunique(), 1)
 
     def test_collapsed_fail_mode_raises(self):
@@ -95,10 +102,61 @@ class NormalizeOrgLevel3Test(unittest.TestCase):
             normalize_org_level_3(df, "SX", env={"ORG_COLLAPSE_FAIL": "1"})
 
     def test_healthy_distribution_no_raise_even_fail_mode(self):
-        # 真实机构集中不是塌缩：映射后全为经营单元短名，FAIL=1 也不触发
-        df = pd.DataFrame({"org_level_3": [SX_CODED_ORG] * 90 + ["其他"] * 10})
+        # 真实机构集中不是塌缩：映射后全为经营单元短名，FAIL=1 也不触发；
+        # 「其他」3% 低于清分闸阈值（5%），默认也放行
+        df = pd.DataFrame({"org_level_3": [SX_CODED_ORG] * 97 + ["其他"] * 3})
         out = normalize_org_level_3(df, "SX", env={"ORG_COLLAPSE_FAIL": "1"})
-        self.assertEqual((out["org_level_3"] == SX_EXPECTED_UNIT).sum(), 90)
+        self.assertEqual((out["org_level_3"] == SX_EXPECTED_UNIT).sum(), 97)
+
+
+class NormalizeOrgLevel3NewCaliberTest(unittest.TestCase):
+    """新口径（BACKLOG 2026-07-15-user-e04971）：org_level_3_new（三级机构新）优先。
+
+    与 transform.py 的差异（刻意）：报价源缺新列只告警不硬失败——历史单日文件
+    替换有时间差（上游 02 导出组件截至 2026-07-15 尚未含该列），过渡期沿旧合并
+    口径产出，重建后以 parquet 值域验收兜底。
+    """
+    RETIRED_BUCKET_CODE = "0118010204山西分公司本部（渠道重客）"  # org_to_unit → 旧合并值（白名单外）
+
+    def test_new_column_preferred_normalized_and_dropped(self):
+        df = pd.DataFrame({
+            "org_level_3_new": ["太原业务二部", "经代", "车商", "重客"],
+            "org_level_3": [SX_CODED_ORG] * 4,
+        })
+        out = normalize_org_level_3(df, "SX")
+        self.assertEqual(out["org_level_3"].tolist(), ["太原二部", "经代", "车商", "重客"])
+        self.assertNotIn("org_level_3_new", out.columns)
+
+    def test_other_rows_fall_back_via_coded_org(self):
+        df = pd.DataFrame({
+            "org_level_3_new": ["其他", "晋中"],
+            "org_level_3": [SX_CODED_ORG, SX_CODED_ORG],
+        })
+        out = normalize_org_level_3(df, "SX")
+        self.assertEqual(out["org_level_3"].tolist(), [SX_EXPECTED_UNIT, "晋中"])
+
+    def test_fallback_to_retired_bucket_keeps_placeholder(self):
+        # 回退命中旧合并值（白名单外）→ 保留「其他」，不产出退役值。
+        # fixture「其他」占比 50% 会触发清分闸，此处显式降级只验行级语义
+        df = pd.DataFrame({
+            "org_level_3_new": ["其他", "晋中"],
+            "org_level_3": [self.RETIRED_BUCKET_CODE, SX_CODED_ORG],
+        })
+        out = normalize_org_level_3(df, "SX", env={"QUOTE_ORG_FALLBACK_ALLOW_DEGRADED": "1"})
+        self.assertEqual(out["org_level_3"].tolist(), ["其他", "晋中"])
+        self.assertNotIn("经代、车商、重客", set(out["org_level_3"]))
+
+    def test_missing_new_column_transitional_old_path(self):
+        # 过渡态：缺新列 → 告警 + 沿旧路径映射（不硬失败，与 transform.py 不同）
+        df = pd.DataFrame({"org_level_3": [SX_CODED_ORG] * 3})
+        out = normalize_org_level_3(df, "SX")
+        self.assertEqual(out["org_level_3"].tolist(), [SX_EXPECTED_UNIT] * 3)
+
+    def test_sc_untouched_even_with_new_column(self):
+        df = pd.DataFrame({"org_level_3": ["天府"], "org_level_3_new": ["晋中"]})
+        out = normalize_org_level_3(df, "SC")
+        self.assertEqual(out["org_level_3"].tolist(), ["天府"])
+        self.assertIn("org_level_3_new", out.columns)
 
 
 if __name__ == "__main__":

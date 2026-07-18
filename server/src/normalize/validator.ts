@@ -69,6 +69,7 @@ export const EXPECTED_TYPES: Record<keyof ColumnMapping, string[]> = {
   vehicle_age_group: ['VARCHAR', 'TEXT', 'STRING'], // 车龄分段
   previous_insurer: ['VARCHAR', 'TEXT', 'STRING'], // 上年承保主体
   next_insurer: ['VARCHAR', 'TEXT', 'STRING'], // 次年保险公司
+  applicant_name: ['VARCHAR', 'TEXT', 'STRING'], // 投保人名称
   branch_code: ['VARCHAR', 'TEXT', 'STRING'], // 分公司编码
 };
 

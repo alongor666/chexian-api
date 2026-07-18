@@ -1,0 +1,1 @@
+{"uid":"2026-07-14-user-932218","kind":"status","ts":"2026-07-16","actor":"@claude","status":"DONE","evidence":"2026-07-16 生产实测:/var/www/chexian/server/.env 中 FEISHU_DEPARTMENT_PERSONAL_ACCOUNTS_ENABLED=true 已生效;user_store 已有5个部门路径真人自动开户账号(丁然/高鹏/郭勇/刘利敏/钟京亮)且机构归属正确,audit.log 可见 org_user 正常查询 200;对账器每15分钟运行且失败告警为0","at":"2026-07-16T13:36:45.135Z","eid":"2f7e4488"}

@@ -1,0 +1,1 @@
+{"uid":"2026-07-16-claude-6daeb8","kind":"note","ts":"2026-07-16","actor":"@claude","text":"实施完毕待评审合并：PR #1123（阶段0-3，policy-override 授权=2026-07-16 会话）+ PR #1124（索引死链闸，stacked base=PR-1 分支，合并后 retarget main）。验证：governance 61 项全绿、闸负向探针双形态 exit=1、红绿测试 26/26、CLAUDE.md 17442B≤基线。","at":"2026-07-16T15:01:33.435Z","eid":"d031dcfd"}

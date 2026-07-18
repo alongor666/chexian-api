@@ -63,7 +63,7 @@ WHERE branch_code='SX'"
 ## 2. T-3：cache-warmer 按 SX 预热完成
 
 ```bash
-# 在生产 VPS 上启用 BRANCH_RLS_ENABLED=true
+# 在生产 VPS 上启用 BRANCH_RLS_ENABLED=true（wrapper 命令 SSOT：deploy-chain-sop.md，此处保留可执行副本）
 sudo /usr/local/bin/deploy-chexian-api edit-env BRANCH_RLS_ENABLED true
 sudo /usr/local/bin/deploy-chexian-api reload
 

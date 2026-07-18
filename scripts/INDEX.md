@@ -236,7 +236,7 @@ python3 scripts/compare-schema-mapping.py
 
 ## 2026-06-03 追加记录
 
-- `check-governance.mjs` 新增 #25“空 catch 块禁令”检查：`server/src` + `src` 禁止纯空 catch 块（静默失败 Law 1），纯代码治理项 22 → 23；配套 `.claude/skills/silent-failure-guard.md`。
+- `check-governance.mjs` 新增 #25“空 catch 块禁令”检查：`server/src` + `src` 禁止纯空 catch 块（静默失败 Law 1），纯代码治理项 22 → 23；配套 skill `silent-failure-guard`（原 `.claude/skills/silent-failure-guard.md`，2026-07-16 迁入 alongor666-skills 仓，本地经 `~/.claude/skills/silent-failure-guard` 软链）。
 
 ## 2026-06-05 追加记录
 

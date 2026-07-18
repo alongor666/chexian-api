@@ -43,6 +43,8 @@ export interface AuthData {
     authMethods?: Array<'password' | 'feishu'>;
     canChangePassword?: boolean;
     specialFeatures?: string[];
+    /** 模块负面清单：该用户不可访问的前端页面路径（服务端按 RESTRICTED_MODULES 派生回传） */
+    deniedModules?: string[];
   };
 }
 

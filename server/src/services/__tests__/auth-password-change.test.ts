@@ -55,6 +55,8 @@ const mockSetUserPasswordByUsername = vi.fn(
 const credentialStateByUserId = new Map<string, 'bootstrap_required' | 'active'>();
 
 vi.mock('../access-control.js', () => ({
+  // 纯函数，用真实实现（auth.ts normalizeUsername 委托给它，桩化会让归一化口径失真）
+  canonicalizeUsername: (u: string) => u.normalize('NFKC').trim().toLowerCase(),
   getUserByUsername: (u: string) => mockGetUserByUsername(u),
   ensurePresetUser: (u: string) => mockEnsurePresetUser(u),
   setUserPasswordByUsername: async (u: string, h: string) => {

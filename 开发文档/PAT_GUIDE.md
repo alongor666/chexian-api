@@ -25,8 +25,8 @@
 
 ## 2. 生成 Token（Web UI）
 
-1. 登录 `https://chexian.cretvalu.com`
-2. 进入「用户与权限管理」→ 切到「我的 API Token」Tab
+1. 登录 `https://chexian.cretvalu.com`（用户名密码或飞书扫码均可；PAT 自助对全部已登录用户开放，含纯飞书账号——2026-07-17 起）
+2. 进入左侧导航「API 令牌」（`/my-tokens` 独立自助页）
 3. 填写 Token 名称（如 `claude-desktop-mac`）+ 选择有效期（推荐 90 天）
 4. 点击「生成 Token」
 5. **立即复制弹出的明文 token**，关闭后无法再次查看
