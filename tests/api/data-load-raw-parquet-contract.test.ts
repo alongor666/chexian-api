@@ -7,10 +7,11 @@ function readSource(relativePath: string): string {
 }
 
 describe('raw_parquet object-type compatibility contract', () => {
-  it('uses typed relation drop helper before recreating raw_parquet', () => {
+  it('builds a staging table before the typed transactional relation swap', () => {
     // dropRelationIfExists 实现已迁移到 duckdb-infra.ts（Phase 04 重构）
     const infraContent = readSource('server/src/services/duckdb-infra.ts');
     const serviceContent = readSource('server/src/services/duckdb.ts');
+    const loaderContent = readSource('server/src/services/duckdb-parquet-loader.ts');
 
     // duckdb-infra.ts 包含实际的 DROP 逻辑
     expect(infraContent).toContain('async function dropRelationIfExists');
@@ -19,8 +20,11 @@ describe('raw_parquet object-type compatibility contract', () => {
     expect(infraContent).toContain('DROP VIEW IF EXISTS');
     expect(infraContent).toContain('DROP TABLE IF EXISTS');
 
-    // duckdb.ts 通过委托方法暴露该能力，并在 loadParquet 中调用
+    // duckdb.ts 通过委托方法暴露清理能力；加载路径必须先构建 staging 再事务换表。
     expect(serviceContent).toContain('async dropRelationIfExists(name: string)');
-    expect(serviceContent).toContain('await this.dropRelationIfExists(sanitizeTableName(tableName))');
+    expect(serviceContent).toContain('await replaceTableFromSelect(');
+    expect(serviceContent).not.toContain('await this.dropRelationIfExists(sanitizeTableName(tableName))');
+    expect(loaderContent).toContain('CREATE TABLE ${stagingTableName} AS ${selectSql}');
+    expect(loaderContent).toContain('await db.transaction(swapStatements)');
   });
 });

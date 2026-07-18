@@ -253,10 +253,8 @@ export class ConnectionPool {
 // 表/视图工具方法（从 duckdb.ts 迁移）
 // ============================================
 
-/**
- * 按真实对象类型清理同名 relation（TABLE / VIEW）。
- */
-export async function dropRelationIfExists(db: DuckDBQueryable, relationName: string): Promise<void> {
+/** 查询同名 relation 的真实对象类型（BASE TABLE / VIEW）。 */
+export async function getRelationType(db: DuckDBQueryable, relationName: string): Promise<string | null> {
   const safeRelationName = sanitizeTableName(relationName);
   const escapedRelationName = escapeSqlValue(safeRelationName);
 
@@ -269,6 +267,13 @@ export async function dropRelationIfExists(db: DuckDBQueryable, relationName: st
   `);
 
   const tableType = (rows[0]?.table_type || '').toUpperCase();
+  return tableType || null;
+}
+
+/** 按真实对象类型清理同名 relation（TABLE / VIEW）。 */
+export async function dropRelationIfExists(db: DuckDBQueryable, relationName: string): Promise<void> {
+  const safeRelationName = sanitizeTableName(relationName);
+  const tableType = await getRelationType(db, safeRelationName);
   if (tableType === 'VIEW') {
     await db.query(`DROP VIEW IF EXISTS ${safeRelationName}`);
     return;
