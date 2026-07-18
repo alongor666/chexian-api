@@ -1,4 +1,12 @@
-# 太原二部 任卫军 签单明细 → 企业微信智能表「业务台账」（任卫军车险签单台账）
+# 太原二部机构级业务台账（现表原地升级，2026-07-18 用户定案）· 🔶 调试态
+#
+# 终态：每个三级机构一张表 + 一个 webhook + 一个实例；业务员为成员型列 + 行权限
+#   "业务员=当前成员"（权限/视图由用户在表端配置），人均只见自己的行；
+#   未来新增其他三级机构 = 新表新 webhook 新实例；本表调试彻底交付生产后再模板化。
+#
+# 🔶 调试态数据边界（RED LINE）：数据严格限定任卫军，不扩散——
+#   filters 保持 salesman_name='118046126任卫军'；扩散到全机构是未来的显式动作
+#   （届时把该条件放宽为 org_level_3='太原二部'，并 --rebuild-state 评估全量）。
 #
 # 业务规则：branch_code = 'SX' AND salesman_name = '118046126任卫军'（太原二部）
 #   源 salesman_name 已含「代码+姓名」，duckdb 直查 2026-07-17 实证仅此一个匹配业务员。
@@ -35,6 +43,9 @@ policy_glob: 数据管理/warehouse/fact/policy/current/SX/*.parquet
 batch_size: 100
 sheet_records_per_minute_limit: 3000
 
+# 花名册：工号 → 企微 user_id（成员型业务员列写入；缺 user_id 行留空=仅管理员可见）
+roster: rosters/sx-taiyuan2-userids.json
+
 filters:
   policy_date_from: "2025-08-01"
   extra_where: "branch_code = 'SX' AND salesman_name = '118046126任卫军'"
@@ -54,6 +65,9 @@ composite_key:
 
 # 字段映射：SQL 输出列名（en） → 智能表 field_id
 field_mapping:
+  # salesman_user_id:    fTODO_业务员成员列id   # 业务员（USER 成员型，行权限锚点）：
+  #   用户在表端加回成员型「业务员」列后，把新列 field_id 填此处与 update_sync.fields
+  #   同名行并取消注释；存量行由 update 引擎自动回填
   policy_date:           f04Gwj      # 出单日期（DATE_TIME, 毫秒 ts）
   policy_no:             ftQMc5      # 保单号（TEXT）
   plate_no:              ftk5Tx      # 车牌号（TEXT）
@@ -110,6 +124,7 @@ update_sync:
   state: state/shanxi-taiyuan2-renweijun_record_map.json
   fields:
     applicant_name:          {field_id: ffFwIh, type: TEXT,          label: 投保人, sensitive: true}
+    # salesman_user_id:      {field_id: fTODO_业务员成员列id, type: USER, label: 业务员}  # 加列后取消注释（存量回填）
     renewal_is_quoted:       {field_id: fGkRjv, type: SINGLE_SELECT, label: 是否报价-续保}
     renewal_insurance_grade: {field_id: fp6zIf, type: SINGLE_SELECT, label: 风险等级-续保}
     renewal_pricing_factor:  {field_id: fKo7sD, type: NUMBER,        label: 定价-续保}
