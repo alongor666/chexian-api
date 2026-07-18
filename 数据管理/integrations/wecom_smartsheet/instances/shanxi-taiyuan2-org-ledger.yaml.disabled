@@ -1,0 +1,104 @@
+# 太原二部 · 机构级业务台账（单表 + 成员列行权限）—— 模板，激活前改后缀去 .disabled
+#
+# 架构（2026-07-18 用户实测「按成员字段设行权限」可用后定案）：
+#   每个三级机构一张表、一个 webhook、一个同步实例。表内「业务员」为成员型列，
+#   行权限规则"业务员 = 当前成员 → 仅可查看"，每人配锁定筛选的个人视图 →
+#   业务员只见自己的行。新业务员零接入操作（机构过滤天然覆盖），只需补花名册。
+#   表过大时按季度/年度滚表：新表 + 新 target（filters 加 policy_date_from/to 窗口）。
+#
+# 🔴 通道铁律：一切读写只走 webhook（总部不批机器人「文档」授权）。
+#   record_id 由 add 响应按序捕获落 record map（缺省派生 state/<实例名>_record_map.json）。
+#
+# 激活步骤（一次性）：
+#   1. 建表：复制任卫军台账结构 + 加回「业务员」成员型列；设行权限 + 个人视图
+#   2. 表内建 webhook → .env.local 添加 WECOM_LEDGER_SX_TAIYUAN2=<url>
+#   3. 用 webhook API 示例页核对全部 field_id，填入下方映射（成员列 id 填 salesman_user_id 行）
+#   4. 花名册 rosters/sx-taiyuan2-userids.json 补齐 工号→企微 user_id
+#   5. 去掉本文件 .disabled 后缀 → dry-run 核对 → 首导（空表需 --i-checked-wecom-rows）
+#
+# 隐私红线：投保人为敏感字段，dry-run 样例与 logs/ 落盘一律脱敏；
+#   花名册缺失 user_id 的行成员列留空（行权限下仅管理员可见，安全默认）。
+
+instance_name: shanxi-taiyuan2-org-ledger
+script: sync_filtered_policies.py        # daily.mjs 据此路由到非续保引擎
+
+webhook_env: WECOM_LEDGER_SX_TAIYUAN2
+
+# 仅扫描山西分片（性能辅助），branch_code 过滤才是隔离保证
+policy_glob: 数据管理/warehouse/fact/policy/current/SX/*.parquet
+
+batch_size: 100
+sheet_records_per_minute_limit: 3000
+
+# 花名册：工号 → 企微 user_id（成员列写入；语义见 sync_filtered_policies.load_roster）
+roster: rosters/sx-taiyuan2-userids.json
+
+filters:
+  policy_date_from: "2025-08-01"
+  extra_where: "branch_code = 'SX' AND org_level_3 = '太原二部'"
+
+primary_key: policy_no
+
+# 聚合/幂等键与任卫军表一致：保单号+车架号，批单聚合保费求和
+aggregate_key:
+  - policy_no
+  - vehicle_frame_no
+composite_key:
+  - policy_no
+  - vehicle_frame_no
+
+# 字段映射：SQL 输出列名（en）→ 智能表 field_id（TODO：建表后按 webhook API 示例页填真实 id）
+field_mapping:
+  salesman_user_id:      fTODO01     # 业务员（USER 成员型，行权限锚点；源=花名册解析）
+  policy_date:           fTODO02     # 出单日期（DATE_TIME）
+  policy_no:             fTODO03     # 保单号（TEXT）
+  plate_no:              fTODO04     # 车牌号（TEXT）
+  applicant_name:        fTODO05     # 投保人（TEXT，敏感字段）
+  premium:               fTODO06     # 保费（NUMBER，批单聚合后净额）
+  insurance_type:        fTODO07     # 险种大类（SINGLE_SELECT）
+  customer_category:     fTODO08     # 客户类别（SINGLE_SELECT）
+  previous_insurer:      fTODO09     # 上年保险公司（SINGLE_SELECT）
+  commercial_pricing_factor: fTODO10 # 定价-签单（NUMBER）
+  commercial_ncd:        fTODO11     # 商NCD-签单（NUMBER）
+
+field_types:
+  fTODO01: USER
+  fTODO02: DATE_TIME
+  fTODO03: TEXT
+  fTODO04: TEXT
+  fTODO05: TEXT
+  fTODO06: NUMBER
+  fTODO07: SINGLE_SELECT
+  fTODO08: SINGLE_SELECT
+  fTODO09: SINGLE_SELECT
+  fTODO10: NUMBER
+  fTODO11: NUMBER
+
+field_labels:
+  fTODO01: 业务员
+  fTODO02: 出单日期
+  fTODO03: 保单号
+  fTODO04: 车牌号
+  fTODO05: 投保人
+  fTODO06: 保费
+  fTODO07: 险种大类
+  fTODO08: 客户类别
+  fTODO09: 上年保险公司
+  fTODO10: 定价-签单
+  fTODO11: 商NCD-签单
+
+# 已有记录字段更新（续保动态 4 字段 + 投保人/成员列回填）；口径详见任卫军实例注释
+update_sync:
+  sheet_id: TODO_TAB_ID                  # 表 URL tab= 参数
+  key_source_field: policy_no
+  key_field_id: fTODO03                  # 保单号列 id（与上方映射一致）
+  renewal_tracker_glob: 数据管理/warehouse/validation/SX/renewal_tracker/latest.parquet
+  quotes_glob: 数据管理/warehouse/validation/SX/quotes_conversion/latest.parquet
+  # state 不显式声明 → 按实例名派生 state/shanxi-taiyuan2-org-ledger_record_map.json
+  fields:
+    applicant_name:          {field_id: fTODO05, type: TEXT,          label: 投保人, sensitive: true}
+    salesman_user_id:        {field_id: fTODO01, type: USER,          label: 业务员}
+    renewal_is_quoted:       {field_id: fTODO12, type: SINGLE_SELECT, label: 是否报价-续保}
+    renewal_insurance_grade: {field_id: fTODO13, type: SINGLE_SELECT, label: 风险等级-续保}
+    renewal_pricing_factor:  {field_id: fTODO14, type: NUMBER,        label: 定价-续保}
+    renewal_commercial_ncd:  {field_id: fTODO15, type: NUMBER,        label: 商NCD-续保}

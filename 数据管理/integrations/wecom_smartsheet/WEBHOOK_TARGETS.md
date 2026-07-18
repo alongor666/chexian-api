@@ -12,6 +12,8 @@
 | `shanxi_postal_all` | 山西邮政/邮储经代签单全量表 | `.env.local:WECOM_SMARTSHEET_WEBHOOK_SX_POSTAL` | `state/shanxi-postal-all_synced_keys.json` | `instances/shanxi-postal-all.yaml` | 增量 add-only；四川 12 字段 + 经代名(简称)；省份隔离 branch_code='SX' | 业务员姓名/投保人/图片字段无源留空 |
 | `shanxi_taiyuan2_renweijun` | 太原二部任卫军「业务台账」 | `.env.local:WECOM_SMARTSHEET_WEBHOOK_TY2_RENWEIJUN` | `state/shanxi-taiyuan2-renweijun_synced_keys.json`（add）+ `state/shanxi-taiyuan2-renweijun_record_map.json`（update） | `instances/shanxi-taiyuan2-renweijun.yaml` | 双引擎：add 增量写 11 字段（2025-08-01 起签单：业务员/出单日期/保单号/车牌号/投保人/保费/险种大类/客户类别/上年保险公司/定价-签单/商NCD-签单）；update 引擎（`sync_ledger_update_fields.py`，daily.mjs 按 update_sync 块路由）刷新 4 续保字段（是否报价-续保/风险等级-续保/定价-续保/商NCD-续保 = 续保底册应续 × 报价域"签单日+30 天后"最新报价）；省份隔离 branch_code='SX' + 业务员=118046126任卫军 | 2026-07-17 用户清表重建（旧 state 归档 `state/deprecated/`）；投保人为敏感字段，dry-run/日志一律脱敏；update 引擎首次执行前须 wecom-cli prime-state；手机号码业务员自填 |
 
+| `shanxi_taiyuan2_org_ledger`（模板·未激活） | 太原二部机构级台账（单表+成员列行权限） | `.env.local:WECOM_LEDGER_SX_TAIYUAN2`（待建） | 按实例名派生 | `instances/shanxi-taiyuan2-org-ledger.yaml.disabled` | 终态架构（2026-07-18 用户实测行权限可用后定案）：每三级机构一表一 webhook 一实例；业务员为成员型列+行权限"业务员=当前成员"，人均只见自己的行；花名册 `rosters/sx-taiyuan2-userids.json`（工号→企微user_id）驱动成员列；新业务员零接入（机构过滤天然覆盖）；表过大按季/年滚表（targets+日期窗口） | 建表+webhook+field_id 填充后去 .disabled 激活；花名册缺 user_id 的行成员列留空（仅管理员可见） |
+
 废弃的续保 5 月 state 已移动到 `state/deprecated/`，不要再作为默认入口使用。
 
 ## 日常命令

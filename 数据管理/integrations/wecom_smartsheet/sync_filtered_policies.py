@@ -94,6 +94,8 @@ class InstanceConfig:
     # 按序捕获并落 record map state（webhook 只能写不能读，这是零授权拿 record_id 的唯一通道）
     record_map_state: str | None = None       # update_sync.state（相对 integrations 目录）
     record_map_key_field: str = "policy_no"   # update_sync.key_source_field
+    # 花名册（可选）：工号→企微 user_id，声明后自动派生 salesman_user_id 供 USER 型成员列映射
+    roster: str | None = None                 # 相对 integrations 目录
 
 
 def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -> InstanceConfig:
@@ -110,12 +112,18 @@ def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -
     else:
         aggregate = None
     update_sync_raw = raw.get("update_sync") or {}
+    instance_name = target.get("instance_name") or (
+        f"{raw['instance_name']}-{target['name']}" if target.get("name") else raw["instance_name"]
+    )
+    # record map state 缺省派生（与 sync_ledger_update_fields 同一规则）：多目标各自独立记账
+    record_map_state = None
+    if update_sync_raw:
+        record_map_state = update_sync_raw.get("state") or f"state/{instance_name}_record_map.json"
     return InstanceConfig(
-        record_map_state=update_sync_raw.get("state"),
+        record_map_state=record_map_state,
         record_map_key_field=update_sync_raw.get("key_source_field", "policy_no"),
-        instance_name=target.get("instance_name") or (
-            f"{raw['instance_name']}-{target['name']}" if target.get("name") else raw["instance_name"]
-        ),
+        roster=raw.get("roster"),
+        instance_name=instance_name,
         webhook_env=target.get("webhook_env") or raw["webhook_env"],
         batch_size=int(raw.get("batch_size", 100)),
         sheet_rpm=int(raw.get("sheet_records_per_minute_limit", 3000)),
@@ -178,6 +186,43 @@ def build_where(filters: dict[str, Any]) -> tuple[str, list[Any]]:
 
     where = " AND ".join(clauses) if clauses else "1=1"
     return where, params
+
+
+# ---------- 花名册（工号 → 企微 user_id，机构级单表成员列写入用） ----------
+
+_SALESMAN_CODE_RE = __import__("re").compile(r"^(\d+)")
+
+
+def load_roster(path: Path) -> dict[str, str]:
+    """读花名册：{工号: 企微 user_id}。文件不存在/无条目 → 空映射（fail-open 留空成员列）。"""
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    out: dict[str, str] = {}
+    for code, entry in (data.get("salesmen") or {}).items():
+        uid = _to_text((entry or {}).get("wecom_user_id"))
+        if uid:
+            out[str(code)] = uid
+    return out
+
+
+def enrich_rows_with_roster(rows: list[dict[str, Any]], roster: dict[str, str]) -> dict[str, int]:
+    """按 salesman_name 前缀工号解析企微 user_id，写入 row['salesman_user_id']。
+
+    返回 {matched, missing}。未命中花名册的行不设该键 → USER 字段留空（安全默认，
+    行权限下仅管理员可见）；花名册补齐后重跑 update 引擎即回填。
+    """
+    matched = missing = 0
+    for row in rows:
+        name = _to_text(row.get("salesman_name")) or ""
+        m = _SALESMAN_CODE_RE.match(name)
+        uid = roster.get(m.group(1)) if m else None
+        if uid:
+            row["salesman_user_id"] = uid
+            matched += 1
+        else:
+            missing += 1
+    return {"matched": matched, "missing": missing}
 
 
 # 可选源列：仅当 parquet schema 实际含该列时才 SELECT，否则补 NULL 占位。
@@ -514,6 +559,20 @@ def invalid_grade_stats(rows: list[dict[str, Any]]) -> dict[str, int]:
     return dict(sorted(out.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
+def _to_user(value: Any) -> list[dict[str, str]] | None:
+    """USER（企微成员）字段：值须为企微 user_id（经花名册解析），空值不写入。
+
+    机构级单表 + 行权限架构（2026-07-18 用户验证「按成员字段设行权限」可用）：
+    业务员成员列由本格式写入，行权限规则"业务员=当前成员"实现每人只见自己的行。
+    花名册缺失 user_id 时该列留空——行权限下留空行仅管理员可见（安全默认），
+    补齐花名册后由 update 引擎回填。
+    """
+    text = _to_text(value)
+    if not text:
+        return None
+    return [{"user_id": text}]
+
+
 def format_value(field_type: str, value: Any) -> Any:
     if field_type == "DATE_TIME":
         return _to_ts_ms(value)
@@ -521,6 +580,8 @@ def format_value(field_type: str, value: Any) -> Any:
         return _to_select(value)
     if field_type == "NUMBER":
         return _to_number(value)
+    if field_type == "USER":
+        return _to_user(value)
     return _to_text(value)
 
 
@@ -655,6 +716,13 @@ def _row_key(row: dict[str, Any], instance: InstanceConfig | None = None) -> str
 def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     raw_rows = fetch_rows(instance)
     rows = aggregate_rows(raw_rows, instance)
+
+    # 花名册解析（机构级单表成员列）：派生 salesman_user_id 供 USER 型映射
+    roster_stats: dict[str, int] | None = None
+    if instance.roster:
+        roster_path = Path(instance.roster)
+        roster_path = roster_path if roster_path.is_absolute() else HERE / roster_path
+        roster_stats = enrich_rows_with_roster(rows, load_roster(roster_path))
     schema = {fid: instance.field_labels.get(fid, fid) for fid in instance.field_mapping.values()}
 
     # sync 模式过滤已同步的主键；init 模式全量
@@ -700,6 +768,8 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
         "dry_run": dry_run,
         "schema_field_ids": list(schema.keys()),
     }
+    if roster_stats is not None:
+        summary["roster_stats"] = roster_stats  # matched/missing：missing 行成员列留空（仅管理员可见）
 
     if dry_run:
         # 打印前 3 条 sample，便于肉眼检查。

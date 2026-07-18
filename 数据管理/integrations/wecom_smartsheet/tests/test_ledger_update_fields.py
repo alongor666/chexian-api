@@ -178,6 +178,64 @@ def test_merge_record_map_appends_dedupes_and_keeps_existing_fields():
     assert "P3" not in state["records"] and "" not in state["records"]
 
 
+def test_user_field_format_and_roster_enrichment():
+    from sync_filtered_policies import format_value as add_format_value, enrich_rows_with_roster
+
+    # USER 型：有 user_id 才写，空值不写入
+    assert add_format_value("USER", "RenWeiJun") == [{"user_id": "RenWeiJun"}]
+    assert add_format_value("USER", "") is None
+    assert add_format_value("USER", None) is None
+
+    rows = [
+        {"salesman_name": "118046126任卫军"},
+        {"salesman_name": "999000000無名氏"},   # 花名册未登记 → 不设键（成员列留空）
+        {"salesman_name": ""},
+    ]
+    stats = enrich_rows_with_roster(rows, {"118046126": "RenWeiJun"})
+    assert stats == {"matched": 1, "missing": 2}
+    assert rows[0]["salesman_user_id"] == "RenWeiJun"
+    assert "salesman_user_id" not in rows[1] and "salesman_user_id" not in rows[2]
+
+
+def test_derive_update_values_passes_salesman_uid():
+    row = {"policy_no": "618X", "salesman_user_id": "RenWeiJun", "in_renewal_universe": False}
+    assert derive_update_values(row)["salesman_user_id"] == "RenWeiJun"
+
+
+def test_load_update_configs_targets_expansion(tmp_path):
+    from sync_ledger_update_fields import load_update_configs, HERE
+
+    yaml_text = """
+instance_name: org-ledger
+webhook_env: W_BASE
+policy_glob: g
+filters: { policy_date_from: "2025-08-01" }
+targets:
+  - name: t1
+    webhook_env: W_T1
+    filters: { extra_where: "branch_code='SX' AND org_level_3='太原二部'" }
+  - name: t2
+update_sync:
+  sheet_id: s
+  key_field_id: fKEY
+  renewal_tracker_glob: rt
+  quotes_glob: q
+  fields:
+    applicant_name: {field_id: fA, type: TEXT, label: 投保人, sensitive: true}
+"""
+    p = tmp_path / "inst.yaml"
+    p.write_text(yaml_text, encoding="utf-8")
+    configs = load_update_configs(p)
+    assert [c.instance_name for c in configs] == ["org-ledger-t1", "org-ledger-t2"]
+    assert configs[0].webhook_env == "W_T1" and configs[1].webhook_env == "W_BASE"
+    # target filters 合并基础 filters
+    assert configs[0].filters["policy_date_from"] == "2025-08-01"
+    assert "太原二部" in configs[0].filters["extra_where"]
+    # state 按目标名派生，互不覆盖
+    assert configs[0].state_path == HERE / "state/org-ledger-t1_record_map.json"
+    assert configs[1].state_path == HERE / "state/org-ledger-t2_record_map.json"
+
+
 def test_read_key_text_from_text_cell():
     assert read_key_text([{"type": "text", "text": "618100"}, {"type": "text", "text": "123"}]) == "618100123"
     assert read_key_text("  P9  ") == "P9"

@@ -52,9 +52,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent.parent))  # 数据管理/ 根：供 import pipelines.*
 from sync_renewal_v2 import post_webhook  # noqa: E402
-from sync_filtered_policies import (  # noqa: E402  复用：where 拼装 / 值格式化 / 脱敏 SSOT
+from sync_filtered_policies import (  # noqa: E402  复用：where 拼装 / 值格式化 / 脱敏 / 花名册 SSOT
     build_where,
+    enrich_rows_with_roster,
     format_value,
+    load_roster,
     mask_pii,
     _to_text,
 )
@@ -93,13 +95,19 @@ class UpdateConfig:
     quotes_glob: str
     state_path: Path
     fields: tuple[UpdateFieldSpec, ...] = field(default_factory=tuple)
+    roster: str | None = None  # 工号→企微 user_id 花名册（成员列回填用，语义同 add 引擎）
 
 
-def load_update_config(instance_path: Path) -> UpdateConfig:
-    raw = yaml.safe_load(instance_path.read_text(encoding="utf-8"))
-    block = raw.get("update_sync")
-    if not block:
-        raise SystemExit(f"实例 {instance_path.name} 无 update_sync 配置块，本引擎不适用")
+def _build_update_config(raw: dict[str, Any], block: dict[str, Any], target: dict[str, Any] | None = None) -> UpdateConfig:
+    """单目标构造。target（可选）沿用 add 引擎 targets 语义：可覆盖
+    instance_name / webhook_env / filters；update_sync 块（字段/口径/数据源）全目标共享。
+    state 缺省按目标名派生 state/<instance_name>_record_map.json（多目标各自独立记账）。"""
+    target = target or {}
+    filters = dict(raw.get("filters", {}))
+    filters.update(target.get("filters", {}))
+    instance_name = target.get("instance_name") or (
+        f"{raw['instance_name']}-{target['name']}" if target.get("name") else raw["instance_name"]
+    )
     specs = tuple(
         UpdateFieldSpec(
             source=src,
@@ -110,12 +118,12 @@ def load_update_config(instance_path: Path) -> UpdateConfig:
         )
         for src, spec in dict(block["fields"]).items()
     )
-    state_rel = Path(block["state"])
+    state_rel = Path(block.get("state") or f"state/{instance_name}_record_map.json")
     return UpdateConfig(
-        instance_name=raw["instance_name"],
-        webhook_env=raw["webhook_env"],
+        instance_name=instance_name,
+        webhook_env=target.get("webhook_env") or raw["webhook_env"],
         policy_glob=raw["policy_glob"],
-        filters=dict(raw.get("filters", {})),
+        filters=filters,
         batch_size=int(raw.get("batch_size", 100)),
         sheet_id=block["sheet_id"],
         key_source_field=block.get("key_source_field", "policy_no"),
@@ -124,7 +132,27 @@ def load_update_config(instance_path: Path) -> UpdateConfig:
         quotes_glob=block["quotes_glob"],
         state_path=state_rel if state_rel.is_absolute() else HERE / state_rel,
         fields=specs,
+        roster=raw.get("roster"),
     )
+
+
+def load_update_configs(instance_path: Path) -> list[UpdateConfig]:
+    raw = yaml.safe_load(instance_path.read_text(encoding="utf-8"))
+    block = raw.get("update_sync")
+    if not block:
+        raise SystemExit(f"实例 {instance_path.name} 无 update_sync 配置块，本引擎不适用")
+    targets = raw.get("targets") or []
+    if not targets:
+        return [_build_update_config(raw, block)]
+    if not block.get("state"):
+        pass  # 多目标下 state 按目标名派生，无需显式声明
+    elif len(targets) > 1:
+        raise SystemExit("多 targets 时 update_sync.state 不可显式声明（会互相覆盖），请删除让其按目标名派生")
+    return [_build_update_config(raw, block, t) for t in targets]
+
+
+def load_update_config(instance_path: Path) -> UpdateConfig:
+    return load_update_configs(instance_path)[0]
 
 
 # ---------- State ----------
@@ -174,12 +202,15 @@ def fetch_source_rows(config: UpdateConfig) -> list[dict[str, Any]]:
         ANY_VALUE(applicant_name) FILTER (
           WHERE applicant_name IS NOT NULL AND applicant_name != ''
         ) AS applicant_name,
+        ANY_VALUE(salesman_name) FILTER (
+          WHERE salesman_name IS NOT NULL AND salesman_name != ''
+        ) AS salesman_name,
         ANY_VALUE(vehicle_frame_no) FILTER (
           WHERE vehicle_frame_no IS NOT NULL AND vehicle_frame_no != ''
         ) AS vehicle_frame_no,
         MIN(CAST(policy_date AS DATE)) AS sign_date
       FROM (
-        SELECT policy_no, vehicle_frame_no, policy_date, {applicant_expr}
+        SELECT policy_no, vehicle_frame_no, policy_date, salesman_name, {applicant_expr}
         FROM read_parquet('{config.policy_glob}', union_by_name=true)
         WHERE {where}
       )
@@ -209,6 +240,7 @@ def fetch_source_rows(config: UpdateConfig) -> list[dict[str, Any]]:
     SELECT
       ledger.policy_no,
       ledger.applicant_name,
+      ledger.salesman_name,
       rt.source_policy_no IS NOT NULL AS in_renewal_universe,
       q.quote_time IS NOT NULL AS has_renewal_quote,
       q.insurance_grade AS renewal_insurance_grade_raw,
@@ -233,7 +265,13 @@ def fetch_source_rows(config: UpdateConfig) -> list[dict[str, Any]]:
         allow_national=is_national_view(),
         context=f"台账字段更新 {config.instance_name}",
     )
-    return df.to_dict("records")
+    rows = df.to_dict("records")
+    # 花名册解析（机构级单表成员列回填）：派生 salesman_user_id 供 USER 型 spec 消费
+    if config.roster:
+        roster_path = Path(config.roster)
+        roster_path = roster_path if roster_path.is_absolute() else HERE / roster_path
+        enrich_rows_with_roster(rows, load_roster(roster_path))
+    return rows
 
 
 def derive_update_values(row: dict[str, Any]) -> dict[str, Any]:
@@ -248,6 +286,10 @@ def derive_update_values(row: dict[str, Any]) -> dict[str, Any]:
     applicant = _to_text(row.get("applicant_name"))
     if applicant:
         values["applicant_name"] = applicant
+    # 成员列回填（机构级单表）：花名册解析出的企微 user_id，有值才写
+    salesman_uid = _to_text(row.get("salesman_user_id"))
+    if salesman_uid:
+        values["salesman_user_id"] = salesman_uid
 
     if bool(row.get("in_renewal_universe")):
         raw_flag = row.get("has_renewal_quote")
@@ -514,13 +556,19 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    config = load_update_config(Path(args.instance).resolve())
+    configs = load_update_configs(Path(args.instance).resolve())
     if args.command == "prime-state":
         if not args.docid and not args.url:
             raise SystemExit("prime-state 需要 --docid 或 --url")
-        result = prime_state(config, docid=args.docid, url=args.url)
+        if len(configs) > 1:
+            raise SystemExit("prime-state 不支持多 targets 实例（record_id 常规来源是 add 响应捕获；如需兜底请拆单实例跑）")
+        result: Any = prime_state(configs[0], docid=args.docid, url=args.url)
     else:
-        result = run_sync(config, execute=args.execute, force=args.force)
+        results = [run_sync(c, execute=args.execute, force=args.force) for c in configs]
+        result = results[0] if len(results) == 1 else {
+            "target_count": len(results),
+            "results": [{k: v for k, v in r.items() if k != "sample_updates"} for r in results],
+        }
     print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
 
 
