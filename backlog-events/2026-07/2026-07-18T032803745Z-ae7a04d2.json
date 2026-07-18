@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-4b93ea","kind":"status","ts":"2026-07-18","actor":"@claude","status":"DONE","evidence":"PR TBD + verify:full 全绿(preflight/governance61/typecheck/5586单测) + 路由级单测 pat-sql-audit-policy.test.ts 5/5 + CLI(cx sql)/MCP 依赖调查确认不可一刀切拒绝 + PAT_SQL_POLICY=allow\\|audit\\|deny 默认audit 落地","at":"2026-07-18T03:28:03.745Z","eid":"ae7a04d2"}

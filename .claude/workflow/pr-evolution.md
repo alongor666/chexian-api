@@ -2246,3 +2246,13 @@ expires: 2026-09-15
 
 ### needs_automation: false
 （首次出现；若同类误报再发生第 2 次，升级为 pre-commit 对测试文件凭据字段值的形态 lint。）
+
+## 2026-07-17 · 新增路由层 helper 文件误撞 RLS 路由消费覆盖闸（M5 PAT SQL 策略，uid=2026-07-12-claude-4b93ea）
+
+- **根因**：GET /api/query/sql 对 PAT 的暴露面收窄任务（readonlyMiddleware 只挡 PAT 非 GET，SQL 直通端点仍全量对 PAT 放开）要求"只在路由层新增调用点，不重构 audit 服务本体"。为了不碰 `server/src/middleware/audit.ts`，最初把 `enforcePatSqlPolicy` 策略判定拆成独立新文件 `server/src/routes/query/pat-sql-audit.ts`。`governance` 的「RLS 路由消费覆盖」闸（`scripts/check-governance.mjs:checkRlsRouteCoverage`）对 `server/src/routes/query/` 目录下**每一个顶层 `.ts` 文件**逐个扫描，只要文件名不在硬编码 `QUERY_ROUTE_EXEMPT` 名单里、且不含 `permissionFilter`/`requireBranchAdmin` 等消费关键字，一律判违规——不区分该文件是不是真正的 router 挂载点。而本任务域范围明确禁止改 `scripts/check-governance.mjs`（登记 EXEMPT 的唯一入口），陷入"新增独立 helper 文件必触发误报，但登记豁免的唯一入口又碰不得"的两难。
+- **修复**：放弃独立文件，把 `enforcePatSqlPolicy` 函数与相关类型直接内联进 `sql-passthrough.ts`（本来就合法消费 `req.permissionFilter` 的真实路由文件），对外仍作具名导出，供单测按纯函数方式直接 `import` 断言（无需 HTTP 层集成测试）。governance 61/61 全绿，`bun run verify:full`（preflight+governance+typecheck+5586 单测）全绿。
+- **预防**：下次要在 `server/src/routes/query/` 目录下新增"非路由本体"的纯逻辑 helper（工具函数/策略判定/校验器）时，默认先内联进调用它的路由文件，而不是拆独立文件——除非该逻辑本身也消费 `permissionFilter`/`requireBranchAdmin`，或已提前确认能进 `QUERY_ROUTE_EXEMPT`（需要拥有 `scripts/check-governance.mjs` 写权限的角色配合登记）。
+
+### needs_automation: true
+expires: 2026-10-17
+（governance 的「RLS 路由消费覆盖」闸目前把"文件在 `routes/query/` 目录下"与"文件是一个路由挂载点"划等号，对纯 helper 文件是结构性误报。理想修法二选一：① 闸先用正则判断文件是否含 `router\.(get|post|put|delete)\(` 真实路由注册，非路由文件天然跳过，不必手工维护 `QUERY_ROUTE_EXEMPT` 硬编码名单；② 允许文件内一行 magic comment 显式声明"非路由文件，豁免本检查"。本次因任务域禁止碰 `scripts/check-governance.mjs`，未落地，登记待下一个持有该文件写权限的任务处理。）
