@@ -165,3 +165,4 @@ export interface KpiDetailResult {
 - `generateComprehensiveLossTrendQuery()`
 - `generateComprehensivePlanByOrgQuery()`
 | 2026-03-03 | performance-analysis.ts | 新增 `generatePerformanceOrgHeatmapQuery`，支持三级机构连续15周期热力图（增长率/达成率/保费）查询 |
+| 2026-07-17 | performance-heatmap.ts | 热力图达成率统一为注册表 `plan_completion_pct` 的 YTD/时间进度口径；维度池保留展示窗口内零业绩机构 |

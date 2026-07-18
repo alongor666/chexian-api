@@ -5,10 +5,10 @@ import { AppError } from '../middleware/error.js';
 import { sanitizeTableName, escapeSqlValue } from '../utils/security.js';
 import { recordQueryMetric, getRequestContext } from '../utils/request-context.js';
 import { QueryCache, ConnectionPool, dropRelationIfExists, hasRelation, getTableSchema } from './duckdb-infra.js';
-import type { DuckDBQueryable } from './duckdb-types.js';
+import type { DuckDBTransactionalQueryable } from './duckdb-types.js';
 import { initDuckDBTables } from './duckdb-init-tables.js';
 import { convertBigIntToNumber, SLOW_QUERY_THRESHOLD_MS } from './duckdb-type-converter.js';
-import { loadMultipleParquet, computeParquetFingerprint } from './duckdb-parquet-loader.js';
+import { loadMultipleParquet, computeParquetFingerprint, replaceTableFromSelect } from './duckdb-parquet-loader.js';
 import { makeTimestampVersionToken } from './data-version.js';
 import { classifyDuckDbError, isDuckDbOomMessage, markDuckDbOom } from './duckdb-error-classifier.js';
 
@@ -27,7 +27,7 @@ export interface DuckDBServiceConfig {
   tempDirectory?: string;
 }
 
-export class DuckDBService implements DuckDBQueryable {
+export class DuckDBService implements DuckDBTransactionalQueryable {
   private instance: DuckDBInstance | null = null;
   private isInitialized = false;
   private connectionPool: ConnectionPool | null = null;
@@ -195,8 +195,12 @@ export class DuckDBService implements DuckDBQueryable {
   }
 
   async loadParquet(filePath: string, tableName: string = 'raw_parquet'): Promise<{ versionToken: string }> {
-    await this.dropRelationIfExists(sanitizeTableName(tableName));
-    await this.query(`CREATE OR REPLACE TABLE ${sanitizeTableName(tableName)} AS SELECT * FROM read_parquet('${escapeSqlValue(filePath)}')`);
+    const safeTableName = sanitizeTableName(tableName);
+    await replaceTableFromSelect(
+      this,
+      safeTableName,
+      `SELECT * FROM read_parquet('${escapeSqlValue(filePath)}')`,
+    );
     this.invalidateCache();
     // 单文件路径也必须让 dataVersion 前进，否则旧 cache key 会继续命中重建前的结果。
     // B311 延迟提交：这里只计算 token（优先文件指纹，stat 失败退回时间戳兜底），
@@ -204,7 +208,7 @@ export class DuckDBService implements DuckDBQueryable {
     // 避免版本 bump 同步唤醒监听者预热查询中间态视图。
     const fp = computeParquetFingerprint([filePath]);
     const versionToken = fp !== null ? fp.fingerprint : makeTimestampVersionToken();
-    console.log(`[DuckDB] Loaded Parquet file: ${filePath} -> ${sanitizeTableName(tableName)}`);
+    console.log(`[DuckDB] Loaded Parquet file: ${filePath} -> ${safeTableName}`);
     return { versionToken };
   }
 

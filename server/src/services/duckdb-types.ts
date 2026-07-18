@@ -11,3 +11,8 @@ export interface DuckDBQueryable {
   dropRelationIfExists(relationName: string): Promise<void>;
   invalidateCache(options?: { silent?: boolean }): void;
 }
+
+/** 需要单连接事务写能力的基础设施路径使用，避免扩大只读/查询型测试桩契约。 */
+export interface DuckDBTransactionalQueryable extends DuckDBQueryable {
+  transaction(statements: string[]): Promise<void>;
+}
