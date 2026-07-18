@@ -5,12 +5,26 @@
  * tick 该做什么——探测上游 / 静默跳过 / 标记当天错过 / 停止重试。把状态机从副作用
  * 编排里抽出来，行为全部可 vitest 锁定。
  *
- * 状态文件（数据管理/logs/auto-release-state.json）语义：
- *   { beijingDay, status: 'released'|'failed'|'missed', attempts, consecutiveMissedDays, ... }
- *   - released：当天已成功发布 → 后续 tick 全部跳过（幂等护栏）
+ * 状态文件（数据管理/logs/auto-release-state.json）语义（2026-07-18 起为「批次 × 天」）：
+ *   {
+ *     beijingDay,  // 最后写入批次的北京日（仅 --status 展示用，判定以各批 slice 内 beijingDay 为准）
+ *     batches: {
+ *       early: { beijingDay, status, attempts, consecutiveMissedDays, note, updatedAt },
+ *       late:  { beijingDay, status, attempts, consecutiveMissedDays, note, updatedAt },
+ *     },
+ *     updatedAt,
+ *   }
+ *   每个批次 slice 就是 nextState() 的返回形状；批次间完全独立（互不重置、互不覆盖）。
+ *   决策纯函数（decideTickAction / nextState / computeConsecutiveMissedDays）不感知批次，
+ *   由 selectBatchState / mergeBatchState 把「某批 slice」当独立 scope 喂进去 / 收回来。
+ *   旧扁平 schema（{beijingDay,status,attempts,consecutiveMissedDays}，2026-07-18 前）向后兼容：
+ *   selectBatchState 把它当「早批的延续」读一次，晚批从零起（仅影响升级当天，无数据损失）。
+ *
+ *   单批 slice 的 status 语义：
+ *   - released：该批当天已成功发布 → 后续 tick 该批全部跳过（幂等护栏）
  *   - failed：release:daily 跑过但失败；attempts < maxAttempts 时窗口内可重试
- *   - missed：窗口结束仍未就绪/未成功，已告警 → 当天不再动作，等人工
- *   - 跨天（state.beijingDay ≠ 今天）视为无状态，从头开始（attempts 归零）
+ *   - missed：窗口结束仍未就绪/未成功，已告警 → 当天该批不再动作，等人工
+ *   - 跨天（slice.beijingDay ≠ 今天）视为无状态，从头开始（attempts 归零）
  *   - consecutiveMissedDays：released 前连续多少个自然日未成功发布（不含今天）。
  *     released 当天归零；跨天时若上一天未 released 则按实际相差的自然日数累加
  *     （非固定 +1，覆盖 Mac 睡眠/关机跨越多天未触发的场景）。用于 mark-missed 告警
@@ -22,8 +36,11 @@
  * 无副作用、不读文件系统 / env / 时钟，可被 vitest 直接 import。
  */
 
+import { EARLY_BATCH } from './release-batches.mjs';
+
 /**
- * 默认发布窗口（北京时间）：上游约 09:30 出 01/03/04/05、10:30 出 02，故 10:35 起窗。
+ * 默认发布窗口（北京时间）：单批时代的历史默认（早批 07:40 / 晚批 12:00 起窗见
+ * release-batches.mjs 各批 window；本常量仅在无批次上下文时兜底/供旧引用不破）。
  * end 原为 14:00（2026-07-12 前）。实证复盘 `数据管理/logs/auto-release.log`（07-08~07-12）
  * 发现窗口内仅 2 次自动重试往往在 11:40 前就耗尽——之后即使根因（治理闸拦截 / VPS SSH
  * 瞬时抖动）当天被人工修复，也要等到人手动 `--once` 补跑才追上，导致报告与数据一起滞后
@@ -155,5 +172,65 @@ export function nextState(status, { todayBeijing, prevState, note = '', nowISO =
     consecutiveMissedDays: computeConsecutiveMissedDays(status, { todayBeijing, prevState }),
     note,
     updatedAt: nowISO,
+  };
+}
+
+// ── 批次状态读写（2026-07-18 双批发布：状态文件从「全天一个 status」升级为「每批一个 slice」）──
+//
+// 决策纯函数不感知批次；这里把「某批 slice」当独立 scope 在完整状态文件里读进 / 写回。
+// 批次间完全独立（互不重置、互不覆盖），故 selectBatchState 直接返回该批 slice（含其自身
+// beijingDay），跨天 / 幂等 / 重试上限判定全部交给决策纯函数按该 slice 的 beijingDay 处理。
+
+/**
+ * 从完整状态文件取某批次的「决策用切片」（喂给 decideTickAction / nextState 的 prevState）。
+ * @param {object|null} fullState 状态文件解析结果（无文件传 null）
+ * @param {string} batchId
+ * @returns {{beijingDay:string,status?:string,attempts?:number,consecutiveMissedDays?:number}|null}
+ *   该批从未跑过（本 schema 缺该批 slice）→ null（决策按「无状态」从头开始）。
+ */
+export function selectBatchState(fullState, batchId) {
+  if (!fullState || typeof fullState !== 'object') return null;
+  const slice = fullState.batches && typeof fullState.batches === 'object'
+    ? fullState.batches[batchId] : undefined;
+  if (slice && typeof slice === 'object' && slice.beijingDay) return slice;
+  // 旧扁平 schema 兼容（2026-07-18 前）：无 batches 字段但有顶层 status → 当作早批的延续读一次，
+  // 晚批读不到（返回 null）从零起。仅影响升级当天的 consecutiveMissedDays 归并，无数据损失。
+  if (!fullState.batches && fullState.beijingDay && fullState.status && batchId === EARLY_BATCH.id) {
+    return {
+      beijingDay: fullState.beijingDay,
+      status: fullState.status,
+      attempts: fullState.attempts ?? 0,
+      consecutiveMissedDays: fullState.consecutiveMissedDays ?? 0,
+    };
+  }
+  return null;
+}
+
+/**
+ * 把某批次的新 slice（nextState 返回值）合并进完整状态文件（纯函数；调用方负责落盘）。
+ * 只更新该批 slice，其余批次 slice 原样保留（跨天也不清除——各批按自身 slice.beijingDay
+ * 独立判跨天，避免「早批先写导致晚批昨日 slice 被丢、连续错过天数归并失真」）。
+ * 从旧扁平 schema 首次写入时自动升级为 batches 结构。
+ * @param {object|null} fullState
+ * @param {string} batchId
+ * @param {{beijingDay:string,status:string,attempts:number,consecutiveMissedDays:number,note?:string,updatedAt?:string}} newSlice
+ * @returns {object} 新的完整状态文件内容
+ */
+export function mergeBatchState(fullState, batchId, newSlice) {
+  const prevBatches = (fullState && typeof fullState.batches === 'object' && fullState.batches) || {};
+  return {
+    beijingDay: newSlice.beijingDay, // 顶层仅展示用：最后写入批次的北京日
+    batches: {
+      ...prevBatches,
+      [batchId]: {
+        beijingDay: newSlice.beijingDay,
+        status: newSlice.status,
+        attempts: newSlice.attempts,
+        consecutiveMissedDays: newSlice.consecutiveMissedDays,
+        note: newSlice.note ?? '',
+        updatedAt: newSlice.updatedAt ?? '',
+      },
+    },
+    updatedAt: newSlice.updatedAt ?? '',
   };
 }

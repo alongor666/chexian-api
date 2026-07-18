@@ -1,17 +1,22 @@
 #!/usr/bin/env node
 /**
- * 全自动日常发布 watcher：监控 VPS auto_loadbi 出表 → 五张齐全即在主仓跑 release:daily
+ * 全自动日常发布 watcher：监控 VPS auto_loadbi 出表 → 按批次齐全即在主仓跑 sync-and-reload --batch
  *
- * 解决的问题：上游五张表分两批出（北京约 09:30 出 01/03/04/05，10:30 出 02 报价），
- * 人工需要「等齐了再跑 release:daily」。本脚本把等待变成机器的事：
+ * 解决的问题（2026-07-18 起上游改双批出表）：
+ *   - 早批：01 签单 + 05 理赔，北京约 07:35 两省就绪 → 07:40 起触发
+ *   - 晚批：02 报价 + 03 维修 + 04 厂牌，北京约 11:50 就绪（04 每周日更新）→ 12:00 起触发
+ * 人工需要「每批等齐了再发布」。本脚本把等待变成机器的事，且两批各自独立就绪判定 / 幂等键 / 窗口：
  *
- *   launchd 每 15 分钟拉起本脚本（无常驻进程）
- *     → 窗口/状态决策（数据管理/lib/auto-release-decision.mjs，北京时区）
- *     → 轻量探测：ssh 只读 latest-manifest.json（不 rsync 135MB）
- *       → evaluateRemoteManifest：5 code 齐全 + mtime=北京今天 + sizeMB 兜空表
- *     → 就绪 → bun run release:daily（其 Stage 0 pull-bi-exports 再做完整
- *       rsync + 字节比对 + 省份内容核验，双层校验）
- *     → 当天成功后写状态幂等跳过；失败重试至上限；窗口结束未成即告警 missed
+ *   launchd 每 15 分钟拉起本脚本（无常驻进程），一个 tick 内依次处理早批、晚批：
+ *     → 每批：窗口/状态决策（auto-release-decision.mjs 纯函数 + selectBatchState/mergeBatchState，北京时区）
+ *     → 轻量探测：ssh 只读 latest-manifest.json（一个 tick 只探一次，两批共用；不 rsync 135MB）
+ *       → evaluateRemoteManifest(requiredCodes=本批 code)：本批 code 齐全 + mtime=北京今天 + sizeMB 兜空表
+ *     → 就绪 → node scripts/sync-and-reload.mjs --batch <id>（其 Stage 0 pull-bi-exports --batch 再做
+ *       本批 rsync + 字节比对 + 省份内容核验，双层校验；--batch 从 release-batches.mjs SSOT 取域/企微/报告）
+ *     → 该批当天成功后写 slice 幂等跳过；失败重试至上限；窗口结束未成即告警 missed（批次粒度）
+ *
+ * 批次 SSOT：数据管理/lib/release-batches.mjs（code 子集 / ETL 域 / 窗口 / 报告·企微编排）。
+ * 状态文件为「批次 × 天」（见 auto-release-decision.mjs 头注释），早批标 released 不会让晚批被幂等跳过。
  *
  * 告警通道：结构化日志（数据管理/logs/auto-release.log）+ macOS 系统通知（osascript）
  * + 飞书机器人（lark-cli bot 身份，默认推「AI 赋能车险经营」群，AUTO_RELEASE_LARK_CHAT_ID 可覆盖；
@@ -19,23 +24,26 @@
  * + 可选企微群机器人 webhook（AUTO_RELEASE_WEBHOOK_URL，群机器人不受 IP 白名单限制）。
  *
  * 用法：
- *   node scripts/auto-release-daily.mjs                     # launchd 周期入口（窗口+状态决策）
- *   node scripts/auto-release-daily.mjs --once              # 忽略窗口手动探测一次，就绪即发布
+ *   node scripts/auto-release-daily.mjs                     # launchd 周期入口（两批各自窗口+状态决策）
+ *   node scripts/auto-release-daily.mjs --once              # 忽略窗口手动探测一次，两批就绪即发布
+ *   node scripts/auto-release-daily.mjs --once --batch early # 只处理指定批次（early / late）
  *   node scripts/auto-release-daily.mjs --once --dry-run    # 只探测判就绪，不真跑 release
- *   node scripts/auto-release-daily.mjs --status            # 看当天状态 + 最近日志
+ *   node scripts/auto-release-daily.mjs --status            # 看两批当天状态 + 最近日志
  *   node scripts/auto-release-daily.mjs --install-launchd   # 安装 launchd 定时器（须在主仓跑）
  *   node scripts/auto-release-daily.mjs --uninstall-launchd # 卸载
  *
  * 环境变量：
- *   AUTO_RELEASE_WINDOW_START / AUTO_RELEASE_WINDOW_END  发布窗口，北京时间（默认 10:35 / 20:00）
- *   AUTO_RELEASE_MAX_ATTEMPTS                            当日失败重试上限（默认 6）
+ *   AUTO_RELEASE_EARLY_WINDOW_START / _END                早批窗口，北京时间（默认 07:40 / 20:00）
+ *   AUTO_RELEASE_LATE_WINDOW_START / _END                 晚批窗口，北京时间（默认 12:00 / 20:00）
+ *     ⚠️ 旧的全局 AUTO_RELEASE_WINDOW_START/END 双批时代已失效（两批窗口不同，单值无法表达）
+ *   AUTO_RELEASE_MAX_ATTEMPTS                            单批当日失败重试上限（默认 6）
  *   AUTO_RELEASE_LARK_CHAT_ID                            飞书告警群 chat_id（默认「AI 赋能车险经营」群，lark-cli bot 已入群免配）
  *   AUTO_RELEASE_WEBHOOK_URL                             企微群机器人 webhook（可选，与飞书并行发）
  *   AUTO_RELEASE_INTERVAL_SEC                            安装时写入 launchd 的轮询间隔（默认 900）
  *   PULL_BI_SSH_ALIAS / PULL_BI_REMOTE_DIR               复用拉取脚本的上游定位（默认 myvps / auto_loadbi）
  *
  * ⚠️ Mac 睡眠时 launchd 不触发（唤醒后下个周期补上）。若 Mac 白天常合盖，可用
- * `sudo pmset repeat wakeorpoweron MTWRFSU 10:30:00` 定时唤醒（本脚本不代改电源设置）。
+ * `sudo pmset repeat wakeorpoweron MTWRFSU 07:30:00 07:35:00 11:45:00` 类定时唤醒（本脚本不代改电源设置）。
  */
 
 import { spawnSync } from 'node:child_process';
@@ -49,8 +57,12 @@ import { homedir } from 'node:os';
 
 import { beijingDayOf, evaluateRemoteManifest } from '../数据管理/lib/bi-export-pull.mjs';
 import {
-  DEFAULT_WINDOW, DEFAULT_MAX_ATTEMPTS, isValidHHMM, decideTickAction, nextState,
+  DEFAULT_MAX_ATTEMPTS, isValidHHMM, decideTickAction, nextState,
+  selectBatchState, mergeBatchState,
 } from '../数据管理/lib/auto-release-decision.mjs';
+import {
+  RELEASE_BATCHES, getReleaseBatch, batchAllCodes, RELEASE_BATCH_IDS,
+} from '../数据管理/lib/release-batches.mjs';
 import { resolveLaunchdNodeBin } from '../数据管理/lib/launchd-node-bin.mjs';
 import { evaluateLedgerUncommittedBulk, LEDGER_TRACKED_FILES } from './etl-ledger/governance-check.mjs';
 
@@ -79,15 +91,22 @@ function log(color, msg) {
 }
 
 function parseArgs(argv) {
-  const opts = { once: false, dryRun: false, status: false, install: false, uninstall: false };
-  for (const a of argv) {
+  // batch=null → 处理全部批次（launchd 周期入口 / 手动 --once 补两批）；指定 → 只处理该批。
+  const opts = { once: false, dryRun: false, status: false, install: false, uninstall: false, batch: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
     if (a === '--once') opts.once = true;
     else if (a === '--dry-run') opts.dryRun = true;
     else if (a === '--status') opts.status = true;
     else if (a === '--install-launchd') opts.install = true;
     else if (a === '--uninstall-launchd') opts.uninstall = true;
+    else if (a === '--batch' || a.startsWith('--batch=')) {
+      const id = a.includes('=') ? a.slice('--batch='.length) : argv[++i];
+      try { opts.batch = getReleaseBatch(id).id; }
+      catch (e) { process.stdout.write(`${e.message}\n`); process.exit(1); }
+    }
     else if (a === '--help' || a === '-h') {
-      process.stdout.write('用法见文件头注释：--once / --dry-run / --status / --install-launchd / --uninstall-launchd\n');
+      process.stdout.write(`用法见文件头注释：--once / --dry-run / --status / --batch ${RELEASE_BATCH_IDS.join('|')} / --install-launchd / --uninstall-launchd\n`);
       process.exit(0);
     } else {
       process.stdout.write(`未知参数：${a}（--help 查看用法）\n`);
@@ -122,11 +141,18 @@ function writeState(state) {
   writeFileSync(STATE_PATH, JSON.stringify(state, null, 2) + '\n');
 }
 
-function resolveWindow() {
-  const start = process.env.AUTO_RELEASE_WINDOW_START || DEFAULT_WINDOW.start;
-  const end = process.env.AUTO_RELEASE_WINDOW_END || DEFAULT_WINDOW.end;
+/**
+ * 解析某批次的触发窗口（北京时间）。默认取 release-batches.mjs SSOT；
+ * 可用 AUTO_RELEASE_EARLY_WINDOW_START/END、AUTO_RELEASE_LATE_WINDOW_START/END 分批覆盖
+ *（测试/应急）。⚠️ 旧的全局 AUTO_RELEASE_WINDOW_START/END 在双批时代已失效——两批窗口不同，
+ * 单一全局值无法表达；如需改窗请用分批 env。
+ */
+function resolveBatchWindow(batch) {
+  const key = batch.id.toUpperCase();
+  const start = process.env[`AUTO_RELEASE_${key}_WINDOW_START`] || batch.window.start;
+  const end = process.env[`AUTO_RELEASE_${key}_WINDOW_END`] || batch.window.end;
   if (!isValidHHMM(start) || !isValidHHMM(end) || start >= end) {
-    log('red', `❌ 窗口配置非法：start=${start} end=${end}（须 HH:MM 且 start < end）`);
+    log('red', `❌ 批次 ${batch.id} 窗口配置非法：start=${start} end=${end}（须 HH:MM 且 start < end）`);
     process.exit(1);
   }
   return { start, end };
@@ -211,7 +237,13 @@ function isProcessAlive(pid) {
   catch (e) { return e.code === 'EPERM'; }
 }
 
+let __lockAcquired = false;
 function acquireLock() {
+  // 幂等：一个 tick 内两批发布共用同一把锁（首批 acquire，次批 no-op），退出时统一释放。
+  // 若直接为每批 acquire/release，次批会撞上首批自己的锁（EEXIST + 同进程 pid 存活 → 误退出）。
+  // ⚠️ __lockAcquired 只在真正成功持锁后置位——陈旧锁接管走 return acquireLock() 递归重试，
+  // 若提前置位会让递归被顶部 guard 短路、锁永不重新拿到。
+  if (__lockAcquired) return;
   mkdirSync(LOGS_DIR, { recursive: true });
   try {
     const fd = openSync(LOCK_PATH, 'wx');
@@ -228,6 +260,7 @@ function acquireLock() {
     unlinkSync(LOCK_PATH); // 陈旧锁接管
     return acquireLock();
   }
+  __lockAcquired = true;
   const release = () => { try { if (existsSync(LOCK_PATH)) unlinkSync(LOCK_PATH); } catch { /* 尽力而为 */ } };
   process.on('exit', release);
   process.on('SIGINT', () => { release(); process.exit(130); });
@@ -236,13 +269,15 @@ function acquireLock() {
 
 // ── 触发发布 ──
 
-function runReleaseDaily() {
-  log('cyan', '▶ 五张表就绪，触发 bun run release:daily（Stage 0 会做完整 rsync+字节校验+省份核验）');
+function runReleaseDaily(batch) {
+  log('cyan', `▶ ${batch.label} 就绪，触发 sync-and-reload --batch ${batch.id}（Stage 0 做本批 rsync+字节校验+省份核验；企微=${batch.runWecom}）`);
   // 全链路打点（2026-07-11）：watcher 预生成 run_id 传给发布链，使 watcher 侧事件与
   // release 全链路事件在台账里同 run_id 可关联；AUTO_RELEASE_TRIGGER 标记触发方式
   //（sync-and-reload 的 run start/end 事件 trigger 字段据此区分 watcher/ai/manual）。
+  // 直接调 sync-and-reload.mjs（不走 bun run release:daily，后者硬编 --wecom）：--batch 从 SSOT
+  // 决定 ETL 域 / code 子集 / 报告 / 企微。用 process.execPath（当前 node 绝对路径）避免 PATH 依赖。
   const runId = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
-  const r = spawnSync('bun', ['run', 'release:daily'], {
+  const r = spawnSync(process.execPath, ['scripts/sync-and-reload.mjs', '--batch', batch.id], {
     cwd: PROJECT_ROOT,
     stdio: 'inherit', // launchd 模式下由 StandardOutPath 收进 launchd 日志
     timeout: 90 * 60 * 1000,
@@ -343,9 +378,20 @@ function uninstallLaunchd() {
 function printStatus() {
   const state = readState();
   process.stdout.write(`状态文件（${STATE_PATH}）：\n${state ? JSON.stringify(state, null, 2) : '（无——尚未运行过）'}\n`);
+  // 按批次概览（双批发布：early / late 各一 slice）
+  const todayBeijing = beijingDayOf(new Date());
+  process.stdout.write(`\n批次状态（北京今天 ${todayBeijing}）：\n`);
+  for (const batch of RELEASE_BATCHES) {
+    const slice = selectBatchState(state, batch.id);
+    const win = resolveBatchWindow(batch);
+    const desc = slice
+      ? `${slice.status}（北京日 ${slice.beijingDay}${slice.beijingDay === todayBeijing ? '·今天' : '·非今天'}，attempts=${slice.attempts ?? 0}）`
+      : '（今天尚未跑过）';
+    process.stdout.write(`  ${batch.id.padEnd(6)} 窗口 ${win.start}~${win.end} code ${batchAllCodes(batch).join('/')}：${desc}\n`);
+  }
   const uid = process.getuid();
   const r = spawnSync('launchctl', ['print', `gui/${uid}/${LAUNCHD_LABEL}`], { encoding: 'utf-8' });
-  process.stdout.write(`launchd：${r.status === 0 ? '已安装 ✓' : '未安装（bun run auto-release:install）'}\n`);
+  process.stdout.write(`\nlaunchd：${r.status === 0 ? '已安装 ✓' : '未安装（bun run auto-release:install）'}\n`);
   if (existsSync(LOG_PATH)) {
     const lines = readFileSync(LOG_PATH, 'utf-8').trim().split('\n');
     process.stdout.write(`最近日志（${LOG_PATH}）：\n${lines.slice(-10).join('\n')}\n`);
@@ -353,6 +399,78 @@ function printStatus() {
 }
 
 // ── 主流程 ──
+
+/**
+ * 处理单个批次的一次 tick。返回本批终态供 main 汇总退出码。
+ * 状态读写走 selectBatchState/mergeBatchState（批次 slice 独立），决策仍用不感知批次的纯函数。
+ * @returns {Promise<'skip'|'missed'|'probe-error'|'not-ready'|'dry-ready'|'released'|'failed'>}
+ */
+async function processBatch(batch, ctx) {
+  const { todayBeijing, nowHHMM, maxAttempts, opts, getManifest } = ctx;
+  const window = resolveBatchWindow(batch);
+  const prev = selectBatchState(ctx.stateRef.value, batch.id);
+  const decision = decideTickAction({ state: prev, todayBeijing, nowHHMM, window, maxAttempts, once: opts.once });
+  const tag = `[${batch.id}]`;
+
+  if (decision.action === 'skip') {
+    // 窗口前的静默 tick 不写日志（每 15 分钟一条噪声）；其余 skip 原因值得留痕
+    if (nowHHMM >= window.start || opts.once) log('yellow', `⏭ ${tag} ${decision.reason}`);
+    return 'skip';
+  }
+  if (decision.action === 'mark-missed') {
+    const slice = nextState('missed', { todayBeijing, prevState: prev, note: decision.reason, nowISO: new Date().toISOString() });
+    ctx.stateRef.value = mergeBatchState(ctx.stateRef.value, batch.id, slice);
+    writeState(ctx.stateRef.value);
+    const body = `${batch.label}：${decision.reason}。请人工检查上游出表（ssh myvps 看 auto_loadbi/exports），需要时手动 node scripts/sync-and-reload.mjs --batch ${batch.id}`;
+    await notify(...escalatedAlert(`今天 ${batch.label} 未自动发布`, body, slice.consecutiveMissedDays));
+    return 'missed';
+  }
+
+  // action === 'probe'
+  log('cyan', `▶ ${tag} ${decision.reason}（北京 ${todayBeijing} ${nowHHMM}·code ${batchAllCodes(batch).join('/')}）`);
+  const probe = getManifest();
+  if (probe.error) {
+    log('red', `❌ ${tag} ${probe.error}`);
+    return 'probe-error'; // 周期模式：下个 tick 重试，窗口结束由 mark-missed 兜底告警
+  }
+  const verdict = evaluateRemoteManifest(probe.manifest, {
+    todayBeijing, requiredCodes: batchAllCodes(batch), optionalCodes: batch.optionalCodes,
+  });
+  // 可选表（04 厂牌，低频维表/周日更新）异常是 warn：不拦就绪，但始终留痕（分发层跳过异常份保留旧维表）
+  for (const i of verdict.issues.filter((x) => x.level === 'warn')) log('yellow', `  ⚠ ${tag} ${i.message}`);
+  if (!verdict.ready) {
+    for (const i of verdict.issues.filter((x) => x.level === 'error')) log('yellow', `  ⏳ ${tag} ${i.message}`);
+    log('yellow', `⏳ ${tag} 上游未就绪（${verdict.reports.length}/${batchAllCodes(batch).length} 张已出今天的表），${opts.once ? '' : '下个周期再探'}`);
+    return 'not-ready';
+  }
+  log('green', `✓ ${tag} 上游必需报表就绪（均为北京 ${todayBeijing}）：${verdict.reports.map((r) => `${r.code}=${r.sizeMB}MB`).join(' ')}`);
+
+  if (opts.dryRun) {
+    log('cyan', `（dry-run）${tag} 就绪但不触发 release`);
+    return 'dry-ready';
+  }
+  if (isWorktreeCheckout()) {
+    log('red', '❌ 当前是 git worktree，禁止在 worktree 触发 release（数据/同步/reload 会错位）。请在主仓运行。');
+    process.exit(1);
+  }
+
+  acquireLock(); // 幂等：两批共用一把锁
+  const result = runReleaseDaily(batch);
+  const now = new Date().toISOString();
+  if (result.ok) {
+    const slice = nextState('released', { todayBeijing, prevState: prev, note: '自动发布成功', nowISO: now });
+    ctx.stateRef.value = mergeBatchState(ctx.stateRef.value, batch.id, slice);
+    writeState(ctx.stateRef.value);
+    await notify(`${batch.label} 自动发布成功`, `sync-and-reload --batch ${batch.id} 完成（北京 ${todayBeijing} ${beijingNowHHMM()}）`);
+    return 'released';
+  }
+  const slice = nextState('failed', { todayBeijing, prevState: prev, note: `release --batch ${batch.id} 失败 ${result.detail}`, nowISO: now });
+  ctx.stateRef.value = mergeBatchState(ctx.stateRef.value, batch.id, slice);
+  writeState(ctx.stateRef.value);
+  const body = `${batch.label} sync-and-reload ${result.detail}（第 ${slice.attempts}/${maxAttempts} 次）。日志：${LOG_PATH} 与 launchd 日志；上限内下个周期自动重试`;
+  await notify(...escalatedAlert(`${batch.label} 自动发布失败`, body, slice.consecutiveMissedDays));
+  return 'failed';
+}
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
@@ -362,67 +480,28 @@ async function main() {
 
   const todayBeijing = beijingDayOf(new Date());
   const nowHHMM = beijingNowHHMM();
-  const window = resolveWindow();
   const maxAttempts = parseInt(process.env.AUTO_RELEASE_MAX_ATTEMPTS || '', 10) || DEFAULT_MAX_ATTEMPTS;
-  const state = readState();
+  // stateRef.value 在两批间累积（早批写入后晚批据此判定，避免读到落盘前的旧文件）
+  const stateRef = { value: readState() };
+  // 上游 manifest 一个 tick 只探测一次（两批共用，避免重复 ssh）
+  let _probe;
+  const getManifest = () => (_probe ??= probeRemoteManifest());
 
-  const decision = decideTickAction({ state, todayBeijing, nowHHMM, window, maxAttempts, once: opts.once });
+  const batches = opts.batch ? [getReleaseBatch(opts.batch)] : RELEASE_BATCHES;
+  const ctx = { todayBeijing, nowHHMM, maxAttempts, opts, stateRef, getManifest };
 
-  if (decision.action === 'skip') {
-    // 窗口前的静默 tick 不写日志文件（每 15 分钟一条噪声）；其余 skip 原因值得留痕
-    if (nowHHMM >= window.start || opts.once) log('yellow', `⏭ ${decision.reason}`);
-    return;
-  }
-  if (decision.action === 'mark-missed') {
-    const missedState = nextState('missed', { todayBeijing, prevState: state, note: decision.reason, nowISO: new Date().toISOString() });
-    writeState(missedState);
-    const body = `${decision.reason}。请人工检查上游出表情况（ssh myvps 看 auto_loadbi/exports），需要时手动 bun run release:daily`;
-    await notify(...escalatedAlert('今天未自动发布', body, missedState.consecutiveMissedDays));
-    return;
-  }
-
-  // action === 'probe'
-  log('cyan', `▶ ${decision.reason}（北京 ${todayBeijing} ${nowHHMM}）`);
-  const probe = probeRemoteManifest();
-  if (probe.error) {
-    log('red', `❌ ${probe.error}`);
-    if (opts.once) process.exit(1);
-    return; // 周期模式：下个 tick 重试，窗口结束由 mark-missed 兜底告警
-  }
-  const verdict = evaluateRemoteManifest(probe.manifest, { todayBeijing });
-  // 可选表（04 厂牌，低频维表）的异常是 warn：不拦就绪，但始终留痕（分发层会跳过异常份保留旧维表）
-  for (const i of verdict.issues.filter((x) => x.level === 'warn')) log('yellow', `  ⚠ ${i.message}`);
-  if (!verdict.ready) {
-    for (const i of verdict.issues.filter((x) => x.level === 'error')) log('yellow', `  ⏳ ${i.message}`);
-    log('yellow', `⏳ 上游未就绪（${verdict.reports.length}/5 张已出今天的表），${opts.once ? '' : '下个周期再探'}`);
-    if (opts.once) process.exit(1);
-    return;
-  }
-  log('green', `✓ 上游必需报表就绪（均为北京 ${todayBeijing}）：${verdict.reports.map((r) => `${r.code}=${r.sizeMB}MB`).join(' ')}`);
-
-  if (opts.dryRun) {
-    log('cyan', '（dry-run）就绪但不触发 release:daily');
-    return;
-  }
-  if (isWorktreeCheckout()) {
-    log('red', '❌ 当前是 git worktree，禁止在 worktree 触发 release:daily（数据/同步/reload 会错位）。请在主仓运行。');
-    process.exit(1);
+  let anyReleased = false;
+  let hardFailure = false; // release 真正跑了但失败 → 无论模式都非零退出
+  let onceUnpublished = false; // --once 模式下本批没能发布（probe-error/not-ready/failed）
+  for (const batch of batches) {
+    const outcome = await processBatch(batch, ctx);
+    if (outcome === 'released') anyReleased = true;
+    if (outcome === 'failed') hardFailure = true;
+    if (opts.once && (outcome === 'failed' || outcome === 'not-ready' || outcome === 'probe-error')) onceUnpublished = true;
   }
 
-  acquireLock();
-  const result = runReleaseDaily();
-  const now = new Date().toISOString();
-  if (result.ok) {
-    writeState(nextState('released', { todayBeijing, prevState: state, note: '自动发布成功', nowISO: now }));
-    await notify('自动发布成功', `release:daily 完成（北京 ${todayBeijing} ${beijingNowHHMM()}），五张表 mtime 均为今天`);
-    remindLedgerUncommitted();
-  } else {
-    const st = nextState('failed', { todayBeijing, prevState: state, note: `release:daily 失败 ${result.detail}`, nowISO: now });
-    writeState(st);
-    const body = `release:daily ${result.detail}（第 ${st.attempts}/${maxAttempts} 次）。日志：${LOG_PATH} 与 launchd 日志；上限内下个周期自动重试`;
-    await notify(...escalatedAlert('自动发布失败', body, st.consecutiveMissedDays));
-    process.exit(1);
-  }
+  if (anyReleased) remindLedgerUncommitted();
+  if (hardFailure || (opts.once && onceUnpublished)) process.exit(1);
 }
 
 main().catch(async (e) => {
