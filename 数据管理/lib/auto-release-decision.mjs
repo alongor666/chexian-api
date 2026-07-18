@@ -217,7 +217,22 @@ export function selectBatchState(fullState, batchId) {
  * @returns {object} 新的完整状态文件内容
  */
 export function mergeBatchState(fullState, batchId, newSlice) {
-  const prevBatches = (fullState && typeof fullState.batches === 'object' && fullState.batches) || {};
+  const prevBatches = (fullState && typeof fullState.batches === 'object' && fullState.batches)
+    ? { ...fullState.batches } : {};
+  // 🔴 旧扁平 schema 迁移：首次写入若旧文件是扁平态（无 batches 但有 status），先把它物化成
+  // early slice 再合并目标批——与 selectBatchState 的 legacy 读取对称。否则「旧态=released +
+  // 本次先写 late」会丢掉旧的 early 幂等记录，下个 tick 把早批当没跑过而重复发布（P1-3）。
+  if (fullState && !fullState.batches && fullState.beijingDay && fullState.status
+      && !prevBatches[EARLY_BATCH.id]) {
+    prevBatches[EARLY_BATCH.id] = {
+      beijingDay: fullState.beijingDay,
+      status: fullState.status,
+      attempts: fullState.attempts ?? 0,
+      consecutiveMissedDays: fullState.consecutiveMissedDays ?? 0,
+      note: fullState.note ?? '',
+      updatedAt: fullState.updatedAt ?? '',
+    };
+  }
   return {
     beijingDay: newSlice.beijingDay, // 顶层仅展示用：最后写入批次的北京日
     batches: {
@@ -233,4 +248,23 @@ export function mergeBatchState(fullState, batchId, newSlice) {
     },
     updatedAt: newSlice.updatedAt ?? '',
   };
+}
+
+/**
+ * 返回某批次「今天尚未满足」的前置依赖批次 id（依赖满足 = 该前置批当天 status==='released'）。
+ * 用于晚批 fail-closed：早批当天未成功就不发晚批（防混新鲜度：晚批 renewal_tracker /
+ * new_energy_claims 依赖早批产出的 policy）。纯函数，watcher / sync-and-reload 共用。
+ * @param {{dependsOn?:readonly string[]}} batch 批次配置（release-batches.mjs）
+ * @param {object|null} fullState 状态文件解析结果
+ * @param {string} todayBeijing 北京今天 YYYY-MM-DD
+ * @returns {string[]} 未满足的前置批 id（空数组 = 依赖全部满足）
+ */
+export function unmetDependencies(batch, fullState, todayBeijing) {
+  const deps = batch?.dependsOn ?? [];
+  const unmet = [];
+  for (const depId of deps) {
+    const slice = selectBatchState(fullState, depId);
+    if (!slice || slice.beijingDay !== todayBeijing || slice.status !== 'released') unmet.push(depId);
+  }
+  return unmet;
 }

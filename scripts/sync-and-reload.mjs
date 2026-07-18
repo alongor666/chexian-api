@@ -55,6 +55,8 @@ import { writeReport, loadEvents } from './etl-ledger/render.mjs';
 import { buildBranchEtlSteps, shouldEnableValidationBranchSync, BRANCH_PUBLISH_DOMAINS } from '../数据管理/lib/branch-publish.mjs';
 // 双批发布 SSOT（早批 01+05 / 晚批 02+03+04）：批次 → ETL 域 / code 子集 / 报告·企微编排
 import { getReleaseBatch, batchAllCodes, RELEASE_BATCH_IDS } from '../数据管理/lib/release-batches.mjs';
+// 晚批依赖早批 fail-closed：手动入口独立校验前置批当天已 released（与 watcher 防混新鲜度同）
+import { unmetDependencies } from '../数据管理/lib/auto-release-decision.mjs';
 // state.db 远程备份（575d2f）：reload 前在 VPS 上备份 PAT/用户/角色权威数据，失败不阻塞
 import { resolveStateDbBackupConfig, buildStateDbBackupScript } from './lib/state-db-backup.mjs';
 import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
@@ -116,6 +118,7 @@ function parseArgs(argv) {
     batch: null,          // 双批发布：'early'|'late'；置位后覆盖 dailyArgs/wecom/report（见下）
     runReport: true,      // 是否跑 Stage 1.5 短中长期报告（批次可关；默认开）
     pullCodes: null,      // 传给 Stage 0 pull-bi-exports 的 code 子集（批次派生；null=全量）
+    allowMissingDep: false, // 应急放行：跳过「前置批当天已 released」依赖闸（防混新鲜度）
     dailyArgs: [],
   };
   for (let i = 0; i < argv.length; i++) {
@@ -152,9 +155,11 @@ function parseArgs(argv) {
       opts.wecomOrg = a.slice('--wecom-org='.length);
     }
     else if (a === '--skip-lark-archive') opts.skipLarkArchive = true;
+    else if (a === '--allow-missing-dep') opts.allowMissingDep = true;
     else if (a === '--help' || a === '-h') {
       log('cyan', `用法：node scripts/sync-and-reload.mjs [--batch ${RELEASE_BATCH_IDS.join('|')}] [daily.mjs subcommand] [--dry-run] [--skip-pull] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]`);
-      log('cyan', '  --batch early：签单+理赔（premium/claims_detail，不跑企微）；--batch late：报价+维修+厂牌+尾部域（跑企微）。不带 --batch=全量 daily.mjs all。');
+      log('cyan', '  --batch early：签单+理赔（premium/claims_detail，不跑企微）；--batch late：报价+维修+厂牌+尾部域（跑企微，依赖早批当天 released）。不带 --batch=全量 daily.mjs all。');
+      log('cyan', '  --allow-missing-dep：应急放行晚批依赖闸（早批未 released 也发；可能混新鲜度）。');
       process.exit(0);
     } else opts.dailyArgs.push(a);
   }
@@ -388,6 +393,32 @@ async function main() {
   log('cyan', `  wecom:             ${opts.wecom}${opts.wecomDryRun ? ' (dry-run)' : ''}`);
   if (opts.wecomOrg) log('cyan', `  wecom org:         ${opts.wecomOrg}`);
   log('cyan', `  dry-run:           ${opts.dryRun}`);
+
+  // 🔴 晚批依赖早批 fail-closed：前置批当天未 released → 拒绝发布（防混新鲜度：晚批 renewal_tracker /
+  // 企微依赖早批产出的 policy）。独立于 watcher 再校验一次（手动 sync-and-reload --batch late 也受护）。
+  // dry-run 只告警不中止（便于查看计划）；应急 --allow-missing-dep 放行。
+  if (opts.batch) {
+    const batch = getReleaseBatch(opts.batch);
+    if ((batch.dependsOn?.length ?? 0) > 0) {
+      let releaseState = null;
+      try { releaseState = JSON.parse(readFileSync(join(ROOT_DIR, '数据管理/logs/auto-release-state.json'), 'utf-8')); } catch { /* 无状态文件视为依赖未满足 */ }
+      const unmet = unmetDependencies(batch, releaseState, beijingDayOf(new Date()));
+      if (unmet.length > 0) {
+        if (opts.allowMissingDep) {
+          log('yellow', `\n⚠ 前置批未就绪（${unmet.join(',')} 今日未 released），但 --allow-missing-dep 已放行（应急：可能发布混新鲜度数据）`);
+        } else if (opts.dryRun) {
+          log('yellow', `\n⚠ (dry-run) 前置批未就绪（${unmet.join(',')} 今日未 released）：真实发布会 fail-closed 中止（--allow-missing-dep 可放行）`);
+        } else {
+          log('red', `\n❌ 前置批未就绪（${unmet.join(',')} 今日未 released），拒绝发布 ${opts.batch} 批（防混新鲜度：晚批依赖早批产出的 policy）。`);
+          log('yellow', `   请先成功发布早批（node scripts/sync-and-reload.mjs --batch early），或应急 --allow-missing-dep 显式放行。`);
+          if (!opts.dryRun) {
+            recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: `依赖闸拒绝：前置批 ${unmet.join(',')} 未 released` });
+          }
+          process.exit(1);
+        }
+      }
+    }
+  }
 
   // 批次模式不参与 full_snapshot 单域路径（批次 ETL 域集由 SSOT 固定）。
   const fullSnapshotDomains = opts.batch ? [] : resolveFullSnapshotDomains(opts.dailyArgs);

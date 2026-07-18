@@ -27,6 +27,8 @@ export const EARLY_BATCH = Object.freeze({
   window: Object.freeze({ start: '07:40', end: '20:00' }),
   runReport: true,
   runWecom: false,
+  // 依赖的前置批次 id（须当天 released 才可发本批）；早批无前置。
+  dependsOn: Object.freeze([]),
 });
 
 /**
@@ -49,6 +51,11 @@ export const LATE_BATCH = Object.freeze({
   window: Object.freeze({ start: '12:00', end: '20:00' }),
   runReport: true,
   runWecom: true,
+  // 🔴 依赖早批：renewal_tracker / new_energy_claims 依赖早批产出的 policy(current)，
+  // 早批当天未 released 就发晚批 = 用陈旧 policy 重算续保追踪 + 推 5 个企微表（混新鲜度发布）。
+  // 故晚批 fail-closed：早批当天未 released 则不发（watcher 自动 / 手动入口均校验），
+  // 应急可 --allow-missing-dep 显式放行。
+  dependsOn: Object.freeze(['early']),
 });
 
 /** 批次全集（顺序 = watcher 每 tick 的处理顺序：早批在前，晚批在后）。 */

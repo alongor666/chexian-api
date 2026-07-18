@@ -58,7 +58,7 @@ import { homedir } from 'node:os';
 import { beijingDayOf, evaluateRemoteManifest } from '../数据管理/lib/bi-export-pull.mjs';
 import {
   DEFAULT_MAX_ATTEMPTS, isValidHHMM, decideTickAction, nextState,
-  selectBatchState, mergeBatchState,
+  selectBatchState, mergeBatchState, unmetDependencies,
 } from '../数据管理/lib/auto-release-decision.mjs';
 import {
   RELEASE_BATCHES, getReleaseBatch, batchAllCodes, RELEASE_BATCH_IDS,
@@ -92,12 +92,13 @@ function log(color, msg) {
 
 function parseArgs(argv) {
   // batch=null → 处理全部批次（launchd 周期入口 / 手动 --once 补两批）；指定 → 只处理该批。
-  const opts = { once: false, dryRun: false, status: false, install: false, uninstall: false, batch: null };
+  const opts = { once: false, dryRun: false, status: false, install: false, uninstall: false, batch: null, allowMissingDep: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--once') opts.once = true;
     else if (a === '--dry-run') opts.dryRun = true;
     else if (a === '--status') opts.status = true;
+    else if (a === '--allow-missing-dep') opts.allowMissingDep = true;
     else if (a === '--install-launchd') opts.install = true;
     else if (a === '--uninstall-launchd') opts.uninstall = true;
     else if (a === '--batch' || a.startsWith('--batch=')) {
@@ -106,7 +107,7 @@ function parseArgs(argv) {
       catch (e) { process.stdout.write(`${e.message}\n`); process.exit(1); }
     }
     else if (a === '--help' || a === '-h') {
-      process.stdout.write(`用法见文件头注释：--once / --dry-run / --status / --batch ${RELEASE_BATCH_IDS.join('|')} / --install-launchd / --uninstall-launchd\n`);
+      process.stdout.write(`用法见文件头注释：--once / --dry-run / --status / --batch ${RELEASE_BATCH_IDS.join('|')} / --allow-missing-dep / --install-launchd / --uninstall-launchd\n`);
       process.exit(0);
     } else {
       process.stdout.write(`未知参数：${a}（--help 查看用法）\n`);
@@ -444,6 +445,14 @@ async function processBatch(batch, ctx) {
     return 'not-ready';
   }
   log('green', `✓ ${tag} 上游必需报表就绪（均为北京 ${todayBeijing}）：${verdict.reports.map((r) => `${r.code}=${r.sizeMB}MB`).join(' ')}`);
+
+  // 🔴 依赖闸（fail-closed）：前置批（如早批）当天未 released → 不发本批，防混新鲜度发布
+  //（晚批 renewal_tracker / 企微依赖早批 policy）。应急 --allow-missing-dep 放行。
+  const unmet = unmetDependencies(batch, ctx.stateRef.value, todayBeijing);
+  if (unmet.length > 0 && !opts.allowMissingDep) {
+    log('yellow', `⏸ ${tag} 前置批未就绪（${unmet.join(',')} 今日未 released），暂不发布本批（防混新鲜度）；待前置批成功或 --allow-missing-dep 再发`);
+    return 'dep-unmet';
+  }
 
   if (opts.dryRun) {
     log('cyan', `（dry-run）${tag} 就绪但不触发 release`);
