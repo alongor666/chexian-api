@@ -5,6 +5,7 @@
  * 处理用户登录、JWT生成和密码验证
  */
 
+import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
@@ -67,6 +68,25 @@ const SELF_SERVICE_ONLY_SET: ReadonlySet<string> = new Set(SELF_SERVICE_PASSWORD
 function isTombstoneHash(hash: string): boolean {
   return /tombstone/i.test(hash);
 }
+
+/**
+ * 「哑」bcrypt 哈希（安全审查 M6）：未知用户名登录时，用它跑一次真实 bcrypt.compare，
+ * 拉平「用户不存在」与「用户存在但密码错误」两条路径的响应耗时——否则未知用户提前 401 早退，
+ * 跳过昂贵的 bcrypt 运算，与已存在账号的响应产生可观测的计时侧信道，能被用来枚举用户名。
+ *
+ * 模块加载时运行时生成（而非源码固定字面量，2026-07-18 返工）：
+ * ① 格式合法（真实 bcrypt 哈希），保证 compare 全程执行等耗时运算，不会因格式非法提前抛错；
+ * ② 明文是进程启动时的 32 字节随机数，无人知晓，比固定字面量更不可能被撞中，
+ *    对任意登录输入恒 false，不对应任何真实账号；
+ * ③ 源码零哈希字面量，从根上消除 GitGuardian 等扫描器的凭据形状误报
+ *    （参 pr-evolution.md 2026-07-15 PR #1115 先例的预防规则：不把凭据形状字面量写进源码）。
+ * cost factor 取 authConfig.bcryptSaltRounds（与真实用户哈希同源同值），保证计时拉平不因
+ * cost 不一致失效；模块级常量只在进程启动生成一次，每次登录零额外开销。
+ */
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync(
+  randomBytes(32).toString('hex'),
+  authConfig.bcryptSaltRounds,
+);
 
 /**
  * 从环境变量加载用户密码覆盖
@@ -153,10 +173,10 @@ class AuthService {
       user = await ensurePresetUser(normalizedUsername);
     }
     if (!user) {
+      // 未知用户名：跑一次哑 bcrypt 比对拉平时序（安全审查 M6，防用户名枚举计时侧信道），
+      // 再抛出与「密码错误」完全相同的 401，不因提前早退产生可观测的响应耗时差异。
+      await this.verifyPassword(normalizedPassword, DUMMY_BCRYPT_HASH);
       throw new AppError(401, 'Invalid username or password');
-    }
-    if (!user.active) {
-      throw new AppError(403, 'Account disabled');
     }
     await assertPasswordAllowed(user.id);
     const allowedIpsOverride = ALLOWED_IP_OVERRIDES[normalizedUsername];
@@ -176,12 +196,22 @@ class AuthService {
       ) || undefined,
     };
 
+    // 2. 验证密码 —— 必须先于 active / IP 检查执行（安全审查 M6 计时侧信道修复）：
+    // 无论账号是否禁用、IP 是否被拒，均先跑一次针对该账号真实哈希的 bcrypt 比对，
+    // 避免「禁用账号/IP 拒绝」提前早退跳过 bcrypt，与「密码错误」路径产生可探测的耗时差异
+    // （否则攻击者可用响应时间反推账号是否存在/是否被禁用）。
+    // 服务层内部错误契约保持不变（403 Account disabled / 403 IP not allowed），
+    // 供审计日志记录真实原因；对外响应统一化在路由层完成（server/src/routes/auth.ts）。
+    const isPasswordValid = await this.verifyPassword(normalizedPassword, userCredential.passwordHash);
+
+    if (!user.active) {
+      throw new AppError(403, 'Account disabled');
+    }
+
     if (!this.isIpAllowed(clientIp, userCredential.allowedIps)) {
       throw new AppError(403, 'IP not allowed');
     }
 
-    // 2. 验证密码
-    const isPasswordValid = await this.verifyPassword(normalizedPassword, userCredential.passwordHash);
     if (!isPasswordValid) {
       throw new AppError(401, 'Invalid username or password');
     }
