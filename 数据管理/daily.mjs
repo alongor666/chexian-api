@@ -1253,6 +1253,32 @@ async function runPostEtlIntegrations(scriptDir, python) {
       log('yellow', `     详细日志：${join(integrationDir, 'logs')}/${instance}_sync_*.json`);
       log('yellow', `     手动重试：python3 ${targetScript} --instance ${yamlPath} --dry-run`);
     }
+
+    // 8b. 声明 update_sync 块的实例：add 同步后追加"已有记录字段更新"
+    //     （续保报价 4 字段等动态字段，add-only 引擎无法回写；引擎见
+    //     sync_ledger_update_fields.py）。state 未 prime 时脚本会明确报错，
+    //     此处同样降级告警不阻塞——直到 prime-state 完成前每天可见一条红字提示。
+    let hasUpdateSync = false;
+    try {
+      hasUpdateSync = /^update_sync:/m.test(readFileSync(yamlPath, 'utf-8'));
+    } catch { /* 读取失败按无处理 */ }
+    if (hasUpdateSync) {
+      const updateScript = join(integrationDir, 'sync_ledger_update_fields.py');
+      if (existsSync(updateScript)) {
+        log('cyan', `  ▶ [v2] ${instance} 字段更新（update_sync）`);
+        try {
+          runPythonScript(python, updateScript, [
+            'sync', '--instance', `"${yamlPath}"`, '--execute',
+          ]);
+          log('green', `  ✓ ${instance} 字段更新完成`);
+        } catch (err) {
+          const msg = (err.message || '').trim();
+          log('red', `  ⚠ ${instance} 字段更新失败（降级告警，不阻塞 ETL）`);
+          for (const line of msg.split('\n')) if (line.trim()) log('red', `     ${line}`);
+          log('yellow', `     手动重试：python3 ${updateScript} sync --instance ${yamlPath}（dry-run）`);
+        }
+      }
+    }
   }
 }
 
