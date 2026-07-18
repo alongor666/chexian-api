@@ -90,6 +90,12 @@ class InstanceConfig:
     script: str | None  # 仅供 daily.mjs 路由用
     aggregate_key: tuple[str, ...] | None = None  # 声明时先按字段聚合，再做 state 去重/企微写入
     prefer_insurance_type: str | None = None  # 聚合代表行优先选择的险种，如“商业保险”
+    # update_sync 联动（可选）：实例声明 update_sync 块时，add 成功响应中的 record_id
+    # 按序捕获并落 record map state（webhook 只能写不能读，这是零授权拿 record_id 的唯一通道）
+    record_map_state: str | None = None       # update_sync.state（相对 integrations 目录）
+    record_map_key_field: str = "policy_no"   # update_sync.key_source_field
+    # 花名册（可选）：工号→企微 user_id，声明后自动派生 salesman_user_id 供 USER 型成员列映射
+    roster: str | None = None                 # 相对 integrations 目录
 
 
 def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -> InstanceConfig:
@@ -105,10 +111,19 @@ def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -
         aggregate = (str(aggregate_raw),)
     else:
         aggregate = None
+    update_sync_raw = raw.get("update_sync") or {}
+    instance_name = target.get("instance_name") or (
+        f"{raw['instance_name']}-{target['name']}" if target.get("name") else raw["instance_name"]
+    )
+    # record map state 缺省派生（与 sync_ledger_update_fields 同一规则）：多目标各自独立记账
+    record_map_state = None
+    if update_sync_raw:
+        record_map_state = update_sync_raw.get("state") or f"state/{instance_name}_record_map.json"
     return InstanceConfig(
-        instance_name=target.get("instance_name") or (
-            f"{raw['instance_name']}-{target['name']}" if target.get("name") else raw["instance_name"]
-        ),
+        record_map_state=record_map_state,
+        record_map_key_field=update_sync_raw.get("key_source_field", "policy_no"),
+        roster=raw.get("roster"),
+        instance_name=instance_name,
         webhook_env=target.get("webhook_env") or raw["webhook_env"],
         batch_size=int(raw.get("batch_size", 100)),
         sheet_rpm=int(raw.get("sheet_records_per_minute_limit", 3000)),
@@ -130,6 +145,10 @@ def load_instances(path: Path) -> list[InstanceConfig]:
     targets = raw.get("targets") or []
     if not targets:
         return [_build_instance(raw)]
+    # 多 targets 禁共用显式 record map（评审 #1134-1，与 update 引擎同规则）：
+    # 不同智能表的 record_id 混入同一 state 会让更新引擎写错表，必须按目标名派生。
+    if len(targets) > 1 and (raw.get("update_sync") or {}).get("state"):
+        raise SystemExit("多 targets 时 update_sync.state 不可显式声明（record_id 会跨表混入同一文件），请删除让其按目标名派生")
     return [_build_instance(raw, target) for target in targets]
 
 
@@ -173,10 +192,47 @@ def build_where(filters: dict[str, Any]) -> tuple[str, list[Any]]:
     return where, params
 
 
+# ---------- 花名册（工号 → 企微 user_id，机构级单表成员列写入用） ----------
+
+_SALESMAN_CODE_RE = __import__("re").compile(r"^(\d+)")
+
+
+def load_roster(path: Path) -> dict[str, str]:
+    """读花名册：{工号: 企微 user_id}。文件不存在/无条目 → 空映射（fail-open 留空成员列）。"""
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    out: dict[str, str] = {}
+    for code, entry in (data.get("salesmen") or {}).items():
+        uid = _to_text((entry or {}).get("wecom_user_id"))
+        if uid:
+            out[str(code)] = uid
+    return out
+
+
+def enrich_rows_with_roster(rows: list[dict[str, Any]], roster: dict[str, str]) -> dict[str, int]:
+    """按 salesman_name 前缀工号解析企微 user_id，写入 row['salesman_user_id']。
+
+    返回 {matched, missing}。未命中花名册的行不设该键 → USER 字段留空（安全默认，
+    行权限下仅管理员可见）；花名册补齐后重跑 update 引擎即回填。
+    """
+    matched = missing = 0
+    for row in rows:
+        name = _to_text(row.get("salesman_name")) or ""
+        m = _SALESMAN_CODE_RE.match(name)
+        uid = roster.get(m.group(1)) if m else None
+        if uid:
+            row["salesman_user_id"] = uid
+            matched += 1
+        else:
+            missing += 1
+    return {"matched": matched, "missing": missing}
+
+
 # 可选源列：仅当 parquet schema 实际含该列时才 SELECT，否则补 NULL 占位。
 # 场景：applicant_name（投保人名称）2026-07-17 起上游签单清单才新增，
 # 存量 parquet 无此列，直接 SELECT 会让全部实例（含无关实例）抽数报错。
-OPTIONAL_SOURCE_COLUMNS = ("customer_category", "previous_insurer", "applicant_name")
+OPTIONAL_SOURCE_COLUMNS = ("customer_category", "previous_insurer", "applicant_name", "commercial_ncd")
 
 # 敏感源字段（个人信息，隐私红线）：dry-run 的 sample_records（stdout 打印 + logs/ 落盘）
 # 必须脱敏后输出；真实 webhook 写入不受影响。与 server 侧注册表 sensitive: true 对齐。
@@ -435,6 +491,7 @@ def aggregate_rows(rows: list[dict[str, Any]], instance: InstanceConfig) -> list
             "customer_category",
             "previous_insurer",
             "applicant_name",
+            "commercial_ncd",
             "policy_no",
             "vehicle_frame_no",
             "vehicle_price_segment",
@@ -506,6 +563,20 @@ def invalid_grade_stats(rows: list[dict[str, Any]]) -> dict[str, int]:
     return dict(sorted(out.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
+def _to_user(value: Any) -> list[dict[str, str]] | None:
+    """USER（企微成员）字段：值须为企微 user_id（经花名册解析），空值不写入。
+
+    机构级单表 + 行权限架构（2026-07-18 用户验证「按成员字段设行权限」可用）：
+    业务员成员列由本格式写入，行权限规则"业务员=当前成员"实现每人只见自己的行。
+    花名册缺失 user_id 时该列留空——行权限下留空行仅管理员可见（安全默认），
+    补齐花名册后由 update 引擎回填。
+    """
+    text = _to_text(value)
+    if not text:
+        return None
+    return [{"user_id": text}]
+
+
 def format_value(field_type: str, value: Any) -> Any:
     if field_type == "DATE_TIME":
         return _to_ts_ms(value)
@@ -513,6 +584,8 @@ def format_value(field_type: str, value: Any) -> Any:
         return _to_select(value)
     if field_type == "NUMBER":
         return _to_number(value)
+    if field_type == "USER":
+        return _to_user(value)
     return _to_text(value)
 
 
@@ -573,6 +646,33 @@ def persist_synced_keys(instance: InstanceConfig, state: dict[str, Any], newly_s
     save_state(instance, state)
 
 
+def record_map_state_path(instance: InstanceConfig) -> Path | None:
+    """update_sync 联动的 record map state 路径（实例未声明 update_sync 时为 None）。"""
+    if not instance.record_map_state:
+        return None
+    rel = Path(instance.record_map_state)
+    return rel if rel.is_absolute() else HERE / rel
+
+
+def merge_record_map(state: dict[str, Any], harvested: list[tuple[str, str]]) -> dict[str, Any]:
+    """把 (业务键, record_id) 合并进 record map state（追加去重；不动 payload_hash 等既有字段）。
+
+    webhook 只能写不能读——add 响应是零授权拿 record_id 的唯一通道（通道铁律：
+    永不依赖智能机器人「文档」授权）。响应 add_records 与发送同序，由调用方对齐后传入。
+    """
+    records = state.setdefault("records", {})
+    now = datetime.now(timezone.utc).isoformat()
+    for key, rid in harvested:
+        if not key or not rid:
+            continue
+        entry = records.setdefault(str(key), {})
+        ids = set(entry.get("record_ids") or [])
+        ids.add(str(rid))
+        entry["record_ids"] = sorted(ids)
+        entry["captured_at"] = now
+    return state
+
+
 def key_strategy(instance: InstanceConfig) -> str:
     return "composite_key" if instance.composite_key else "primary_key"
 
@@ -620,6 +720,13 @@ def _row_key(row: dict[str, Any], instance: InstanceConfig | None = None) -> str
 def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     raw_rows = fetch_rows(instance)
     rows = aggregate_rows(raw_rows, instance)
+
+    # 花名册解析（机构级单表成员列）：派生 salesman_user_id 供 USER 型映射
+    roster_stats: dict[str, int] | None = None
+    if instance.roster:
+        roster_path = Path(instance.roster)
+        roster_path = roster_path if roster_path.is_absolute() else HERE / roster_path
+        roster_stats = enrich_rows_with_roster(rows, load_roster(roster_path))
     schema = {fid: instance.field_labels.get(fid, fid) for fid in instance.field_mapping.values()}
 
     # sync 模式过滤已同步的主键；init 模式全量
@@ -638,7 +745,12 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     add_records = []
     for row in new_rows:
         values = build_record_values(row, instance.field_mapping, instance.field_types)
-        add_records.append({"values": values, "_primary_key": _row_key(row, instance)})
+        add_records.append({
+            "values": values,
+            # 同一复合键同时用于 add state 去重与 record map 捕获（评审 #1134-2：
+            # 与更新引擎 row_business_key 同源同构，一保单多车架各记录各归各键）
+            "_primary_key": _row_key(row, instance),
+        })
 
     summary: dict[str, Any] = {
         "instance_name": instance.instance_name,
@@ -660,6 +772,8 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
         "dry_run": dry_run,
         "schema_field_ids": list(schema.keys()),
     }
+    if roster_stats is not None:
+        summary["roster_stats"] = roster_stats  # matched/missing：missing 行成员列留空（仅管理员可见）
 
     if dry_run:
         # 打印前 3 条 sample，便于肉眼检查。
@@ -690,10 +804,43 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
     if not webhook_url:
         raise RuntimeError(f"缺少环境变量 {instance.webhook_env}")
 
+    # update_sync 联动：add 响应按序捕获 record_id → record map（webhook 写响应是
+    # 零授权拿 record_id 的唯一通道；通道铁律见实例 YAML 头注释）。
+    # 库按 add_records 原序切批、逐批调用 post_fn，故用游标对齐发送批与响应批。
+    rm_path = record_map_state_path(instance)
+    rm_state: dict[str, Any] = {}
+    rm_cursor = 0
+    rm_captured = 0
+    if rm_path is not None and rm_path.exists():
+        rm_state = json.loads(rm_path.read_text(encoding="utf-8"))
+
     # 幂等批量推送：成功才记账·按批落盘（防线4）+ 返回条数断言（防线5）。委托共享库。
     def _post(records: list[dict[str, Any]]) -> dict[str, Any]:
         # webhook payload 不带内部 _primary_key 标记，外加 schema 信封
-        return post_webhook(webhook_url, {"schema": schema, "add_records": records})
+        nonlocal rm_cursor, rm_captured
+        resp = post_webhook(webhook_url, {"schema": schema, "add_records": records})
+        returned = resp.get("add_records")
+        batch_src = add_records[rm_cursor:rm_cursor + len(records)]
+        rm_cursor += len(records)
+        if (
+            rm_path is not None
+            and resp.get("errcode") == 0
+            and isinstance(returned, list)
+            and len(returned) == len(records)
+        ):
+            harvested = []
+            for src, ret in zip(batch_src, returned):
+                rid = ret.get("record_id") or ret.get("id")
+                if rid and src.get("_primary_key"):
+                    harvested.append((src["_primary_key"], str(rid)))
+            if harvested:
+                merge_record_map(rm_state, harvested)
+                rm_path.parent.mkdir(parents=True, exist_ok=True)
+                rm_path.write_text(
+                    json.dumps(rm_state, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                rm_captured += len(harvested)
+        return resp
 
     push_summary = _lib_push_add_records_idempotent(
         add_records,
@@ -704,6 +851,10 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
         rpm=instance.sheet_rpm,
     )
     summary["batches"] = push_summary["batches"]
+    if rm_path is not None:
+        summary["record_map_state"] = str(rm_path)
+        summary["record_map_captured"] = rm_captured
+        summary["record_map_keys_after"] = len(rm_state.get("records") or {})
     summary["state_synced_keys_after"] = len(state.get("synced_keys") or [])
     summary["newly_synced_count"] = push_summary["newly_synced_count"]
     summary["completed_at"] = datetime.now(timezone.utc).isoformat()

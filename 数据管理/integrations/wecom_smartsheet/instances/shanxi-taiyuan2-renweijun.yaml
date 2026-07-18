@@ -1,4 +1,12 @@
-# 太原二部 任卫军 签单明细 → 企业微信智能表「业务台账」（任卫军车险签单台账）
+# 太原二部机构级业务台账（现表原地升级，2026-07-18 用户定案）· 🔶 调试态
+#
+# 终态：每个三级机构一张表 + 一个 webhook + 一个实例；业务员为成员型列 + 行权限
+#   "业务员=当前成员"（权限/视图由用户在表端配置），人均只见自己的行；
+#   未来新增其他三级机构 = 新表新 webhook 新实例；本表调试彻底交付生产后再模板化。
+#
+# 🔶 调试态数据边界（RED LINE）：数据严格限定任卫军，不扩散——
+#   filters 保持 salesman_name='118046126任卫军'；扩散到全机构是未来的显式动作
+#   （届时把该条件放宽为 org_level_3='太原二部'，并 --rebuild-state 评估全量）。
 #
 # 业务规则：branch_code = 'SX' AND salesman_name = '118046126任卫军'（太原二部）
 #   源 salesman_name 已含「代码+姓名」，duckdb 直查 2026-07-17 实证仅此一个匹配业务员。
@@ -10,12 +18,19 @@
 #
 # 去重：复合主键 = 保单号 + 车架号；同组源行（批单）聚合为一条，保费组内求和（add-only + state）。
 #
-# 目标表 schema（10 字段）与本同步的覆盖关系：
-#   自动导入 9 字段：业务员 / 出单日期 / 保单号 / 车牌号 / 投保人 / 保费 / 险种大类 /
-#     客户类别 / 上年保险公司（业务员、投保人两列 2026-07-17 已由 user 型改为文本型，
-#     业务员写源值「代码+姓名」；投保人取上游 2026-07-17 新增列「投保人」→
-#     applicant_name，该列到货前的历史 parquet 分片为 NULL，届时留空不写入）
+# 目标表 schema（15 字段，2026-07-17 用户清空重建 + 字段拆分定稿；业务员列已删除——
+# 整表同一业务员无需该列）与本同步的覆盖关系：
+#   add 引擎写入 10 字段（签单时静态值）：出单日期 / 保单号 / 车牌号 / 投保人 / 保费 /
+#     险种大类 / 客户类别 / 上年保险公司 / 定价-签单 / 商NCD-签单
+#     （定价-签单 = 签单域 commercial_pricing_factor；商NCD-签单 = 签单域 commercial_ncd；
+#      交强险行两者为空不写入。投保人为文本型）
+#   update 引擎刷新 4 字段（续保动态值，见下方 update_sync 块）：
+#     是否报价-续保 / 风险等级-续保 / 定价-续保 / 商NCD-续保
 #   不写入 1 字段：foG7hq 手机号码（phone 型：按业务约定由业务员自行填写）
+#
+# 🔴 通道铁律（用户拍板 2026-07-17）：本表一切读写只走 webhook，永不依赖智能机器人
+#   「文档」授权（总部不批）。record_id 映射由 add 引擎从 webhook 新增响应按序捕获
+#   （响应 add_records 与发送同序，含 record_id），落 update_sync.state。
 
 instance_name: shanxi-taiyuan2-renweijun
 script: sync_filtered_policies.py        # daily.mjs 据此路由到非续保引擎
@@ -27,6 +42,11 @@ policy_glob: 数据管理/warehouse/fact/policy/current/SX/*.parquet
 
 batch_size: 100
 sheet_records_per_minute_limit: 3000
+
+# 业务员列 = 方案 B（2026-07-18 定案）：本同步只写「业务员」**文本**列（源值代码+姓名），
+# 成员列由用户用企微智能表 AI 从文本列自动转换、行权限按成员列配置——
+# 彻底绕开 userid（本企业 userid 不可获取，四种候选实测全被 40031 拒绝）。
+# 花名册/USER 型写入能力保留在引擎（rosters/ 目录），本表不启用。
 
 filters:
   policy_date_from: "2025-08-01"
@@ -47,7 +67,7 @@ composite_key:
 
 # 字段映射：SQL 输出列名（en） → 智能表 field_id
 field_mapping:
-  salesman_name:         fD9EyK      # 业务员（TEXT，源值含代码前缀如 118046126任卫军）
+  salesman_name:         fNy4a6      # 业务员（TEXT，源值代码+姓名；成员列/行权限由表端 AI 转换承担）
   policy_date:           f04Gwj      # 出单日期（DATE_TIME, 毫秒 ts）
   policy_no:             ftQMc5      # 保单号（TEXT）
   plate_no:              ftk5Tx      # 车牌号（TEXT）
@@ -56,10 +76,12 @@ field_mapping:
   insurance_type:        frjAN4      # 险种大类（SINGLE_SELECT：商业保险/交强险）
   customer_category:     f5UJGN      # 客户类别（SINGLE_SELECT，11 类）
   previous_insurer:      fKRUlL      # 上年保险公司（SINGLE_SELECT，源=上年承保主体）
+  commercial_pricing_factor: fTDa2j  # 定价-签单（NUMBER，签单域商车自主定价系数；交强险行为空）
+  commercial_ncd:        f6Gjkk      # 商NCD-签单（NUMBER，签单域商业险NCD；交强险行为空）
 
 # 智能表字段类型（用于格式化值）
 field_types:
-  fD9EyK: TEXT
+  fNy4a6: TEXT
   f04Gwj: DATE_TIME
   ftQMc5: TEXT
   ftk5Tx: TEXT
@@ -68,10 +90,12 @@ field_types:
   frjAN4: SINGLE_SELECT
   f5UJGN: SINGLE_SELECT
   fKRUlL: SINGLE_SELECT
+  fTDa2j: NUMBER
+  f6Gjkk: NUMBER
 
 # 智能表字段中文 label（供 webhook payload 中 schema 字段使用）
 field_labels:
-  fD9EyK: 业务员
+  fNy4a6: 业务员
   f04Gwj: 出单日期
   ftQMc5: 保单号
   ftk5Tx: 车牌号
@@ -80,3 +104,32 @@ field_labels:
   frjAN4: 险种大类
   f5UJGN: 客户类别
   fKRUlL: 上年保险公司
+  fTDa2j: 定价-签单
+  f6Gjkk: 商NCD-签单
+
+# ── 已有记录字段更新（sync_ledger_update_fields.py 消费，add 引擎忽略本块）──
+# 台账 2026-07-17 新增 4 个续保报价列（用户提供 field_id）+ 投保人补齐共用本机制：
+#   应续判定 ← 续保底册 renewal_tracker（source_policy_no 命中即应续，唯一应续事实源）
+#   是否报价-续保 + 风险等级/定价/商NCD-续保 ← 报价域 quotes_conversion：同车架号、
+#     签单日 30 天后的最新一次商业险报价（排除促成本单的签单报价；底册 is_quoted 因
+#     "车架号任意报价"粗口径存在假阳性，不用作本表字段，详见引擎 fetch_source_rows 注释）
+#   投保人 ← 签单域 applicant_name（add 时源缺列的记录由本机制补齐）
+# record_id 映射：add 引擎写入时从 webhook 响应按序捕获（无需读表授权，通道铁律见文件头）；
+# 映射键 = 复合键（保单号|车架号，与 add state 同源，评审 #1134-2）；
+# prime-state 子命令仅作历史兜底（依赖机器人授权，本表禁用）。
+# 应续行报价 4 字段"有值写值、无值显式清空"（评审 #1134-4），"是→否"不留旧值残影。
+# 隐私红线：投保人为敏感字段，dry-run 样例与 logs/ 落盘一律 mask_pii 脱敏。
+update_sync:
+  sheet_id: q979lj                       # 表 URL tab= 参数
+  key_source_field: policy_no            # state 主键（源列）
+  key_field_id: ftQMc5                   # state 主键（智能表列：保单号）
+  renewal_tracker_glob: 数据管理/warehouse/validation/SX/renewal_tracker/latest.parquet
+  quotes_glob: 数据管理/warehouse/validation/SX/quotes_conversion/latest.parquet
+  state: state/shanxi-taiyuan2-renweijun_record_map.json
+  fields:
+    applicant_name:          {field_id: ffFwIh, type: TEXT,          label: 投保人, sensitive: true}
+    salesman_name:           {field_id: fNy4a6, type: TEXT,          label: 业务员}
+    renewal_is_quoted:       {field_id: fGkRjv, type: SINGLE_SELECT, label: 是否报价-续保}
+    renewal_insurance_grade: {field_id: fp6zIf, type: SINGLE_SELECT, label: 风险等级-续保}
+    renewal_pricing_factor:  {field_id: fKo7sD, type: NUMBER,        label: 定价-续保}
+    renewal_commercial_ncd:  {field_id: f6Crlx, type: NUMBER,        label: 商NCD-续保}
