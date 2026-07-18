@@ -61,6 +61,7 @@ import {
   sha256File,
   validateBranchCodeSX,
   parquetDataIdentical,
+  parquetSchemaColumns,
   runDuckdbCli,
   leftoverPreflight,
   writeReadyMarker,
@@ -411,11 +412,29 @@ describe('sx-promote: validateBranchCodeSX（mock duckdb）', () => {
 // ─────────────────────────── 单元测试：parquetDataIdentical（P1-7 回退，mock duckdb） ───────────────────────────
 
 describe('sx-promote: parquetDataIdentical（sha256 冲突的数据级回退，mock duckdb）', () => {
+  const DEFAULT_COLS = ['branch_code', 'premium'];
+
+  /** 列定义归一化：字符串（默认 VARCHAR 类型）或 { column_name, column_type } 对象均可 */
+  function toDescRow(c) {
+    return typeof c === 'string'
+      ? { column_name: c, column_type: 'VARCHAR' }
+      : { column_name: c.column_name, column_type: c.column_type ?? 'VARCHAR' };
+  }
+
   /**
-   * mock runDuckdb：第 1 次调用（含 a_rows）返回行数，第 2 次（含 a_minus_b）返回差集。
+   * mock runDuckdb：
+   *   DESCRIBE 调用（P1-7a schema 比对）→ 按路径返回 colsA / colsB（含 column_type）；
+   *   含 a_rows 的调用 → 返回行数；含 a_minus_b 的调用 → 返回双向差集。
    */
-  function makeMock({ aRows, bRows, aMinusB = 0, bMinusA = 0, countEmpty = false, diffEmpty = false }) {
+  function makeMock({
+    aRows, bRows, aMinusB = 0, bMinusA = 0, countEmpty = false, diffEmpty = false,
+    colsA = DEFAULT_COLS, colsB = DEFAULT_COLS, pathA = '/a.parquet', pathB = '/b.parquet',
+  }) {
     return async (sql) => {
+      if (sql.includes('DESCRIBE')) {
+        const cols = sql.includes(pathA.replace(/'/g, "''")) ? colsA : colsB;
+        return cols.map(toDescRow);
+      }
       if (sql.includes('a_rows')) return countEmpty ? [] : [{ a_rows: aRows, b_rows: bRows }];
       if (sql.includes('a_minus_b')) return diffEmpty ? [] : [{ a_minus_b: aMinusB, b_minus_a: bMinusA }];
       throw new Error(`unexpected sql: ${sql.slice(0, 60)}`);
@@ -430,6 +449,7 @@ describe('sx-promote: parquetDataIdentical（sha256 冲突的数据级回退，m
   it('行数不同 → false（短路，不查 EXCEPT）', async () => {
     let exceptCalled = false;
     const mock = async (sql) => {
+      if (sql.includes('DESCRIBE')) return DEFAULT_COLS.map(toDescRow);
       if (sql.includes('a_rows')) return [{ a_rows: 100, b_rows: 101 }];
       if (sql.includes('a_minus_b')) { exceptCalled = true; return [{ a_minus_b: 0, b_minus_a: 0 }]; }
       throw new Error('unexpected');
@@ -462,11 +482,112 @@ describe('sx-promote: parquetDataIdentical（sha256 冲突的数据级回退，m
     let seen = '';
     const mock = async (sql) => {
       seen = sql;
+      if (sql.includes('DESCRIBE')) return DEFAULT_COLS.map(toDescRow);
       if (sql.includes('a_rows')) return [{ a_rows: 1, b_rows: 1 }];
       return [{ a_minus_b: 0, b_minus_a: 0 }];
     };
     await parquetDataIdentical("/a'b.parquet", '/c.parquet', { runDuckdb: mock });
     expect(seen).toContain("/a''b.parquet"); // 单引号转义为两个单引号
+  });
+
+  // ─── P1-7a schema 演进防崩（backlog 34e06a：46→47 列 Binder 崩溃根治） ───
+
+  it('列集合不同（46 vs 47 列，模拟新增 applicant_name）→ false，且不触发行数/EXCEPT 查询', async () => {
+    const cols46 = Array.from({ length: 44 }, (_, i) => `c${i + 1}`).concat(['branch_code', 'premium']);
+    const cols47 = cols46.concat(['applicant_name']);
+    let countOrExceptCalled = false;
+    const mock = async (sql) => {
+      if (sql.includes('DESCRIBE')) {
+        const cols = sql.includes('/a.parquet') ? cols47 : cols46;
+        return cols.map(toDescRow);
+      }
+      countOrExceptCalled = true;
+      return [];
+    };
+    expect(await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock })).toBe(false);
+    expect(countOrExceptCalled).toBe(false); // 列集合不同直接判冲突，不进 EXCEPT（EXCEPT 会 Binder 崩溃）
+  });
+
+  it('列名相同但同名列类型不同（premium BIGINT vs VARCHAR）→ false，且不进行数/EXCEPT 查询', async () => {
+    let countOrExceptCalled = false;
+    const mock = async (sql) => {
+      if (sql.includes('DESCRIBE')) {
+        const type = sql.includes('/a.parquet') ? 'BIGINT' : 'VARCHAR';
+        return [
+          { column_name: 'branch_code', column_type: 'VARCHAR' },
+          { column_name: 'premium', column_type: type },
+        ];
+      }
+      countOrExceptCalled = true;
+      return [];
+    };
+    expect(await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock })).toBe(false);
+    // 类型不同即 schema 演进：不进 EXCEPT（EXCEPT 隐式转换可能比出"数据相同"→误判等价）
+    expect(countOrExceptCalled).toBe(false);
+  });
+
+  it('列集合相同但物理列序不同 → 不判 schema 冲突，继续数据级比对（可判等价）', async () => {
+    const mock = makeMock({
+      aRows: 10, bRows: 10, aMinusB: 0, bMinusA: 0,
+      colsA: ['branch_code', 'premium', 'policy_no'],
+      colsB: ['policy_no', 'branch_code', 'premium'], // 同列集合、不同物理列序
+    });
+    expect(await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock })).toBe(true);
+  });
+
+  it('EXCEPT 查询按排序后的显式列清单投影（不再 SELECT *，免疫列序重排）', async () => {
+    let exceptSql = '';
+    const mock = async (sql) => {
+      if (sql.includes('DESCRIBE')) return ['premium', 'branch_code'].map(toDescRow);
+      if (sql.includes('a_rows')) return [{ a_rows: 1, b_rows: 1 }];
+      if (sql.includes('a_minus_b')) { exceptSql = sql; return [{ a_minus_b: 0, b_minus_a: 0 }]; }
+      throw new Error('unexpected');
+    };
+    await parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock });
+    expect(exceptSql).toContain('"branch_code", "premium"'); // 排序后的显式列清单
+    expect(exceptSql).not.toContain('SELECT * FROM read_parquet');
+  });
+
+  it('duckdb 抛错（模拟 Binder 错误）→ 返回 false 不 reject（fail-safe 判冲突，脚本不崩）', async () => {
+    const mock = async () => {
+      throw new Error('Binder Error: Set operations can only apply to expressions with the same number of result columns');
+    };
+    await expect(parquetDataIdentical('/a.parquet', '/b.parquet', { runDuckdb: mock }))
+      .resolves.toBe(false);
+  });
+});
+
+// ─────────────────────────── 单元测试：parquetSchemaColumns ───────────────────────────
+
+describe('sx-promote: parquetSchemaColumns（mock duckdb）', () => {
+  it('返回 DESCRIBE 的列名+列类型清单', async () => {
+    const mock = async () => [
+      { column_name: 'branch_code', column_type: 'VARCHAR' },
+      { column_name: 'premium', column_type: 'BIGINT' },
+    ];
+    expect(await parquetSchemaColumns('/x.parquet', { runDuckdb: mock })).toEqual([
+      { column_name: 'branch_code', column_type: 'VARCHAR' },
+      { column_name: 'premium', column_type: 'BIGINT' },
+    ]);
+  });
+
+  it('兼容 "column name"/"column type" 键变体，并过滤缺列名的行', async () => {
+    const mock = async () => [
+      { 'column name': 'a', 'column type': 'DOUBLE' },
+      { other: 'ignored' },
+      { column_name: 'b', column_type: 'VARCHAR' },
+    ];
+    expect(await parquetSchemaColumns('/x.parquet', { runDuckdb: mock })).toEqual([
+      { column_name: 'a', column_type: 'DOUBLE' },
+      { column_name: 'b', column_type: 'VARCHAR' },
+    ]);
+  });
+
+  it('路径单引号被转义', async () => {
+    let seen = '';
+    const mock = async (sql) => { seen = sql; return []; };
+    await parquetSchemaColumns("/a'b.parquet", { runDuckdb: mock });
+    expect(seen).toContain("/a''b.parquet");
   });
 });
 
@@ -714,6 +835,101 @@ describe('sx-promote: 集成测试（真实 tmpdir + duckdb CLI）', () => {
     expect(result.rowCount).toBe(2);
     expect(result.premiumSum).toBeCloseTo(1100, 0);
   });
+
+  // ─── P1-7a schema 演进防崩（backlog 34e06a）：真实 duckdb 造 46 vs 47 列 parquet ───
+
+  /**
+   * 复现事故形态的宽行构造器：46 列基线（branch_code + premium + c01..c44），
+   * 47 列 = 基线 + applicant_name（上游 BI 导出 2026-07 新增投保人列）。
+   */
+  function makeWideRow(rowIdx, { withApplicantName = false, premiumOverride = null } = {}) {
+    const row = { branch_code: 'SX', premium: premiumOverride ?? 1000 + rowIdx };
+    for (let i = 1; i <= 44; i++) {
+      row[`c${String(i).padStart(2, '0')}`] = `v${rowIdx}_${i}`;
+    }
+    if (withApplicantName) row.applicant_name = `投保人${rowIdx}`;
+    return row;
+  }
+
+  itDuckdb('P1-7a ①：46 列 vs 47 列（公共列数据行相同）→ 不崩溃且判定 false（冲突）', async () => {
+    const p46 = join(intSrcDir, 'schema_46.parquet');
+    const p47 = join(intDstDir, 'schema_47.parquet');
+    writeParquetViaDuckdb(p46, [makeWideRow(1), makeWideRow(2)]);
+    writeParquetViaDuckdb(p47, [
+      makeWideRow(1, { withApplicantName: true }),
+      makeWideRow(2, { withApplicantName: true }),
+    ]);
+
+    // 修复前此调用直接 reject（DuckDB Binder："Set operations can only apply to
+    // expressions with the same number of result columns"）→ 脚本崩溃。
+    // 修复后：不 reject，返回 false（schema 演进判冲突，走 --force 人工流程）。
+    await expect(parquetDataIdentical(p47, p46)).resolves.toBe(false);
+    await expect(parquetDataIdentical(p46, p47)).resolves.toBe(false); // 双向都不崩
+  }, 60_000);
+
+  itDuckdb('P1-7a ②：46 列 vs 47 列且数据行也不同 → 不崩溃且判定 false', async () => {
+    const p46 = join(intSrcDir, 'schema_46_diff.parquet');
+    const p47 = join(intDstDir, 'schema_47_diff.parquet');
+    writeParquetViaDuckdb(p46, [makeWideRow(1)]);
+    writeParquetViaDuckdb(p47, [makeWideRow(9, { withApplicantName: true, premiumOverride: 99999 })]);
+
+    await expect(parquetDataIdentical(p46, p47)).resolves.toBe(false);
+  }, 60_000);
+
+  itDuckdb('P1-7a ③：同 schema 同数据（47 列）→ 仍正确判定 true（等价路径不被误伤）', async () => {
+    const pa = join(intSrcDir, 'schema_same_a.parquet');
+    const pb = join(intDstDir, 'schema_same_b.parquet');
+    const rows = [
+      makeWideRow(1, { withApplicantName: true }),
+      makeWideRow(2, { withApplicantName: true }),
+    ];
+    writeParquetViaDuckdb(pa, rows);
+    writeParquetViaDuckdb(pb, rows);
+
+    await expect(parquetDataIdentical(pa, pb)).resolves.toBe(true);
+  }, 60_000);
+
+  itDuckdb('P1-7a ④：parquetSchemaColumns 返回真实列名+列类型清单', async () => {
+    const p = join(intSrcDir, 'colnames_check.parquet');
+    writeParquetViaDuckdb(p, [{ branch_code: 'SX', premium: 1, applicant_name: '张三' }]);
+    const cols = await parquetSchemaColumns(p);
+    expect(cols).toEqual([
+      { column_name: 'branch_code', column_type: 'VARCHAR' },
+      { column_name: 'premium', column_type: 'INTEGER' }, // VALUES 字面量 1 → duckdb 推断 INTEGER
+      { column_name: 'applicant_name', column_type: 'VARCHAR' },
+    ]);
+  }, 30_000);
+
+  /**
+   * P1-7a ⑤（评审 F1 回归锁）：同名列类型演进——列名与行值完全相同、仅 premium 类型
+   * BIGINT vs VARCHAR。EXCEPT 隐式转换会比出"数据相同"，若只比列名将误判等价 →
+   * skipped_data_identical 静默保留旧 schema。修复后必须判定不等价（false）。
+   */
+  itDuckdb('P1-7a ⑤：列名与值相同、premium BIGINT vs VARCHAR → 判定不等价（false）', async () => {
+    const writeParquetSql = (parquetPath, selectSql) => {
+      const sql = `COPY (${selectSql}) TO '${parquetPath}' (FORMAT PARQUET)`;
+      const r = spawnSync('duckdb', ['-c', sql], { encoding: 'utf-8', windowsHide: true });
+      if (r.status !== 0) throw new Error(`duckdb 写 parquet 失败:\n${r.stderr}`);
+    };
+    const pBigint = join(intSrcDir, 'type_bigint.parquet');
+    const pVarchar = join(intDstDir, 'type_varchar.parquet');
+    writeParquetSql(pBigint,
+      `SELECT 'SX' AS branch_code, CAST(100 AS BIGINT) AS premium ` +
+      `UNION ALL SELECT 'SX', CAST(200 AS BIGINT)`);
+    writeParquetSql(pVarchar,
+      `SELECT 'SX' AS branch_code, CAST(100 AS VARCHAR) AS premium ` +
+      `UNION ALL SELECT 'SX', CAST(200 AS VARCHAR)`);
+
+    // 前置确认：两侧列名集合相同、仅类型不同（BIGINT vs VARCHAR）
+    const [sa, sb] = await Promise.all([parquetSchemaColumns(pBigint), parquetSchemaColumns(pVarchar)]);
+    expect(sa.map((c) => c.column_name)).toEqual(sb.map((c) => c.column_name));
+    expect(sa.find((c) => c.column_name === 'premium').column_type).toBe('BIGINT');
+    expect(sb.find((c) => c.column_name === 'premium').column_type).toBe('VARCHAR');
+
+    // 类型演进必须判不等价（修复前只比列名 → 误判 true → 静默保留旧 schema）
+    await expect(parquetDataIdentical(pBigint, pVarchar)).resolves.toBe(false);
+    await expect(parquetDataIdentical(pVarchar, pBigint)).resolves.toBe(false);
+  }, 60_000);
 });
 
 // ─────────────────────────── 单元测试：leftoverPreflight ───────────────────────────
@@ -1086,6 +1302,45 @@ describe('sx-promote: 端到端测试（spawn 真实进程）', () => {
     expect(exitCode).toBe(1);
     expect(stdout).toMatch(/不是 SX 省份子目录/);
   }, 30_000);
+
+  /**
+   * E2E-8: schema 演进防崩（P1-7a，backlog 34e06a）—— 目标已存在同名 46 列旧分片，
+   * 源是 47 列新 schema（上游 BI 导出新增 applicant_name）→ 修复前 DuckDB Binder 崩溃
+   * （"Set operations can only apply to expressions with the same number of result columns"），
+   * 修复后应走清晰的中文冲突报错 exit 1（--force 人工流程），目标旧文件原样保留。
+   */
+  itDuckdb('E2E-8: 同名分片 46 列 vs 47 列（schema 演进）→ exit 1 中文冲突报错，不再 Binder 崩溃', async () => {
+    const name = '每日数据_20250601_20260715.parquet';
+    // 目标：46 列旧 schema（无 applicant_name）
+    writeParquetViaDuckdb(join(e2eDstDir, name), [
+      { branch_code: 'SX', premium: 1000, policy_no: 'P001' },
+    ]);
+    // 源：47 列新 schema（多 applicant_name 列）
+    writeParquetViaDuckdb(join(e2eSrcDir, name), [
+      { branch_code: 'SX', premium: 1000, policy_no: 'P001', applicant_name: '张三' },
+    ]);
+
+    const { exitCode, stdout } = await runScript([
+      '--apply', '--rls-confirmed',
+      '--source-dir', e2eSrcDir, '--unsafe-source-dir',
+      '--target-dir', e2eDstDir,
+    ]);
+
+    expect(exitCode).toBe(1);
+    // 清晰中文报错：schema 差异告警 + 冲突拒绝（--force 人工流程）
+    expect(stdout).toMatch(/列结构（schema）不同/);
+    expect(stdout).toMatch(/仅源存在的列: applicant_name/);
+    expect(stdout).toMatch(/目标已存在且内容不一致/);
+    // 不再是 Binder 崩溃 / 未捕获错误
+    expect(stdout).not.toMatch(/Set operations can only apply/);
+    expect(stdout).not.toMatch(/未捕获错误/);
+
+    // 目标旧文件原样保留（fail-safe：未被覆盖、未被删除）
+    expect(existsSync(join(e2eDstDir, name))).toBe(true);
+    // 无 staging 残留、无 ready-marker
+    expect(existsSync(join(e2eDstDir, `${name}.staging`))).toBe(false);
+    expect(existsSync(join(e2eDstDir, '.sx-promote-ready'))).toBe(false);
+  }, 60_000);
 });
 
 // ─────────────── 单元测试：被取代滚动分片归档（2026-07-11 根因修复） ───────────────
