@@ -25,7 +25,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { parseLedger, normalizeVerdict, collectRevertedPrs, parseUserReworkLog } from './quality-report.mjs';
+import { parseLedger, normalizeVerdict, collectRevertedPrs, parseUserReworkLog, reviewerFindings } from './quality-report.mjs';
 import { CLAIM_STATUSES } from './dispatch.mjs';
 import { loadEventsDir } from '../backlog/lib.mjs';
 
@@ -58,6 +58,12 @@ function codexGateRan(o) {
  *     reworkCount: number, revertedCount: number|null }
  */
 export const RULES = [
+  {
+    id: 'default-reviewer',
+    title: '默认 /code-reviewer 自审入账（reviewer_findings）',
+    source: 'loop-orchestration.md §3 F3',
+    probe: (ctx) => ctx.ledger.filter((r) => r && reviewerFindings(r.reviewer_findings) != null).length,
+  },
   {
     id: 'codex-gate1',
     title: 'codex 闸-1（计划对抗·2026-06-29 起默认关闭）',

@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-829263","kind":"status","ts":"2026-07-19","actor":"@codex","status":"DONE","evidence":"F3 reviewer_findings 分源聚合与 default-reviewer probe 已实现；loop 定向测试 181/181；governance 61/61；verify:full 402 文件/5707 测试全绿；fresh 自审第三轮通过；PR 号推送后以 note 回填","at":"2026-07-19T20:57:16.857Z","eid":"730df6fd"}

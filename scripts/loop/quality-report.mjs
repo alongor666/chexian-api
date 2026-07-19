@@ -7,7 +7,7 @@
  *
  * 行 schema（见 .claude/rules/loop-orchestration.md §3）：
  *   完成行 {uid, round, ts, task, domain:[..], rounds_to_green, rework_count,
- *    codex_plan:{P0,P1,P2}, codex_done:{P0,P1,P2}, verifier_refuted,
+ *    reviewer_findings:{P0,P1,P2}, codex_plan:{P0,P1,P2}, codex_done:{P0,P1,P2}, verifier_refuted,
  *    byte_safety_proof: "golden-baseline|by-construction|n/a",
  *    tests_added, governance_pass, pr, verdict: "pass|partial|reverted"}
  *   失败行（E1·dispatch 自动记账）{uid, ts, task, domain, verdict:"orphaned|blocked|abandoned",
@@ -61,6 +61,17 @@ export function parseLedger(lines) {
 
 const sum = (arr, f) => arr.reduce((a, x) => a + (f(x) || 0), 0);
 const findings = (o) => (o ? (Number(o.P0) || 0) + (Number(o.P1) || 0) + (Number(o.P2) || 0) : 0);
+
+/**
+ * F3 默认评审 schema 的唯一解析入口。返回 null 表示缺字段/坏 schema；0 表示已评审且零发现。
+ * 三档都要求非负整数，避免报表宽松求和而 rule-hit probe 严格判无效造成双口径。
+ */
+export function reviewerFindings(o) {
+  if (o == null || typeof o !== 'object' || Array.isArray(o)) return null;
+  const levels = ['P0', 'P1', 'P2'];
+  if (!levels.every((level) => Number.isInteger(o[level]) && o[level] >= 0)) return null;
+  return levels.reduce((total, level) => total + o[level], 0);
+}
 
 /**
  * 历史成功同义词（顶层极少；防御性归一为 pass，免未来顶层使用被误判非 pass）。
@@ -509,6 +520,9 @@ export function aggregate(rawRows, opts = {}) {
   const govPass = rows.filter((r) => r.governance_pass === true).length;
   const codexPlan = sum(rows, (r) => findings(r.codex_plan));
   const codexDone = sum(rows, (r) => findings(r.codex_done));
+  // F3：默认 /code-reviewer 与显式 codex 对抗分源统计，禁止混成一条历史趋势。
+  // 旧行缺 reviewer_findings 时 reviewerFindings(undefined) = null，聚合按 0 兼容且不改历史行。
+  const reviewerFindingsTotal = sum(rows, (r) => reviewerFindings(r.reviewer_findings) ?? 0);
   const verifierRefuted = sum(rows, (r) => Number(r.verifier_refuted) || 0);
 
   // verdict 分布（有效态，含 git 事后回滚覆盖）：规范六类 + other（未知/缺失不在分布里消失·codex 闸-1 P2-3）。
@@ -535,8 +549,9 @@ export function aggregate(rawRows, opts = {}) {
   const byDomain = {};
   for (const r of rows) {
     for (const d of (r.domain || ['(无域)'])) {
-      byDomain[d] = byDomain[d] || { n: 0, codex: 0 };
+      byDomain[d] = byDomain[d] || { n: 0, reviewer: 0, codex: 0 };
       byDomain[d].n += 1;
+      byDomain[d].reviewer += reviewerFindings(r.reviewer_findings) ?? 0;
       byDomain[d].codex += findings(r.codex_plan) + findings(r.codex_done);
     }
   }
@@ -601,6 +616,7 @@ export function aggregate(rawRows, opts = {}) {
     avg_rounds_to_green: avg(withRtg, (r) => Number(r.rounds_to_green)),
     avg_rework: avg(withRework, (r) => Number(r.rework_count)),
     governance_pass_rate: +(govPass / n).toFixed(3),
+    reviewer_findings_total: reviewerFindingsTotal,
     codex_findings_total: codexPlan + codexDone,
     codex_plan_findings: codexPlan,
     codex_done_findings: codexDone,
@@ -633,7 +649,7 @@ export function aggregate(rawRows, opts = {}) {
   };
 }
 
-function render(agg) {
+export function renderQualityReport(agg) {
   if (!agg.n) return 'Loop 质量账本为空（.claude/workflow/loop-quality-ledger.jsonl 无数据行）。';
   const L = [];
   L.push('# Loop 质量报告（quality-report）');
@@ -651,13 +667,14 @@ function render(agg) {
   const b = agg.verdict_breakdown || {};
   L.push(`- verdict 分布：pass ${b.pass || 0} · partial ${b.partial || 0} · reverted ${b.reverted || 0} · abandoned ${b.abandoned || 0} · orphaned ${b.orphaned || 0} · blocked ${b.blocked || 0}${b.other ? ` · other ${b.other}` : ''}`);
   L.push(`- governance 通过率 ${(agg.governance_pass_rate * 100).toFixed(1)}%（占全部尝试，失败行计未过）`);
-  L.push(`- 对抗命中：codex 计划 ${agg.codex_plan_findings} + 完成 ${agg.codex_done_findings} = ${agg.codex_findings_total}；verifier 证伪 ${agg.verifier_refuted_total}`);
+  L.push(`- 默认评审命中：/code-reviewer ${agg.reviewer_findings_total}（同模型自评，只用于趋势与有无度量）`);
+  L.push(`- codex 对抗命中：计划 ${agg.codex_plan_findings} + 完成 ${agg.codex_done_findings} = ${agg.codex_findings_total}；verifier 证伪 ${agg.verifier_refuted_total}`);
   L.push(`- 新增测试合计 ${agg.tests_added_total}`);
   for (const line of renderConcentration(agg.concentration)) L.push(line);
   L.push('');
   L.push('## 按域');
   for (const [d, v] of Object.entries(agg.byDomain).sort((a, b) => b[1].n - a[1].n)) {
-    L.push(`- ${d}: ${v.n} 任务 · 对抗命中 ${v.codex}`);
+    L.push(`- ${d}: ${v.n} 任务 · 默认评审命中 ${v.reviewer} · codex 对抗命中 ${v.codex}`);
   }
   L.push('');
   L.push('## 按 round 趋势（平均转绿轮次 / 返工）');
@@ -678,7 +695,7 @@ function main() {
   try { reworkLines = fs.readFileSync(REWORK_PATH, 'utf-8').split('\n'); } catch { /* sink 不存在=无返工 */ }
   const agg = aggregate(parseLedger(lines), { revertedPrs, reworkRows: parseUserReworkLog(reworkLines) });
   if (args.includes('--json')) { process.stdout.write(JSON.stringify(agg, null, 2) + '\n'); return; }
-  console.log(render(agg));
+  console.log(renderQualityReport(agg));
 }
 
 // 入口守卫：fileURLToPath 解码比较（仓库路径含非 ASCII 时直接拼 file://${argv[1]} 会失配）。
