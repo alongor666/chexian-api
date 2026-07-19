@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -11,6 +11,13 @@ import {
 } from '../etl-ledger/governance-check.mjs';
 
 const T = (iso) => Date.parse(iso);
+const isolatedGitEnv = () => {
+  const env = { ...process.env };
+  for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_CONFIG']) delete env[key];
+  env.GIT_CONFIG_GLOBAL = '/dev/null';
+  env.GIT_CONFIG_SYSTEM = '/dev/null';
+  return env;
+};
 const base = {
   ledgerExists: true,
   ledgerMtimeMs: T('2026-06-27T10:00:00Z'),
@@ -102,14 +109,22 @@ describe('evaluateLedgerUncommittedBulk（2419ed 台账未提交体量提醒）'
 
   it('每月首次生成的 untracked JSONL 也计入体量', () => {
     const root = mkdtempSync(join(tmpdir(), 'etl-ledger-diff-'));
-    mkdirSync(join(root, '数据管理/ledger/events'), { recursive: true });
-    execFileSync('git', ['init', '-q'], { cwd: root });
-    writeFileSync(join(root, 'seed.txt'), 'seed\n');
-    execFileSync('git', ['add', 'seed.txt'], { cwd: root });
-    execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'seed'], { cwd: root });
-    const monthly = '数据管理/ledger/events/2026-07.jsonl';
-    writeFileSync(join(root, monthly), '{"a":1}\n{"a":2}\n');
+    const env = isolatedGitEnv();
+    try {
+      mkdirSync(join(root, '数据管理/ledger/events'), { recursive: true });
+      execFileSync('git', ['init', '-q'], { cwd: root, env });
+      writeFileSync(join(root, 'seed.txt'), 'seed\n');
+      execFileSync('git', ['add', 'seed.txt'], { cwd: root, env });
+      execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'seed'], {
+        cwd: root,
+        env,
+      });
+      const monthly = '数据管理/ledger/events/2026-07.jsonl';
+      writeFileSync(join(root, monthly), '{"a":1}\n{"a":2}\n');
 
-    expect(collectLedgerDiffFiles(root)).toContainEqual({ path: monthly, added: 2, deleted: 0 });
+      expect(collectLedgerDiffFiles(root, env)).toContainEqual({ path: monthly, added: 2, deleted: 0 });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

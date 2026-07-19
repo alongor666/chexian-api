@@ -108,16 +108,16 @@ function parseNumstat(out) {
  * 收集已跟踪 diff，并把每月首次生成的 untracked JSONL 计入体量。
  * 仅靠 git diff 会漏掉新月份的首个分片，导致提醒整月失明。
  */
-export function collectLedgerDiffFiles(rootDir) {
+export function collectLedgerDiffFiles(rootDir, gitEnv = process.env) {
   const trackedOut = execFileSync(
     'git', ['-c', 'core.quotepath=off', 'diff', '--numstat', 'HEAD', '--', ...LEDGER_TRACKED_FILES],
-    { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: gitEnv },
   );
   const files = parseNumstat(trackedOut);
   const seen = new Set(files.map((file) => file.path));
   const untrackedOut = execFileSync(
     'git', ['-c', 'core.quotepath=off', 'ls-files', '--others', '--exclude-standard', '--', '数据管理/ledger/events'],
-    { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: gitEnv },
   );
   for (const relativePath of untrackedOut.split('\n').filter((p) => /^数据管理\/ledger\/events\/\d{4}-\d{2}\.jsonl$/.test(p))) {
     if (seen.has(relativePath)) continue;

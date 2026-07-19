@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { parseSnapshotToEvents, dedupeByDomainChange } from '../etl-ledger/backfill-from-git.mjs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  appendBackfillEvents,
+  dedupeByDomainChange,
+  hasBackfilledEvents,
+  parseSnapshotToEvents,
+} from '../etl-ledger/backfill-from-git.mjs';
 
 describe('parseSnapshotToEvents', () => {
   const obj = {
@@ -45,5 +53,42 @@ describe('dedupeByDomainChange', () => {
     const out = dedupeByDomainChange(events);
     expect(out).toHaveLength(3);
     expect(out.map((e) => e.row_count)).toEqual([100, 110, 50]);
+  });
+});
+
+describe('月度分片回填', () => {
+  it('跨月事件按各自 ts 写入对应分片，不回写封存历史', () => {
+    const root = mkdtempSync(join(tmpdir(), 'etl-ledger-backfill-'));
+    try {
+      const sealed = join(root, 'etl-ledger.jsonl');
+      writeFileSync(sealed, '{"sealed":true}\n');
+      const events = [
+        { ts: '2026-05-31T23:59:59+08:00', domain: 'premium', backfilled: true },
+        { ts: '2026-06-01T00:00:00+08:00', domain: 'claims_detail', backfilled: true },
+      ];
+      const targets = appendBackfillEvents(events, {
+        pathForEvent: (event) => join(root, 'events', `${event.ts.slice(0, 7)}.jsonl`),
+      });
+
+      expect(targets.map((p) => p.split('/').at(-1))).toEqual(['2026-05.jsonl', '2026-06.jsonl']);
+      expect(readFileSync(join(root, 'events/2026-05.jsonl'), 'utf8')).toContain('"domain":"premium"');
+      expect(readFileSync(join(root, 'events/2026-06.jsonl'), 'utf8')).toContain('"domain":"claims_detail"');
+      expect(readFileSync(sealed, 'utf8')).toBe('{"sealed":true}\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('任一来源含 backfilled 事件即识别为已回填', () => {
+    const root = mkdtempSync(join(tmpdir(), 'etl-ledger-backfill-check-'));
+    try {
+      const sealed = join(root, 'etl-ledger.jsonl');
+      const monthly = join(root, '2026-06.jsonl');
+      writeFileSync(sealed, '{"backfilled":false}\n');
+      writeFileSync(monthly, '{"backfilled":true}\n');
+      expect(hasBackfilledEvents([sealed, monthly])).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
