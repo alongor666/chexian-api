@@ -1,0 +1,1 @@
+{"uid":"2026-07-14-claude-ec5dba","kind":"status","ts":"2026-07-15","actor":"@claude","status":"DONE","evidence":"PR #1102 已合并：核实 visibleBranches 由 authMiddleware decorateVisibleBranches 每请求派生、飞书路径无缺口，补 2 条回归测试锁；无生产代码改动","at":"2026-07-15T11:35:10.421Z","eid":"98c01cc2"}
