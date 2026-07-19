@@ -1,0 +1,1 @@
+{"uid":"2026-07-14-claude-c14756","kind":"note","ts":"2026-07-19","actor":"@claude","text":"check-merged-drift 命中 c62b0bb9 系误报：该提交新增销售队伍业绩域本体(phase1+2)；实测 server/src/routes/query/sales-team-performance.ts:57 现仍requireBranchAdmin，未开放org_user访问","at":"2026-07-19T07:14:32.810Z","eid":"cc5cbba7"}

@@ -1,0 +1,1 @@
+{"uid":"2026-06-11-claude-02aa70","kind":"status","ts":"2026-07-19","actor":"@claude","status":"DONE","evidence":"PR #920/#922/#1064 均已合入 origin/main（git merge-base --is-ancestor 核实）；a) A版彻底删除(grep VersionAView/VersionSwitcher零命中)；b) 成本分析页综合视图重叠明细tab已裁剪(#1064)","at":"2026-07-19T07:14:32.939Z","eid":"c9d0da8c"}

@@ -1,0 +1,1 @@
+{"uid":"2026-07-14-claude-806947","kind":"note","ts":"2026-07-19","actor":"@claude","text":"check-merged-drift 命中 27b26aeb(#1102) 系误报：该提交是8ba910多部门最小权限确定性选择的实现，未清理 feishu_role_mapping.json（gitignored）中武**冗余个人映射条目","at":"2026-07-19T07:14:32.747Z","eid":"2c8d58b7"}

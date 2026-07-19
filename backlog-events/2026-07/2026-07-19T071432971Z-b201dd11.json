@@ -1,0 +1,1 @@
+{"uid":"2026-06-20-claude-f1c991","kind":"status","ts":"2026-07-19","actor":"@claude","status":"DONE","evidence":"PR #1063 已合入 origin/main；生产 ecosystem CUBE_ROUTING_ENABLED=true + ROUTES=trend,growth,salesman-ranking 已实际生效（server/ecosystem.config.cjs:58-59核实）；cost/kpi路由已明确搁置见65f495另案；后续哨兵降频监控由055a12单独跟踪","at":"2026-07-19T07:14:32.971Z","eid":"b201dd11"}

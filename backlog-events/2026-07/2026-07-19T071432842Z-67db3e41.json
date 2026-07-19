@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-claude-cfac9b","kind":"note","ts":"2026-07-19","actor":"@claude","text":"check-merged-drift 命中 31f36de9(#1108) 系误报：pr-evolution.md 明确记录#1108是首登死锁修复，文中写明\"两次都是事后一事一治，没有针对该类的通用防线...已登记BACKLOG交独立PR处理\"——本卡要求的通用防线机制未建","at":"2026-07-19T07:14:32.842Z","eid":"67db3e41"}

@@ -1,0 +1,1 @@
+{"uid":"2026-07-18-claude-a04720","kind":"note","ts":"2026-07-19","actor":"@claude","text":"check-merged-drift 命中 aaa7bdb8(#1136) 系误报：#1136是34e06a的P1-7a schema演进修复PR，其note明确\"评审F2(EXCEPT改EXCEPT ALL)按一卡一PR另登新卡2026-07-18-claude-a04720\"——本卡(EXCEPT ALL重复行计数)代码未动","at":"2026-07-19T07:14:32.874Z","eid":"aca3b24f"}
