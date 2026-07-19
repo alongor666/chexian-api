@@ -245,14 +245,23 @@ describe('performance analysis SQL', () => {
     expect(sql).not.toContain('p..org_level_3');
   });
 
-  it('heatmap SQL should use period plan and natural-day progress for achievement', () => {
+  it('heatmap SQL should use YTD premium and cutoff-based annual-plan progress for achievement', () => {
     const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'month', 15, 'org_level_3');
 
     expect(sql).toContain('FROM SalesmanTeamMapping m');
-    expect(sql).toContain('period_progress');
-    expect(sql).toContain('progress_ratio');
-    expect(sql).toContain('ppd.period_plan_wan * pr.progress_ratio');
+    expect(sql).toContain('ytd_by_dim_period');
+    expect(sql).toContain("EXTRACT('doy' FROM pw.current_cutoff)");
+    expect(sql).toContain('COALESCE(ytd.ytd_premium, 0) * 100.0 / ppd.progress_plan_wan');
+    expect(sql).toContain('ppd.progress_plan_wan AS plan_premium');
+    expect(sql).not.toContain('period_progress');
     expect(sql).not.toContain('cur.plan_premium / 12');
+  });
+
+  it('heatmap dimension pool should retain dimensions with no rows in the display window', () => {
+    const sql = generatePerformanceOrgHeatmapQuery('1=1', 'all', 'day', 15, 'org_level_3');
+
+    expect(sql).toContain('SELECT DISTINCT dimension_value FROM filtered');
+    expect(sql).not.toContain('SELECT DISTINCT dimension_value FROM window_rows');
   });
 
   it('heatmap SQL should null out plan fields for non-plan dimensions', () => {

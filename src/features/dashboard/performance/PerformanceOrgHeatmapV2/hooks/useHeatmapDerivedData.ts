@@ -22,12 +22,18 @@ function buildBranchSummaryRow(
   if (dateRows.length === 0) return null;
 
   const premium = dateRows.reduce((sum, r) => sum + r.premium, 0);
-  const planRows = dateRows.filter((r) => r.planPremium !== null);
+  const planRows = dateRows.filter(
+    (r) => r.planPremium !== null && r.planPremium > 0 && r.achievementRate !== null,
+  );
   const planPremium = planRows.length > 0
     ? planRows.reduce((sum, r) => sum + (r.planPremium ?? 0), 0)
     : null;
-  const achievementRate =
-    planPremium !== null && planPremium > 0 ? (premium / planPremium) * 100 : null;
+  const achievementRate = planPremium !== null && planPremium > 0
+    ? planRows.reduce(
+        (sum, r) => sum + (r.achievementRate ?? 0) * (r.planPremium ?? 0),
+        0,
+      ) / planPremium
+    : null;
 
   const prevMomPremium = dateRows.reduce((sum, r) => sum + r.prevMomPremium, 0);
   const prevYoyPremium = dateRows.reduce((sum, r) => sum + r.prevYoyPremium, 0);

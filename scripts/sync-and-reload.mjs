@@ -18,8 +18,14 @@
  *   4.5. rsync public/reports/ → VPS frontend/dist/reports/   （Nginx 静态托管）
  *   5.   可选：批量同步企微机构续保追踪表 + 续保5月表 + 邮政经代签单表
  *
+ * 双批发布（2026-07-18 起，上游改双批出表）：--batch early|late 从 release-batches.mjs SSOT
+ * 取该批的 ETL 域集 + code 子集 + 报告/企微编排。早批（01签单+05理赔）不跑企微；晚批
+ *（02报价+03维修+04厂牌+尾部域）跑企微。不带 --batch = 全量 daily.mjs all（12:00 后手动补全用）。
+ *
  * 使用：
- *   node scripts/sync-and-reload.mjs                        # daily.mjs all
+ *   node scripts/sync-and-reload.mjs                        # daily.mjs all（全量单批，兜底）
+ *   node scripts/sync-and-reload.mjs --batch early          # 早批：premium + claims_detail（不企微）
+ *   node scripts/sync-and-reload.mjs --batch late           # 晚批：quotes/repair/brand/...（含企微）
  *   node scripts/sync-and-reload.mjs premium                # 仅保费域
  *   node scripts/sync-and-reload.mjs --skip-governance      # 跳过 governance（不推荐）
  *   node scripts/sync-and-reload.mjs --skip-reload          # 仅 ETL+governance，不重启
@@ -46,7 +52,11 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { recordEvent, LEDGER_PATH } from './etl-ledger/record.mjs';
 import { writeReport, loadEvents } from './etl-ledger/render.mjs';
 // 多省 B2 分省编排：遍历注册的非 SC 省逐域生成 daily.mjs 步骤（省份枚举单一来源 source-file-routing）
-import { buildBranchEtlSteps, shouldEnableValidationBranchSync } from '../数据管理/lib/branch-publish.mjs';
+import { buildBranchEtlSteps, shouldEnableValidationBranchSync, BRANCH_PUBLISH_DOMAINS } from '../数据管理/lib/branch-publish.mjs';
+// 双批发布 SSOT（早批 01+05 / 晚批 02+03+04）：批次 → ETL 域 / code 子集 / 报告·企微编排
+import { getReleaseBatch, batchAllCodes, RELEASE_BATCH_IDS } from '../数据管理/lib/release-batches.mjs';
+// 晚批依赖早批 fail-closed：手动入口独立校验前置批当天已 released（与 watcher 防混新鲜度同）
+import { unmetDependencies } from '../数据管理/lib/auto-release-decision.mjs';
 // state.db 远程备份（575d2f）：reload 前在 VPS 上备份 PAT/用户/角色权威数据，失败不阻塞
 import { resolveStateDbBackupConfig, buildStateDbBackupScript } from './lib/state-db-backup.mjs';
 import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
@@ -102,13 +112,24 @@ function parseArgs(argv) {
     skipGateReason: '',
     wecom: false,
     wecomDryRun: false,
+    wecomExplicit: false, // 用户显式传了 --wecom/--wecom-dry-run（批次默认不覆盖它）
     wecomOrg: null,
     skipLarkArchive: false,
+    batch: null,          // 双批发布：'early'|'late'；置位后覆盖 dailyArgs/wecom/report（见下）
+    runReport: true,      // 是否跑 Stage 1.5 短中长期报告（批次可关；默认开）
+    pullCodes: null,      // 传给 Stage 0 pull-bi-exports 的 code 子集（批次派生；null=全量）
+    allowMissingDep: false, // 应急放行：跳过「前置批当天已 released」依赖闸（防混新鲜度）
     dailyArgs: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') opts.dryRun = true;
+    else if (a === '--batch' || a.startsWith('--batch=')) {
+      const id = a.includes('=') ? a.slice('--batch='.length) : argv[++i];
+      let batch;
+      try { batch = getReleaseBatch(id); } catch (e) { throw new Error(e.message); }
+      opts.batch = batch.id;
+    }
     else if (a === '--skip-pull') opts.skipPull = true;
     else if (a === '--skip-governance') opts.skipGovernance = true;
     else if (a === '--skip-reload') opts.skipReload = true;
@@ -120,10 +141,11 @@ function parseArgs(argv) {
     else if (a.startsWith('--skip-gate-reason=')) {
       opts.skipGateReason = a.slice('--skip-gate-reason='.length);
     }
-    else if (a === '--wecom') opts.wecom = true;
+    else if (a === '--wecom') { opts.wecom = true; opts.wecomExplicit = true; }
     else if (a === '--wecom-dry-run') {
       opts.wecom = true;
       opts.wecomDryRun = true;
+      opts.wecomExplicit = true;
     }
     else if (a === '--wecom-org') {
       opts.wecomOrg = argv[++i];
@@ -133,10 +155,25 @@ function parseArgs(argv) {
       opts.wecomOrg = a.slice('--wecom-org='.length);
     }
     else if (a === '--skip-lark-archive') opts.skipLarkArchive = true;
+    else if (a === '--allow-missing-dep') opts.allowMissingDep = true;
     else if (a === '--help' || a === '-h') {
-      log('cyan', '用法：node scripts/sync-and-reload.mjs [daily.mjs subcommand] [--dry-run] [--skip-pull] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]');
+      log('cyan', `用法：node scripts/sync-and-reload.mjs [--batch ${RELEASE_BATCH_IDS.join('|')}] [daily.mjs subcommand] [--dry-run] [--skip-pull] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]`);
+      log('cyan', '  --batch early：签单+理赔（premium/claims_detail，不跑企微）；--batch late：报价+维修+厂牌+尾部域（跑企微，依赖早批当天 released）。不带 --batch=全量 daily.mjs all。');
+      log('cyan', '  --allow-missing-dep：应急放行晚批依赖闸（早批未 released 也发；可能混新鲜度）。');
       process.exit(0);
     } else opts.dailyArgs.push(a);
+  }
+  // 双批发布：--batch 覆盖 ETL 域 / 报告 / 企微 / pull code 子集（SSOT=release-batches.mjs）。
+  if (opts.batch) {
+    const batch = getReleaseBatch(opts.batch);
+    if (opts.dailyArgs.length > 0) {
+      log('yellow', `⚠ --batch ${opts.batch} 已指定 ETL 域集，忽略额外位置参数：${opts.dailyArgs.join(' ')}`);
+    }
+    opts.dailyArgs = [...batch.scDomains];
+    opts.runReport = batch.runReport;
+    opts.pullCodes = batchAllCodes(batch);
+    // 企微：批次默认（早批 false / 晚批 true），除非用户显式 --wecom/--wecom-dry-run 覆盖
+    if (!opts.wecomExplicit) opts.wecom = batch.runWecom;
   }
   if (opts.dailyArgs.length === 0) opts.dailyArgs = ['all'];
   // 环境变量兜底（CI / cron / 紧急运维）
@@ -211,6 +248,20 @@ function buildEtlCommands(dailyArgs, fullSnapshotDomains) {
   const args = dailyArgs.includes('--no-sync') ? [...dailyArgs] : [...dailyArgs, '--no-sync'];
   if (!args.includes('--skip-report')) args.push('--skip-report');
   return [{ label: 'ETL', args: ['数据管理/daily.mjs', ...args] }];
+}
+
+/**
+ * 批次模式 ETL 命令：每个域一条 daily.mjs 子命令（daily.mjs 单次只处理一个 subcommand，
+ * 传多个域只会跑第一个——故批次多域必须逐域调用，与 full_snapshot 多域路径同理）。
+ * 一律带 --no-sync（同步统一交 Stage 3 sync-vps）+ --skip-report（报告统一交 Stage 1.5）。
+ * @param {string[]} scDomains 批次 SC 默认链路 ETL 域（顺序即执行序）
+ * @returns {Array<{label:string,args:string[]}>}
+ */
+function buildBatchEtlCommands(scDomains) {
+  return scDomains.map((domain) => ({
+    label: `ETL:${domain}`,
+    args: ['数据管理/daily.mjs', domain, '--no-sync', '--skip-report'],
+  }));
 }
 
 async function runDataReload(domains, { dryRun, healthUrl }) {
@@ -331,6 +382,7 @@ async function main() {
   log('bold', '════════════════════════════════════════════════');
   log('bold', '  sync-and-reload：ETL → governance → reload → /health');
   log('bold', '════════════════════════════════════════════════');
+  log('cyan', `  批次:              ${opts.batch ? `${opts.batch}（code ${opts.pullCodes.join('/')}；报告=${opts.runReport}）` : '全量（不分批）'}`);
   log('cyan', `  daily.mjs args:    ${opts.dailyArgs.join(' ')}`);
   log('cyan', `  skip pull:         ${opts.skipPull}`);
   log('cyan', `  ssh alias:         ${sshAlias}`);
@@ -342,27 +394,64 @@ async function main() {
   if (opts.wecomOrg) log('cyan', `  wecom org:         ${opts.wecomOrg}`);
   log('cyan', `  dry-run:           ${opts.dryRun}`);
 
-  const fullSnapshotDomains = resolveFullSnapshotDomains(opts.dailyArgs);
+  // 🔴 晚批依赖早批 fail-closed：前置批当天未 released → 拒绝发布（防混新鲜度：晚批 renewal_tracker /
+  // 企微依赖早批产出的 policy）。独立于 watcher 再校验一次（手动 sync-and-reload --batch late 也受护）。
+  // dry-run 只告警不中止（便于查看计划）；应急 --allow-missing-dep 放行。
+  if (opts.batch) {
+    const batch = getReleaseBatch(opts.batch);
+    if ((batch.dependsOn?.length ?? 0) > 0) {
+      let releaseState = null;
+      try { releaseState = JSON.parse(readFileSync(join(ROOT_DIR, '数据管理/logs/auto-release-state.json'), 'utf-8')); } catch { /* 无状态文件视为依赖未满足 */ }
+      const unmet = unmetDependencies(batch, releaseState, beijingDayOf(new Date()));
+      if (unmet.length > 0) {
+        if (opts.allowMissingDep) {
+          log('yellow', `\n⚠ 前置批未就绪（${unmet.join(',')} 今日未 released），但 --allow-missing-dep 已放行（应急：可能发布混新鲜度数据）`);
+        } else if (opts.dryRun) {
+          log('yellow', `\n⚠ (dry-run) 前置批未就绪（${unmet.join(',')} 今日未 released）：真实发布会 fail-closed 中止（--allow-missing-dep 可放行）`);
+        } else {
+          log('red', `\n❌ 前置批未就绪（${unmet.join(',')} 今日未 released），拒绝发布 ${opts.batch} 批（防混新鲜度：晚批依赖早批产出的 policy）。`);
+          log('yellow', `   请先成功发布早批（node scripts/sync-and-reload.mjs --batch early），或应急 --allow-missing-dep 显式放行。`);
+          if (!opts.dryRun) {
+            recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: `依赖闸拒绝：前置批 ${unmet.join(',')} 未 released` });
+          }
+          process.exit(1);
+        }
+      }
+    }
+  }
+
+  // 批次模式不参与 full_snapshot 单域路径（批次 ETL 域集由 SSOT 固定）。
+  const fullSnapshotDomains = opts.batch ? [] : resolveFullSnapshotDomains(opts.dailyArgs);
 
   // Stage 0: 拉取上游 BI 导出（VPS auto_loadbi manifest 契约 → inbox → 校验 → 分发 ETL 源目录）。
   // 失败即中止（上游断线兜底：宁可发布失败也不默默用旧数据）；full_snapshot 单域模式
   // （customer_flow / new_energy_claims 源不来自 auto_loadbi）自动跳过，避免无关发布被上游波动阻断。
+  // 批次模式：透传 --batch，pull 只校验/分发该批 code 子集（早批 01/05、晚批 02/03/04）。
   if (opts.skipPull) {
     log('yellow', '\n⚠ 跳过上游 BI 导出拉取（--skip-pull），使用现有本地源文件');
   } else if (fullSnapshotDomains.length > 0) {
     log('yellow', `\n⚠ full_snapshot 单域模式（${fullSnapshotDomains.join(',')}）：源不来自 auto_loadbi，自动跳过上游拉取`);
   } else {
-    await runCmd('pull:bi-exports', 'node', ['scripts/pull-bi-exports.mjs'], { dryRun: opts.dryRun });
+    const pullArgs = ['scripts/pull-bi-exports.mjs'];
+    if (opts.batch) pullArgs.push('--batch', opts.batch);
+    await runCmd('pull:bi-exports', 'node', pullArgs, { dryRun: opts.dryRun });
   }
 
-  // Stage 1: ETL（先 SC 默认链路）
-  for (const step of buildEtlCommands(opts.dailyArgs, fullSnapshotDomains)) {
+  // Stage 1: ETL（先 SC 默认链路）。批次模式逐域调用（daily.mjs 单次只处理一个域）。
+  const etlCommands = opts.batch
+    ? buildBatchEtlCommands(opts.dailyArgs)
+    : buildEtlCommands(opts.dailyArgs, fullSnapshotDomains);
+  for (const step of etlCommands) {
     await runCmd(step.label, 'node', step.args, { dryRun: opts.dryRun });
   }
   // Stage 1.1: 多省 B2 分省发布——遍历注册的非 SC 省逐域跑（产物落 warehouse/validation/<省>）。
   // BRANCH_PUBLISH=1 让无源域 graceful skip 不中断；有源但转换失败 → fail-fast + 明确定位
   // （闸-1 P1-E），不让生产数据处于"部分省成功"混合状态。full_snapshot 单域模式不追加分省。
-  const branchSteps = fullSnapshotDomains.length === 0 ? buildBranchEtlSteps() : [];
+  // 批次模式：非 SC 省也只跑本批的核心域（BRANCH_PUBLISH_DOMAINS ∩ 本批 SC 域，保序）。
+  const branchCoreDomains = opts.batch
+    ? BRANCH_PUBLISH_DOMAINS.filter((d) => opts.dailyArgs.includes(d))
+    : BRANCH_PUBLISH_DOMAINS;
+  const branchSteps = fullSnapshotDomains.length === 0 ? buildBranchEtlSteps(undefined, branchCoreDomains) : [];
   if (fullSnapshotDomains.length === 0) {
     if (branchSteps.length > 0) {
       const provinces = [...new Set(branchSteps.map(s => s.env.BRANCH_CODE))].join(', ');
@@ -400,6 +489,24 @@ async function main() {
     } catch { /* 读回失败不阻断，仅丢失文案增强 */ }
   }
 
+  // Stage 1.45: 非 SC 省晋升（validation/<省> → current/<省>）——必须早于 Stage 1.5 报告生成。
+  // 根因（2026-07-18 发布死锁）：非 SC 省 premium ETL 产物落 warehouse/validation/<省>（Stage 1.1），
+  // 而晋升到 fact/policy/current/<省> 原本只发生在 Stage 3 的 sync-vps.runSxAutoPromote()——晚于
+  // 报告生成（Stage 1.5）与报告 scope 新鲜度闸（Stage 1.6）。period-trend 报告的省级/机构级取数
+  // 走 current/<省>（skill query.policy_glob），故报告读到的是上一周期晋升的旧 current/<省>：当四川
+  // 根基准前进到新一天、而 current/<省> 还停在旧日，freshness gate 判「磁盘 latest ≠ 根基准」中止，
+  // 又阻断了本能修复它的 Stage 3 晋升 → 死锁。此处提前把晋升做掉，让报告读到已晋升的当日数据。
+  // 复用 sync-vps --promote-only（同一 RLS 实时核实 + sx-promote 安全内核）；与 Stage 3 的
+  // runSxAutoPromote 幂等（sha256 一致自动 skip），不重复搬运。仅在本批要生成报告时才需要。
+  if (opts.runReport) {
+    await runCmd(
+      '非 SC 省晋升（报告前）',
+      'node',
+      ['scripts/sync-vps.mjs', '--promote-only'],
+      { dryRun: opts.dryRun }
+    );
+  }
+
   // Stage 1.5: 生成短中长期对照报告 — ETL 完成后数据最新。
   // 覆盖省级根目录 + branches/<省>/ 镜像 + 各注册省机构级 orgs/<省>/<机构>/。
   //
@@ -414,28 +521,33 @@ async function main() {
   // 超时放宽至 30 分钟：覆盖全部注册省 × 全部机构（当前 SC 14 + SX 11），远超原省级单次调用。
   // skill 缺失时 daily.mjs 目前只告警跳过；版本能力闸未过则 exit 1。前者由紧随其后的
   // Stage 1.6 “本批次必须刷新”约束补齐 fail-loud，后者由 runCmd 直接阻断。
+  // 批次可关报告（当前早/晚批 runReport 均为 true，故两批都跑；保留开关供未来某批不需报告时用）。
   const reportGenerationStartedAt = Date.now();
-  await runCmd(
-    'period-trend report',
-    'node',
-    ['数据管理/daily.mjs', 'report', '--no-sync'],
-    { dryRun: opts.dryRun, timeoutMs: 30 * 60 * 1000 }
-  );
+  if (!opts.runReport) {
+    log('yellow', `\n⚠ 批次 ${opts.batch} 不生成短中长期报告（runReport=false），跳过 Stage 1.5/1.6`);
+  } else {
+    await runCmd(
+      'period-trend report',
+      'node',
+      ['数据管理/daily.mjs', 'report', '--no-sync'],
+      { dryRun: opts.dryRun, timeoutMs: 30 * 60 * 1000 }
+    );
 
-  // Stage 1.6: 报告 scope 新鲜度一致性闸。daily.mjs 的逐机构生成失败目前仅告警，
-  // 因此子进程 exit 0 仍不足以证明 branches/orgs 全部更新；这里按配置 SSOT 枚举全部
-  // 应生成 scope，并以真实磁盘产物 + manifest 对账。任一缺失/日期不一致/本批次未刷新即非零阻断，
-  // 绝不进入后续 sync-vps 把“根目录新、部分 scope 旧”的混合批次推上线。
-  await runCmd(
-    'report scope freshness gate',
-    'node',
-    [
-      'scripts/report-scope-freshness-gate.mjs',
-      '--not-before-epoch-ms',
-      String(reportGenerationStartedAt),
-    ],
-    { dryRun: opts.dryRun }
-  );
+    // Stage 1.6: 报告 scope 新鲜度一致性闸。daily.mjs 的逐机构生成失败目前仅告警，
+    // 因此子进程 exit 0 仍不足以证明 branches/orgs 全部更新；这里按配置 SSOT 枚举全部
+    // 应生成 scope，并以真实磁盘产物 + manifest 对账。任一缺失/日期不一致/本批次未刷新即非零阻断，
+    // 绝不进入后续 sync-vps 把“根目录新、部分 scope 旧”的混合批次推上线。
+    await runCmd(
+      'report scope freshness gate',
+      'node',
+      [
+        'scripts/report-scope-freshness-gate.mjs',
+        '--not-before-epoch-ms',
+        String(reportGenerationStartedAt),
+      ],
+      { dryRun: opts.dryRun }
+    );
+  }
 
 
   // Stage 1.7: 数据就绪校验（pre-sync）— ETL 完成后、sync-vps 前
@@ -793,6 +905,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 
 export {
   buildEtlCommands,
+  buildBatchEtlCommands,
   parseArgs,
   runDataReload,
   resolveFullSnapshotDomains,

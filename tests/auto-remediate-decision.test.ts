@@ -80,6 +80,54 @@ describe('decideRemediation', () => {
   });
 });
 
+describe('🔴 双批 schema 接手（P1-1：新 batches schema 不能让自动接手静默失效）', () => {
+  const slice = (status: string, attempts = DEFAULT_MIN_RELEASE_ATTEMPTS) => ({ beijingDay: TODAY, status, attempts });
+
+  it('两批均 failed（达上限）→ tier1-retry，batches=[early,late]（保序）', () => {
+    const d = decideRemediation({
+      releaseState: { beijingDay: TODAY, batches: { early: slice('failed'), late: slice('failed') } },
+      remediateState: null, todayBeijing: TODAY,
+    });
+    expect(d.action).toBe('tier1-retry');
+    expect(d.batches).toEqual(['early', 'late']);
+  });
+
+  it('只晚批 failed、早批 released → 只接手 late', () => {
+    const d = decideRemediation({
+      releaseState: { beijingDay: TODAY, batches: { early: slice('released'), late: slice('missed') } },
+      remediateState: null, todayBeijing: TODAY,
+    });
+    expect(d.action).toBe('tier1-retry');
+    expect(d.batches).toEqual(['late']);
+  });
+
+  it('早批 failed 但仍在重试（attempts<min）→ 该批不接手（防并发）；晚批 released → 整体 skip', () => {
+    const d = decideRemediation({
+      releaseState: { beijingDay: TODAY, batches: { early: slice('failed', DEFAULT_MIN_RELEASE_ATTEMPTS - 1), late: slice('released') } },
+      remediateState: null, todayBeijing: TODAY,
+    });
+    expect(d.action).toBe('skip');
+    expect(d.batches).toEqual([]);
+  });
+
+  it('两批均 released → skip', () => {
+    const d = decideRemediation({
+      releaseState: { beijingDay: TODAY, batches: { early: slice('released'), late: slice('released') } },
+      remediateState: null, todayBeijing: TODAY,
+    });
+    expect(d.action).toBe('skip');
+  });
+
+  it('旧扁平 schema 仍走全量重跑（batches=null）', () => {
+    const d = decideRemediation({
+      releaseState: { beijingDay: TODAY, status: 'failed', attempts: DEFAULT_MIN_RELEASE_ATTEMPTS },
+      remediateState: null, todayBeijing: TODAY,
+    });
+    expect(d.action).toBe('tier1-retry');
+    expect(d.batches).toBeNull();
+  });
+});
+
 describe('nextRemediateState', () => {
   it('recovered / tier1-failed 各消耗一次 Tier1 尝试', () => {
     expect(nextRemediateState('tier1-failed', { todayBeijing: TODAY, prevState: null }).tier1Attempts).toBe(1);

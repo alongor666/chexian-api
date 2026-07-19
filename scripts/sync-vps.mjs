@@ -137,6 +137,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     dryRun: false,
     checkMode: false,
     helpMode: false,
+    promoteOnly: false,
     noCleanup: false,
     alias: undefined,
     host: undefined,
@@ -166,6 +167,11 @@ function parseArgs(argv = process.argv.slice(2)) {
         break;
       case '--check':
         parsed.checkMode = true;
+        break;
+      case '--promote-only':
+        // 仅晋升非 SC 省（validation/<省> → current/<省>），不做任何 rsync/reload。
+        // 供发布链在报告生成前调用，使 Stage 1.5 报告读到已晋升的 current/<省>。
+        parsed.promoteOnly = true;
         break;
       case '--no-cleanup':
         parsed.noCleanup = true;
@@ -899,6 +905,8 @@ function printHelp() {
   --remote-dir <path>  覆盖远端数据根目录
   --health-url <url>   覆盖健康检查地址
   --domain <ids>       仅同步指定数据域（逗号分隔），如 customer_flow,sales_team_performance
+  --promote-only       仅晋升非 SC 省（validation/<省> → current/<省>），不做 rsync/reload；
+                       供发布链在报告生成前调用（与 Stage 3 完整同步的晋升幂等）
 `);
 }
 
@@ -1452,6 +1460,37 @@ async function main(argv = process.argv.slice(2)) {
   log('blue', '================================================================================');
   log('green', `✓ SSH 配置: ${sshConfig.username}@${sshConfig.host}:${sshConfig.port}`);
   log('green', `✓ 密钥: ${sshConfig.privateKeyPath}`);
+
+  // --promote-only：仅晋升非 SC 省（validation/<省> → current/<省>），不做 rsync/reload。
+  // 用途：发布链（sync-and-reload Stage 1.45）在报告生成（Stage 1.5）+ 报告 scope 新鲜度闸
+  // （Stage 1.6）之前先跑本模式，使省级/机构级报告读到已晋升的 current/<省>；否则报告读到
+  // 上一周期的旧 current/<省>，报告日期落后四川根基准 → freshness gate 死锁。与 Stage 3 完整
+  // sync-vps 里的 runSxAutoPromote 幂等（sx-promote sha256 一致自动 skip），不重复搬运。
+  if (parsedArgs.promoteOnly) {
+    if (runConfig.dryRun) {
+      log('yellow', '▶ [promote-only] dry-run：仅打印，不执行非 SC 省晋升');
+      return;
+    }
+    try {
+      log('yellow', '▶ SSH 连通性预检（promote-only）...');
+      await ensureSshReady(sshConfig);
+      log('green', '✓ SSH 连接成功');
+    } catch (e) {
+      log('red', `错误：SSH 预检失败: ${e.message}`);
+      process.exit(1);
+    }
+    const sxReadiness = await runSxAutoPromote(sshConfig);
+    if (sxReadiness.verdict === 'block') {
+      log('red', `  SX 核实未通过（promote-only）：晋升中止（fail-safe，不用未核实数据）：${sxReadiness.reason}`);
+      recordEvent({ stage: 'vps_sync', step: 'sx_auto_promote', status: 'failure', error: sxReadiness.reason });
+      process.exit(1);
+    }
+    if (sxReadiness.verdict === 'promote') {
+      recordEvent({ stage: 'vps_sync', step: 'sx_auto_promote', status: 'success' });
+    }
+    log('green', `✓ [promote-only] ${sxReadiness.verdict}：${sxReadiness.reason}`);
+    return;
+  }
 
   if (runConfig.dryRun) {
     printDryRun(sshConfig, runConfig);
