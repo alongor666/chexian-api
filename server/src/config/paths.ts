@@ -157,6 +157,17 @@ export function getFeishuRoleMappingPath(): string {
 }
 
 /**
+ * 飞书部门授权文件路径（飞书部门 → 机构/省份授权，部门个人账号登录时消费）。
+ * 优先级：FEISHU_DEPARTMENT_ENTITLEMENTS_PATH 环境变量 > server/data/feishu_department_entitlements.json
+ * 文件由运维侧下发（按部门授权机构/省份），gitignored；缺文件时回退内置默认值（零配置行为不变）。
+ */
+export function getFeishuDepartmentEntitlementsPath(): string {
+  return process.env.FEISHU_DEPARTMENT_ENTITLEMENTS_PATH
+    ? path.resolve(process.env.FEISHU_DEPARTMENT_ENTITLEMENTS_PATH)
+    : path.resolve(getDataDir(), 'feishu_department_entitlements.json');
+}
+
+/**
  * PAT 持久层文件路径。DuckDB ApiToken 表是 :memory: 表，
  * PM2 reload 后必须从此文件重建，否则用户 token 全部失效。
  */

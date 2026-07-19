@@ -11,6 +11,7 @@ vi.mock('../../config/env.js', () => ({ feishuEnv: env }));
 vi.mock('../feishu-app-client.js', () => ({ feishuAppGetJson: appGet }));
 vi.mock('../../config/paths.js', () => ({
   getFeishuRoleMappingPath: () => '/missing/roles.json', getSalesmanMappingPaths: () => [],
+  getFeishuDepartmentEntitlementsPath: () => '/missing/dept-entitlements.json',
 }));
 
 import { feishuService } from '../feishu.js';
