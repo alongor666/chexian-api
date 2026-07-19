@@ -169,7 +169,7 @@ export function validateDepartmentEntitlements(raw: unknown): FeishuDepartmentEn
     cleaned.push({
       feishuDeptId,
       feishuDeptName: typeof feishuDeptName === 'string' ? feishuDeptName : feishuDeptId,
-      role: 'org_user',
+      role: role as FeishuDepartmentEntitlement['role'], // 已过 VALID_ROLES 校验，透传而非硬编码（未来加角色不需改此处）
       organization,
       branchCode,
     });
