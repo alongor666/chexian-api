@@ -9,7 +9,7 @@ import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate, latestC
 import { parseLedger, aggregate, normalizeVerdict, parseRevertedPrs, buildRevertGitArgs, collectRevertedPrs, effectiveVerdict, parseUserReworkLog, classifyTopic, hhiOf, overfitFlag, extractPrEvolutionEntryDates, ledgerMaxTs, isEntryLedgerStale } from '../quality-report.mjs';
 import { scanEntries, classify, isoAddDays, verifyMechanisms } from '../automation-due.mjs';
 import { scanNotes, classifyStale, scanStale, uidToken, branchMatchesUid } from '../stale-scan.mjs';
-import { RULES, ruleHits } from '../rule-hit-rate.mjs';
+import { RULES, ruleHits, parsePatternRegistry, collectRecurrenceAnchors, patternWatchlist } from '../rule-hit-rate.mjs';
 
 const J = (o) => JSON.stringify(o);
 
@@ -1316,5 +1316,85 @@ describe('quality-report.aggregate · 样本主题集中度（E5 治茧房2·cod
     ]).concentration;
     expect(c.domain.distribution['(无域)']).toBeGreaterThan(0);
     expect(c.topic.top.name).toBe('省份接入'); // 缺 domain 不影响 topic 分类
+  });
+});
+
+// F2：失败模式「观察中清单」（pattern-watch）——登记表解析 + recurrence_watch 锚 + 观察清单合成
+describe('rule-hit-rate.patternWatchlist（F2 观察中清单·纯函数）', () => {
+  // fixture 覆盖四档拦截层 + 冒号/等号两种锚 + needs_automation 子标题干扰
+  const FIXTURE = [
+    '## 失败模式登记表（Pattern Registry · 必读）',
+    '',
+    '| # | 失败模式 | 发作 | 各次 | 当前拦截层 | 升级触发线 |',
+    '|---|---------|:---:|-----|-----------|-----------|',
+    '| P1 | 工具链严格度漂移 | 2 | #459 | ✅ pre-push typecheck | 已硬拦 |',
+    '| P3 | codex 多轮盘点不全 | 4 | #669 | 🔵 codex 兜底（贵） | 再发生1次→硬证据 |',
+    '| P8 | loop v2 偏离 | 1 | 复盘 | 🟡 文档纪律 | warn-only ≠ 强制 |',
+    '| P9 | 并行卡改同一 CI 文件 | 1 | #928 | 🔴 §3.1 文档 | recurrence_watch=P9；再现→交集告警 |',
+    '| P14 | 存量 env 撞新闸 | 2 | #1077 | ✅ 闸自动拦；🔴 源头债 | recurrence_watch=P14；expires 2026-07-26 |',
+    '',
+    '---',
+    '',
+    '## 2026-07-05 · 并行卡 entry 标题',
+    '- 根因：文本零冲突但运行时语义冲突',
+    '### needs_automation: false',
+    '- recurrence_watch: P9',
+    '（同类失败首次；若再现→升级）',
+    '',
+    '---',
+    '',
+  ].join('\n');
+
+  it('parsePatternRegistry 解析出全部 pattern 行，占位/数字/多正确', () => {
+    const rows = parsePatternRegistry(FIXTURE);
+    expect(rows.map((r) => r.id)).toEqual(['P1', 'P3', 'P8', 'P9', 'P14']);
+    expect(rows.find((r) => r.id === 'P3').occurrences).toBe(4);
+    expect(rows.find((r) => r.id === 'P9').layer).toContain('🔴');
+    expect(rows.find((r) => r.id === 'P14').occurrences).toBe(2);
+  });
+
+  it('parsePatternRegistry：无登记表 / 非字符串入参 → 空数组（不崩）', () => {
+    expect(parsePatternRegistry('无表格正文')).toEqual([]);
+    expect(parsePatternRegistry(null)).toEqual([]);
+  });
+
+  it('collectRecurrenceAnchors：只匹配冒号式锚，登记表内等号式不计（防双重计数）', () => {
+    const anchors = collectRecurrenceAnchors(FIXTURE);
+    expect(anchors).toHaveLength(1); // 仅 entry 的 `- recurrence_watch: P9`，登记表 `=P9`/`=P14` 不算
+    expect(anchors[0].patternId).toBe('P9');
+  });
+
+  it('collectRecurrenceAnchors：锚归属到真实 entry 标题（跳过 needs_automation 子标题）', () => {
+    const anchors = collectRecurrenceAnchors(FIXTURE);
+    expect(anchors[0].entryTitle).toBe('2026-07-05 · 并行卡 entry 标题');
+    expect(anchors[0].entryTitle).not.toContain('needs_automation');
+  });
+
+  it('patternWatchlist：registryWatch 收「发作=1 且 🔴」+ 🔵，排除 ✅ 与🟡发作1', () => {
+    const w = patternWatchlist(FIXTURE);
+    const ids = w.registryWatch.map((r) => r.id);
+    expect(ids).toContain('P9');  // 发作1 🔴
+    expect(ids).toContain('P3');  // 🔵 有触发线
+    expect(ids).not.toContain('P1');  // ✅ 已硬拦
+    expect(ids).not.toContain('P8');  // 🟡 发作1（非🔴）不入
+    expect(ids).not.toContain('P14'); // ✅ 主拦 + 发作2，靠锚进 B 段而非高危 A 段
+    expect(w.total).toBe(w.registryWatch.length + w.anchors.length);
+  });
+
+  it('负向注入：新增一条含 recurrence_watch 的假 entry → 被扫出；还原后消失', () => {
+    const injected = FIXTURE + [
+      '',
+      '## 2099-01-01 · 假 entry（负向注入验收）',
+      '- 根因：测试锚可被扫出',
+      '### needs_automation: false',
+      '- recurrence_watch: P99',
+      '',
+    ].join('\n');
+    const before = patternWatchlist(FIXTURE);
+    const after = patternWatchlist(injected);
+    expect(after.anchors.map((a) => a.patternId)).toContain('P99');
+    expect(after.anchors).toHaveLength(before.anchors.length + 1);
+    // 还原（用回原 fixture）→ 假锚消失
+    expect(patternWatchlist(FIXTURE).anchors.map((a) => a.patternId)).not.toContain('P99');
   });
 });
