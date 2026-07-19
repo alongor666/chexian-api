@@ -21,8 +21,15 @@
 | P6 | 并发 sub-agent 写入打断 stash → push（race） | 1 | #644/#645(06-15) | 🟡 等完成通知 + 隔离 worktree（文档 + memory） | 异步 sub-agent 无暂停接口 → 结构性靠"隔离 + 完成再 push"纪律 |
 | P7 | 跨会话重复劳动（已合任务被重复派单） | 多 | #640/b299/b261(06-22)、wave-2 b331 | ✅ stale-scan PR-合并信号(#747) + event-log 认领锁(#748) | 上游机制根治；锁 TTL 据"最后活动"已修(#748) |
 | P8 | Loop v2 偏离：跳认领锁 / 跳对抗闸 | 1 | 2026-06-23 偏离复盘 | 🟡 文档纪律 + post-checkout warn-only 提示 | needs_automation=true；warn-only ≠ 强制，残留靠会话遵从 |
+| P9 | 并行卡改同一 CI workflow 文件：文本零冲突但运行时语义冲突（PATH/解释器/user-site 遮蔽） | 1 | #928×#929(07-05) | 🔴 §3.1 rebase 时重看同文件在途 PR 的运行时交互（文档）+ dispatch 前按 memory `feedback_loop_fanout_concurrent_collision` 查同文件在途 PR（文档） | recurrence_watch=P9；再现→dispatch 前对 `.github/workflows/**` 自动文件交集告警（扩展 push 前 fetch 闸） |
+| P10 | backlog 置终态(DONE/CANCELLED/WONTFIX)后派生归档视图(BACKLOG_ARCHIVE.md)陈旧 → CI governance 红 | 1 | #993(07-08) | 🔴 收尾紧跟 `governance-backlog-curate.mjs --apply` 重渲归档视图（文档）；pre-push harness 是全量 governance 子集、不含派生视图一致闸 | recurrence_watch=P10；再现→`backlog.mjs status` 置终态时自动 curate 折叠，或 pre-push 对齐全量 backlog 视图闸 |
+| P11 | 对 `error.message` 做正则分支，跨脱敏/包装边界后失效（两侧各自正确·组合致死） | 1 | #1015(07-09) | 🟡 本例已由结构化标记 `markDuckDbOom` + `isOutOfMemoryError`（SSOT `duckdb-error-classifier.ts`）根治；**反模式本身无 grep 闸** | recurrence_watch=P11；再现→governance grep `\.message\)?\.test\(` 于 `services/**` |
+| P12 | 新增护栏做成 fail-open（未知枚举值静默回退 / 不一致仅提示不拦截） | 1 | #1021(07-10) | 🔴 §3.4 自审一问「枚举未知值报错还是静默回退？不一致 fail 还是仅提示？」护栏一律 fail-closed（文档） | recurrence_watch=P12；再现→pr-checklist 红线行固化 |
+| P13 | 鉴权/会话语义改动漏盘 E2E 固件账号（CI 注入凭据=一类"存量账号消费方"） | 1 | #1068(07-11) | 🔴 §3.4 自审 `grep tests/e2e -l "auth/login"` 逐个核对新语义下能否直通业务路由（文档） | recurrence_watch=P13；再现→pr-checklist 红线行固化 |
+| P14 | 存量 env 注入/残留撞上新 governance 闸（worktree→主仓，源头生成器持续再生） | 2 | 阶段二#1069(07-11)、#1077(07-12「同类第2次」) | ✅ #1068「自助设密账号禁入 USER_PASSWORDS」governance 闸自动拦；🔴 **源头债**：`rotate/reset-passwords.mjs` 生成器未过滤 `SELF_SERVICE_PASSWORD_ONLY_USERS` → 残留反复再生，卡 3901cd 待落地 | recurrence_watch=P14；needs_automation=true(expires 2026-07-26)；第3处(VPS 侧)再残留→报错附一键修复命令 + 全环境(主仓/worktree/VPS)扫残留 |
 
-> **本表暴露的最高优先债 = P2**（worktree 路径泄漏，发作 3 次仍 🔴）。其余 🟡 项（P5/P6/P8）按触发线在 meta-review 评估升级；✅ 项（P1 主路径 / P4 / P7）只需守住不回退。
+> **本表暴露的最高优先债 = P2**（worktree 路径泄漏，发作 3 次仍 🔴）。其余 🟡 项（P5/P6/P8/P11）按触发线在 meta-review 评估升级；✅ 项（P1 主路径 / P4 / P7）只需守住不回退。
+> **P9-P14（2026-07 首次失败模式补录 · F2）**：均发作 1（P14=2），除 P14 有 ✅ 闸兜底外全靠文档纪律（🔴/🟡），是"再现即升级"的高危候选。每条对应 entry 已加机器可读锚 `recurrence_watch=<pattern-id>`（紧跟 `needs_automation` 行），由 `bun run loop:pattern-watch` 扫「发作=1 且 🔴」+ 全表 `recurrence_watch` 锚 + P3(🔵) 触发线，输出**观察中清单**供 meta-review 必读——机器只保证清单存在且必读，不声称能自动判定两次失败同类（诚实边界：再现仍靠人对照）。
 > **登记表与「待自动化」闭环的关系**：单条 entry 的 `needs_automation` 字段（值 `true` 时由 `loop:automation-due` + governance #703 追期）是"这次该自动化"信号；本表是**跨 entry 的 pattern 聚合视图**，专门捕捉"单条看着已处置、合起来才暴露的反复发作债"（如 P2 每次都写了预防，但跨 3 次才看出预防从未兑现）。
 
 ---
@@ -1920,6 +1927,7 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
   3. 呼应 memory `feedback_loop_fanout_concurrent_collision`：dispatch 并行卡前按主题查同文件在途 PR；本次两卡同改 production-gate.yml，理应串行或合并为一卡。
 
 ### needs_automation: false
+- recurrence_watch: P9
 （同类失败首次；若再现「并行卡改同一 workflow 文件合并后红」则按进化铁律升级为 dispatch 前的自动交集检查——扩展现有 push 前 fetch 闸对 `.github/workflows/**` 的文件交集告警。）
 
 ---
@@ -1946,6 +1954,7 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
   2. 改动涉及 BACKLOG 台账时，push 前须**显式补跑全量 `bun run governance`**（54 项）——pre-push 钩子的 harness 是子集，不等于 CI 门禁。
 
 ### needs_automation: false
+- recurrence_watch: P10
 （同类失败首次。若再现「置终态后 CI 报归档视图陈旧」→ 按进化铁律升级：在 `backlog.mjs status` 置终态时自动调用 curate 折叠，或把 pre-push 钩子对齐到全量 governance 的 backlog 视图一致闸。）
 
 ---
@@ -1958,6 +1967,7 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 - **灰度机制审计要点**：晋级门槛（match ≥ 1000/路由）必须对照**实测流量 × 计数器生命周期**做可达性演算——内存计数器 + 每日 reload + 缓存吸收重复请求 = 25/天上限，1000 永不可达。灰度机制上线时应同步验证"验收条件在当前流量下多久可达"。
 
 ### needs_automation: false
+- recurrence_watch: P11
 （消息正则判定反模式若再现（grep `\.message\)?\s*\)?\.test\(|test\(.*message` 于 services/**）可考虑 governance 闸；首例先登记。）
 
 ---
@@ -1970,6 +1980,7 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 - **预防**：新建任何"约束/闸/开关"时，§3.4 自审补一问——**枚举值输入收到未知值是报错还是静默回退？不一致是 fail 还是仅提示？** 护栏一律 fail-closed：宁可硬失败逼人显式对齐，不做"提示后照过"。与本仓既有共识一致（省份解析 fail-closed、SX 晋级 block 语义）。
 
 ### needs_automation: false
+- recurrence_watch: P12
 （同类失败首次。若再现"新增护栏被评审/事故证实 fail-open" → 升级为 pr-checklist 红线行固化。）
 
 ---
@@ -1994,6 +2005,7 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 - **预防**：改动**认证/权限/会话语义**的 PR，§3.4 自审补一问——`grep tests/e2e -l "auth/login"` 列出所有以密码登录的 E2E 用户，逐个核对新语义下这些登录会话还能否直通业务路由；E2E 固件注入的凭据（USER_PASSWORDS/E2E_*）视同一类"存量账号消费方"盘点，不要只盘生产账号。
 
 ### needs_automation: false
+- recurrence_watch: P13
 （同类失败首次。若再现"鉴权语义改动漏盘 E2E 固件账号" → 升级为 pr-checklist 红线行。）
 
 ---
@@ -2052,6 +2064,7 @@ R4/R5/R9/R10/R11 五次登记同一 harness 未建。根因不是疏忽，而是
 
 ### needs_automation: true
 expires: 2026-07-26
+- recurrence_watch: P14
 （同类第 2 次。已升级动作：本次将残留清理卡片化（c0f97a）；截止日前给该 governance 检查的报错文案附标准修复命令，并在 #1068 系列收尾时全环境（主仓/worktree/VPS）扫一遍残留。）
 
 ---
