@@ -2331,3 +2331,16 @@ expires: 2026-10-18
 （本 PR 已交付 `loop:pattern-watch` 扫描器 + 单测闸，机制到位；"清单必读"的消费约定已写入登记表表尾 + meta-review 流程，无待办自动化项。若后续要把"新失败发生时强制对照清单"从会话纪律升级为确定性触发点，属 meta-review 层 follow-up，另行登记。）
 
 - **返工一轮（评审 P1，2026-07-18）**：外部评审指出初版「配置损坏/显式路径缺失 → 回退内置默认表」是**授权面 fail-open**——若外置文件已删除某部门以撤销授权，文件损坏窗口（截断/非原子写入/权限）会让该部门借内置表复活拿回 `org_user`；且初版单测「坏 JSON → 默认授权」正在用绿 CI 固化这个风险。已按建议收紧：**唯一回退分支** = 未显式设路径 + 默认路径从未下发（ENOENT）→ 内置默认表（零配置兼容不变）；显式设 `FEISHU_DEPARTMENT_ENTITLEMENTS_PATH` 后缺失/不可读、或任何已存在文件损坏 → 抛错，消费方 `resolveDepartmentEntitlement` 既有 catch 转 `unavailable` 拒绝本次登录（不误禁用身份，文件修好即自愈）。单测 12→15 例（显式路径缺失/EACCES/默认路径坏 JSON 三个 fail-closed 分支），消费方新增「加载器抛错 → unavailable 而非放大权限」回归 1 例。示例 JSON/.env.example 同步补「临时文件+原子 rename」运维要求。**教训**：设计回退语义时把「可用性优先」惯性套在了**授权数据**上——授权面的回退方向必须朝更窄收（拒绝服务可自愈，权限放大不可自愈）；仓内 `loadRoleMapping()` 损坏返回空授权正是这个方向，初版声称仿照它却在此处走反了。
+
+---
+
+## 2026-07-19 · F3 默认评审路径入账（loop v3 F3，uid 2026-07-12-claude-829263）
+
+- **背景**：2026-06-29 起 codex 双闸默认关闭，默认 code review 改为 `/code-reviewer` 自审；但质量账本只有历史 `codex_plan`/`codex_done`，默认评审执行与发现均不可见，`loop:quality` 的 codex 命中 409 停止增长却没有新路径的独立趋势。
+- **动作**：① 账本 schema 新增 `reviewer_findings:{P0,P1,P2}`，`reviewerFindings()` 作为合法性与求和的单一解析器，完整零发现（0）与缺失/坏 schema（null）可区分；② `quality-report` 在总览与按域视图把默认 `/code-reviewer` 和 codex 命中分列，旧行缺字段读时按 0，不回写历史；③ `rule-hit-rate` 新增 `default-reviewer` probe，只把完整非负整数 schema 计为一次真实入账；④ `loop-orchestration.md §3` 同步字段语义、诚实边界和可复制 JSON 示例（本次为用户明确推进 F3 的 frozen policy override）。
+- **fresh 自审**：结构闸三项均通过（复用既有 ledger/report/RULES，无第二事实源；共享解析器消除报表/probe 双口径；只扩现有机制不叠新管道）。两轮共发现并修复 `P0=0/P1=3/P2=1`：宽松求和与严格 probe 分叉、最终 CLI 分列文案缺测试、协议示例仍引导旧 schema、注释引用旧实现；第三轮复审通过。诚实边界：Claude 审 Claude 的同模型发现数只用于趋势与有无度量，不与 codex 历史命中作强度比较。
+- **oracle**：定向测试 178→181，`181/181` 全绿；写入本任务 ledger 行前，真实旧账本输出 `/code-reviewer 0`、codex `249+160=409`，probe 为 `dead-candidate`；写入后应变为 `/code-reviewer 4`、codex 保持 409、probe `alive ×1`。`bun run verify:full` 与 governance 61/61 已在实现后通过，收尾账本/复盘追加后再次复验。
+
+### needs_automation: false
+
+（本项自身已把默认评审入账变成可聚合字段 + 可审计 probe，并用首条真实样本闭环；后续若出现连续任务漏写，`default-reviewer` 会回落为命中不增长并由 meta-review 处置。强制“每个任务都必须写字段”超出 F3 的度量补齐范围，不在本 PR 追加第二道治理闸。）

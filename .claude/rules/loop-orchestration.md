@@ -90,15 +90,17 @@ policy: append-only
 
 - **`.claude/workflow/loop-quality-ledger.jsonl`**（append-only，`merge=union`）：每任务收尾 append 一行结构化指标：
   ```json
-  {"uid":"...","round":"R12","ts":"2026-06-21","task":"一句话","domain":["be-sql"],
-   "rounds_to_green":1,"rework_count":0,
-   "codex_plan":{"P0":0,"P1":1,"P2":2},"codex_done":{"P0":0,"P1":0,"P2":1},
+   {"uid":"...","round":"R12","ts":"2026-06-21","task":"一句话","domain":["be-sql"],
+    "rounds_to_green":1,"rework_count":0,
+    "reviewer_findings":{"P0":0,"P1":0,"P2":1},
+    "codex_plan":{"P0":0,"P1":1,"P2":2},"codex_done":{"P0":0,"P1":0,"P2":1},
    "byte_safety_proof":"by-construction","tests_added":6,
    "governance_pass":true,"pr":704,"verdict":"pass"}
   ```
   字段语义见 `dispatch.mjs`/`quality-report.mjs` 注释。`byte_safety_proof ∈ golden-baseline|by-construction|n/a`。
   - **`verifier_refuted` 字段 2026-06-25 起弃用**：闸-2 收敛为 codex CLI 单源、不再跑 evidence-verifier，新行**不再产出**该字段（`quality-report.mjs` 以 `Number(...)||0` 兜底，缺失即计 0，旧行兼容保留）。对抗命中以 `codex_plan`/`codex_done` 为准。
-- **`bun run loop:quality`**（`quality-report.mjs`）聚合 → 北极星：**一次过率**（rounds_to_green=1 且 rework=0）/ 平均转绿轮次 / 平均返工 / codex 命中（plan+done 各级合计）/ governance 通过率，按域 + 按 round 趋势。
+  - **`reviewer_findings` 字段（2026-07-19 · F3）**：默认未启用 codex 时，把 `/code-reviewer` 自审发现按 `{"P0":n,"P1":n,"P2":n}` 入账；显式启用 codex 时照旧写 `codex_plan`/`codex_done`，两类字段可并存但 `quality-report.mjs` **分源聚合、禁止混算**。旧行缺字段读时按 0 兜底，不回写 append-only 历史。诚实边界：默认评审是 Claude 审 Claude 的同模型自评，只用于趋势与「有无执行」度量，不与 codex 历史命中作强度比较。
+- **`bun run loop:quality`**（`quality-report.mjs`）聚合 → 北极星：**一次过率**（rounds_to_green=1 且 rework=0）/ 平均转绿轮次 / 平均返工 / 默认 `/code-reviewer` 命中与 codex 命中分列（codex=plan+done 各级合计）/ governance 通过率，按域 + 按 round 趋势。
 - 与 `pr-evolution.md` 互补：**账本=量化指标，复盘=定性教训**。两者同一收尾步一起写。
 - **E1 失败记账（治茧房1 幸存者偏差·2026-06-27）**：账本原只在「成功收尾步」记账 → 失败/孤儿/放弃任务走不到记账点 → 北极星只算幸存样本、放弃率不可见（实测 58 样本 0 fail/orphaned，一次过率 36.2% 是幸存值）。E1 补齐：
   - **verdict 规范集扩**为 `pass | partial | reverted | abandoned | orphaned | blocked`（`reason` 必附）；既有历史成功变体（实测 5 种顶层 `pass-*` 共 7 行 + `all_fixed`/`mergeable` 同义词）由 `quality-report.normalizeVerdict`（**单一事实源**，`dispatch` import 复用·前缀 `pass-*`/`pass_*` + 同义词白名单归一）**读时归一**到 `pass`+子标记——**不迁移既有 append-only 行**（改写历史行会在 `merge=union` 下产生新旧重复），归一在读时做，「非 pass 纳入分母」口径据归一后判定才稳。

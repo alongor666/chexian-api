@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { foldBacklog, bucketOf, taskDomains, computeFrontier, mergeGate, latestClaims, failureLedgerRows, isInspectMode } from '../dispatch.mjs';
-import { parseLedger, aggregate, normalizeVerdict, parseRevertedPrs, buildRevertGitArgs, collectRevertedPrs, effectiveVerdict, parseUserReworkLog, classifyTopic, hhiOf, overfitFlag, extractPrEvolutionEntryDates, ledgerMaxTs, isEntryLedgerStale } from '../quality-report.mjs';
+import { parseLedger, aggregate, renderQualityReport, reviewerFindings, normalizeVerdict, parseRevertedPrs, buildRevertGitArgs, collectRevertedPrs, effectiveVerdict, parseUserReworkLog, classifyTopic, hhiOf, overfitFlag, extractPrEvolutionEntryDates, ledgerMaxTs, isEntryLedgerStale } from '../quality-report.mjs';
 import { scanEntries, classify, isoAddDays, verifyMechanisms } from '../automation-due.mjs';
 import { scanNotes, classifyStale, scanStale, uidToken, branchMatchesUid } from '../stale-scan.mjs';
 import { RULES, ruleHits, parsePatternRegistry, collectRecurrenceAnchors, patternWatchlist } from '../rule-hit-rate.mjs';
@@ -350,7 +350,7 @@ describe('dispatch.computeFrontier · 跨会话认领锁（P0「跨会话重复�
 
 describe('quality-report.aggregate', () => {
   const rows = [
-    { uid: 'a', round: 'R1', domain: ['be-sql'], rounds_to_green: 1, rework_count: 0, codex_plan: { P0: 0, P1: 1 }, codex_done: { P2: 1 }, verifier_refuted: 0, governance_pass: true, tests_added: 3, verdict: 'pass' },
+    { uid: 'a', round: 'R1', domain: ['be-sql'], rounds_to_green: 1, rework_count: 0, reviewer_findings: { P0: 0, P1: 2, P2: 1 }, codex_plan: { P0: 0, P1: 1 }, codex_done: { P2: 1 }, verifier_refuted: 0, governance_pass: true, tests_added: 3, verdict: 'pass' },
     { uid: 'b', round: 'R1', domain: ['frontend'], rounds_to_green: 3, rework_count: 2, codex_plan: { P0: 1 }, codex_done: {}, verifier_refuted: 1, governance_pass: true, tests_added: 2, verdict: 'pass' },
     { uid: 'c', round: 'R2', domain: ['be-sql'], rounds_to_green: 1, rework_count: 1, governance_pass: false, tests_added: 0, verdict: 'reverted' },
   ];
@@ -362,6 +362,7 @@ describe('quality-report.aggregate', () => {
     expect(a.n).toBe(3);
     expect(a.first_pass_rate).toBe(+(1 / 3).toFixed(3)); // 仅 a 一次过
     expect(a.avg_rounds_to_green).toBe(+((1 + 3 + 1) / 3).toFixed(2));
+    expect(a.reviewer_findings_total).toBe(3);
     expect(a.codex_plan_findings).toBe(2); // 1 + 1
     expect(a.codex_done_findings).toBe(1);
     expect(a.codex_findings_total).toBe(3);
@@ -369,8 +370,24 @@ describe('quality-report.aggregate', () => {
     expect(a.reverted_count).toBe(1);
     expect(a.governance_pass_rate).toBe(+(2 / 3).toFixed(3));
     expect(a.byDomain['be-sql'].n).toBe(2);
+    expect(a.byDomain['be-sql'].reviewer).toBe(3);
+    expect(a.byDomain.frontend.reviewer).toBe(0); // 旧行缺字段读时兜底，不报错也不误计
   });
   it('空账本', () => { expect(aggregate([]).n).toBe(0); });
+  it('F3 最终报告把默认评审与 codex 分列，按域同样不混算', () => {
+    const report = renderQualityReport(aggregate(rows));
+    expect(report).toContain('默认评审命中：/code-reviewer 3');
+    expect(report).toContain('codex 对抗命中：计划 2 + 完成 1 = 3');
+    expect(report).toContain('be-sql: 2 任务 · 默认评审命中 3 · codex 对抗命中 2');
+  });
+  it('F3 reviewer_findings 单一解析：完整零发现可区分于缺失/坏 schema', () => {
+    expect(reviewerFindings({ P0: 0, P1: 0, P2: 0 })).toBe(0);
+    expect(reviewerFindings({ P0: 1, P1: 2, P2: 3 })).toBe(6);
+    expect(reviewerFindings(undefined)).toBeNull();
+    expect(reviewerFindings({ P0: 0, P1: 0 })).toBeNull();
+    expect(reviewerFindings({ P0: 0, P1: -1, P2: 0 })).toBeNull();
+    expect(reviewerFindings({ P0: '0', P1: 0, P2: 0 })).toBeNull();
+  });
 });
 
 // ============ E1 账本记失败（治幸存者偏差·2026-06-27）============
@@ -697,7 +714,7 @@ describe('stale-scan.scanNotes', () => {
 describe('rule-hit-rate.ruleHits（E4 死规则审计·纯函数）', () => {
   const baseCtx = {
     ledger: [
-      { uid: 'a', verdict: 'pass', codex_plan: { P0: 0, P1: 1 }, codex_done: { P0: 0 } },
+      { uid: 'a', verdict: 'pass', reviewer_findings: { P0: 0, P1: 1, P2: 0 }, codex_plan: { P0: 0, P1: 1 }, codex_done: { P0: 0 } },
       { uid: 'b', verdict: 'orphaned' },
     ],
     prEvo: 'needs_automation: true\n合并门 slot holder\n待跨域验证',
@@ -710,6 +727,7 @@ describe('rule-hit-rate.ruleHits（E4 死规则审计·纯函数）', () => {
   it('alive / dead-candidate / untestable 三分类', () => {
     const rs = ruleHits(baseCtx);
     expect(rs).toHaveLength(RULES.length);
+    expect(byId(rs, 'default-reviewer')).toMatchObject({ hits: 1, verdict: 'alive' });
     expect(byId(rs, 'codex-gate1')).toMatchObject({ hits: 1, verdict: 'alive' });
     expect(byId(rs, 'e1-failure-accounting')).toMatchObject({ hits: 1, verdict: 'alive' });
     expect(byId(rs, 'claim-lock')).toMatchObject({ hits: 1, verdict: 'alive' }); // DONE 状态事件不算认领
@@ -735,6 +753,20 @@ describe('rule-hit-rate.ruleHits（E4 死规则审计·纯函数）', () => {
     });
     expect(byId(rs, 'codex-gate1').hits).toBe(1);
     expect(byId(rs, 'codex-gate2').hits).toBe(0);
+  });
+  it('default-reviewer 只计完整非负整数 schema；旧行/占位/坏值不误计', () => {
+    const rs = ruleHits({
+      ...baseCtx,
+      ledger: [
+        { uid: 'ok', reviewer_findings: { P0: 0, P1: 0, P2: 0 } },
+        { uid: 'old' },
+        { uid: 'partial', reviewer_findings: { P0: 0, P1: 0 } },
+        { uid: 'negative', reviewer_findings: { P0: 0, P1: -1, P2: 0 } },
+        { uid: 'string', reviewer_findings: { P0: '0', P1: 0, P2: 0 } },
+        { uid: 'skip', reviewer_findings: { skipped: true } },
+      ],
+    });
+    expect(byId(rs, 'default-reviewer')).toMatchObject({ hits: 1, verdict: 'alive' });
   });
 });
 
