@@ -64,7 +64,7 @@ import {
   RELEASE_BATCHES, getReleaseBatch, batchAllCodes, RELEASE_BATCH_IDS,
 } from '../数据管理/lib/release-batches.mjs';
 import { resolveLaunchdNodeBin } from '../数据管理/lib/launchd-node-bin.mjs';
-import { evaluateLedgerUncommittedBulk, LEDGER_TRACKED_FILES } from './etl-ledger/governance-check.mjs';
+import { collectLedgerDiffFiles, evaluateLedgerUncommittedBulk } from './etl-ledger/governance-check.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(__filename, '../..');
@@ -296,14 +296,7 @@ function runReleaseDaily(batch) {
  */
 function remindLedgerUncommitted() {
   try {
-    const r = spawnSync('git', ['-c', 'core.quotepath=off', 'diff', '--numstat', 'HEAD', '--', ...LEDGER_TRACKED_FILES], {
-      cwd: PROJECT_ROOT, encoding: 'utf8',
-    });
-    if (r.status !== 0 || !r.stdout) return;
-    const files = r.stdout.split('\n').filter(Boolean).map((line) => {
-      const [added, deleted, ...rest] = line.split('\t');
-      return { path: rest.join('\t'), added: Number(added) || 0, deleted: Number(deleted) || 0 };
-    });
+    const files = collectLedgerDiffFiles(PROJECT_ROOT);
     const { level, message } = evaluateLedgerUncommittedBulk({ files });
     log(level === 'ok' ? 'cyan' : 'yellow', `📒 ${message}`);
   } catch { /* 提醒失败不影响发布结果 */ }

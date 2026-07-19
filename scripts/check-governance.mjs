@@ -53,6 +53,7 @@ import { detectPolicyCurrentOverlap } from './lib/parquet-overlap-check.mjs';
 import { runSelfServicePasswordIsolationCheck } from './governance/self-service-password-isolation.mjs';
 import { runOrgUserAllowedRoutesConsistencyCheck } from './governance/org-user-allowed-routes-consistency.mjs';
 import { evaluateLedgerFreshness, runLedgerUncommittedBulkCheck } from './etl-ledger/governance-check.mjs';
+import { listLedgerPaths } from './etl-ledger/record.mjs';
 import { collectValidationDimFileEntries, collectValidationFactFileEntries } from './lib/policy-current-shards.mjs';
 import {
   loadLog, fold, validateLog, displayId, TERMINAL_STATUSES,
@@ -3805,10 +3806,12 @@ except Exception as e:
 
 function checkEtlLedgerFreshness() {
   info('检查 ETL 台账新鲜度（防漏记）...');
-  const ledgerPath = path.join(ROOT_DIR, '数据管理/ledger/etl-ledger.jsonl');
   const statusPath = path.join(ROOT_DIR, '数据管理/data-sources-status.json');
-  const ledgerExists = fs.existsSync(ledgerPath);
-  const ledgerMtimeMs = ledgerExists ? fs.statSync(ledgerPath).mtimeMs : 0;
+  const ledgerPaths = listLedgerPaths();
+  const ledgerExists = ledgerPaths.length > 0;
+  const ledgerMtimeMs = ledgerExists
+    ? Math.max(...ledgerPaths.map((ledgerPath) => fs.statSync(ledgerPath).mtimeMs))
+    : 0;
   const statusExists = fs.existsSync(statusPath);
   const statusMtimeMs = statusExists ? fs.statSync(statusPath).mtimeMs : 0;
   const { level, message } = evaluateLedgerFreshness({ ledgerExists, ledgerMtimeMs, statusExists, statusMtimeMs });

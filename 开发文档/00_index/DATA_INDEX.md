@@ -46,7 +46,7 @@
 | [DATA_FLOW_KNOWLEDGE.md](../../数据管理/knowledge/ai/DATA_FLOW_KNOWLEDGE.md) | 字段在 Excel→Parquet→PolicyFact→预聚合→API→前端 各节点的变换规则、JOIN 关系、关键陷阱 |
 | [PARQUET_SCHEMA_KNOWLEDGE.md](../../数据管理/knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md) | 表结构、字段类型、值域范围 |
 | [车险数据业务规则字典.md](../../数据管理/knowledge/rules/车险数据业务规则字典.md) | 字段业务语义定义 |
-| [etl-ledger.jsonl](../../数据管理/ledger/etl-ledger.jsonl) | ETL 全链路流转台账**真相源**（append-only，入库）：源→转换→校验→VPS→上线→健康→前端各环节的数据量/时间段/状态/断点。人读视图 `数据管理/ledger/数据流转台账.md` **已 gitignored**（每轮全量重渲、churn 大），按需生成：`node scripts/etl-ledger/render.mjs`；分析 `bun run ledger:analyze`。生成器 `scripts/etl-ledger/`，设计 `docs/plans/2026-06-27-etl-ledger-design.md` |
+| [etl-ledger.jsonl](../../数据管理/ledger/etl-ledger.jsonl) + [`events/`](../../数据管理/ledger/events/) | ETL 全链路流转台账**真相源**：旧文件封存历史，新事件按 `YYYY-MM.jsonl` 月度 append-only 入库；记录源→转换→校验→VPS→上线→健康→前端的数据量、时间段、状态与断点。人读视图 `数据管理/ledger/数据流转台账.md` 已 gitignored，按需运行 `node scripts/etl-ledger/render.mjs`；分析 `bun run ledger:analyze`。生成器 `scripts/etl-ledger/` |
 
 ---
 

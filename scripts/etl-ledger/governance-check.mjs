@@ -4,8 +4,8 @@
  *
  * 判据用「文件 mtime 对比」而非「事件 ts」：
  *   回填事件的 ts 是历史 commit 时间（最新仅到回填那天），用事件 ts 会误报；
- *   而 etl-ledger.jsonl 的文件 mtime 是「最近一次记账」的真实时刻。
- *   真实 ETL 会同时更新 data-sources-status.json 与 etl-ledger.jsonl 两个文件 mtime，
+ *   而最新台账分片的文件 mtime 是「最近一次记账」的真实时刻。
+ *   真实 ETL 会同时更新 data-sources-status.json 与当月 JSONL 两个文件 mtime，
  *   只有埋点失效（写了状态却没写台账）才会让 data-sources-status 显著新于台账 → 报警。
  *
  * B314 契约/状态拆分后（2026-07）：mtime 判据的对比对象由 data-sources.json 换成
@@ -21,6 +21,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * @param {object} p
@@ -38,7 +40,7 @@ export function evaluateLedgerFreshness({ ledgerExists, ledgerMtimeMs, statusExi
   if (!ledgerExists && statusExists) {
     return {
       level: 'warn',
-      message: 'ETL 台账不存在（数据管理/ledger/etl-ledger.jsonl），但 data-sources-status.json 已存在——疑似漏记或台账被删',
+      message: 'ETL 台账不存在（封存历史与月度分片均缺失），但 data-sources-status.json 已存在——疑似漏记或台账被删',
     };
   }
   if (ledgerExists && !statusExists) {
@@ -67,6 +69,7 @@ export function evaluateLedgerFreshness({ ledgerExists, ledgerMtimeMs, statusExi
  */
 export const LEDGER_TRACKED_FILES = [
   '数据管理/ledger/etl-ledger.jsonl',
+  '数据管理/ledger/events',
   '数据管理/knowledge/QUICK_REFERENCE.md',
 ];
 
@@ -94,11 +97,41 @@ export function evaluateLedgerUncommittedBulk({ files, thresholdLines = 300 }) {
   return { level: 'ok', totalLines, message: `台账未提交 diff ${totalLines} 行（阈值 ${thresholdLines} 内）` };
 }
 
+function parseNumstat(out) {
+  return out.split('\n').filter(Boolean).map((line) => {
+    const [added, deleted, ...rest] = line.split('\t');
+    return { path: rest.join('\t'), added: Number(added) || 0, deleted: Number(deleted) || 0 };
+  });
+}
+
+/**
+ * 收集已跟踪 diff，并把每月首次生成的 untracked JSONL 计入体量。
+ * 仅靠 git diff 会漏掉新月份的首个分片，导致提醒整月失明。
+ */
+export function collectLedgerDiffFiles(rootDir, gitEnv = process.env) {
+  const trackedOut = execFileSync(
+    'git', ['-c', 'core.quotepath=off', 'diff', '--numstat', 'HEAD', '--', ...LEDGER_TRACKED_FILES],
+    { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: gitEnv },
+  );
+  const files = parseNumstat(trackedOut);
+  const seen = new Set(files.map((file) => file.path));
+  const untrackedOut = execFileSync(
+    'git', ['-c', 'core.quotepath=off', 'ls-files', '--others', '--exclude-standard', '--', '数据管理/ledger/events'],
+    { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: gitEnv },
+  );
+  for (const relativePath of untrackedOut.split('\n').filter((p) => /^数据管理\/ledger\/events\/\d{4}-\d{2}\.jsonl$/.test(p))) {
+    if (seen.has(relativePath)) continue;
+    const added = readFileSync(join(rootDir, relativePath), 'utf8').split('\n').filter(Boolean).length;
+    files.push({ path: relativePath, added, deleted: 0 });
+  }
+  return files;
+}
+
 /**
  * governance 检查主体「台账未提交体量」（2419ed）——实现在本模块，
  * check-governance.mjs 只注册（H5 单体棘轮 4000 行上限，新检查不进单体）。
  *
- * --numstat 相对 HEAD（含已暂存+未暂存）；CI 工作区干净天然 0 行不误报。
+ * --numstat 相对 HEAD（含已暂存+未暂存）+ 月度首个 untracked JSONL；CI 工作区干净天然 0 行不误报。
  * core.quotepath=off：中文路径原样输出，避免 warn 明细出现八进制转义。
  *
  * @param {object} p
@@ -110,24 +143,17 @@ export function evaluateLedgerUncommittedBulk({ files, thresholdLines = 300 }) {
  */
 export function runLedgerUncommittedBulkCheck({ rootDir, info, success, warning }) {
   info('检查台账文件未提交体量（2419ed 防累积撞 PR 体量门禁）...');
-  let out;
   try {
-    out = execFileSync('git', ['-c', 'core.quotepath=off', 'diff', '--numstat', 'HEAD', '--', ...LEDGER_TRACKED_FILES], {
-      cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-    });
+    const files = collectLedgerDiffFiles(rootDir);
+    const { level, message } = evaluateLedgerUncommittedBulk({ files });
+    if (level === 'ok') {
+      success(message);
+    } else {
+      warning(message);
+    }
+    return true;
   } catch {
     warning('git diff 不可用（无 git 环境），跳过台账体量检查');
     return true;
   }
-  const files = out.split('\n').filter(Boolean).map((line) => {
-    const [added, deleted, ...rest] = line.split('\t');
-    return { path: rest.join('\t'), added: Number(added) || 0, deleted: Number(deleted) || 0 };
-  });
-  const { level, message } = evaluateLedgerUncommittedBulk({ files });
-  if (level === 'ok') {
-    success(message);
-  } else {
-    warning(message);
-  }
-  return true;
 }

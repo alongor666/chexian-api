@@ -24,6 +24,7 @@ BACKLOG_LOG.jsonl merge=union
 # 要的"时由会话 append 一行）。与质量账本同为多会话追加型 → merge=union。见 loop-orchestration.md §3
 # 「E2 注入外部真相」。2026-07-15 首次落地建档时补登（此前 sink 从未存在，故 gitattributes 亦缺此行）。
 .claude/workflow/user-rework-log.jsonl merge=union
-# ETL 流转台账：每行一个 JSON 事件、按内容唯一 → merge=union 自动并入多分支新增（同 BACKLOG_LOG.jsonl）。
-# 派生视图 数据管理/ledger/数据流转台账.md 全量重渲染、非纯追加 → 不设 union，冲突时重跑 render.mjs。
+# ETL 流转台账：旧单文件封存；新事件按月写入 events/YYYY-MM.jsonl。
+# 每个分片均为 append-only JSONL，merge=union 自动并入多分支新增；派生 Markdown 不设 union。
 数据管理/ledger/etl-ledger.jsonl merge=union
+数据管理/ledger/events/*.jsonl merge=union

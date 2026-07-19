@@ -1,7 +1,7 @@
 /**
  * ETL 全链路台账分析器 — 每次发布的环节耗时 / 断点 / 跨次趋势。
  *
- * 数据源：数据管理/ledger/etl-ledger.jsonl（recordEvent 写入，append-only）。
+ * 数据源：封存历史 etl-ledger.jsonl + events/YYYY-MM.jsonl 月度分片。
  * 依赖事件：
  *   - stage='run'      step='start'|'end'     run 级起止（trigger=watcher|ai|manual，end 带 duration_ms/终态/断点 note）
  *   - stage='pipeline' step=<环节 label>       每环节耗时与终态（sync-and-reload runCmd 统一打点，成功+失败都记）
@@ -15,11 +15,10 @@
  * 设计原则（2026-07-11 用户要求）：每一次跑（自动 watcher / AI 驱动 / 人工）都必须留痕，
  * 耗时与断点数据是后续「砍不必要环节 / 单点优化 / 全局优化」决策的输入——没有度量就没有优化。
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { LEDGER_PATH } from './record.mjs';
+import { loadAllEvents, loadEvents } from './render.mjs';
 
 function parseArgs(argv) {
-  const opts = { days: 14, run: null, ledgerPath: LEDGER_PATH };
+  const opts = { days: 14, run: null, ledgerPath: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--days') opts.days = parseInt(argv[++i], 10) || 14;
@@ -33,14 +32,10 @@ function parseArgs(argv) {
   return opts;
 }
 
-/** 读台账并按 run_id 分组（坏行跳过不中断） */
-export function loadRuns(ledgerPath, { sinceMs = 0 } = {}) {
-  if (!existsSync(ledgerPath)) return new Map();
+/** 把事件按 run_id 分组。 */
+export function groupRuns(events, { sinceMs = 0 } = {}) {
   const runs = new Map(); // run_id → events[]
-  for (const line of readFileSync(ledgerPath, 'utf8').split('\n')) {
-    if (!line.trim()) continue;
-    let ev;
-    try { ev = JSON.parse(line); } catch { continue; }
+  for (const ev of events) {
     const t = Date.parse(ev.ts);
     if (Number.isFinite(sinceMs) && sinceMs > 0 && (!Number.isFinite(t) || t < sinceMs)) continue;
     const id = ev.run_id || 'adhoc';
@@ -48,6 +43,16 @@ export function loadRuns(ledgerPath, { sinceMs = 0 } = {}) {
     runs.get(id).push(ev);
   }
   return runs;
+}
+
+/** 读单个台账文件并按 run_id 分组（--ledger 兼容入口）。 */
+export function loadRuns(ledgerPath, options) {
+  return groupRuns(loadEvents(ledgerPath), options);
+}
+
+/** 聚合封存历史与月度分片并按 run_id 分组。 */
+export function loadAllRuns(options) {
+  return groupRuns(loadAllEvents(), options);
 }
 
 function fmtMs(ms) {
@@ -122,7 +127,9 @@ function printRunTimeline(summary) {
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   const sinceMs = opts.run ? 0 : Date.now() - opts.days * 86_400_000;
-  const runs = loadRuns(opts.ledgerPath, { sinceMs });
+  const runs = opts.ledgerPath
+    ? loadRuns(opts.ledgerPath, { sinceMs })
+    : loadAllRuns({ sinceMs });
 
   if (opts.run) {
     const events = runs.get(opts.run);

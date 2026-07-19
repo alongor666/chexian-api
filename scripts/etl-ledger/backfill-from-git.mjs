@@ -10,11 +10,11 @@
  * row_count 等状态字段（改由 gitignored 的 data-sources-status.json 承载，台账由
  * daily.mjs 直接埋点），本工具只服务拆分前历史段的回填，勿对新历史使用。
  */
-import { appendFileSync, existsSync, readFileSync, realpathSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LEDGER_PATH } from './record.mjs';
+import { listLedgerPaths, monthlyLedgerPath } from './record.mjs';
 
 const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const REL = '数据管理/data-sources.json';
@@ -56,12 +56,28 @@ export function dedupeByDomainChange(events) {
   return out;
 }
 
+/** 封存历史或任一月度分片已含回填事件时视为完成。 */
+export function hasBackfilledEvents(ledgerPaths = listLedgerPaths()) {
+  return ledgerPaths.some((ledgerPath) => readFileSync(ledgerPath, 'utf8').includes('"backfilled":true'));
+}
+
+/**
+ * 按事件时间写入月度分片。回填是维护命令，写失败应显式抛出，不能走 recordEvent 的吞错语义。
+ * @returns {string[]} 实际写入的分片路径（去重、稳定顺序）
+ */
+export function appendBackfillEvents(events, { pathForEvent = (event) => monthlyLedgerPath(event.ts) } = {}) {
+  const targets = new Set();
+  for (const event of events) {
+    const targetPath = pathForEvent(event);
+    mkdirSync(dirname(targetPath), { recursive: true });
+    appendFileSync(targetPath, JSON.stringify(event) + '\n', 'utf8');
+    targets.add(targetPath);
+  }
+  return [...targets].sort();
+}
+
 function main() {
-  if (
-    existsSync(LEDGER_PATH) &&
-    readFileSync(LEDGER_PATH, 'utf8').includes('"backfilled":true') &&
-    !process.env.FORCE
-  ) {
+  if (hasBackfilledEvents() && !process.env.FORCE) {
     console.log('[backfill] 台账已含回填事件，跳过（设 FORCE=1 强制重跑）。');
     return;
   }
@@ -83,8 +99,8 @@ function main() {
     }
   }
   const deduped = dedupeByDomainChange(all);
-  for (const ev of deduped) appendFileSync(LEDGER_PATH, JSON.stringify(ev) + '\n', 'utf8');
-  console.log(`[backfill] 回填 ${deduped.length} 条事件（扫描 ${log.length} 次提交）→ ${LEDGER_PATH}`);
+  const targets = appendBackfillEvents(deduped);
+  console.log(`[backfill] 回填 ${deduped.length} 条事件（扫描 ${log.length} 次提交）→ ${targets.join(', ')}`);
 }
 
 // 仅在直接运行时执行（被 import 测试时不触发）；realpathSync 两边归一化，兼容中文路径 + 相对调用

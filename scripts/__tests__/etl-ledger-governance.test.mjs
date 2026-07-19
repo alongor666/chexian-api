@@ -1,7 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateLedgerFreshness, evaluateLedgerUncommittedBulk, LEDGER_TRACKED_FILES } from '../etl-ledger/governance-check.mjs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  collectLedgerDiffFiles,
+  evaluateLedgerFreshness,
+  evaluateLedgerUncommittedBulk,
+  LEDGER_TRACKED_FILES,
+} from '../etl-ledger/governance-check.mjs';
 
 const T = (iso) => Date.parse(iso);
+const isolatedGitEnv = () => {
+  const env = { ...process.env };
+  for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_CONFIG']) delete env[key];
+  env.GIT_CONFIG_GLOBAL = '/dev/null';
+  env.GIT_CONFIG_SYSTEM = '/dev/null';
+  return env;
+};
 const base = {
   ledgerExists: true,
   ledgerMtimeMs: T('2026-06-27T10:00:00Z'),
@@ -51,6 +67,7 @@ describe('evaluateLedgerUncommittedBulk（2419ed 台账未提交体量提醒）'
   it('白名单只含拆分后仍入库的台账文件', () => {
     expect(LEDGER_TRACKED_FILES).toEqual([
       '数据管理/ledger/etl-ledger.jsonl',
+      '数据管理/ledger/events',
       '数据管理/knowledge/QUICK_REFERENCE.md',
     ]);
   });
@@ -63,7 +80,7 @@ describe('evaluateLedgerUncommittedBulk（2419ed 台账未提交体量提醒）'
 
   it('累积在阈值内 → ok', () => {
     const r = evaluateLedgerUncommittedBulk({
-      files: [{ path: '数据管理/ledger/etl-ledger.jsonl', added: 120, deleted: 0 }],
+      files: [{ path: '数据管理/ledger/events/2026-07.jsonl', added: 120, deleted: 0 }],
     });
     expect(r.level).toBe('ok');
     expect(r.totalLines).toBe(120);
@@ -72,7 +89,7 @@ describe('evaluateLedgerUncommittedBulk（2419ed 台账未提交体量提醒）'
   it('累积超阈值 → warn，消息含体量与可执行提示', () => {
     const r = evaluateLedgerUncommittedBulk({
       files: [
-        { path: '数据管理/ledger/etl-ledger.jsonl', added: 400, deleted: 0 },
+        { path: '数据管理/ledger/events/2026-07.jsonl', added: 400, deleted: 0 },
         { path: '数据管理/knowledge/QUICK_REFERENCE.md', added: 4, deleted: 4 },
       ],
     });
@@ -84,9 +101,30 @@ describe('evaluateLedgerUncommittedBulk（2419ed 台账未提交体量提醒）'
 
   it('阈值可配置', () => {
     const r = evaluateLedgerUncommittedBulk({
-      files: [{ path: '数据管理/ledger/etl-ledger.jsonl', added: 100, deleted: 0 }],
+      files: [{ path: '数据管理/ledger/events/2026-07.jsonl', added: 100, deleted: 0 }],
       thresholdLines: 50,
     });
     expect(r.level).toBe('warn');
+  });
+
+  it('每月首次生成的 untracked JSONL 也计入体量', () => {
+    const root = mkdtempSync(join(tmpdir(), 'etl-ledger-diff-'));
+    const env = isolatedGitEnv();
+    try {
+      mkdirSync(join(root, '数据管理/ledger/events'), { recursive: true });
+      execFileSync('git', ['init', '-q'], { cwd: root, env });
+      writeFileSync(join(root, 'seed.txt'), 'seed\n');
+      execFileSync('git', ['add', 'seed.txt'], { cwd: root, env });
+      execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'seed'], {
+        cwd: root,
+        env,
+      });
+      const monthly = '数据管理/ledger/events/2026-07.jsonl';
+      writeFileSync(join(root, monthly), '{"a":1}\n{"a":2}\n');
+
+      expect(collectLedgerDiffFiles(root, env)).toContainEqual({ path: monthly, added: 2, deleted: 0 });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

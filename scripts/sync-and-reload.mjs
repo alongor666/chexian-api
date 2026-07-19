@@ -49,8 +49,8 @@ import { spawn } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { recordEvent, LEDGER_PATH } from './etl-ledger/record.mjs';
-import { writeReport, loadEvents } from './etl-ledger/render.mjs';
+import { recordEvent, LEDGER_ROOT } from './etl-ledger/record.mjs';
+import { writeAllReport, loadAllEvents } from './etl-ledger/render.mjs';
 // 多省 B2 分省编排：遍历注册的非 SC 省逐域生成 daily.mjs 步骤（省份枚举单一来源 source-file-routing）
 import { buildBranchEtlSteps, shouldEnableValidationBranchSync, BRANCH_PUBLISH_DOMAINS } from '../数据管理/lib/branch-publish.mjs';
 // 双批发布 SSOT（早批 01+05 / 晚批 02+03+04）：批次 → ETL 域 / code 子集 / 报告·企微编排
@@ -482,7 +482,7 @@ async function main() {
   if (!opts.dryRun) {
     try {
       const runId = process.env.ETL_RUN_ID;
-      const warn = loadEvents(LEDGER_PATH)
+      const warn = loadAllEvents()
         .filter((e) => e.run_id === runId && e.step === 'claims_freshness_patrol' && e.status === 'warning')
         .at(-1);
       if (warn) claimsFreshnessWarning = warn.error || '赔案报案截止日落后阈值';
@@ -878,8 +878,8 @@ async function main() {
 
   // 全流程结束：从台账 JSONL 重渲染中文报告（数据流转台账.md）
   try {
-    const mdPath = join(dirname(LEDGER_PATH), '数据流转台账.md');
-    writeReport(LEDGER_PATH, mdPath);
+    const mdPath = join(LEDGER_ROOT, '数据流转台账.md');
+    writeAllReport(mdPath);
     log('green', `  📊 数据流转台账已刷新 → ${mdPath}`);
   } catch (e) {
     log('yellow', `  ⚠ 台账报告刷新失败（不阻断）：${e.message}`);
