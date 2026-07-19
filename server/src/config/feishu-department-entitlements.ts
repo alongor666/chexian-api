@@ -42,9 +42,10 @@ export function selectMinimalPrivilegeEntitlement(
 /**
  * 内置默认部门授权表（零配置兜底）。
  *
- * 这是当**外置配置文件缺失/损坏时**的回退值，等同历史硬编码行为——保证不下发配置文件的
- * 部署（如现网）行为逐项不变。运维如需「新增授权部门零代码」，改走外置文件
- * `server/data/feishu_department_entitlements.json`（见 `loadFeishuDepartmentEntitlements`），
+ * 仅当**未显式设路径且默认路径文件从未下发（ENOENT）**时回退到本表，等同历史硬编码行为——
+ * 保证不下发配置文件的部署（如现网）行为逐项不变。文件存在但损坏时**不回退**（fail-closed，
+ * 详见 `loadFeishuDepartmentEntitlements`——避免已撤销授权借坏文件复活）。运维如需
+ * 「新增授权部门零代码」，改走外置文件 `server/data/feishu_department_entitlements.json`，
  * 文件一旦存在即**整体接管**本默认表（非合并），种子模板见 `.example` 同名文件。
  */
 export const DEFAULT_FEISHU_DEPARTMENT_ENTITLEMENTS: readonly FeishuDepartmentEntitlement[] = [{
@@ -178,32 +179,40 @@ export function validateDepartmentEntitlements(raw: unknown): FeishuDepartmentEn
 }
 
 /**
- * 加载部门授权（外置配置文件优先，缺文件回退内置默认表）。
+ * 加载部门授权（外置配置文件优先；回退语义按「授权面 fail-closed」收紧）。
  *
- * - 文件不存在（ENOENT）：回退 `DEFAULT_FEISHU_DEPARTMENT_ENTITLEMENTS`——保证零配置部署行为不变。
- * - 文件存在但 JSON 解析失败：回退默认表 + 中文告警——避免一次坏下发就把现网合法授权全部清空。
- * - 文件存在且解析成功：走 `validateDepartmentEntitlements` 清洗，**整体接管**默认表（非合并）；
- *   即便清洗后为空数组也按配置为准（运维显式提供文件 = 显式意图），fail-closed 不再回退默认。
+ * - **未显式设路径 + 默认路径文件不存在（ENOENT）**：回退 `DEFAULT_FEISHU_DEPARTMENT_ENTITLEMENTS`
+ *   ——这是唯一的回退分支，保证从未下发配置的零配置部署行为与历史硬编码逐项一致。
+ * - **显式设了 FEISHU_DEPARTMENT_ENTITLEMENTS_PATH 但缺失/不可读**：抛错（fail-closed）。
+ *   运维显式指定路径 = 显式声明外置配置为唯一授权源，缺失即异常，不得静默退回内置表。
+ * - **文件存在但读取失败 / JSON 解析失败**：抛错（fail-closed）。若外置文件曾删除某部门以撤销
+ *   授权，文件损坏时退回内置表会让已撤销授权复活（fail-open 回退面）——宁可让本次登录走
+ *   `unavailable` 拒绝，也不放大权限。调用方（feishu.ts）catch 后返回 unavailable，
+ *   不误禁用身份，文件修好即自愈。
+ * - **文件存在且解析成功**：走 `validateDepartmentEntitlements` 清洗，**整体接管**默认表（非合并）；
+ *   即便清洗后为空数组也按配置为准（运维显式提供文件 = 显式意图），不再回退默认。
  *
  * 每次调用实时读盘（与角色映射文件 loadRoleMapping 一致），便于运维改文件后无需重启即生效。
+ * 生产更新文件建议「临时文件写入 + 校验 + 原子 rename」，避免半写状态窗口。
  * 配置根结构：`{ "entitlements": [ ... ] }`。
  */
 export async function loadFeishuDepartmentEntitlements(): Promise<readonly FeishuDepartmentEntitlement[]> {
+  const explicitPath = Boolean(process.env.FEISHU_DEPARTMENT_ENTITLEMENTS_PATH);
   const filePath = getFeishuDepartmentEntitlementsPath();
   let raw: string;
   try {
     raw = await fs.readFile(filePath, 'utf8');
   } catch (error: any) {
-    if (error?.code !== 'ENOENT') {
-      console.warn(`[FeishuDeptEntitlements] 配置读取失败（${filePath}）：${error?.message}，回退内置默认表`);
+    if (!explicitPath && error?.code === 'ENOENT') {
+      // 零配置部署：默认路径从未下发文件 → 回退内置默认表（行为与历史硬编码一致）
+      return DEFAULT_FEISHU_DEPARTMENT_ENTITLEMENTS;
     }
-    return DEFAULT_FEISHU_DEPARTMENT_ENTITLEMENTS;
+    throw new Error(`飞书部门授权配置读取失败（${filePath}）：${error?.message ?? String(error)}`);
   }
   try {
     const root = JSON.parse(raw);
     return validateDepartmentEntitlements(root?.entitlements);
   } catch (error: any) {
-    console.warn(`[FeishuDeptEntitlements] 配置 JSON 解析失败（${filePath}）：${error?.message}，回退内置默认表`);
-    return DEFAULT_FEISHU_DEPARTMENT_ENTITLEMENTS;
+    throw new Error(`飞书部门授权配置 JSON 解析失败（${filePath}）：${error?.message ?? String(error)}`);
   }
 }

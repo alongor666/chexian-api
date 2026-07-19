@@ -47,11 +47,25 @@ describe('内置默认表不变量（回归底线）', () => {
   });
 });
 
-describe('loadFeishuDepartmentEntitlements — 加载/回退三路径', () => {
-  it('文件缺失（ENOENT）→ 回退内置默认表（零配置行为不变）', async () => {
-    process.env[ENV_KEY] = path.join(tmpDir, 'does-not-exist.json');
+describe('loadFeishuDepartmentEntitlements — 加载/回退/fail-closed', () => {
+  it('未显式设路径 + 默认路径缺文件（ENOENT）→ 回退内置默认表（零配置行为不变）', async () => {
+    delete process.env[ENV_KEY];
+    const enoent = Object.assign(new Error('no such file'), { code: 'ENOENT' });
+    vi.spyOn(fs, 'readFile').mockRejectedValueOnce(enoent);
     const loaded = await loadFeishuDepartmentEntitlements();
     expect(loaded).toEqual(DEFAULT_FEISHU_DEPARTMENT_ENTITLEMENTS);
+  });
+
+  it('显式设 FEISHU_DEPARTMENT_ENTITLEMENTS_PATH 但文件缺失 → 抛错（fail-closed，不退内置表）', async () => {
+    process.env[ENV_KEY] = path.join(tmpDir, 'does-not-exist.json');
+    await expect(loadFeishuDepartmentEntitlements()).rejects.toThrow('配置读取失败');
+  });
+
+  it('未显式设路径但默认路径读取失败（非 ENOENT，如权限）→ 抛错（fail-closed）', async () => {
+    delete process.env[ENV_KEY];
+    const eacces = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    vi.spyOn(fs, 'readFile').mockRejectedValueOnce(eacces);
+    await expect(loadFeishuDepartmentEntitlements()).rejects.toThrow('配置读取失败');
   });
 
   it('文件合法存在 → 整体接管默认表（非合并）', async () => {
@@ -69,12 +83,15 @@ describe('loadFeishuDepartmentEntitlements — 加载/回退三路径', () => {
     expect(loaded.some(e => e.organization === '运城')).toBe(false);
   });
 
-  it('JSON 解析失败 → 回退默认表 + 中文告警', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('文件存在但 JSON 损坏 → 抛错（fail-closed，已撤销授权不得借坏文件复活）', async () => {
     process.env[ENV_KEY] = await writeConfig('broken.json', '{ this is not json ]');
-    const loaded = await loadFeishuDepartmentEntitlements();
-    expect(loaded).toEqual(DEFAULT_FEISHU_DEPARTMENT_ENTITLEMENTS);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('JSON 解析失败'));
+    await expect(loadFeishuDepartmentEntitlements()).rejects.toThrow('JSON 解析失败');
+  });
+
+  it('默认路径文件存在但 JSON 损坏（未显式设路径）→ 同样抛错（fail-closed）', async () => {
+    delete process.env[ENV_KEY];
+    vi.spyOn(fs, 'readFile').mockResolvedValueOnce('{ truncated');
+    await expect(loadFeishuDepartmentEntitlements()).rejects.toThrow('JSON 解析失败');
   });
 
   it('文件存在但 entitlements 全非法 → 返回空数组（显式配置 fail-closed，不回退默认）', async () => {

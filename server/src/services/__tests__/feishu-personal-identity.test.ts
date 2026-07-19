@@ -41,6 +41,19 @@ describe('飞书部门个人账号授权', () => {
     await expect(feishuService.resolveDepartmentEntitlement('u1')).resolves.toEqual({ status: 'not_member' });
     expect(appGet).not.toHaveBeenCalled();
   });
+
+  it('部门授权配置损坏（加载器抛错）→ unavailable 拒绝本次，不退内置表放大权限（fail-closed）', async () => {
+    // 显式设路径 + 文件缺失 → loadFeishuDepartmentEntitlements 抛错 → 消费方 catch 转 unavailable
+    process.env.FEISHU_DEPARTMENT_ENTITLEMENTS_PATH = '/missing/dept-entitlements.json';
+    try {
+      appGet.mockResolvedValue({ code: 0, data: { user: { department_ids: ['od-395bce9db9d4acccae3e6da8d25cb672'] } } });
+      await expect(feishuService.resolveDepartmentEntitlement('u1')).resolves.toEqual({
+        status: 'unavailable', reason: expect.stringContaining('配置读取失败'),
+      });
+    } finally {
+      delete process.env.FEISHU_DEPARTMENT_ENTITLEMENTS_PATH;
+    }
+  });
 });
 
 describe('飞书部门个人账号授权：多部门命中最小权限确定性选择（2026-07-14-claude-8ba910）', () => {
