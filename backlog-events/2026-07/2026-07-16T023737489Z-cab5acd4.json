@@ -1,0 +1,1 @@
+{"uid":"2026-07-15-user-e04971","kind":"note","ts":"2026-07-16","actor":"@claude","text":"执行中发现既有缺口：generate_dim_tables.py build_sx_salesman_from_parquet 的 glob '*_签单清单_*.parquet' 匹配不到 daily.mjs premium 产物 '每日数据_*.parquet'，SX 业务员维度当前只从 2021-2025.5 历史段派生，2025-06+ 新业务员缺席（team JOIN 落未分配）。非本次拆分引入，随 sales_team 字段正式接入一并修。","at":"2026-07-16T02:37:37.489Z","eid":"cab5acd4"}

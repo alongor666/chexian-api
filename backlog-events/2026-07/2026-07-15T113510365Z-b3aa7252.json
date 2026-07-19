@@ -1,0 +1,1 @@
+{"uid":"2026-07-14-claude-8ba910","kind":"status","ts":"2026-07-15","actor":"@claude","status":"DONE","evidence":"PR #1102 已合并（merge commit 27b26aeb，2026-07-14T07:57Z）：selectMinimalPrivilegeEntitlement 确定性最小选择+多命中告警，4 测试用例，CI 双流水线绿","at":"2026-07-15T11:35:10.365Z","eid":"b3aa7252"}
