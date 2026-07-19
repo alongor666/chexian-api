@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadEvents, renderLedger } from '../etl-ledger/render.mjs';
+import { loadAllEvents, loadEvents, renderLedger } from '../etl-ledger/render.mjs';
 
 const EVENTS = [
   { ts: '2026-06-26T10:00:00+08:00', run_id: 'rA', stage: 'etl', domain: 'premium', status: 'success', row_count: 100, date_range: '2021-01-01~2026-05-15' },
@@ -45,5 +45,19 @@ describe('loadEvents', () => {
 
   it('文件不存在返回空数组', () => {
     expect(loadEvents('/nonexistent-xyz/l.jsonl')).toEqual([]);
+  });
+
+  it('聚合封存历史与全部月度分片', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'etl-render-all-'));
+    const legacyPath = join(dir, 'etl-ledger.jsonl');
+    const eventsDir = join(dir, 'events');
+    mkdirSync(eventsDir);
+    writeFileSync(legacyPath, '{"run_id":"legacy"}\n');
+    writeFileSync(join(eventsDir, '2026-07.jsonl'), '{"run_id":"july"}\n');
+    writeFileSync(join(eventsDir, '2026-08.jsonl'), '{"run_id":"august"}\n');
+
+    expect(loadAllEvents({ legacyPath, eventsDir }).map((e) => e.run_id)).toEqual([
+      'legacy', 'july', 'august',
+    ]);
   });
 });

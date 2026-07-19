@@ -140,7 +140,7 @@ node run.mjs transform  # 仅转换Parquet
 |------|------|----------|
 | [AI Schema知识](knowledge/ai/PARQUET_SCHEMA_KNOWLEDGE.md) | NL2SQL字段映射 | AI SQL生成 |
 | [业务规则字典](knowledge/rules/车险数据业务规则字典.md) | 完整字段定义 | 开发参考 |
-| [快速参考](knowledge/QUICK_REFERENCE.md) | 常用查询 | 日常分析 |
+| [快速参考](knowledge/QUICK_REFERENCE.md) | 自动刷新规模快照与权威入口 | 日常分析 |
 | [知识索引](knowledge/INDEX.md) | 全量索引 | 深度开发 |
 
 ## 数据流水线说明

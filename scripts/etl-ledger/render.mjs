@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LEDGER_PATH } from './record.mjs';
+import { listLedgerPaths } from './record.mjs';
 
 const DEFAULT_MD_PATH = join(dirname(fileURLToPath(import.meta.url)), '../..', '数据管理/ledger/数据流转台账.md');
 
@@ -46,6 +46,11 @@ export function loadEvents(ledgerPath) {
       }
     })
     .filter(Boolean);
+}
+
+/** 聚合封存历史与全部月度分片；可注入路径用于测试。 */
+export function loadAllEvents(options) {
+  return listLedgerPaths(options).flatMap((ledgerPath) => loadEvents(ledgerPath));
 }
 
 function renderBreakpoints(events) {
@@ -120,8 +125,16 @@ export function writeReport(ledgerPath, mdPath) {
   return md;
 }
 
+/** 从封存历史 + 月度分片重渲染报告。 */
+export function writeAllReport(mdPath, options) {
+  const md = renderLedger(loadAllEvents(options));
+  mkdirSync(dirname(mdPath), { recursive: true });
+  writeFileSync(mdPath, md, 'utf8');
+  return md;
+}
+
 // CLI：直接运行时从默认台账重渲染报告；realpathSync 两边归一化，兼容中文路径 + 相对调用
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
-  const md = writeReport(LEDGER_PATH, DEFAULT_MD_PATH);
+  const md = writeAllReport(DEFAULT_MD_PATH);
   console.log(`[etl-ledger] 报告已生成（${md.split('\n').length} 行）→ ${DEFAULT_MD_PATH}`);
 }

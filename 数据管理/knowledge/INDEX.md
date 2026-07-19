@@ -36,7 +36,7 @@
 
 | 文件 | 用途 | 读者 |
 |------|------|------|
-| [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) | 域全景速览 + 高频命令（~300 tokens） | AI / 开发者 |
+| [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) | 自动刷新规模快照 + 权威入口导航 | AI / 开发者 |
 | [ai/DOMAIN_OVERVIEW.md](./ai/DOMAIN_OVERVIEW.md) | **14 域全景 + 跨域 JOIN 速查 + 血缘链路** | AI SQL 生成器 / 开发者 |
 | [ai/PARQUET_SCHEMA_KNOWLEDGE.md](./ai/PARQUET_SCHEMA_KNOWLEDGE.md) | 完整字段值域 + NL2SQL 映射 | AI SQL 生成器 |
 | [ai/DATA_FLOW_KNOWLEDGE.md](./ai/DATA_FLOW_KNOWLEDGE.md) | 数据流字段变换 + 跨域 JOIN 条件 + Gotcha | 开发者 / AI |
