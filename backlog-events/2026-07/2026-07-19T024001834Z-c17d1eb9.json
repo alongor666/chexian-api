@@ -1,0 +1,1 @@
+{"uid":"2026-07-12-claude-3864c3","kind":"status","ts":"2026-07-19","actor":"@claude","status":"DONE","evidence":"PR #1146 + 验收：loop:pattern-watch 输出11条观察项(≥6达标·登记表高危5+锚6)；真实文件副本负向注入recurrence_watch:P99假entry扫出→删副本还原0命中；178单测全绿(+6 pattern-watch)+verify:full(5682单测)+governance61/61。登记表补P9-P14+6条entry加recurrence_watch锚。","at":"2026-07-19T02:40:01.834Z","eid":"c17d1eb9"}
