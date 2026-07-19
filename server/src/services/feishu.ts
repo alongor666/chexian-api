@@ -4,7 +4,7 @@ import { getSalesmanMappingPaths, getFeishuRoleMappingPath } from '../config/pat
 import { feishuEnv } from '../config/env.js';
 import { resolveBranchCode, getDeploymentBranchCode, isValidBranchCodeFormat } from '../config/sql-federation-policy.js';
 import {
-    FEISHU_DEPARTMENT_ENTITLEMENTS,
+    loadFeishuDepartmentEntitlements,
     selectMinimalPrivilegeEntitlement,
     type FeishuDepartmentEntitlement,
 } from '../config/feishu-department-entitlements.js';
@@ -171,7 +171,8 @@ class FeishuService {
             }
             // 一人可能同时挂多个授权部门：收集全部命中，按最小权限原则确定性选择一条
             // （禁止并集/升权；唯一例外走个人映射条目，不在此硬编码人名）。
-            const matches = FEISHU_DEPARTMENT_ENTITLEMENTS.filter(item => departmentIds.includes(item.feishuDeptId));
+            const entitlements = await loadFeishuDepartmentEntitlements();
+            const matches = entitlements.filter(item => departmentIds.includes(item.feishuDeptId));
             if (matches.length === 0) {
                 return { status: 'not_member' };
             }

@@ -2301,6 +2301,18 @@ expires: 2026-09-01
 expires: 2026-10-17
 （governance 的「RLS 路由消费覆盖」闸目前把"文件在 `routes/query/` 目录下"与"文件是一个路由挂载点"划等号，对纯 helper 文件是结构性误报。理想修法二选一：① 闸先用正则判断文件是否含 `router\.(get|post|put|delete)\(` 真实路由注册，非路由文件天然跳过，不必手工维护 `QUERY_ROUTE_EXEMPT` 硬编码名单；② 允许文件内一行 magic comment 显式声明"非路由文件，豁免本检查"。本次因任务域禁止碰 `scripts/check-governance.mjs`，未落地，登记待下一个持有该文件写权限的任务处理。）
 
+## 2026-07-18 · 飞书部门授权配置化外置（loop f685a7，uid 2026-07-16-claude-f685a7，PR #1147）
+
+- **场景**：`FEISHU_DEPARTMENT_ENTITLEMENTS` 硬编码 10 条山西部门授权在 `server/src/config/feishu-department-entitlements.ts`，新增授权部门须改代码走发版。目标：仿仓内既有 `feishu_role_mapping.json` 模式外置为部署配置文件（运行时从 `server/data/` 加载、gitignored、生产以 VPS 文件为准），实现「新增部门零代码」。
+- **动作**：① 新增 `getFeishuDepartmentEntitlementsPath()`（env 覆盖 > `server/data/feishu_department_entitlements.json`），照抄 `getFeishuRoleMappingPath` 路径约定；② 硬编码表转 `DEFAULT_FEISHU_DEPARTMENT_ENTITLEMENTS` 内置默认值，保留编译期不变量（默认表自身部门 ID 唯一 + organization 非空 + branchCode 合法，违反即模块加载 fail-fast）；③ `loadFeishuDepartmentEntitlements()` 实时读盘——缺文件（ENOENT）/JSON 坏 → 回退默认表，文件存在 → 整体接管（非合并）；④ `validateDepartmentEntitlements()` 逐条 fail-closed，branchCode 复用权威格式校验器 `isValidBranchCodeFormat`（CHAR(2) 大写，**禁硬编码省清单**，遵 memory `data-attribution-use-ownership-field-not-proxies` 同源「勿死硬编码 2 省」教训），role 校验取值集合 = `ROLE_PRIVILEGE_RANK` 键（权威源）；⑤ 消费方 `feishu.ts:resolveDepartmentEntitlement` 改用加载器（唯一改动行）；⑥ 示例种子 `feishu_department_entitlements.example.json`（受跟踪，含 10 条快照）+ `.env.example` 文档。
+- **oracle**：`bun run verify:full` 全绿（preflight + governance + typecheck + 402 测试文件 / 5688 单测）。新增 12 例单测覆盖加载/校验/回退三路径 + `selectMinimalPrivilegeEntitlement` 回归。**「无配置文件=行为逐项一致」回归证据**：单测 `文件缺失（ENOENT）→ 回退内置默认表` 断言 `loaded` 深度等于历史硬编码 `DEFAULT` 数组；消费方 `feishu-personal-identity.test.ts`（mock 路径指向不存在文件 → ENOENT → 默认表）7 例逐项不变（运城/临汾/多部门最小权限）。
+- **fresh 自审抓到的改进**（codex 默认关，sub-agent 因组织禁订阅访问不可 spawn，故内联自审）：`validateDepartmentEntitlements` 已对 role 过 `VALID_ROLES` 校验却硬编码回 `'org_user'`，属「校验 X 返回 Y」坏味道，改为透传已验证值（未来加角色不需改此处，当前功能等价）。
+- **GitGuardian 预防自查**（复用 PR #1115/#1140 两次同类误报先例）：示例 JSON 与新增测试**零凭据形状字面量**——`feishuDeptId`（`od-...`）为飞书部门 ID 且改动前即已明文在受跟踪的 `.ts` 默认表中（非本 PR 引入的新敏感物），测试夹具用 `od-new-1`/`甲机构` 等一眼可辨假值，无 token/hash/password 语义字段赋高信息量值。
+- **诚实边界**：生产 VPS 落配置文件（`server/data/feishu_department_entitlements.json`）属运维操作，不在本 PR 范围——启用步骤写入 PR 描述与 backlog evidence，留给授权会话。本 PR 只交付「加载/回退/校验代码链 + 零配置行为不变」，不含生产实际下发。
+
+### needs_automation: false
+expires: 2026-10-18
+（外置配置 + 缺文件回退 + 逐条校验三路径均已由 12 例单测锁定，且校验器复用既有权威 `isValidBranchCodeFormat`，无新增未覆盖不变量。若未来出现「配置文件已下发但部门授权未生效」类生产事故，再登记为 loop 登记表新行——届时应查读盘缓存/PM2 reload 时序，而非本层校验逻辑。）
 ---
 
 ## 2026-07-18 · F2 登记表补录 P9-P14 + 「再现监视」机器化（loop v3 F2，uid 2026-07-12-claude-3864c3）
@@ -2317,3 +2329,5 @@ expires: 2026-10-17
 
 ### needs_automation: false
 （本 PR 已交付 `loop:pattern-watch` 扫描器 + 单测闸，机制到位；"清单必读"的消费约定已写入登记表表尾 + meta-review 流程，无待办自动化项。若后续要把"新失败发生时强制对照清单"从会话纪律升级为确定性触发点，属 meta-review 层 follow-up，另行登记。）
+
+- **返工一轮（评审 P1，2026-07-18）**：外部评审指出初版「配置损坏/显式路径缺失 → 回退内置默认表」是**授权面 fail-open**——若外置文件已删除某部门以撤销授权，文件损坏窗口（截断/非原子写入/权限）会让该部门借内置表复活拿回 `org_user`；且初版单测「坏 JSON → 默认授权」正在用绿 CI 固化这个风险。已按建议收紧：**唯一回退分支** = 未显式设路径 + 默认路径从未下发（ENOENT）→ 内置默认表（零配置兼容不变）；显式设 `FEISHU_DEPARTMENT_ENTITLEMENTS_PATH` 后缺失/不可读、或任何已存在文件损坏 → 抛错，消费方 `resolveDepartmentEntitlement` 既有 catch 转 `unavailable` 拒绝本次登录（不误禁用身份，文件修好即自愈）。单测 12→15 例（显式路径缺失/EACCES/默认路径坏 JSON 三个 fail-closed 分支），消费方新增「加载器抛错 → unavailable 而非放大权限」回归 1 例。示例 JSON/.env.example 同步补「临时文件+原子 rename」运维要求。**教训**：设计回退语义时把「可用性优先」惯性套在了**授权数据**上——授权面的回退方向必须朝更窄收（拒绝服务可自愈，权限放大不可自愈）；仓内 `loadRoleMapping()` 损坏返回空授权正是这个方向，初版声称仿照它却在此处走反了。
