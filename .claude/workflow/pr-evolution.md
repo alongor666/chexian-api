@@ -2300,3 +2300,20 @@ expires: 2026-09-01
 ### needs_automation: true
 expires: 2026-10-17
 （governance 的「RLS 路由消费覆盖」闸目前把"文件在 `routes/query/` 目录下"与"文件是一个路由挂载点"划等号，对纯 helper 文件是结构性误报。理想修法二选一：① 闸先用正则判断文件是否含 `router\.(get|post|put|delete)\(` 真实路由注册，非路由文件天然跳过，不必手工维护 `QUERY_ROUTE_EXEMPT` 硬编码名单；② 允许文件内一行 magic comment 显式声明"非路由文件，豁免本检查"。本次因任务域禁止碰 `scripts/check-governance.mjs`，未落地，登记待下一个持有该文件写权限的任务处理。）
+
+---
+
+## 2026-07-18 · F2 登记表补录 P9-P14 + 「再现监视」机器化（loop v3 F2，uid 2026-07-12-claude-3864c3）
+
+- **背景**：治进化规划 D2（登记表停止吸收——7 月 6 类首次失败模式未进 Pattern Registry）+ D5（"同类失败首次·若再现→升级"是散文承诺，无机器追踪，meta-review 靠记忆）。承接 F1（#1139 三联一致闸）。
+- **动作**：① 判定 7 月 6 类失败模式补录 P9-P14（真实 PR/日期锚：#928×#929/#993/#1015/#1021/#1068/env-residue）——复核确认「护栏 fail-open(P12)」与「存量 env 撞新闸(P14)」非同类各起一行；P14 发作 2（阶段二+#1077 明确"第2次"），闸 ✅ 但源头生成器债(3901cd)未清标 🔴；② 给 6 条对应 entry 加机器可读锚 `recurrence_watch=<pid>`（紧跟 needs_automation 行）；③ 扩展 `rule-hit-rate.mjs` 加 `patternWatchlist`/`parsePatternRegistry`/`collectRecurrenceAnchors` 纯函数 + `--watch` 分支 + `loop:pattern-watch` script，扫「发作=1 且 🔴」+ 🔵 触发线 + 全表 `recurrence_watch:` 锚，输出**观察中清单**供 meta-review 必读。
+- **验收 oracle**：`bun run loop:pattern-watch` 输出 11 条观察项（≥6 达标：登记表高危 5 + 锚 6）；真实文件副本负向注入 `recurrence_watch: P99` 假 entry → 扫出（12 条含 P99）→ 删副本还原真实文件 0 命中。6 条 pattern-watch 单测 + 原 172 = 178 全绿；`bun run verify:full` 全绿；governance 61/61。
+- **锚设计要点**：登记表内锚用 `recurrence_watch=Pxx`（等号），entry 锚用 `recurrence_watch: Pxx`（冒号），扫描器只匹配冒号式，避免同一 pattern 被双重计数；锚归属跳过 `### needs_automation:` 元数据子标题，正确落到 entry 标题。
+
+### 三问复盘
+1. **重来更好？** 一次到位。唯一斟酌点是 P14 归类——初判可能与 #1030(.env.local 未加载) 合并，但 #1030 是"env 读不到"(load-env.ts 已根治=✅无需监视)、P14 是"存量 env 残留撞闸"(源头债未清)，机理不同故不并入，P14 只收 env-residue 家族(阶段二+#1077)。
+2. **复用价值？** `patternWatchlist` 是通用"散文承诺→机器可读清单"模式，任何 append-only 台账的"若再现则升级"承诺都可套用 `<anchor>: <id>` + 扫描器。已进 loop 基座候选。
+3. **能否自动化？** 已自动化：`loop:pattern-watch` 一条命令产出必读清单。诚实边界——"两次失败是否同类"仍靠人对照，机器只保证清单存在且必读，不声称自动判定同类（与规划 F2 风险栏一致）。
+
+### needs_automation: false
+（本 PR 已交付 `loop:pattern-watch` 扫描器 + 单测闸，机制到位；"清单必读"的消费约定已写入登记表表尾 + meta-review 流程，无待办自动化项。若后续要把"新失败发生时强制对照清单"从会话纪律升级为确定性触发点，属 meta-review 层 follow-up，另行登记。）
