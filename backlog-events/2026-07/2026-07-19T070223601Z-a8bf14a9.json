@@ -1,0 +1,1 @@
+{"uid":"2026-07-14-claude-ec5dba","kind":"status","ts":"2026-07-19","actor":"@claude","status":"WONTFIX","evidence":"07-14 核实结论：visibleBranches 由 authMiddleware 每请求单点派生，密码/飞书两出口均覆盖，问题不存在","at":"2026-07-19T07:02:23.601Z","eid":"a8bf14a9"}

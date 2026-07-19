@@ -1,0 +1,1 @@
+{"uid":"2026-07-18-claude-b1ba3e","kind":"note","ts":"2026-07-19","actor":"@claude","text":"check-merged-drift 命中 1c667f4d/c639f77a(#1137) 系误报：#1137是550186口径SSOT文档化PR，note明确\"is_quoted收紧留待用户决策...生产代码未动，等用户确认后另开卡执行\"","at":"2026-07-19T07:14:32.906Z","eid":"26d933a2"}

@@ -1,0 +1,1 @@
+{"uid":"2026-07-10-claude-2815e4","kind":"status","ts":"2026-07-19","actor":"@claude","status":"PARTIAL","evidence":"gap② 已实现（RepairDim loader 归属列问题已解决）；gap① 仍残留：convert_repair.py 与 branch-org-mapping/SX.json 未对 org_level_3 六位段级编码做规范化归一","at":"2026-07-19T07:14:32.682Z","eid":"0cf47f87"}
