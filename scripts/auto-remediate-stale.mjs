@@ -91,9 +91,9 @@ function isWorktreeCheckout() {
   }
 }
 
-/** 跑 release:daily，返回 {ok, log}。 */
+/** 跑全量 release:daily（旧扁平 schema 兜底），返回 {ok, log}。 */
 function runReleaseDaily() {
-  log('▶ Tier 1 自处置：重跑 bun run release:daily');
+  log('▶ Tier 1 自处置：重跑 bun run release:daily（全量）');
   const r = spawnSync('bun', ['run', 'release:daily'], {
     cwd: PROJECT_ROOT,
     encoding: 'utf-8',
@@ -102,6 +102,26 @@ function runReleaseDaily() {
   });
   const out = `${r.stdout || ''}\n${r.stderr || ''}`;
   return { ok: r.status === 0, log: out };
+}
+
+/**
+ * 双批：只重跑「未完成的批次」（早批在前，保序）。任一批失败即整体失败——晚批失败常见于早批
+ * 未 released 触发依赖闸拒绝（预期行为，不该用 --allow-missing-dep 绕过）。返回 {ok, log}。
+ */
+function runReleaseDailyBatches(batches) {
+  let combined = '';
+  for (const id of batches) {
+    log(`▶ Tier 1 自处置：重跑发布批次 ${id}（sync-and-reload --batch ${id}）`);
+    const r = spawnSync(process.execPath, ['scripts/sync-and-reload.mjs', '--batch', id], {
+      cwd: PROJECT_ROOT,
+      encoding: 'utf-8',
+      timeout: 30 * 60_000,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    combined += `\n===== batch ${id} (exit=${r.status}) =====\n${r.stdout || ''}\n${r.stderr || ''}`;
+    if (r.status !== 0) return { ok: false, log: combined };
+  }
+  return { ok: true, log: combined };
 }
 
 function statusReport() {
@@ -181,7 +201,10 @@ function main() {
       log('⏸ auto-release 正在运行（.auto-release.lock 存在），本 tick 让路，不接手');
       return undefined;
     }
-    const { ok, log: relLog } = runReleaseDaily();
+    // 新 schema：只重跑未完成批次（decision.batches）；旧扁平 schema（batches===null）：全量重跑。
+    const { ok, log: relLog } = decision.batches === null
+      ? runReleaseDaily()
+      : runReleaseDailyBatches(decision.batches);
     if (ok) {
       writeRemediateState(nextRemediateState('recovered', { todayBeijing, prevState: remediateState, note: 'Tier1 重跑 release:daily 成功', nowISO }));
       notify('🟢 车险数据已自动补发\n\n发现　当日发布曾失败，Mac 侧自动接手已重跑成功\n结果　数据已恢复，无需人工处理');

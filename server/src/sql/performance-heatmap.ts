@@ -14,7 +14,6 @@ import {
   truthyExpr,
   normalizeSqlTableAliasPrefix,
   getPerformanceSegmentFilter,
-  getPlanDenominator,
   type PerformanceSegmentTag,
   type PerformanceTimePeriod,
 } from './performance-analysis-shared.js';
@@ -259,8 +258,6 @@ export function generatePerformanceOrgHeatmapQuery(
   let momOffset: string;        // 环比偏移
   let yoyOffset: string;        // 同比偏移
   let periodEndExpr: string;    // 当前 period_key 对应的周期结束日
-  const planDenom = getPlanDenominator(timePeriod);
-
   switch (timePeriod) {
     case 'week':
       truncExpr = `DATE_TRUNC('week', pd)::DATE`;
@@ -329,24 +326,43 @@ export function generatePerformanceOrgHeatmapQuery(
     plan_period AS (
       SELECT
         pbd.dimension_value,
-        pp.period_key,
-        ROUND(pbd.annual_plan / ${planDenom}.0, 4) AS period_plan_wan
+        pw.period_key,
+        ROUND(
+          pbd.annual_plan
+          * GREATEST(CAST(EXTRACT('doy' FROM pw.current_cutoff) AS DOUBLE), 1.0)
+          / CAST(DATE_DIFF(
+              'day',
+              DATE_TRUNC('year', pw.current_cutoff),
+              DATE_TRUNC('year', pw.current_cutoff) + INTERVAL 1 YEAR
+            ) AS DOUBLE),
+          4
+        ) AS progress_plan_wan
       FROM plan_by_dim pbd
-      CROSS JOIN period_pool pp
+      CROSS JOIN period_window pw
+    ),
+    ytd_by_dim_period AS (
+      SELECT
+        pw.period_key,
+        f.${dimConfig.alias},
+        ROUND(SUM(f.premium_wan), 4) AS ytd_premium
+      FROM period_window pw
+      JOIN filtered f
+        ON f.pd >= DATE_TRUNC('year', pw.current_cutoff)
+        AND f.pd <= pw.current_cutoff
+      GROUP BY pw.period_key, f.${dimConfig.alias}
     )` : '';
 
-  const planPremiumSelect = supportsAnnualPlan ? 'ppd.period_plan_wan' : 'NULL::DOUBLE';
+  const planPremiumSelect = supportsAnnualPlan ? 'ppd.progress_plan_wan' : 'NULL::DOUBLE';
   const achievementRateSelect = supportsAnnualPlan
     ? `CASE
-        WHEN COALESCE(ppd.period_plan_wan, 0) <= 0 THEN NULL
-        WHEN COALESCE(pr.progress_ratio, 0) <= 0 THEN NULL
-        WHEN pr.progress_ratio < 1 THEN ROUND(COALESCE(cur.premium, 0) * 100.0 / (ppd.period_plan_wan * pr.progress_ratio), 2)
-        ELSE ROUND(COALESCE(cur.premium, 0) * 100.0 / ppd.period_plan_wan, 2)
+        WHEN COALESCE(ppd.progress_plan_wan, 0) <= 0 THEN NULL
+        ELSE ROUND(COALESCE(ytd.ytd_premium, 0) * 100.0 / ppd.progress_plan_wan, 2)
       END`
     : 'NULL';
 
   const planJoin = supportsAnnualPlan
-    ? `LEFT JOIN plan_period ppd ON ppd.dimension_value = bg.${dimConfig.alias} AND ppd.period_key = bg.period_key`
+    ? `LEFT JOIN plan_period ppd ON ppd.dimension_value = bg.${dimConfig.alias} AND ppd.period_key = bg.period_key
+    LEFT JOIN ytd_by_dim_period ytd ON ytd.${dimConfig.alias} = bg.${dimConfig.alias} AND ytd.period_key = bg.period_key`
     : '';
 
   const sql = `
@@ -395,7 +411,7 @@ export function generatePerformanceOrgHeatmapQuery(
       GROUP BY wr.${dimConfig.alias}, wr.period_key
     ),
     dim_pool AS (
-      SELECT DISTINCT ${dimConfig.alias} FROM window_rows
+      SELECT DISTINCT ${dimConfig.alias} FROM filtered
     ),
     period_pool AS (
       SELECT d::DATE AS period_key
@@ -411,28 +427,6 @@ export function generatePerformanceOrgHeatmapQuery(
         ${prevMomCutoffExpr} AS prev_mom_cutoff
       FROM period_pool pp
       CROSS JOIN period_bounds pb
-    ),
-    -- 时间进度锚定数据内最新签单日 max_pd（非服务器当前日期）：注册表 plan_completion_pct
-    -- v2.0.0 红线；ETL 滞后 N 天时用 CURRENT_DATE 会把达成率分母放大而低估达成率。
-    period_progress AS (
-      SELECT
-        pp.period_key,
-        CAST(DATE_DIFF('day', pp.period_key, pp.period_end) + 1 AS DOUBLE) AS total_days,
-        CAST(
-          CASE
-            WHEN LEAST(pp.max_pd, pp.period_end) < pp.period_key THEN 0
-            ELSE DATE_DIFF('day', pp.period_key, LEAST(pp.max_pd, pp.period_end)) + 1
-          END AS DOUBLE
-        ) AS elapsed_days,
-        CASE
-          WHEN DATE_DIFF('day', pp.period_key, pp.period_end) + 1 <= 0 THEN 0
-          WHEN LEAST(pp.max_pd, pp.period_end) < pp.period_key THEN 0
-          ELSE CAST(
-            DATE_DIFF('day', pp.period_key, LEAST(pp.max_pd, pp.period_end)) + 1
-            AS DOUBLE
-          ) / CAST(DATE_DIFF('day', pp.period_key, pp.period_end) + 1 AS DOUBLE)
-        END AS progress_ratio
-      FROM period_window pp
     ),
     base_grid AS (
       SELECT o.${dimConfig.alias}, pp.period_key
@@ -481,7 +475,6 @@ export function generatePerformanceOrgHeatmapQuery(
       END AS per_policy_premium
     FROM base_grid bg
     LEFT JOIN dim_period cur ON cur.${dimConfig.alias} = bg.${dimConfig.alias} AND cur.period_key = bg.period_key
-    LEFT JOIN period_progress pr ON pr.period_key = bg.period_key
     ${planJoin}
     LEFT JOIN prev_mom_data prev_mom ON prev_mom.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_mom.period_key = bg.period_key
     LEFT JOIN prev_yoy_data prev_yoy ON prev_yoy.${dimConfig.alias} = bg.${dimConfig.alias} AND prev_yoy.period_key = bg.period_key

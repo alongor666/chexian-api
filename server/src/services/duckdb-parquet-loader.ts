@@ -5,13 +5,14 @@
  * - Parquet 指纹缓存（按文件 mtime 判断是否需要重建）
  * - loadMultipleParquet 增量/全量加载逻辑
  *
- * 从 duckdb.ts 拆出，接受 DuckDBQueryable 接口，零主类依赖。
+ * 从 duckdb.ts 拆出，接受 DuckDBTransactionalQueryable 接口，零主类依赖。
  */
 
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { statSync } from 'fs';
-import type { DuckDBQueryable } from './duckdb-types.js';
-import { escapeSqlValue } from '../utils/security.js';
+import type { DuckDBTransactionalQueryable } from './duckdb-types.js';
+import { getRelationType } from './duckdb-infra.js';
+import { escapeSqlValue, sanitizeTableName } from '../utils/security.js';
 import { AppError } from '../middleware/error.js';
 import { makeTimestampVersionToken } from './data-version.js';
 
@@ -31,6 +32,49 @@ interface FingerprintResult {
 }
 
 const parquetFingerprintCache = new Map<string, ParquetCacheEntry>();
+
+/**
+ * 先完整物化唯一 staging 表，再在单连接事务内替换目标 relation。
+ * staging 创建失败时目标表完全不动；换表失败时事务回滚，finally 仅清 staging。
+ */
+export async function replaceTableFromSelect(
+  db: DuckDBTransactionalQueryable,
+  tableName: string,
+  selectSql: string,
+): Promise<void> {
+  const safeTableName = sanitizeTableName(tableName);
+  const stagingSuffix = `__staging_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  const stagingTableName = sanitizeTableName(
+    `${safeTableName.slice(0, 64 - stagingSuffix.length)}${stagingSuffix}`,
+  );
+  let stagingExists = false;
+
+  try {
+    await db.query(`CREATE TABLE ${stagingTableName} AS ${selectSql}`);
+    stagingExists = true;
+
+    const relationType = await getRelationType(db, safeTableName);
+    const swapStatements: string[] = [];
+    if (relationType === 'VIEW') {
+      swapStatements.push(`DROP VIEW ${safeTableName}`);
+    } else if (relationType) {
+      swapStatements.push(`DROP TABLE ${safeTableName}`);
+    }
+    swapStatements.push(`ALTER TABLE ${stagingTableName} RENAME TO ${safeTableName}`);
+
+    await db.transaction(swapStatements);
+    stagingExists = false;
+  } finally {
+    if (stagingExists) {
+      try {
+        await db.dropRelationIfExists(stagingTableName);
+      } catch (cleanupError: unknown) {
+        const message = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        console.error(`[DuckDB] Failed to clean staging table ${stagingTableName}: ${message}`);
+      }
+    }
+  }
+}
 
 /**
  * 计算文件路径列表的指纹：hash(排序后路径 + 各文件 mtime)
@@ -67,7 +111,7 @@ export function computeParquetFingerprint(filePaths: string[]): FingerprintResul
  * @returns totalRows + versionToken（指纹或时间戳兜底 token；缓存命中时为当前指纹，提交为 no-op）
  */
 export async function loadMultipleParquet(
-  db: DuckDBQueryable,
+  db: DuckDBTransactionalQueryable,
   filePaths: string[],
 ): Promise<{ totalRows: number; versionToken: string }> {
   if (filePaths.length === 0) {
@@ -136,14 +180,11 @@ export async function loadMultipleParquet(
     }
   }
 
-  // ── 全量重建（DROP + CREATE）──
+  // ── 全量重建（staging 构建成功后事务换表）──
   const escapedPaths = filePaths.map((p) => `'${escapeSqlValue(p)}'`).join(', ');
 
-  await db.dropRelationIfExists('raw_parquet');
-
   try {
-    await db.query(`
-      CREATE TABLE ${TABLE_NAME} AS
+    await replaceTableFromSelect(db, TABLE_NAME, `
       SELECT * FROM read_parquet([${escapedPaths}], union_by_name=true)
     `);
   } catch (err: unknown) {

@@ -180,20 +180,38 @@ export function runReportScopeFreshnessGate({
     }
   }
 
+  const retired = [];
   const checkedSlugs = [...candidateSlugs].sort();
   for (const slug of checkedSlugs) {
     const slugDir = join(reportsRoot, slug);
+    const isPeriodTrend = slug === PERIOD_TREND_SLUG;
     // Stage 1.5 只生成 period-trend；其他报告可合法保留历史版本，仍只做磁盘/manifest 对账。
-    const scopeNotBeforeMs = slug === PERIOD_TREND_SLUG ? notBeforeMs : null;
-    const expected = slug === PERIOD_TREND_SLUG
+    const scopeNotBeforeMs = isPeriodTrend ? notBeforeMs : null;
+    const expected = isPeriodTrend
       ? expectedPeriodTrend
       : { branches: [], orgs: [] };
     const observed = discoverObservedScopes(slugDir);
-    const branches = [...new Set([...expected.branches, ...observed.branches])].sort();
+    // period-trend：branch-org-mapping SSOT(expected) 是「必须新鲜」的权威集——枚举它才能发现
+    // 「应生成却缺失」的 scope。磁盘 observed 但不在 SSOT 白名单的 scope = 已退役单元（如
+    // 2026-07-15 org 拆分把合并单元「经代、车商、重客」拆成 经代/车商/重客 后残留的旧目录），
+    // 不参与新鲜度强制（否则永远追不上根基准日、死锁发布），只归入 retired 告警提示人工清理。
+    // 非 period-trend slug 无 SSOT，沿用磁盘 observed（历史行为不变）。
+    const branches = [...new Set(isPeriodTrend ? expected.branches : observed.branches)].sort();
     const orgMap = new Map(
-      [...expected.orgs, ...observed.orgs].map((scope) => [scopeKey(scope), scope]),
+      (isPeriodTrend ? expected.orgs : observed.orgs).map((scope) => [scopeKey(scope), scope]),
     );
     const orgs = [...orgMap.values()].sort((a, b) => scopeKey(a).localeCompare(scopeKey(b)));
+
+    if (isPeriodTrend) {
+      const expectedBranchSet = new Set(expected.branches);
+      const expectedOrgKeys = new Set(expected.orgs.map(scopeKey));
+      for (const branch of observed.branches) {
+        if (!expectedBranchSet.has(branch)) retired.push(`${slug}/branches/${branch}`);
+      }
+      for (const scope of observed.orgs) {
+        if (!expectedOrgKeys.has(scopeKey(scope))) retired.push(`${slug}/orgs/${scope.branch}/${scope.org}`);
+      }
+    }
 
     const rootLatest = inspectScope({
       dir: slugDir,
@@ -231,6 +249,7 @@ export function runReportScopeFreshnessGate({
   return {
     ok: errors.length === 0,
     errors,
+    retired,
     checkedSlugs,
   };
 }
@@ -258,6 +277,10 @@ function parseCliArgs(argv) {
 
 function main() {
   const result = runReportScopeFreshnessGate(parseCliArgs(process.argv.slice(2)));
+  if (result.retired?.length) {
+    console.warn(`⚠ 报告 scope 新鲜度闸：发现 ${result.retired.length} 个已退役 scope（磁盘存在但不在 SSOT 白名单，不阻断，建议归档清理）：`);
+    for (const scope of result.retired) console.warn(`  - ${scope}`);
+  }
   if (!result.ok) {
     console.error(`❌ 报告 scope 新鲜度一致性闸失败（${result.errors.length} 项）：`);
     for (const error of result.errors) console.error(`  - ${error}`);

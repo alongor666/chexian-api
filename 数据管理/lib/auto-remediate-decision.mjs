@@ -13,8 +13,15 @@
  *
  * 幂等（防死循环）：每北京日只接手一次——Tier 1 用尽 → Tier 2 一次 → 待确认后不再自动动作。
  *
+ * 双批发布（2026-07-18）：auto-release-state.json 升级为「批次 × 天」schema
+ *（batches.early/late，见 auto-release-decision.mjs）。本模块改为按批聚合判定——任一批当天
+ * failed（已达重试上限）/ missed 即接手，且只重跑「未完成的批次」（不再无脑重跑全量）。
+ * 旧扁平 schema 向后兼容：视为单批（全量）重跑。
+ *
  * 无副作用、不读文件/时钟/env，可被 vitest 直接 import（调用方负责落盘与执行）。
  */
+import { RELEASE_BATCHES } from './release-batches.mjs';
+import { selectBatchState } from './auto-release-decision.mjs';
 
 /** Tier 1 每日自动重跑上限（默认 1：瞬时失败一跑即好，多跑无益且放大风险）。 */
 export const DEFAULT_MAX_TIER1 = 1;
@@ -37,17 +44,16 @@ const REMEDIABLE_RELEASE_STATUSES = ['failed', 'missed'];
  * 决定本次 tick 该做什么。
  *
  * @param {object} opts
- * @param {{beijingDay?:string,status?:string,attempts?:number}|null} opts.releaseState
- *   auto-release-state.json 内容（无文件传 null）。
+ * @param {object|null} opts.releaseState auto-release-state.json 内容（无文件传 null）。
+ *   支持新「批次×天」schema（batches.early/late）与旧扁平 schema（status/attempts）。
  * @param {{beijingDay?:string,status?:string,tier1Attempts?:number}|null} opts.remediateState
  *   auto-remediate-state.json 内容（无文件传 null）。
  * @param {string} opts.todayBeijing 北京今天 YYYY-MM-DD。
  * @param {number} [opts.maxTier1=DEFAULT_MAX_TIER1]
  * @param {number} [opts.minReleaseAttempts=DEFAULT_MIN_RELEASE_ATTEMPTS] 并发闸阈值
- * @returns {{action:'skip'|'tier1-retry'|'tier2-diagnose', reason:string}}
- *   - skip：本 tick 不动作
- *   - tier1-retry：轻风险自处置——重跑 release:daily
- *   - tier2-diagnose：重风险——诊断 + 回帖群待确认
+ * @returns {{action:'skip'|'tier1-retry'|'tier2-diagnose', reason:string, batches:(string[]|null)}}
+ *   - action：skip / tier1-retry（轻风险重跑）/ tier2-diagnose（重风险诊断待确认）
+ *   - batches：待接手的批次 id 列表（早批在前，保序）；`null` = 旧扁平 schema，重跑全量 release:daily
  */
 export function decideRemediation({
   releaseState,
@@ -56,18 +62,36 @@ export function decideRemediation({
   maxTier1 = DEFAULT_MAX_TIER1,
   minReleaseAttempts = DEFAULT_MIN_RELEASE_ATTEMPTS,
 }) {
-  const releaseSameDay = releaseState?.beijingDay === todayBeijing;
-  if (!releaseSameDay || !REMEDIABLE_RELEASE_STATUSES.includes(releaseState?.status)) {
-    return { action: 'skip', reason: '今日发布非 failed/missed（未失败或已 released），无需接手' };
-  }
-  // 并发闸：failed 态须达重试上限（auto-release 已停手）才接手，防与其重试窗并发跑 release:daily。
-  // missed 态天然已停手（窗口已过），不受尝试数约束。
-  const attempts = releaseState?.attempts ?? 0;
-  if (releaseState?.status === 'failed' && attempts < minReleaseAttempts) {
-    return {
-      action: 'skip',
-      reason: `auto-release 仍在重试（failed·attempts=${attempts}<${minReleaseAttempts}），等其停手再接手（防并发）`,
-    };
+  // 判定哪些批次今日需接手。并发闸：failed 须达重试上限（auto-release 已停手）才接手，防与其
+  // 重试窗内并发跑 release；missed 态天然已停手（窗口已过），不受尝试数约束。
+  const needsRemediation = (status, attempts) =>
+    REMEDIABLE_RELEASE_STATUSES.includes(status)
+    && !(status === 'failed' && (attempts ?? 0) < minReleaseAttempts);
+
+  // 旧扁平 schema（无 batches 但有 status）：视为单批全量重跑（batches=null）。
+  const isLegacyFlat = releaseState && !releaseState.batches && releaseState.status;
+  let batches; // null=legacy full；string[]=新 schema 待接手批次
+  if (isLegacyFlat) {
+    const sameDay = releaseState.beijingDay === todayBeijing;
+    if (!sameDay || !needsRemediation(releaseState.status, releaseState.attempts)) {
+      const why = !sameDay ? '发布状态非今天'
+        : releaseState.status === 'released' ? '今日已 released'
+        : releaseState.status === 'failed' ? `auto-release 仍在重试（attempts=${releaseState.attempts ?? 0}<${minReleaseAttempts}）`
+        : '非 failed/missed';
+      return { action: 'skip', reason: `无需接手（旧扁平态）：${why}`, batches: [] };
+    }
+    batches = null;
+  } else {
+    batches = [];
+    for (const batch of RELEASE_BATCHES) {
+      const slice = selectBatchState(releaseState, batch.id);
+      if (!slice || slice.beijingDay !== todayBeijing) continue;
+      if (!needsRemediation(slice.status, slice.attempts)) continue;
+      batches.push(batch.id);
+    }
+    if (batches.length === 0) {
+      return { action: 'skip', reason: '今日各批均非 failed/missed，或 failed 批仍在 auto-release 重试窗内（防并发）', batches: [] };
+    }
   }
 
   const remedSameDay = remediateState?.beijingDay === todayBeijing;
@@ -75,18 +99,20 @@ export function decideRemediation({
   const remedStatus = remedSameDay ? remediateState?.status : null;
 
   if (remedStatus === 'recovered') {
-    return { action: 'skip', reason: '今日已自动接手成功（数据恢复），幂等跳过' };
+    return { action: 'skip', reason: '今日已自动接手成功（数据恢复），幂等跳过', batches: [] };
   }
   if (remedStatus === 'tier2-awaiting') {
-    return { action: 'skip', reason: '已诊断并回帖群等人工确认（Tier 2），不再自动尝试' };
+    return { action: 'skip', reason: '已诊断并回帖群等人工确认（Tier 2），不再自动尝试', batches: [] };
   }
+  const label = batches === null ? '全量' : batches.join('+');
   if (tier1Attempts < maxTier1) {
     return {
       action: 'tier1-retry',
-      reason: `轻风险自处置：重跑 release:daily（第 ${tier1Attempts + 1}/${maxTier1} 次）`,
+      reason: `轻风险自处置：重跑发布（${label}，第 ${tier1Attempts + 1}/${maxTier1} 次）`,
+      batches,
     };
   }
-  return { action: 'tier2-diagnose', reason: `Tier 1 重跑 ${tier1Attempts} 次仍失败，转重风险诊断 + 回帖群待确认` };
+  return { action: 'tier2-diagnose', reason: `Tier 1 重跑 ${tier1Attempts} 次仍失败（${label}），转重风险诊断 + 回帖群待确认`, batches };
 }
 
 /**

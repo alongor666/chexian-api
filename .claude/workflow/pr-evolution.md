@@ -2249,6 +2249,24 @@ expires: 2026-09-15
 ### needs_automation: false
 （首次出现；若同类误报再发生第 2 次，升级为 pre-commit 对测试文件凭据字段值的形态 lint。）
 
+## 2026-07-18 · 登录用户枚举 + 计时侧信道修复（M6，uid=2026-07-12-claude-823570）
+
+- **现象**：登录端点两条信息泄漏路径。① 未知用户名在 `bcrypt.compare` 之前早退直接 401，账号存在时才会真正跑一次 bcrypt（~50-100ms@cost10）——响应耗时差可用于枚举用户名。② 账号禁用（`403 Account disabled`）与 IP 白名单拒绝（`403 IP not allowed`）对客户端返回与「用户名或密码错误」（`401`）不同的状态码和文案，直接暴露账号存在性/状态。
+- **修复**：服务层 `authService.login()`（`server/src/services/auth.ts`）内部错误契约不变（供审计与既有服务层测试锁死行为），但重排了执行顺序——未知用户跑一次针对固定「哑」bcrypt 哈希（`DUMMY_BCRYPT_HASH`，与真实哈希同 `bcryptSaltRounds`）的比对再抛 401；已知用户无论是否禁用/IP 是否放行，均先跑一次针对该账号真实哈希的 bcrypt 比对，再判定 active/IP/密码，避免任一分支跳过 bcrypt 产生可观测耗时差。路由层 `loginHandler`（`server/src/routes/auth.ts`，从内联 handler 抽成具名导出函数，便于无 supertest 直调测试）是唯一的「对外收窄」收口点：捕获 403 Account disabled / 403 IP not allowed，写审计日志（新增 `login_account_disabled` 事件种类，`server/src/middleware/audit.ts`）记录真实原因后，统一改写为 401 + 与密码错误完全相同的文案再抛给客户端。
+- **自查抓到的追加缺口（未在原始 backlog 描述里，评审补的 P1）**：单次响应字节级一致后，`IP not allowed` 分支原来不计入 `recordLoginFailure`（登录失败锁定计数），而其余三种失败场景都计入——这会形成一条多请求行为侧信道：「该用户名从被拒 IP 反复试探永不触发 429 锁定」可用来反推「这是一个存在且被 IP 限制的真实账号」。已同步补齐，四种失败场景现在锁定计数行为也一致。
+- **E2E 证据**：本地起 server（无生产数据，仅靠 45 个预置账号），用真实预置账号 curl 三态对比——未知用户名 / `leshan` 错误密码 / 真正 `active:false` 的 `sx_jdcszk`，三次响应逐字节相同：`{"success":false,"error":{"message":"Invalid username or password","statusCode":401}}`；同时用 `USER_ALLOWED_IPS` 覆盖触发 IP 拒绝场景，响应同样一致。`logs/audit.log` 核实四种场景分别落 `login_failure` / `login_failure` / `login_account_disabled` / `login_ip_denied` 四个不同事件种类，真实原因未丢失。
+- **踩坑记录**：最初想用 `active:false` 的 `sxAdmin` 做 E2E 禁用账号场景，结果拿到的是 401 而非预期 403（怀疑实现有 bug）——查证后发现 `preset-users.ts` 里 `sxadmin` 实际 `active:true`（服务层测试 `auth-sx-active-gate.test.ts` 里的 `active:false` 是该测试自己构造的合成夹具，不是真实 preset 数据）。换成真正 `active:false` 的 `sx_jdcszk` 后行为符合预期。教训与既有 memory `feedback_verify_before_assume`（分析前必查不猜）同源：**测试夹具的字段值不能代表当前真实配置数据**，尤其数据会随迭代漂移（本例是 2026-06 后 SX 账号陆续转 active）。
+- **有意不做**（已各自 spawn/记录，避免搭车扩大范围）：`assertPasswordAllowed()` 对 Feishu-only 账号仍可能抛出未被本次两个 catch 分支拦截的 `403 AUTH_METHOD_NOT_ALLOWED`（同类枚举面，但 credential-policy.ts 是改密/PAT/找回等多条链路共用的基础设施，不在本次「只处理登录端点」边界内）——已 `spawn_task` 登记独立后续任务。
+- **返工两轮（GitGuardian 凭据形状告警，2026-07-18）**：PR #1140 被 GitGuardian 标记——同上方 2026-07-15 PR #1115 entry 预防规则（「不把凭据形状字面量写进源码」）覆盖的形态，写代码时没想起来查这条先例。
+  - **轮次一（源码哑哈希常量 → 运行时生成）**：初版把哑哈希写成源码固定字面量（`$2b$10$...`，本地预生成、不对应任何真实凭据）。改为模块加载时 `bcrypt.hashSync(randomBytes(32).toString('hex'), authConfig.bcryptSaltRounds)` 运行时生成：① 格式合法保证 compare 全程等耗时；② 随机明文无人知晓；③ 源码零哈希字面量。附带收益：cost 取 `authConfig.bcryptSaltRounds` 与真实用户哈希同源同值（测试 mock 4 / 生产 10 自动对齐），比字面量硬编码 `$2b$10$` 前缀更不易与真实 cost 漂移。
+  - **轮次二（诚实修正：真正触发点在新增测试文件，不止源码常量）**：改完源码常量后重扫 GitGuardian **仍 fail**——说明轮次一是「必要但不充分」，我最初把病因单点归到了源码哈希常量。逐行核对本次 diff 后定位到 `auth-login-enumeration-timing.test.ts` 里两处更强的匹配：① 一个 `password` 语义字段被赋了通用短词字面量（与 #1115 面板已开 incident 34854315 **同形态**，命中概率最高）；② 一个像真实口令的高信息量字面量赋给 `CORRECT_PASSWORD`（原值形似「正确-马-电池-订书钉」式口令，此处不复现以免文档本身再触发扫描器）。两处按 #1115 既有对策改为一眼可辨的假值（`unit-test-fake-hash` / `unit-test-fake-correct-pw`）+ 行内注释。登录只做 `bcrypt.compare` 不校验口令策略，改值不影响 `REAL_HASH` 对应关系，14 个测试仍全绿。**教训（复用 memory `audit-agent-findings-are-leads-not-conclusions`）**：协调方回执把病因定为「源码哈希字面量」，我照单执行了轮次一没有独立复核"改完是否真的转绿"就宣告；正确做法是每轮修完都要用 GitGuardian 重扫这个**外部 oracle** 证伪，而非信任对病因的单点推断。**二阶教训**：连写复盘时都不能把被标记的原始凭据字面量原样抄进文档（`pr-evolution.md` 也在 GitGuardian 扫描范围内）——描述其形态即可，复现即等于重新引入。
+  - **诚实边界（未闭合项）**：GitGuardian 面板 incident 明细需仓库所有者 dashboard 权限，我无法经 GitHub API 读到它精确指认的行，故上述"轮次二两处是真凶"是**基于形态匹配的高置信推断 + 待重扫证伪**，非面板直证。若清除源码全部凭据形状字面量后 GitGuardian 仍 fail，则剩余可能是 #1115 式的**面板存量 incident**（须所有者标 false positive 才转绿，非代码可自愈）——此时应把结论交回协调方/所有者，不再对代码做无效改动。
+  - **触发线到期**：按 #1115 entry 自己定的触发线（「再发生第 2 次，升级为 pre-commit 对凭据字段值的形态 lint」），该升级现已到期应兑现——扫描范围应同时含**源码常量**（轮次一形态）与**测试 mock/夹具值**（轮次二形态，#1115 原范围）。
+
+### needs_automation: true
+expires: 2026-09-01
+
+登录响应「四态字节级一致」目前只靠新增单测（mock 层）+ 一次性手工 curl E2E 验证锁定，无常态化回归闸——下次改动 `authService.login()` 或 `loginHandler` 时，若有人在某个分支手滑加回一条特例状态码/文案，现有 `bun run governance`/CI 不会拦。建议后续把「四种登录失败场景响应体逐字节相同」这条不变量收进一条轻量 governance 检查或 CI 冒烟测试（起本地 server + curl 四态 diff），而不是依赖人工记得跑一遍验证脚本。
 ---
 
 ## 2026-07-18 · F1 账本断档修复 + entry↔ledger 一致闸（loop v3 F1，uid 2026-07-12-claude-59ac3a）

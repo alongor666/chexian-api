@@ -40,10 +40,10 @@ node scripts/pull-bi-exports.mjs --dry-run   # 只看计划
 ```
 
 - `bun run release:daily`（sync-and-reload.mjs）已内置为 Stage 0 自动执行，无需单独跑；`--skip-pull` 可跳过
-- **全自动模式**：`bun run auto-release:install` 装 launchd 定时器后，每天北京 10:35~20:00 窗口内自动等五张齐→自动跑 release:daily（2026-07-12 起窗口/重试上限调宽，见下方 data-pipeline.md），成功/失败/错过均有通知；状态看 `bun run auto-release:status`。详见 [data-pipeline.md「全自动日常发布 watcher」](../rules/data-pipeline.md)
+- **全自动模式（2026-07-18 起双批）**：`bun run auto-release:install` 装 launchd 定时器后，每天在两批窗口内各自等本批就绪→自动发布：早批 01 签单 + 05 理赔（北京 07:40~20:00，不跑企微）、晚批 02 报价 + 03 维修 + 04 厂牌 +尾部域（12:00~20:00，跑企微；依赖早批当天 released）。幂等键为批次×天，成功/失败/错过均有通知；状态看 `bun run auto-release:status`。详见 [data-pipeline.md「双批发布拆分」](../rules/data-pipeline.md)
 - 校验四件套：code 齐全 / 本地字节=manifest / **mtime=北京时间今天**（本机时钟不在北京时区，禁止本地日期直比）/ sizeMB 兜空表。**分层语义（2026-07-05）**：硬闸 01/02/03/05 任一不过 = 上游断线，**告警中止，禁止默默用旧数据**；04 厂牌是可选维表（很少增量），异常只告警 + 跳过分发保留旧维表，不阻塞。应急豁免：`--allow-stale 02`（仅豁免新鲜度）。上游补导的历史文件（manifest 之外、符合命名模式）自动一并分发（[4b] 补导段）
 - 省份路由：文件名 `shanxi_`/`sichuan_` 前缀只是导出配置标签（不自动跟登录账号），分发前会抽样 01 签单保单号前缀（fields.json `branch_code.derivation.mapping`）做内容核验，错配即中止；`shanxi_*` → `数据管理/staging/SX/`，`sichuan_*`/无前缀（含 04 厂牌全国口径）→ `数据管理/` 根
-- 出表时机：北京时间约 09:30 出 01/03/04/05，10:30 出 02 报价；**五张齐全须 10:35 之后拉**
+- 出表时机（2026-07-18 起双批）：早批 01 签单 + 05 理赔约北京 **07:35** 就绪；晚批 02 报价 + 03 维修（+ 04 厂牌，每周日更新）约 **11:50** 就绪。按批拉取用 `node scripts/pull-bi-exports.mjs --batch early|late`，过早拉会被该批新鲜度校验拦下
 - 分发时自动做区间覆盖归档（同品类旧短窗 → `.xlsx-archive/<日期>/`），02 报价单日文件逐日累积不归档
 
 **Legacy 兜底（iCloud 手动源，仅上游断线时应急）**：`/Users/alongor666/Library/Mobile Documents/com~apple~CloudDocs/00_PC同步/`，手动拷贝到 `数据管理/`（SC）或 `数据管理/staging/SX/`（SX）后按 §1 跑 ETL。

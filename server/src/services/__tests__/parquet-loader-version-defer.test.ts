@@ -1,14 +1,14 @@
 /**
  * B311：loadMultipleParquet 不再内部 setDataVersion（延迟提交）。
  *
- * 用假 DuckDBQueryable + 真实临时文件（指纹需要 statSync）驱动三条路径：
+ * 用假 DuckDBTransactionalQueryable + 真实临时文件（指纹需要 statSync）驱动三条路径：
  * 全量重建 / 增量 INSERT / 缓存命中——全部只返回 versionToken、不改变当前版本。
  */
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { DuckDBQueryable } from '../duckdb-types.js';
+import type { DuckDBTransactionalQueryable } from '../duckdb-types.js';
 import { loadMultipleParquet, computeParquetFingerprint } from '../duckdb-parquet-loader.js';
 import { getDataVersion, _resetDataVersionForTesting } from '../data-version.js';
 
@@ -23,11 +23,14 @@ afterAll(() => {
 
 function createFakeDb(options: { hasRelation: boolean }) {
   const queries: string[] = [];
-  const db: DuckDBQueryable = {
+  const db: DuckDBTransactionalQueryable = {
     async query<T = any>(sql: string): Promise<T[]> {
       queries.push(sql);
       if (/COUNT\(\*\) AS cnt/i.test(sql)) return [{ cnt: 7 }] as T[];
       return [] as T[];
+    },
+    async transaction(statements: string[]) {
+      queries.push(...statements);
     },
     async getTableSchema() {
       return [];
@@ -54,7 +57,8 @@ describe('loadMultipleParquet 延迟版本提交（B311）', () => {
     expect(result.versionToken).toBe(fp!.fingerprint);
     // 关键断言：加载器内部不再 setDataVersion —— 版本仍是初始值
     expect(getDataVersion()).toBe('init0000');
-    expect(queries.some((q) => /CREATE TABLE raw_parquet/i.test(q))).toBe(true);
+    expect(queries.some((q) => /CREATE TABLE raw_parquet__staging_/i.test(q))).toBe(true);
+    expect(queries.some((q) => /ALTER TABLE raw_parquet__staging_.* RENAME TO raw_parquet/i.test(q))).toBe(true);
   });
 
   it('增量 INSERT：返回新指纹 token，同样不 bump 版本', async () => {
@@ -92,6 +96,6 @@ describe('loadMultipleParquet 延迟版本提交（B311）', () => {
     expect(result.versionToken).not.toMatch(/^[0-9a-f]{64}$/);
     // 关键断言：即使走兜底分支，加载器内部也不 bump —— 提交权在编排方
     expect(getDataVersion()).toBe('init0000');
-    expect(queries.some((q) => /CREATE TABLE raw_parquet/i.test(q))).toBe(true);
+    expect(queries.some((q) => /CREATE TABLE raw_parquet__staging_/i.test(q))).toBe(true);
   });
 });
