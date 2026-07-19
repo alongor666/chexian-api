@@ -15,6 +15,8 @@
  *
  * 用法：bun run loop:rule-hit-rate [--json] [--no-git]
  *   --no-git  跳过 git 史回滚反查（CI/无 git 环境）
+ *   --watch   F2 观察中清单模式（= bun run loop:pattern-watch）：只读 pr-evolution.md，
+ *             扫「发作=1 且 🔴」+ 🔵 触发线 + 全表 recurrence_watch 锚，输出 meta-review 必读清单
  *
  * 纯函数 ruleHits 导出供单测（不读文件、不 spawn git）。
  * env：LOOP_LEDGER_PATH / LOOP_REWORK_PATH / LOOP_GIT_DIR / LOOP_PR_EVO_PATH /
@@ -156,6 +158,107 @@ export function ruleHits(ctx) {
   });
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// F2：失败模式「观察中清单」（pattern-watch）——把 pr-evolution.md 登记表里
+// "同类失败首次·若再现→升级"的散文承诺机器化，扫成 meta-review 必读清单。
+// 治进化规划 D2（登记表停止吸收）+ D5（"若再现→升级"承诺不被机器追踪）。
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * 解析 pr-evolution.md 的【失败模式登记表】markdown 表格 → [{id,mode,occurrences,layer,trigger}]。
+ * occurrences 为整数，"多"/非数字 → null（视为 ≥2，不落入"发作=1"高危判定）。
+ * 纯函数（入参全文字符串），供单测与 patternWatchlist 复用；不读文件、不 spawn。
+ */
+export function parsePatternRegistry(prEvo) {
+  const text = typeof prEvo === 'string' ? prEvo : '';
+  const start = text.indexOf('## 失败模式登记表');
+  if (start < 0) return [];
+  const rest = text.slice(start);
+  const end = rest.indexOf('\n---'); // 表格止于该 section 后第一条水平分隔线
+  const block = end < 0 ? rest : rest.slice(0, end);
+  const rows = [];
+  for (const line of block.split('\n')) {
+    if (!/^\|\s*P\d+\s*\|/.test(line)) continue; // 仅数据行（表头/分隔行不以 |Pxx 开头）
+    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
+    if (cells.length < 6) continue;
+    const occ = parseInt(cells[2], 10);
+    rows.push({
+      id: cells[0],
+      mode: cells[1],
+      occurrences: Number.isNaN(occ) ? null : occ,
+      layer: cells[4],
+      trigger: cells[5],
+    });
+  }
+  return rows;
+}
+
+/** 拦截层单元格 emoji 四档判定（🔴仅文档 / 🟡部分机制 / 🔵自审对抗 / ✅自动拦截）。 */
+function layerFlags(layer) {
+  const s = layer || '';
+  return { red: s.includes('🔴'), yellow: s.includes('🟡'), blue: s.includes('🔵'), green: s.includes('✅') };
+}
+
+/**
+ * 提取 entry 里的机器可读锚 `recurrence_watch: <pid>`（**冒号式**）——登记表内的
+ * `recurrence_watch=<pid>`（等号式）不匹配，避免同一 pattern 被登记表 + entry 双重计数。
+ * 每个锚关联到所属 entry 标题（最近一个非元数据 ## / ### 标题）。返回 [{patternId,entryTitle}]。
+ */
+export function collectRecurrenceAnchors(prEvo) {
+  const text = typeof prEvo === 'string' ? prEvo : '';
+  const anchors = [];
+  let currentTitle = '(文件头·无 entry 标题)';
+  for (const line of text.split('\n')) {
+    const h = line.match(/^#{2,3}\s+(.*)$/);
+    if (h) {
+      const title = h[1].trim();
+      // `### needs_automation:` / `### expires` 等是 entry 内元数据子标题，不作为 entry 归属标题
+      if (!/^(needs_automation|expires|rationale|mechanism)\b/.test(title)) currentTitle = title;
+      continue;
+    }
+    const a = line.match(/recurrence_watch:\s*(P\d+)/); // 冒号式（entry 锚）
+    if (a) anchors.push({ patternId: a[1], entryTitle: currentTitle });
+  }
+  return anchors;
+}
+
+/**
+ * 观察中清单（纯函数）：合并两源——
+ *   ① registryWatch：登记表中「发作=1 且 🔴」或「🔵（有明确触发线，如 P3）」的 pattern 行；
+ *   ② anchors：全表 `recurrence_watch:` 锚（entry → pattern 映射）。
+ * 输出供 meta-review 必读。诚实边界：只保证"若再现"承诺存在且必读，不自动判定两次失败同类。
+ */
+export function patternWatchlist(prEvo) {
+  const registry = parsePatternRegistry(prEvo);
+  const registryWatch = registry.filter((r) => {
+    const f = layerFlags(r.layer);
+    return (r.occurrences === 1 && f.red) || f.blue;
+  });
+  const anchors = collectRecurrenceAnchors(prEvo);
+  return { registryWatch, anchors, total: registryWatch.length + anchors.length };
+}
+
+function renderWatch(w) {
+  const L = [];
+  L.push('# Loop 失败模式「观察中清单」（pattern-watch · F2 · meta-review 必读）');
+  L.push('');
+  L.push(`- 观察项 ${w.total} 条：登记表高危 ${w.registryWatch.length}（发作=1 且 🔴 / 🔵 触发线）· recurrence_watch 锚 ${w.anchors.length}`);
+  L.push('');
+  L.push('## 🔴 登记表高危候选（发作=1 且仅文档拦截，或 🔵 有明确触发线 —— 再现即升级）');
+  if (!w.registryWatch.length) L.push('（无）');
+  for (const r of w.registryWatch) {
+    L.push(`- \`${r.id}\`（发作 ${r.occurrences ?? '?'} · ${r.layer}）${r.mode}`);
+    L.push(`  ↳ 触发线：${r.trigger}`);
+  }
+  L.push('');
+  L.push('## 🔗 recurrence_watch 锚（entry → pattern，散文承诺已机器可读）');
+  if (!w.anchors.length) L.push('（无）');
+  for (const a of w.anchors) L.push(`- \`${a.patternId}\` ← ${a.entryTitle}`);
+  L.push('');
+  L.push('> 诚实边界：清单只保证"若再现→升级"的承诺存在且必读；两次失败是否同类仍靠人对照，机器不自动判定。');
+  return L.join('\n');
+}
+
 function readFileSafe(p) {
   try { return fs.readFileSync(p, 'utf-8'); } catch { return ''; }
 }
@@ -210,6 +313,13 @@ function render(results) {
 
 function main() {
   const args = process.argv.slice(2);
+  if (args.includes('--watch')) {
+    // F2 观察中清单模式（loop:pattern-watch）：只读 pr-evolution.md，无需 git/ledger。
+    const w = patternWatchlist(readFileSafe(PR_EVO_PATH));
+    if (args.includes('--json')) { process.stdout.write(JSON.stringify(w, null, 2) + '\n'); return; }
+    console.log(renderWatch(w));
+    return;
+  }
   const ctx = loadContext({ noGit: args.includes('--no-git') });
   const results = ruleHits(ctx);
   if (args.includes('--json')) {
