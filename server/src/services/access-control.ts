@@ -8,7 +8,7 @@ import { getUserStorePath } from '../config/paths.js';
 import { dbEnv } from '../config/env.js';
 import { AppError } from '../middleware/error.js';
 import { createLogger } from '../utils/logger.js';
-import { setActiveUsernames } from './user-activation-cache.js';
+import { setUserAuthorizationCache } from './user-activation-cache.js';
 import type { AuthIdentityRecord, PasswordCredentialRecord } from './auth-model.js';
 
 const log = createLogger('access-control');
@@ -432,7 +432,7 @@ async function ensureUserFromPreset(user: PresetUser): Promise<AccessUser> {
     )
   `);
   await persistToFile();
-  await refreshActiveUsernamesCache();
+  await refreshUserAuthorizationCache();
   const created = await getUserByUsername(user.username);
   if (!created) {
     throw new AppError(500, '创建预置用户失败');
@@ -448,9 +448,9 @@ async function ensureUserFromPreset(user: PresetUser): Promise<AccessUser> {
  *    multi-branch-day1-sop.md Step 4.0 明确「源码把占位改成 tombstone 不会也不得覆盖
  *    store 里已落地的哈希」——回填即破坏该不变量。
  *  - active：账号生命周期归管理面 / 激活流程，preset 的 active 只是初始值。
- *  - allowedRoutes / defaultRoute：**用户行上的值不参与后端鉴权**——路由白名单由
- *    PRESET_ROLES 按 role 派生（permission.ts getAllowedRoutesForRole、
- *    auth.ts 登录响应 resolveAllowedRoutes），已有两处兜底；再加一处即第三套事实源。
+ *  - allowedRoutes / defaultRoute：授权型运行时配置，store 是管理面权威；allowedRoutes 已由
+ *    authMiddleware 注入并被 permissionMiddleware 消费，defaultRoute 由 /auth/me 返回给前端。
+ *    preset 仅提供建号初值/角色兜底，自动回填会把管理员已收紧或清空的配置重新放宽。
  *  - specialFeatures：授权型字段，管理面清空 = 有意收回（如撤 cost 成本权限），
  *    回填等于把管理员撤掉的权限自动还回去 —— 提权。
  *  - visibleBranches：非 store 列（UserAccount 无此字段），登录时由 PRESET_USERS
@@ -585,24 +585,24 @@ export async function seedAccessControlData(): Promise<void> {
   } else {
     await seedFromPreset();
   }
-  await refreshActiveUsernamesCache();
+  await refreshUserAuthorizationCache();
 }
 
-// JWT 实时吊销支持：把「active 且存在」的用户名集合刷进纯缓存模块 user-activation-cache，
+// JWT 运行时授权支持：把 active 与用户级 allowedRoutes 一次性刷进纯缓存模块，
 // 供 authMiddleware O(1) 查询（详见该模块头注释：为何与 duckdb 解耦）。
 // 每次用户写操作（create/update/delete/ensurePreset）+ 启动 seed 后调用。
-async function refreshActiveUsernamesCache(): Promise<void> {
+async function refreshUserAuthorizationCache(): Promise<void> {
   try {
     const users = await listUsersInternal();
-    setActiveUsernames(users.filter((u) => u.active).map((u) => u.username));
+    setUserAuthorizationCache(users);
   } catch (err) {
-    // fail-safe：刷新失败保留旧缓存（吊销延迟到下次成功刷新），绝不因此让写操作 500。
-    log.error('刷新 active 用户名缓存失败，保留旧缓存', err);
+    // fail-safe：刷新失败保留旧快照，绝不写入 active/routes 半新半旧的组合。
+    log.error('刷新用户运行时授权缓存失败，保留旧缓存', err);
   }
 }
 
 export async function refreshActiveUsernames(): Promise<void> {
-  await refreshActiveUsernamesCache();
+  await refreshUserAuthorizationCache();
 }
 
 // ============================================
@@ -741,7 +741,7 @@ export async function createUser(input: {
     )
   `);
   await persistToFile();
-  await refreshActiveUsernamesCache();
+  await refreshUserAuthorizationCache();
   const created = await getUserByUsername(input.username);
   if (!created) {
     throw new AppError(500, '创建用户失败');
@@ -787,7 +787,7 @@ export async function createFeishuUserWithIdentity(input: {
     COMMIT;
   `);
   await persistToFile();
-  await refreshActiveUsernamesCache();
+  await refreshUserAuthorizationCache();
   const created = await getUserByUsername(input.username);
   if (!created) throw new AppError(500, '创建飞书个人账号失败');
   return created;
@@ -825,7 +825,7 @@ export async function reactivateFeishuUserEntitlement(user: AccessUser, input: {
     WHERE id = '${escapeSqlValue(user.id)}'
   `);
   await persistToFile();
-  await refreshActiveUsernamesCache();
+  await refreshUserAuthorizationCache();
   return (await getUserById(user.id)) ?? { ...user, ...input, active: true };
 }
 
@@ -894,7 +894,7 @@ export async function updateUser(id: string, input: {
     `);
   }
   await persistToFile();
-  await refreshActiveUsernamesCache();
+  await refreshUserAuthorizationCache();
   const rows = await duckdbService.query(`
     SELECT * FROM UserAccount
     WHERE id = '${escapeSqlValue(id)}'
@@ -956,7 +956,7 @@ export async function deleteUser(id: string): Promise<void> {
     WHERE id = '${escapeSqlValue(id)}'
   `);
   await persistToFile();
-  await refreshActiveUsernamesCache();
+  await refreshUserAuthorizationCache();
 }
 
 // ============================================

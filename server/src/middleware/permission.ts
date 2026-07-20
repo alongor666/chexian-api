@@ -212,13 +212,17 @@ function resolvePageRoutes(apiPath: string | undefined): string[] | undefined {
 }
 
 /**
- * 获取角色的 allowedRoutes（从 PRESET_ROLES 按角色名取，不依赖 JWT token）。
- * org_user 角色的 allowedRoutes 均为 ORG_ROLE_ALLOWED_ROUTES（SSOT 在 PRESET_ROLES）。
+ * 获取请求的有效 allowedRoutes：运行时用户级非空配置优先，角色 preset 兜底。
+ * 用户级配置由 authMiddleware 从 UserAccount 注入 req.user，不进入 JWT，修改后下一请求即生效。
  * 返回 null 表示该角色不受路由白名单限制（branch_admin / 系统超管）。
  */
-function getAllowedRoutesForRole(role: string): string[] | null {
+function getEffectiveAllowedRoutes(role: string, userAllowedRoutes?: string[]): string[] | null {
   // branch_admin 和 admin 不受路由白名单限制
   if (role === UserRole.BRANCH_ADMIN) return null;
+
+  if (Array.isArray(userAllowedRoutes) && userAllowedRoutes.length > 0) {
+    return userAllowedRoutes;
+  }
 
   const presetRole = PRESET_ROLES.find((r) => r.role === role);
   if (!presetRole?.allowedRoutes || presetRole.allowedRoutes.length === 0) return null;
@@ -279,7 +283,7 @@ export function permissionMiddleware(
       throw new AppError(401, 'Authentication required');
     }
 
-    const { role, organization, branchCode, visibleBranches, username } = req.user;
+    const { role, organization, branchCode, visibleBranches, username, allowedRoutes } = req.user;
 
     // 1.5 模块负面清单（RESTRICTED_MODULES · 2026-07-15）：对**所有角色**（含 branch_admin）生效。
     // 受管域（governed）的 API 路径映射到前端页面后，若全部候选页面都被该用户的负面清单拒绝 → 403。
@@ -312,7 +316,7 @@ export function permissionMiddleware(
     // 按挂载域（req.baseUrl）显式声明（backlog de1e40，替代 mountedOutsideQuery
     // 一刀切）；baseUrl 缺失（单测直调 middleware 的 mock req）回退查表，
     // 保持既有单测语义。
-    const routeAllowList = getAllowedRoutesForRole(role);
+    const routeAllowList = getEffectiveAllowedRoutes(role, allowedRoutes);
     if (routeAllowList !== null) {
       const mountPolicy = resolveMountWhitelistPolicy((req as { baseUrl?: unknown }).baseUrl);
       const pageRoutes = mountPolicy.governed

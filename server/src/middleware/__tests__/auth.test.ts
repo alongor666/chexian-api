@@ -22,6 +22,7 @@ import { authMiddleware } from '../auth.js';
 import { AppError } from '../error.js';
 import {
   setActiveUsernames,
+  setUserAuthorizationCache,
   __resetActiveUsernamesCacheForTest,
 } from '../../services/user-activation-cache.js';
 
@@ -61,6 +62,7 @@ describe('authMiddleware: Bearer PAT 分支', () => {
       user: {
         id: 'u-1', username: 'alice', displayName: 'Alice', passwordHash: 'x',
         role: 'org_user', organization: '分公司A', active: true,
+        allowedRoutes: ['/home'],
       },
       tokenId: 'AB12CD34',
       name: 'cli',
@@ -71,6 +73,7 @@ describe('authMiddleware: Bearer PAT 分支', () => {
     expect(err).toBeUndefined();
     expect(req.user).toEqual({
       userId: 'u-1', username: 'alice', role: 'org_user', organization: '分公司A',
+      allowedRoutes: ['/home'],
     });
     expect(req.pat).toEqual({ tokenId: 'AB12CD34', name: 'cli' });
     expect(verifyPatMock).toHaveBeenCalledOnce();
@@ -88,6 +91,9 @@ describe('authMiddleware: Bearer PAT 分支', () => {
 
 describe('authMiddleware: Bearer JWT 分支', () => {
   it('合法 JWT → req.user 注入 + 不调 verifyPat', async () => {
+    setUserAuthorizationCache([
+      { username: 'alice', active: true, allowedRoutes: ['/home', '/growth'] },
+    ]);
     const token = jwt.sign(
       { userId: 'u-1', username: 'alice', role: 'branch_admin' },
       'test-secret',
@@ -98,8 +104,36 @@ describe('authMiddleware: Bearer JWT 分支', () => {
     expect(err).toBeUndefined();
     expect(req.user.username).toBe('alice');
     expect(req.user.role).toBe('branch_admin');
+    expect(req.user.allowedRoutes).toEqual(['/home', '/growth']);
     expect(req.pat).toBeUndefined();
     expect(verifyPatMock).not.toHaveBeenCalled();
+  });
+
+  it('运行时 store 白名单覆盖 JWT 中的旧值，确保管理员修改后免重登生效', async () => {
+    setUserAuthorizationCache([
+      { username: 'alice', active: true, allowedRoutes: ['/home'] },
+    ]);
+    const token = jwt.sign(
+      { userId: 'u-1', username: 'alice', role: 'org_user', allowedRoutes: ['/cost'] },
+      'test-secret',
+      { expiresIn: '1h' },
+    );
+    const req = makeReq({ authorization: `Bearer ${token}` });
+    const err = await runMiddleware(req);
+    expect(err).toBeUndefined();
+    expect(req.user.allowedRoutes).toEqual(['/home']);
+  });
+
+  it('缓存未就绪时不信任 JWT 中的旧白名单，清空后交由权限层按角色兜底', async () => {
+    const token = jwt.sign(
+      { userId: 'u-1', username: 'alice', role: 'org_user', allowedRoutes: ['/cost'] },
+      'test-secret',
+      { expiresIn: '1h' },
+    );
+    const req = makeReq({ authorization: `Bearer ${token}` });
+    const err = await runMiddleware(req);
+    expect(err).toBeUndefined();
+    expect(req.user.allowedRoutes).toBeUndefined();
   });
 
   it('非法 JWT → 401 Invalid token', async () => {
@@ -112,6 +146,9 @@ describe('authMiddleware: Bearer JWT 分支', () => {
 
 describe('authMiddleware: Cookie JWT 分支', () => {
   it('cx_access_token cookie → req.user 注入', async () => {
+    setUserAuthorizationCache([
+      { username: 'alice', active: true, allowedRoutes: ['/specialty'] },
+    ]);
     const token = jwt.sign(
       { userId: 'u-1', username: 'alice', role: 'org_user', organization: '分公司A' },
       'test-secret',
@@ -121,6 +158,7 @@ describe('authMiddleware: Cookie JWT 分支', () => {
     const err = await runMiddleware(req);
     expect(err).toBeUndefined();
     expect(req.user.organization).toBe('分公司A');
+    expect(req.user.allowedRoutes).toEqual(['/specialty']);
     expect(req.pat).toBeUndefined();
   });
 
