@@ -681,6 +681,8 @@ def build_sx_plan_from_local_source(
         missing = sorted(expected_columns - actual_columns)
         unknown = sorted(actual_columns - expected_columns)
         raise ValueError(f"SX 计划源字段不符合契约：missing={missing}, unknown={unknown}")
+    if df_src.empty:
+        raise ValueError("SX 计划源为空")
 
     if df_src["organization"].isna().any():
         raise ValueError("SX 计划源存在空 organization")
@@ -690,7 +692,10 @@ def build_sx_plan_from_local_source(
     duplicated = sorted(df_src.loc[df_src["organization"].duplicated(keep=False), "organization"].unique())
     if duplicated:
         raise ValueError(f"SX 计划源存在重复三级机构：{duplicated}")
-    df_src["plan_vehicle"] = pd.to_numeric(df_src["plan_vehicle"], errors="raise")
+    try:
+        df_src["plan_vehicle"] = pd.to_numeric(df_src["plan_vehicle"], errors="raise")
+    except Exception as exc:
+        raise ValueError("SX 计划源存在非数值 plan_vehicle") from exc
     if not df_src["plan_vehicle"].map(pd.notna).all():
         raise ValueError("SX 计划源存在空 plan_vehicle")
     if not df_src["plan_vehicle"].map(lambda value: float("-inf") < float(value) < float("inf")).all():

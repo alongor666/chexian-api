@@ -75,7 +75,11 @@ describe('generateKpiQuery — variable_cost_ratio 注册表派生 (B305)', () =
 
 describe('generateKpiQuery — 三级机构计划读取 PlanFact Parquet', () => {
   it('无业务员筛选时优先按年度/机构/省份读取 organization 级 PlanFact', () => {
-    const sql = generateKpiQuery('1=1', { orgNames: ['太原一部'], branchCode: 'SX' });
+    const sql = generateKpiQuery('1=1', {
+      orgNames: ['太原一部'],
+      achievementCacheBranchCode: 'SX',
+      organizationPlanBranchCode: 'SX',
+    });
     expect(sql).toContain('FROM PlanFact');
     expect(sql).toContain("level = 'organization'");
     expect(sql).toContain("organization IN ('太原一部')");
@@ -83,11 +87,24 @@ describe('generateKpiQuery — 三级机构计划读取 PlanFact Parquet', () =>
     expect(sql).toContain('COALESCE(NULLIF(op.vehicle_plan_wan, 0), ap.vehicle_plan_wan, 0)');
   });
 
+  it('四川机构视角保持 achievement_cache 人员计划汇总口径，不切到 PlanFact organization', () => {
+    const sql = generateKpiQuery('1=1', {
+      orgNames: ['乐山'],
+      achievementCacheBranchCode: 'SC',
+      organizationPlanBranchCode: 'SC',
+    });
+    expect(sql).not.toContain('FROM PlanFact');
+    expect(sql).toContain('FROM achievement_cache');
+    expect(sql).toContain("org_name IN ('乐山')");
+    expect(sql).toContain("branch_code = 'SC'");
+  });
+
   it('业务员筛选时保持人员级 achievement_cache，不误用整个三级机构计划', () => {
     const sql = generateKpiQuery('1=1', {
       orgNames: ['太原一部'],
       salesmanNames: ['10001张三'],
-      branchCode: 'SX',
+      achievementCacheBranchCode: 'SX',
+      organizationPlanBranchCode: 'SX',
     });
     expect(sql).not.toContain('FROM PlanFact');
     expect(sql).toContain("full_name IN ('10001张三')");
@@ -95,7 +112,11 @@ describe('generateKpiQuery — 三级机构计划读取 PlanFact Parquet', () =>
   });
 
   it('机构名中的单引号会被 SQL 转义', () => {
-    const sql = generateKpiQuery('1=1', { orgNames: ["太原'一部"], branchCode: 'SX' });
+    const sql = generateKpiQuery('1=1', {
+      orgNames: ["太原'一部"],
+      achievementCacheBranchCode: 'SX',
+      organizationPlanBranchCode: 'SX',
+    });
     expect(sql).toContain("organization IN ('太原''一部')");
   });
 });

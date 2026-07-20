@@ -104,13 +104,22 @@ router.get(
 
     const orgNames = extractOrgNames(filterData, req.permissionFilter);
     const salesmanNames = extractSalesmanNames(filterData, req.permissionFilter);
-    // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 的 vehicle_plan CTE 携 branch_code 时按省过滤
-    const branchCode = await resolveBranchRlsCode(req, 'achievement_cache');
+    // 分省 RLS（ADR G4 GATED 多省）：两张计划关系独立门控，避免 achievement_cache / PlanFact
+    // 任一侧维度副本滞后时把另一侧 branch_code 条件误注入导致 Binder Error。
+    const [achievementCacheBranchCode, organizationPlanBranchCode] = await Promise.all([
+      resolveBranchRlsCode(req, 'achievement_cache'),
+      resolveBranchRlsCode(req, 'PlanFact'),
+    ]);
 
     const plan = planKpiCostCube(whereWithDate, dateField);
     const mainSql = generateKpiQuery(
       whereWithDate,
-      { orgNames, salesmanNames, branchCode },
+      {
+        orgNames,
+        salesmanNames,
+        achievementCacheBranchCode: achievementCacheBranchCode ?? null,
+        organizationPlanBranchCode: organizationPlanBranchCode ?? null,
+      },
       whereWithoutDate,
       dateField,
       plan?.mode === 'routing'

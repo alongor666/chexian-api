@@ -104,6 +104,12 @@ beforeAll(async () => {
   // KPI 用的两张维表（计划数据不影响 cost 五项比对）
   await duckdbService.query(`CREATE TABLE achievement_cache (org_name VARCHAR, full_name VARCHAR, plan_vehicle DOUBLE, branch_code VARCHAR)`);
   await duckdbService.query(`
+    INSERT INTO achievement_cache VALUES
+      ('org_0', 'sales_sc_a', 1111.0, 'SC'),
+      ('org_0', 'sales_sc_b', 1111.0, 'SC'),
+      ('org_0', 'sales_sx_a', 999.0, 'SX')
+  `);
+  await duckdbService.query(`
     CREATE TABLE PlanFact AS
     SELECT * FROM (VALUES
       (2026, 'organization', 'org_0', 1000.0, 'SC'),
@@ -162,12 +168,32 @@ describe('/api/query/kpi 立方体三态行为', () => {
   it('PlanFact organization 计划按 branch_code 从 Parquet 关系隔离读取', async () => {
     const sql = generateKpiQuery(
       '1=1',
-      { orgNames: ['org_0'], branchCode: 'SX' },
+      {
+        orgNames: ['org_0'],
+        achievementCacheBranchCode: 'SX',
+        organizationPlanBranchCode: 'SX',
+      },
       undefined,
       'insurance_start_date'
     );
     const rows = await duckdbService.query<{ vehicle_plan_wan: number }>(sql);
     expect(Number(rows[0]?.vehicle_plan_wan)).toBe(1234);
+  });
+
+  it('SC 机构视角不读取 PlanFact organization，继续使用 achievement_cache 业务员计划汇总', async () => {
+    const sql = generateKpiQuery(
+      '1=1',
+      {
+        orgNames: ['org_0'],
+        achievementCacheBranchCode: 'SC',
+        organizationPlanBranchCode: 'SC',
+      },
+      undefined,
+      'insurance_start_date'
+    );
+    expect(sql).not.toContain('FROM PlanFact');
+    const rows = await duckdbService.query<{ vehicle_plan_wan: number }>(sql);
+    expect(Number(rows[0]?.vehicle_plan_wan)).toBe(2222);
   });
 
   it('① 双开关关闭：原 KPI SQL 跑（含 variable_cost CTE + LEFT JOIN ClaimsAgg）', async () => {

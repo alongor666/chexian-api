@@ -154,8 +154,12 @@ router.get(
       requirePermissionFilter(req.permissionFilter)
     );
 
-    // 分省 RLS：kpi-detail 内同城/异地名单按省切换（G6 follow-up）
-    const branchCode = await resolveBranchRlsCode(req, 'PolicyFact');
+    // 分省 RLS：kpi-detail 内同城/异地名单按省切换；KPI 计划表按各自关系独立门控。
+    const [branchCode, achievementCacheBranchCode, organizationPlanBranchCode] = await Promise.all([
+      resolveBranchRlsCode(req, 'PolicyFact'),
+      resolveBranchRlsCode(req, 'achievement_cache'),
+      resolveBranchRlsCode(req, 'PlanFact'),
+    ]);
 
     // Tier 3: 动态执行 Fallback
     const bundleData = await fetchDashboardBundleData({
@@ -170,6 +174,8 @@ router.get(
       groupDim,
       dateField: filterData.dateField || 'policy_date',
       branchCode,
+      achievementCacheBranchCode: achievementCacheBranchCode ?? null,
+      organizationPlanBranchCode: organizationPlanBranchCode ?? null,
     });
 
     setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
@@ -194,6 +200,8 @@ export async function fetchDashboardBundleData({
   groupDim,
   dateField,
   branchCode,
+  achievementCacheBranchCode,
+  organizationPlanBranchCode,
 }: {
   whereWithDate: string;
   whereWithoutDate: string;
@@ -207,10 +215,21 @@ export async function fetchDashboardBundleData({
   dateField: DateCriteria;
   /** 省份代码（'SC'/'SX'）；未传时回退 SC 名单，SQL 字节与改动前一致（字节安全）。G6 follow-up。*/
   branchCode?: string;
+  /** achievement_cache 计划关系的分省码，必须由该关系自身列门控解析。 */
+  achievementCacheBranchCode?: string | null;
+  /** PlanFact 计划关系的分省码，必须由该关系自身列门控解析。 */
+  organizationPlanBranchCode?: string | null;
 }) {
   const kpiSql = generateKpiQuery(
     whereWithDate,
-    { orgNames, salesmanNames, branchCode },
+    {
+      orgNames,
+      salesmanNames,
+      achievementCacheBranchCode: achievementCacheBranchCode !== undefined
+        ? achievementCacheBranchCode
+        : branchCode,
+      organizationPlanBranchCode,
+    },
     whereWithoutDate,
     dateField
   );

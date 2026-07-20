@@ -63,6 +63,14 @@ describe('kpi achievement_cache 分省 RLS 注入', () => {
   it('options.branchCode → vehicle_plan CTE 含 branch_code 过滤', () => {
     expect(generateKpiQuery('1=1', { branchCode: 'SX' })).toContain(BRANCH);
   });
+  it('achievement_cache 与 PlanFact branch gate 可独立表达，避免跨表误注入', () => {
+    const sql = generateKpiQuery('1=1', {
+      achievementCacheBranchCode: 'SX',
+      organizationPlanBranchCode: null,
+    });
+    expect(sql).toContain("branch_code = 'SX'");
+    expect(sql).not.toContain('FROM PlanFact');
+  });
   it('无 branchCode → achievement_cache 段不含 branch_code 过滤（字节安全）', () => {
     expect(generateKpiQuery('1=1', { orgNames: ['乐山'] })).not.toContain(NO_BRANCH);
   });

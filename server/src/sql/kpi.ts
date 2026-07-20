@@ -9,8 +9,12 @@ export { QUALITY_BUSINESS_CONDITION };
 interface KpiQueryOptions {
   orgNames?: string[];
   salesmanNames?: string[];
-  /** 分省 RLS 码（ADR G4 GATED 多省）：路由经 resolveBranchRlsCode 双门控解析；undefined → 不注入 */
+  /** @deprecated use achievementCacheBranchCode / organizationPlanBranchCode to avoid cross-table gate coupling. */
   branchCode?: string;
+  /** achievement_cache 分省 RLS 码；路由必须按 achievement_cache 自身列门控解析。 */
+  achievementCacheBranchCode?: string | null;
+  /** PlanFact 分省 RLS 码；路由必须按 PlanFact 自身列门控解析。 */
+  organizationPlanBranchCode?: string | null;
 }
 
 const esc = escapeSqlValue;
@@ -25,9 +29,12 @@ const buildAchievementCacheWhere = (options: KpiQueryOptions = {}): string => {
     const salesmanList = options.salesmanNames.map((item) => `'${esc(item)}'`).join(', ');
     conditions.push(`full_name IN (${salesmanList})`);
   }
+  const branchCode = options.achievementCacheBranchCode !== undefined
+    ? options.achievementCacheBranchCode
+    : options.branchCode;
   // 分省 RLS（GATED 多省）：achievement_cache 多省时携 branch_code（flag off / 单省无列 → undefined → 不注入）
-  if (options.branchCode) {
-    conditions.push(`branch_code = '${esc(options.branchCode)}'`);
+  if (branchCode) {
+    conditions.push(`branch_code = '${esc(branchCode)}'`);
   }
   if (conditions.length === 0) {
     return '';
@@ -44,8 +51,11 @@ const buildOrganizationPlanWhere = (options: KpiQueryOptions = {}): string => {
     const orgList = options.orgNames.map((item) => `'${esc(item)}'`).join(', ');
     conditions.push(`organization IN (${orgList})`);
   }
-  if (options.branchCode) {
-    conditions.push(`branch_code = '${esc(options.branchCode)}'`);
+  const branchCode = options.organizationPlanBranchCode !== undefined
+    ? options.organizationPlanBranchCode
+    : options.branchCode;
+  if (branchCode) {
+    conditions.push(`branch_code = '${esc(branchCode)}'`);
   }
   return `WHERE ${conditions.join(' AND ')}`;
 };
@@ -67,7 +77,13 @@ export const generateKpiQuery = (
 ) => {
   const achievementCacheWhere = buildAchievementCacheWhere(options);
   const organizationPlanWhere = buildOrganizationPlanWhere(options);
-  const canUseOrganizationPlan = !options.salesmanNames || options.salesmanNames.length === 0;
+  const organizationPlanBranchCode = options.organizationPlanBranchCode !== undefined
+    ? options.organizationPlanBranchCode
+    : options.branchCode;
+  const canUseOrganizationPlan =
+    organizationPlanBranchCode === 'SX' &&
+    (!options.salesmanNames || options.salesmanNames.length === 0);
+  const canFallbackToAchievementPlan = options.achievementCacheBranchCode !== null;
   const finalBaseWhereClause = baseWhereClause ?? whereClause;
   // 立方体路由模式下，cost 五项由 generateKpiCostCubeQuery 单行提供。
   // 主 SQL 完全跳过 variable_cost_base CTE（260 万行去重 + JOIN ClaimsAgg 的 P95 大头）
@@ -138,7 +154,7 @@ export const generateKpiQuery = (
   const vehiclePlanCte = canUseOrganizationPlan
     ? `
     organization_plan AS (
-      -- 三级机构年计划直接读取 PlanFact（Parquet），山西不再依赖业务员计划空桩。
+      -- 山西三级机构年计划直接读取 PlanFact（Parquet）；四川保留 achievement_cache 人员汇总口径。
       SELECT COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
       FROM PlanFact
       ${organizationPlanWhere}
@@ -150,7 +166,11 @@ export const generateKpiQuery = (
       ${achievementCacheWhere}
     ),
     vehicle_plan AS (
-      SELECT COALESCE(NULLIF(op.vehicle_plan_wan, 0), ap.vehicle_plan_wan, 0) AS vehicle_plan_wan
+      SELECT ${
+        canFallbackToAchievementPlan
+          ? 'COALESCE(NULLIF(op.vehicle_plan_wan, 0), ap.vehicle_plan_wan, 0)'
+          : 'COALESCE(op.vehicle_plan_wan, 0)'
+      } AS vehicle_plan_wan
       FROM organization_plan op
       CROSS JOIN achievement_plan ap
     )`
