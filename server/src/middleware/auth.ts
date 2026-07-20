@@ -13,7 +13,10 @@ import jwt from 'jsonwebtoken';
 import { authConfig } from '../config/auth.js';
 import { AppError } from './error.js';
 import { verifyPat } from '../services/personal-access-token.js';
-import { isUsernameActive } from '../services/user-activation-cache.js';
+import {
+  getUserAllowedRoutes,
+  isUsernameActive,
+} from '../services/user-activation-cache.js';
 import { getPresetVisibleBranches } from '../config/preset-users.js';
 
 /**
@@ -25,6 +28,26 @@ import { getPresetVisibleBranches } from '../config/preset-users.js';
  */
 function decorateVisibleBranches(user: JwtPayload): void {
   user.visibleBranches = getPresetVisibleBranches(user.username);
+}
+
+/**
+ * 从运行时用户授权缓存注入用户级页面白名单。
+ *
+ * allowedRoutes 不进签名 token：管理员修改后无需等待旧 JWT 过期，下一次请求立即生效；
+ * 缓存由 access-control 在启动 seed 与每次用户写操作后原子重建，认证热路径零 DuckDB I/O；
+ * PAT 校验已经取过完整用户记录，直接复用其中配置。
+ */
+function decorateAllowedRoutes(
+  user: JwtPayload,
+  verifiedUser?: { allowedRoutes?: string[] } | null,
+): void {
+  const storedRoutes = verifiedUser === undefined
+    ? getUserAllowedRoutes(user.username)
+    : verifiedUser?.allowedRoutes;
+  user.allowedRoutes =
+    storedRoutes && storedRoutes.length > 0
+      ? [...storedRoutes]
+      : undefined;
 }
 
 /**
@@ -45,6 +68,11 @@ export interface JwtPayload {
    * 不进签名 token —— 免重登即对存量会话生效，且单一事实源在 preset 配置（codex 闸-1 P1-3）。
    */
   visibleBranches?: string[];
+  /**
+   * 用户级页面白名单。由 authMiddleware 每次请求从运行时授权缓存注入，不进 JWT；
+   * 非空时优先于角色默认值，空/未配置时由 permissionMiddleware 回退到角色默认值。
+   */
+  allowedRoutes?: string[];
   /**
    * pns（password-not-set）：该账号尚未自设专属密码（password_changed_at 为空且非豁免账号），
    * 本会话须先设密。密码登录（authService.login）与飞书扫码（feishu-auth callback）两条链路
@@ -122,6 +150,7 @@ export async function authMiddleware(
         branchCode: verified.user.branchCode,
       };
       decorateVisibleBranches(req.user); // 全国超管能力按 username 派生（PAT 出口）
+      decorateAllowedRoutes(req.user, verified.user); // PAT 已取过完整用户记录，直接复用
       req.pat = { tokenId: verified.tokenId, name: verified.name };
       return next();
     }
@@ -159,6 +188,7 @@ export async function authMiddleware(
     }
     req.user = decoded;
     decorateVisibleBranches(req.user); // 全国超管能力按 username 派生（JWT/cookie 出口）；旧 token 免重登生效
+    decorateAllowedRoutes(req.user); // 用户级路由白名单从运行时缓存注入；旧 token 免重登生效
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {

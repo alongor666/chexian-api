@@ -380,6 +380,35 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     branchCode: 'SC',
   };
 
+  it('用户级白名单可收紧角色默认权限：仅允许 /home 时 /performance-org-heatmap → 403', async () => {
+    const req = makeReqWithPath(
+      { ...orgUser, allowedRoutes: ['/home'] },
+      '/performance-org-heatmap',
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
+  });
+
+  it('用户级白名单可覆盖角色默认权限：允许 /chart-ledger 时 /pivot → 通过', async () => {
+    const req = makeReqWithPath(
+      { ...orgUser, allowedRoutes: ['/chart-ledger'] },
+      '/pivot',
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+    expect(req.permissionFilter).toBeDefined();
+  });
+
+  it('用户级白名单为空时回退角色默认权限：/performance-org-heatmap → 通过', async () => {
+    const req = makeReqWithPath(
+      { ...orgUser, allowedRoutes: [] },
+      '/performance-org-heatmap',
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeUndefined();
+  });
+
   // ─── 白名单外路由 → 403 ───
   it('org_user 访问 /cost → 403（成本分析不在白名单）', async () => {
     const req = makeReqWithPath(orgUser, '/cost');
@@ -669,6 +698,16 @@ describe('permissionMiddleware: org_user 路由白名单校验（纵深防御）
     );
     const err = await runMiddlewarePath(req);
     expect(err).toBeUndefined();
+  });
+
+  it('telemarketing_user 有用户级白名单时同样消费：未含 /cost → 403', async () => {
+    const req = makeReqWithPath(
+      { role: UserRole.TELEMARKETING_USER, branchCode: 'SC', allowedRoutes: ['/home'] },
+      '/cost',
+    );
+    const err = await runMiddlewarePath(req);
+    expect(err).toBeInstanceOf(AppError);
+    expect((err as AppError).statusCode).toBe(403);
   });
 
   // ─── API_ROUTE_TO_PAGE_MAP 导出验证 ───
