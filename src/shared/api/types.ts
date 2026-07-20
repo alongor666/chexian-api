@@ -118,6 +118,10 @@ export interface KpiData {
   latest_policy_date: string | null;
   vehicle_plan_wan: number | null;
   vehicle_premium: number;
+  /** 满期保费（元，闰年感知） */
+  earned_premium: number | null;
+  /** 满期率（满期保费 / 同口径签单保费，百分数） */
+  maturity_rate: number | null;
   vehicle_achievement_rate: number | null;
   vehicle_growth_rate: number | null;
   variable_cost_ratio: number | null;

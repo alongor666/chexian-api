@@ -146,7 +146,7 @@ function donutBarCard(
   };
 }
 
-/** 构造单卡 props — Hero 三张携带参照系 + 状态；其它走标准变体（Hero 归属由 HERO_KPI_IDS + visibleHero 分组决定） */
+/** 构造单卡 props — Hero 五张展示规模/满期/进度/成本；其它走标准变体（Hero 归属由 HERO_KPI_IDS + visibleHero 分组决定） */
 export function buildKpiCardProps(
   id: KpiCardId,
   { kpis, kpiDetails, loading }: KpiCardBuildContext
@@ -182,7 +182,31 @@ export function buildKpiCardProps(
       };
     }
 
-    /* -------- Hero #2：车险达成率（ring） -------- */
+    /* -------- Hero #2：满期保费（闰年感知） -------- */
+    case 'earned_premium':
+      return {
+        title,
+        value: kpis.earned_premium,
+        unit: '万元',
+        formatter: formatPremiumWan,
+        loading,
+        type: 'value',
+        variant: 'hero',
+      };
+
+    /* -------- Hero #3：满期率（满期保费 / 同口径签单保费） -------- */
+    case 'maturity_rate':
+      return {
+        title,
+        value: kpis.maturity_rate,
+        unit: '%',
+        formatter: (v) => v.toFixed(1),
+        loading,
+        type: 'value',
+        variant: 'hero',
+      };
+
+    /* -------- Hero #4：车险达成率（ring） -------- */
     case 'vehicle_achievement_rate': {
       const pct = toPercent(kpis.vehicle_achievement_rate) ?? 0;
       const status = statusFor({ value: pct, threshold: T.premiumProgressWarn });
@@ -204,7 +228,7 @@ export function buildKpiCardProps(
       };
     }
 
-    /* -------- Hero #3：变动成本率（segments：满期赔付率 + 费用率） -------- */
+    /* -------- Hero #5：变动成本率（segments：满期赔付率 + 费用率） -------- */
     case 'variable_cost_ratio': {
       const value = toPercent(kpis.variable_cost_ratio) ?? 0;
       const earnedClaimRatio = toPercent(kpis.earned_claim_ratio);

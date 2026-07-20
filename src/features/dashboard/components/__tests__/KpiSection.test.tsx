@@ -19,6 +19,8 @@ import type { KpiDetailResult } from '../../../../shared/types/kpi';
 const kpis: KpiData = {
   vehicle_premium: 12000,
   vehicle_plan_wan: 13000,
+  earned_premium: 6000,
+  maturity_rate: 50,
   vehicle_achievement_rate: 92.3,
   vehicle_growth_rate: 5.2,
   variable_cost_ratio: 88.5,
@@ -77,11 +79,13 @@ function renderSection(
 afterEach(cleanup);
 
 describe('KpiSection 特征测试', () => {
-  it('渲染 3 张 Hero 卡（经营体检）', () => {
+  it('按指定顺序渲染 5 张 Hero 卡（经营体检）', () => {
     renderSection();
-    expect(screen.getByText('车险保费')).toBeTruthy();
-    expect(screen.getByText('车险达成率')).toBeTruthy();
-    expect(screen.getByText('变动成本率')).toBeTruthy();
+    const labels = ['车险保费', '满期保费', '满期率', '车险达成率', '变动成本率'];
+    const elements = labels.map((label) => screen.getByText(label));
+    for (let i = 0; i < elements.length - 1; i += 1) {
+      expect(elements[i].compareDocumentPosition(elements[i + 1]) & 4).toBe(4);
+    }
   });
 
   it('渲染 6 张 Core 卡（核心指标）', () => {

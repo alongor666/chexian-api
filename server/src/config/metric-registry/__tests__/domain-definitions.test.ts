@@ -118,6 +118,23 @@ describe('满期保费 (earned_premium) 闰年感知', () => {
   });
 });
 
+describe('满期率 (maturity_rate) 与满期保费同源', () => {
+  const m = getMetric('maturity_rate')!;
+
+  it('注册为截止日口径的不可加百分比指标', () => {
+    expect(m).toBeDefined();
+    expect(m.timeWindow).toBe('cutoff-based');
+    expect(m.additive).toBe(false);
+    expect(m.formula.unit).toBe('%');
+  });
+
+  it('分子闰年感知且分母为同口径签单保费', () => {
+    expect(m.formula.numerator).toContain('earned_days / policy_term');
+    expect(m.formula.denominator).toBe('SUM(premium)');
+    expect(m.sql.requiredColumns).toEqual(['premium', 'earned_days', 'policy_term']);
+  });
+});
+
 // ═══════════════════════════════════════════════════
 // 5. 基准保费链路: 基准保费 → 满期基准保费 → 满期基准赔付率
 // ═══════════════════════════════════════════════════

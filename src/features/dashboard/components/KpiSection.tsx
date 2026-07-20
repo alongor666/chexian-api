@@ -28,7 +28,7 @@ interface KpiSectionProps {
  * KPI 指标卡片区域 — 重设计版
  *
  * 设计简报 §5 落地：
- *  - 顶部「经营体检」3 张 Hero 卡（含 progress / ring / segments 参照系 + 状态 rail）
+ *  - 顶部「经营体检」5 张 Hero 卡（规模 / 满期 / 进度 / 成本）
  *  - 中部「核心指标」6 张普通卡
  *  - 底部「关注指标」13 张普通卡，默认折叠（渐进披露）
  *
@@ -127,7 +127,7 @@ export const KpiSection = memo<KpiSectionProps>(({ kpis, kpiDetails, loading, vi
           </span>
         </div>
         {visibleHero.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {visibleHero.map((id) => cardWith(id))}
           </div>
         )}

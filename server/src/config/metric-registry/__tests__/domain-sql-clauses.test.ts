@@ -65,6 +65,20 @@ describe('满期保费 (earned_premium) SQL 闰年感知', () => {
   });
 });
 
+describe('满期率 (maturity_rate) SQL 口径', () => {
+  const sql = getMetric('maturity_rate')!.sql.expression;
+
+  it('使用同一满期因子并除以签单保费', () => {
+    expect(sql).toContain('earned_days');
+    expect(sql).toContain('policy_term');
+    expect(sql).toMatch(/100\.0\s*\/\s*SUM\(premium\)/);
+  });
+
+  it('不固定按 365 天折算', () => {
+    expect(sql).not.toMatch(/\/\s*365(?:\.0)?/);
+  });
+});
+
 // ═══════════════════════════════════════════════════
 // 3. 基准保费 SQL — 商业险先归一，再进入满期口径
 // ═══════════════════════════════════════════════════

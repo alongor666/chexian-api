@@ -9,13 +9,13 @@
  *     P95 通常在数十毫秒
  *   ─ 非可加（salesman_count / per_vehicle_premium 的 COUNT DISTINCT vehicle_frame_no
  *     / bundle_renewal_rate 的套单配对）……保持主路径，结构性回退
- *   ─ **本立方体专管 cost 三项**（variable_cost_ratio / earned_claim_ratio /
- *     expense_ratio）：原路径的 P95 大头 = variable_cost_base CTE（B252 保单去重
+ *   ─ **本立方体专管 cost 五项**（variable_cost_ratio / earned_claim_ratio /
+ *     expense_ratio / earned_premium / maturity_rate）：原路径的 P95 大头 = variable_cost_base CTE（B252 保单去重
  *     260 万行 + LEFT JOIN ClaimsAgg + 逐保单日期函数）→ 全部移到构建期，
  *     查询期单行扫小立方体即得
  *
  * 接线由 routes/query/kpi.ts 在双开关开启 + cube 可服务 + 新鲜时启用：
- *   主 SQL（excludeVariableCost=true）+ 本立方体 SQL 并行 → 合并三项 →
+ *   主 SQL（excludeVariableCost=true）+ 本立方体 SQL 并行 → 合并五项 →
  *   总时延 ≈ max(主 SQL去 cost 后, 立方体)，cost JOIN 大头消除。
  *
  * 结构性回退（不可服务情形）：
@@ -51,7 +51,7 @@ export interface KpiCostCubeServabilityArgs {
   dateField: string;
 }
 
-/** 判定 KPI 的 cost 三项能否由 CubeCostDay 精确回答 */
+/** 判定 KPI 的 cost 五项能否由 CubeCostDay 精确回答 */
 export function isKpiCostCubeServable(args: KpiCostCubeServabilityArgs): CubeServability {
   if (args.dateField !== 'insurance_start_date') {
     return {
@@ -63,7 +63,7 @@ export function isKpiCostCubeServable(args: KpiCostCubeServabilityArgs): CubeSer
 }
 
 /**
- * 生成 KPI cost 三项的立方体单行 SQL（输出列与 generateKpiQuery 的 vc.* 三列同名）。
+ * 生成 KPI cost 五项的立方体单行 SQL（输出列与 generateKpiQuery 的 vc.* 五列同名）。
  *
  * 等价性依据：dateField=insurance_start_date 时，
  *   原路径 latest_policy_date = MAX(insurance_start_date)（受同 whereClause 过滤）
@@ -71,7 +71,8 @@ export function isKpiCostCubeServable(args: KpiCostCubeServabilityArgs): CubeSer
  * 满期天数/保险期限按 ratio-of-sums 在格子行内联（格内保单共享起保日 →
  * earned_days/policy_term 为格内常量），注册表表达式逐字内联即与原路径同义。
  *
- * 单行返回（无 GROUP BY）：variable_cost_ratio / earned_claim_ratio / expense_ratio。
+ * 单行返回（无 GROUP BY）：variable_cost_ratio / earned_claim_ratio / expense_ratio /
+ * earned_premium / maturity_rate。
  *
  * 调用方必须先通过 isKpiCostCubeServable + ensureCostCubeFresh（含跨格保单探针）。
  */
@@ -102,7 +103,9 @@ export function generateKpiCostCubeQuery(whereClause: string = '1=1'): string {
     SELECT
       ${getMetricSql('variable_cost_ratio')},
       ${getMetricSql('earned_claim_ratio')},
-      ${getMetricSql('expense_ratio')}
+      ${getMetricSql('expense_ratio')},
+      ${getMetricSql('earned_premium')},
+      ${getMetricSql('maturity_rate')}
     FROM cell_exposure
   `;
 }

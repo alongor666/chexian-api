@@ -43,16 +43,18 @@ describe('isKpiCostCubeServable', () => {
 });
 
 describe('generateKpiCostCubeQuery', () => {
-  it('单行 SQL：CubeCostDay 来源、cost 三项别名、零 PolicyFact/ClaimsAgg 引用', () => {
+  it('单行 SQL：CubeCostDay 来源、cost 五项别名、零 PolicyFact/ClaimsAgg 引用', () => {
     const sql = generateKpiCostCubeQuery('1=1');
     expect(sql).toContain(`FROM ${COST_CUBE_TABLE}`);
     expect(sql).toContain('AS variable_cost_ratio');
     expect(sql).toContain('AS earned_claim_ratio');
     expect(sql).toContain('AS expense_ratio');
+    expect(sql).toContain('AS earned_premium');
+    expect(sql).toContain('AS maturity_rate');
     expect(sql).not.toMatch(/\bPolicyFact\b/);
     expect(sql).not.toMatch(/\bClaimsAgg\b/);
     expect(sql).not.toMatch(/\bCOUNT\(DISTINCT\b/);
-    // 立方体 SQL 不分组 → 不应出现 GROUP BY（cost 三项是单行单值）
+    // 立方体 SQL 不分组 → 不应出现 GROUP BY（cost 五项是单行单值）
     expect(sql).not.toMatch(/\bGROUP BY\b/);
   });
 
@@ -72,13 +74,13 @@ describe('generateKpiCostCubeQuery', () => {
 });
 
 describe('generateKpiQuery + excludeVariableCost 等价对比', () => {
-  // 立方体路由模式开关 excludeVariableCost=true 时主 SQL 必须刚好少了 cost 三项
+  // 立方体路由模式开关 excludeVariableCost=true 时主 SQL 必须刚好少了 cost 五项
   // 与对应 CTE/JOIN，其他 17 项指标输出列完全一致（这是 merge 的等价前提）
 
   const FULL_KPI_OUTPUT_COLUMNS = [
     'latest_policy_date', 'vehicle_plan_wan', 'vehicle_premium', 'vehicle_achievement_rate',
     'vehicle_growth_rate',
-    'variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio',
+    'variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio', 'earned_premium', 'maturity_rate',
     'bundle_renewal_rate', 'driver_premium', 'driver_achievement_rate', 'driver_growth_rate',
     'total_premium', 'policy_count', 'org_count', 'salesman_count',
     'transfer_rate', 'telesales_rate', 'per_capita_premium', 'renewal_rate',
@@ -86,13 +88,13 @@ describe('generateKpiQuery + excludeVariableCost 等价对比', () => {
     'commercial_insurance_rate', 'per_vehicle_premium',
   ];
 
-  // SELECT 的输出别名匹配方式：cost 三项与 5 项 plan/growth 用 `AS xxx`，
+  // SELECT 的输出别名匹配方式：cost 五项与 5 项 plan/growth 用 `AS xxx`，
   // 其他 17 项 fm/bp 列直接 `fm.xxx,`/`bp.xxx,` 引用 —— 任一形态出现即视为存在
   const hasOutputColumn = (sql: string, col: string): boolean =>
     new RegExp(`AS ${col}\\b`).test(sql)
     || new RegExp(`\\b(fm|bp|vpl|dpl|vc|lc)\\.${col}\\b`).test(sql);
 
-  it('默认（excludeVariableCost=false）输出 KPI 全部 26 列（包含 cost 三项）', () => {
+  it('默认（excludeVariableCost=false）输出 KPI 全部 28 列（包含 cost 五项）', () => {
     const sql = generateKpiQuery('1=1', {}, undefined, 'policy_date');
     for (const col of FULL_KPI_OUTPUT_COLUMNS) {
       expect(hasOutputColumn(sql, col), `缺输出列 ${col}`).toBe(true);
@@ -101,14 +103,14 @@ describe('generateKpiQuery + excludeVariableCost 等价对比', () => {
     expect(sql).toMatch(/CROSS JOIN variable_cost vc/);
   });
 
-  it('excludeVariableCost=true 移除 cost 三项 + variable_cost CTE/JOIN，其他 23 项保留', () => {
+  it('excludeVariableCost=true 移除 cost 五项 + variable_cost CTE/JOIN，其他 23 项保留', () => {
     const sql = generateKpiQuery('1=1', {}, undefined, 'insurance_start_date', true);
-    const COST_THREE = ['variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio'];
-    const OTHERS = FULL_KPI_OUTPUT_COLUMNS.filter((c) => !COST_THREE.includes(c));
+    const COST_FIVE = ['variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio', 'earned_premium', 'maturity_rate'];
+    const OTHERS = FULL_KPI_OUTPUT_COLUMNS.filter((c) => !COST_FIVE.includes(c));
     for (const col of OTHERS) {
       expect(hasOutputColumn(sql, col), `excludeVariableCost=true 不应移除 ${col}`).toBe(true);
     }
-    for (const col of COST_THREE) {
+    for (const col of COST_FIVE) {
       expect(hasOutputColumn(sql, col), `excludeVariableCost=true 应移除 ${col}`).toBe(false);
     }
     // CTE 与 JOIN 必须连带剥离（否则白扫 P95 大头）

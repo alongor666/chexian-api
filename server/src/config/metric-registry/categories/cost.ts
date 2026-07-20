@@ -173,6 +173,46 @@ export const costMetrics: readonly MetricDefinition[] = [
   },
 
   {
+    id: 'maturity_rate',
+    additive: false,
+    version: '1.0.0',
+    timeWindow: 'cutoff-based',
+    name: '满期率',
+    category: 'cost',
+    tags: ['core', 'kpi', 'cost'],
+    formula: {
+      description: '满期保费 / 同口径签单保费（闰年感知）',
+      numerator: 'SUM(premium * earned_days / policy_term)',
+      denominator: 'SUM(premium)',
+      unit: '%',
+    },
+    sql: {
+      expression: `CASE
+    WHEN SUM(premium) > 0
+    THEN SUM(premium * CAST(earned_days AS DOUBLE) / CAST(policy_term AS DOUBLE)) * 100.0 / SUM(premium)
+    ELSE NULL
+  END AS maturity_rate`,
+      requiredColumns: ['premium', 'earned_days', 'policy_term'],
+      notes: '与满期保费使用同一保单工作集和观察截止日；policy_term 为 365/366 天，禁止固定按 365 天折算。不在 SQL 内 ROUND，前端按 1 位小数单次舍入。',
+    },
+    display: {
+      formatter: 'percent',
+      label: '满期率',
+      unit: '%',
+      decimals: 1,
+      tooltip: '满期率 = 满期保费 / 同口径签单保费 × 100%',
+    },
+    testCases: [
+      {
+        name: '满期率位于 0% 到 100%',
+        input: { whereClause: '1=1' },
+        assertions: { maturity_rate: { op: 'between', min: 0, max: 100 } },
+      },
+    ],
+    changelog: [{ version: '1.0.0', date: '2026-07-19', changes: '新增 Dashboard 满期率 KPI，复用满期保费闰年感知口径' }],
+  },
+
+  {
     id: 'baseline_premium',
     timeWindow: 'any',
     additive: false,
