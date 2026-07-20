@@ -35,10 +35,26 @@ const buildAchievementCacheWhere = (options: KpiQueryOptions = {}): string => {
   return `WHERE ${conditions.join(' AND ')}`;
 };
 
+const buildOrganizationPlanWhere = (options: KpiQueryOptions = {}): string => {
+  const conditions = [
+    `plan_year = COALESCE((SELECT latest_year FROM latest_context LIMIT 1), 0)`,
+    `level = 'organization'`,
+  ];
+  if (options.orgNames && options.orgNames.length > 0) {
+    const orgList = options.orgNames.map((item) => `'${esc(item)}'`).join(', ');
+    conditions.push(`organization IN (${orgList})`);
+  }
+  if (options.branchCode) {
+    conditions.push(`branch_code = '${esc(options.branchCode)}'`);
+  }
+  return `WHERE ${conditions.join(' AND ')}`;
+};
+
 /**
  * 单行 KPI SQL 生成器。
  * @param excludeVariableCost  立方体路由专用开关：跳过 variable_cost CTE 与 SELECT
- *   的 cost 三列（variable_cost_ratio / earned_claim_ratio / expense_ratio），
+ *   的 cost 五列（variable_cost_ratio / earned_claim_ratio / expense_ratio /
+ *   earned_premium / maturity_rate），
  *   由 handler 并行的成本立方体单行 SQL 提供后 merge。默认 false 行为完全不变。
  *   见 sql/cube/kpi-cost-cube.ts 与 routes/query/kpi.ts 的 tryKpiCostCube。
  */
@@ -50,10 +66,12 @@ export const generateKpiQuery = (
   excludeVariableCost: boolean = false
 ) => {
   const achievementCacheWhere = buildAchievementCacheWhere(options);
+  const organizationPlanWhere = buildOrganizationPlanWhere(options);
+  const canUseOrganizationPlan = !options.salesmanNames || options.salesmanNames.length === 0;
   const finalBaseWhereClause = baseWhereClause ?? whereClause;
-  // 立方体路由模式下，cost 三项由 generateKpiCostCubeQuery 单行提供。
+  // 立方体路由模式下，cost 五项由 generateKpiCostCubeQuery 单行提供。
   // 主 SQL 完全跳过 variable_cost_base CTE（260 万行去重 + JOIN ClaimsAgg 的 P95 大头）
-  // 与 SELECT 的 vc.* 三列、CROSS JOIN vc —— 这才是 KPI 接立方体的真实加速来源。
+  // 与 SELECT 的 vc.* 五列、CROSS JOIN vc —— 这才是 KPI 接立方体的真实加速来源。
   const variableCostCte = excludeVariableCost ? '' : `,
     -- B252：filtered_dedup 按 (policy_no, insurance_start_date) 聚合去重，
     -- 防止 variable_cost_base JOIN ClaimsAgg 后因 PolicyFact 原单+批改多行导致赔款虚增
@@ -104,15 +122,45 @@ export const generateKpiQuery = (
         -- 注册表 variable_cost_ratio.formula）。供 dashboard 变动成本率卡片真实分段，
         -- 替代前端 kpiCardProps.ts 的 ×0.69 假估算。
         ${getMetricSql('earned_claim_ratio')},
-        ${getMetricSql('expense_ratio')}
+        ${getMetricSql('expense_ratio')},
+        ${getMetricSql('earned_premium')},
+        ${getMetricSql('maturity_rate')}
       FROM variable_cost_base
     )`;
   const variableCostSelect = excludeVariableCost ? '' : `
       vc.variable_cost_ratio AS variable_cost_ratio,
       vc.earned_claim_ratio AS earned_claim_ratio,
-      vc.expense_ratio AS expense_ratio,`;
+      vc.expense_ratio AS expense_ratio,
+      vc.earned_premium AS earned_premium,
+      vc.maturity_rate AS maturity_rate,`;
   const variableCostJoin = excludeVariableCost ? '' : `
     CROSS JOIN variable_cost vc`;
+  const vehiclePlanCte = canUseOrganizationPlan
+    ? `
+    organization_plan AS (
+      -- 三级机构年计划直接读取 PlanFact（Parquet），山西不再依赖业务员计划空桩。
+      SELECT COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
+      FROM PlanFact
+      ${organizationPlanWhere}
+    ),
+    achievement_plan AS (
+      -- 兼容业务员级计划；当目标年度没有机构级计划时回退现有口径。
+      SELECT COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
+      FROM achievement_cache
+      ${achievementCacheWhere}
+    ),
+    vehicle_plan AS (
+      SELECT COALESCE(NULLIF(op.vehicle_plan_wan, 0), ap.vehicle_plan_wan, 0) AS vehicle_plan_wan
+      FROM organization_plan op
+      CROSS JOIN achievement_plan ap
+    )`
+    : `
+    vehicle_plan AS (
+      -- 业务员筛选必须按人员粒度取计划，不能摊入整个三级机构年计划。
+      SELECT COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
+      FROM achievement_cache
+      ${achievementCacheWhere}
+    )`;
 
   return `
     WITH filtered AS (
@@ -283,13 +331,7 @@ export const generateKpiQuery = (
         ) AS driver_prev_full_premium
       FROM filtered_base f
       CROSS JOIN latest_context lc
-    )${variableCostCte},
-    vehicle_plan AS (
-      SELECT
-        COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
-      FROM achievement_cache
-      ${achievementCacheWhere}
-    ),
+    )${variableCostCte},${vehiclePlanCte},
     driver_plan AS (
       SELECT
         COALESCE(SUM(plan_premium), 0) AS driver_plan_wan

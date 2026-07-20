@@ -2,7 +2,7 @@
  * buildKpiCardProps 单测 — 逐项锁定 (KpiCardId → EnhancedKpiCardProps) 映射
  *
  * 这是 KpiSection God-组件抽取后新增的安全网：把原本藏在组件闭包里、无法单测的
- * 22 路 switch 映射固化下来。任何对 kpiCardProps 的后续重组（分组/去重）都必须保持本测全绿。
+ * 24 路 switch 映射固化下来。任何对 kpiCardProps 的后续重组（分组/去重）都必须保持本测全绿。
  */
 import { describe, it, expect } from 'vitest';
 import { buildKpiCardProps, type KpiCardBuildContext } from '../kpiCardProps';
@@ -13,6 +13,8 @@ import type { KpiDetailResult } from '../../../../shared/types/kpi';
 const kpis: KpiData = {
   vehicle_premium: 12000,
   vehicle_plan_wan: 13000,
+  earned_premium: 6000,
+  maturity_rate: 50,
   vehicle_achievement_rate: 92.3,
   vehicle_growth_rate: 5.2,
   variable_cost_ratio: 88.5,
@@ -75,6 +77,8 @@ type Expect = {
 
 const EXPECTATIONS: Record<KpiCardId, Expect> = {
   vehicle_premium: { type: 'value', variant: 'hero', unit: '万元', hasProgress: true, hasStatus: true },
+  earned_premium: { type: 'value', variant: 'hero', unit: '万元' },
+  maturity_rate: { type: 'value', variant: 'hero', unit: '%' },
   vehicle_achievement_rate: { type: 'value', variant: 'hero', unit: '%', hasRing: true, hasStatus: true },
   variable_cost_ratio: { type: 'bar', variant: 'hero', unit: '%', hasSegments: true, hasStatus: true },
   vehicle_growth_rate: { type: 'value', variant: 'standard', hasDeltaMoM: true },
@@ -99,7 +103,7 @@ const EXPECTATIONS: Record<KpiCardId, Expect> = {
 };
 
 describe('buildKpiCardProps', () => {
-  it('为 KPI_CARD_META 中全部 22 个 id 返回非空 props 且标题对齐注册表', () => {
+  it('为 KPI_CARD_META 中全部 24 个 id 返回非空 props 且标题对齐注册表', () => {
     for (const meta of KPI_CARD_META) {
       const props = buildKpiCardProps(meta.id, ctx);
       expect(props, `id=${meta.id} 应返回非空`).not.toBeNull();
@@ -127,6 +131,8 @@ describe('buildKpiCardProps', () => {
 
   it('锁定关键取值来源', () => {
     expect(buildKpiCardProps('driver_premium', ctx)!.value).toBe(kpis.driver_premium);
+    expect(buildKpiCardProps('earned_premium', ctx)!.value).toBe(kpis.earned_premium);
+    expect(buildKpiCardProps('maturity_rate', ctx)!.value).toBe(kpis.maturity_rate);
     expect(buildKpiCardProps('total_premium', ctx)!.value).toBe(kpis.total_premium);
     expect(buildKpiCardProps('policy_count', ctx)!.value).toBe(kpis.policy_count);
     // 占比型按定义 value 为 undefined（只画占比条）

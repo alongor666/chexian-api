@@ -18,6 +18,8 @@ export interface KpiData {
   latest_policy_date?: string | null;
   vehicle_plan_wan?: number | null;
   vehicle_premium?: number | bigint;
+  earned_premium?: number | bigint | null;
+  maturity_rate?: number | null;
   vehicle_achievement_rate?: number | null;
   vehicle_growth_rate?: number | null;
   variable_cost_ratio?: number | null;
@@ -89,6 +91,8 @@ export const useKpiData = ({
         latest_policy_date: kpiResponse.latest_policy_date,
         vehicle_plan_wan: kpiResponse.vehicle_plan_wan,
         vehicle_premium: kpiResponse.vehicle_premium,
+        earned_premium: kpiResponse.earned_premium,
+        maturity_rate: kpiResponse.maturity_rate,
         vehicle_achievement_rate: kpiResponse.vehicle_achievement_rate,
         vehicle_growth_rate: kpiResponse.vehicle_growth_rate,
         variable_cost_ratio: kpiResponse.variable_cost_ratio,

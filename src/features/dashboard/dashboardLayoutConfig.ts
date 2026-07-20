@@ -15,6 +15,8 @@ export type KpiGroup = 'core' | 'focus';
 
 export type KpiCardId =
   | 'vehicle_premium'
+  | 'earned_premium'
+  | 'maturity_rate'
   | 'vehicle_achievement_rate'
   | 'vehicle_growth_rate'
   | 'variable_cost_ratio'
@@ -39,6 +41,8 @@ export type KpiCardId =
 
 export const KPI_CARD_META: Array<{ id: KpiCardId; label: string; group: KpiGroup }> = [
   { id: 'vehicle_premium', label: '车险保费', group: 'core' },
+  { id: 'earned_premium', label: '满期保费', group: 'core' },
+  { id: 'maturity_rate', label: '满期率', group: 'core' },
   { id: 'vehicle_achievement_rate', label: '车险达成率', group: 'core' },
   { id: 'vehicle_growth_rate', label: '车险增长率', group: 'core' },
   { id: 'variable_cost_ratio', label: '变动成本率', group: 'core' },
@@ -67,9 +71,11 @@ export const DEFAULT_KPI_ORDER: Record<KpiGroup, KpiCardId[]> = {
   focus: KPI_CARD_META.filter((item) => item.group === 'focus').map((item) => item.id),
 };
 
-/** 核心指标中的"主角"卡片 — 在 3+N 分层布局中用大卡片展示 */
+/** 核心指标中的“主角”卡片 — 在 5+N 分层布局中用大卡片展示 */
 export const HERO_KPI_IDS: KpiCardId[] = [
   'vehicle_premium',
+  'earned_premium',
+  'maturity_rate',
   'vehicle_achievement_rate',
   'variable_cost_ratio',
 ];

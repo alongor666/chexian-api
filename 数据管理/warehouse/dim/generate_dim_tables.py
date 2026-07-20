@@ -14,19 +14,21 @@
     - 川分销售人员名单__3月12日更新.xlsx          → 业务员基础信息（岗位、状态、入职、离职）
     - 四川分公司机构业务日报（截止2026年3月23日）.xlsx → 2026 机构级计划
 
-**SX 模式（--branch-code SX）**：从山西 policy parquet 派生维度表（无 xlsx 源时的应急方案）：
+**SX 模式（--branch-code SX）**：从山西 policy parquet + 本地三级机构计划源生成维度表：
   输出至 warehouse/validation/SX/dim/salesman/latest.parquet
          warehouse/validation/SX/dim/plan/latest.parquet
 
   - salesman 派生：从 SX policy parquet 的 salesman_name(工号+姓名) + org_level_3 提取唯一业务员列表
     （无岗位/入职/离职等字段，plan=0·SalesmanTeamMapping 不 join，achievement_cache Part B 兜底出现）
-  - plan 派生：最小可用空表（plan_vehicle=0），使 PlanFact 不报 Binder Error
+  - plan：从本地 CSV 读取三级机构年计划，标准化写入 PlanFact Parquet
   - branch_code 落列触发运行时 multiProvince（ADR G3 信号）
 
 用法：
   cd 数据管理
   python3 warehouse/dim/generate_dim_tables.py                  # SC 模式（需四川 xlsx）
   python3 warehouse/dim/generate_dim_tables.py --branch-code SX # SX 模式（从 policy parquet 派生）
+  python3 warehouse/dim/generate_dim_tables.py --branch-code SX \
+    --sx-plan-source /path/to/sx_plan_2026_by_org.csv
 
 依赖：pandas, openpyxl, pyarrow, duckdb（SX 模式额外需要）
 """
@@ -50,6 +52,11 @@ def _parse_args() -> argparse.Namespace:
         default="SC",
         choices=["SC", "SX"],
         help="目标省份码（SC=四川 xlsx 模式；SX=山西 parquet 派生模式）",
+    )
+    parser.add_argument(
+        "--sx-plan-source",
+        type=Path,
+        help="山西三级机构保费计划本地 CSV（organization,plan_vehicle；单位万元）",
     )
     return parser.parse_args()
 
@@ -647,38 +654,51 @@ def build_sx_salesman_from_parquet(branch_code: str = "SX") -> pd.DataFrame:
     return result
 
 
-def build_sx_plan_stub(branch_code: str = "SX", plan_year: int = 2026) -> pd.DataFrame:
-    """生成 SX 计划表。优先读分机构年计划源 csv（level=organization，真实 plan_vehicle）；
-    无源回退最小空桩（防 PlanFact Binder Error，plan=0 → achievement_rate=NULL）。
+def build_sx_plan_from_local_source(
+    source_path: Path | None = None,
+    branch_code: str = "SX",
+    plan_year: int = 2026,
+) -> pd.DataFrame:
+    """从本地分机构计划 CSV 生成 SX organization 级计划表。
 
     源：数据管理/存量数据/sx_plan_<year>_by_org.csv（organization, plan_vehicle 两列，万元）。
     来自山西分公司经营快报分机构表。仅 10 个纯三级机构（太原一部/二部 + 大同/阳泉/长治/晋城/
     晋中/运城/临汾/吕梁）；渠道类（车商/经代/金融同业/重客）+「其他」因与三级机构重复计算
     暂不统计；salesman 层无源（业务员级计划待补，团队/业务员达成率仍空）。
+
+    数据契约：缺文件、字段漂移、空/重复机构、非数值或负计划一律失败，禁止静默回退 0 计划。
     """
-    sx_plan_src = DATA_ROOT / "存量数据" / f"sx_plan_{plan_year}_by_org.csv"
+    del branch_code  # 输出省份码由多省维度加载器按物理隔离路径注入
+    sx_plan_src = source_path or DATA_ROOT / "存量数据" / f"sx_plan_{plan_year}_by_org.csv"
+    sx_plan_src = Path(sx_plan_src).expanduser().resolve()
     if not sx_plan_src.exists():
-        print(f"  ⚠ 未找到 SX 计划源 {sx_plan_src.name}，回退最小空桩（plan=0）")
-        return pd.DataFrame({
-            "plan_year": pd.array([], dtype="int64"),
-            "level": pd.array([], dtype="object"),
-            "business_no": pd.array([], dtype="object"),
-            "salesman_name": pd.array([], dtype="object"),
-            "full_name": pd.array([], dtype="object"),
-            "team": pd.array([], dtype="object"),
-            "organization": pd.array([], dtype="object"),
-            "hire_date": pd.array([], dtype="object"),
-            "plan_vehicle": pd.array([], dtype="float64"),
-            "plan_property": pd.array([], dtype="float64"),
-            "plan_personal": pd.array([], dtype="float64"),
-            "plan_total": pd.array([], dtype="float64"),
-            "actual_vehicle": pd.array([], dtype="float64"),
-            "actual_property": pd.array([], dtype="float64"),
-            "actual_personal": pd.array([], dtype="float64"),
-            "actual_total": pd.array([], dtype="float64"),
-        })
+        raise FileNotFoundError(f"未找到 SX 三级机构计划本地源：{sx_plan_src}")
 
     df_src = pd.read_csv(sx_plan_src)
+    expected_columns = {"organization", "plan_vehicle"}
+    actual_columns = set(df_src.columns)
+    if actual_columns != expected_columns:
+        missing = sorted(expected_columns - actual_columns)
+        unknown = sorted(actual_columns - expected_columns)
+        raise ValueError(f"SX 计划源字段不符合契约：missing={missing}, unknown={unknown}")
+
+    if df_src["organization"].isna().any():
+        raise ValueError("SX 计划源存在空 organization")
+    df_src["organization"] = df_src["organization"].astype(str).str.strip()
+    if df_src["organization"].eq("").any():
+        raise ValueError("SX 计划源存在空 organization")
+    duplicated = sorted(df_src.loc[df_src["organization"].duplicated(keep=False), "organization"].unique())
+    if duplicated:
+        raise ValueError(f"SX 计划源存在重复三级机构：{duplicated}")
+    df_src["plan_vehicle"] = pd.to_numeric(df_src["plan_vehicle"], errors="raise")
+    if not df_src["plan_vehicle"].map(pd.notna).all():
+        raise ValueError("SX 计划源存在空 plan_vehicle")
+    if not df_src["plan_vehicle"].map(lambda value: float("-inf") < float(value) < float("inf")).all():
+        raise ValueError("SX 计划源存在非有限 plan_vehicle")
+    if (df_src["plan_vehicle"] < 0).any():
+        bad_orgs = df_src.loc[df_src["plan_vehicle"] < 0, "organization"].tolist()
+        raise ValueError(f"SX 计划源存在负计划值：{bad_orgs}")
+
     print(f"  读 SX 分机构计划源: {sx_plan_src.name}（{len(df_src)} 机构）")
     rows = []
     for _, r in df_src.iterrows():
@@ -697,10 +717,10 @@ def build_sx_plan_stub(branch_code: str = "SX", plan_year: int = 2026) -> pd.Dat
     return pd.DataFrame(rows)
 
 
-def main_sx(branch_code: str = "SX") -> None:
+def main_sx(branch_code: str = "SX", sx_plan_source: Path | None = None) -> None:
     """SX 模式主流程：从 policy parquet 派生维度表到 validation/<branch_code>/dim/"""
     print("=" * 60)
-    print(f"维度表 Parquet 生成脚本 v1.1 — {branch_code} 模式（parquet 派生）")
+    print(f"维度表 Parquet 生成脚本 v1.1 — {branch_code} 模式（policy parquet + 本地计划源）")
     print(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
@@ -714,22 +734,22 @@ def main_sx(branch_code: str = "SX") -> None:
     # 派生业务员维度
     salesman_df = build_sx_salesman_from_parquet(branch_code)
 
-    # 生成计划表（有分机构年计划源则填实，否则最小空桩）
-    plan_df = build_sx_plan_stub(branch_code)
+    # 从本地源生成三级机构计划表；契约不满足时 fail-closed。
+    plan_df = build_sx_plan_from_local_source(sx_plan_source, branch_code)
     print(f"\n{'='*60}")
-    print(f"计划数据：{'分机构年计划（level=organization）' if len(plan_df) > 0 else '最小可用空桩（无源）'}")
+    print("计划数据：本地三级机构年计划（level=organization）")
     print(f"  行数: {len(plan_df)}")
 
     # 写出 Parquet
     write_parquet(salesman_df, out_salesman, f"{branch_code} 业务员主数据（parquet 派生）")
-    write_parquet(plan_df, out_plan, f"{branch_code} 计划数据（最小可用空桩）")
+    write_parquet(plan_df, out_plan, f"{branch_code} 三级机构计划数据（本地源标准化）")
 
     # 输出摘要 JSON（与 SC 模式对齐）
     summary_path = out_dir.parent / f"dim_summary_{branch_code}.json"
     summary = {
         "generated_at": datetime.now().isoformat(),
         "branch_code": branch_code,
-        "source": "policy_parquet",
+        "source": "policy_parquet+local_org_plan_csv",
         "salesman": {
             "total": len(salesman_df),
             "active": 0,   # 无状态字段
@@ -739,10 +759,10 @@ def main_sx(branch_code: str = "SX") -> None:
         },
         "plan": {
             "total_rows": len(plan_df),
-            "years": ([int(plan_df["plan_year"].iloc[0])] if len(plan_df) > 0 else []),
-            "levels": (plan_df["level"].unique().tolist() if len(plan_df) > 0 else []),
-            "note": (f"SX 分机构年计划（level=organization，{len(plan_df)} 机构）；渠道类暂未统计"
-                     if len(plan_df) > 0 else "SX 无计划源，plan=0 空桩"),
+            "years": [int(plan_df["plan_year"].iloc[0])],
+            "levels": plan_df["level"].unique().tolist(),
+            "source": str((sx_plan_source or DATA_ROOT / "存量数据" / "sx_plan_2026_by_org.csv").expanduser().resolve()),
+            "note": f"SX 分机构年计划（level=organization，{len(plan_df)} 机构）；渠道类暂未统计",
             "path": str(out_plan),
         },
     }
@@ -764,6 +784,6 @@ def main_sx(branch_code: str = "SX") -> None:
 if __name__ == "__main__":
     args = _parse_args()
     if args.branch_code == "SX":
-        main_sx("SX")
+        main_sx("SX", args.sx_plan_source)
     else:
         main()

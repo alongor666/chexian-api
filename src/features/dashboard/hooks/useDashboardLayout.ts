@@ -49,7 +49,25 @@ const normalizeOrder = <T extends string>(stored: T[] | undefined, defaults: T[]
   if (!stored || stored.length === 0) return defaults;
   const filtered = stored.filter((id) => defaults.includes(id));
   const missing = defaults.filter((id) => !filtered.includes(id));
-  return [...filtered, ...missing];
+  const result = [...filtered];
+
+  // 新增 KPI 要按默认相邻位置插入已有用户的自定义顺序；若一律 append，
+  // “满期保费/满期率”会落到核心指标末尾，无法保持产品要求的卡片顺序。
+  missing.forEach((id) => {
+    const defaultIndex = defaults.indexOf(id);
+    const nextId = defaults.slice(defaultIndex + 1).find((candidate) => result.includes(candidate));
+    if (nextId) {
+      result.splice(result.indexOf(nextId), 0, id);
+      return;
+    }
+    const previousId = defaults
+      .slice(0, defaultIndex)
+      .reverse()
+      .find((candidate) => result.includes(candidate));
+    const insertAt = previousId ? result.indexOf(previousId) + 1 : result.length;
+    result.splice(insertAt, 0, id);
+  });
+  return result;
 };
 
 const normalizeVisibility = <T extends string>(

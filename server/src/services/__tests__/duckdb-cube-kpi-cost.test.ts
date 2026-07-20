@@ -1,12 +1,12 @@
 /**
- * KPI 路由级端到端 + cost 三项立方体等值集成测试（需 DuckDB 原生二进制，仅本地）
+ * KPI 路由级端到端 + cost 五项立方体等值集成测试（需 DuckDB 原生二进制，仅本地）
  *
  * 用真实 express 应用 + 真实 DuckDB（:memory:）验证 /api/query/kpi 的三态行为：
  *   ① 双开关关闭（默认）：原 KPI SQL 跑（含 variable_cost CTE + JOIN ClaimsAgg）
  *   ② CUBE_ROUTING_ENABLED + dateField=insurance_start_date：
- *      主 SQL 携 excludeVariableCost=true 与立方体单行并行 → 合并 26 列
- *      26 列与原路径全部相等（cost 三项依赖立方体等值，其他 23 项依赖主 SQL 不动）
- *   ③ CUBE_SHADOW_COMPARE：对外返回原路径结果，后台双跑 cost 三项比对计 match
+ *      主 SQL 携 excludeVariableCost=true 与立方体单行并行 → 合并 28 列
+ *      28 列与原路径全部相等（cost 五项依赖立方体等值，其他 23 项依赖主 SQL 不动）
+ *   ③ CUBE_SHADOW_COMPARE：对外返回原路径结果，后台双跑 cost 五项比对计 match
  *   ④ dateField=policy_date：自动回退原路径（立方体无 policy_date 列）
  */
 import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest';
@@ -18,6 +18,7 @@ import { ensureCostCubeFresh, resetCostCubeStateForTest } from '../duckdb-cube.j
 import { getShadowStats, resetShadowStatsForTest } from '../cube-shadow.js';
 import { dbEnv } from '../../config/env.js';
 import kpiRouter from '../../routes/query/kpi.js';
+import { generateKpiQuery } from '../../sql/kpi.js';
 
 let server: Server;
 let baseUrl: string;
@@ -50,7 +51,7 @@ beforeAll(async () => {
 
   await duckdbService.init();
   // 集成测试共享 duckdbService 实例，前序套件可能已建表 → 先清场
-  for (const t of ['PolicyFact', 'ClaimsAgg', 'achievement_cache', 'KpiPlanConfig', 'CubeTrendDay', 'CubeCostDay']) {
+  for (const t of ['PolicyFact', 'ClaimsAgg', 'PlanFact', 'achievement_cache', 'KpiPlanConfig', 'CubeTrendDay', 'CubeCostDay']) {
     await duckdbService.query(`DROP TABLE IF EXISTS ${t}`);
   }
   // PolicyFact：含批改重复行（B252 形态）→ variable_cost_base 去重后 JOIN ClaimsAgg
@@ -100,8 +101,15 @@ beforeAll(async () => {
       300 + random() * 8000 AS reported_claims
     FROM range(0, 20100, 3) t(i)
   `);
-  // KPI 用的两张维表（plan 数据可为空 → 计划达成率输出 NULL，不影响 cost 三项比对）
-  await duckdbService.query(`CREATE TABLE achievement_cache (org_name VARCHAR, full_name VARCHAR, plan_vehicle DOUBLE)`);
+  // KPI 用的两张维表（计划数据不影响 cost 五项比对）
+  await duckdbService.query(`CREATE TABLE achievement_cache (org_name VARCHAR, full_name VARCHAR, plan_vehicle DOUBLE, branch_code VARCHAR)`);
+  await duckdbService.query(`
+    CREATE TABLE PlanFact AS
+    SELECT * FROM (VALUES
+      (2026, 'organization', 'org_0', 1000.0, 'SC'),
+      (2026, 'organization', 'org_0', 1234.0, 'SX')
+    ) AS t(plan_year, level, organization, plan_vehicle, branch_code)
+  `);
   await duckdbService.query(`CREATE TABLE KpiPlanConfig (business_line VARCHAR, level VARCHAR, level_key VARCHAR, plan_year INTEGER, plan_premium DOUBLE)`);
   setDataVersion('verKpi1');
 
@@ -114,7 +122,7 @@ beforeAll(async () => {
     res.status(status).json({ success: false, error: err?.message ?? String(err) });
   });
   await new Promise<void>((resolve) => {
-    server = app.listen(0, () => resolve());
+    server = app.listen(0, '127.0.0.1', () => resolve());
   });
   const addr = server.address();
   baseUrl = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
@@ -129,7 +137,13 @@ afterAll(async () => {
   resetShadowStatsForTest();
 });
 
-const COST_COLUMNS = ['variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio'] as const;
+const COST_COLUMNS = [
+  'variable_cost_ratio',
+  'earned_claim_ratio',
+  'expense_ratio',
+  'earned_premium',
+  'maturity_rate',
+] as const;
 // 浮点容差比对（与 cube-shadow.ts 同一公式）+ 对象（DuckDB DATE/Numeric 序列化）按 JSON 字符串等价
 const numericClose = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
@@ -145,6 +159,17 @@ const numericClose = (a: unknown, b: unknown): boolean => {
 };
 
 describe('/api/query/kpi 立方体三态行为', () => {
+  it('PlanFact organization 计划按 branch_code 从 Parquet 关系隔离读取', async () => {
+    const sql = generateKpiQuery(
+      '1=1',
+      { orgNames: ['org_0'], branchCode: 'SX' },
+      undefined,
+      'insurance_start_date'
+    );
+    const rows = await duckdbService.query<{ vehicle_plan_wan: number }>(sql);
+    expect(Number(rows[0]?.vehicle_plan_wan)).toBe(1234);
+  });
+
   it('① 双开关关闭：原 KPI SQL 跑（含 variable_cost CTE + LEFT JOIN ClaimsAgg）', async () => {
     setFlags(false, false);
     const spy = vi.spyOn(duckdbService, 'query');
@@ -159,7 +184,7 @@ describe('/api/query/kpi 立方体三态行为', () => {
     spy.mockRestore();
   });
 
-  it('② routing + insurance_start_date：主 SQL 去 variable_cost + 立方体并行，合并 26 列', async () => {
+  it('② routing + insurance_start_date：主 SQL 去 variable_cost + 立方体并行，合并 28 列', async () => {
     setFlags(true, false);
     // 首请求：立方体未构建 → 回退原路径，触发后台构建
     await getKpi({ dateField: 'insurance_start_date', _bust: 'B0' });
@@ -185,7 +210,7 @@ describe('/api/query/kpi 立方体三态行为', () => {
     spy.mockRestore();
   }, 30_000);
 
-  it('② 立方体路径与原路径 26 列逐字段等值（cost 三项依赖立方体等值，其余依赖主 SQL 不动）', async () => {
+  it('② 立方体路径与原路径 28 列逐字段等值（cost 五项依赖立方体等值，其余依赖主 SQL 不动）', async () => {
     setFlags(true, false);
     await waitFor(() => ensureCostCubeFresh(duckdbService) === 'ready');
     const cubeRes = await getKpi({ dateField: 'insurance_start_date', _bust: 'C1' });
@@ -230,7 +255,7 @@ describe('/api/query/kpi 立方体三态行为', () => {
     spy.mockRestore();
   });
 
-  it('③ 影子对账：对外返回原路径，后台双跑 cost 三项比对计 match 且零 mismatch', async () => {
+  it('③ 影子对账：对外返回原路径，后台双跑 cost 五项比对计 match 且零 mismatch', async () => {
     setFlags(false, true);
     resetShadowStatsForTest();
     await waitFor(() => ensureCostCubeFresh(duckdbService) === 'ready');

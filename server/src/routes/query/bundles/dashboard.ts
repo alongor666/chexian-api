@@ -208,7 +208,12 @@ export async function fetchDashboardBundleData({
   /** 省份代码（'SC'/'SX'）；未传时回退 SC 名单，SQL 字节与改动前一致（字节安全）。G6 follow-up。*/
   branchCode?: string;
 }) {
-  const kpiSql = generateKpiQuery(whereWithDate, { orgNames, salesmanNames }, whereWithoutDate);
+  const kpiSql = generateKpiQuery(
+    whereWithDate,
+    { orgNames, salesmanNames, branchCode },
+    whereWithoutDate,
+    dateField
+  );
   const kpiDetailSql = generateKpiDetailQuery(whereWithDate, false, branchCode);
   const trendSql = generatePremiumTrendQuery(
     timeView,

@@ -208,7 +208,7 @@
       "id": "plan",
       "name": "保费计划",
       "type": "dim",
-      "source_pattern": "2025计划.xlsx + 机构业务日报.xlsx + salesman_organization_mapping.json",
+      "source_pattern": "SC: 2025计划.xlsx + 机构业务日报.xlsx + salesman_organization_mapping.json; SX: 本地 sx_plan_<year>_by_org.csv",
       "etl_entry": "python3 数据管理/warehouse/dim/generate_dim_tables.py",
       "etl_script": "warehouse/dim/generate_dim_tables.py",
       "output": "warehouse/dim/plan/latest.parquet",
@@ -221,7 +221,7 @@
         "plan_vehicle",
         "plan_total"
       ],
-      "notes": "分salesman/organization两级，2025含实际值，2026仅计划值；SX 隔离副本落 warehouse/validation/SX/dim/plan/（空桩，plan=0）"
+      "notes": "分salesman/organization两级，2025含实际值，2026仅计划值；SX 从本地 CSV 强校验后生成 organization 级 Parquet，隔离落 warehouse/validation/SX/dim/plan/latest.parquet，运行时统一由 PlanFact 读取"
     },
     {
       "id": "cross_sell",

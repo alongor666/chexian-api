@@ -9,8 +9,14 @@ import { ensureCostCubeFresh } from '../../services/duckdb-cube.js';
 import { runShadowCompare } from '../../services/cube-shadow.js';
 import { isCubeRoutingEnabledFor, isCubeShadowEnabledFor } from '../../services/cube-routing.js';
 
-/** KPI 主 SQL 接口的 cost 三项输出列（注册表表达式直接定义的别名） */
-const KPI_COST_COLUMNS = ['variable_cost_ratio', 'earned_claim_ratio', 'expense_ratio'] as const;
+/** KPI 主 SQL 接口的 cost 五项输出列（注册表表达式直接定义的别名） */
+const KPI_COST_COLUMNS = [
+  'variable_cost_ratio',
+  'earned_claim_ratio',
+  'expense_ratio',
+  'earned_premium',
+  'maturity_rate',
+] as const;
 
 /**
  * KPI 路由的成本立方体接线（第四批次，BACKLOG uid=2026-06-11-claude-90a92c）。
@@ -18,10 +24,10 @@ const KPI_COST_COLUMNS = ['variable_cost_ratio', 'earned_claim_ratio', 'expense_
  *
  * routing 模式（CUBE_ROUTING_ENABLED）：
  *   主 SQL 携 excludeVariableCost=true（去掉 260 万行 variable_cost CTE 的 P95 大头）
- *   + 立方体单行 SQL，并行跑后 merge cost 三项。
+ *   + 立方体单行 SQL，并行跑后 merge cost 五项。
  *
  * shadow 模式（CUBE_SHADOW_COMPARE）：
- *   原 KPI 主 SQL 不变；后台双跑立方体 SQL 比对 cost 三项。
+ *   原 KPI 主 SQL 不变；后台双跑立方体 SQL 比对 cost 五项。
  *
  * 三态返回：
  *   { mode: 'routing', mainSql, cubeSql }   handler 应并行跑两条 SQL 后 merge
@@ -116,13 +122,13 @@ router.get(
         duckdbService.query(mainSql, QUERY_CACHE.hotspotShort),
         duckdbService.query(plan.cubeSql, QUERY_CACHE.hotspotShort),
       ]);
-      // merge：主 SQL 已不含 cost 三项，立方体单行补齐
+      // merge：主 SQL 已不含 cost 五项，立方体单行补齐
       rowData = { ...(mainRows[0] || {}), ...(cubeRows[0] || {}) };
     } else {
       const mainRows = await duckdbService.query(mainSql, QUERY_CACHE.hotspotShort);
       rowData = mainRows[0] || {};
       if (plan?.mode === 'shadow') {
-        // 影子对账：只比 cost 三项，不比整行（其余指标走主路径与立方体无关）
+        // 影子对账：只比 cost 五项，不比整行（其余指标走主路径与立方体无关）
         const legacyCostRow: Record<string, unknown> = {};
         for (const col of KPI_COST_COLUMNS) legacyCostRow[col] = rowData[col];
         runShadowCompare('kpi', [legacyCostRow], async () => {
