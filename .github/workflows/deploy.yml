@@ -22,6 +22,8 @@ jobs:
   deploy:
     name: Build & Deploy
     runs-on: ubuntu-latest
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     # workflow_run 触发时只在上游成功时运行；手动触发时无条件运行
     if: >
       github.event_name == 'workflow_dispatch' ||
@@ -44,6 +46,9 @@ jobs:
 
       - name: Build backend
         run: cd server && bun install --frozen-lockfile && bun run build
+
+      - name: Generate shared release metadata
+        run: REQUIRE_RELEASE_SHA=1 bun scripts/generate-release-metadata.mjs
 
       # state-db Phase 0 sandbox smoke 已在临时 worktree 验证 better-sqlite3 工作。
       # 这里在 CI 跑一次确保（a）原生模块 build 成功 ESM import 成功；
@@ -113,9 +118,10 @@ jobs:
           retry 6 10 "${SSH_CMD[@]}" "$VPS" "echo 'SSH preflight OK'"
           retry 6 10 "${SCP_CMD[@]}" deploy-bundle.tar.gz "$VPS:/tmp/${BUNDLE_NAME}"
 
-          "${SSH_CMD[@]}" "$VPS" "bash -s -- '$BUNDLE_NAME'" << 'DEPLOY'
+          "${SSH_CMD[@]}" "$VPS" "bash -s -- '$BUNDLE_NAME' '$RELEASE_SHA'" << 'DEPLOY'
             set -e
             BUNDLE_NAME="$1"
+            EXPECTED_RELEASE_SHA="$2"
             STAGING_DIR="$(mktemp -d /tmp/chexian-deploy.XXXXXX)"
 
             cd /var/www/chexian
@@ -271,7 +277,9 @@ jobs:
             HEALTHY=false
             for i in $(seq 1 18); do
               sleep 10
-              if curl -s http://localhost:3000/health | grep -q '"success":true'; then
+              HEALTH_JSON="$(curl -fsS "http://localhost:3000/health?_=${EXPECTED_RELEASE_SHA}" || true)"
+              if printf '%s' "$HEALTH_JSON" | grep -q '"success":true' \
+                && printf '%s' "$HEALTH_JSON" | grep -q "\"releaseSha\":\"${EXPECTED_RELEASE_SHA}\""; then
                 HEALTHY=true
                 break
               fi
@@ -279,6 +287,15 @@ jobs:
             done
 
             if [ "$HEALTHY" = true ]; then
+              PUBLIC_BASE="https://chexian.cretvalu.com"
+              PUBLIC_HEALTH="$(curl -fsS --retry 3 "${PUBLIC_BASE}/health?_=${EXPECTED_RELEASE_SHA}")"
+              PUBLIC_RELEASE="$(curl -fsS --retry 3 "${PUBLIC_BASE}/release.json?_=${EXPECTED_RELEASE_SHA}")"
+              INDEX_HTML="$(curl -fsS --retry 3 "${PUBLIC_BASE}/index.html?_=${EXPECTED_RELEASE_SHA}")"
+              printf '%s' "$PUBLIC_HEALTH" | grep -q "\"releaseSha\":\"${EXPECTED_RELEASE_SHA}\""
+              printf '%s' "$PUBLIC_RELEASE" | grep -Fq "\"releaseSha\": \"${EXPECTED_RELEASE_SHA}\""
+              ENTRY_PATH="$(printf '%s' "$INDEX_HTML" | grep -oE 'src="/assets/[^"]+\.js"' | head -n 1 | cut -d '"' -f 2)"
+              [ -n "$ENTRY_PATH" ]
+              curl -fsS --retry 3 -o /dev/null "${PUBLIC_BASE}${ENTRY_PATH}?_=${EXPECTED_RELEASE_SHA}"
               echo "Deploy success!"
               ROLLBACK_NEEDED=false   # 关掉回滚标志，trap 仍会触发但不动作
               # || true：备份内若有 root-owned 残留删不净，不能把健康部署标成失败；
