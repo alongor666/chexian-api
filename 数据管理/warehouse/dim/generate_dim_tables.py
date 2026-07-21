@@ -34,6 +34,7 @@
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -85,6 +86,52 @@ OUT_PLAN = SCRIPT_DIR / "plan" / "latest.parquet"
 # 业务员维度部署省（ADR G3）：本脚本只读四川源 xlsx，业务员主数据全归 SC。
 # 落 branch_code 列触发运行时 multiProvince（见 build_salesman_table 注释）。
 SALESMAN_BRANCH_CODE = "SC"
+
+PLAN_FACT_COLUMNS = [
+    "plan_year", "level", "business_no", "salesman_name", "full_name",
+    "team", "organization", "hire_date", "plan_vehicle", "plan_property",
+    "plan_personal", "plan_total", "actual_vehicle", "actual_property",
+    "actual_personal", "actual_total",
+]
+PLAN_FACT_STRING_COLUMNS = [
+    "level", "business_no", "salesman_name", "full_name", "team",
+    "organization", "hire_date",
+]
+PLAN_FACT_DOUBLE_COLUMNS = [
+    "plan_vehicle", "plan_property", "plan_personal", "plan_total",
+    "actual_vehicle", "actual_property", "actual_personal", "actual_total",
+]
+
+
+def normalize_plan_fact_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+    """将分省 PlanFact 写出列统一为可跨省 UNION ALL BY NAME 的稳定类型。"""
+    result = df.reindex(columns=PLAN_FACT_COLUMNS).copy()
+    result["plan_year"] = pd.to_numeric(result["plan_year"], errors="raise").astype("Int64")
+    for column in PLAN_FACT_STRING_COLUMNS:
+        result[column] = result[column].astype("string")
+    for column in PLAN_FACT_DOUBLE_COLUMNS:
+        result[column] = pd.to_numeric(result[column], errors="raise").astype("Float64")
+    return result
+
+
+def load_sx_plan_roster() -> tuple[list[str], list[str]]:
+    """从机构配置读取 SX 计划候选机构与显式排除单元。"""
+    config_path = DATA_ROOT / "config" / "branch-org-mapping" / "SX.json"
+    with open(config_path, encoding="utf-8") as f:
+        config = json.load(f)
+    units = config.get("units")
+    excluded = config.get("plan_excluded_units")
+    if not isinstance(units, list) or not units or not all(isinstance(v, str) and v.strip() for v in units):
+        raise ValueError("SX 机构配置 units 无效")
+    if not isinstance(excluded, list) or not all(isinstance(v, str) and v.strip() for v in excluded):
+        raise ValueError("SX 机构配置 plan_excluded_units 无效")
+    unknown_excluded = sorted(set(excluded) - set(units))
+    if unknown_excluded:
+        raise ValueError(f"SX 计划排除单元不在 units 中：{unknown_excluded}")
+    eligible = [unit for unit in units if unit not in set(excluded)]
+    if not eligible:
+        raise ValueError("SX 计划候选机构为空")
+    return eligible, excluded
 
 
 def extract_business_no(full_name: str) -> str:
@@ -663,16 +710,19 @@ def build_sx_plan_from_local_source(
 
     源：数据管理/存量数据/sx_plan_<year>_by_org.csv（organization, plan_vehicle 两列，万元）。
     来自山西分公司经营快报分机构表。仅 10 个纯三级机构（太原一部/二部 + 大同/阳泉/长治/晋城/
-    晋中/运城/临汾/吕梁）；渠道类（车商/经代/金融同业/重客）+「其他」因与三级机构重复计算
-    暂不统计；salesman 层无源（业务员级计划待补，团队/业务员达成率仍空）。
+    晋中/运城/临汾/吕梁）；配置内渠道类（经代/车商/重客）显式排除，「其他」是 units 外回退桶，
+    均不纳入当前计划；salesman 层无源（业务员级计划待补，团队/业务员达成率仍空）。
 
-    数据契约：缺文件、字段漂移、空/重复机构、非数值或负计划一律失败，禁止静默回退 0 计划。
+    数据契约：缺文件/空文件、字段漂移、未知或重复机构、非数值/非有限/负计划一律失败。
+    配置新增候选机构但 CSV 暂缺时保留 partial 状态并告警，不阻断每日 ETL；查询端按未配置处理。
     """
     del branch_code  # 输出省份码由多省维度加载器按物理隔离路径注入
     sx_plan_src = source_path or DATA_ROOT / "存量数据" / f"sx_plan_{plan_year}_by_org.csv"
     sx_plan_src = Path(sx_plan_src).expanduser().resolve()
     if not sx_plan_src.exists():
         raise FileNotFoundError(f"未找到 SX 三级机构计划本地源：{sx_plan_src}")
+
+    eligible_orgs, excluded_units = load_sx_plan_roster()
 
     df_src = pd.read_csv(sx_plan_src)
     expected_columns = {"organization", "plan_vehicle"}
@@ -704,6 +754,15 @@ def build_sx_plan_from_local_source(
         bad_orgs = df_src.loc[df_src["plan_vehicle"] < 0, "organization"].tolist()
         raise ValueError(f"SX 计划源存在负计划值：{bad_orgs}")
 
+    configured_orgs = df_src["organization"].tolist()
+    unknown_orgs = sorted(set(configured_orgs) - set(eligible_orgs))
+    if unknown_orgs:
+        raise ValueError(f"SX 计划源存在非候选机构：{unknown_orgs}")
+    missing_orgs = [org for org in eligible_orgs if org not in set(configured_orgs)]
+    status = "partial" if missing_orgs else "complete"
+    if missing_orgs:
+        print(f"  ⚠️ SX 计划候选机构缺少计划，按未配置继续生成：{missing_orgs}", file=sys.stderr)
+
     print(f"  读 SX 分机构计划源: {sx_plan_src.name}（{len(df_src)} 机构）")
     rows = []
     for _, r in df_src.iterrows():
@@ -718,8 +777,18 @@ def build_sx_plan_from_local_source(
             "actual_vehicle": None, "actual_property": None,
             "actual_personal": None, "actual_total": None,
         })
-    print(f"  车险计划总额: {sum(r['plan_vehicle'] for r in rows):.0f} 万")
-    return pd.DataFrame(rows)
+    print(f"  已配置机构计划合计: {sum(r['plan_vehicle'] for r in rows):.0f} 万")
+    result = normalize_plan_fact_dtypes(pd.DataFrame(rows))
+    result.attrs["plan_contract"] = {
+        "status": status,
+        "eligible_orgs": eligible_orgs,
+        "configured_orgs": configured_orgs,
+        "missing_orgs": missing_orgs,
+        "excluded_units": excluded_units,
+        "source_sha256": hashlib.sha256(sx_plan_src.read_bytes()).hexdigest(),
+        "source": str(sx_plan_src),
+    }
+    return result
 
 
 def main_sx(branch_code: str = "SX", sx_plan_source: Path | None = None) -> None:
@@ -741,6 +810,7 @@ def main_sx(branch_code: str = "SX", sx_plan_source: Path | None = None) -> None
 
     # 从本地源生成三级机构计划表；契约不满足时 fail-closed。
     plan_df = build_sx_plan_from_local_source(sx_plan_source, branch_code)
+    plan_contract = plan_df.attrs["plan_contract"]
     print(f"\n{'='*60}")
     print("计划数据：本地三级机构年计划（level=organization）")
     print(f"  行数: {len(plan_df)}")
@@ -766,8 +836,15 @@ def main_sx(branch_code: str = "SX", sx_plan_source: Path | None = None) -> None
             "total_rows": len(plan_df),
             "years": [int(plan_df["plan_year"].iloc[0])],
             "levels": plan_df["level"].unique().tolist(),
-            "source": str((sx_plan_source or DATA_ROOT / "存量数据" / "sx_plan_2026_by_org.csv").expanduser().resolve()),
-            "note": f"SX 分机构年计划（level=organization，{len(plan_df)} 机构）；渠道类暂未统计",
+            "source": plan_contract["source"],
+            "source_sha256": plan_contract["source_sha256"],
+            "status": plan_contract["status"],
+            "eligible_orgs": plan_contract["eligible_orgs"],
+            "configured_orgs": plan_contract["configured_orgs"],
+            "missing_orgs": plan_contract["missing_orgs"],
+            "excluded_units": plan_contract["excluded_units"],
+            "configured_plan_vehicle_total_wan": float(plan_df["plan_vehicle"].sum()),
+            "note": f"SX 已配置三级机构年计划（level=organization，{len(plan_df)} 机构）；不得视为分公司全口径计划",
             "path": str(out_plan),
         },
     }
