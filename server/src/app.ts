@@ -15,7 +15,6 @@ import helmet from 'helmet';
 import { corsConfig } from './config/cors.js';
 import { helmetOptions } from './config/csp.js';
 import { serverEnv, dbEnv, feishuEnv } from './config/env.js';
-import { getReleaseMetadata } from './config/release.js';
 import { duckdbService } from './services/duckdb.js';
 import { getTrendCubeState, getCostCubeState, getSalesmanCubeState } from './services/duckdb-cube.js';
 import { getShadowStats, redactMismatchDetail } from './services/cube-shadow.js';
@@ -146,12 +145,10 @@ app.use('/api/ai', aiLimiter);
  * 5. 健康检查路由
  */
 app.get('/health', (req, res) => {
-  const { releaseSha } = getReleaseMetadata();
   if (!dataReady) {
     res.status(503).json({
       success: false,
       message: 'Server is starting, data not loaded yet',
-      releaseSha,
       timestamp: new Date().toISOString(),
     });
     return;
@@ -193,7 +190,6 @@ app.get('/health', (req, res) => {
       salesman: cubeStateView(getSalesmanCubeState()),
     },
     cubeShadow,
-    releaseSha,
     timestamp: new Date().toISOString(),
   });
 });
