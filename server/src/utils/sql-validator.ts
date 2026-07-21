@@ -105,13 +105,40 @@ const FORBIDDEN_TABLES = [
 const FORBIDDEN_FIELDS = ['policy_no', ...SENSITIVE_FIELDS];
 
 /**
- * PolicyFact 中不可直接用于分析的兼容占位/派生列。
+ * PolicyFact 中不可直接用于分析的兼容占位列。
  *
- * claim_cases 的物理列是历史兼容占位（真实赔案来自 ClaimsAgg），earned_days 必须按
- * 查询截止日派生。SQL 直通若裸引用它们会得到看似合理的 0/错误口径，故 fail-closed，
- * 引导用户改走已封装 ClaimsAgg JOIN 与已赚天数口径的 PIVOT 指标。
+ * claim_cases 的物理列是历史兼容占位（真实赔案来自 ClaimsAgg）。SQL 直通若裸引用
+ * 会得到看似合理的 0，故 fail-closed。earned_days 不是 PolicyFact 物理列：裸引用会由
+ * DuckDB 明确报错，同时必须允许用户在 CTE 中按截止日自行派生，不能在这里全局封禁。
  */
-const DERIVED_ONLY_FIELDS = ['claim_cases', 'earned_days'] as const;
+const SILENT_PLACEHOLDER_FIELDS = ['claim_cases'] as const;
+
+/**
+ * 遮蔽合法输出别名及其 GROUP BY/HAVING/QUALIFY/ORDER BY 回引。
+ *
+ * 例：COUNT(*) AS claim_cases ... ORDER BY claim_cases 是输出重命名，不是在读取
+ * PolicyFact.claim_cases。SELECT/SUM/WHERE 中的源字段引用不会被遮蔽，仍会 fail-closed。
+ */
+function maskOutputAliasReferences(sql: string, field: string): string {
+  const aliasPattern = new RegExp(`\\bAS\\s+${field}\\b`, 'i');
+  if (!aliasPattern.test(sql)) return sql;
+
+  const maskedAlias = sql.replace(
+    new RegExp(`\\bAS\\s+${field}\\b`, 'gi'),
+    'AS __silent_placeholder_alias',
+  );
+  const trailingAliasClause =
+    /\b(GROUP\s+BY|HAVING|QUALIFY|ORDER\s+BY)\b([\s\S]*?)(?=\b(?:GROUP\s+BY|HAVING|QUALIFY|ORDER\s+BY|LIMIT|OFFSET|FETCH|UNION|INTERSECT|EXCEPT)\b|$)/gi;
+  return maskedAlias.replace(trailingAliasClause, (clause) =>
+    clause.replace(new RegExp(`\\b${field}\\b`, 'gi'), (identifier, offset: number) => {
+      // 只豁免裸别名。函数参数 `SUM(claim_cases)`、限定列 `p.claim_cases` 仍是源字段读取；
+      // 即使语句另有同名 AS 别名，也不能借此绕过占位列保护。
+      const previousNonWhitespace = clause.slice(0, offset).match(/\S(?=\s*$)/)?.[0];
+      if (previousNonWhitespace === '(' || previousNonWhitespace === '.') return identifier;
+      return '__silent_placeholder_alias_ref';
+    })
+  );
+}
 
 /**
  * 聚合函数列表 (必须出现至少一个)
@@ -353,18 +380,16 @@ export function validateSQL(sql: string): ValidationResult {
 
   // 6.2 禁止裸引用 PolicyFact 的静默错误列。structuralSQL 已移除注释并遮蔽字符串，
   // 因而文案/筛选值中出现同名文本不会误触发。
-  for (const field of DERIVED_ONLY_FIELDS) {
-    // 允许把其他合法聚合结果命名为同名输出别名；禁止的是读取该标识符本身。
-    const sqlWithoutOutputAlias = structuralSQL.replace(
-      new RegExp(`\\bAS\\s+${field}\\b`, 'gi'),
-      'AS __derived_field_alias',
-    );
+  for (const field of SILENT_PLACEHOLDER_FIELDS) {
+    // 允许把其他合法聚合结果命名为同名输出别名，并允许下游排序/筛选回引该别名；
+    // 禁止的是从 PolicyFact 读取该标识符本身。
+    const sqlWithoutOutputAlias = maskOutputAliasReferences(structuralSQL, field);
     if (new RegExp(`\\b${field}\\b`, 'i').test(sqlWithoutOutputAlias)) {
       return {
         valid: false,
         error:
-          `禁止直接查询 ${field}：该字段在 PolicyFact 中是占位或需按截止日派生，` +
-          '会产生静默错数。请改用 cx query PIVOT --metrics=earned_loss_frequency。',
+          `禁止直接读取 ${field}：该字段在 PolicyFact 中是恒为 0 的兼容占位，` +
+          '会产生静默错数。请改用 PIVOT/CUBE 的 earned_loss_frequency 等已注册指标。',
       };
     }
   }

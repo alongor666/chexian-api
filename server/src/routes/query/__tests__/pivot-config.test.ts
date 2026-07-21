@@ -4,7 +4,7 @@ import { PIVOT_DIM_WHITELIST, resolvePivotLimit } from '../pivot.js';
 describe('PIVOT agent_name 维度配置', () => {
   it('仅剥前导机构码、保留全称并显式归类 NULL', () => {
     const expression = PIVOT_DIM_WHITELIST.agent_name;
-    expect(expression).toContain("REGEXP_REPLACE(agent_name, '^[0-9]+', '')");
+    expect(expression).toContain("TRIM(REGEXP_REPLACE(agent_name, '^[0-9]+', ''))");
     expect(expression).toContain("'无经代'");
     expect(expression).not.toMatch(/LIKE|邮政|储蓄/);
   });

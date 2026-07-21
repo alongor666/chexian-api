@@ -11,7 +11,7 @@ import { cxGet } from '../api.js';
 import { renderOutput, type OutputFormat } from '../output.js';
 import { failWith, EXIT } from '../exit-codes.js';
 import { applyPathParams } from '../path-params.js';
-import { note } from '../cli-state.js';
+import { cliState, note } from '../cli-state.js';
 import { fetchCatalog } from './routes.js';
 
 export interface QueryOpts {
@@ -94,7 +94,8 @@ export async function queryCommand(rawKey: string, opts: QueryOpts): Promise<voi
 }
 
 async function warnImplicitDefaultBranch(params: Record<string, string>): Promise<void> {
-  if (params.targetBranch?.trim()) return;
+  // --quiet 的提示最终不会输出，直接跳过权限请求，避免白耗一次 /api/auth/me 限流额度。
+  if (cliState.quiet) return;
   try {
     const me = await cxGet<QueryUserScopeResp>('/api/auth/me');
     const warning = formatImplicitBranchWarning(me.data, params);
@@ -104,17 +105,32 @@ async function warnImplicitDefaultBranch(params: Record<string, string>): Promis
   }
 }
 
-/** 纯函数：仅多省账号且未显式传 targetBranch 时生成默认省提示。 */
+/** 纯函数：提示多省默认落省，或显式 targetBranch 被服务端静默回落。 */
 export function formatImplicitBranchWarning(
   scope: QueryUserScopeResp['data'],
   params: Record<string, string>,
 ): string | null {
-  if (params.targetBranch?.trim()) return null;
   const visibleBranches = Array.isArray(scope.visibleBranches)
     ? [...new Set(scope.visibleBranches.filter((branch) => typeof branch === 'string' && branch.length > 0))]
     : [];
+  // 服务端严格按大写代码匹配；这里保留原值比较，避免把 `sx` 误判为已授权后静默回落 SC。
+  const requestedBranch = params.targetBranch?.trim();
+  const defaultBranch = scope.branchCode ?? '(未知)';
+
+  if (requestedBranch) {
+    if (requestedBranch === 'ALL' && visibleBranches.length > 0) return null;
+    if (visibleBranches.includes(requestedBranch)) return null;
+    if (visibleBranches.length === 0 && requestedBranch === scope.branchCode) return null;
+    const scopeText = visibleBranches.length > 0
+      ? `可见省份: ${visibleBranches.join(', ')}`
+      : '当前账号无跨省切换权限';
+    return (
+      `⚠ targetBranch=${requestedBranch} 不在当前可切换范围；服务端将按默认省 ${defaultBranch} 生效。` +
+      `${scopeText}。`
+    );
+  }
+
   if (visibleBranches.length <= 1) return null;
-  const defaultBranch = scope.branchCode ?? '(none)';
   return (
     `⚠ 多省账号未指定 targetBranch；本次查询按默认省 ${defaultBranch} 生效。` +
     `可见省份: ${visibleBranches.join(', ')}；切省请传 --targetBranch=<省代码>。`

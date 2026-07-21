@@ -1039,6 +1039,7 @@ router.get(
         displayName: username === 'admin' ? '系统管理员' : username,
         role,
         organization,
+        branchCode: req.user.branchCode,
         visibleBranches,
         deniedModules: getDeniedModules(username),
         tokenType,

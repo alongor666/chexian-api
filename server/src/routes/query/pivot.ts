@@ -50,7 +50,7 @@ export const PIVOT_DIM_WHITELIST: Record<string, string> = {
   salesman_name: 'salesman_name',
   // 仅剥离前导机构码，保留经代完整名称，避免把「中国邮政储蓄银行」误归并为「邮政」。
   // NULL/纯机构码显式归入「无经代」，不静默丢弃高占比缺失值。
-  agent_name: "COALESCE(NULLIF(REGEXP_REPLACE(agent_name, '^[0-9]+', ''), ''), '无经代')",
+  agent_name: "COALESCE(NULLIF(TRIM(REGEXP_REPLACE(agent_name, '^[0-9]+', '')), ''), '无经代')",
   customer_category: 'customer_category',
   insurance_type: 'insurance_type',
   coverage_combination: 'coverage_combination',

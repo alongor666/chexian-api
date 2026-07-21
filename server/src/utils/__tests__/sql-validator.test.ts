@@ -148,15 +148,23 @@ describe('validateSQL — 隐私保护 policy_no', () => {
 });
 
 describe('validateSQL — PolicyFact 静默错数列', () => {
-  for (const field of ['claim_cases', 'earned_days']) {
-    it(`SUM(${field}) 裸引用 → 拒绝并指向 PIVOT 满期出险率`, () => {
-      const r = validateSQL(`SELECT SUM(${field}) FROM PolicyFact`);
-      expect(r.valid).toBe(false);
-      expect(r.error).toContain(field);
-      expect(r.error).toContain('PIVOT');
-      expect(r.error).toContain('earned_loss_frequency');
-    });
-  }
+  it('SUM(claim_cases) 裸引用 → 拒绝并指向语义查询满期出险率', () => {
+    const r = validateSQL('SELECT SUM(claim_cases) FROM PolicyFact');
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('claim_cases');
+    expect(r.error).toContain('PIVOT/CUBE');
+    expect(r.error).toContain('earned_loss_frequency');
+  });
+
+  it('CTE 内按截止日派生 earned_days → 允许自定义满期口径', () => {
+    const r = validateSQL(`WITH exposure AS (
+      SELECT premium, policy_term,
+        DATEDIFF('day', policy_start_date, CURRENT_DATE) AS earned_days
+      FROM PolicyFact
+    )
+    SELECT SUM(premium * earned_days / policy_term) AS earned_premium FROM exposure`);
+    expect(r.valid).toBe(true);
+  });
 
   it('字符串与注释中的同名文本不误伤合法聚合', () => {
     expect(validateSQL(
@@ -168,6 +176,24 @@ describe('validateSQL — PolicyFact 静默错数列', () => {
     expect(validateSQL(
       'SELECT SUM(premium) AS claim_cases, MAX(policy_date) AS earned_days FROM PolicyFact',
     ).valid).toBe(true);
+  });
+
+  it('合法 claim_cases 输出别名可在 ORDER BY/HAVING 中回引', () => {
+    expect(validateSQL(
+      'SELECT COUNT(*) AS claim_cases FROM PolicyFact GROUP BY org_level_3 ORDER BY claim_cases DESC',
+    ).valid).toBe(true);
+    expect(validateSQL(
+      'SELECT COUNT(*) AS claim_cases FROM PolicyFact GROUP BY org_level_3 HAVING claim_cases > 1',
+    ).valid).toBe(true);
+  });
+
+  it('即使存在同名输出别名，读取源 claim_cases 仍拒绝', () => {
+    expect(validateSQL(
+      'SELECT SUM(claim_cases) AS claim_cases FROM PolicyFact ORDER BY claim_cases DESC',
+    ).valid).toBe(false);
+    expect(validateSQL(
+      'SELECT SUM(premium) AS claim_cases FROM PolicyFact HAVING SUM(claim_cases) > 0',
+    ).valid).toBe(false);
   });
 });
 
