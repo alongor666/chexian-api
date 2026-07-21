@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService, withRouteCache, parseFiltersAndBuildWhere,
   resolveBranchRlsCode, resolveLatestPlanYear, getRequestBranchCode,
-  resolveRequiredPlanFactBranchCode,
+  resolveRequiredPlanFactBranchCode, QUERY_CACHE,
 } from './shared.js';
 import { generatePremiumPlanDrilldownQuery, generateKPICardQuery, generateRateDistributionQuery, generatePlanAchievementPanel, type PlanDrilldownDimension, type PlanDrilldownLevel, type PlanSortField, type SortOrder as PlanSortOrder } from '../../sql/premiumPlan.js';
 
@@ -18,7 +18,8 @@ async function resolvePremiumPlanYear(
   if (requestBranchCode !== 'SX') return resolveLatestPlanYear('achievement_cache');
 
   const rows = await duckdbService.query<{ max_data_date: string | null }>(
-    `SELECT MAX(CAST(policy_date AS DATE)) AS max_data_date FROM PolicyFact WHERE ${whereClause}`
+    `SELECT MAX(CAST(policy_date AS DATE)) AS max_data_date FROM PolicyFact WHERE ${whereClause}`,
+    QUERY_CACHE.hotspotLong,
   );
   const maxDataDate = rows[0]?.max_data_date ? String(rows[0].max_data_date) : null;
   return maxDataDate ? Number(maxDataDate.slice(0, 4)) : new Date().getFullYear();
@@ -84,10 +85,14 @@ router.get(
     let sql: string;
     switch (queryType) {
       case 'kpi':
-        sql = generateKPICardQuery(planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode);
+        sql = generateKPICardQuery(
+          planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode, requestBranchCode
+        );
         break;
       case 'distribution':
-        sql = generateRateDistributionQuery(planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode);
+        sql = generateRateDistributionQuery(
+          planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode, requestBranchCode
+        );
         break;
       case 'drilldown':
       default:
@@ -106,6 +111,7 @@ router.get(
           whereClause,
           rlsBranchCode,
           organizationPlanBranchCode,
+          requestBranchCode,
         );
         break;
     }
@@ -174,6 +180,7 @@ router.get(
       whereClause,
       rlsBranchCode,
       organizationPlanBranchCode,
+      requestBranchCode,
     );
 
     const [children, summaryRows, distribution] = await Promise.all([

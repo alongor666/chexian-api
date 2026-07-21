@@ -63,7 +63,18 @@ describe('premiumPlan achievement_cache 分省 RLS 注入', () => {
     const sxDim: PlanDrilldownDimension = { level: 'org', filters: { org: '太原' } };
     const sql = generateKPICardQuery(2026, sxDim, undefined, 'SX', 'SX');
     expect(sql).toContain("organization = '太原'");
-    expect(sql).toContain('MAX(rate_vehicle) AS avg_rate_vehicle');
+    expect(sql).toContain('SUM(actual_vehicle) * 100.0 / (SUM(plan_vehicle) * MAX(_time_progress))');
+    expect(sql).not.toContain('MAX(rate_vehicle) AS avg_rate_vehicle');
+  });
+
+  it('SX 请求但 PlanFact 门控未开启时仍返回空计划，不回退 achievement_cache', () => {
+    const sql = generatePremiumPlanDrilldownQuery(
+      2026, { level: 'org' }, { enabled: false }, 'plan_vehicle', 'desc',
+      undefined, undefined, undefined, undefined, 'SX'
+    );
+    expect(sql).not.toContain('FROM PlanFact');
+    expect(sql).toContain('NULL::DOUBLE AS plan_vehicle WHERE FALSE');
+    expect(sql).not.toContain('FROM achievement_cache\n    WHERE');
   });
 
   it('不传 rlsBranchCode → 不含 branch_code 过滤（字节安全）', () => {
@@ -170,6 +181,28 @@ describe('performance SX 机构计划口径', () => {
     );
     expect(sql).toContain('NULL::DOUBLE AS annual_plan WHERE FALSE');
     expect(sql).not.toContain('FROM achievement_cache');
+  });
+
+  it('SX 请求但 PlanFact 门控未开启时，机构下钻与热力图同样为空且不回退 SC 计划', () => {
+    const unavailableScope = {
+      requestBranchCode: 'SX',
+      organizationPlanBranchCode: undefined,
+      branchCode: undefined,
+    } as const;
+    const drilldownSql = generatePerformanceDrilldownQuery(
+      '1=1', '1=1', 'all', 'day', 'mom', [], 'org_level_3',
+      undefined, 'policy_date', unavailableScope
+    );
+    expect(drilldownSql).not.toContain('FROM PlanFact');
+    expect(drilldownSql).not.toContain('FROM achievement_cache');
+    expect(drilldownSql).toContain('NULL AS plan_premium');
+
+    const heatmapSql = generatePerformanceOrgHeatmapQuery(
+      '1=1', 'all', 'day', 15, 'org_level_3', [], 'policy_date', undefined, unavailableScope
+    );
+    expect(heatmapSql).not.toContain('FROM PlanFact');
+    expect(heatmapSql).not.toContain('FROM SalesmanTeamMapping m');
+    expect(heatmapSql).toContain('NULL::DOUBLE AS plan_premium');
   });
 });
 

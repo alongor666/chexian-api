@@ -25,6 +25,7 @@ import {
   buildPlanScopeConds,
   buildOrganizationPlanScopeConds,
   isSxOrganizationPlanScope,
+  isSxPlanRequest,
   drillStepToWhere,
   getGroupByConfig,
   supportsAnnualPlanByDimension,
@@ -70,12 +71,13 @@ export function generatePerformanceDrilldownQuery(
     : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode, dateField);
   const ytdProgress = buildYtdProgressCte();
   const groupCfg = getGroupByConfig(groupBy, 'p.');
-  const isSxPlanScope = isSxOrganizationPlanScope(planScope);
+  const isSxRequest = isSxPlanRequest(planScope);
+  const canUseSxOrganizationPlan = isSxOrganizationPlanScope(planScope);
   const hasSxUnsupportedDrill = Boolean(
     planScope?.salesmanNames?.length || drillPath.some((step) => step.dimension === 'team' || step.dimension === 'salesman')
   );
-  const hasAnnualPlan = isSxPlanScope
-    ? groupBy === 'org_level_3' && !hasSxUnsupportedDrill
+  const hasAnnualPlan = isSxRequest
+    ? canUseSxOrganizationPlan && groupBy === 'org_level_3' && !hasSxUnsupportedDrill
     : supportsAnnualPlanByDimension(groupBy);
 
   const stepWheres = drillPath.map((step) => drillStepToWhere(step, 'p.'));
@@ -110,11 +112,11 @@ export function generatePerformanceDrilldownQuery(
     ? `,
     plan_group AS (
       SELECT
-        ${isSxPlanScope ? 'organization' : planGroupExpr(groupBy)} AS group_name,
+        ${isSxRequest ? 'organization' : planGroupExpr(groupBy)} AS group_name,
         SUM(plan_vehicle) AS annual_plan
-      FROM ${isSxPlanScope ? 'PlanFact' : 'achievement_cache'}
-      ${isSxPlanScope ? organizationPlanWhere : planWhere}
-      GROUP BY ${isSxPlanScope ? 'organization' : planGroupExpr(groupBy)}
+      FROM ${isSxRequest ? 'PlanFact' : 'achievement_cache'}
+      ${isSxRequest ? organizationPlanWhere : planWhere}
+      GROUP BY ${isSxRequest ? 'organization' : planGroupExpr(groupBy)}
     )`
     : '';
   const planPremiumExpr = hasAnnualPlan ? 'ROUND(pl.annual_plan, 4)' : 'NULL';

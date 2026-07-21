@@ -22,7 +22,7 @@ import {
   buildStaticPeriodBoundsCte,
   buildYtdProgressCte,
   buildPlanScopeConds,
-  isSxOrganizationPlanScope,
+  isSxPlanRequest,
   type PerformanceSegmentTag,
   type PerformanceTimePeriod,
   type PerformanceGrowthMode,
@@ -52,7 +52,7 @@ export function generatePerformanceTopSalesmanQuery(
   // 年计划取数范围：全局 org/salesman 筛选（计划只懂机构/团队/业务员归属）
   const planConds = buildPlanScopeConds(planScope, []);
   const planWhere = planConds.length > 0 ? `WHERE ${planConds.join(' AND ')}` : '';
-  const isSxPlanScope = isSxOrganizationPlanScope(planScope);
+  const isSxPlanScope = isSxPlanRequest(planScope);
 
   const sql = `
     WITH

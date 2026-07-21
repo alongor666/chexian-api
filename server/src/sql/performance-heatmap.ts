@@ -15,6 +15,7 @@ import {
   normalizeSqlTableAliasPrefix,
   getPerformanceSegmentFilter,
   isSxOrganizationPlanScope,
+  isSxPlanRequest,
   type PerformanceSegmentTag,
   type PerformanceTimePeriod,
   type PerformancePlanScope,
@@ -239,9 +240,10 @@ export function generatePerformanceOrgHeatmapQuery(
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, tableAlias);
   const safePeriods = Math.max(7, Math.min(31, Math.floor(periods)));
   const dimConfig = getHeatmapGroupByExpr(groupByDimension, tableAlias);
-  const isSxPlanScope = isSxOrganizationPlanScope(planScope);
-  const supportsAnnualPlan = isSxPlanScope
-    ? groupByDimension === 'org_level_3'
+  const isSxRequest = isSxPlanRequest(planScope);
+  const canUseSxOrganizationPlan = isSxOrganizationPlanScope(planScope);
+  const supportsAnnualPlan = isSxRequest
+    ? canUseSxOrganizationPlan && groupByDimension === 'org_level_3'
     : heatmapSupportsAnnualPlan(groupByDimension);
   const planDimExpr = getHeatmapPlanDimensionExpr(groupByDimension);
   const needsTeamJoin = groupByDimension === 'team' || drillFilter.some((s) => s.dimension === 'team');
@@ -318,7 +320,7 @@ export function generatePerformanceOrgHeatmapQuery(
           ELSE (${currentCutoffExpr}) - ${momOffset}
         END`;
 
-  const planCtes = supportsAnnualPlan && (planDimExpr || isSxPlanScope) ? isSxPlanScope ? `,
+  const planCtes = supportsAnnualPlan && (planDimExpr || isSxRequest) ? isSxRequest ? `,
     plan_by_dim AS (
       SELECT organization AS dimension_value, plan_year, ROUND(SUM(plan_vehicle), 4) AS annual_plan
       FROM PlanFact

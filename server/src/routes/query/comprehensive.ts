@@ -106,14 +106,14 @@ async function handleComprehensiveBundle(req: Request, res: Response): Promise<v
     ),
     QUERY_CACHE.hotspotMedium
   );
-  if (isSxPlanScope) {
-    planRows = await loadPlanRows();
-  } else try {
-    planRows = await duckdbService.query(
-      generateComprehensivePlanByOrgQuery(resolvedPlanYear, orgNames, rlsBranchCode),
-      QUERY_CACHE.hotspotMedium
-    );
+  try {
+    // RLS 兼容期的 SX 请求没有可安全读取的 PlanFact 分省列：计划保持空，禁止回退 SC 缓存。
+    if (!isSxPlanScope || organizationPlanBranchCode === 'SX') {
+      planRows = await loadPlanRows();
+    }
   } catch (error) {
+    // SC 保留历史容错；SX 的 PlanFact 查询异常继续 fail-closed，避免把数据问题伪装成未配置。
+    if (isSxPlanScope) throw error;
     logger.warn('comprehensive-bundle: failed to load achievement_cache plan data, fallback to null plan.', {
       error: error instanceof Error ? error.message : String(error),
     });

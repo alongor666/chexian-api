@@ -15,6 +15,12 @@ const req = (branchCode: string): Request => ({
   user: { branchCode },
 } as unknown as Request);
 
+const reqWithoutBranchRls = (branchCode: string): Request => ({
+  effectiveBranch: branchCode,
+  permissionFilter: '1=1',
+  user: { branchCode },
+} as unknown as Request);
+
 describe('resolveRequiredPlanFactBranchCode', () => {
   beforeEach(() => duckdbQuery.mockReset());
 
@@ -29,6 +35,11 @@ describe('resolveRequiredPlanFactBranchCode', () => {
       statusCode: 503,
       message: expect.stringContaining('SalesmanDim branch_code 信号缺失'),
     });
+  });
+
+  it('RLS 第一门未开启时 SX 不探测 PlanFact，也不误报 503', async () => {
+    await expect(resolveRequiredPlanFactBranchCode(reqWithoutBranchRls('SX'))).resolves.toBeUndefined();
+    expect(duckdbQuery).not.toHaveBeenCalled();
   });
 
   it('SC 延续双门控，不把 SX 严格规则扩散到四川', async () => {

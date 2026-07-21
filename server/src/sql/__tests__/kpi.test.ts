@@ -124,6 +124,17 @@ describe('generateKpiQuery — 三级机构计划读取 PlanFact Parquet', () =>
     expect(sql).toContain('SELECT NULL::DOUBLE AS vehicle_plan_wan');
   });
 
+  it('RLS 兼容期 PlanFact 不可用时仍识别 SX，请求计划为空且不回退 achievement_cache', () => {
+    const sql = generateKpiQuery('1=1', {
+      orgNames: ['太原一部'],
+      organizationPlanBranchCode: null,
+      requestBranchCode: 'SX',
+    });
+    expect(sql).not.toContain('FROM PlanFact');
+    expect(sql).not.toContain('FROM achievement_cache');
+    expect(sql).toContain('SELECT NULL::DOUBLE AS vehicle_plan_wan');
+  });
+
   it('山西显式多机构范围要求计划行全部存在', () => {
     const sql = generateKpiQuery('1=1', {
       orgNames: ['太原一部', '经代'],

@@ -22,8 +22,8 @@ const formatRateValue = (value: number | null): string => {
   return formatPercent(value);
 };
 
-const formatPlanValue = (value: number | null): string =>
-  value === null ? '未配置计划' : formatWanDirect(value);
+const formatPlanValue = (value: number | null, suffix = ''): string =>
+  value === null ? '未配置计划' : `${formatWanDirect(value)}${suffix}`;
 
 /** 达成率颜色 */
 const getRateColor = (rate: number | null): string => {
@@ -63,7 +63,7 @@ const KpiCards: React.FC<{ data: PlanKpiData }> = ({ data }) => (
   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
     <KpiCard
       title="车险计划保费"
-      value={data.total_plan_vehicle === null ? '未配置计划' : `${formatPlanValue(data.total_plan_vehicle)}万`}
+      value={formatPlanValue(data.total_plan_vehicle, '万')}
       subtitle="年度计划"
     />
     <KpiCard

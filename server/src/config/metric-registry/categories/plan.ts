@@ -48,6 +48,8 @@ export const planMetrics: readonly MetricDefinition[] = [
       notes:
         'L4 计算。分子与分母的机构/团队/业务员覆盖范围必须完全一致；未配置范围返回 NULL，禁止以 0 或其他粒度计划回退。' +
         'SC 沿用 achievement_cache 业务员计划汇总；SX 仅机构粒度从 PlanFact.level=organization 读取，' +
+        '其中“覆盖范围完全一致”是 v3 对 SX 新链路的强约束；SC 仍存在 PolicyFact 分子与 achievement_cache ' +
+        '业务员计划覆盖范围未逐机构闭合验证的历史偏差，本版本明确保留其现网结果，不宣称已完成 SC 同源迁移。' +
         '分公司整体及团队/业务员粒度在无权威计划时返回 NULL。covered_scope_ytd_premium = 年初（当年 1 月 1 日）' +
         '至时间窗口末、且只属于计划覆盖范围的累计 SUM(premium)；' +
         'time_progress = EXTRACT(doy FROM 数据内最新签单日) ÷ 全年天数（闰年感知，禁止硬编码 365）。' +
@@ -86,8 +88,9 @@ export const planMetrics: readonly MetricDefinition[] = [
         version: '3.0.0',
         date: '2026-07-21',
         changes:
-          '计划覆盖范围升级：分子与分母必须完全同源同范围；未配置范围返回 NULL，禁止回退业务员/团队计划。' +
-          'SX 仅机构粒度消费 PlanFact 机构计划，分公司整体在缺少全口径权威计划时不计算达成率；SC 保持原 achievement_cache 口径。',
+          'SX 计划覆盖范围升级：分子与分母必须完全同源同范围；未配置范围返回 NULL，禁止回退业务员/团队计划。' +
+          'SX 仅机构粒度消费 PlanFact 机构计划，分公司整体在缺少全口径权威计划时不计算达成率；' +
+          'SC 保持原 achievement_cache 口径，其分子/计划覆盖范围闭合属于已知历史偏差，留待后续独立迁移。',
       },
       {
         version: '2.1.0',

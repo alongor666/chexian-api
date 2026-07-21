@@ -378,6 +378,11 @@ export function isSxOrganizationPlanScope(planScope?: PerformancePlanScope): boo
   return planScope?.requestBranchCode === 'SX' && planScope.organizationPlanBranchCode === 'SX';
 }
 
+/** SX 请求识别与 PlanFact 可用性分离：兼容期缺门控时仍须禁止回退 SC 计划。 */
+export function isSxPlanRequest(planScope?: PerformancePlanScope): boolean {
+  return planScope?.requestBranchCode === 'SX';
+}
+
 export function buildOrganizationPlanScopeConds(
   planScope: PerformancePlanScope | undefined,
   drillPath: PerformanceDrilldownStep[]

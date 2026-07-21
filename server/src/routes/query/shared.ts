@@ -180,9 +180,18 @@ export function getRequestBranchCode(req: Request): string | undefined {
 /**
  * SX 机构计划必须依赖运行时 PlanFact.branch_code。物理 Parquet 不含该列；它由多省维度
  * loader 注入，而 loader 的 multiProvince 信号来自 SalesmanDim.branch_code。
- * 因此 SX 请求遇到缺列时必须 503，禁止悄悄退回 achievement_cache 或跨省读取。
+ * 因此 RLS 第一门已开启的 SX 请求遇到缺列时必须 503；第一门未开启时返回 undefined，
+ * 由消费端保持计划为 NULL。两种状态都禁止悄悄退回 achievement_cache 或跨省读取。
  */
 export async function resolveRequiredPlanFactBranchCode(req: Request): Promise<string | undefined> {
+  // gate a：只有 permission middleware 已实际注入 branch_code 时，才进入 PlanFact
+  // 严格门控。BRANCH_RLS_ENABLED=false 时 token/effectiveBranch 仍可能是 SX，但运行时
+  // 维度加载尚未切到多省模式；此时保持历史可用性，由各消费端依据 requestBranchCode
+  // 返回“计划未配置”，禁止回退 achievement_cache，也不把兼容期误报成 503。
+  const permissionBranchCode = req.permissionFilter
+    ?.match(/branch_code\s*=\s*'([A-Z]{2})'/)?.[1];
+  if (!permissionBranchCode) return undefined;
+
   const branchCode = getRequestBranchCode(req);
   if (branchCode !== 'SX') return resolveBranchRlsCode(req, 'PlanFact');
   if (await relationHasBranchCode('PlanFact')) return branchCode;

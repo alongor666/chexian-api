@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
-import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, createDomainMiddleware, withRouteCache, resolveBranchRlsCode, resolveRequiredPlanFactBranchCode } from './shared.js';
+import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, createDomainMiddleware, withRouteCache, resolveBranchRlsCode, resolveRequiredPlanFactBranchCode, getRequestBranchCode } from './shared.js';
 import { generateKpiQuery } from '../../sql/kpi.js';
 import { generateKpiDetailQuery } from '../../sql/kpi-detail.js';
 import { RouteConcurrencyGate } from '../../services/route-concurrency.js';
@@ -119,6 +119,7 @@ router.get(
         salesmanNames,
         achievementCacheBranchCode: achievementCacheBranchCode ?? null,
         organizationPlanBranchCode: organizationPlanBranchCode ?? null,
+        requestBranchCode: getRequestBranchCode(req) ?? null,
       },
       whereWithoutDate,
       dateField,

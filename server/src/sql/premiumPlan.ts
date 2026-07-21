@@ -166,6 +166,7 @@ function buildSxPremiumPlanCore(
   dimension: PlanDrilldownDimension,
   rlsOrgName: string | undefined,
   rlsBranchCode: string | undefined,
+  organizationPlanAvailable: boolean,
 ): string {
   const filters = dimension.filters ?? {};
   const effectiveOrg = rlsOrgName ?? filters.org;
@@ -184,7 +185,8 @@ function buildSxPremiumPlanCore(
       ? `MAX(team_name) AS parent_name, MAX(org_name) AS org_name,`
       : '';
   const parentGroup = level === 'team' ? ', org_name' : '';
-  const supportsOrgPlan = level === 'org' || (level === 'company' && Boolean(effectiveOrg));
+  const supportsOrgPlan = organizationPlanAvailable &&
+    (level === 'org' || (level === 'company' && Boolean(effectiveOrg)));
   const planGroupExpr = level === 'company' ? `'分公司整体'` : 'organization';
   const planOrgCondition = effectiveOrg ? `AND organization = '${esc(effectiveOrg)}'` : '';
 
@@ -221,6 +223,7 @@ function buildSxPremiumPlanCore(
       p.plan_vehicle,
       p.plan_vehicle AS plan_total,
       a.actual_vehicle,
+      a.time_progress AS _time_progress,
       0 AS actual_total,
       CASE
         WHEN p.plan_vehicle > 0 AND a.time_progress > 0
@@ -264,6 +267,7 @@ export function generatePremiumPlanDrilldownQuery(
   policyFactWhereClause?: string,
   rlsBranchCode?: string,
   organizationPlanBranchCode?: string,
+  requestBranchCode?: string,
 ): string {
   const { level, filters = {} } = dimension;
   const where = buildCacheWhere(filters, planYear, rlsOrgName, rlsBranchCode);
@@ -271,12 +275,15 @@ export function generatePremiumPlanDrilldownQuery(
   // customer_category / coverage：无计划数据，直接查 PolicyFact
   if (level === 'customer_category' || level === 'coverage') {
     return generatePolicyFactDrilldownQuery(
-      planYear, dimension, sortField, sortOrder, policyFactWhereClause, organizationPlanBranchCode === 'SX'
+      planYear, dimension, sortField, sortOrder, policyFactWhereClause,
+      requestBranchCode === 'SX' || organizationPlanBranchCode === 'SX'
     );
   }
 
-  if (organizationPlanBranchCode === 'SX') {
-    const coreSql = buildSxPremiumPlanCore(planYear, dimension, rlsOrgName, rlsBranchCode);
+  if (requestBranchCode === 'SX' || organizationPlanBranchCode === 'SX') {
+    const coreSql = buildSxPremiumPlanCore(
+      planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode === 'SX'
+    );
     if (ranking.enabled && ranking.rankField) {
       const topN = ranking.topN ?? 10;
       const bottomN = ranking.bottomN ?? 10;
@@ -288,7 +295,7 @@ export function generatePremiumPlanDrilldownQuery(
             ROW_NUMBER() OVER (ORDER BY ${rankCol} ASC NULLS LAST) AS rank_asc
           FROM base
         )
-        SELECT *, CASE
+        SELECT * EXCLUDE (_time_progress), CASE
           WHEN rank_desc <= ${topN} THEN 'top'
           WHEN rank_asc <= ${bottomN} THEN 'bottom'
           ELSE NULL END AS rank_category
@@ -297,7 +304,7 @@ export function generatePremiumPlanDrilldownQuery(
         ORDER BY ${sortField} ${sortOrder} NULLS LAST
       `;
     }
-    return `${coreSql} ORDER BY ${sortField} ${sortOrder} NULLS LAST`;
+    return `SELECT * EXCLUDE (_time_progress) FROM (${coreSql}) ORDER BY ${sortField} ${sortOrder} NULLS LAST`;
   }
 
   let selectBody: string;
@@ -374,9 +381,12 @@ export function generateKPICardQuery(
   rlsOrgName?: string,
   rlsBranchCode?: string,
   organizationPlanBranchCode?: string,
+  requestBranchCode?: string,
 ): string {
-  if (organizationPlanBranchCode === 'SX') {
-    const rowsSql = buildSxPremiumPlanCore(planYear, dimension, rlsOrgName, rlsBranchCode);
+  if (requestBranchCode === 'SX' || organizationPlanBranchCode === 'SX') {
+    const rowsSql = buildSxPremiumPlanCore(
+      planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode === 'SX'
+    );
     const hasExplicitOrg = Boolean(rlsOrgName ?? dimension.filters?.org);
     const canAggregatePlan = hasExplicitOrg && (dimension.level === 'company' || dimension.level === 'org');
     return `
@@ -386,7 +396,11 @@ export function generateKPICardQuery(
         ${canAggregatePlan ? 'SUM(plan_total)' : 'NULL::DOUBLE'} AS total_plan_total,
         SUM(actual_vehicle) AS total_actual_vehicle,
         0 AS total_actual_total,
-        ${canAggregatePlan ? 'MAX(rate_vehicle)' : 'NULL::DOUBLE'} AS avg_rate_vehicle,
+        ${canAggregatePlan ? `CASE
+          WHEN COUNT(plan_vehicle) = COUNT(*) AND SUM(plan_vehicle) > 0 AND MAX(_time_progress) > 0
+          THEN ROUND(SUM(actual_vehicle) * 100.0 / (SUM(plan_vehicle) * MAX(_time_progress)), 2)
+          ELSE NULL
+        END` : 'NULL::DOUBLE'} AS avg_rate_vehicle,
         NULL AS avg_rate_total,
         SUM(salesman_count) AS total_salesman_count
       FROM rows
@@ -423,9 +437,12 @@ export function generateRateDistributionQuery(
   rlsOrgName?: string,
   rlsBranchCode?: string,
   organizationPlanBranchCode?: string,
+  requestBranchCode?: string,
 ): string {
-  if (organizationPlanBranchCode === 'SX') {
-    const rowsSql = buildSxPremiumPlanCore(planYear, dimension, rlsOrgName, rlsBranchCode);
+  if (requestBranchCode === 'SX' || organizationPlanBranchCode === 'SX') {
+    const rowsSql = buildSxPremiumPlanCore(
+      planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode === 'SX'
+    );
     return `
       WITH rows AS (${rowsSql})
       SELECT
@@ -491,14 +508,20 @@ export function generatePlanAchievementPanel(
   policyFactWhereClause?: string,
   rlsBranchCode?: string,
   organizationPlanBranchCode?: string,
+  requestBranchCode?: string,
 ): { childrenSql: string; summarySql: string; distributionSql: string } {
   return {
     childrenSql: generatePremiumPlanDrilldownQuery(
       planYear, dimension, { enabled: false }, sortField, sortOrder, rlsOrgName, policyFactWhereClause, rlsBranchCode,
-      organizationPlanBranchCode
+      organizationPlanBranchCode,
+      requestBranchCode
     ),
-    summarySql: generateKPICardQuery(planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode),
-    distributionSql: generateRateDistributionQuery(planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode),
+    summarySql: generateKPICardQuery(
+      planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode, requestBranchCode
+    ),
+    distributionSql: generateRateDistributionQuery(
+      planYear, dimension, rlsOrgName, rlsBranchCode, organizationPlanBranchCode, requestBranchCode
+    ),
   };
 }
 

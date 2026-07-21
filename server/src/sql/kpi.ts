@@ -15,6 +15,8 @@ interface KpiQueryOptions {
   achievementCacheBranchCode?: string | null;
   /** PlanFact 分省 RLS 码；路由必须按 PlanFact 自身列门控解析。 */
   organizationPlanBranchCode?: string | null;
+  /** 请求业务省份；与 PlanFact 关系是否可安全读取分离，用于 SX 缺门控时保持 null 语义。 */
+  requestBranchCode?: string | null;
 }
 
 const esc = escapeSqlValue;
@@ -80,8 +82,9 @@ export const generateKpiQuery = (
   const organizationPlanBranchCode = options.organizationPlanBranchCode !== undefined
     ? options.organizationPlanBranchCode
     : options.branchCode;
+  const isSxRequest = options.requestBranchCode === 'SX' || organizationPlanBranchCode === 'SX';
   const canUseOrganizationPlan =
-    organizationPlanBranchCode === 'SX' &&
+    isSxRequest && organizationPlanBranchCode === 'SX' &&
     (!options.salesmanNames || options.salesmanNames.length === 0);
   const hasExplicitOrganizationScope = Boolean(options.orgNames && options.orgNames.length > 0);
   const finalBaseWhereClause = baseWhereClause ?? whereClause;
@@ -174,7 +177,7 @@ export const generateKpiQuery = (
       -- SX 暂无覆盖经代/车商/重客/其他的权威分公司总计划，整体计划必须为空。
       SELECT NULL::DOUBLE AS vehicle_plan_wan
     )`
-    : organizationPlanBranchCode === 'SX'
+    : isSxRequest
       ? `
     vehicle_plan AS (
       -- SX 团队/业务员层无计划源，禁止回退 achievement_cache。
