@@ -167,6 +167,41 @@ export async function resolveBranchRlsCode(
 }
 
 /**
+ * 返回请求的业务省份。优先使用 permission middleware 已解析的 effectiveBranch，
+ * 其次读取用户 token；最后兼容仅存在 permissionFilter 的旧调用。
+ */
+export function getRequestBranchCode(req: Request): string | undefined {
+  const direct = req.effectiveBranch ?? req.user?.branchCode;
+  if (typeof direct === 'string' && /^[A-Z]{2}$/.test(direct)) return direct;
+  const match = req.permissionFilter?.match(/branch_code\s*=\s*'([A-Z]{2})'/);
+  return match?.[1];
+}
+
+/**
+ * SX 机构计划必须依赖运行时 PlanFact.branch_code。物理 Parquet 不含该列；它由多省维度
+ * loader 注入，而 loader 的 multiProvince 信号来自 SalesmanDim.branch_code。
+ * 因此 RLS 第一门已开启的 SX 请求遇到缺列时必须 503；第一门未开启时返回 undefined，
+ * 由消费端保持计划为 NULL。两种状态都禁止悄悄退回 achievement_cache 或跨省读取。
+ */
+export async function resolveRequiredPlanFactBranchCode(req: Request): Promise<string | undefined> {
+  // gate a：只有 permission middleware 已实际注入 branch_code 时，才进入 PlanFact
+  // 严格门控。BRANCH_RLS_ENABLED=false 时 token/effectiveBranch 仍可能是 SX，但运行时
+  // 维度加载尚未切到多省模式；此时保持历史可用性，由各消费端依据 requestBranchCode
+  // 返回“计划未配置”，禁止回退 achievement_cache，也不把兼容期误报成 503。
+  const permissionBranchCode = req.permissionFilter
+    ?.match(/branch_code\s*=\s*'([A-Z]{2})'/)?.[1];
+  if (!permissionBranchCode) return undefined;
+
+  const branchCode = getRequestBranchCode(req);
+  if (branchCode !== 'SX') return resolveBranchRlsCode(req, 'PlanFact');
+  if (await relationHasBranchCode('PlanFact')) return branchCode;
+  throw new AppError(
+    503,
+    'SX 机构计划运行时隔离未就绪：多省维度加载未激活（SalesmanDim branch_code 信号缺失，PlanFact 未注入 branch_code）'
+  );
+}
+
+/**
  * 关系是否含 branch_code 列（gate b 的实测）。information_schema 查询：关系/列缺失返回 0 行
  * （不抛错，免 DESCRIBE 在表不存在时的异常）。带 hotspotLong TTL 缓存——列结构仅 ETL reload 时变，
  * 缓存随 duckdb 内部 cache epoch（invalidateCache）自动作废。

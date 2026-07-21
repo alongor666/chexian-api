@@ -112,8 +112,8 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
           parent_name: row.parent_name ? String(row.parent_name) : undefined,
           org_name: row.org_name ? String(row.org_name) : undefined,
           plan_year: Number(row.plan_year || year),
-          plan_vehicle: Number(row.plan_vehicle || 0),
-          plan_total: Number(row.plan_total || 0),
+          plan_vehicle: row.plan_vehicle != null ? Number(row.plan_vehicle) : null,
+          plan_total: row.plan_total != null ? Number(row.plan_total) : null,
           actual_vehicle: Number(row.actual_vehicle || 0),
           actual_total: Number(row.actual_total || 0),
           rate_vehicle: row.rate_vehicle != null ? Number(row.rate_vehicle) : null,
@@ -130,8 +130,8 @@ export function usePremiumPlan(): UsePremiumPlanReturn {
       if (summary) {
         const k = summary as Record<string, unknown>;
         setKpiData({
-          total_plan_vehicle: Number(k.total_plan_vehicle || 0),
-          total_plan_total: Number(k.total_plan_total || 0),
+          total_plan_vehicle: k.total_plan_vehicle != null ? Number(k.total_plan_vehicle) : null,
+          total_plan_total: k.total_plan_total != null ? Number(k.total_plan_total) : null,
           total_actual_vehicle: Number(k.total_actual_vehicle || 0),
           total_actual_total: Number(k.total_actual_total || 0),
           avg_rate_vehicle: k.avg_rate_vehicle != null ? Number(k.avg_rate_vehicle) : null,

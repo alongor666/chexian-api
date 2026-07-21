@@ -157,14 +157,17 @@ export function buildKpiCardProps(
     /* -------- Hero #1：车险保费（数值型，progress bar） -------- */
     case 'vehicle_premium': {
       const value = toNumber(kpis.vehicle_premium);
-      const plan = toNumber(kpis.vehicle_plan_wan ?? null);
+      const hasPlan = kpis.vehicle_plan_wan != null && Number.isFinite(Number(kpis.vehicle_plan_wan));
+      const plan = hasPlan ? toNumber(kpis.vehicle_plan_wan) : null;
       const ratePct =
         typeof kpis.vehicle_achievement_rate === 'number'
           ? toPercent(kpis.vehicle_achievement_rate) ?? 0
-          : plan
+          : plan && plan > 0
           ? (value / plan) * 100
           : 0;
-      const status = statusFor({ value: ratePct, threshold: T.premiumProgressWarn });
+      const status = hasPlan
+        ? statusFor({ value: ratePct, threshold: T.premiumProgressWarn })
+        : undefined;
       return {
         title,
         value,
@@ -173,11 +176,11 @@ export function buildKpiCardProps(
         loading,
         type: 'value',
         variant: 'hero',
-        progress: {
+        progress: hasPlan ? {
           value: ratePct,
           threshold: T.premiumProgressWarn,
-          note: plan ? `目标 ${formatWanDirect(plan)} 万元` : undefined,
-        },
+          note: plan && plan > 0 ? `目标 ${formatWanDirect(plan)} 万元` : undefined,
+        } : undefined,
         status,
       };
     }
@@ -208,7 +211,19 @@ export function buildKpiCardProps(
 
     /* -------- Hero #4：车险达成率（ring） -------- */
     case 'vehicle_achievement_rate': {
-      const pct = toPercent(kpis.vehicle_achievement_rate) ?? 0;
+      const pct = toPercent(kpis.vehicle_achievement_rate);
+      if (pct === null) {
+        return {
+          title,
+          value: undefined,
+          unit: '%',
+          formatter: (v) => v.toFixed(1),
+          loading,
+          type: 'value',
+          variant: 'hero',
+          note: '计划未配置',
+        };
+      }
       const status = statusFor({ value: pct, threshold: T.premiumProgressWarn });
       const gap = T.premiumProgressWarn - pct;
       return {

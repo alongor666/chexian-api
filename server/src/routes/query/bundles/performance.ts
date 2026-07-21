@@ -8,6 +8,7 @@ import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere,
   extractOrgNames, extractSalesmanNames, resolveBranchRlsCode,
+  getRequestBranchCode, resolveRequiredPlanFactBranchCode,
   QUERY_CACHE, HTTP_MAX_AGE,
   isBundleRoutesEnabled, buildRouteCacheKey,
   getRouteCache, setRouteCache,
@@ -178,11 +179,14 @@ router.get(
 
     const { filterData, whereWithDate, whereWithoutDate, dateField } = parseFiltersAndBuildBothWhere(req);
     // 年计划取数范围（标准口径）：与保费看板 /kpi 同源的 org/salesman 提取
+    const requestBranchCode = getRequestBranchCode(req);
     const planScope = {
       orgNames: extractOrgNames(filterData, req.permissionFilter),
       salesmanNames: extractSalesmanNames(filterData, req.permissionFilter),
+      requestBranchCode,
       // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 年计划按省过滤（双门控；flag off / 单省无列 → 不注入）
       branchCode: await resolveBranchRlsCode(req, 'achievement_cache'),
+      organizationPlanBranchCode: await resolveRequiredPlanFactBranchCode(req),
     };
     // 分省 RLS：团队维度 all_rows JOIN 的剥列 CTE 按省过滤，免同名业务员跨省保费扇出
     const drilldownRlsBranchCode = await resolveBranchRlsCode(req, 'SalesmanTeamMapping');

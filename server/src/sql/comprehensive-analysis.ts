@@ -273,8 +273,25 @@ ORDER BY p.time_period ASC
 export function generateComprehensivePlanByOrgQuery(
   planYear: number,
   orgNames: string[] = [],
-  rlsBranchCode?: string
+  rlsBranchCode?: string,
+  organizationPlanBranchCode?: string
 ): string {
+  if (organizationPlanBranchCode === 'SX') {
+    const organizationCondition = orgNames.length > 0
+      ? `AND organization IN (${orgNames.map((org) => `'${escapeSqlValue(org)}'`).join(', ')})`
+      : '';
+    return `
+SELECT
+  organization AS dim_key,
+  ROUND(SUM(plan_vehicle), 2) AS plan_premium
+FROM PlanFact
+WHERE plan_year = ${Number(planYear)}
+  AND level = 'organization'
+  AND branch_code = 'SX'
+  ${organizationCondition}
+GROUP BY organization
+    `.trim();
+  }
   const orgCondition =
     orgNames.length > 0
       ? `AND org_name IN (${orgNames.map((org) => `'${escapeSqlValue(org)}'`).join(', ')})`
