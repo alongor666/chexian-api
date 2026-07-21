@@ -1,10 +1,10 @@
 /**
  * 计划达成指标（L4）— 年度计划/时间进度达成率
  *
- * 来源：dim/plan/latest.parquet（业务员年计划）+ PolicyFact（实际签单保费）
+ * 来源：PlanFact / achievement_cache（按省份与粒度选择权威计划）+ PolicyFact（实际签单保费）
  *
  * 标准口径（用户 2026-06-11 拍板，B-146cce 三路由统一）：
- *   计划达成率 = 年初累计签单保费 × 100 ÷（业务员年计划合计 × 时间进度）
+ *   计划达成率 = 计划覆盖范围内年初累计签单保费 × 100 ÷（同范围年计划 × 时间进度）
  *   - 时间进度 = 数据内最新签单日是当年第几天 ÷ 全年天数（闰年感知 365/366）
  *   - 进度锚点是「数据内最新签单日」而非自然日今天：数据滞后时不冤枉业务员
  *   - 带时间筛选时语义为「年初至筛选末日的累计达成率」（非单期达成率）
@@ -30,14 +30,14 @@ export const planMetrics: readonly MetricDefinition[] = [
     id: 'plan_completion_pct',
     timeWindow: 'cutoff-based',
     additive: false,
-    version: '2.1.0',
+    version: '3.0.0',
     name: '计划达成率',
     category: 'plan',
     tags: ['kpi', 'plan', 'alert', 'branch-ops'],
     formula: {
       description:
-        '年初累计签单保费 × 100 ÷ (业务员年计划合计 × 时间进度)；时间进度 = 数据内最新签单日是当年第几天 ÷ 全年天数（闰年感知）',
-      numerator: 'ytd_premium',
+        '计划覆盖范围内年初累计签单保费 × 100 ÷ (同范围年计划 × 时间进度)；时间进度 = 数据内最新签单日是当年第几天 ÷ 全年天数（闰年感知）',
+      numerator: 'covered_scope_ytd_premium',
       denominator: 'plan_premium * time_progress',
       unit: '%',
     },
@@ -46,8 +46,12 @@ export const planMetrics: readonly MetricDefinition[] = [
         '-- L4 计算，由 SQL 生成器动态拼接：ytd_premium * 100.0 / (plan_premium * time_progress)',
       requiredColumns: ['premium', 'policy_date'],
       notes:
-        'L4 计算。ytd_premium = 年初（当年 1 月 1 日）至时间窗口末的累计 SUM(premium)；' +
-        'plan_premium 来自 dim/plan/latest.parquet 业务员年计划合计；' +
+        'L4 计算。分子与分母的机构/团队/业务员覆盖范围必须完全一致；未配置范围返回 NULL，禁止以 0 或其他粒度计划回退。' +
+        'SC 沿用 achievement_cache 业务员计划汇总；SX 仅机构粒度从 PlanFact.level=organization 读取，' +
+        '其中“覆盖范围完全一致”是 v3 对 SX 新链路的强约束；SC 仍存在 PolicyFact 分子与 achievement_cache ' +
+        '业务员计划覆盖范围未逐机构闭合验证的历史偏差，本版本明确保留其现网结果，不宣称已完成 SC 同源迁移。' +
+        '分公司整体及团队/业务员粒度在无权威计划时返回 NULL。covered_scope_ytd_premium = 年初（当年 1 月 1 日）' +
+        '至时间窗口末、且只属于计划覆盖范围的累计 SUM(premium)；' +
         'time_progress = EXTRACT(doy FROM 数据内最新签单日) ÷ 全年天数（闰年感知，禁止硬编码 365）。' +
         '进度锚点必须用数据内最新签单日（非服务器当前日期）；带时间筛选时返回' +
         '「年初至筛选末日的累计达成率」。100% 即按时间进度均匀达成。' +
@@ -80,6 +84,14 @@ export const planMetrics: readonly MetricDefinition[] = [
       source: 'skills/chexian-report-shell/lib/alerts.py v1.7 (2026-05-13)',
     },
     changelog: [
+      {
+        version: '3.0.0',
+        date: '2026-07-21',
+        changes:
+          'SX 计划覆盖范围升级：分子与分母必须完全同源同范围；未配置范围返回 NULL，禁止回退业务员/团队计划。' +
+          'SX 仅机构粒度消费 PlanFact 机构计划，分公司整体在缺少全口径权威计划时不计算达成率；' +
+          'SC 保持原 achievement_cache 口径，其分子/计划覆盖范围闭合属于已知历史偏差，留待后续独立迁移。',
+      },
       {
         version: '2.1.0',
         date: '2026-06-22',

@@ -142,8 +142,8 @@ export interface PlanDrilldownRow {
   parent_name?: string;
   org_name?: string;
   plan_year: number;
-  plan_vehicle: number;
-  plan_total: number;
+  plan_vehicle: number | null;
+  plan_total: number | null;
   actual_vehicle: number;
   actual_total: number;
   rate_vehicle: number | null;
@@ -159,8 +159,8 @@ export interface PlanDrilldownRow {
 
 /** KPI 卡片数据 */
 export interface PlanKpiData {
-  total_plan_vehicle: number;
-  total_plan_total: number;
+  total_plan_vehicle: number | null;
+  total_plan_total: number | null;
   total_actual_vehicle: number;
   total_actual_total: number;
   avg_rate_vehicle: number | null;

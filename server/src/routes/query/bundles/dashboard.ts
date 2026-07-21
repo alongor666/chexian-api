@@ -14,6 +14,8 @@ import {
   getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
   resolveBranchRlsCode,
+  getRequestBranchCode,
+  resolveRequiredPlanFactBranchCode,
   requirePermissionFilter,
 } from '../shared.js';
 import { buildWhereFromFilterParams } from '../../../utils/filter-params.js';
@@ -158,7 +160,7 @@ router.get(
     const [branchCode, achievementCacheBranchCode, organizationPlanBranchCode] = await Promise.all([
       resolveBranchRlsCode(req, 'PolicyFact'),
       resolveBranchRlsCode(req, 'achievement_cache'),
-      resolveBranchRlsCode(req, 'PlanFact'),
+      resolveRequiredPlanFactBranchCode(req),
     ]);
 
     // Tier 3: 动态执行 Fallback
@@ -176,6 +178,7 @@ router.get(
       branchCode,
       achievementCacheBranchCode: achievementCacheBranchCode ?? null,
       organizationPlanBranchCode: organizationPlanBranchCode ?? null,
+      requestBranchCode: getRequestBranchCode(req) ?? null,
     });
 
     setRouteCache(routeCacheKey, bundleData, QUERY_CACHE.hotspotShort);
@@ -202,6 +205,7 @@ export async function fetchDashboardBundleData({
   branchCode,
   achievementCacheBranchCode,
   organizationPlanBranchCode,
+  requestBranchCode,
 }: {
   whereWithDate: string;
   whereWithoutDate: string;
@@ -219,6 +223,8 @@ export async function fetchDashboardBundleData({
   achievementCacheBranchCode?: string | null;
   /** PlanFact 计划关系的分省码，必须由该关系自身列门控解析。 */
   organizationPlanBranchCode?: string | null;
+  /** 请求业务省份；PlanFact 未就绪时仍用于保持 SX 计划为空且禁止回退。 */
+  requestBranchCode?: string | null;
 }) {
   const kpiSql = generateKpiQuery(
     whereWithDate,
@@ -229,6 +235,7 @@ export async function fetchDashboardBundleData({
         ? achievementCacheBranchCode
         : branchCode,
       organizationPlanBranchCode,
+      requestBranchCode,
     },
     whereWithoutDate,
     dateField

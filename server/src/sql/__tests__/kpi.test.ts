@@ -84,7 +84,10 @@ describe('generateKpiQuery — 三级机构计划读取 PlanFact Parquet', () =>
     expect(sql).toContain("level = 'organization'");
     expect(sql).toContain("organization IN ('太原一部')");
     expect(sql).toContain("branch_code = 'SX'");
-    expect(sql).toContain('COALESCE(NULLIF(op.vehicle_plan_wan, 0), ap.vehicle_plan_wan, 0)');
+    expect(sql).toContain('COUNT(*) = 1');
+    expect(sql).toContain('COUNT(plan_vehicle) = 1');
+    expect(sql).toContain('SELECT op.vehicle_plan_wan');
+    expect(sql).not.toContain('achievement_plan AS');
   });
 
   it('四川机构视角保持 achievement_cache 人员计划汇总口径，不切到 PlanFact organization', () => {
@@ -99,7 +102,7 @@ describe('generateKpiQuery — 三级机构计划读取 PlanFact Parquet', () =>
     expect(sql).toContain("branch_code = 'SC'");
   });
 
-  it('业务员筛选时保持人员级 achievement_cache，不误用整个三级机构计划', () => {
+  it('山西业务员筛选时计划为空，不回退人员级 achievement_cache', () => {
     const sql = generateKpiQuery('1=1', {
       orgNames: ['太原一部'],
       salesmanNames: ['10001张三'],
@@ -107,8 +110,41 @@ describe('generateKpiQuery — 三级机构计划读取 PlanFact Parquet', () =>
       organizationPlanBranchCode: 'SX',
     });
     expect(sql).not.toContain('FROM PlanFact');
-    expect(sql).toContain("full_name IN ('10001张三')");
-    expect(sql).toContain("branch_code = 'SX'");
+    expect(sql).not.toContain('FROM achievement_cache');
+    expect(sql).toContain('SELECT NULL::DOUBLE AS vehicle_plan_wan');
+  });
+
+  it('山西分公司整体计划为空，避免全量分子除以10家机构计划', () => {
+    const sql = generateKpiQuery('1=1', {
+      achievementCacheBranchCode: 'SX',
+      organizationPlanBranchCode: 'SX',
+    });
+    expect(sql).not.toContain('FROM PlanFact');
+    expect(sql).not.toContain('FROM achievement_cache');
+    expect(sql).toContain('SELECT NULL::DOUBLE AS vehicle_plan_wan');
+  });
+
+  it('RLS 兼容期 PlanFact 不可用时仍识别 SX，请求计划为空且不回退 achievement_cache', () => {
+    const sql = generateKpiQuery('1=1', {
+      orgNames: ['太原一部'],
+      organizationPlanBranchCode: null,
+      requestBranchCode: 'SX',
+    });
+    expect(sql).not.toContain('FROM PlanFact');
+    expect(sql).not.toContain('FROM achievement_cache');
+    expect(sql).toContain('SELECT NULL::DOUBLE AS vehicle_plan_wan');
+  });
+
+  it('山西显式多机构范围要求计划行全部存在', () => {
+    const sql = generateKpiQuery('1=1', {
+      orgNames: ['太原一部', '经代'],
+      achievementCacheBranchCode: 'SX',
+      organizationPlanBranchCode: 'SX',
+    });
+    expect(sql).toContain('COUNT(*) = 2');
+    expect(sql).toContain('COUNT(plan_vehicle) = 2');
+    expect(sql).toContain("organization IN ('太原一部', '经代')");
+    expect(sql).toContain('ELSE NULL');
   });
 
   it('机构名中的单引号会被 SQL 转义', () => {

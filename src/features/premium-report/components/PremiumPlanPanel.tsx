@@ -22,6 +22,9 @@ const formatRateValue = (value: number | null): string => {
   return formatPercent(value);
 };
 
+const formatPlanValue = (value: number | null, suffix = ''): string =>
+  value === null ? '未配置计划' : `${formatWanDirect(value)}${suffix}`;
+
 /** 达成率颜色 */
 const getRateColor = (rate: number | null): string => {
   if (rate === null) return colorClasses.text.neutralMuted;
@@ -60,7 +63,7 @@ const KpiCards: React.FC<{ data: PlanKpiData }> = ({ data }) => (
   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
     <KpiCard
       title="车险计划保费"
-      value={`${formatWanDirect(data.total_plan_vehicle)}万`}
+      value={formatPlanValue(data.total_plan_vehicle, '万')}
       subtitle="年度计划"
     />
     <KpiCard
@@ -176,7 +179,7 @@ const DrilldownTable: React.FC<{
       format: (r) => (displaySalesmanName ? formatSalesmanName(r.group_name) : r.group_name),
       sortable: true,
     },
-    { key: 'plan_vehicle', header: '计划保费(万)', align: 'right', format: (r) => formatWanDirect(r.plan_vehicle), sortable: true },
+    { key: 'plan_vehicle', header: '计划保费(万)', align: 'right', format: (r) => formatPlanValue(r.plan_vehicle), sortable: true },
     { key: 'actual_vehicle', header: '实际保费(万)', align: 'right', format: (r) => formatWanDirect(r.actual_vehicle), sortable: true },
     { key: 'rate_vehicle', header: '达成率', align: 'right', format: (r) => formatRateValue(r.rate_vehicle), sortable: true },
     { key: 'prev_year_premium', header: '上年保费(万)', align: 'right', format: (r) => formatWanDirect(r.prev_year_premium), sortable: true },

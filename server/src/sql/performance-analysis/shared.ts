@@ -366,8 +366,43 @@ export function buildYtdProgressCte(): string {
 export interface PerformancePlanScope {
   orgNames?: string[];
   salesmanNames?: string[];
+  /** 请求业务省份，用于选择计划事实源；与关系自身的 branch_code 门控分离。 */
+  requestBranchCode?: string;
   /** 分省 RLS 码（ADR G4 GATED 多省）：路由经 resolveBranchRlsCode 双门控解析；undefined → 不注入 */
   branchCode?: string;
+  /** PlanFact 自身实测可用的分省码；SX 机构计划查询必须提供。 */
+  organizationPlanBranchCode?: string;
+}
+
+export function isSxOrganizationPlanScope(planScope?: PerformancePlanScope): boolean {
+  return planScope?.requestBranchCode === 'SX' && planScope.organizationPlanBranchCode === 'SX';
+}
+
+/** SX 请求识别与 PlanFact 可用性分离：兼容期缺门控时仍须禁止回退 SC 计划。 */
+export function isSxPlanRequest(planScope?: PerformancePlanScope): boolean {
+  return planScope?.requestBranchCode === 'SX';
+}
+
+export function buildOrganizationPlanScopeConds(
+  planScope: PerformancePlanScope | undefined,
+  drillPath: PerformanceDrilldownStep[]
+): string[] {
+  const conds = [
+    `level = 'organization'`,
+    `plan_year = CAST(EXTRACT('year' FROM (SELECT ytd_end FROM ytd_bounds LIMIT 1)) AS INTEGER)`,
+  ];
+  if (planScope?.organizationPlanBranchCode) {
+    conds.push(`branch_code = '${escapeSqlValue(planScope.organizationPlanBranchCode)}'`);
+  }
+  if (planScope?.orgNames && planScope.orgNames.length > 0) {
+    conds.push(`organization IN (${planScope.orgNames.map((n) => `'${escapeSqlValue(n)}'`).join(', ')})`);
+  }
+  for (const step of drillPath) {
+    if (step.dimension === 'org_level_3') {
+      conds.push(`organization = '${escapeSqlValue(step.value)}'`);
+    }
+  }
+  return conds;
 }
 
 /**
