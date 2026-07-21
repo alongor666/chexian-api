@@ -58,12 +58,20 @@ vi.mock('../../../sql/renewal-tracker.js', () => ({
   RENEWAL_OUTPUT_COLUMNS: [{ column: 'A', metricId: 'renewal_due_count' }],
 }));
 vi.mock('../../../sql/pivot.js', () => ({ generatePivotQuery: vi.fn(() => 'SELECT 1') }));
-vi.mock('../pivot.js', () => ({ isPivotSafeMetric: () => false, PIVOT_DIM_WHITELIST: {} }));
+vi.mock('../pivot.js', () => ({
+  isPivotSafeMetric: () => false,
+  PIVOT_DIM_WHITELIST: {},
+  resolvePivotLimit: (dims: string[], raw: unknown) => {
+    const fallback = dims.includes('agent_name') ? 500 : 100;
+    const parsed = parseInt(String(raw ?? fallback), 10);
+    return Math.min(500, Number.isFinite(parsed) && parsed > 0 ? parsed : fallback);
+  },
+}));
 vi.mock('../../../config/metric-registry/index.js', () => ({ getMetric: vi.fn(() => null) }));
 vi.mock('../../../services/bootstrapper-registry.js', () => ({ getBootstrapper: vi.fn(() => null) }));
 
 // 延迟导入，确保 mock 在 import 之前生效
-import { buildRenewalExtraConditions } from '../cube.js';
+import { buildRenewalExtraConditions, resolveCubeLimit } from '../cube.js';
 
 /** 最简 Request stub：cube 续保受限筛选器仅读 query（此处全空）+ permissionFilter */
 function makeReq(permissionFilter: string): Request {
@@ -98,5 +106,13 @@ describe('cube 续保路径 buildRenewalExtraConditions：分省 RLS（branch_co
   it('CUBE-RT-04: 电销用户（is_telemarketing=true）→ extra 不含 is_telemarketing / branch_code（防 Binder Error）', async () => {
     const extra = await buildRenewalExtraConditions(makeReq('is_telemarketing = true'));
     expect(extra.every((c) => !c.includes('is_telemarketing') && !c.includes('branch_code'))).toBe(true);
+  });
+});
+
+describe('cube limit：PolicyFact 高基数维度与 PIVOT 对齐', () => {
+  it('agent_name 默认 500，续保域与普通维度仍默认 100', () => {
+    expect(resolveCubeLimit('policyfact', ['agent_name'], undefined)).toBe(500);
+    expect(resolveCubeLimit('policyfact', ['org_level_3'], undefined)).toBe(100);
+    expect(resolveCubeLimit('renewal', ['agent_name'], undefined)).toBe(100);
   });
 });

@@ -1,0 +1,1 @@
+{"uid":"2026-07-21-claude-de3f75","kind":"status","ts":"2026-07-21","actor":"@claude","status":"DONE","evidence":"真实本地 cx sql SELECT SUM(claim_cases) 退出码 1，并提示改用 PIVOT earned_loss_frequency；校验器回归测试通过","at":"2026-07-21T22:19:54.093Z","eid":"ccf04002"}

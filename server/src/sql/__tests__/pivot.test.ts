@@ -49,6 +49,32 @@ describe('generatePivotQuery', () => {
     expect(sql).toContain("policy_date >= '2026-01-01'");
   });
 
+  it('agent_name 高基数维度 + policy_count：优先按件数降序截断', () => {
+    const sql = generatePivotQuery({
+      dimensions: [dim(
+        'agent_name',
+        "COALESCE(NULLIF(REGEXP_REPLACE(agent_name, '^[0-9]+', ''), ''), '无经代')",
+      )],
+      metricIds: ['earned_loss_frequency', 'policy_count'],
+      whereClause: "branch_code = 'SX'",
+      limit: 500,
+    });
+    expect(sql).toContain("REGEXP_REPLACE(agent_name, '^[0-9]+', '')");
+    expect(sql).toContain("'无经代'");
+    expect(sql).toMatch(/ORDER BY\s+policy_count\s+DESC/);
+    expect(sql).toMatch(/LIMIT\s+500/);
+  });
+
+  it('agent_name 未请求 policy_count 时仍按第一个指标降序', () => {
+    const sql = generatePivotQuery({
+      dimensions: [dim('agent_name')],
+      metricIds: ['total_premium'],
+      whereClause: '1=1',
+      limit: 100,
+    });
+    expect(sql).toMatch(/ORDER BY\s+total_premium\s+DESC/);
+  });
+
   it('维度为 CASE 表达式（is_renewal）— sqlExpr 正确嵌入', () => {
     const sql = generatePivotQuery({
       dimensions: [dim('is_renewal', "CASE WHEN is_renewal THEN '续保' ELSE '新保' END")],

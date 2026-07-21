@@ -1,0 +1,1 @@
+{"uid":"2026-07-21-claude-8529ba","kind":"status","ts":"2026-07-21","actor":"@claude","status":"DONE","evidence":"真实本地 cx whoami 回显 DefaultBranch SC 与 VisibleBranches SC,SX；无 targetBranch 查询 stderr 明示默认省 SC；CLI 测试与构建通过","at":"2026-07-21T22:19:54.287Z","eid":"d694eca3"}
