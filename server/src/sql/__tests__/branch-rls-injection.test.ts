@@ -23,6 +23,7 @@ import { generateComprehensivePlanByOrgQuery } from '../comprehensive-analysis.j
 import { buildPlanScopeConds } from '../performance-analysis/shared.js';
 import { generatePerformanceOrgHeatmapQuery } from '../performance-heatmap.js';
 import { generatePerformanceDrilldownQuery } from '../performance-analysis/drilldown.js';
+import { generatePerformanceTopSalesmanQuery } from '../performance-analysis/top-salesman.js';
 import { generateCrossSellHeatmapQuery } from '../cross-sell-heatmap.js';
 import { generateCrossSellQuery } from '../cross-sell.js';
 
@@ -37,6 +38,32 @@ describe('premiumPlan achievement_cache 分省 RLS 注入', () => {
     ).toContain(BRANCH);
     expect(generateKPICardQuery(2026, dim, undefined, 'SX')).toContain(BRANCH);
     expect(generateRateDistributionQuery(2026, dim, undefined, 'SX')).toContain(BRANCH);
+  });
+
+  it('SX 机构行从 PlanFact 取计划，整体/团队/业务员不回退业务员计划', () => {
+    const sxOrg = generatePremiumPlanDrilldownQuery(
+      2026, { level: 'org' }, { enabled: false }, 'plan_vehicle', 'desc',
+      undefined, undefined, 'SX', 'SX'
+    );
+    expect(sxOrg).toContain('FROM PlanFact');
+    expect(sxOrg).toContain("level = 'organization'");
+    expect(sxOrg).toContain("branch_code = 'SX'");
+
+    for (const level of ['company', 'team', 'salesman'] as const) {
+      const sql = generatePremiumPlanDrilldownQuery(
+        2026, { level }, { enabled: false }, 'plan_vehicle', 'desc',
+        undefined, undefined, 'SX', 'SX'
+      );
+      expect(sql).not.toContain('FROM PlanFact');
+      expect(sql).toContain('NULL::DOUBLE AS plan_vehicle');
+    }
+  });
+
+  it('SX 明确机构筛选时允许机构计划，汇总达成率复用行级时间进度口径', () => {
+    const sxDim: PlanDrilldownDimension = { level: 'org', filters: { org: '太原' } };
+    const sql = generateKPICardQuery(2026, sxDim, undefined, 'SX', 'SX');
+    expect(sql).toContain("organization = '太原'");
+    expect(sql).toContain('MAX(rate_vehicle) AS avg_rate_vehicle');
   });
 
   it('不传 rlsBranchCode → 不含 branch_code 过滤（字节安全）', () => {
@@ -60,8 +87,11 @@ describe('premiumPlan achievement_cache 分省 RLS 注入', () => {
 });
 
 describe('kpi achievement_cache 分省 RLS 注入', () => {
-  it('options.branchCode → vehicle_plan CTE 含 branch_code 过滤', () => {
-    expect(generateKpiQuery('1=1', { branchCode: 'SX' })).toContain(BRANCH);
+  it('SC achievementCacheBranchCode → vehicle_plan CTE 含 branch_code 过滤', () => {
+    expect(generateKpiQuery('1=1', {
+      achievementCacheBranchCode: 'SC',
+      organizationPlanBranchCode: null,
+    })).toContain("branch_code = 'SC'");
   });
   it('achievement_cache 与 PlanFact branch gate 可独立表达，避免跨表误注入', () => {
     const sql = generateKpiQuery('1=1', {
@@ -82,6 +112,64 @@ describe('comprehensive achievement_cache 分省 RLS 注入', () => {
   });
   it('不传 → 不含（字节安全）', () => {
     expect(generateComprehensivePlanByOrgQuery(2026, ['乐山'])).not.toContain(NO_BRANCH);
+  });
+  it('SX 从机构级 PlanFact 读取，SC 仍保持 achievement_cache', () => {
+    const sx = generateComprehensivePlanByOrgQuery(2026, ['太原'], 'SX', 'SX');
+    expect(sx).toContain('FROM PlanFact');
+    expect(sx).toContain("organization IN ('太原')");
+    const sc = generateComprehensivePlanByOrgQuery(2026, ['乐山'], 'SC');
+    expect(sc).toContain('FROM achievement_cache');
+    expect(sc).not.toContain('FROM PlanFact');
+  });
+});
+
+describe('performance SX 机构计划口径', () => {
+  const sxScope = {
+    requestBranchCode: 'SX',
+    organizationPlanBranchCode: 'SX',
+    branchCode: 'SX',
+  } as const;
+
+  it('机构下钻从 PlanFact 取计划，分公司整体与团队粒度均返回空计划', () => {
+    const orgSql = generatePerformanceDrilldownQuery(
+      '1=1', "branch_code = 'SX'", 'all', 'day', 'mom', [], 'org_level_3',
+      undefined, 'policy_date', sxScope, 'SX'
+    );
+    expect(orgSql).toContain('FROM PlanFact');
+    expect(orgSql).toContain("level = 'organization'");
+
+    for (const groupBy of [null, 'team', 'salesman'] as const) {
+      const sql = generatePerformanceDrilldownQuery(
+        '1=1', "branch_code = 'SX'", 'all', 'day', 'mom', [], groupBy,
+        undefined, 'policy_date', sxScope, 'SX'
+      );
+      expect(sql).not.toContain('FROM PlanFact');
+      expect(sql).toContain('NULL AS plan_premium');
+    }
+  });
+
+  it('机构热力图从 PlanFact 按计划年和机构连接，团队热力图不取计划', () => {
+    const orgSql = generatePerformanceOrgHeatmapQuery(
+      "branch_code = 'SX'", 'all', 'day', 15, 'org_level_3', [], 'policy_date', 'SX', sxScope
+    );
+    expect(orgSql).toContain('FROM PlanFact');
+    expect(orgSql).toContain("branch_code = 'SX'");
+    expect(orgSql).toContain('pbd.plan_year = CAST(EXTRACT');
+
+    const teamSql = generatePerformanceOrgHeatmapQuery(
+      "branch_code = 'SX'", 'all', 'day', 15, 'team', [], 'policy_date', 'SX', sxScope
+    );
+    expect(teamSql).not.toContain('FROM PlanFact');
+    expect(teamSql).toContain('NULL::DOUBLE AS plan_premium');
+  });
+
+  it('SX Top 业务员不回退 achievement_cache 计划', () => {
+    const sql = generatePerformanceTopSalesmanQuery(
+      '1=1', "branch_code = 'SX'", 'all', 'day', 'mom', 20,
+      undefined, 'policy_date', sxScope, 'SX'
+    );
+    expect(sql).toContain('NULL::DOUBLE AS annual_plan WHERE FALSE');
+    expect(sql).not.toContain('FROM achievement_cache');
   });
 });
 

@@ -14,6 +14,7 @@ import {
   getRouteCache, setRouteCache,
   markRequestCacheHit, sendWithEtag, buildResponseMeta,
   resolveBranchRlsCode,
+  resolveRequiredPlanFactBranchCode,
   requirePermissionFilter,
 } from '../shared.js';
 import { buildWhereFromFilterParams } from '../../../utils/filter-params.js';
@@ -158,7 +159,7 @@ router.get(
     const [branchCode, achievementCacheBranchCode, organizationPlanBranchCode] = await Promise.all([
       resolveBranchRlsCode(req, 'PolicyFact'),
       resolveBranchRlsCode(req, 'achievement_cache'),
-      resolveBranchRlsCode(req, 'PlanFact'),
+      resolveRequiredPlanFactBranchCode(req),
     ]);
 
     // Tier 3: 动态执行 Fallback

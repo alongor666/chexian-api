@@ -14,8 +14,10 @@ import {
   truthyExpr,
   normalizeSqlTableAliasPrefix,
   getPerformanceSegmentFilter,
+  isSxOrganizationPlanScope,
   type PerformanceSegmentTag,
   type PerformanceTimePeriod,
+  type PerformancePlanScope,
 } from './performance-analysis-shared.js';
 
 // ============================================================================
@@ -230,13 +232,17 @@ export function generatePerformanceOrgHeatmapQuery(
   groupByDimension: HeatmapGroupDimension = 'org_level_3',
   drillFilter: HeatmapDrillStep[] = [],
   dateField: string = 'policy_date',
-  rlsBranchCode?: string
+  rlsBranchCode?: string,
+  planScope?: PerformancePlanScope
 ): string {
   const tableAlias = 'p.';
   const segmentFilter = getPerformanceSegmentFilter(segmentTag, tableAlias);
   const safePeriods = Math.max(7, Math.min(31, Math.floor(periods)));
   const dimConfig = getHeatmapGroupByExpr(groupByDimension, tableAlias);
-  const supportsAnnualPlan = heatmapSupportsAnnualPlan(groupByDimension);
+  const isSxPlanScope = isSxOrganizationPlanScope(planScope);
+  const supportsAnnualPlan = isSxPlanScope
+    ? groupByDimension === 'org_level_3'
+    : heatmapSupportsAnnualPlan(groupByDimension);
   const planDimExpr = getHeatmapPlanDimensionExpr(groupByDimension);
   const needsTeamJoin = groupByDimension === 'team' || drillFilter.some((s) => s.dimension === 'team');
   // 主 PolicyFact 查询按团队维度 JOIN team_mapping（剥列 CTE：只投影 full_name+team_name，不含 branch_code）——
@@ -312,7 +318,43 @@ export function generatePerformanceOrgHeatmapQuery(
           ELSE (${currentCutoffExpr}) - ${momOffset}
         END`;
 
-  const planCtes = supportsAnnualPlan && planDimExpr ? `,
+  const planCtes = supportsAnnualPlan && (planDimExpr || isSxPlanScope) ? isSxPlanScope ? `,
+    plan_by_dim AS (
+      SELECT organization AS dimension_value, plan_year, ROUND(SUM(plan_vehicle), 4) AS annual_plan
+      FROM PlanFact
+      WHERE level = 'organization'
+        AND branch_code = '${escapeSqlValue(planScope!.organizationPlanBranchCode!)}'
+      GROUP BY organization, plan_year
+    ),
+    plan_period AS (
+      SELECT
+        pbd.dimension_value,
+        pw.period_key,
+        ROUND(
+          pbd.annual_plan
+          * GREATEST(CAST(EXTRACT('doy' FROM pw.current_cutoff) AS DOUBLE), 1.0)
+          / CAST(DATE_DIFF(
+              'day',
+              DATE_TRUNC('year', pw.current_cutoff),
+              DATE_TRUNC('year', pw.current_cutoff) + INTERVAL 1 YEAR
+            ) AS DOUBLE),
+          4
+        ) AS progress_plan_wan
+      FROM plan_by_dim pbd
+      JOIN period_window pw
+        ON pbd.plan_year = CAST(EXTRACT('year' FROM pw.current_cutoff) AS INTEGER)
+    ),
+    ytd_by_dim_period AS (
+      SELECT
+        pw.period_key,
+        f.${dimConfig.alias},
+        ROUND(SUM(f.premium_wan), 4) AS ytd_premium
+      FROM period_window pw
+      JOIN filtered f
+        ON f.pd >= DATE_TRUNC('year', pw.current_cutoff)
+        AND f.pd <= pw.current_cutoff
+      GROUP BY pw.period_key, f.${dimConfig.alias}
+    )` : `,
     plan_by_dim AS (
       SELECT
         ${planDimExpr} AS dimension_value,

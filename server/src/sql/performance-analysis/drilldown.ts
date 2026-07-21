@@ -23,6 +23,8 @@ import {
   buildStaticPeriodBoundsCte,
   buildYtdProgressCte,
   buildPlanScopeConds,
+  buildOrganizationPlanScopeConds,
+  isSxOrganizationPlanScope,
   drillStepToWhere,
   getGroupByConfig,
   supportsAnnualPlanByDimension,
@@ -68,7 +70,13 @@ export function generatePerformanceDrilldownQuery(
     : buildPeriodBoundsCte(whereWithDate, segmentFilterNoAlias, timePeriod, growthMode, dateField);
   const ytdProgress = buildYtdProgressCte();
   const groupCfg = getGroupByConfig(groupBy, 'p.');
-  const hasAnnualPlan = supportsAnnualPlanByDimension(groupBy);
+  const isSxPlanScope = isSxOrganizationPlanScope(planScope);
+  const hasSxUnsupportedDrill = Boolean(
+    planScope?.salesmanNames?.length || drillPath.some((step) => step.dimension === 'team' || step.dimension === 'salesman')
+  );
+  const hasAnnualPlan = isSxPlanScope
+    ? groupBy === 'org_level_3' && !hasSxUnsupportedDrill
+    : supportsAnnualPlanByDimension(groupBy);
 
   const stepWheres = drillPath.map((step) => drillStepToWhere(step, 'p.'));
   const drillWhere = stepWheres.length > 0 ? `AND ${stepWheres.join('\n        AND ')}` : '';
@@ -76,6 +84,7 @@ export function generatePerformanceDrilldownQuery(
   // 年计划取数范围：全局 org/salesman 筛选 + 下钻步骤（计划只懂机构/团队/业务员）
   const planConds = buildPlanScopeConds(planScope, drillPath);
   const planWhere = planConds.length > 0 ? `WHERE ${planConds.join(' AND ')}` : '';
+  const organizationPlanWhere = `WHERE ${buildOrganizationPlanScopeConds(planScope, drillPath).join(' AND ')}`;
 
   // Phase 2b: 业务员层下钻附带 org_level_3 + team_name 元数据列，
   // 供前端按团队折叠/展开（团队与业务员合并为同一下钻层）
@@ -101,11 +110,11 @@ export function generatePerformanceDrilldownQuery(
     ? `,
     plan_group AS (
       SELECT
-        ${planGroupExpr(groupBy)} AS group_name,
+        ${isSxPlanScope ? 'organization' : planGroupExpr(groupBy)} AS group_name,
         SUM(plan_vehicle) AS annual_plan
-      FROM achievement_cache
-      ${planWhere}
-      GROUP BY ${planGroupExpr(groupBy)}
+      FROM ${isSxPlanScope ? 'PlanFact' : 'achievement_cache'}
+      ${isSxPlanScope ? organizationPlanWhere : planWhere}
+      GROUP BY ${isSxPlanScope ? 'organization' : planGroupExpr(groupBy)}
     )`
     : '';
   const planPremiumExpr = hasAnnualPlan ? 'ROUND(pl.annual_plan, 4)' : 'NULL';

@@ -22,6 +22,7 @@ import {
   buildStaticPeriodBoundsCte,
   buildYtdProgressCte,
   buildPlanScopeConds,
+  isSxOrganizationPlanScope,
   type PerformanceSegmentTag,
   type PerformanceTimePeriod,
   type PerformanceGrowthMode,
@@ -51,6 +52,7 @@ export function generatePerformanceTopSalesmanQuery(
   // 年计划取数范围：全局 org/salesman 筛选（计划只懂机构/团队/业务员归属）
   const planConds = buildPlanScopeConds(planScope, []);
   const planWhere = planConds.length > 0 ? `WHERE ${planConds.join(' AND ')}` : '';
+  const isSxPlanScope = isSxOrganizationPlanScope(planScope);
 
   const sql = `
     WITH
@@ -102,12 +104,14 @@ export function generatePerformanceTopSalesmanQuery(
       FROM ytd_rows
       GROUP BY dimension_name
     ),
-    -- 年计划（业务员粒度）：achievement_cache 按带工号 full_name 聚合，与行分组键 dimension_name(=salesman_name 带工号) 对齐
+    -- 年计划（业务员粒度）：SC 沿用 achievement_cache；SX 无该粒度权威计划，恒为空。
     plan_group AS (
-      SELECT full_name AS dimension_name, SUM(plan_vehicle) AS annual_plan -- 带工号，对齐 dimension_name=salesman_name（带工号）
+      ${isSxPlanScope
+        ? `SELECT NULL::VARCHAR AS dimension_name, NULL::DOUBLE AS annual_plan WHERE FALSE`
+        : `SELECT full_name AS dimension_name, SUM(plan_vehicle) AS annual_plan
       FROM achievement_cache
       ${planWhere}
-      GROUP BY full_name
+      GROUP BY full_name`}
     ),
     -- 归属机构剥列 CTE：SalesmanDim 多省同带 branch_code，同名业务员跨省各一行 → 裸 JOIN 会让
     -- current_group 的单省业务员行按机构翻倍（同名在排名里出现两次/premium 重复）。按省过滤根治。

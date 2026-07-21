@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
-import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, createDomainMiddleware, withRouteCache, resolveBranchRlsCode } from './shared.js';
+import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, parseFiltersAndBuildBothWhere, extractOrgNames, extractSalesmanNames, createDomainMiddleware, withRouteCache, resolveBranchRlsCode, resolveRequiredPlanFactBranchCode } from './shared.js';
 import { generateKpiQuery } from '../../sql/kpi.js';
 import { generateKpiDetailQuery } from '../../sql/kpi-detail.js';
 import { RouteConcurrencyGate } from '../../services/route-concurrency.js';
@@ -108,7 +108,7 @@ router.get(
     // 任一侧维度副本滞后时把另一侧 branch_code 条件误注入导致 Binder Error。
     const [achievementCacheBranchCode, organizationPlanBranchCode] = await Promise.all([
       resolveBranchRlsCode(req, 'achievement_cache'),
-      resolveBranchRlsCode(req, 'PlanFact'),
+      resolveRequiredPlanFactBranchCode(req),
     ]);
 
     const plan = planKpiCostCube(whereWithDate, dateField);

@@ -83,7 +83,7 @@ export const generateKpiQuery = (
   const canUseOrganizationPlan =
     organizationPlanBranchCode === 'SX' &&
     (!options.salesmanNames || options.salesmanNames.length === 0);
-  const canFallbackToAchievementPlan = options.achievementCacheBranchCode !== null;
+  const hasExplicitOrganizationScope = Boolean(options.orgNames && options.orgNames.length > 0);
   const finalBaseWhereClause = baseWhereClause ?? whereClause;
   // 立方体路由模式下，cost 五项由 generateKpiCostCubeQuery 单行提供。
   // 主 SQL 完全跳过 variable_cost_base CTE（260 万行去重 + JOIN ClaimsAgg 的 P95 大头）
@@ -152,31 +152,37 @@ export const generateKpiQuery = (
   const variableCostJoin = excludeVariableCost ? '' : `
     CROSS JOIN variable_cost vc`;
   const vehiclePlanCte = canUseOrganizationPlan
-    ? `
+    ? hasExplicitOrganizationScope
+      ? `
     organization_plan AS (
-      -- 山西三级机构年计划直接读取 PlanFact（Parquet）；四川保留 achievement_cache 人员汇总口径。
-      SELECT COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
+      -- 山西仅在显式机构范围内读取 PlanFact。每个选中机构均须有非空计划，否则整组未配置。
+      SELECT CASE
+        WHEN COUNT(*) = ${options.orgNames!.length}
+          AND COUNT(plan_vehicle) = ${options.orgNames!.length}
+        THEN SUM(plan_vehicle)
+        ELSE NULL
+      END AS vehicle_plan_wan
       FROM PlanFact
       ${organizationPlanWhere}
     ),
-    achievement_plan AS (
-      -- 兼容业务员级计划；当目标年度没有机构级计划时回退现有口径。
-      SELECT COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
-      FROM achievement_cache
-      ${achievementCacheWhere}
-    ),
     vehicle_plan AS (
-      SELECT ${
-        canFallbackToAchievementPlan
-          ? 'COALESCE(NULLIF(op.vehicle_plan_wan, 0), ap.vehicle_plan_wan, 0)'
-          : 'COALESCE(op.vehicle_plan_wan, 0)'
-      } AS vehicle_plan_wan
+      SELECT op.vehicle_plan_wan
       FROM organization_plan op
-      CROSS JOIN achievement_plan ap
+    )`
+      : `
+    vehicle_plan AS (
+      -- SX 暂无覆盖经代/车商/重客/其他的权威分公司总计划，整体计划必须为空。
+      SELECT NULL::DOUBLE AS vehicle_plan_wan
+    )`
+    : organizationPlanBranchCode === 'SX'
+      ? `
+    vehicle_plan AS (
+      -- SX 团队/业务员层无计划源，禁止回退 achievement_cache。
+      SELECT NULL::DOUBLE AS vehicle_plan_wan
     )`
     : `
     vehicle_plan AS (
-      -- 业务员筛选必须按人员粒度取计划，不能摊入整个三级机构年计划。
+      -- 四川继续使用现有业务员计划汇总口径。
       SELECT COALESCE(SUM(plan_vehicle), 0) AS vehicle_plan_wan
       FROM achievement_cache
       ${achievementCacheWhere}

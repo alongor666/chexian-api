@@ -202,6 +202,24 @@ describe('buildKpiCardProps', () => {
     expect(seg[0].value).toBeCloseTo(88.5, 6);
   });
 
+  it('计划未配置时保留全量保费，但不伪造 0% 进度或危险状态', () => {
+    const noPlanCtx: KpiCardBuildContext = {
+      kpis: { ...kpis, vehicle_plan_wan: null, vehicle_achievement_rate: null },
+      kpiDetails,
+      loading: false,
+    };
+    const premium = buildKpiCardProps('vehicle_premium', noPlanCtx)!;
+    expect(premium.value).toBe(12000);
+    expect(premium.progress).toBeUndefined();
+    expect(premium.status).toBeUndefined();
+
+    const achievement = buildKpiCardProps('vehicle_achievement_rate', noPlanCtx)!;
+    expect(achievement.value).toBeUndefined();
+    expect(achievement.ring).toBeUndefined();
+    expect(achievement.status).toBeUndefined();
+    expect(achievement.note).toBe('计划未配置');
+  });
+
   it('未知 id 返回 null', () => {
     expect(buildKpiCardProps('not_a_real_kpi' as KpiCardId, ctx)).toBeNull();
   });

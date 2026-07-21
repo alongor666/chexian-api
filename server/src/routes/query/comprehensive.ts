@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   asyncHandler, AppError, duckdbService,
   parseFiltersAndBuildBothWhere, extractOrgNames, resolveBranchRlsCode,
+  getRequestBranchCode, resolveRequiredPlanFactBranchCode,
   isValidDateFormat, logger, createDomainMiddleware,
   QUERY_CACHE, HTTP_MAX_AGE,
   buildRouteCacheKey, getRouteCache, setRouteCache,
@@ -90,10 +91,24 @@ async function handleComprehensiveBundle(req: Request, res: Response): Promise<v
   ]);
 
   const orgNames = extractOrgNames(filterData, req.permissionFilter);
+  const requestBranchCode = getRequestBranchCode(req);
+  const isSxPlanScope = requestBranchCode === 'SX';
   // 分省 RLS（ADR G4 GATED 多省）：achievement_cache 年计划按省过滤（双门控；flag off / 单省无列 → 不注入）
   const rlsBranchCode = await resolveBranchRlsCode(req, 'achievement_cache');
+  const organizationPlanBranchCode = await resolveRequiredPlanFactBranchCode(req);
   let planRows: Array<{ dim_key: string; plan_premium: number }> = [];
-  try {
+  const loadPlanRows = () => duckdbService.query<Array<{ dim_key: string; plan_premium: number }>[number]>(
+    generateComprehensivePlanByOrgQuery(
+      resolvedPlanYear,
+      orgNames,
+      rlsBranchCode,
+      organizationPlanBranchCode
+    ),
+    QUERY_CACHE.hotspotMedium
+  );
+  if (isSxPlanScope) {
+    planRows = await loadPlanRows();
+  } else try {
     planRows = await duckdbService.query(
       generateComprehensivePlanByOrgQuery(resolvedPlanYear, orgNames, rlsBranchCode),
       QUERY_CACHE.hotspotMedium
@@ -116,7 +131,7 @@ async function handleComprehensiveBundle(req: Request, res: Response): Promise<v
       const dimKey = String(row.dim_key ?? '未知');
       const planPremium = dimType === 'org' ? (planMap.get(dimKey) ?? null) : null;
       const signedPremium = toFiniteNumber(row.signed_premium);
-      // signed_premium 单位为元、plan_premium（achievement_cache.plan_vehicle）单位为万元，
+      // signed_premium 单位为元、plan_premium（SX PlanFact / SC achievement_cache）单位为万元，
       // 分子须先 /10000 对齐（同 kpi.ts vehicle_achievement_rate），否则达成率被压成约 1/10000
       const achievementRate =
         planPremium && planPremium > 0 && timeProgress && timeProgress > 0
@@ -174,14 +189,20 @@ async function handleComprehensiveBundle(req: Request, res: Response): Promise<v
   const totalSignedPremium = toFiniteNumber(summaryRow.signed_premium);
   // 达成率口径对齐：分子/分母必须同 scope（均来自 orgRows 计划覆盖范围），
   // 否则分子用全量签单 / 分母用计划机构 会让比率虚高。
-  const totalPlanPremium = orgRows.reduce((sum, row) => sum + (row.plan_premium || 0), 0);
+  const hasCompleteSxOrganizationScope =
+    isSxPlanScope && orgNames.length > 0 && orgNames.every((org) => planMap.has(org));
+  const totalPlanPremium = isSxPlanScope
+    ? (hasCompleteSxOrganizationScope
+      ? orgRows.reduce((sum, row) => sum + (row.plan_premium || 0), 0)
+      : null)
+    : orgRows.reduce((sum, row) => sum + (row.plan_premium || 0), 0);
   const totalSignedPremiumForPlan = orgRows.reduce(
     (sum, row) => sum + (toFiniteNumber(row.signed_premium) || 0),
     0
   );
   // 同上：signed_premium（元）→ /10000 对齐 plan（万元）
   const summaryAchievementRate =
-    totalPlanPremium > 0 && timeProgress && timeProgress > 0
+    totalPlanPremium !== null && totalPlanPremium > 0 && timeProgress && timeProgress > 0
       ? Number((((totalSignedPremiumForPlan / 10000) / totalPlanPremium) / timeProgress * 100).toFixed(2))
       : null;
 
