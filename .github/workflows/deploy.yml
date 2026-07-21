@@ -287,15 +287,6 @@ jobs:
             done
 
             if [ "$HEALTHY" = true ]; then
-              PUBLIC_BASE="https://chexian.cretvalu.com"
-              PUBLIC_HEALTH="$(curl -fsS --retry 3 "${PUBLIC_BASE}/health?_=${EXPECTED_RELEASE_SHA}")"
-              PUBLIC_RELEASE="$(curl -fsS --retry 3 "${PUBLIC_BASE}/release.json?_=${EXPECTED_RELEASE_SHA}")"
-              INDEX_HTML="$(curl -fsS --retry 3 "${PUBLIC_BASE}/index.html?_=${EXPECTED_RELEASE_SHA}")"
-              printf '%s' "$PUBLIC_HEALTH" | grep -q "\"releaseSha\":\"${EXPECTED_RELEASE_SHA}\""
-              printf '%s' "$PUBLIC_RELEASE" | grep -Fq "\"releaseSha\": \"${EXPECTED_RELEASE_SHA}\""
-              ENTRY_PATH="$(printf '%s' "$INDEX_HTML" | grep -oE 'src="/assets/[^"]+\.js"' | head -n 1 | cut -d '"' -f 2)"
-              [ -n "$ENTRY_PATH" ]
-              curl -fsS --retry 3 -o /dev/null "${PUBLIC_BASE}${ENTRY_PATH}?_=${EXPECTED_RELEASE_SHA}"
               echo "Deploy success!"
               ROLLBACK_NEEDED=false   # 关掉回滚标志，trap 仍会触发但不动作
               # || true：备份内若有 root-owned 残留删不净，不能把健康部署标成失败；
@@ -314,3 +305,35 @@ jobs:
             rm -f "/tmp/${BUNDLE_NAME}"
             rm -rf "${STAGING_DIR}"
           DEPLOY
+
+      # 公网/CDN 验证必须在 runner 侧、远端 rollback trap 之外执行：公网抖动可以让
+      # workflow 失败并告警，但不能回滚已经通过 localhost 健康检查的生产服务。
+      - name: Verify public release fingerprint and entry asset
+        run: |
+          set -euo pipefail
+          PUBLIC_BASE="https://chexian.cretvalu.com"
+          CACHE_BUSTER="${RELEASE_SHA}-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+          PUBLIC_HEALTH="$(curl -fsS --retry 3 "${PUBLIC_BASE}/health?_=${CACHE_BUSTER}")"
+          PUBLIC_RELEASE="$(curl -fsS --retry 3 "${PUBLIC_BASE}/release.json?_=${CACHE_BUSTER}")"
+          INDEX_HTML="$(curl -fsS --retry 3 "${PUBLIC_BASE}/index.html?_=${CACHE_BUSTER}")"
+
+          node -e '
+            const expected = process.argv[1];
+            for (const [name, raw] of [["health", process.argv[2]], ["release.json", process.argv[3]]]) {
+              const parsed = JSON.parse(raw);
+              if (parsed.releaseSha !== expected) {
+                throw new Error(`${name} releaseSha mismatch: expected ${expected}, got ${parsed.releaseSha}`);
+              }
+            }
+          ' "$RELEASE_SHA" "$PUBLIC_HEALTH" "$PUBLIC_RELEASE"
+
+          ENTRY_PATH="$(node -e '
+            const match = process.argv[1].match(/src="(\/assets\/[^"]+\.js)"/);
+            if (match) process.stdout.write(match[1]);
+          ' "$INDEX_HTML")"
+          if [ -z "$ENTRY_PATH" ]; then
+            echo "No module entry asset found in public index.html"
+            exit 1
+          fi
+          curl -fsS --retry 3 -o /dev/null "${PUBLIC_BASE}${ENTRY_PATH}?_=${CACHE_BUSTER}"
+          echo "Public release verification passed: ${RELEASE_SHA} ${ENTRY_PATH}"
