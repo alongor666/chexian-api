@@ -95,6 +95,7 @@
 
 | 脚本 | 作用 | 运行命令 |
 |------|------|----------|
+| `generate-release-metadata.mjs` | 生成前后端共享发布指纹 `{ releaseSha, builtAt }`；生产可用 `REQUIRE_RELEASE_SHA=1` 强制 40 位提交 SHA，后端单独构建使用 `--server-only` 防止沿用旧指纹 | `RELEASE_SHA=<sha> node scripts/generate-release-metadata.mjs` |
 | `release-vps-heatmap.mjs` | **VPS 一键发布 + 验收编排**：构建前后端、同步 VPS、重启 PM2、健康检查并调用线上热力图验收 | `bun run release:vps:heatmap` |
 | `verify-vps-heatmap.mjs` | **VPS 热力图专项验收**：真实登录线上页面并校验热力图标题/三标签切换/`performance-org-heatmap` 200 | `bun run verify:vps:heatmap` |
 | `verify-agent-production-smoke.mjs` | **Agent 生产验收 smoke**：按固定 API 调用 7 个确定性诊断端点、observability 和 readiness，输出 Stage 5 前置证据报告；不接 LLM、不生成 SQL、不输出 token | `bun run verify:agent:smoke -- --token <jwt> --start-date YYYY-MM-DD --end-date YYYY-MM-DD --baseline-start-date YYYY-MM-DD --baseline-end-date YYYY-MM-DD` |

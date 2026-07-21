@@ -146,12 +146,13 @@ app.use('/api/ai', aiLimiter);
  * 5. 健康检查路由
  */
 app.get('/health', (req, res) => {
-  const { releaseSha } = getReleaseMetadata();
+  const { releaseSha, builtAt } = getReleaseMetadata();
   if (!dataReady) {
     res.status(503).json({
       success: false,
       message: 'Server is starting, data not loaded yet',
       releaseSha,
+      builtAt,
       timestamp: new Date().toISOString(),
     });
     return;
@@ -194,6 +195,7 @@ app.get('/health', (req, res) => {
     },
     cubeShadow,
     releaseSha,
+    builtAt,
     timestamp: new Date().toISOString(),
   });
 });

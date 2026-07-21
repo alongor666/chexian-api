@@ -45,7 +45,8 @@ jobs:
         run: bun install --frozen-lockfile && bun run build
 
       - name: Build backend
-        run: cd server && bun install --frozen-lockfile && bun run build
+        # deploy 在下一步统一生成一次前后端元数据；这里仅编译，避免 builtAt 被生成两次。
+        run: cd server && bun install --frozen-lockfile && bun run build:compile
 
       - name: Generate shared release metadata
         run: REQUIRE_RELEASE_SHA=1 bun scripts/generate-release-metadata.mjs
@@ -277,7 +278,7 @@ jobs:
             HEALTHY=false
             for i in $(seq 1 18); do
               sleep 10
-              HEALTH_JSON="$(curl -fsS "http://localhost:3000/health?_=${EXPECTED_RELEASE_SHA}" || true)"
+              HEALTH_JSON="$(curl -fsS "http://localhost:3000/health" || true)"
               if printf '%s' "$HEALTH_JSON" | grep -q '"success":true' \
                 && printf '%s' "$HEALTH_JSON" | grep -q "\"releaseSha\":\"${EXPECTED_RELEASE_SHA}\""; then
                 HEALTHY=true
@@ -313,27 +314,61 @@ jobs:
           set -euo pipefail
           PUBLIC_BASE="https://chexian.cretvalu.com"
           CACHE_BUSTER="${RELEASE_SHA}-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
-          PUBLIC_HEALTH="$(curl -fsS --retry 3 "${PUBLIC_BASE}/health?_=${CACHE_BUSTER}")"
-          PUBLIC_RELEASE="$(curl -fsS --retry 3 "${PUBLIC_BASE}/release.json?_=${CACHE_BUSTER}")"
-          INDEX_HTML="$(curl -fsS --retry 3 "${PUBLIC_BASE}/index.html?_=${CACHE_BUSTER}")"
+          public_curl() {
+            curl -fsS \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --retry 5 \
+              --retry-delay 5 \
+              --retry-all-errors \
+              "$@"
+          }
+          PUBLIC_HEALTH="$(public_curl "${PUBLIC_BASE}/health?_=${CACHE_BUSTER}")"
+          PUBLIC_RELEASE="$(public_curl "${PUBLIC_BASE}/release.json?_=${CACHE_BUSTER}")"
+          INDEX_HTML="$(public_curl "${PUBLIC_BASE}/index.html?_=${CACHE_BUSTER}")"
 
           node -e '
             const expected = process.argv[1];
             for (const [name, raw] of [["health", process.argv[2]], ["release.json", process.argv[3]]]) {
-              const parsed = JSON.parse(raw);
+              if (!raw.trimStart().startsWith("{")) {
+                const detail = name === "release.json"
+                  ? "release.json was not deployed (SPA fallback returned instead)"
+                  : `${name} did not return JSON`;
+                throw new Error(detail);
+              }
+              let parsed;
+              try {
+                parsed = JSON.parse(raw);
+              } catch (error) {
+                throw new Error(`${name} returned invalid JSON: ${error.message}`);
+              }
               if (parsed.releaseSha !== expected) {
                 throw new Error(`${name} releaseSha mismatch: expected ${expected}, got ${parsed.releaseSha}`);
               }
             }
           ' "$RELEASE_SHA" "$PUBLIC_HEALTH" "$PUBLIC_RELEASE"
 
-          ENTRY_PATH="$(node -e '
-            const match = process.argv[1].match(/src="(\/assets\/[^"]+\.js)"/);
-            if (match) process.stdout.write(match[1]);
+          ASSET_PATHS="$(node -e '
+            const html = process.argv[1];
+            const assets = new Set();
+            for (const tag of html.match(/<(?:script|link)\b[^>]*>/gi) || []) {
+              const isModuleScript = /^<script\b/i.test(tag) && /\btype="module"/i.test(tag);
+              const isModulePreload = /^<link\b/i.test(tag) && /\brel="modulepreload"/i.test(tag);
+              if (!isModuleScript && !isModulePreload) continue;
+              const attribute = isModuleScript ? "src" : "href";
+              const match = tag.match(new RegExp(`\\b${attribute}="(\\/assets\\/[^\"]+)"`, "i"));
+              if (match) assets.add(match[1]);
+            }
+            process.stdout.write([...assets].join("\n"));
           ' "$INDEX_HTML")"
-          if [ -z "$ENTRY_PATH" ]; then
-            echo "No module entry asset found in public index.html"
+          if [ -z "$ASSET_PATHS" ]; then
+            echo "No module entry or preload asset found in public index.html"
             exit 1
           fi
-          curl -fsS --retry 3 -o /dev/null "${PUBLIC_BASE}${ENTRY_PATH}?_=${CACHE_BUSTER}"
-          echo "Public release verification passed: ${RELEASE_SHA} ${ENTRY_PATH}"
+          VERIFIED_ASSETS=0
+          while IFS= read -r ASSET_PATH; do
+            [ -n "$ASSET_PATH" ] || continue
+            public_curl -o /dev/null "${PUBLIC_BASE}${ASSET_PATH}?_=${CACHE_BUSTER}"
+            VERIFIED_ASSETS=$((VERIFIED_ASSETS + 1))
+          done <<< "$ASSET_PATHS"
+          echo "Public release verification passed: ${RELEASE_SHA}; ${VERIFIED_ASSETS} module assets"

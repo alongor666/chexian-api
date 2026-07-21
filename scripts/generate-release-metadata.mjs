@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /** 生成一次发布元数据，同时写入前后端构建产物。 */
 import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const serverOnly = process.argv.includes('--server-only');
 
 const releaseSha = String(process.env.RELEASE_SHA || 'dev').trim();
 const requireCommitSha = process.env.REQUIRE_RELEASE_SHA === '1';
@@ -17,11 +21,13 @@ const metadata = {
   builtAt: new Date().toISOString(),
 };
 const output = `${JSON.stringify(metadata, null, 2)}\n`;
-const targets = [resolve('dist/release.json'), resolve('server/dist/release.json')];
+const targets = serverOnly
+  ? [resolve(repoRoot, 'server/dist/release.json')]
+  : [resolve(repoRoot, 'dist/release.json'), resolve(repoRoot, 'server/dist/release.json')];
 
 for (const target of targets) {
-  await mkdir(resolve(target, '..'), { recursive: true });
+  await mkdir(dirname(target), { recursive: true });
   await writeFile(target, output, 'utf8');
 }
 
-console.log(`[release] metadata generated for ${releaseSha}`);
+console.log(`[release] metadata generated for ${releaseSha} (${serverOnly ? 'server' : 'frontend+server'})`);
