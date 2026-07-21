@@ -1,0 +1,1 @@
+{"uid":"2026-07-21-claude-02e35a","kind":"status","ts":"2026-07-21","actor":"@claude","status":"CANCELLED","evidence":"误判撤销：经代含个人代理人属正常业务事实，是渠道交易对手方而非数据主体。正确类比对象是 salesman_name(已在 PIVOT_DIM_WHITELIST:50 开放为分析维度)，非 applicant_name(投保人/客户，数据主体)。渠道管理本就需按经代归集业务表现，无隐私问题。","at":"2026-07-21T07:44:52.006Z","eid":"0660cfa7"}
