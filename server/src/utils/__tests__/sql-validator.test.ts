@@ -147,6 +147,30 @@ describe('validateSQL — 隐私保护 policy_no', () => {
   });
 });
 
+describe('validateSQL — PolicyFact 静默错数列', () => {
+  for (const field of ['claim_cases', 'earned_days']) {
+    it(`SUM(${field}) 裸引用 → 拒绝并指向 PIVOT 满期出险率`, () => {
+      const r = validateSQL(`SELECT SUM(${field}) FROM PolicyFact`);
+      expect(r.valid).toBe(false);
+      expect(r.error).toContain(field);
+      expect(r.error).toContain('PIVOT');
+      expect(r.error).toContain('earned_loss_frequency');
+    });
+  }
+
+  it('字符串与注释中的同名文本不误伤合法聚合', () => {
+    expect(validateSQL(
+      "SELECT SUM(premium) FROM PolicyFact WHERE channel = 'claim_cases' -- earned_days",
+    ).valid).toBe(true);
+  });
+
+  it('其他合法聚合结果使用同名 AS 输出别名不误伤', () => {
+    expect(validateSQL(
+      'SELECT SUM(premium) AS claim_cases, MAX(policy_date) AS earned_days FROM PolicyFact',
+    ).valid).toBe(true);
+  });
+});
+
 describe('validateSQL — 敏感字段 applicant_name（注册表 sensitive: true 驱动，PR #1129 隐私回归锁）', () => {
   it('SELECT applicant_name（即便带聚合与分组）→ 拒绝（隐私）', () => {
     const r = validateSQL(

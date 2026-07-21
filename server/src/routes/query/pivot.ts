@@ -2,7 +2,7 @@
  * GET /api/query/pivot — 维度 × 指标 交叉聚合
  *
  * 维度走白名单（hardcoded），指标走 metric-registry（getMetricSql）。
- * 1-2 维 × 1-10 指标，LIMIT 默认 100，上限 500（防笛卡尔爆炸）。
+ * 1-2 维 × 1-10 指标，LIMIT 默认 100（agent_name 默认 500）、上限 500（防笛卡尔爆炸）。
  *
  * 安全堆叠（继承自 router 级）：
  *   authMiddleware + readonlyMiddleware + permissionMiddleware
@@ -48,6 +48,9 @@ export function isPivotSafeMetric(id: string): boolean {
 export const PIVOT_DIM_WHITELIST: Record<string, string> = {
   org_level_3: 'org_level_3',
   salesman_name: 'salesman_name',
+  // 仅剥离前导机构码，保留经代完整名称，避免把「中国邮政储蓄银行」误归并为「邮政」。
+  // NULL/纯机构码显式归入「无经代」，不静默丢弃高占比缺失值。
+  agent_name: "COALESCE(NULLIF(REGEXP_REPLACE(agent_name, '^[0-9]+', ''), ''), '无经代')",
   customer_category: 'customer_category',
   insurance_type: 'insurance_type',
   coverage_combination: 'coverage_combination',
@@ -70,6 +73,16 @@ const MAX_DIMENSIONS = 2;
 const MAX_METRICS = 10;
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
+
+/**
+ * agent_name 的实际基数可超过 800；默认 100 会把仍有显著业务量的经代截掉。
+ * 仅该高基数维度在未显式传 limit 时默认取上限 500，其他维度保持既有 100。
+ */
+export function resolvePivotLimit(dimNames: readonly string[], raw: unknown): number {
+  const defaultLimit = dimNames.includes('agent_name') ? MAX_LIMIT : DEFAULT_LIMIT;
+  const parsed = parseInt(String(raw ?? defaultLimit), 10);
+  return Math.min(MAX_LIMIT, Number.isFinite(parsed) && parsed > 0 ? parsed : defaultLimit);
+}
 
 function parseCsv(raw: unknown): string[] {
   if (typeof raw !== 'string' || raw.trim() === '') return [];
@@ -109,11 +122,7 @@ router.get(
       }
     }
 
-    const limitRaw = parseInt(String(req.query.limit ?? DEFAULT_LIMIT), 10);
-    const limit = Math.min(
-      MAX_LIMIT,
-      Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : DEFAULT_LIMIT
-    );
+    const limit = resolvePivotLimit(dimNames, req.query.limit);
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
 

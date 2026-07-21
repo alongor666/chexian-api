@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { parseExtraParams, resolveTarget, resolveWithRefresh, formatLegend } from '../commands/query.js';
+import {
+  parseExtraParams,
+  resolveTarget,
+  resolveWithRefresh,
+  formatLegend,
+  formatImplicitBranchWarning,
+} from '../commands/query.js';
 import { applyPathParams } from '../path-params.js';
 
 describe('parseExtraParams', () => {
@@ -99,6 +105,28 @@ describe('applyPathParams (cli)', () => {
 
   it('缺少 path 参数时抛错', () => {
     expect(() => applyPathParams('/api/query/example/:domain', {})).toThrow(/domain/);
+  });
+});
+
+describe('formatImplicitBranchWarning', () => {
+  const multiBranch = { branchCode: 'SC', visibleBranches: ['SC', 'SX'] };
+
+  it('多省账号未指定 targetBranch → 明示默认省与可见省份', () => {
+    const warning = formatImplicitBranchWarning(multiBranch, {});
+    expect(warning).toContain('默认省 SC');
+    expect(warning).toContain('SC, SX');
+    expect(warning).toContain('--targetBranch=<省代码>');
+  });
+
+  it('显式指定任意可扩展省代码 → 不提示', () => {
+    expect(formatImplicitBranchWarning(multiBranch, { targetBranch: 'BJ' })).toBeNull();
+  });
+
+  it('普通单省用户 → 不提示', () => {
+    expect(formatImplicitBranchWarning(
+      { branchCode: 'SX', visibleBranches: undefined },
+      {},
+    )).toBeNull();
   });
 });
 

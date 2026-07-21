@@ -105,6 +105,15 @@ const FORBIDDEN_TABLES = [
 const FORBIDDEN_FIELDS = ['policy_no', ...SENSITIVE_FIELDS];
 
 /**
+ * PolicyFact 中不可直接用于分析的兼容占位/派生列。
+ *
+ * claim_cases 的物理列是历史兼容占位（真实赔案来自 ClaimsAgg），earned_days 必须按
+ * 查询截止日派生。SQL 直通若裸引用它们会得到看似合理的 0/错误口径，故 fail-closed，
+ * 引导用户改走已封装 ClaimsAgg JOIN 与已赚天数口径的 PIVOT 指标。
+ */
+const DERIVED_ONLY_FIELDS = ['claim_cases', 'earned_days'] as const;
+
+/**
  * 聚合函数列表 (必须出现至少一个)
  */
 const AGGREGATE_FUNCTIONS = [
@@ -338,6 +347,24 @@ export function validateSQL(sql: string): ValidationResult {
       return {
         valid: false,
         error: `禁止访问 ${table} 表 (访问边界限制)`,
+      };
+    }
+  }
+
+  // 6.2 禁止裸引用 PolicyFact 的静默错误列。structuralSQL 已移除注释并遮蔽字符串，
+  // 因而文案/筛选值中出现同名文本不会误触发。
+  for (const field of DERIVED_ONLY_FIELDS) {
+    // 允许把其他合法聚合结果命名为同名输出别名；禁止的是读取该标识符本身。
+    const sqlWithoutOutputAlias = structuralSQL.replace(
+      new RegExp(`\\bAS\\s+${field}\\b`, 'gi'),
+      'AS __derived_field_alias',
+    );
+    if (new RegExp(`\\b${field}\\b`, 'i').test(sqlWithoutOutputAlias)) {
+      return {
+        valid: false,
+        error:
+          `禁止直接查询 ${field}：该字段在 PolicyFact 中是占位或需按截止日派生，` +
+          '会产生静默错数。请改用 cx query PIVOT --metrics=earned_loss_frequency。',
       };
     }
   }

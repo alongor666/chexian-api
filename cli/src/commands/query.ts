@@ -50,6 +50,14 @@ interface RouteTarget {
   fullPath: string;
 }
 
+interface QueryUserScopeResp {
+  success: boolean;
+  data: {
+    branchCode?: string;
+    visibleBranches?: string[];
+  };
+}
+
 export async function queryCommand(rawKey: string, opts: QueryOpts): Promise<void> {
   try {
     const { route, refreshed } = await resolveWithRefresh(rawKey, fetchCatalog);
@@ -59,6 +67,10 @@ export async function queryCommand(rawKey: string, opts: QueryOpts): Promise<voi
       process.exit(EXIT.USAGE);
     }
     if (refreshed) note(kleur.gray('(本地缓存未命中，已自动刷新 route-catalog)'));
+
+    // 多省账号若未显式切省，服务端会按默认省返回数据。查询前只读获取当前权限范围，
+    // 在 stderr 明示实际省份；提示失败不阻断主查询，也不改变 stdout 数据契约。
+    await warnImplicitDefaultBranch(opts.params);
 
     // --describe：先把字段图例打到 stderr（口径来自服务端 metric-registry 单一事实源），
     // 再正常返回数据到 stdout（保持管道纯净）。图例失败不阻断数据。
@@ -79,6 +91,34 @@ export async function queryCommand(rawKey: string, opts: QueryOpts): Promise<voi
   } catch (err) {
     failWith(err);
   }
+}
+
+async function warnImplicitDefaultBranch(params: Record<string, string>): Promise<void> {
+  if (params.targetBranch?.trim()) return;
+  try {
+    const me = await cxGet<QueryUserScopeResp>('/api/auth/me');
+    const warning = formatImplicitBranchWarning(me.data, params);
+    if (warning) note(kleur.yellow(warning));
+  } catch {
+    // 提示能力降级不得把原本可成功的数据查询变成失败；主请求仍会独立完成鉴权与报错。
+  }
+}
+
+/** 纯函数：仅多省账号且未显式传 targetBranch 时生成默认省提示。 */
+export function formatImplicitBranchWarning(
+  scope: QueryUserScopeResp['data'],
+  params: Record<string, string>,
+): string | null {
+  if (params.targetBranch?.trim()) return null;
+  const visibleBranches = Array.isArray(scope.visibleBranches)
+    ? [...new Set(scope.visibleBranches.filter((branch) => typeof branch === 'string' && branch.length > 0))]
+    : [];
+  if (visibleBranches.length <= 1) return null;
+  const defaultBranch = scope.branchCode ?? '(none)';
+  return (
+    `⚠ 多省账号未指定 targetBranch；本次查询按默认省 ${defaultBranch} 生效。` +
+    `可见省份: ${visibleBranches.join(', ')}；切省请传 --targetBranch=<省代码>。`
+  );
 }
 
 /**
