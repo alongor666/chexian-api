@@ -34,7 +34,7 @@ import {
   RENEWAL_OUTPUT_COLUMNS,
 } from '../../sql/renewal-tracker.js';
 import { generatePivotQuery } from '../../sql/pivot.js';
-import { isPivotSafeMetric, PIVOT_DIM_WHITELIST } from './pivot.js';
+import { isPivotSafeMetric, PIVOT_DIM_WHITELIST, resolvePivotLimit } from './pivot.js';
 import { getMetric } from '../../config/metric-registry/index.js';
 import { getBootstrapper } from '../../services/bootstrapper-registry.js';
 
@@ -64,6 +64,15 @@ function parseBooleanCondition(value: unknown, column: string): string | null {
 function clampLimit(raw: unknown): number {
   const n = parseInt(String(raw ?? DEFAULT_LIMIT), 10);
   return Math.min(MAX_LIMIT, Number.isFinite(n) && n > 0 ? n : DEFAULT_LIMIT);
+}
+
+/** PolicyFact cube 与 PIVOT 共享高基数维度默认值；续保域保持既有默认 100。 */
+export function resolveCubeLimit(
+  domain: 'renewal' | 'policyfact',
+  dimNames: readonly string[],
+  raw: unknown,
+): number {
+  return domain === 'policyfact' ? resolvePivotLimit(dimNames, raw) : clampLimit(raw);
 }
 
 function round1(x: number): number {
@@ -145,10 +154,10 @@ router.get(
 
     // dims 兼容 dimensions / dims 两个参数名
     const dimNames = parseCsv(req.query.dimensions ?? req.query.dims);
-    const limit = clampLimit(req.query.limit);
 
     // ───────── 续保可组合路径 ─────────
     if (metric.category === 'renewal') {
+      const limit = resolveCubeLimit('renewal', dimNames, req.query.limit);
       if (!RENEWAL_CUBE_METRIC_IDS.has(metricId)) {
         throw new AppError(
           400,
@@ -257,6 +266,7 @@ router.get(
 
     const { whereClause } = parseFiltersAndBuildWhere(req);
     const dimensions = dimNames.map((id) => ({ id, sqlExpr: PIVOT_DIM_WHITELIST[id] }));
+    const limit = resolveCubeLimit('policyfact', dimNames, req.query.limit);
     const sql = generatePivotQuery({ dimensions, metricIds: [metricId], whereClause, limit });
     const rows = await duckdbService.query<Record<string, unknown>>(sql, QUERY_CACHE.hotspotMedium);
 

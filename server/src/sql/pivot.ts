@@ -68,7 +68,11 @@ export function generatePivotQuery(c: GeneratePivotQueryConfig): string {
   const groupBy = c.dimensions.map((_, i) => String(i + 1)).join(', ');
   // ORDER BY 第一个指标。指标 SQL 形如 `SUM(premium) as total_premium` —
   // 用 metric id 做别名即可，与 metric-registry 约定一致。
-  const orderByAlias = c.metricIds[0];
+  // agent_name 是高基数维度（可超过 MAX_LIMIT）；请求同时带 policy_count 时优先按件数
+  // 截断，避免少量保单的极端比率挤占前排，让主要经代稳定可见。其他维度保持既有排序。
+  const orderByAlias = dimIds.includes('agent_name') && c.metricIds.includes('policy_count')
+    ? 'policy_count'
+    : c.metricIds[0];
 
   if (!needsClaimsAggCte(c.metricIds)) {
     return `SELECT ${dimSelects}, ${metricSelects}
