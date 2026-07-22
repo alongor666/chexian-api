@@ -58,10 +58,25 @@ describe('远程分析能力目录', () => {
   it('目录版本与响应体 ETag 随代码契约变化，不依赖 ETL 版本', () => {
     const current = buildAnalysisCapabilitiesData();
     expect(current.version).toBe(ANALYSIS_CAPABILITIES_VERSION);
-    expect(current.minCliVersion).toBe('1.2.0');
+    expect(current.version).toBe(5);
+    expect(current.minCliVersion).toBe('1.3.0');
 
     const changed = structuredClone(current);
     changed.capabilities[0].allowedParams.push('futureParam');
     expect(computeEtag(changed)).not.toBe(computeEtag(current));
+  });
+
+  it('每项能力公开稳定结果语义，维度与指标均属于必需字段', () => {
+    for (const capability of buildAnalysisCapabilitiesData().capabilities) {
+      expect(capability.resultSchema.id).toMatch(/\.v[1-9][0-9]*$/);
+      expect(capability.resultSchema.version).toBeGreaterThan(0);
+      expect(['$', '$.rows']).toContain(capability.resultSchema.recordsPath);
+      for (const field of [
+        ...capability.resultSchema.dimensionFields,
+        ...capability.resultSchema.metricFields,
+      ]) {
+        expect(capability.resultSchema.requiredFields).toContain(field);
+      }
+    }
   });
 });
