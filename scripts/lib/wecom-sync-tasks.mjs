@@ -171,3 +171,116 @@ export function evaluateWecomOutcome(failures) {
       : '',
   };
 }
+
+/**
+ * 🔴 专用退出码契约（PR #1158 评审二轮 F1）：「核心数据发布成功 + 企微失败」时发布进程以
+ * 此码退出（非 0、非 1）——手动入口（bun run release:daily / sync-and-reload）不再静默成功，
+ * shell/自动化能区分三种终态：0=全成功、86=核心成功仅企微失败、其他=核心发布失败。
+ * 86 刻意避开 sysexits(3) 保留区（64-78，尤其 launchd EX_CONFIG=78 在本项目有历史含义）。
+ */
+export const WECOM_FAILURE_EXIT_CODE = 86;
+
+/**
+ * watcher 侧退出码解释器（auto-release-daily runReleaseDaily 消费）：
+ * 把发布子进程退出码翻译为两个独立结果——coreReleased 决定批次 released/failed
+ * （企微失败不连坐晚批），wecomFailed 决定是否独立告警。
+ * @param {number|null} status spawnSync 返回的 exit status（进程被杀等异常时为 null）
+ * @returns {{coreReleased: boolean, wecomFailed: boolean}}
+ */
+export function interpretReleaseExit(status) {
+  if (status === 0) return { coreReleased: true, wecomFailed: false };
+  if (status === WECOM_FAILURE_EXIT_CODE) return { coreReleased: true, wecomFailed: true };
+  return { coreReleased: false, wecomFailed: false };
+}
+
+/**
+ * Stage 5 企微同步编排——发布链（sync-and-reload）与独立重试入口（wecom-sync）共用的
+ * **真实执行体**；runner / persistMarker 可注入，使真实链路可被单测注入失败复现：
+ * 「企微子任务失败 → 不抛错 → 返回 WECOM_FAILURE_EXIT_CODE + 标记落盘」整条路径都在本函数内，
+ * 恢复旧的 throw 行为会直接打红对应测试（tests/wecom-sync-tasks.test.ts）。
+ *
+ * @param {object} opts
+ * @param {boolean} [opts.dryRun] 全局 dry-run（连 python 子进程都不跑；由 runner 自行尊重）
+ * @param {boolean} [opts.wecomDryRun] 企微级 dry-run（python 侧 --dry-run）
+ * @param {string|null} [opts.org] 机构续保表限定机构
+ * @param {string|null} opts.todayBeijing 北京日（YYYY-MM-DD）
+ * @param {string} [opts.runId] 本次发布 run_id（watcher 经 ETL_RUN_ID 注入；标记文件据此绑定，
+ *   避免消费陈旧/并发运行的结果）
+ * @param {(task: {label:string,args:string[],timeoutMs:number}) => Promise<unknown>} opts.runner
+ *   单任务执行器（必注入）：sync-and-reload 传 runCmd 包装，wecom-sync 传本地 spawn，测试传桩
+ * @param {(marker: {beijingDay:string|null,runId:string,failures:{label:string,reason:string}[],updatedAt:string}) => void} [opts.persistMarker]
+ *   标记文件写入器；dry-run（全局或企微级）不调用（演练不污染真实告警态）；写失败由本函数吞掉（非阻断）
+ * @param {(level: 'info'|'warn'|'error', msg: string) => void} [opts.log] 日志器
+ * @returns {Promise<{failures:{label:string,reason:string}[], outcome:ReturnType<typeof evaluateWecomOutcome>,
+ *   exitCode: 0|typeof WECOM_FAILURE_EXIT_CODE, activeCount:number, totalCount:number}>}
+ */
+export async function runWecomStage({
+  dryRun = false,
+  wecomDryRun = false,
+  org = null,
+  todayBeijing,
+  runId = 'adhoc',
+  runner,
+  persistMarker,
+  log = () => {},
+}) {
+  const allTasks = buildWecomTasks({ dryRun: wecomDryRun, org });
+  const { active, retired } = filterActiveWecomTasks(allTasks, todayBeijing);
+  for (const task of retired) {
+    log('warn', `  ⏹ 跳过「${task.label}」：已过停推日 ${task.retireAfterBeijingDay}（北京今天 ${todayBeijing}），该表已退役。`);
+  }
+
+  log('info', `\n▶ [WeCom] 并行启动 ${active.length}/${allTasks.length} 个智能表格同步任务`);
+  const results = await Promise.allSettled(active.map((task) => runner(task)));
+  const failures = summarizeWecomFailures(results, active);
+  const outcome = evaluateWecomOutcome(failures);
+
+  // 标记文件：失败写清单、成功清空（幂等覆盖当天态），绑定 runId 防消费陈旧/并发结果。
+  if (!dryRun && !wecomDryRun && typeof persistMarker === 'function') {
+    try {
+      persistMarker({ beijingDay: todayBeijing, runId, failures, updatedAt: new Date().toISOString() });
+    } catch (e) {
+      log('warn', `  ⚠ 企微告警标记写入失败（不阻断）：${e.message}`);
+    }
+  }
+
+  if (failures.length > 0) {
+    for (const f of failures) log('error', `  ❌ ${f.label}: ${f.reason}`);
+    log('warn', `⚠ 企微同步 ${failures.length}/${active.length} 个任务失败——按非阻断策略继续（核心数据发布不受影响，晚批不被连坐）。`);
+    log('warn', '  独立重试（只跑企微，不重跑 ETL/reload）：node scripts/wecom-sync.mjs');
+  } else {
+    log('info', `  ✓ WeCom 全部 ${active.length} 个任务完成`);
+  }
+
+  return {
+    failures,
+    outcome,
+    exitCode: failures.length > 0 ? WECOM_FAILURE_EXIT_CODE : 0,
+    activeCount: active.length,
+    totalCount: allTasks.length,
+  };
+}
+
+/**
+ * watcher 独立告警文案构建（auto-release-daily 在 interpretReleaseExit().wecomFailed 时调用）。
+ * 标记文件新鲜（北京日相符，且 runId 相符或未提供）→ 带具体失败表名；陈旧/缺失/损坏 → 通用文案
+ * （告警不因标记问题而丢失）。
+ * @param {{beijingDay?:string, runId?:string, failures?:{label:string}[]}|null} marker
+ * @param {{todayBeijing: string|null, runId?: string|null}} ctx
+ * @returns {{title: string, body: string}}
+ */
+export function buildWecomFailureAlert(marker, { todayBeijing, runId = null }) {
+  const title = '企微同步部分失败（发布未受阻断）';
+  const fresh = marker
+    && marker.beijingDay === todayBeijing
+    && (!runId || !marker.runId || marker.runId === runId)
+    && Array.isArray(marker.failures)
+    && marker.failures.length > 0;
+  const detail = fresh
+    ? `${marker.failures.map((f) => f.label).join('、')} 失败`
+    : '企微同步存在失败任务（标记文件缺失或陈旧，详见发布日志）';
+  return {
+    title,
+    body: `${detail}；核心数据已正常发布。独立重试：node scripts/wecom-sync.mjs（不重跑 ETL/reload）`,
+  };
+}

@@ -25,10 +25,7 @@ import { writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
-import {
-  buildWecomTasks, filterActiveWecomTasks, summarizeWecomFailures,
-  WECOM_ALERT_MARKER_RELPATH,
-} from './lib/wecom-sync-tasks.mjs';
+import { runWecomStage, WECOM_ALERT_MARKER_RELPATH } from './lib/wecom-sync-tasks.mjs';
 
 const ROOT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -72,41 +69,27 @@ function runTask(task) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const todayBeijing = beijingDayOf(new Date());
-  const allTasks = buildWecomTasks({ dryRun: opts.dryRun, org: opts.org });
-  const { active, retired } = filterActiveWecomTasks(allTasks, todayBeijing);
-  for (const task of retired) {
-    console.log(`⏹ 跳过「${task.label}」：已过停推日 ${task.retireAfterBeijingDay}（北京今天 ${todayBeijing}），该表已退役。`);
-  }
-  if (active.length === 0) {
-    console.log('全部企微表均已退役，无任务可跑。');
-    return;
-  }
+  // 与发布链 Stage 5 共用同一真实编排体 runWecomStage（任务清单/停推闸/标记语义完全一致）。
+  // 本入口的 --dry-run 映射到企微级 dry-run（python --dry-run 真实跑通计划）；全局 dryRun=false。
+  const result = await runWecomStage({
+    dryRun: false,
+    wecomDryRun: opts.dryRun,
+    org: opts.org,
+    todayBeijing: beijingDayOf(new Date()),
+    runId: `wecom-retry-${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}`,
+    runner: runTask,
+    persistMarker: (marker) => writeFileSync(
+      join(ROOT_DIR, WECOM_ALERT_MARKER_RELPATH),
+      JSON.stringify(marker, null, 2) + '\n'
+    ),
+    log: (level, msg) => (level === 'error' ? console.error(msg) : level === 'warn' ? console.warn(msg) : console.log(msg)),
+  });
 
-  console.log(`\n▶ [WeCom 独立重试] 并行启动 ${active.length}/${allTasks.length} 个智能表格同步任务`);
-  const results = await Promise.allSettled(active.map(runTask));
-  const failures = summarizeWecomFailures(results, active);
-
-  // 刷新告警标记（与发布链 Stage 5 同一文件同一语义）：成功清空当天失败清单，失败写入。
-  // dry-run 不落盘（演练不污染真实告警态）。
-  if (!opts.dryRun) {
-    try {
-      writeFileSync(join(ROOT_DIR, WECOM_ALERT_MARKER_RELPATH), JSON.stringify({
-        beijingDay: todayBeijing,
-        failures,
-        updatedAt: new Date().toISOString(),
-      }, null, 2) + '\n');
-    } catch (e) {
-      console.warn(`⚠ 企微告警标记写入失败（不阻断）：${e.message}`);
-    }
-  }
-
-  if (failures.length > 0) {
-    for (const f of failures) console.error(`❌ ${f.label}: ${f.reason}`);
-    console.error(`\n❌ 企微同步 ${failures.length}/${active.length} 个任务失败`);
+  if (result.failures.length > 0) {
+    console.error(`\n❌ 企微同步 ${result.failures.length}/${result.activeCount} 个任务失败`);
     process.exit(1);
   }
-  console.log(`\n✅ WeCom 全部 ${active.length} 个任务完成`);
+  console.log(`\n✅ WeCom 全部 ${result.activeCount} 个任务完成`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

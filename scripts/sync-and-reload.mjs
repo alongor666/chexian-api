@@ -35,9 +35,11 @@
  *   node scripts/sync-and-reload.mjs --dry-run              # 仅打印计划，不执行
  *
  * 任一阶段失败立即退出且告知排查方向，不进入后续阶段。
- * 🔴 例外：Stage 5 企微失败**非阻断**（PR #1158 评审 F1）——核心数据发布（Stage 0~4.5）已成功，
- * 企微失败只独立告警 + 独立重试（node scripts/wecom-sync.mjs），进程仍以 0 退出，
- * 避免 watcher 把批次标 failed 引发晚批连坐与 ETL/reload 重跑。
+ * 🔴 例外：Stage 5 企微失败**非阻断但不静默**（PR #1158 评审 F1 两轮）——核心数据发布
+ *（Stage 0~4.5）已成功时企微失败不抛错（避免 watcher 把批次标 failed 引发晚批连坐与
+ * ETL/reload 重跑），进程改以专用退出码 86（WECOM_FAILURE_EXIT_CODE）结束：手动入口
+ * shell 可见失败；watcher 经 interpretReleaseExit 标 released 并独立告警；
+ * 独立重试：node scripts/wecom-sync.mjs（只跑企微）。退出码：0=全成功 / 86=仅企微失败 / 1=核心失败。
  *
  * 环境变量：
  *   SYNC_VPS_SSH_ALIAS         （默认 chexian-vps-deploy）
@@ -63,11 +65,8 @@ import { unmetDependencies } from '../数据管理/lib/auto-release-decision.mjs
 // state.db 远程备份（575d2f）：reload 前在 VPS 上备份 PAT/用户/角色权威数据，失败不阻塞
 import { resolveStateDbBackupConfig, buildStateDbBackupScript } from './lib/state-db-backup.mjs';
 import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
-// 企微任务清单 + 到期停推 + 非阻断失败策略 SSOT（PR #1158 评审 F1/F2 拆出，单测锁定）
-import {
-  buildWecomTasks, filterActiveWecomTasks, summarizeWecomFailures, evaluateWecomOutcome,
-  WECOM_ALERT_MARKER_RELPATH,
-} from './lib/wecom-sync-tasks.mjs';
+// 企微 Stage 5 真实编排体 + 非阻断/退出码契约 SSOT（PR #1158 评审 F1/F2，单测注入 runner 锁定）
+import { runWecomStage, WECOM_ALERT_MARKER_RELPATH } from './lib/wecom-sync-tasks.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -780,62 +779,43 @@ async function main() {
 
   // Stage 5: 企业微信同步（显式开关）
   // 5 个脚本独立 webhook、互不依赖，并行执行（Promise.allSettled）。
-  // 🔴 非阻断策略（PR #1158 评审 F1）：企微失败**不**抛错、不让本进程非零退出——否则 watcher
-  // 会把本批（现为早批）标 failed → 晚批 fail-closed 连坐拒发 + 早批 ETL/reload 整链重跑。
-  // 失败改走独立告警（标记文件 → watcher 通知）+ 独立重试（node scripts/wecom-sync.mjs）。
-  // 策略 SSOT = scripts/lib/wecom-sync-tasks.mjs evaluateWecomOutcome（单测锁定恒不阻断）。
-  let wecomOutcome = null;
+  // 🔴 非阻断 + 专用退出码契约（PR #1158 评审 F1 两轮）：企微失败**不**抛错（否则 watcher
+  // 把本批标 failed → 晚批 fail-closed 连坐 + 早批 ETL/reload 重跑），但也**不静默成功**——
+  // 进程以 WECOM_FAILURE_EXIT_CODE(86) 退出：手动入口（bun run release:daily）shell 可见失败，
+  // watcher 经 interpretReleaseExit 区分「核心成功(标 released) + 企微失败(独立告警)」。
+  // 编排真实执行体 = runWecomStage（scripts/lib/wecom-sync-tasks.mjs，测试注入 runner 锁定该路径）。
+  let wecomStage = null;
   if (opts.wecom) {
     if (claimsFreshnessWarning) {
       log('yellow', `\n⚠ claims 报案截止日落后 N 天：${claimsFreshnessWarning}（见 Stage 1.2 新鲜度巡检；不阻断本次企微同步）`);
     }
-    // 任务清单 + 到期停推闸（5-7 月续保 2 表 2026-07-31 后自动退役）SSOT：wecom-sync-tasks.mjs
-    const todayBeijing = beijingDayOf(new Date());
-    const allWecomTasks = buildWecomTasks({ dryRun: opts.wecomDryRun, org: opts.wecomOrg });
-    const { active: activeWecomTasks, retired } = filterActiveWecomTasks(allWecomTasks, todayBeijing);
-    for (const task of retired) {
-      log('yellow', `  ⏹ 跳过「${task.label}」：已过停推日 ${task.retireAfterBeijingDay}（北京今天 ${todayBeijing}），该表已退役。`);
-    }
-
-    log('cyan', `\n▶ [WeCom] 并行启动 ${activeWecomTasks.length}/${allWecomTasks.length} 个智能表格同步任务`);
-    const results = await Promise.allSettled(
-      activeWecomTasks.map(task =>
-        runCmd(task.label, 'python3', task.args, { dryRun: opts.dryRun, timeoutMs: task.timeoutMs })
-      )
-    );
-    const failures = summarizeWecomFailures(results, activeWecomTasks);
-    wecomOutcome = evaluateWecomOutcome(failures);
-    // 标记文件：失败写清单、成功清空（幂等覆盖当天态）。watcher 发布成功后读它做独立告警；
-    // dry-run（全局或企微级）不落盘，避免演练污染真实告警态。
-    if (!opts.dryRun && !opts.wecomDryRun) {
-      try {
-        writeFileSync(join(ROOT_DIR, WECOM_ALERT_MARKER_RELPATH), JSON.stringify({
-          beijingDay: todayBeijing,
-          failures,
-          updatedAt: new Date().toISOString(),
-        }, null, 2) + '\n');
-      } catch (e) {
-        log('yellow', `  ⚠ 企微告警标记写入失败（不阻断）：${e.message}`);
-      }
-    }
-    if (failures.length > 0) {
-      for (const f of failures) {
-        log('red', `  ❌ ${f.label}: ${f.reason}`);
-      }
-      log('yellow', `⚠ 企微同步 ${failures.length}/${activeWecomTasks.length} 个任务失败——按非阻断策略继续（核心数据发布成功不受影响，晚批不被连坐）。`);
-      log('yellow', '  独立重试（只跑企微，不重跑 ETL/reload）：node scripts/wecom-sync.mjs');
-    } else {
-      log('green', `  ✓ WeCom 全部 ${activeWecomTasks.length} 个任务完成`);
-    }
+    wecomStage = await runWecomStage({
+      dryRun: opts.dryRun,
+      wecomDryRun: opts.wecomDryRun,
+      org: opts.wecomOrg,
+      todayBeijing: beijingDayOf(new Date()),
+      runId: process.env.ETL_RUN_ID || 'adhoc',
+      runner: (task) => runCmd(task.label, 'python3', task.args, { dryRun: opts.dryRun, timeoutMs: task.timeoutMs }),
+      persistMarker: (marker) => writeFileSync(
+        join(ROOT_DIR, WECOM_ALERT_MARKER_RELPATH),
+        JSON.stringify(marker, null, 2) + '\n'
+      ),
+      log: (level, msg) => log(level === 'error' ? 'red' : level === 'warn' ? 'yellow' : 'cyan', msg),
+    });
   }
 
+  const wecomFailed = (wecomStage?.failures.length ?? 0) > 0;
   if (!opts.dryRun) {
     recordEvent({
       stage: 'run', step: 'end', status: 'success', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0,
-      ...(wecomOutcome?.alertNeeded ? { note: wecomOutcome.note } : {}),
+      ...(wecomFailed ? { note: `${wecomStage.outcome.note}（核心发布成功，进程退出码 ${wecomStage.exitCode}）` } : {}),
     });
   }
-  log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
+  if (wecomFailed) {
+    log('yellow', `\n⚠ 核心发布完成（ETL → governance → reload → /health 全成功），但企微 ${wecomStage.failures.length} 个任务失败——进程以退出码 ${wecomStage.exitCode} 结束（非静默成功）。`);
+  } else {
+    log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
+  }
   if (claimsFreshnessWarning) {
     log('yellow', `⚠ 健康汇总：claims 报案截止日新鲜度告警未解除——${claimsFreshnessWarning}`);
   }
@@ -848,10 +828,16 @@ async function main() {
   } catch (e) {
     log('yellow', `  ⚠ 台账报告刷新失败（不阻断）：${e.message}`);
   }
+
+  // 🔴 退出码契约（SSOT：wecom-sync-tasks.mjs WECOM_FAILURE_EXIT_CODE）：核心成功 + 企微失败
+  // → 86（手动入口 shell 可见、watcher interpretReleaseExit 标 released 并独立告警）；全成功 → 0。
+  return wecomStage?.exitCode ?? 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(err => {
+  main().then((exitCode) => {
+    if (exitCode) process.exitCode = exitCode;
+  }).catch(err => {
   // 断点入账：err.message 含失败环节 label（runCmd reject 消息），run end 事件据此定位断在哪一环。
   // dry-run 不打点（与 run start/end success 的守护对称，否则 dry-run 失败会留下无 start 配对的孤儿事件）；
   // opts 不在本作用域，与 parseArgs 同源地看 argv。
