@@ -1,39 +1,64 @@
-name: Release cx-cli
+name: Promote cx-cli release tag
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: '发布标签（必须与 cli/package.json 一致，例如 v0.3.1）'
+        description: '单调递增的发布标签（必须与 cli/package.json 一致，例如 v1.1.0）'
         required: true
         type: string
 
 jobs:
-  release:
+  promote:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      GH_TOKEN: ${{ secrets.CX_CLI_SYNC_TOKEN }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      MIRROR_REPO: alongor666/cx-cli
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.14'
-      - name: Verify requested tag
-        working-directory: cli
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: |
-          test "v$(node -p \"require('./package.json').version\")" = "$RELEASE_TAG"
-      - name: Build verified cross-platform assets
+          fetch-depth: 0
+
+      - name: Verify source version and monotonic tag
         working-directory: cli
         run: |
-          bun install --frozen-lockfile
-          bun run package:release
-      - name: Publish immutable release to cx-cli mirror
-        env:
-          GH_TOKEN: ${{ secrets.CX_CLI_SYNC_TOKEN }}
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: |
+          set -euo pipefail
           test -n "$GH_TOKEN"
-          gh release create "$RELEASE_TAG" cli/dist/cx-* cli/dist/manifest.json cli/dist/SHA256SUMS \
-            --repo alongor666/cx-cli --target main --title "cx $RELEASE_TAG" --generate-notes
+          VERSION="$(node -p 'require("./package.json").version')"
+          test "v${VERSION}" = "$RELEASE_TAG"
+          test "$RELEASE_TAG" != 'v1.0.0'
+          LATEST_TAG="$(gh api "repos/${MIRROR_REPO}/releases/latest" --jq .tag_name)"
+          export VERSION LATEST_TAG
+          node -e '
+            const parse = (v) => v.replace(/^v/, "").split(".").map(Number);
+            const next = parse(process.env.VERSION);
+            const latest = parse(process.env.LATEST_TAG);
+            if (next.length !== 3 || latest.length !== 3 || next.some(Number.isNaN) || latest.some(Number.isNaN)) process.exit(2);
+            const newer = next.some((n, i) => n > latest[i] && next.slice(0, i).every((x, j) => x === latest[j]));
+            if (!newer) throw new Error(`release v${process.env.VERSION} must be newer than ${process.env.LATEST_TAG}`);
+          '
+
+      - name: Verify mirror contains the exact synced CLI source
+        run: |
+          set -euo pipefail
+          SOURCE_CLI_COMMIT="$(git log -1 --format=%H -- cli/)"
+          MIRROR_SOURCE_COMMIT="$(gh api "repos/${MIRROR_REPO}/contents/source-commit.txt?ref=main" --jq .content | base64 --decode | tr -d '\r\n')"
+          MIRROR_VERSION="$(gh api "repos/${MIRROR_REPO}/contents/package.json?ref=main" --jq .content | base64 --decode | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')"
+          test "$SOURCE_CLI_COMMIT" = "$MIRROR_SOURCE_COMMIT"
+          test "v${MIRROR_VERSION}" = "$RELEASE_TAG"
+
+      - name: Create immutable tag on mirror main
+        run: |
+          set -euo pipefail
+          if gh api "repos/${MIRROR_REPO}/git/ref/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "::error::tag ${RELEASE_TAG} already exists"
+            exit 1
+          fi
+          MIRROR_SHA="$(gh api "repos/${MIRROR_REPO}/commits/main" --jq .sha)"
+          gh api --method POST "repos/${MIRROR_REPO}/git/refs" \
+            -f ref="refs/tags/${RELEASE_TAG}" \
+            -f sha="$MIRROR_SHA"
+          echo "::notice::tagged ${MIRROR_REPO}@${MIRROR_SHA}; mirror release workflow is the sole publisher"
