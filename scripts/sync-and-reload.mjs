@@ -73,6 +73,11 @@ const COLORS = {
   bold: '\x1b[1m',
 };
 
+// 5-7 月续保追踪企微表停推日（北京时区，含当日）：2026-08-01 起 5-7 月应续保单全部到期，
+// 追踪表（机构续保 sync_org_renewal_from_xlsx + 电销5-7月续保 sync_may_renewal_fields）无意义，
+// 故 2026-07-31 为最后一次推送，之后由 wecomTasks 的 retireAfterBeijingDay 闸自动停推（不删表、不报错）。
+const MAY_JUL_RENEWAL_WECOM_LAST_DAY = '2026-07-31';
+
 const FULL_SNAPSHOT_DOMAINS = new Set(['customer_flow', 'new_energy_claims', 'new_energy']);
 const FULL_SNAPSHOT_DOMAIN_ALIASES = {
   customer_flow: 'customer_flow',
@@ -158,7 +163,7 @@ function parseArgs(argv) {
     else if (a === '--allow-missing-dep') opts.allowMissingDep = true;
     else if (a === '--help' || a === '-h') {
       log('cyan', `用法：node scripts/sync-and-reload.mjs [--batch ${RELEASE_BATCH_IDS.join('|')}] [daily.mjs subcommand] [--dry-run] [--skip-pull] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]`);
-      log('cyan', '  --batch early：签单+理赔（premium/claims_detail，不跑企微）；--batch late：报价+维修+厂牌+尾部域（跑企微，依赖早批当天 released）。不带 --batch=全量 daily.mjs all。');
+      log('cyan', '  --batch early：签单+理赔（premium/claims_detail，跑企微）；--batch late：报价+维修+厂牌+尾部域（不跑企微，依赖早批当天 released）。不带 --batch=全量 daily.mjs all。');
       log('cyan', '  --allow-missing-dep：应急放行晚批依赖闸（早批未 released 也发；可能混新鲜度）。');
       process.exit(0);
     } else opts.dailyArgs.push(a);
@@ -827,11 +832,15 @@ async function main() {
         label: opts.wecomDryRun ? 'WeCom renewal dry-run' : 'WeCom renewal sync',
         args: orgRenewalArgs,
         timeoutMs: 90 * 60 * 1000,
+        // 5-7 月续保追踪表：2026-08-01 起 5-7 月应续保单全部到期，追踪无意义，
+        // 故 2026-07-31（北京，含）为最后一次推送，之后自动停推（见 MAY_JUL_RENEWAL_WECOM_LAST_DAY）。
+        retireAfterBeijingDay: MAY_JUL_RENEWAL_WECOM_LAST_DAY,
       },
       {
         label: opts.wecomDryRun ? 'WeCom 电销5-7月续保 dry-run' : 'WeCom 电销5-7月续保 sync',
         args: renewalMayArgs,
         timeoutMs: 30 * 60 * 1000,
+        retireAfterBeijingDay: MAY_JUL_RENEWAL_WECOM_LAST_DAY,
       },
       {
         label: opts.wecomDryRun ? 'WeCom postal dry-run' : 'WeCom postal sync',
@@ -850,22 +859,33 @@ async function main() {
       },
     ];
 
-    log('cyan', `\n▶ [WeCom] 并行启动 ${wecomTasks.length} 个智能表格同步任务`);
+    // 到期停推闸：某表 retireAfterBeijingDay 已过（北京今天 > 该日）则从本次同步中剔除，
+    // 不删表、不写入、不报错——达成"到期日后自动停推"而无需人工到点删任务。
+    const todayBeijing = beijingDayOf(new Date());
+    const activeWecomTasks = wecomTasks.filter(task => {
+      if (task.retireAfterBeijingDay && todayBeijing && todayBeijing > task.retireAfterBeijingDay) {
+        log('yellow', `  ⏹ 跳过「${task.label}」：已过停推日 ${task.retireAfterBeijingDay}（北京今天 ${todayBeijing}），该表已退役。`);
+        return false;
+      }
+      return true;
+    });
+
+    log('cyan', `\n▶ [WeCom] 并行启动 ${activeWecomTasks.length}/${wecomTasks.length} 个智能表格同步任务`);
     const results = await Promise.allSettled(
-      wecomTasks.map(task =>
+      activeWecomTasks.map(task =>
         runCmd(task.label, 'python3', task.args, { dryRun: opts.dryRun, timeoutMs: task.timeoutMs })
       )
     );
     const failures = results
-      .map((r, i) => ({ r, label: wecomTasks[i].label }))
+      .map((r, i) => ({ r, label: activeWecomTasks[i].label }))
       .filter(({ r }) => r.status === 'rejected');
     if (failures.length > 0) {
       for (const { r, label } of failures) {
         log('red', `  ❌ ${label}: ${r.reason?.message || r.reason}`);
       }
-      throw new Error(`WeCom 同步存在 ${failures.length}/${wecomTasks.length} 个失败任务`);
+      throw new Error(`WeCom 同步存在 ${failures.length}/${activeWecomTasks.length} 个失败任务`);
     }
-    log('green', `  ✓ WeCom 全部 ${wecomTasks.length} 个任务完成`);
+    log('green', `  ✓ WeCom 全部 ${activeWecomTasks.length} 个任务完成`);
   }
 
   if (!opts.dryRun) {
