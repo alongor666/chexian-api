@@ -11,8 +11,13 @@
  */
 import { Router } from 'express';
 import { asyncHandler, AppError, duckdbService, sendWithEtag, QUERY_CACHE, HTTP_MAX_AGE, parseFiltersAndBuildWhere, withRouteCache } from './shared.js';
-import { generatePivotQuery } from '../../sql/pivot.js';
+import {
+  generatePivotEffectiveCutoffQuery,
+  generatePivotQuery,
+  needsPivotClaimsContext,
+} from '../../sql/pivot.js';
 import { hasMetric, getMetric } from '../../config/metric-registry/index.js';
+import { NORMALIZED_AGENT_NAME_SQL } from '../../utils/agent-name.js';
 
 const router = Router();
 
@@ -50,7 +55,7 @@ export const PIVOT_DIM_WHITELIST: Record<string, string> = {
   salesman_name: 'salesman_name',
   // 仅剥离前导机构码，保留经代完整名称，避免把「中国邮政储蓄银行」误归并为「邮政」。
   // NULL/纯机构码显式归入「无经代」，不静默丢弃高占比缺失值。
-  agent_name: "COALESCE(NULLIF(TRIM(REGEXP_REPLACE(agent_name, '^[0-9]+', '')), ''), '无经代')",
+  agent_name: NORMALIZED_AGENT_NAME_SQL,
   customer_category: 'customer_category',
   insurance_type: 'insurance_type',
   coverage_combination: 'coverage_combination',
@@ -128,7 +133,18 @@ router.get(
 
     const dimensions = dimNames.map((id) => ({ id, sqlExpr: PIVOT_DIM_WHITELIST[id] }));
     const sql = generatePivotQuery({ dimensions, metricIds, whereClause, limit });
-    const rows = await duckdbService.query(sql, QUERY_CACHE.hotspotMedium);
+    const needsClaimsContext = needsPivotClaimsContext(metricIds);
+    const [rows, contextRows] = await Promise.all([
+      duckdbService.query(sql, QUERY_CACHE.hotspotMedium),
+      needsClaimsContext
+        ? duckdbService.query<{ effective_cutoff: string | null }>(
+          generatePivotEffectiveCutoffQuery(whereClause),
+          QUERY_CACHE.hotspotMedium,
+        )
+        : Promise.resolve([]),
+    ]);
+    const effectiveCutoff = contextRows[0]?.effective_cutoff ?? null;
+    const requestedEndDate = typeof req.query.endDate === 'string' ? req.query.endDate : null;
 
     sendWithEtag(
       req,
@@ -138,6 +154,15 @@ router.get(
         data: {
           dimensions: dimNames,
           metrics: metricIds,
+          context: {
+            requestedStartDate: typeof req.query.startDate === 'string' ? req.query.startDate : null,
+            requestedEndDate,
+            dateField: typeof req.query.dateField === 'string' ? req.query.dateField : 'policy_date',
+            effectiveCutoff,
+            partialPeriod: effectiveCutoff && requestedEndDate
+              ? effectiveCutoff < requestedEndDate
+              : null,
+          },
           rowCount: rows.length,
           rows,
         },

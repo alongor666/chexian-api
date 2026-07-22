@@ -47,7 +47,7 @@ export interface GeneratePivotQueryConfig {
 /** 触发「满期/赔案路径」的 requiredColumns（PolicyFact 单层裸聚合算不出，须走 ClaimsAgg CTE） */
 const NEEDS_CLAIMS_JOIN_COLUMNS = new Set(['earned_days', 'policy_term', 'reported_claims', 'claim_cases']);
 
-function needsClaimsAggCte(metricIds: readonly string[]): boolean {
+export function needsPivotClaimsContext(metricIds: readonly string[]): boolean {
   return metricIds.some((id) => {
     const metric = getMetric(id);
     return metric ? metric.sql.requiredColumns.some((col) => NEEDS_CLAIMS_JOIN_COLUMNS.has(col)) : false;
@@ -74,7 +74,7 @@ export function generatePivotQuery(c: GeneratePivotQueryConfig): string {
     ? 'policy_count'
     : c.metricIds[0];
 
-  if (!needsClaimsAggCte(c.metricIds)) {
+  if (!needsPivotClaimsContext(c.metricIds)) {
     return `SELECT ${dimSelects}, ${metricSelects}
 FROM PolicyFact
 WHERE ${c.whereClause}
@@ -140,4 +140,14 @@ FROM earned_base
 GROUP BY ${groupBy}
 ORDER BY ${orderByAlias} DESC
 LIMIT ${c.limit}`;
+}
+
+/**
+ * 满期指标的真实观察截止日与生成器 latest_context 保持同源：筛选后 PolicyFact 的
+ * MAX(policy_date)。独立返回元数据，避免把未来 endDate 误读成已具备全年数据。
+ */
+export function generatePivotEffectiveCutoffQuery(whereClause: string): string {
+  return `SELECT MAX(CAST(policy_date AS DATE))::VARCHAR AS effective_cutoff
+FROM PolicyFact
+WHERE ${whereClause}`;
 }

@@ -17,6 +17,7 @@ import {
 } from './sql-sanitizer.js';
 import { AppError } from '../middleware/error.js';
 import { createLogger } from './logger.js';
+import { buildNormalizedAgentNameInCondition } from './agent-name.js';
 
 const log = createLogger('filter-params');
 
@@ -58,6 +59,7 @@ export const commonFilterSchema = z.object({
   // 多选（逗号分隔字符串）
   orgNames: z.string().optional(),
   salesmanNames: z.string().optional(),
+  agentNames: z.string().optional(),
   customerCategories: z.string().optional(),
   coverageCombinations: z.string().optional(),
   renewalModes: z.string().optional(),
@@ -146,6 +148,13 @@ export function buildConditionsFromFilterParams(
     conditions.push(buildInCondition('salesman_name', salesmanList));
   } else if (params.salesmanName) {
     conditions.push(`salesman_name = '${escapeSqlString(params.salesmanName)}'`);
+  }
+
+  // 经代：与 PIVOT agent_name 维度使用同一规范化表达式，只做完整名称精确匹配。
+  // 不接受短名/LIKE 归并，避免“中国邮政储蓄银行”被并入“邮政”。
+  const agentList = csvToArray(params.agentNames);
+  if (agentList) {
+    conditions.push(buildNormalizedAgentNameInCondition(agentList));
   }
 
   // 客户类别

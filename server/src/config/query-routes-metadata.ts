@@ -87,6 +87,7 @@ const COMMON_PARAMS = {
   dateField: { name: 'dateField', type: 'string', description: '日期口径字段（默认 policy_date）', enum: ['policy_date', 'insurance_start_date'] } as QueryRouteParam,
   orgNames: { name: 'orgNames', type: 'string', description: '三级机构名，多个用英文逗号分隔（受 dataScope 限制）' } as QueryRouteParam,
   salesmanNames: { name: 'salesmanNames', type: 'string', description: '业务员姓名，多个用英文逗号分隔' } as QueryRouteParam,
+  agentNames: { name: 'agentNames', type: 'string', description: '规范化后的经代完整名称，多个用英文逗号分隔；只做精确匹配' } as QueryRouteParam,
   customerCategories: { name: 'customerCategories', type: 'string', description: '客户类别（11 类），多个用英文逗号分隔' } as QueryRouteParam,
   insuranceType: { name: 'insuranceType', type: 'string', description: '险类（交强/商业）' } as QueryRouteParam,
   vehicleQuickFilter: { name: 'vehicleQuickFilter', type: 'string', description: '车型快捷预设', enum: ['home_car', 'truck_1t', 'truck_2_9t', 'motorcycle', 'truck_1_2t', 'rental', 'dump', 'tractor', 'general'] } as QueryRouteParam,
@@ -490,12 +491,12 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
   {
     key: 'PIVOT', path: '/pivot', method: 'GET',
     summary: '维度×指标交叉聚合',
-    description: '让 Agent 自由组合 1-2 个维度 × 1-10 个指标做 GROUP BY 聚合。维度走白名单（org_level_3 / salesman_name / customer_category / insurance_type / coverage_combination / tonnage_segment / renewal_mode / insurance_grade / is_renewal / is_new_car / is_nev / is_telemarketing / is_transfer / week_number / month_number），指标走 metric-registry（参考 /api/discover/metrics）。',
+    description: '让 Agent 自由组合 1-2 个维度 × 1-10 个指标做 GROUP BY 聚合。维度走白名单（org_level_3 / salesman_name / agent_name / customer_category / insurance_type / coverage_combination / tonnage_segment / renewal_mode / insurance_grade / is_renewal / is_new_car / is_nev / is_telemarketing / is_transfer / week_number / month_number），指标走 metric-registry（参考 /api/discover/metrics）。',
     parameters: [
       { name: 'dimensions', type: 'string', required: true, description: '逗号分隔的 1-2 个维度（如 org_level_3,customer_category）' },
       { name: 'metrics', type: 'string', required: true, description: '逗号分隔的 1-10 个指标 id（如 total_premium,policy_count）' },
       { name: 'limit', type: 'number', description: '返回行数，默认 100，上限 500' },
-      ...TS_COMMON, ...ORG_FILTER,
+      ...TS_COMMON, ...ORG_FILTER, COMMON_PARAMS.agentNames,
     ],
     timeWindow: 'window',
     dataScope: 'any',

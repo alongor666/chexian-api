@@ -32,10 +32,33 @@ describe('远程分析能力目录', () => {
     expect(getAnalysisCapabilityAllowedParams(trend)).not.toContain('notAParam');
   });
 
+  it('经代满期出险率锁定维度指标，只允许精确经代和明确时间口径', () => {
+    const capability = getAnalysisCapability('agent-earned-loss-frequency')!;
+    expect(capability.fixedParams).toEqual({
+      dimensions: 'agent_name',
+      metrics: 'earned_loss_frequency,policy_count',
+      limit: '500',
+    });
+    expect(getAnalysisCapabilityAllowedParams(capability)).toEqual(expect.arrayContaining([
+      'startDate', 'endDate', 'dateField', 'agentNames', 'targetBranch',
+    ]));
+    expect(getAnalysisCapabilityAllowedParams(capability)).not.toContain('dimensions');
+    expect(getAnalysisCapabilityAllowedParams(capability)).not.toContain('metrics');
+    expect(getAnalysisCapabilityAllowedParams(capability)).not.toContain('limit');
+
+    const published = buildAnalysisCapabilitiesData().capabilities.find(
+      (item) => item.id === capability.id,
+    )!;
+    expect(published.timeWindow).toBe('window');
+    expect(published.parameters.find((parameter) => parameter.name === 'agentNames')).toMatchObject({
+      type: 'string', required: true,
+    });
+  });
+
   it('目录版本与响应体 ETag 随代码契约变化，不依赖 ETL 版本', () => {
     const current = buildAnalysisCapabilitiesData();
     expect(current.version).toBe(ANALYSIS_CAPABILITIES_VERSION);
-    expect(current.minCliVersion).toBe('1.1.0');
+    expect(current.minCliVersion).toBe('1.2.0');
 
     const changed = structuredClone(current);
     changed.capabilities[0].allowedParams.push('futureParam');

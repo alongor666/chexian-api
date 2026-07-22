@@ -10,11 +10,22 @@
  *   - WHERE 子句正确拼接
  */
 import { describe, expect, it } from 'vitest';
-import { generatePivotQuery, type PivotDimension } from '../pivot.js';
+import {
+  generatePivotEffectiveCutoffQuery,
+  generatePivotQuery,
+  needsPivotClaimsContext,
+  type PivotDimension,
+} from '../pivot.js';
 
 const dim = (id: string, sqlExpr = id): PivotDimension => ({ id, sqlExpr });
 
 describe('generatePivotQuery', () => {
+  it('满期指标显式声明观察截止上下文并生成同源 cutoff 查询', () => {
+    expect(needsPivotClaimsContext(['earned_loss_frequency'])).toBe(true);
+    expect(needsPivotClaimsContext(['policy_count'])).toBe(false);
+    expect(generatePivotEffectiveCutoffQuery("agent_name = '邮政'"))
+      .toContain('MAX(CAST(policy_date AS DATE))::VARCHAR AS effective_cutoff');
+  });
   it('1 维 + 1 指标：基本骨架', () => {
     const sql = generatePivotQuery({
       dimensions: [dim('org_level_3')],
