@@ -304,9 +304,14 @@ staging-then-rename 原子性 / leftover preflight）完全未动；人工 `--rl
 > （四川邮政/山西邮政/任卫军台账）读 policy(premium，早批产出) → 移早批后上午即更新鲜；2 张续保类
 > （机构续保/电销5-7月续保）读晚批域 renewal_tracker+quotes → 早批推送时读到的是**前一天晚批**快照
 > （混新鲜度，已知取舍）。SSOT = `release-batches.mjs`（EARLY.runWecom=true / LATE.runWecom=false）。
-> **续保 2 表到期停推**：2026-08-01 起 5-7 月应续保单全部到期，故 `sync-and-reload.mjs` 的
-> `MAY_JUL_RENEWAL_WECOM_LAST_DAY='2026-07-31'` 日期闸令这 2 表在北京 07-31（含）后自动停推
-> （不删表、不报错）；签单 3 表无 cutoff 继续。
+> **续保 2 表到期停推**：2026-08-01 起 5-7 月应续保单全部到期，故 `MAY_JUL_RENEWAL_WECOM_LAST_DAY
+> ='2026-07-31'` 日期闸令这 2 表在北京 07-31（含）后自动停推（不删表、不报错）；签单 3 表无 cutoff 继续。
+> **企微失败非阻断（PR #1158 评审 F1）**：企微任务失败**不**使发布进程非零退出——否则 watcher 把本批
+> 标 failed → 晚批 fail-closed 连坐拒发 + 早批 ETL/reload 整链重跑。失败走独立告警（标记文件
+> `数据管理/logs/wecom-sync-alert.json` → watcher 发布成功后读取并单独通知）+ 独立重试
+> `node scripts/wecom-sync.mjs`（只跑企微，不重跑 ETL/reload）。任务清单/停推闸/非阻断策略 SSOT =
+> `scripts/lib/wecom-sync-tasks.mjs`，回归测试 `tests/wecom-sync-tasks.test.ts` 锁定
+> （7-31/8-1 边界 + UTC 时刻边界 + releaseBlocking 恒 false + 晚批不连坐状态机）。
 
 **关键设计**：
 - **幂等键 = 批次 × 天**：状态文件 `auto-release-state.json` 升级为 `{beijingDay, batches:{early:{…},late:{…}}}`

@@ -65,6 +65,9 @@ import {
 } from '../数据管理/lib/release-batches.mjs';
 import { resolveLaunchdNodeBin } from '../数据管理/lib/launchd-node-bin.mjs';
 import { collectLedgerDiffFiles, evaluateLedgerUncommittedBulk } from './etl-ledger/governance-check.mjs';
+// 企微失败独立告警（PR #1158 评审 F1）：企微失败不阻断发布（sync-and-reload 退出 0、批次照常
+// released），失败清单落在标记文件——发布成功后读它，有失败则**独立**告警 + 提示独立重试。
+import { WECOM_ALERT_MARKER_RELPATH } from './lib/wecom-sync-tasks.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(__filename, '../..');
@@ -464,6 +467,23 @@ async function processBatch(batch, ctx) {
     ctx.stateRef.value = mergeBatchState(ctx.stateRef.value, batch.id, slice);
     writeState(ctx.stateRef.value);
     await notify(`${batch.label} 自动发布成功`, `sync-and-reload --batch ${batch.id} 完成（北京 ${todayBeijing} ${beijingNowHHMM()}）`);
+    // 企微失败独立告警（非阻断，见 wecom-sync-tasks.mjs evaluateWecomOutcome）：核心数据已
+    // released，但当天企微若有失败任务，单独告警 + 给出独立重试命令，不改批次状态、不触发重跑。
+    if (batch.runWecom) {
+      try {
+        const markerPath = join(PROJECT_ROOT, WECOM_ALERT_MARKER_RELPATH);
+        const marker = existsSync(markerPath) ? JSON.parse(readFileSync(markerPath, 'utf-8')) : null;
+        if (marker?.beijingDay === todayBeijing && Array.isArray(marker.failures) && marker.failures.length > 0) {
+          const labels = marker.failures.map((f) => f.label).join('、');
+          await notify(
+            '企微同步部分失败（发布未受阻断）',
+            `${labels} 失败；核心数据已正常发布。独立重试：node scripts/wecom-sync.mjs（不重跑 ETL/reload）`
+          );
+        }
+      } catch (e) {
+        log('yellow', `⚠ 企微告警标记读取失败（不阻断）：${e.message}`);
+      }
+    }
     return 'released';
   }
   const slice = nextState('failed', { todayBeijing, prevState: prev, note: `release --batch ${batch.id} 失败 ${result.detail}`, nowISO: now });
