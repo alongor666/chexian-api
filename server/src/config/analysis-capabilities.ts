@@ -7,6 +7,7 @@
  */
 import { QUERY_ROUTES } from './api-routes.js';
 import { getRouteMetaByPath } from './query-routes-metadata.js';
+import type { QueryRouteParam, RouteTimeWindow } from './query-routes-metadata.js';
 
 export interface AnalysisCapability {
   id: string;
@@ -20,19 +21,27 @@ export interface AnalysisCapability {
   requiresExplicitBranchForMultiBranch: boolean;
   /** 供 skills 选择叙事/表格渲染的稳定领域标识。 */
   domain: 'operating' | 'claims' | 'pricing';
+  /** 服务端能力锁定的查询参数；调用方不得覆盖。 */
+  fixedParams?: Readonly<Record<string, string>>;
 }
 
 /** 目录协议版本；任何响应形态、参数契约或能力集合变化都必须递增。 */
-export const ANALYSIS_CAPABILITIES_VERSION = 3;
+export const ANALYSIS_CAPABILITIES_VERSION = 4;
 
-/** 此目录要求的最小 CLI 版本；1.1.0 起消费 minCliVersion 并做运行时形态校验。 */
-export const ANALYSIS_CAPABILITIES_MIN_CLI_VERSION = '1.1.0';
+/** 1.2.0 起支持参数 schema、固定参数和原生 evidence 包。 */
+export const ANALYSIS_CAPABILITIES_MIN_CLI_VERSION = '1.2.0';
 
 /**
  * 分析入口额外允许的全局查询参数。业务路由自身的参数来自 QUERY_ROUTE_METADATA；
  * targetBranch 由统一 RLS 中间件消费，因此不重复登记在每条业务路由里。
  */
-const ANALYSIS_GLOBAL_ALLOWED_PARAMS = ['targetBranch'] as const;
+const ANALYSIS_GLOBAL_PARAMETERS: readonly QueryRouteParam[] = [
+  {
+    name: 'targetBranch',
+    type: 'string',
+    description: '显式分公司代码（如 SC/SX）或有权账号的 ALL；多省分析必填',
+  },
+] as const;
 
 export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
   {
@@ -81,6 +90,20 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     domain: 'claims',
   },
   {
+    id: 'agent-earned-loss-frequency',
+    name: '经代满期出险率',
+    description: '按规范化后的经代完整名称返回年化满期出险频率和保单件数；只做精确匹配，不做短名归并。',
+    path: QUERY_ROUTES.PIVOT,
+    requiredParams: ['startDate', 'endDate', 'dateField', 'agentNames'],
+    requiresExplicitBranchForMultiBranch: true,
+    domain: 'claims',
+    fixedParams: {
+      dimensions: 'agent_name',
+      metrics: 'earned_loss_frequency,policy_count',
+      limit: '500',
+    },
+  },
+  {
     id: 'accident-profile',
     name: '事故画像',
     description: '按原因、机构和筛选条件返回事故画像聚合。',
@@ -115,6 +138,14 @@ export function validateAnalysisCapabilities(): string[] {
         issues.push(`${capability.id}: ${capability.path} 的 catalog 未登记必填参数 ${param}`);
       }
     }
+    for (const [param, value] of Object.entries(capability.fixedParams ?? {})) {
+      if (!params.has(param)) {
+        issues.push(`${capability.id}: ${capability.path} 的 catalog 未登记固定参数 ${param}`);
+      }
+      if (!value.trim()) {
+        issues.push(`${capability.id}: 固定参数 ${param} 不能为空`);
+      }
+    }
   }
   return issues;
 }
@@ -125,11 +156,35 @@ export function validateAnalysisCapabilities(): string[] {
  */
 export function getAnalysisCapabilityAllowedParams(capability: AnalysisCapability): string[] {
   const route = getRouteMetaByPath(capability.path);
-  if (!route) return [...ANALYSIS_GLOBAL_ALLOWED_PARAMS];
+  const fixed = new Set(Object.keys(capability.fixedParams ?? {}));
+  if (!route) return ANALYSIS_GLOBAL_PARAMETERS.map((parameter) => parameter.name);
   return [...new Set([
-    ...route.parameters.map((parameter) => parameter.name),
-    ...ANALYSIS_GLOBAL_ALLOWED_PARAMS,
+    ...route.parameters.map((parameter) => parameter.name).filter((name) => !fixed.has(name)),
+    ...ANALYSIS_GLOBAL_PARAMETERS.map((parameter) => parameter.name),
   ])];
+}
+
+export interface PublishedAnalysisCapability extends AnalysisCapability {
+  allowedParams: string[];
+  fullPath: string;
+  parameters: QueryRouteParam[];
+  timeWindow: RouteTimeWindow;
+  timeWindowNote?: string;
+}
+
+function buildCapabilityParameters(capability: AnalysisCapability): QueryRouteParam[] {
+  const route = getRouteMetaByPath(capability.path);
+  if (!route) return [...ANALYSIS_GLOBAL_PARAMETERS];
+  const fixed = new Set(Object.keys(capability.fixedParams ?? {}));
+  return [
+    ...route.parameters.filter((parameter) => !fixed.has(parameter.name)),
+    ...ANALYSIS_GLOBAL_PARAMETERS.filter(
+      (global) => !route.parameters.some((parameter) => parameter.name === global.name),
+    ),
+  ].map((parameter) => ({
+    ...parameter,
+    required: capability.requiredParams.includes(parameter.name) || parameter.required,
+  }));
 }
 
 export function getAnalysisCapability(id: string): AnalysisCapability | undefined {
@@ -140,15 +195,21 @@ export function getAnalysisCapability(id: string): AnalysisCapability | undefine
 export function buildAnalysisCapabilitiesData(): {
   version: number;
   minCliVersion: string;
-  capabilities: Array<AnalysisCapability & { allowedParams: string[]; fullPath: string }>;
+  capabilities: PublishedAnalysisCapability[];
 } {
   return {
     version: ANALYSIS_CAPABILITIES_VERSION,
     minCliVersion: ANALYSIS_CAPABILITIES_MIN_CLI_VERSION,
-    capabilities: ANALYSIS_CAPABILITIES.map((capability) => ({
-      ...capability,
-      allowedParams: getAnalysisCapabilityAllowedParams(capability),
-      fullPath: `/api/query${capability.path}`,
-    })),
+    capabilities: ANALYSIS_CAPABILITIES.map((capability) => {
+      const route = getRouteMetaByPath(capability.path)!;
+      return {
+        ...capability,
+        allowedParams: getAnalysisCapabilityAllowedParams(capability),
+        fullPath: `/api/query${capability.path}`,
+        parameters: buildCapabilityParameters(capability),
+        timeWindow: route.timeWindow,
+        ...(route.timeWindowNote ? { timeWindowNote: route.timeWindowNote } : {}),
+      };
+    }),
   };
 }
