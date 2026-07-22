@@ -16,7 +16,13 @@
 /**
  * 早批：签单(01→premium) + 理赔(05→claims_detail)。北京约 07:35 上游就绪，07:40 起触发。
  * scDomains 顺序即 ETL 执行序：claims_detail 富集依赖 policy（VIN/保单号 JOIN 回填 org_level_3），
- * 故 premium 必须在前。早批不跑企微续保表（依赖报价/续保追踪，属晚批）。
+ * 故 premium 必须在前。
+ *
+ * 🔴 企微同步（2026-07-22 起从晚批移到早批，用户决策）：5 张企微表中
+ *   - 3 张签单类（四川邮政 / 山西邮政 / 任卫军台账）读 policy(premium，早批产出) → 移到早批后更新鲜；
+ *   - 2 张续保类（机构续保 / 电销5-7月续保）读 renewal_tracker+quotes（晚批域，早批不重算）
+ *     → 早批推送时它们读到的是**前一天晚批**产出的续保追踪快照（混新鲜度，属已知取舍）。
+ * 决策依据：签单类表的上午新鲜度价值 > 续保类表当日刷新（续保口径一天变化有限）。
  */
 export const EARLY_BATCH = Object.freeze({
   id: 'early',
@@ -26,7 +32,7 @@ export const EARLY_BATCH = Object.freeze({
   scDomains: Object.freeze(['premium', 'claims_detail']),
   window: Object.freeze({ start: '07:40', end: '20:00' }),
   runReport: true,
-  runWecom: false,
+  runWecom: true,
   // 依赖的前置批次 id（须当天 released 才可发本批）；早批无前置。
   dependsOn: Object.freeze([]),
 });
@@ -50,9 +56,10 @@ export const LATE_BATCH = Object.freeze({
   ]),
   window: Object.freeze({ start: '12:00', end: '20:00' }),
   runReport: true,
-  runWecom: true,
+  // 企微同步 2026-07-22 起移到早批（见 EARLY_BATCH 注释）；晚批不再推企微。
+  runWecom: false,
   // 🔴 依赖早批：renewal_tracker / new_energy_claims 依赖早批产出的 policy(current)，
-  // 早批当天未 released 就发晚批 = 用陈旧 policy 重算续保追踪 + 推 5 个企微表（混新鲜度发布）。
+  // 早批当天未 released 就发晚批 = 用陈旧 policy 重算续保追踪（混新鲜度发布）。
   // 故晚批 fail-closed：早批当天未 released 则不发（watcher 自动 / 手动入口均校验），
   // 应急可 --allow-missing-dep 显式放行。
   dependsOn: Object.freeze(['early']),

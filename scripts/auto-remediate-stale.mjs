@@ -29,6 +29,10 @@ import { fileURLToPath } from 'node:url';
 import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
 import { classifyReleaseFailure, decideRemediation, nextRemediateState } from '../数据管理/lib/auto-remediate-decision.mjs';
 import { resolveLaunchdNodeBin } from '../数据管理/lib/launchd-node-bin.mjs';
+// 退出码契约（PR #1158 三轮复审补口）：0=全成功、86=核心发布成功仅企微失败（非阻断）、其他=核心失败。
+// 接手判成败必须走 interpretReleaseExit——否则 86 会被当失败：误报 Tier1 失败/升级 Tier2 假告警，
+// 批次版还会提前 return 跳过晚批（连坐经接手路径复活）。
+import { interpretReleaseExit } from './lib/wecom-sync-tasks.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(dirname(__filename), '..');
@@ -101,15 +105,20 @@ function runReleaseDaily() {
     maxBuffer: 64 * 1024 * 1024,
   });
   const out = `${r.stdout || ''}\n${r.stderr || ''}`;
-  return { ok: r.status === 0, log: out };
+  // 86 = 核心发布成功仅企微失败：接手目标（数据恢复）已达成，按成功处理并透传 wecomFailed
+  const interp = interpretReleaseExit(r.status);
+  return { ok: interp.coreReleased, wecomFailed: interp.wecomFailed, log: out };
 }
 
 /**
- * 双批：只重跑「未完成的批次」（早批在前，保序）。任一批失败即整体失败——晚批失败常见于早批
- * 未 released 触发依赖闸拒绝（预期行为，不该用 --allow-missing-dep 绕过）。返回 {ok, log}。
+ * 双批：只重跑「未完成的批次」（早批在前，保序）。核心失败即整体失败——晚批失败常见于早批
+ * 未 released 触发依赖闸拒绝（预期行为，不该用 --allow-missing-dep 绕过）。
+ * 🔴 exit=86（核心成功仅企微失败）不算失败：继续后续批次（否则早批 86 提前 return 会
+ * 跳过晚批，连坐经接手路径复活），并透传 wecomFailed 供通知提示独立重试。返回 {ok, wecomFailed, log}。
  */
 function runReleaseDailyBatches(batches) {
   let combined = '';
+  let wecomFailed = false;
   for (const id of batches) {
     log(`▶ Tier 1 自处置：重跑发布批次 ${id}（sync-and-reload --batch ${id}）`);
     const r = spawnSync(process.execPath, ['scripts/sync-and-reload.mjs', '--batch', id], {
@@ -119,9 +128,14 @@ function runReleaseDailyBatches(batches) {
       maxBuffer: 64 * 1024 * 1024,
     });
     combined += `\n===== batch ${id} (exit=${r.status}) =====\n${r.stdout || ''}\n${r.stderr || ''}`;
-    if (r.status !== 0) return { ok: false, log: combined };
+    const interp = interpretReleaseExit(r.status);
+    if (!interp.coreReleased) return { ok: false, wecomFailed, log: combined };
+    if (interp.wecomFailed) {
+      wecomFailed = true;
+      combined += `\n（batch ${id}：核心发布成功，仅企微失败 exit=${r.status}，非阻断——继续后续批次）`;
+    }
   }
-  return { ok: true, log: combined };
+  return { ok: true, wecomFailed, log: combined };
 }
 
 function statusReport() {
@@ -202,13 +216,15 @@ function main() {
       return undefined;
     }
     // 新 schema：只重跑未完成批次（decision.batches）；旧扁平 schema（batches===null）：全量重跑。
-    const { ok, log: relLog } = decision.batches === null
+    const { ok, wecomFailed, log: relLog } = decision.batches === null
       ? runReleaseDaily()
       : runReleaseDailyBatches(decision.batches);
     if (ok) {
-      writeRemediateState(nextRemediateState('recovered', { todayBeijing, prevState: remediateState, note: 'Tier1 重跑 release:daily 成功', nowISO }));
-      notify('🟢 车险数据已自动补发\n\n发现　当日发布曾失败，Mac 侧自动接手已重跑成功\n结果　数据已恢复，无需人工处理');
-      log('✅ Tier 1 自处置成功：数据已恢复');
+      writeRemediateState(nextRemediateState('recovered', { todayBeijing, prevState: remediateState, note: wecomFailed ? 'Tier1 重跑成功（核心恢复；企微仍有失败，需独立重试）' : 'Tier1 重跑 release:daily 成功', nowISO }));
+      notify(wecomFailed
+        ? '🟡 车险核心数据已自动补发（企微同步仍有失败）\n\n发现　当日发布曾失败，Mac 侧自动接手已重跑：核心数据恢复，但企微表同步存在失败（非阻断）\n处理　独立重试：node scripts/wecom-sync.mjs（不重跑 ETL/reload）'
+        : '🟢 车险数据已自动补发\n\n发现　当日发布曾失败，Mac 侧自动接手已重跑成功\n结果　数据已恢复，无需人工处理');
+      log(wecomFailed ? '✅ Tier 1 自处置：核心数据已恢复（企微仍有失败，独立重试 node scripts/wecom-sync.mjs）' : '✅ Tier 1 自处置成功：数据已恢复');
       return undefined;
     }
     // Tier 1 失败 → 落盘失败日志 + 计一次尝试；若达上限即同轮升级 Tier 2

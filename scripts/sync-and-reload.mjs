@@ -19,13 +19,13 @@
  *   5.   可选：批量同步企微机构续保追踪表 + 续保5月表 + 邮政经代签单表
  *
  * 双批发布（2026-07-18 起，上游改双批出表）：--batch early|late 从 release-batches.mjs SSOT
- * 取该批的 ETL 域集 + code 子集 + 报告/企微编排。早批（01签单+05理赔）不跑企微；晚批
- *（02报价+03维修+04厂牌+尾部域）跑企微。不带 --batch = 全量 daily.mjs all（12:00 后手动补全用）。
+ * 取该批的 ETL 域集 + code 子集 + 报告/企微编排。企微 2026-07-22 起挂早批（01签单+05理赔）；
+ * 晚批（02报价+03维修+04厂牌+尾部域）不跑企微。不带 --batch = 全量 daily.mjs all（12:00 后手动补全用）。
  *
  * 使用：
  *   node scripts/sync-and-reload.mjs                        # daily.mjs all（全量单批，兜底）
- *   node scripts/sync-and-reload.mjs --batch early          # 早批：premium + claims_detail（不企微）
- *   node scripts/sync-and-reload.mjs --batch late           # 晚批：quotes/repair/brand/...（含企微）
+ *   node scripts/sync-and-reload.mjs --batch early          # 早批：premium + claims_detail（含企微）
+ *   node scripts/sync-and-reload.mjs --batch late           # 晚批：quotes/repair/brand/...（不企微）
  *   node scripts/sync-and-reload.mjs premium                # 仅保费域
  *   node scripts/sync-and-reload.mjs --skip-governance      # 跳过 governance（不推荐）
  *   node scripts/sync-and-reload.mjs --skip-reload          # 仅 ETL+governance，不重启
@@ -35,6 +35,11 @@
  *   node scripts/sync-and-reload.mjs --dry-run              # 仅打印计划，不执行
  *
  * 任一阶段失败立即退出且告知排查方向，不进入后续阶段。
+ * 🔴 例外：Stage 5 企微失败**非阻断但不静默**（PR #1158 评审 F1 两轮）——核心数据发布
+ *（Stage 0~4.5）已成功时企微失败不抛错（避免 watcher 把批次标 failed 引发晚批连坐与
+ * ETL/reload 重跑），进程改以专用退出码 86（WECOM_FAILURE_EXIT_CODE）结束：手动入口
+ * shell 可见失败；watcher 经 interpretReleaseExit 标 released 并独立告警；
+ * 独立重试：node scripts/wecom-sync.mjs（只跑企微）。退出码：0=全成功 / 86=仅企微失败 / 1=核心失败。
  *
  * 环境变量：
  *   SYNC_VPS_SSH_ALIAS         （默认 chexian-vps-deploy）
@@ -46,7 +51,7 @@
  */
 
 import { spawn } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { recordEvent, LEDGER_ROOT } from './etl-ledger/record.mjs';
@@ -60,6 +65,8 @@ import { unmetDependencies } from '../数据管理/lib/auto-release-decision.mjs
 // state.db 远程备份（575d2f）：reload 前在 VPS 上备份 PAT/用户/角色权威数据，失败不阻塞
 import { resolveStateDbBackupConfig, buildStateDbBackupScript } from './lib/state-db-backup.mjs';
 import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
+// 企微 Stage 5 真实编排体 + 非阻断/退出码契约 SSOT（PR #1158 评审 F1/F2，单测注入 runner 锁定）
+import { runWecomStage, WECOM_ALERT_MARKER_RELPATH } from './lib/wecom-sync-tasks.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..');
@@ -158,7 +165,7 @@ function parseArgs(argv) {
     else if (a === '--allow-missing-dep') opts.allowMissingDep = true;
     else if (a === '--help' || a === '-h') {
       log('cyan', `用法：node scripts/sync-and-reload.mjs [--batch ${RELEASE_BATCH_IDS.join('|')}] [daily.mjs subcommand] [--dry-run] [--skip-pull] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]`);
-      log('cyan', '  --batch early：签单+理赔（premium/claims_detail，不跑企微）；--batch late：报价+维修+厂牌+尾部域（跑企微，依赖早批当天 released）。不带 --batch=全量 daily.mjs all。');
+      log('cyan', '  --batch early：签单+理赔（premium/claims_detail，跑企微）；--batch late：报价+维修+厂牌+尾部域（不跑企微，依赖早批当天 released）。不带 --batch=全量 daily.mjs all。');
       log('cyan', '  --allow-missing-dep：应急放行晚批依赖闸（早批未 released 也发；可能混新鲜度）。');
       process.exit(0);
     } else opts.dailyArgs.push(a);
@@ -771,107 +778,44 @@ async function main() {
   // 那份永远静默失败；且与 Stage 3 完全冗余。删除以消除重复与失效代码路径。
 
   // Stage 5: 企业微信同步（显式开关）
-  // 三个脚本独立 webhook、互不依赖，并行执行；任一失败仍记录但不中断其他（Promise.allSettled）。
-  // 失败统一在 Stage 5 末尾抛出，便于人工排查。
+  // 5 个脚本独立 webhook、互不依赖，并行执行（Promise.allSettled）。
+  // 🔴 非阻断 + 专用退出码契约（PR #1158 评审 F1 两轮）：企微失败**不**抛错（否则 watcher
+  // 把本批标 failed → 晚批 fail-closed 连坐 + 早批 ETL/reload 重跑），但也**不静默成功**——
+  // 进程以 WECOM_FAILURE_EXIT_CODE(86) 退出：手动入口（bun run release:daily）shell 可见失败，
+  // watcher 经 interpretReleaseExit 区分「核心成功(标 released) + 企微失败(独立告警)」。
+  // 编排真实执行体 = runWecomStage（scripts/lib/wecom-sync-tasks.mjs，测试注入 runner 锁定该路径）。
+  let wecomStage = null;
   if (opts.wecom) {
     if (claimsFreshnessWarning) {
       log('yellow', `\n⚠ claims 报案截止日落后 N 天：${claimsFreshnessWarning}（见 Stage 1.2 新鲜度巡检；不阻断本次企微同步）`);
     }
-    const orgRenewalArgs = ['数据管理/integrations/wecom_smartsheet/sync_org_renewal_from_xlsx.py'];
-    if (!opts.wecomDryRun) orgRenewalArgs.push('--execute');
-    if (opts.wecomOrg) orgRenewalArgs.push('--org', opts.wecomOrg);
-
-    // 电销 5-7 月续保表是四川实例：--province 为脚本侧 fail-closed 必填参数（50d62e 省份轴收窄），
-    // 此处是调用方对该实例省份的显式声明（同 sync_filtered_policies 用 instance yaml 声明省份）
-    const renewalMayArgs = [
-      '数据管理/integrations/wecom_smartsheet/sync_may_renewal_fields.py',
-      'sync',
-      '--province', 'SC',
-    ];
-    if (!opts.wecomDryRun) renewalMayArgs.push('--execute');
-
-    const postalArgs = [
-      '数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py',
-      '--instance',
-      '数据管理/integrations/wecom_smartsheet/instances/postal-policy-since-20260420.yaml',
-      '--mode',
-      'sync',
-    ];
-    if (opts.wecomDryRun) postalArgs.push('--dry-run');
-
-    // 山西邮政/邮储经代签单全量表（branch_code='SX' AND agent_name LIKE '%邮政%'）。
-    // 与四川邮政表同引擎、独立 webhook + 独立 state；增量 add-only，防重复防遗漏。
-    const shanxiPostalArgs = [
-      '数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py',
-      '--instance',
-      '数据管理/integrations/wecom_smartsheet/instances/shanxi-postal-all.yaml',
-      '--mode',
-      'sync',
-    ];
-    if (opts.wecomDryRun) shanxiPostalArgs.push('--dry-run');
-
-    // 太原二部任卫军「业务台账」（branch_code='SX' AND salesman_name='118046126任卫军'，
-    // 2025-08-01 起）。同引擎、独立 webhook + 独立 state；首量 888 条已于 2026-07-17
-    // 人工导入（--i-checked-wecom-rows），此处仅日常增量 add-only。
-    const ty2RenweijunArgs = [
-      '数据管理/integrations/wecom_smartsheet/sync_filtered_policies.py',
-      '--instance',
-      '数据管理/integrations/wecom_smartsheet/instances/shanxi-taiyuan2-renweijun.yaml',
-      '--mode',
-      'sync',
-    ];
-    if (opts.wecomDryRun) ty2RenweijunArgs.push('--dry-run');
-
-    const wecomTasks = [
-      {
-        label: opts.wecomDryRun ? 'WeCom renewal dry-run' : 'WeCom renewal sync',
-        args: orgRenewalArgs,
-        timeoutMs: 90 * 60 * 1000,
-      },
-      {
-        label: opts.wecomDryRun ? 'WeCom 电销5-7月续保 dry-run' : 'WeCom 电销5-7月续保 sync',
-        args: renewalMayArgs,
-        timeoutMs: 30 * 60 * 1000,
-      },
-      {
-        label: opts.wecomDryRun ? 'WeCom postal dry-run' : 'WeCom postal sync',
-        args: postalArgs,
-        timeoutMs: 30 * 60 * 1000,
-      },
-      {
-        label: opts.wecomDryRun ? 'WeCom 山西邮政 dry-run' : 'WeCom 山西邮政 sync',
-        args: shanxiPostalArgs,
-        timeoutMs: 30 * 60 * 1000,
-      },
-      {
-        label: opts.wecomDryRun ? 'WeCom 任卫军台账 dry-run' : 'WeCom 任卫军台账 sync',
-        args: ty2RenweijunArgs,
-        timeoutMs: 30 * 60 * 1000,
-      },
-    ];
-
-    log('cyan', `\n▶ [WeCom] 并行启动 ${wecomTasks.length} 个智能表格同步任务`);
-    const results = await Promise.allSettled(
-      wecomTasks.map(task =>
-        runCmd(task.label, 'python3', task.args, { dryRun: opts.dryRun, timeoutMs: task.timeoutMs })
-      )
-    );
-    const failures = results
-      .map((r, i) => ({ r, label: wecomTasks[i].label }))
-      .filter(({ r }) => r.status === 'rejected');
-    if (failures.length > 0) {
-      for (const { r, label } of failures) {
-        log('red', `  ❌ ${label}: ${r.reason?.message || r.reason}`);
-      }
-      throw new Error(`WeCom 同步存在 ${failures.length}/${wecomTasks.length} 个失败任务`);
-    }
-    log('green', `  ✓ WeCom 全部 ${wecomTasks.length} 个任务完成`);
+    wecomStage = await runWecomStage({
+      dryRun: opts.dryRun,
+      wecomDryRun: opts.wecomDryRun,
+      org: opts.wecomOrg,
+      todayBeijing: beijingDayOf(new Date()),
+      runId: process.env.ETL_RUN_ID || 'adhoc',
+      runner: (task) => runCmd(task.label, 'python3', task.args, { dryRun: opts.dryRun, timeoutMs: task.timeoutMs }),
+      persistMarker: (marker) => writeFileSync(
+        join(ROOT_DIR, WECOM_ALERT_MARKER_RELPATH),
+        JSON.stringify(marker, null, 2) + '\n'
+      ),
+      log: (level, msg) => log(level === 'error' ? 'red' : level === 'warn' ? 'yellow' : 'cyan', msg),
+    });
   }
 
+  const wecomFailed = (wecomStage?.failures.length ?? 0) > 0;
   if (!opts.dryRun) {
-    recordEvent({ stage: 'run', step: 'end', status: 'success', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0 });
+    recordEvent({
+      stage: 'run', step: 'end', status: 'success', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0,
+      ...(wecomFailed ? { note: `${wecomStage.outcome.note}（核心发布成功，进程退出码 ${wecomStage.exitCode}）` } : {}),
+    });
   }
-  log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
+  if (wecomFailed) {
+    log('yellow', `\n⚠ 核心发布完成（ETL → governance → reload → /health 全成功），但企微 ${wecomStage.failures.length} 个任务失败——进程以退出码 ${wecomStage.exitCode} 结束（非静默成功）。`);
+  } else {
+    log('green', `\n✅ 全流程完成（ETL → governance → reload → /health${opts.wecom ? ' → WeCom' : ''}）`);
+  }
   if (claimsFreshnessWarning) {
     log('yellow', `⚠ 健康汇总：claims 报案截止日新鲜度告警未解除——${claimsFreshnessWarning}`);
   }
@@ -884,10 +828,16 @@ async function main() {
   } catch (e) {
     log('yellow', `  ⚠ 台账报告刷新失败（不阻断）：${e.message}`);
   }
+
+  // 🔴 退出码契约（SSOT：wecom-sync-tasks.mjs WECOM_FAILURE_EXIT_CODE）：核心成功 + 企微失败
+  // → 86（手动入口 shell 可见、watcher interpretReleaseExit 标 released 并独立告警）；全成功 → 0。
+  return wecomStage?.exitCode ?? 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(err => {
+  main().then((exitCode) => {
+    if (exitCode) process.exitCode = exitCode;
+  }).catch(err => {
   // 断点入账：err.message 含失败环节 label（runCmd reject 消息），run end 事件据此定位断在哪一环。
   // dry-run 不打点（与 run start/end success 的守护对称，否则 dry-run 失败会留下无 start 配对的孤儿事件）；
   // opts 不在本作用域，与 parseArgs 同源地看 argv。

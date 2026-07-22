@@ -143,7 +143,7 @@ node scripts/sync-and-reload.mjs --wecom --wecom-org 新都,资阳
 - 本地 state 有 VIN 且 payload hash 未变化：跳过，不调用 webhook
 - 已在 state 但不再符合筛选口径的 VIN：写入 `missing_vins`，不自动删除
 
-**失败策略**：发布入口任一阶段失败会中止；单独跑企微 wrapper 时，会继续后续机构并在摘要里报告失败机构。
+**失败策略**（2026-07-22 起，PR #1158）：发布入口（`bun run release:daily` / `sync-and-reload`）的**核心阶段**（ETL/VPS 同步/reload/健康检查）任一失败会中止；**企微阶段失败非阻断但不静默**——核心已成功时进程以专用退出码 **86** 结束（0=全成功、86=仅企微失败、其他=核心失败），失败清单写 `数据管理/logs/wecom-sync-alert.json`（绑定 run_id），watcher 据退出码把批次照常标 released 并**独立**告警（不连坐晚批、不重跑 ETL/reload）。独立重试：`node scripts/wecom-sync.mjs`（只跑企微，全部成功退出码 0/存在失败退出码 1）。单独跑企微 wrapper 时，会继续后续机构并在摘要里报告失败机构。
 
 ## 新增实例
 

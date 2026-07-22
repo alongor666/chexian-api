@@ -65,6 +65,11 @@ import {
 } from '../数据管理/lib/release-batches.mjs';
 import { resolveLaunchdNodeBin } from '../数据管理/lib/launchd-node-bin.mjs';
 import { collectLedgerDiffFiles, evaluateLedgerUncommittedBulk } from './etl-ledger/governance-check.mjs';
+// 企微失败独立告警（PR #1158 评审 F1 两轮）：发布子进程退出码契约——0=全成功、86=核心成功仅
+// 企微失败（批次照常 released + 独立告警）、其他=核心失败；标记文件仅提供失败明细（绑 runId）。
+import {
+  WECOM_ALERT_MARKER_RELPATH, interpretReleaseExit, buildWecomFailureAlert,
+} from './lib/wecom-sync-tasks.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(__filename, '../..');
@@ -284,8 +289,11 @@ function runReleaseDaily(batch) {
     timeout: 90 * 60 * 1000,
     env: { ...process.env, ETL_RUN_ID: runId, AUTO_RELEASE_TRIGGER: 'watcher' },
   });
-  if (r.error) return { ok: false, detail: r.error.message };
-  return { ok: r.status === 0, detail: `exit=${r.status}` };
+  if (r.error) return { ok: false, wecomFailed: false, detail: r.error.message };
+  // 🔴 退出码契约（SSOT：wecom-sync-tasks.mjs）：0=全成功；86=核心发布成功仅企微失败
+  //（ok=true → 批次照常标 released，晚批不连坐；wecomFailed=true → 独立告警）；其他=核心失败。
+  const interp = interpretReleaseExit(r.status);
+  return { ok: interp.coreReleased, wecomFailed: interp.wecomFailed, detail: `exit=${r.status}`, runId };
 }
 
 /**
@@ -464,6 +472,20 @@ async function processBatch(batch, ctx) {
     ctx.stateRef.value = mergeBatchState(ctx.stateRef.value, batch.id, slice);
     writeState(ctx.stateRef.value);
     await notify(`${batch.label} 自动发布成功`, `sync-and-reload --batch ${batch.id} 完成（北京 ${todayBeijing} ${beijingNowHHMM()}）`);
+    // 企微失败独立告警（PR #1158 评审 F1 两轮）：退出码 86 判定（interpretReleaseExit，
+    // 非只靠标记文件）——核心数据已 released，企微失败单独告警 + 给出独立重试命令，
+    // 不改批次状态、不触发重跑；标记文件仅作失败明细来源（绑定 runId 防陈旧/并发误读）。
+    if (result.wecomFailed) {
+      let marker = null;
+      try {
+        const markerPath = join(PROJECT_ROOT, WECOM_ALERT_MARKER_RELPATH);
+        marker = existsSync(markerPath) ? JSON.parse(readFileSync(markerPath, 'utf-8')) : null;
+      } catch (e) {
+        log('yellow', `⚠ 企微告警标记读取失败（不阻断，用通用告警文案）：${e.message}`);
+      }
+      const alert = buildWecomFailureAlert(marker, { todayBeijing, runId: result.runId });
+      await notify(alert.title, alert.body);
+    }
     return 'released';
   }
   const slice = nextState('failed', { todayBeijing, prevState: prev, note: `release --batch ${batch.id} 失败 ${result.detail}`, nowISO: now });

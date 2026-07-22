@@ -297,8 +297,24 @@ staging-then-rename 原子性 / leftover preflight）完全未动；人工 `--rl
 
 | 批次 | 上游 code | SC ETL 域 | SX 分省域 | 触发窗口(北京) | 报告 | 企微 | reload |
 |------|-----------|-----------|-----------|----------------|------|------|--------|
-| early | 01 签单 / 05 理赔 | premium, claims_detail | premium, claims_detail | 07:40~20:00 | ✓ | ✗ | ✓ |
-| late | 02 报价 / 03 维修 / 04 厂牌(可选) | quotes, cross_sell, brand, repair, customer_flow, new_energy_claims, renewal_tracker | quotes, repair, renewal_tracker | 12:00~20:00 | ✓ | ✓ | ✓ |
+| early | 01 签单 / 05 理赔 | premium, claims_detail | premium, claims_detail | 07:40~20:00 | ✓ | ✓ | ✓ |
+| late | 02 报价 / 03 维修 / 04 厂牌(可选) | quotes, cross_sell, brand, repair, customer_flow, new_energy_claims, renewal_tracker | quotes, repair, renewal_tracker | 12:00~20:00 | ✓ | ✗ | ✓ |
+
+> ⚠️ **企微 2026-07-22 起从晚批移到早批**（用户决策，`[policy-override]`）：5 张企微表中 3 张签单类
+> （四川邮政/山西邮政/任卫军台账）读 policy(premium，早批产出) → 移早批后上午即更新鲜；2 张续保类
+> （机构续保/电销5-7月续保）读晚批域 renewal_tracker+quotes → 早批推送时读到的是**前一天晚批**快照
+> （混新鲜度，已知取舍）。SSOT = `release-batches.mjs`（EARLY.runWecom=true / LATE.runWecom=false）。
+> **续保 2 表到期停推**：2026-08-01 起 5-7 月应续保单全部到期，故 `MAY_JUL_RENEWAL_WECOM_LAST_DAY
+> ='2026-07-31'` 日期闸令这 2 表在北京 07-31（含）后自动停推（不删表、不报错）；签单 3 表无 cutoff 继续。
+> **企微失败非阻断但不静默（PR #1158 评审 F1 两轮）**：企微失败不抛错（否则 watcher 把本批标
+> failed → 晚批 fail-closed 连坐拒发 + 早批 ETL/reload 整链重跑），但发布进程以**专用退出码 86**
+> （`WECOM_FAILURE_EXIT_CODE`）结束——退出码契约：0=全成功、86=核心发布成功仅企微失败、其他=核心
+> 失败。手动入口（`bun run release:daily`）shell 可见失败；watcher 经 `interpretReleaseExit` 对 86
+> 标批次 released 并**独立**告警（文案 `buildWecomFailureAlert`，明细来自标记文件
+> `数据管理/logs/wecom-sync-alert.json`，绑定 run_id 防陈旧/并发误读）。独立重试
+> `node scripts/wecom-sync.mjs`（只跑企微，不重跑 ETL/reload）。编排真实执行体 + 契约 SSOT =
+> `scripts/lib/wecom-sync-tasks.mjs`（`runWecomStage` 注入 runner 可测），回归测试
+> `tests/wecom-sync-tasks.test.ts` 锁定（7-31/8-1/UTC 边界 + 失败注入退出码 86 + 晚批不连坐 + 告警文案）。
 
 **关键设计**：
 - **幂等键 = 批次 × 天**：状态文件 `auto-release-state.json` 升级为 `{beijingDay, batches:{early:{…},late:{…}}}`
@@ -310,6 +326,8 @@ staging-then-rename 原子性 / leftover preflight）完全未动；人工 `--rl
 - **04 厂牌可选表语义不变**：晚批 `optionalCodes=['04']`——周一至周六 mtime 停在上周日 → 告警 + 跳过分发
   （保留本地旧维表），不报错、不拦就绪；仅周日 mtime=当天时分发（`bi-export-pull.mjs OPTIONAL_REPORT_CODES`）。
 - **renewal_tracker 派生域**依赖 policy（早批产出）+ quotes（晚批）+ salesman，排晚批最后。
+- **企微编排移早批 + 续保表到期停推**（2026-07-22，见上表下方 ⚠️ 注）：早批 runWecom=true / 晚批 false；
+  续保 2 表由 `MAY_JUL_RENEWAL_WECOM_LAST_DAY` 日期闸在 2026-07-31（北京，含）后自动退役。
 
 **入口**：
 - watcher 自动：`node scripts/auto-release-daily.mjs`（一 tick 处理两批）；手动单批 `--once --batch early|late`。
