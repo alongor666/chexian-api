@@ -596,8 +596,19 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
   {
     key: 'QUOTE_CONVERSION_RANKING', path: '/quote-conversion/ranking', method: 'GET',
     summary: '报价转化排名',
-    description: '按机构/团队/业务员的报价转化率排名。',
-    parameters: QUOTE_PARAMS,
+    description: '按客户类别、风险等级、能源类型等业务维度返回报价转化排名。',
+    parameters: [
+      ...QUOTE_PARAMS,
+      {
+        name: 'dimension',
+        type: 'string',
+        description: '排行维度',
+        enum: [
+          'customer_category', 'commercial_ncd', 'insurance_grade', 'is_nev',
+          'tonnage_segment', 'traffic_risk_grade', 'is_telemarketing', 'is_transfer',
+        ],
+      },
+    ],
     timeWindow: 'window',
     dataScope: 'any',
     tags: ['quote-conversion', 'ranking'],
@@ -759,7 +770,10 @@ export const QUERY_ROUTE_METADATA: QueryRouteMeta[] = [
     key: 'CLAIMS_DETAIL_LOSS_RATIO_DEVELOPMENT', path: '/claims-detail/loss-ratio-development', method: 'GET',
     summary: '赔付率发展',
     description: '多 cutoff 日期下的满期赔付率发展视图（与理赔热力图同口径）。',
-    parameters: CLAIMS_DETAIL_PARAMS,
+    parameters: [
+      ...CLAIMS_DETAIL_PARAMS,
+      { name: 'cohortYears', type: 'string', description: '保单起保年度列表，逗号分隔（如 2025,2026）' },
+    ],
     timeWindow: 'cohort-development',
     timeWindowNote: '按保单年度批次 × 观察期发展（cohortYears）',
     dataScope: 'any',

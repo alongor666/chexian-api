@@ -20,7 +20,7 @@ export interface AnalysisCapability {
   /** 不传 targetBranch 时是否可能让多省账号误取默认省。 */
   requiresExplicitBranchForMultiBranch: boolean;
   /** 供 skills 选择叙事/表格渲染的稳定领域标识。 */
-  domain: 'operating' | 'claims' | 'pricing';
+  domain: 'operating' | 'claims' | 'renewal' | 'pricing';
   /** 服务端能力锁定的查询参数；调用方不得覆盖。 */
   fixedParams?: Readonly<Record<string, string>>;
   /** skills 可据此稳定解析、校验聚合结果，不再猜测每条路由的响应形态。 */
@@ -40,7 +40,7 @@ export interface AnalysisResultSchema {
 }
 
 /** 目录协议版本；任何响应形态、参数契约或能力集合变化都必须递增。 */
-export const ANALYSIS_CAPABILITIES_VERSION = 5;
+export const ANALYSIS_CAPABILITIES_VERSION = 6;
 
 /** 1.3.0 起支持 resultSchema 校验、服务端 requestId 与可复现 SHA-256 指纹。 */
 export const ANALYSIS_CAPABILITIES_MIN_CLI_VERSION = '1.3.0';
@@ -104,6 +104,26 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     },
   },
   {
+    id: 'portfolio-segment',
+    name: '客户分群经营质量',
+    description: '按客户类别返回保费、保单件数与满期赔付率，供分群规模和质量诊断。',
+    path: QUERY_ROUTES.PIVOT,
+    requiredParams: ['startDate', 'endDate', 'dateField'],
+    requiresExplicitBranchForMultiBranch: true,
+    domain: 'operating',
+    fixedParams: {
+      dimensions: 'customer_category',
+      metrics: 'total_premium,policy_count,earned_claim_ratio',
+      limit: '100',
+    },
+    resultSchema: {
+      id: 'operating.portfolio-segment.v1', version: 1, kind: 'records', recordsPath: '$.rows',
+      requiredFields: ['customer_category', 'total_premium', 'policy_count', 'earned_claim_ratio'],
+      dimensionFields: ['customer_category'],
+      metricFields: ['total_premium', 'policy_count', 'earned_claim_ratio'],
+    },
+  },
+  {
     id: 'loss-development',
     name: '赔付率发展',
     description: '按事故口径返回赔付率发展分析的聚合结果。',
@@ -116,6 +136,23 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
       requiredFields: ['cohort_year', 'dev_month', 'loss_ratio_pct'],
       dimensionFields: ['cohort_year', 'dev_month'],
       metricFields: ['loss_ratio_pct'],
+    },
+  },
+  {
+    id: 'cohort-loss-development',
+    name: '指定批次赔付发展',
+    description: '按显式保单起保年度批次返回观察月、成熟度、出险频率和满期赔付率。',
+    path: QUERY_ROUTES.CLAIMS_DETAIL.LOSS_RATIO_DEV,
+    requiredParams: ['dateStart', 'dateEnd', 'cutoffDate', 'cohortYears'],
+    requiresExplicitBranchForMultiBranch: true,
+    domain: 'claims',
+    resultSchema: {
+      id: 'claims.cohort-loss-development.v1', version: 1, kind: 'records', recordsPath: '$',
+      requiredFields: [
+        'cohort_year', 'dev_month', 'loss_ratio_pct', 'incident_rate_pct', 'coverage_pct',
+      ],
+      dimensionFields: ['cohort_year', 'dev_month'],
+      metricFields: ['loss_ratio_pct', 'incident_rate_pct', 'coverage_pct'],
     },
   },
   {
@@ -169,6 +206,35 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     },
   },
   {
+    id: 'renewal-org-diagnosis',
+    name: '机构续保诊断',
+    description: '按机构返回应续、报价、已续、未报价、流失件数及对应比率。',
+    path: QUERY_ROUTES.CUBE,
+    requiredParams: ['start', 'end', 'cutoff'],
+    requiresExplicitBranchForMultiBranch: true,
+    domain: 'renewal',
+    fixedParams: {
+      metric: 'renewal_due_count',
+      dimensions: 'org_level_3',
+      limit: '100',
+    },
+    resultSchema: {
+      id: 'renewal.org-diagnosis.v1', version: 1, kind: 'records', recordsPath: '$.rows',
+      requiredFields: [
+        'org_level_3',
+        'renewal_due_count', 'renewal_quoted_count', 'renewal_renewed_count',
+        'renewal_unquoted_count', 'renewal_lost_count',
+        'renewal_rate_pct', 'unquoted_rate_pct', 'lost_rate_pct',
+      ],
+      dimensionFields: ['org_level_3'],
+      metricFields: [
+        'renewal_due_count', 'renewal_quoted_count', 'renewal_renewed_count',
+        'renewal_unquoted_count', 'renewal_lost_count',
+        'renewal_rate_pct', 'unquoted_rate_pct', 'lost_rate_pct',
+      ],
+    },
+  },
+  {
     id: 'ncd-pricing',
     name: 'NCD 定价诊断',
     description: '返回报价转化与价格/NCD 分布的聚合数据。',
@@ -181,6 +247,39 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
       requiredFields: ['discount_bin', 'total_quotes', 'conversion_rate'],
       dimensionFields: ['discount_bin'],
       metricFields: ['total_quotes', 'conversion_rate'],
+    },
+  },
+  {
+    id: 'quote-conversion-funnel',
+    name: '报价转化漏斗',
+    description: '按续保、新保和转保拆分有效报价、优质报价与最终承保件数。',
+    path: QUERY_ROUTES.QUOTE_CONVERSION.FUNNEL,
+    requiredParams: ['dateStart', 'dateEnd'],
+    requiresExplicitBranchForMultiBranch: true,
+    domain: 'pricing',
+    resultSchema: {
+      id: 'pricing.quote-funnel.v1', version: 1, kind: 'records', recordsPath: '$',
+      requiredFields: ['renewal_type', 'l1_total', 'l2_valid', 'l3_quality', 'l4_insured'],
+      dimensionFields: ['renewal_type'],
+      metricFields: ['l1_total', 'l2_valid', 'l3_quality', 'l4_insured'],
+    },
+  },
+  {
+    id: 'pricing-risk-segment',
+    name: '风险等级定价分群',
+    description: '按风险等级返回报价量、承保量、转化率与平均折扣，定位定价断层。',
+    path: QUERY_ROUTES.QUOTE_CONVERSION.RANKING,
+    requiredParams: ['dateStart', 'dateEnd'],
+    requiresExplicitBranchForMultiBranch: true,
+    domain: 'pricing',
+    fixedParams: {
+      dimension: 'insurance_grade',
+    },
+    resultSchema: {
+      id: 'pricing.risk-segment.v1', version: 1, kind: 'records', recordsPath: '$',
+      requiredFields: ['dim_value', 'total_quotes', 'total_insured', 'conversion_rate', 'avg_discount'],
+      dimensionFields: ['dim_value'],
+      metricFields: ['total_quotes', 'total_insured', 'conversion_rate', 'avg_discount'],
     },
   },
 ] as const;
@@ -206,6 +305,12 @@ export function validateAnalysisCapabilities(): string[] {
       }
       if (!value.trim()) {
         issues.push(`${capability.id}: 固定参数 ${param} 不能为空`);
+      }
+      const declaration = route.parameters.find((parameter) => parameter.name === param);
+      if (declaration?.enum && !declaration.enum.includes(value)) {
+        issues.push(
+          `${capability.id}: 固定参数 ${param}=${value} 不在 catalog 枚举 ${declaration.enum.join(', ')}`,
+        );
       }
     }
     const schema = capability.resultSchema;

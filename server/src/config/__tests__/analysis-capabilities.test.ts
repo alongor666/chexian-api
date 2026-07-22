@@ -58,7 +58,7 @@ describe('远程分析能力目录', () => {
   it('目录版本与响应体 ETag 随代码契约变化，不依赖 ETL 版本', () => {
     const current = buildAnalysisCapabilitiesData();
     expect(current.version).toBe(ANALYSIS_CAPABILITIES_VERSION);
-    expect(current.version).toBe(5);
+    expect(current.version).toBe(6);
     expect(current.minCliVersion).toBe('1.3.0');
 
     const changed = structuredClone(current);
@@ -78,5 +78,28 @@ describe('远程分析能力目录', () => {
         expect(capability.resultSchema.requiredFields).toContain(field);
       }
     }
+  });
+
+  it('扩展 cohort、分群、续保与定价能力，并锁定可复核聚合形态', () => {
+    expect(getAnalysisCapability('portfolio-segment')).toMatchObject({
+      domain: 'operating',
+      fixedParams: {
+        dimensions: 'customer_category',
+        metrics: 'total_premium,policy_count,earned_claim_ratio',
+      },
+    });
+    expect(getAnalysisCapability('cohort-loss-development')?.requiredParams).toContain('cohortYears');
+    expect(getAnalysisCapability('renewal-org-diagnosis')).toMatchObject({
+      domain: 'renewal',
+      fixedParams: { metric: 'renewal_due_count', dimensions: 'org_level_3' },
+    });
+    expect(getAnalysisCapability('quote-conversion-funnel')?.resultSchema.requiredFields)
+      .toEqual(expect.arrayContaining(['l1_total', 'l4_insured']));
+    expect(getAnalysisCapability('pricing-risk-segment')?.fixedParams)
+      .toEqual({ dimension: 'insurance_grade' });
+
+    const risk = getAnalysisCapability('pricing-risk-segment')!;
+    expect(getAnalysisCapabilityAllowedParams(risk)).not.toContain('dimension');
+    expect(getAnalysisCapabilityAllowedParams(risk)).toContain('targetBranch');
   });
 });
