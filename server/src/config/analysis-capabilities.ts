@@ -23,7 +23,13 @@ export interface AnalysisCapability {
 }
 
 /** 此目录要求的最小 CLI 版本；低版本没有 cx analyze/capabilities 命令。 */
-export const ANALYSIS_CAPABILITIES_MIN_CLI_VERSION = '0.3.0';
+export const ANALYSIS_CAPABILITIES_MIN_CLI_VERSION = '0.3.1';
+
+/**
+ * 分析入口额外允许的全局查询参数。业务路由自身的参数来自 QUERY_ROUTE_METADATA；
+ * targetBranch 由统一 RLS 中间件消费，因此不重复登记在每条业务路由里。
+ */
+const ANALYSIS_GLOBAL_ALLOWED_PARAMS = ['targetBranch'] as const;
 
 export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
   {
@@ -108,6 +114,19 @@ export function validateAnalysisCapabilities(): string[] {
     }
   }
   return issues;
+}
+
+/**
+ * 返回 cx analyze 可转发的完整白名单。能力目录必须公开这份契约，CLI 才能在发请求前
+ * 拒绝拼写错误或未支持参数，避免 Express/路由静默忽略后产出看似成功的错误分析。
+ */
+export function getAnalysisCapabilityAllowedParams(capability: AnalysisCapability): string[] {
+  const route = getRouteMetaByPath(capability.path);
+  if (!route) return [...ANALYSIS_GLOBAL_ALLOWED_PARAMS];
+  return [...new Set([
+    ...route.parameters.map((parameter) => parameter.name),
+    ...ANALYSIS_GLOBAL_ALLOWED_PARAMS,
+  ])];
 }
 
 export function getAnalysisCapability(id: string): AnalysisCapability | undefined {
