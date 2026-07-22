@@ -33,6 +33,7 @@ import {
 import {
   ANALYSIS_CAPABILITIES,
   ANALYSIS_CAPABILITIES_MIN_CLI_VERSION,
+  getAnalysisCapabilityAllowedParams,
   validateAnalysisCapabilities,
 } from '../config/analysis-capabilities.js';
 
@@ -154,10 +155,11 @@ router.get(
     res.json({
       success: true,
       data: {
-        version: 1,
+        version: 2,
         minCliVersion: ANALYSIS_CAPABILITIES_MIN_CLI_VERSION,
         capabilities: ANALYSIS_CAPABILITIES.map((capability) => ({
           ...capability,
+          allowedParams: getAnalysisCapabilityAllowedParams(capability),
           fullPath: `/api/query${capability.path}`,
         })),
       },
