@@ -13,6 +13,7 @@ import { buildResponseMeta } from '../../utils/api-meta.js';
 import { DEFAULT_COMPREHENSIVE_THRESHOLDS } from '../../config/comprehensive-thresholds.js';
 import { dbEnv } from '../../config/env.js';
 import { getDataVersion } from '../../services/data-version.js';
+import { NON_SEMANTIC_QUERY_PARAMS } from '../../config/query-param-policy.js';
 
 // Re-export commonly used items for convenience
 export type { Request, Response } from 'express';
@@ -217,11 +218,11 @@ async function relationHasBranchCode(relation: string): Promise<boolean> {
   return Number(rows[0]?.cnt ?? 0) > 0;
 }
 
-const NON_SEMANTIC_QUERY_PARAMS = new Set(['_t', '_', 'cacheBust', 'cachebuster', 'timestamp']);
+const NON_SEMANTIC_QUERY_PARAM_SET = new Set<string>(NON_SEMANTIC_QUERY_PARAMS);
 
 export function buildRouteCacheKey(req: Request, routeName: string): string {
   const normalizedQuery = Object.entries(req.query)
-    .filter(([key]) => !NON_SEMANTIC_QUERY_PARAMS.has(key))
+    .filter(([key]) => !NON_SEMANTIC_QUERY_PARAM_SET.has(key))
     .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : String(value)] as const)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)

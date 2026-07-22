@@ -12,7 +12,7 @@
  *
  * 维护规则：新增路由（governance QueryCatalog 对账会强制登记 catalog）时，
  * 必须同步在此登记契约条目，validate-params 的覆盖率检查会拦截遗漏。
- * 本文件仅被校验脚本/测试 import，生产运行时不加载。
+ * 本文件同时被校验脚本/测试和 query 参数契约中间件消费；修改后须兼顾运行时导入安全。
  */
 import { z } from 'zod';
 import { commonFilterSchema } from '../utils/filter-params.js';
@@ -81,6 +81,8 @@ const CLAIMS_DETAIL_FILTER_KEYS = [
   'accidentCause', 'accidentCity', 'customerCategory', 'isNev',
   'coverageCombination', 'coverageCombinations', 'isTransfer', 'vehicleQuickFilter',
   'businessNature', 'isNewCar', 'isRenewal', 'cutoffDate',
+  // claims-detail.ts parseFilters() 与 heatmap handler 的 Phase 2 真实消费字段。
+  'insuranceType', 'enterpriseCar', 'fuelCategory',
 ];
 
 export const ROUTE_PARAM_CONTRACTS: Record<string, RouteParamContract> = {
@@ -171,6 +173,7 @@ export const ROUTE_PARAM_CONTRACTS: Record<string, RouteParamContract> = {
     extraKeys: [
       'orgName', 'customerCategory', 'isNev', 'coverageCombination', 'coverageCombinations',
       'isTransfer', 'vehicleQuickFilter', 'businessNature', 'isNewCar', 'isRenewal',
+      'insuranceType', 'enterpriseCar', 'fuelCategory',
       'dimension', 'dateField', 'claimsDateField', 'policyYear', 'customCutoffs',
     ],
   },

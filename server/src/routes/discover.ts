@@ -11,7 +11,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { asyncHandler, AppError } from '../middleware/error.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { withRouteCache, QUERY_CACHE, HTTP_MAX_AGE, duckdbService } from './query/shared.js';
+import { withRouteCache, QUERY_CACHE, HTTP_MAX_AGE, duckdbService, sendWithEtag } from './query/shared.js';
 import { getAllMetrics, getMetricsByCategory } from '../config/metric-registry/index.js';
 import type { MetricCategory } from '../config/metric-registry/types.js';
 import {
@@ -31,9 +31,7 @@ import {
   type DescribeColumn,
 } from './discover-fields-view.js';
 import {
-  ANALYSIS_CAPABILITIES,
-  ANALYSIS_CAPABILITIES_MIN_CLI_VERSION,
-  getAnalysisCapabilityAllowedParams,
+  buildAnalysisCapabilitiesData,
   validateAnalysisCapabilities,
 } from '../config/analysis-capabilities.js';
 
@@ -146,24 +144,18 @@ router.get(
  */
 router.get(
   '/analysis-capabilities',
-  withRouteCache('discover_analysis_capabilities', QUERY_CACHE.hotspotLong, HTTP_MAX_AGE.query),
-  asyncHandler(async (_req: Request, res: Response) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const issues = validateAnalysisCapabilities();
     if (issues.length > 0) {
       throw new AppError(500, `远程分析能力目录配置错误：${issues.join('；')}`);
     }
-    res.json({
+    const body = {
       success: true,
-      data: {
-        version: 2,
-        minCliVersion: ANALYSIS_CAPABILITIES_MIN_CLI_VERSION,
-        capabilities: ANALYSIS_CAPABILITIES.map((capability) => ({
-          ...capability,
-          allowedParams: getAnalysisCapabilityAllowedParams(capability),
-          fullPath: `/api/query${capability.path}`,
-        })),
-      },
-    });
+      data: buildAnalysisCapabilitiesData(),
+    };
+    // 静态代码目录不能使用仅绑定 ETL dataVersion 的 route cache key；响应体哈希确保
+    // allowedParams/requiredParams/能力集合任一变化都会生成新 ETag。
+    sendWithEtag(req, res, body, HTTP_MAX_AGE.query);
   })
 );
 

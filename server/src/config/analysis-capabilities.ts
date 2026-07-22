@@ -22,8 +22,11 @@ export interface AnalysisCapability {
   domain: 'operating' | 'claims' | 'pricing';
 }
 
-/** 此目录要求的最小 CLI 版本；低版本没有 cx analyze/capabilities 命令。 */
-export const ANALYSIS_CAPABILITIES_MIN_CLI_VERSION = '0.3.1';
+/** 目录协议版本；任何响应形态、参数契约或能力集合变化都必须递增。 */
+export const ANALYSIS_CAPABILITIES_VERSION = 3;
+
+/** 此目录要求的最小 CLI 版本；1.1.0 起消费 minCliVersion 并做运行时形态校验。 */
+export const ANALYSIS_CAPABILITIES_MIN_CLI_VERSION = '1.1.0';
 
 /**
  * 分析入口额外允许的全局查询参数。业务路由自身的参数来自 QUERY_ROUTE_METADATA；
@@ -131,4 +134,21 @@ export function getAnalysisCapabilityAllowedParams(capability: AnalysisCapabilit
 
 export function getAnalysisCapability(id: string): AnalysisCapability | undefined {
   return ANALYSIS_CAPABILITIES.find((capability) => capability.id === id);
+}
+
+/** 构造完整的公开目录数据；路由以响应体 ETag 发送，代码变化自动失效。 */
+export function buildAnalysisCapabilitiesData(): {
+  version: number;
+  minCliVersion: string;
+  capabilities: Array<AnalysisCapability & { allowedParams: string[]; fullPath: string }>;
+} {
+  return {
+    version: ANALYSIS_CAPABILITIES_VERSION,
+    minCliVersion: ANALYSIS_CAPABILITIES_MIN_CLI_VERSION,
+    capabilities: ANALYSIS_CAPABILITIES.map((capability) => ({
+      ...capability,
+      allowedParams: getAnalysisCapabilityAllowedParams(capability),
+      fullPath: `/api/query${capability.path}`,
+    })),
+  };
 }

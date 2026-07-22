@@ -59,6 +59,7 @@ import {
 } from '../config/preset-users.js';
 import { assertStaticReportAccess, shouldEnforceStaticReportPolicy } from './reports.js';
 import { getAuthMethods } from '../services/credential-policy.js';
+import { buildBranchScope } from '../utils/branch-scope.js';
 
 const router = Router();
 
@@ -989,8 +990,9 @@ router.get(
     if (originalUri && shouldEnforceStaticReportPolicy(originalUri)) {
       assertStaticReportAccess(req, originalUri);
     }
-    const { username, role, organization, visibleBranches } = req.user;
+    const { username, role, organization, visibleBranches, branchCode } = req.user;
     const tokenType = req.pat ? 'pat' : 'session';
+    const branchScope = buildBranchScope({ role, branchCode, visibleBranches });
 
     let user = await getUserByUsername(username);
     if (!user) {
@@ -1021,6 +1023,7 @@ router.get(
           // allowedRoutes 为空/未定义时按角色回填，避免前端回退到本地兜底清单（前后端口径漂移根因）。
           allowedRoutes: resolveAllowedRoutes(rest.role, rest.allowedRoutes),
           visibleBranches,
+          branchScope,
           // 模块负面清单按 username 派生（SSOT: RESTRICTED_MODULES），刷新/恢复会话后导航隐藏仍生效。
           deniedModules: getDeniedModules(username),
           tokenType,
@@ -1041,6 +1044,7 @@ router.get(
         organization,
         branchCode: req.user.branchCode,
         visibleBranches,
+        branchScope,
         deniedModules: getDeniedModules(username),
         tokenType,
         mustChangePassword,
