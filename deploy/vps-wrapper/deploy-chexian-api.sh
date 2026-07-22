@@ -48,6 +48,39 @@ export PATH="$NVM_BIN_DIR:$PATH"
 APP_DIR="/var/www/chexian/server"
 APP_NAME="chexian-api"
 ECOSYSTEM="${APP_DIR}/ecosystem.config.cjs"
+TIMEOUT_BIN="/usr/bin/timeout"
+DEPENDENCY_STEP_TIMEOUT="600s"
+NATIVE_SOURCE_MODULES=("bcrypt" "better-sqlite3")
+
+# 生产依赖安装必须有界。npm/node-pre-gyp 的 GitHub 预编译下载没有可靠超时，
+# 2026-07-22 实证同一 bcrypt 下载可在 ep_poll 中残留 10 天并永久占住 deploy。
+# 生产依赖里仅 bcrypt / better-sqlite3 带 install script（由 package-lock 契约测试锁定），
+# 因此先从国内 registry 安装包但跳过脚本，再逐包源码编译；避免访问 GitHub 预编译资产，
+# 也避免两个 C++ 模块并发编译造成小内存 VPS OOM。
+run_bounded_dependency_step() {
+  local label="$1"
+  shift
+  if [ ! -x "$TIMEOUT_BIN" ]; then
+    echo "[$label] 错误: 缺少 $TIMEOUT_BIN，拒绝执行无超时依赖安装" >&2
+    return 1
+  fi
+  if "$TIMEOUT_BIN" --signal=TERM --kill-after=30s "$DEPENDENCY_STEP_TIMEOUT" "$@"; then
+    return 0
+  else
+    local status=$?
+    echo "[$label] 错误: 依赖步骤失败或超过 $DEPENDENCY_STEP_TIMEOUT（exit=$status）" >&2
+    return "$status"
+  fi
+}
+
+install_production_dependencies() {
+  cd "$APP_DIR"
+  run_bounded_dependency_step "install" "$NPM_BIN" ci --omit=dev --ignore-scripts
+  for MOD in "${NATIVE_SOURCE_MODULES[@]}"; do
+    run_bounded_dependency_step "install:$MOD" \
+      env npm_config_build_from_source=true "$NPM_BIN" rebuild "$MOD"
+  done
+}
 
 # --- 原生模块健康检查 + 自愈（共享逻辑）─────────────────────────────────────
 # 背景：CN 代理 / registry 抖动 / optional 平台包缺失可能让 node-pre-gyp 预编译下载
@@ -124,8 +157,9 @@ register_conditional_chown_trap() {
 # --- 子命令分发 ---
 case "${1:-help}" in
   install)
-    # 锁文件驱动安装：要求 server/package-lock.json 存在（由 deploy.yml bundle 提供）
-    # npm ci 行为：清空 node_modules 后按 lockfile 严格安装，版本不会漂移
+    # 锁文件驱动安装：要求 server/package-lock.json 存在（由 deploy.yml bundle 提供）。
+    # npm ci 只落包不跑脚本，再按 NATIVE_SOURCE_MODULES 顺序源码构建，版本不会漂移，
+    # 也不会因 GitHub 预编译下载无超时而永久占住部署队列。
     # 失败模式：lockfile 缺失或与 package.json 不一致 → 立即报错，避免半升级状态
     #
     # 所有权兜底（codex PR #516 复审 P1）：install 里的 npm ci 与下方自愈 rebuild/重装都以
@@ -136,7 +170,7 @@ case "${1:-help}" in
     # 统一把 node_modules chown 回 deployer——取代散落各处、易在某个 exit 前漏写的手动 chown。
     # （chown 失败容错为 no-op：node_modules 不存在或已是 deployer 时不应影响 wrapper 退出码。）
     trap 'chown -R deployer:deployer "$APP_DIR/node_modules" 2>/dev/null || true' EXIT
-    cd "$APP_DIR" && "$NPM_BIN" ci --omit=dev
+    install_production_dependencies
 
     # 原生模块自检 + 自愈：共享逻辑见脚本顶部 heal_natives_or_exit。
     # 与本地 scripts/hooks/post-checkout §3 同源策略（按模块分发类型分修复），
@@ -280,7 +314,7 @@ case "${1:-help}" in
     echo "用法: deploy-chexian-api {install|start|restart|reload|stop|status|describe|logs [N]|save|doctor|self-update|fix-deps-owner|fix-frontend-owner|verify-natives}"
     echo ""
     echo "子命令:"
-    echo "  install         在 $APP_DIR 执行 npm ci --omit=dev (要求 package-lock.json)"
+    echo "  install         有界安装生产依赖并逐包源码构建原生模块 (要求 package-lock.json)"
     echo "  start           启动 PM2 进程 (ecosystem.config.cjs)"
     echo "  restart         重启 PM2 进程 (前置原生模块自愈; 保留环境变量)"
     echo "  reload          删除后重新启动 (前置原生模块自愈; 重读 ecosystem 配置)"
