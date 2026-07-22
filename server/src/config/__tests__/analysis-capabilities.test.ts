@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   ANALYSIS_CAPABILITIES,
+  ANALYSIS_CAPABILITIES_VERSION,
+  buildAnalysisCapabilitiesData,
   getAnalysisCapabilityAllowedParams,
   getAnalysisCapability,
   validateAnalysisCapabilities,
 } from '../analysis-capabilities.js';
+import { computeEtag } from '../../services/route-cache.js';
 
 describe('远程分析能力目录', () => {
   it('全部映射到已登记的只读查询路由及参数', () => {
@@ -27,5 +30,15 @@ describe('远程分析能力目录', () => {
       'targetBranch',
     ]));
     expect(getAnalysisCapabilityAllowedParams(trend)).not.toContain('notAParam');
+  });
+
+  it('目录版本与响应体 ETag 随代码契约变化，不依赖 ETL 版本', () => {
+    const current = buildAnalysisCapabilitiesData();
+    expect(current.version).toBe(ANALYSIS_CAPABILITIES_VERSION);
+    expect(current.minCliVersion).toBe('1.1.0');
+
+    const changed = structuredClone(current);
+    changed.capabilities[0].allowedParams.push('futureParam');
+    expect(computeEtag(changed)).not.toBe(computeEtag(current));
   });
 });

@@ -34,6 +34,13 @@ export interface AuthData {
     branchCode?: string;
     /** 全国超管可切换/合并的省集合（如 ['SC','SX']）。普通用户 undefined → 不显示切省下拉 */
     visibleBranches?: string[];
+    /** 机器调用使用的规范化分公司范围；避免根据 visibleBranches 缺失/脏值猜权限。 */
+    branchScope?: {
+      defaultBranch?: string;
+      visibleBranches: string[];
+      canSwitch: boolean;
+      canAggregateAll: boolean;
+    };
     allowedRoutes?: string[];
     defaultRoute?: string;
     /** pns：该账号尚未自设专属密码，须先设密才能访问业务页（密码登录与飞书登录都可能出现） */

@@ -4,7 +4,7 @@ import { apiClient } from '@/shared/api/client';
 import { buildFilterParams } from '@/shared/utils/filterParams';
 import { pickDimensionLabels } from '@/shared/config/drilldown-dimensions';
 import { useRBAC } from '@/shared/hooks/useRBAC';
-import type { PerformanceGrowthMode, PerformanceSegmentTag, PerformanceTimePeriod } from './usePerformanceSummary';
+import type { PerformanceSegmentTag, PerformanceTimePeriod } from './usePerformanceSummary';
 
 export type HeatmapDimension = 'org_level_3' | 'team' | 'salesman' | 'customer_category' | 'coverage_combination' | 'energy_type' | 'business_nature' | 'insurance_grade';
 
@@ -44,7 +44,6 @@ export interface PerformanceOrgHeatmapRow {
 interface UsePerformanceOrgHeatmapProps {
   filters: AdvancedFilterState;
   segmentTag: PerformanceSegmentTag;
-  growthMode: PerformanceGrowthMode;
   timePeriod: PerformanceTimePeriod;
   groupByDimension?: HeatmapDimension;
   drillFilter?: HeatmapDrillStep[];
@@ -78,7 +77,6 @@ function mapHeatmapRow(row: Record<string, unknown>): PerformanceOrgHeatmapRow {
 export function usePerformanceOrgHeatmap({
   filters,
   segmentTag,
-  growthMode,
   timePeriod,
   groupByDimension = 'org_level_3',
   drillFilter = [],
@@ -91,7 +89,6 @@ export function usePerformanceOrgHeatmap({
   const params: Record<string, string> = {
     ...filterParams,
     segmentTag,
-    growthMode,
     timePeriod,
     groupByDimension,
     drillFilter: JSON.stringify(drillFilter),
