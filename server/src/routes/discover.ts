@@ -30,6 +30,11 @@ import {
   type FieldsJsonEntry,
   type DescribeColumn,
 } from './discover-fields-view.js';
+import {
+  ANALYSIS_CAPABILITIES,
+  ANALYSIS_CAPABILITIES_MIN_CLI_VERSION,
+  validateAnalysisCapabilities,
+} from '../config/analysis-capabilities.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -127,6 +132,34 @@ router.get(
       data: {
         filterSchema,
         vehicleQuickFilters: VEHICLE_QUICK_FILTER_VALUES,
+      },
+    });
+  })
+);
+
+/**
+ * GET /api/discover/analysis-capabilities
+ *
+ * 面向 cx 与技能的远程分析目录。它只公开受既有查询路由保护的聚合能力和参数契约，
+ * 不公开 SQL、Parquet 路径或行级标识。
+ */
+router.get(
+  '/analysis-capabilities',
+  withRouteCache('discover_analysis_capabilities', QUERY_CACHE.hotspotLong, HTTP_MAX_AGE.query),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const issues = validateAnalysisCapabilities();
+    if (issues.length > 0) {
+      throw new AppError(500, `远程分析能力目录配置错误：${issues.join('；')}`);
+    }
+    res.json({
+      success: true,
+      data: {
+        version: 1,
+        minCliVersion: ANALYSIS_CAPABILITIES_MIN_CLI_VERSION,
+        capabilities: ANALYSIS_CAPABILITIES.map((capability) => ({
+          ...capability,
+          fullPath: `/api/query${capability.path}`,
+        })),
       },
     });
   })
