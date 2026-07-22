@@ -1,0 +1,39 @@
+name: Release cx-cli
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '发布标签（必须与 cli/package.json 一致，例如 v0.3.0）'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Verify requested tag
+        working-directory: cli
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          test "v$(node -p \"require('./package.json').version\")" = "$RELEASE_TAG"
+      - name: Build verified cross-platform assets
+        working-directory: cli
+        run: |
+          bun install --frozen-lockfile
+          bun run package:release
+      - name: Publish immutable release to cx-cli mirror
+        env:
+          GH_TOKEN: ${{ secrets.CX_CLI_SYNC_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          test -n "$GH_TOKEN"
+          gh release create "$RELEASE_TAG" cli/dist/cx-* cli/dist/manifest.json cli/dist/SHA256SUMS \
+            --repo alongor666/cx-cli --target main --title "cx $RELEASE_TAG" --generate-notes
