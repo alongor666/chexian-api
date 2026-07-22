@@ -23,13 +23,27 @@ export interface AnalysisCapability {
   domain: 'operating' | 'claims' | 'pricing';
   /** 服务端能力锁定的查询参数；调用方不得覆盖。 */
   fixedParams?: Readonly<Record<string, string>>;
+  /** skills 可据此稳定解析、校验聚合结果，不再猜测每条路由的响应形态。 */
+  resultSchema: AnalysisResultSchema;
+}
+
+export interface AnalysisResultSchema {
+  /** 语义稳定标识；字段或形态发生不兼容变化时递增末尾版本。 */
+  id: string;
+  version: number;
+  kind: 'record' | 'records';
+  /** 聚合记录相对 response.data 的位置。 */
+  recordsPath: '$' | '$.rows';
+  requiredFields: readonly string[];
+  dimensionFields: readonly string[];
+  metricFields: readonly string[];
 }
 
 /** 目录协议版本；任何响应形态、参数契约或能力集合变化都必须递增。 */
-export const ANALYSIS_CAPABILITIES_VERSION = 4;
+export const ANALYSIS_CAPABILITIES_VERSION = 5;
 
-/** 1.2.0 起支持参数 schema、固定参数和原生 evidence 包。 */
-export const ANALYSIS_CAPABILITIES_MIN_CLI_VERSION = '1.2.0';
+/** 1.3.0 起支持 resultSchema 校验、服务端 requestId 与可复现 SHA-256 指纹。 */
+export const ANALYSIS_CAPABILITIES_MIN_CLI_VERSION = '1.3.0';
 
 /**
  * 分析入口额外允许的全局查询参数。业务路由自身的参数来自 QUERY_ROUTE_METADATA；
@@ -52,6 +66,12 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     requiredParams: ['startDate', 'endDate'],
     requiresExplicitBranchForMultiBranch: true,
     domain: 'operating',
+    resultSchema: {
+      id: 'operating.trend.v1', version: 1, kind: 'records', recordsPath: '$',
+      requiredFields: ['time_period', 'premium'],
+      dimensionFields: ['time_period'],
+      metricFields: ['premium'],
+    },
   },
   {
     id: 'org-weekly',
@@ -61,6 +81,12 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     requiredParams: ['startDate', 'endDate'],
     requiresExplicitBranchForMultiBranch: true,
     domain: 'operating',
+    resultSchema: {
+      id: 'operating.kpi.v1', version: 1, kind: 'record', recordsPath: '$',
+      requiredFields: ['vehicle_premium', 'total_premium', 'policy_count', 'org_count'],
+      dimensionFields: [],
+      metricFields: ['vehicle_premium', 'total_premium', 'policy_count', 'org_count'],
+    },
   },
   {
     id: 'period-trend',
@@ -70,6 +96,12 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     requiredParams: ['startDate', 'endDate', 'granularity'],
     requiresExplicitBranchForMultiBranch: true,
     domain: 'operating',
+    resultSchema: {
+      id: 'operating.period-trend.v1', version: 1, kind: 'records', recordsPath: '$',
+      requiredFields: ['time_period', 'premium'],
+      dimensionFields: ['time_period'],
+      metricFields: ['premium'],
+    },
   },
   {
     id: 'loss-development',
@@ -79,6 +111,12 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     requiredParams: ['dateStart', 'dateEnd', 'cutoffDate'],
     requiresExplicitBranchForMultiBranch: true,
     domain: 'claims',
+    resultSchema: {
+      id: 'claims.loss-development.v1', version: 1, kind: 'records', recordsPath: '$',
+      requiredFields: ['cohort_year', 'dev_month', 'loss_ratio_pct'],
+      dimensionFields: ['cohort_year', 'dev_month'],
+      metricFields: ['loss_ratio_pct'],
+    },
   },
   {
     id: 'incident-rate',
@@ -88,6 +126,12 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     requiredParams: ['dateStart', 'dateEnd'],
     requiresExplicitBranchForMultiBranch: true,
     domain: 'claims',
+    resultSchema: {
+      id: 'claims.incident-rate.v1', version: 1, kind: 'records', recordsPath: '$',
+      requiredFields: ['year', 'quarter', 'freq_per_1000', 'policy_count'],
+      dimensionFields: ['year', 'quarter'],
+      metricFields: ['freq_per_1000', 'policy_count'],
+    },
   },
   {
     id: 'agent-earned-loss-frequency',
@@ -102,6 +146,12 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
       metrics: 'earned_loss_frequency,policy_count',
       limit: '500',
     },
+    resultSchema: {
+      id: 'claims.agent-earned-loss-frequency.v1', version: 1, kind: 'records', recordsPath: '$.rows',
+      requiredFields: ['agent_name', 'earned_loss_frequency', 'policy_count'],
+      dimensionFields: ['agent_name'],
+      metricFields: ['earned_loss_frequency', 'policy_count'],
+    },
   },
   {
     id: 'accident-profile',
@@ -111,6 +161,12 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     requiredParams: ['dateStart', 'dateEnd'],
     requiresExplicitBranchForMultiBranch: true,
     domain: 'claims',
+    resultSchema: {
+      id: 'claims.accident-profile.v1', version: 1, kind: 'records', recordsPath: '$',
+      requiredFields: ['accident_cause', 'cases', 'reserve_wan'],
+      dimensionFields: ['accident_cause'],
+      metricFields: ['cases', 'reserve_wan'],
+    },
   },
   {
     id: 'ncd-pricing',
@@ -120,6 +176,12 @@ export const ANALYSIS_CAPABILITIES: readonly AnalysisCapability[] = [
     requiredParams: ['dateStart', 'dateEnd'],
     requiresExplicitBranchForMultiBranch: true,
     domain: 'pricing',
+    resultSchema: {
+      id: 'pricing.ncd.v1', version: 1, kind: 'records', recordsPath: '$',
+      requiredFields: ['discount_bin', 'total_quotes', 'conversion_rate'],
+      dimensionFields: ['discount_bin'],
+      metricFields: ['total_quotes', 'conversion_rate'],
+    },
   },
 ] as const;
 
@@ -144,6 +206,34 @@ export function validateAnalysisCapabilities(): string[] {
       }
       if (!value.trim()) {
         issues.push(`${capability.id}: 固定参数 ${param} 不能为空`);
+      }
+    }
+    const schema = capability.resultSchema;
+    const required = new Set(schema.requiredFields);
+    const dimensions = new Set(schema.dimensionFields);
+    const metrics = new Set(schema.metricFields);
+    if (!/^[a-z0-9.-]+\.v[1-9][0-9]*$/.test(schema.id)) {
+      issues.push(`${capability.id}: resultSchema.id 非法 ${schema.id}`);
+    }
+    if (!Number.isInteger(schema.version) || schema.version < 1) {
+      issues.push(`${capability.id}: resultSchema.version 必须为正整数`);
+    }
+    if (schema.kind === 'record' && schema.recordsPath !== '$') {
+      issues.push(`${capability.id}: record 结果只能使用 recordsPath=$`);
+    }
+    if (required.size !== schema.requiredFields.length
+      || dimensions.size !== schema.dimensionFields.length
+      || metrics.size !== schema.metricFields.length) {
+      issues.push(`${capability.id}: resultSchema 字段不得重复`);
+    }
+    for (const field of [...dimensions, ...metrics]) {
+      if (!required.has(field)) {
+        issues.push(`${capability.id}: resultSchema 语义字段 ${field} 必须同时列入 requiredFields`);
+      }
+    }
+    for (const field of dimensions) {
+      if (metrics.has(field)) {
+        issues.push(`${capability.id}: resultSchema 字段 ${field} 不能同时是维度和指标`);
       }
     }
   }
