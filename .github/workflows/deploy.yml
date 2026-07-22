@@ -22,6 +22,8 @@ jobs:
   deploy:
     name: Build & Deploy
     runs-on: ubuntu-latest
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     # workflow_run 触发时只在上游成功时运行；手动触发时无条件运行
     if: >
       github.event_name == 'workflow_dispatch' ||
@@ -43,7 +45,11 @@ jobs:
         run: bun install --frozen-lockfile && bun run build
 
       - name: Build backend
-        run: cd server && bun install --frozen-lockfile && bun run build
+        # deploy 在下一步统一生成一次前后端元数据；这里仅编译，避免 builtAt 被生成两次。
+        run: cd server && bun install --frozen-lockfile && bun run build:compile
+
+      - name: Generate shared release metadata
+        run: REQUIRE_RELEASE_SHA=1 bun scripts/generate-release-metadata.mjs
 
       # state-db Phase 0 sandbox smoke 已在临时 worktree 验证 better-sqlite3 工作。
       # 这里在 CI 跑一次确保（a）原生模块 build 成功 ESM import 成功；
@@ -113,9 +119,10 @@ jobs:
           retry 6 10 "${SSH_CMD[@]}" "$VPS" "echo 'SSH preflight OK'"
           retry 6 10 "${SCP_CMD[@]}" deploy-bundle.tar.gz "$VPS:/tmp/${BUNDLE_NAME}"
 
-          "${SSH_CMD[@]}" "$VPS" "bash -s -- '$BUNDLE_NAME'" << 'DEPLOY'
+          "${SSH_CMD[@]}" "$VPS" "bash -s -- '$BUNDLE_NAME' '$RELEASE_SHA'" << 'DEPLOY'
             set -e
             BUNDLE_NAME="$1"
+            EXPECTED_RELEASE_SHA="$2"
             STAGING_DIR="$(mktemp -d /tmp/chexian-deploy.XXXXXX)"
 
             cd /var/www/chexian
@@ -271,7 +278,9 @@ jobs:
             HEALTHY=false
             for i in $(seq 1 18); do
               sleep 10
-              if curl -s http://localhost:3000/health | grep -q '"success":true'; then
+              HEALTH_JSON="$(curl -fsS "http://localhost:3000/health" || true)"
+              if printf '%s' "$HEALTH_JSON" | grep -q '"success":true' \
+                && printf '%s' "$HEALTH_JSON" | grep -q "\"releaseSha\":\"${EXPECTED_RELEASE_SHA}\""; then
                 HEALTHY=true
                 break
               fi
@@ -297,3 +306,69 @@ jobs:
             rm -f "/tmp/${BUNDLE_NAME}"
             rm -rf "${STAGING_DIR}"
           DEPLOY
+
+      # 公网/CDN 验证必须在 runner 侧、远端 rollback trap 之外执行：公网抖动可以让
+      # workflow 失败并告警，但不能回滚已经通过 localhost 健康检查的生产服务。
+      - name: Verify public release fingerprint and entry asset
+        run: |
+          set -euo pipefail
+          PUBLIC_BASE="https://chexian.cretvalu.com"
+          CACHE_BUSTER="${RELEASE_SHA}-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+          public_curl() {
+            curl -fsS \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --retry 5 \
+              --retry-delay 5 \
+              --retry-all-errors \
+              "$@"
+          }
+          PUBLIC_HEALTH="$(public_curl "${PUBLIC_BASE}/health?_=${CACHE_BUSTER}")"
+          PUBLIC_RELEASE="$(public_curl "${PUBLIC_BASE}/release.json?_=${CACHE_BUSTER}")"
+          INDEX_HTML="$(public_curl "${PUBLIC_BASE}/index.html?_=${CACHE_BUSTER}")"
+
+          node -e '
+            const expected = process.argv[1];
+            for (const [name, raw] of [["health", process.argv[2]], ["release.json", process.argv[3]]]) {
+              if (!raw.trimStart().startsWith("{")) {
+                const detail = name === "release.json"
+                  ? "release.json was not deployed (SPA fallback returned instead)"
+                  : `${name} did not return JSON`;
+                throw new Error(detail);
+              }
+              let parsed;
+              try {
+                parsed = JSON.parse(raw);
+              } catch (error) {
+                throw new Error(`${name} returned invalid JSON: ${error.message}`);
+              }
+              if (parsed.releaseSha !== expected) {
+                throw new Error(`${name} releaseSha mismatch: expected ${expected}, got ${parsed.releaseSha}`);
+              }
+            }
+          ' "$RELEASE_SHA" "$PUBLIC_HEALTH" "$PUBLIC_RELEASE"
+
+          ASSET_PATHS="$(node -e '
+            const html = process.argv[1];
+            const assets = new Set();
+            for (const tag of html.match(/<(?:script|link)\b[^>]*>/gi) || []) {
+              const isModuleScript = /^<script\b/i.test(tag) && /\btype="module"/i.test(tag);
+              const isModulePreload = /^<link\b/i.test(tag) && /\brel="modulepreload"/i.test(tag);
+              if (!isModuleScript && !isModulePreload) continue;
+              const attribute = isModuleScript ? "src" : "href";
+              const match = tag.match(new RegExp(`\\b${attribute}="(\\/assets\\/[^\"]+)"`, "i"));
+              if (match) assets.add(match[1]);
+            }
+            process.stdout.write([...assets].join("\n"));
+          ' "$INDEX_HTML")"
+          if [ -z "$ASSET_PATHS" ]; then
+            echo "No module entry or preload asset found in public index.html"
+            exit 1
+          fi
+          VERIFIED_ASSETS=0
+          while IFS= read -r ASSET_PATH; do
+            [ -n "$ASSET_PATH" ] || continue
+            public_curl -o /dev/null "${PUBLIC_BASE}${ASSET_PATH}?_=${CACHE_BUSTER}"
+            VERIFIED_ASSETS=$((VERIFIED_ASSETS + 1))
+          done <<< "$ASSET_PATHS"
+          echo "Public release verification passed: ${RELEASE_SHA}; ${VERIFIED_ASSETS} module assets"
