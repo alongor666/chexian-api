@@ -65,22 +65,24 @@ jobs:
 
           # rsync 规则:
           #   --delete: 让 target 与 source 完全一致（避免遗留过时文件）
-          #   --filter='P package-lock.json': protect target 的 npm lockfile
-          #     (chexian-api 内未维护 lock；cx-cli 端 release.yml npm ci 自动更新)
           #   --exclude=images: 仅 source 端 .gitignore 兜底（防 user 本地截图含 PAT）
-          echo "Rsync cli/ → $TARGET_DIR (preserve package-lock.json, exclude .git/node_modules/dist/manual/images)"
+          # cli/bun.lock 是独立镜像发布所需的冻结依赖真源；旧 package-lock.json 会被删除。
+          echo "Rsync cli/ → $TARGET_DIR (exclude .git/node_modules/dist/manual/images)"
           rsync -a --delete \
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='dist' \
             --exclude='manual/images' \
-            --filter='P package-lock.json' \
             cli/ "$TARGET_DIR/"
+
+          # 记录 chexian-api 中最后一次改变 cli/ 的源码提交。镜像 tag 发布器把它写进
+          # manifest.sourceCommit；promotion workflow 也据此确认 tag 指向精确同步版本。
+          git log -1 --format=%H -- cli/ > "$TARGET_DIR/source-commit.txt"
 
           cd "$TARGET_DIR"
           # 仅在内容真的变化时 commit
           if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
-            echo "::notice::cx-cli 已与 chexian-api/cli/ 一致（protect filter 后），无需同步"
+            echo "::notice::cx-cli 已与 chexian-api/cli/ 一致，无需同步"
             exit 0
           fi
 

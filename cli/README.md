@@ -10,7 +10,7 @@ cd cli && bun install
 bunx tsx src/index.ts --help
 
 # 构建后以 cx 运行
-bun run build && bun link    # 或 npm i -g .
+bun run build && bun link
 
 cx login                     # 交互式输入 PAT（或 --token cx_pat_xxx.yyy）
 cx whoami                    # 验证身份与数据范围
