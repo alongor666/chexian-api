@@ -19,13 +19,13 @@
  *   5.   可选：批量同步企微机构续保追踪表 + 续保5月表 + 邮政经代签单表
  *
  * 双批发布（2026-07-18 起，上游改双批出表）：--batch early|late 从 release-batches.mjs SSOT
- * 取该批的 ETL 域集 + code 子集 + 报告/企微编排。早批（01签单+05理赔）不跑企微；晚批
- *（02报价+03维修+04厂牌+尾部域）跑企微。不带 --batch = 全量 daily.mjs all（12:00 后手动补全用）。
+ * 取该批的 ETL 域集 + code 子集 + 报告/企微编排。企微 2026-07-22 起挂早批（01签单+05理赔）；
+ * 晚批（02报价+03维修+04厂牌+尾部域）不跑企微。不带 --batch = 全量 daily.mjs all（12:00 后手动补全用）。
  *
  * 使用：
  *   node scripts/sync-and-reload.mjs                        # daily.mjs all（全量单批，兜底）
- *   node scripts/sync-and-reload.mjs --batch early          # 早批：premium + claims_detail（不企微）
- *   node scripts/sync-and-reload.mjs --batch late           # 晚批：quotes/repair/brand/...（含企微）
+ *   node scripts/sync-and-reload.mjs --batch early          # 早批：premium + claims_detail（含企微）
+ *   node scripts/sync-and-reload.mjs --batch late           # 晚批：quotes/repair/brand/...（不企微）
  *   node scripts/sync-and-reload.mjs premium                # 仅保费域
  *   node scripts/sync-and-reload.mjs --skip-governance      # 跳过 governance（不推荐）
  *   node scripts/sync-and-reload.mjs --skip-reload          # 仅 ETL+governance，不重启
