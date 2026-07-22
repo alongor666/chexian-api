@@ -160,7 +160,6 @@ export const PerformanceAnalysisPanel: React.FC<PerformanceAnalysisPanelProps> =
   const heatmapQuery = usePerformanceOrgHeatmap({
     filters,
     segmentTag,
-    growthMode,
     timePeriod,
     groupByDimension: activeHeatmapGroupBy,
     drillFilter: heatmapDrillPath,
