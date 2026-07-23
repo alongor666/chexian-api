@@ -49,6 +49,7 @@ import { assertNoPolicyCurrentOverlap } from '../scripts/lib/parquet-overlap-che
 import { inspectPolicyCurrentLayout } from '../scripts/lib/policy-current-shards.mjs';
 // 分片判定纯函数抽到 lib/shard-classify.mjs（可单测，daily.mjs 顶层执行 main() 无法被 import）
 import { formatDate, extractDateRange, getShardType } from './lib/shard-classify.mjs';
+import { classifyReportExit } from './lib/report-exit.mjs';
 // 多省 ETL 路由纯函数（0a：非 SC 省 premium 源走 staging/<省>、产物隔离到 warehouse/validation/<省>，绝不进 current/；ADR D5）
 import { branchSourceDir, branchOutputRoot } from './lib/branch-naming.mjs';
 // 多省 B1 命名路由：源文件拼音前缀↔branch_code 派生 + 按省防混省过滤 + 前缀感知 glob（可单测）
@@ -1061,8 +1062,10 @@ function runPeriodTrendReport(scriptDir, python) {
       }
     );
     if (result.status !== 0) {
-      const timedOut = result.status === null && !result.error;
-      console.warn(`[ETL] 短中长期对照报告（${label}）生成失败（不阻塞 ETL），exit=${result.status}${timedOut ? `（exit=null 通常为超时 ${reportTimeoutMinutes} 分钟被杀，可设 PERIOD_TREND_REPORT_TIMEOUT_MINUTES 放宽）` : ''}`);
+      // 退出分类判据（超时/OOM击杀/启动失败）实测细节见 lib/report-exit.mjs 头注释
+      //（PR #1169 评审 F1：ETIMEDOUT 在 error.code 上，旧 `!result.error` 判据恒漏报）。
+      const { hint } = classifyReportExit(result);
+      console.warn(`[ETL] 短中长期对照报告（${label}）生成失败（不阻塞 ETL），exit=${result.status}${hint ? `（${hint}，当前超时 ${reportTimeoutMinutes} 分钟）` : ''}`);
       if (result.error) console.warn(`        ${result.error.message}`);
       return false;
     }
