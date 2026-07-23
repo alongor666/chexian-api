@@ -71,6 +71,47 @@ DEFAULT_POLICY_GLOB = policy_current_glob(
 )
 
 
+# ---------- Field transforms（实例 YAML `field_transforms` 声明，写入前应用） ----------
+
+# 中文范围 = 基本汉字区 U+4E00~U+9FFF；「·」为少数民族姓名分隔点，一并保留
+_CHINESE_ONLY_RE = __import__("re").compile(r"[^一-鿿·]")
+
+
+def _transform_chinese_only(value: Any) -> str | None:
+    """只保留中文字符（含少数民族姓名分隔点「·」），其余（工号/字母/空格）剥除。
+
+    场景：源 salesman_name 为「工号+姓名」（如 118046126任卫军），表端业务员列
+    只想展示中文姓名时，实例声明 field_transforms: {salesman_name: chinese_only}。
+    结果为空 → None（沿用"空值不写入"语义）。
+    """
+    text = _to_text(value)
+    if text is None:
+        return None
+    return _CHINESE_ONLY_RE.sub("", text) or None
+
+
+# 转换器注册表：YAML 里按名字引用；新增转换器在此登记（未注册名在配置加载期报错）
+FIELD_TRANSFORMS: dict[str, Any] = {
+    "chinese_only": _transform_chinese_only,
+}
+
+
+def validate_field_transforms(raw: dict[str, Any] | None) -> dict[str, str] | None:
+    """校验 field_transforms 声明（fail-fast：未注册转换器名在加载期报错，不带病运行）。"""
+    transforms = {str(k): str(v) for k, v in (raw or {}).items()}
+    unknown = sorted({name for name in transforms.values() if name not in FIELD_TRANSFORMS})
+    if unknown:
+        raise SystemExit(
+            f"field_transforms 声明了未注册的转换器 {unknown}（可用: {sorted(FIELD_TRANSFORMS)}）"
+        )
+    return transforms or None
+
+
+def apply_field_transform(name: str, value: Any) -> Any:
+    """按注册表名应用单个字段转换（供 add / update 两引擎共用）。"""
+    return FIELD_TRANSFORMS[name](value)
+
+
 # ---------- Config ----------
 
 
@@ -96,6 +137,9 @@ class InstanceConfig:
     record_map_key_field: str = "policy_no"   # update_sync.key_source_field
     # 花名册（可选）：工号→企微 user_id，声明后自动派生 salesman_user_id 供 USER 型成员列映射
     roster: str | None = None                 # 相对 integrations 目录
+    # 字段转换（可选）：源字段名 → FIELD_TRANSFORMS 注册表转换器名，写入前应用；
+    # 只影响写入智能表的值，不影响 filters 过滤 / 花名册工号解析（二者用原始源值）
+    field_transforms: dict[str, str] | None = None
 
 
 def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -> InstanceConfig:
@@ -137,6 +181,7 @@ def _build_instance(raw: dict[str, Any], target: dict[str, Any] | None = None) -
         script=raw.get("script"),
         aggregate_key=aggregate,
         prefer_insurance_type=raw.get("prefer_insurance_type"),
+        field_transforms=validate_field_transforms(raw.get("field_transforms")),
     )
 
 
@@ -593,17 +638,22 @@ def build_record_values(
     row: dict[str, Any],
     field_mapping: dict[str, str],
     field_types: dict[str, str],
+    field_transforms: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """把 1 行 SQL 结果转为 add_records.values 字段。
 
-    field_mapping: 源字段（en）→ 智能表 field_id
-    field_types:   field_id → 类型 (TEXT/NUMBER/DATE_TIME/SINGLE_SELECT)
+    field_mapping:    源字段（en）→ 智能表 field_id
+    field_types:      field_id → 类型 (TEXT/NUMBER/DATE_TIME/SINGLE_SELECT)
+    field_transforms: 源字段 → 转换器名（可选，格式化前应用，如 salesman_name: chinese_only）
     """
     values: dict[str, Any] = {}
     for src_field, target_id in field_mapping.items():
         raw_val = row.get(src_field)
         if src_field == "insurance_grade" and str(raw_val).strip() not in {"A", "B", "C", "D", "E", "F"}:
             raw_val = None
+        transform_name = (field_transforms or {}).get(src_field)
+        if transform_name:
+            raw_val = apply_field_transform(transform_name, raw_val)
         field_type = field_types.get(target_id, "TEXT")
         formatted = format_value(field_type, raw_val)
         if formatted is None:
@@ -744,7 +794,9 @@ def run(instance: InstanceConfig, mode: str, dry_run: bool) -> dict[str, Any]:
 
     add_records = []
     for row in new_rows:
-        values = build_record_values(row, instance.field_mapping, instance.field_types)
+        values = build_record_values(
+            row, instance.field_mapping, instance.field_types, instance.field_transforms
+        )
         add_records.append({
             "values": values,
             # 同一复合键同时用于 add state 去重与 record map 捕获（评审 #1134-2：

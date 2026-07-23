@@ -52,12 +52,14 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent.parent))  # 数据管理/ 根：供 import pipelines.*
 from sync_renewal_v2 import post_webhook  # noqa: E402
-from sync_filtered_policies import (  # noqa: E402  复用：where 拼装 / 值格式化 / 脱敏 / 花名册 SSOT
+from sync_filtered_policies import (  # noqa: E402  复用：where 拼装 / 值格式化 / 字段转换 / 脱敏 / 花名册 SSOT
+    apply_field_transform,
     build_where,
     enrich_rows_with_roster,
     format_value,
     load_roster,
     mask_pii,
+    validate_field_transforms,
     _to_text,
 )
 from lib.idempotent_smartsheet import stable_value as _stable_value  # noqa: E402  复合键口径与 add state 同源
@@ -110,6 +112,9 @@ class UpdateConfig:
     # 复合键（与 add 引擎/state 同源，评审 #1134-2 修复）：record map 与更新粒度均按
     # 复合键（如 保单号|车架号），杜绝"一保单多车架"时任意 VIN 的报价被扇出到所有记录
     composite_key: tuple[str, ...] | None = None
+    # 字段转换（可选，与 add 引擎共用同一注册表/声明）：源字段名 → 转换器名，
+    # 格式化前应用（如 salesman_name: chinese_only 只写中文姓名）；CLEAR 哨兵不经转换
+    field_transforms: dict[str, str] | None = None
 
 
 def _build_update_config(raw: dict[str, Any], block: dict[str, Any], target: dict[str, Any] | None = None) -> UpdateConfig:
@@ -149,6 +154,7 @@ def _build_update_config(raw: dict[str, Any], block: dict[str, Any], target: dic
         fields=specs,
         roster=raw.get("roster"),
         composite_key=tuple(composite_raw) if composite_raw else None,
+        field_transforms=validate_field_transforms(raw.get("field_transforms")),
     )
 
 
@@ -346,11 +352,15 @@ def derive_update_values(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def format_update_values(
-    business_values: dict[str, Any], specs: Iterable[UpdateFieldSpec]
+    business_values: dict[str, Any],
+    specs: Iterable[UpdateFieldSpec],
+    field_transforms: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """业务值 → 智能表 values（field_id → 格式化值；复用 add 引擎 format_value）。
 
     CLEAR 哨兵 → 按字段类型取显式空形态（评审 #1134-4），不会被"空值不写"逻辑吞掉。
+    field_transforms（可选）：按 spec.source 在格式化前应用（与 add 引擎同一注册表），
+    CLEAR 哨兵不经转换（清空语义优先）。
     """
     out: dict[str, Any] = {}
     for spec in specs:
@@ -360,6 +370,9 @@ def format_update_values(
         if value is CLEAR or value == CLEAR:
             out[spec.field_id] = CLEAR_PAYLOADS.get(spec.field_type, "")
             continue
+        transform_name = (field_transforms or {}).get(spec.source)
+        if transform_name:
+            value = apply_field_transform(transform_name, value)
         formatted = format_value(spec.field_type, value)
         if formatted is None:
             continue
@@ -389,7 +402,7 @@ def build_plan(
         if not entry or not entry.get("record_ids"):
             missing_in_state.append(key)
             continue
-        values = format_update_values(derive_update_values(row), config.fields)
+        values = format_update_values(derive_update_values(row), config.fields, config.field_transforms)
         if not values:
             skipped_no_values += 1
             continue
