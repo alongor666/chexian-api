@@ -1039,6 +1039,15 @@ function runPeriodTrendReport(scriptDir, python) {
   let provinceContractFailed = false;
   const provinceGenFailures = [];
   log('cyan', '\n═══ 9. 短中长期对照报告（diagnose-period-trend skill）═══\n');
+  // 单次报告生成超时：默认 10 分钟（历史值，Mac 大内存机器绰绰有余）。低配机器
+  // （如 14GB 内存 VPS）上省级全量查询需 DuckDB 降内存+溢写落盘，耗时贴着 10 分钟
+  // 波动（2026-07-23 迁移 myvps 实证：同参数一次 ~9 分钟通过、一次超时被杀且
+  // exit=null 无任何输出——python stdout 块缓冲被 SIGTERM 直接丢弃，极难排查），
+  // 故开放 env 覆盖。设 PERIOD_TREND_REPORT_TIMEOUT_MINUTES=30 类值放宽。
+  const reportTimeoutMinutes = (() => {
+    const raw = parseInt(process.env.PERIOD_TREND_REPORT_TIMEOUT_MINUTES || '', 10);
+    return Number.isFinite(raw) && raw > 0 ? raw : 10;
+  })();
   const runOnce = (extraArgs, label) => {
     const result = spawnSync(
       python,
@@ -1047,12 +1056,13 @@ function runPeriodTrendReport(scriptDir, python) {
         stdio: 'inherit',
         cwd: projectRoot,
         env: process.env,
-        timeout: 10 * 60 * 1000,
+        timeout: reportTimeoutMinutes * 60 * 1000,
         windowsHide: true,
       }
     );
     if (result.status !== 0) {
-      console.warn(`[ETL] 短中长期对照报告（${label}）生成失败（不阻塞 ETL），exit=${result.status}`);
+      const timedOut = result.status === null && !result.error;
+      console.warn(`[ETL] 短中长期对照报告（${label}）生成失败（不阻塞 ETL），exit=${result.status}${timedOut ? `（exit=null 通常为超时 ${reportTimeoutMinutes} 分钟被杀，可设 PERIOD_TREND_REPORT_TIMEOUT_MINUTES 放宽）` : ''}`);
       if (result.error) console.warn(`        ${result.error.message}`);
       return false;
     }
