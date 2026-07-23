@@ -65,9 +65,16 @@ composite_key:
   - policy_no
   - vehicle_frame_no
 
+# 字段转换（2026-07-23 用户要求）：业务员写入表时只保留中文姓名——
+# 源 salesman_name 为「工号+姓名」（如 118046126任卫军），写入前剥掉工号只留「任卫军」。
+# 仅影响写入值；filters 过滤 / 花名册工号解析仍用原始源值（含工号）。
+# add / update 两引擎共用本声明（update 引擎 payload_hash 变化后会自动把存量行刷成纯中文）。
+field_transforms:
+  salesman_name: chinese_only
+
 # 字段映射：SQL 输出列名（en） → 智能表 field_id
 field_mapping:
-  salesman_name:         fNy4a6      # 业务员（TEXT，源值代码+姓名；成员列/行权限由表端 AI 转换承担）
+  salesman_name:         fNy4a6      # 业务员（TEXT，写入值经 chinese_only 只留中文姓名；成员列/行权限由表端 AI 转换承担）
   policy_date:           f04Gwj      # 出单日期（DATE_TIME, 毫秒 ts）
   policy_no:             ftQMc5      # 保单号（TEXT）
   plate_no:              ftk5Tx      # 车牌号（TEXT）
