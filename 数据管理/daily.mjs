@@ -62,7 +62,7 @@ import {
 } from './lib/source-file-routing.mjs';
 // 多省 Bug 1：merge_parquet.py 参数构造纯函数（branchCode 经 ctx 透传，锁死 --declared-branch）
 import { buildMergeParquetArgs } from './lib/merge-parquet-args.mjs';
-import { readBranchOrgUnits, skillSupportsOrgFlag, listBranchOrgMappingCodes, planProvinceMirror, parseSkillVersion, skillSupportsBranchOnlyMode, shouldAbortReportSync } from './lib/period-trend-orgs.mjs';
+import { readBranchOrgUnits, skillSupportsOrgFlag, listBranchOrgMappingCodes, planProvinceMirror, parseSkillVersion, skillSupportsBranchOnlyMode, shouldAbortReportSync, resolvePeriodTrendSkillDir } from './lib/period-trend-orgs.mjs';
 // 多省 B3 防重复：区间覆盖归档纯函数（被新全量区间完全覆盖的旧文件归档，仅同品类互斥）
 import {
   parseRangePrefix,
@@ -1020,7 +1020,10 @@ function runStrategyMultiMerge(ctx) {
 function runPeriodTrendReport(scriptDir, python) {
   // 返回可执行发布契约状态：provinceContractFailed=省级分省能力闸未过（stale skill，
   // report 子命令据此 exit 1）；provinceGenFailures=能力具备但实际生成失败的省清单。
-  const skillCli = join(homedir(), '.claude/skills/diagnose-period-trend/lib/cli.py');
+  // 技能根目录可经 PERIOD_TREND_SKILL_DIR 覆盖（发布链 pin 私有 main 快照，见
+  // period-trend-orgs.mjs resolvePeriodTrendSkillDir 注释）；缺省 ~/.claude/skills，零行为变化。
+  const skillDir = resolvePeriodTrendSkillDir(process.env, homedir());
+  const skillCli = join(skillDir, 'lib/cli.py');
   if (!existsSync(skillCli)) {
     console.warn(`[ETL] 跳过短中长期对照报告：skill cli.py 不存在 (${skillCli})`);
     return { provinceContractFailed: false, provinceGenFailures: [] };
@@ -1029,7 +1032,7 @@ function runPeriodTrendReport(scriptDir, python) {
   const deployBranch = resolveEnvBranchCode('runPeriodTrendReport');
   // 省级分省能力（可执行发布契约）：SKILL.md 版本 ≥ v2.5.0 才支持「仅 --branch」省级模式。
   // 详见 period-trend-orgs.mjs skillSupportsBranchOnlyMode（为何用版本而非 --help 探测）。
-  const skillMdPath = join(homedir(), '.claude/skills/diagnose-period-trend/SKILL.md');
+  const skillMdPath = join(skillDir, 'SKILL.md');
   const skillVersion = existsSync(skillMdPath)
     ? parseSkillVersion(readFileSync(skillMdPath, 'utf-8'))
     : null;

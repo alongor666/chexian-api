@@ -19,6 +19,28 @@ import { join } from 'path';
 export const BRANCH_CODE_RE = /^[A-Z]{2}$/;
 
 /**
+ * 解析 diagnose-period-trend 技能根目录。
+ *
+ * 优先级：env `PERIOD_TREND_SKILL_DIR`（去空白后非空即采用）> `<homeDir>/.claude/skills/
+ * diagnose-period-trend`（缺省，零行为变化）。
+ *
+ * 为何需要 env 覆盖（2026-07-24 首日发布事故根治）：发布链所在机器的共享技能仓可能被
+ * 其它 agent 占用在其工作分支，且有日更 `git reset` 会把就地补丁（如 #93 DuckDB 内存调优）
+ * 冲掉——软链 `~/.claude/skills` 指向该仓时，发布链每天都会在 reset 后跑到旧技能（省级报告
+ * OOM → 新鲜度闸失败）。此 env 让发布链在 `.env.local` 显式 pin 自己的私有 main 快照
+ * （与共享仓解耦），也不受软链被技能重装还原的影响。纯 SC/常规部署不设此 env，行为不变。
+ *
+ * @param {Record<string,string|undefined>} env - 环境变量（通常 process.env）
+ * @param {string} homeDir - 用户主目录（通常 homedir()）
+ * @returns {string} 技能根目录绝对路径
+ */
+export function resolvePeriodTrendSkillDir(env, homeDir) {
+  const override = (env?.PERIOD_TREND_SKILL_DIR ?? '').trim();
+  if (override) return override;
+  return join(homeDir, '.claude/skills/diagnose-period-trend');
+}
+
+/**
  * 判定 diagnose-period-trend skill CLI 是否支持机构级参数（`--org`，v2.3.0+）。
  * 输入是 `cli.py --help` 的输出文本；不支持时 daily.mjs 须**显式红字告警**并跳过
  * 机构级循环——B346 治理教训：skill 版本落后时逐机构 spawn 静默失败（仅黄字
