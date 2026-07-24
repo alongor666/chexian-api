@@ -11,6 +11,7 @@ import {
   planProvinceMirror,
   parseSkillVersion,
   skillSupportsBranchOnlyMode,
+  resolvePeriodTrendSkillDir,
 } from '../数据管理/lib/period-trend-orgs.mjs';
 // @ts-expect-error — 纯 JS 模块，无类型声明（仅在 ETL 内部使用）
 import * as periodTrendOrgs from '../数据管理/lib/period-trend-orgs.mjs';
@@ -261,5 +262,34 @@ describe('真仓对账：branch-org-mapping ↔ 注册表 ↔ 预置账号', () 
         u.organization
       );
     }
+  });
+});
+
+/** 技能根目录解析 — env 覆盖优先，缺省回退 ~/.claude/skills（发布链 pin 私有快照根治用） */
+describe('resolvePeriodTrendSkillDir', () => {
+  const HOME = '/home/tester';
+  const DEFAULT = join(HOME, '.claude/skills/diagnose-period-trend');
+
+  it('未设 env → 回退 ~/.claude/skills（零行为变化）', () => {
+    expect(resolvePeriodTrendSkillDir({}, HOME)).toBe(DEFAULT);
+  });
+
+  it('PERIOD_TREND_SKILL_DIR 非空 → 采用 env 值', () => {
+    const pinned = '/root/workspace/release-skills/skills/diagnose-period-trend';
+    expect(resolvePeriodTrendSkillDir({ PERIOD_TREND_SKILL_DIR: pinned }, HOME)).toBe(pinned);
+  });
+
+  it('env 值前后空白被 trim', () => {
+    const pinned = '/srv/skills/diagnose-period-trend';
+    expect(resolvePeriodTrendSkillDir({ PERIOD_TREND_SKILL_DIR: `  ${pinned}  ` }, HOME)).toBe(pinned);
+  });
+
+  it('env 为空串 / 纯空白 → 视同未设，回退缺省', () => {
+    expect(resolvePeriodTrendSkillDir({ PERIOD_TREND_SKILL_DIR: '' }, HOME)).toBe(DEFAULT);
+    expect(resolvePeriodTrendSkillDir({ PERIOD_TREND_SKILL_DIR: '   ' }, HOME)).toBe(DEFAULT);
+  });
+
+  it('env 为 undefined（对象无此键）→ 回退缺省', () => {
+    expect(resolvePeriodTrendSkillDir({ OTHER: 'x' }, HOME)).toBe(DEFAULT);
   });
 });
