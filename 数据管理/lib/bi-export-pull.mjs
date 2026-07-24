@@ -19,7 +19,9 @@
  * 无副作用、不读文件系统 / env / 网络，可被 vitest 直接 import。
  * 副作用编排（rsync / 抽样 / 分发落盘）在 scripts/pull-bi-exports.mjs。
  */
-import { provinceCodeFromFilename, stripProvincePrefix } from './source-file-routing.mjs';
+import {
+  provinceCodeFromFilename, stripProvincePrefix, registeredBranchCodesFromPrefixMap,
+} from './source-file-routing.mjs';
 import { parseRangePrefix, findCoveredKeys } from './range-coverage.mjs';
 
 /** 五张报表 code 全集（上游契约的完整清单）。 */
@@ -164,18 +166,31 @@ export function evaluateManifestReports(manifest, {
  * @param {readonly string[]} [opts.requiredCodes=REQUIRED_REPORT_CODES] 本次要判就绪的 code 子集
  *   （双批发布：早批只探 ['01','05'] / 晚批只探 ['02','03','04']）。默认全集 → 与拆批前一致。
  * @param {readonly string[]} [opts.optionalCodes=OPTIONAL_REPORT_CODES] requiredCodes 中哪些为可选表。
- * @returns {{ready:boolean, issues:Array<{level:'error'|'warn', code:string|null, message:string}>, reports:Array<object>}}
- *   ready 只由硬闸 code（requiredCodes 减 optionalCodes）决定；可选 code（04 厂牌维表）异常 → warn
- *   不拦就绪（否则上游 04 偶发骤降会一直拦住核心事实表的每日发布）。
+ * @param {readonly string[]} [opts.provinces=registeredBranchCodesFromPrefixMap()] 逐省判定要考虑的
+ *   已注册省份全集（数据驱动，禁硬编 SC/SX）。**枚举全集而非只看 manifest 出现的省**——某省上游
+ *   完全断线（manifest 无该省任何条目）时，仍须把它判为 stale 才能发响亮缺口告警，不能静默漏掉。
+ * @returns {{ready:boolean, issues:Array<{level:'error'|'warn', code:string|null, message:string}>,
+ *   reports:Array<object>, readyProvinces:string[], staleProvinces:Array<{province:string, gaps:Array<{code:string, reason:string}>}>}}
+ *   ready（整体全就绪）只由硬闸 code（requiredCodes 减 optionalCodes）决定，与拆省前逐字节一致；
+ *   可选 code（04 厂牌维表）异常 → warn 不拦就绪。
+ *   readyProvinces/staleProvinces 是**逐省**判定（B255「四川缺数据不阻塞山西」）：某省所有硬闸 code
+ *   的当前份都新鲜 → 该省 ready；任一硬闸 code 缺席/停在往日/疑似空表 → 该省 stale（附 gaps 明细）。
+ *   可选 code 不参与逐省判定（04 为全国口径，routeBranchCode 归 SC，且低频不该拦任何省）。
  */
 export function evaluateRemoteManifest(manifest, {
   todayBeijing, requiredCodes = REQUIRED_REPORT_CODES, optionalCodes = OPTIONAL_REPORT_CODES,
+  provinces = registeredBranchCodesFromPrefixMap(),
 }) {
   const issues = [];
 
   if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.reports)) {
     issues.push({ level: 'error', code: null, message: 'manifest 结构非法：缺 reports 数组（上游导出可能中断）' });
-    return { ready: false, issues, reports: [] };
+    // 结构非法：所有已注册省都判为 stale（无法证明任何省就绪，fail-closed）
+    return {
+      ready: false, issues, reports: [],
+      readyProvinces: [],
+      staleProvinces: provinces.map((province) => ({ province, gaps: [{ code: null, reason: 'manifest 结构非法' }] })),
+    };
   }
   if (typeof manifest.schema !== 'string' || !manifest.schema.startsWith(MANIFEST_SCHEMA_PREFIX)) {
     issues.push({ level: 'error', code: null, message: `manifest schema 非预期：${manifest.schema ?? '(缺失)'}（期望前缀 ${MANIFEST_SCHEMA_PREFIX}）` });
@@ -197,20 +212,58 @@ export function evaluateRemoteManifest(manifest, {
     }
     for (const r of entries) {
       const tag = r.province ? `[${r.province}] ` : '';
-      const day = beijingDayOf(r.mtime);
-      if (day !== todayBeijing) {
-        push(`code ${code} ${tag}mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}），未出今天的表${optNote}`);
-        continue;
-      }
-      const minMB = MIN_SIZE_MB_BY_CODE[code];
-      if (minMB != null && Number.isFinite(r.sizeMB) && r.sizeMB < minMB) {
-        push(`code ${code} ${tag}体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）${optNote}`);
+      const { fresh, reason } = remoteEntryFreshness(r, code, todayBeijing);
+      if (!fresh) {
+        push(`code ${code} ${tag}${reason}${optNote}`);
         continue;
       }
       reports.push(r);
     }
   }
-  return { ready: !issues.some((i) => i.level === 'error'), issues, reports };
+
+  // 逐省就绪判定（只看硬闸 code；可选 code 全国口径不参与）。省份归属经 routeBranchCode(file)
+  // 从文件名前缀派生（与分发路由同键），无前缀归 SC。缺席=某省该 code 在 manifest 里没有条目。
+  const hardCodes = requiredCodes.filter((c) => !optionalCodes.includes(c));
+  const readyProvinces = [];
+  const staleProvinces = [];
+  for (const province of provinces) {
+    const gaps = [];
+    for (const code of hardCodes) {
+      const provinceEntries = manifest.reports.filter((x) => x && x.code === code && routeBranchCode(x.file) === province);
+      if (provinceEntries.length === 0) {
+        gaps.push({ code, reason: '未出表（manifest 缺该省该 code）' });
+        continue;
+      }
+      for (const r of provinceEntries) {
+        const { fresh, reason } = remoteEntryFreshness(r, code, todayBeijing);
+        if (!fresh) gaps.push({ code, reason });
+      }
+    }
+    if (gaps.length === 0) readyProvinces.push(province);
+    else staleProvinces.push({ province, gaps });
+  }
+
+  return { ready: !issues.some((i) => i.level === 'error'), issues, reports, readyProvinces, staleProvinces };
+}
+
+/**
+ * 单份远程 manifest report entry 的就绪新鲜度判定（探测口径：mtime=北京今天 + sizeMB 兜空表）。
+ * 不比对本地字节（那是 evaluateManifestReports 落地后的完整性闸）。纯函数、内部复用。
+ * @param {{mtime:string|number, sizeMB?:number}} r
+ * @param {string} code
+ * @param {string} todayBeijing
+ * @returns {{fresh:boolean, reason:string|null}}
+ */
+function remoteEntryFreshness(r, code, todayBeijing) {
+  const day = beijingDayOf(r.mtime);
+  if (day !== todayBeijing) {
+    return { fresh: false, reason: `mtime 停在 ${day ?? '(无效)'}（≠ 北京今天 ${todayBeijing}），未出今天的表` };
+  }
+  const minMB = MIN_SIZE_MB_BY_CODE[code];
+  if (minMB != null && Number.isFinite(r.sizeMB) && r.sizeMB < minMB) {
+    return { fresh: false, reason: `体积骤降：${r.sizeMB}MB < 下限 ${minMB}MB（疑似空表）` };
+  }
+  return { fresh: true, reason: null };
 }
 
 /**

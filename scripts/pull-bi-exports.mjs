@@ -63,6 +63,7 @@ import {
   planBackfillFiles,
 } from '../数据管理/lib/bi-export-pull.mjs';
 import { getReleaseBatch, batchAllCodes, RELEASE_BATCH_IDS } from '../数据管理/lib/release-batches.mjs';
+import { registeredBranchCodesFromPrefixMap } from '../数据管理/lib/source-file-routing.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(__filename, '../..');
@@ -80,6 +81,7 @@ function parseArgs(argv) {
   const opts = {
     dryRun: false, skipRsync: false, skipVerifyProvince: false, force: false, allowStaleCodes: [],
     batch: null, requiredCodes: REQUIRED_REPORT_CODES, optionalCodes: OPTIONAL_REPORT_CODES,
+    onlyProvince: null, // B255：只拉/校验/分发就绪省的文件（watcher 逐省放行时透传）
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -87,6 +89,17 @@ function parseArgs(argv) {
     else if (a === '--skip-rsync') opts.skipRsync = true;
     else if (a === '--skip-verify-province') opts.skipVerifyProvince = true;
     else if (a === '--force') opts.force = true;
+    else if (a === '--only-province' || a.startsWith('--only-province=')) {
+      // B255 逐省就绪：只处理该省（branch_code）文件——04 厂牌全国口径归 SC，故仅 SC 时含 04。
+      // fail-closed：只接受已注册省份，未注册即中止（禁静默回落 SC）。
+      const raw = a.includes('=') ? a.slice('--only-province='.length) : argv[++i];
+      const registered = registeredBranchCodesFromPrefixMap();
+      if (!raw || !registered.includes(raw)) {
+        log('red', `--only-province 参数非法：${raw ?? '(空)'}（合法值 ${registered.join('/')}，数据驱动·禁硬编）`);
+        process.exit(1);
+      }
+      opts.onlyProvince = raw;
+    }
     else if (a === '--batch' || a.startsWith('--batch=')) {
       // 双批发布：只校验/分发该批的 code 子集（早批 01/05、晚批 02/03/04）。
       // 不在子集内的 code 完全不参与校验、分发、补导（各批互不干扰）。
@@ -110,8 +123,9 @@ function parseArgs(argv) {
       opts.allowStaleCodes.push(...codes);
     }
     else if (a === '--help' || a === '-h') {
-      log('cyan', `用法：node scripts/pull-bi-exports.mjs [--batch ${RELEASE_BATCH_IDS.join('|')}] [--dry-run] [--skip-rsync] [--skip-verify-province] [--allow-stale 02[,05]] [--force]`);
+      log('cyan', `用法：node scripts/pull-bi-exports.mjs [--batch ${RELEASE_BATCH_IDS.join('|')}] [--only-province ${registeredBranchCodesFromPrefixMap().join('|')}] [--dry-run] [--skip-rsync] [--skip-verify-province] [--allow-stale 02[,05]] [--force]`);
       log('cyan', '  --batch early：只拉/校验 01 签单 + 05 理赔；--batch late：只拉 02 报价 + 03 维修 + 04 厂牌；不带 --batch=全量');
+      log('cyan', '  --only-province SC|SX：B255 逐省就绪——只拉/校验/分发该省文件（就绪省放行、陈旧省不连累）；04 厂牌全国口径归 SC');
       process.exit(0);
     } else {
       log('red', `未知参数：${a}（--help 查看用法）`);
@@ -153,7 +167,7 @@ function runRsync({ dryRun }) {
 
 // ── Step 2: manifest 校验 ──
 
-function loadManifestAndValidate({ force, allowStaleCodes, requiredCodes, optionalCodes, batch }) {
+function loadManifestAndValidate({ force, allowStaleCodes, requiredCodes, optionalCodes, batch, onlyProvince = null }) {
   const manifestPath = join(INBOX_DIR, MANIFEST_NAME);
   if (!existsSync(manifestPath)) {
     log('red', `❌ inbox 缺 ${MANIFEST_NAME}（${manifestPath}）——上游断线或从未拉取。`);
@@ -167,17 +181,23 @@ function loadManifestAndValidate({ force, allowStaleCodes, requiredCodes, option
     process.exit(1);
   }
 
+  // B255 逐省：校验只针对目标省的当前份——否则「拉山西」会因四川那条陈旧而 exit(1)（正是要根治的连坐）。
+  // 用一个省份过滤后的 manifest 副本喂校验；原 manifest 仍返回给分发层做补导排除集（用全集更安全）。
+  const manifestForValidation = onlyProvince
+    ? { ...manifest, reports: (manifest.reports || []).filter((r) => r?.file && routeBranchCode(r.file) === onlyProvince) }
+    : manifest;
+
   const statByName = {};
-  for (const r of manifest.reports || []) {
+  for (const r of manifestForValidation.reports || []) {
     if (!r?.file) continue;
     const p = join(INBOX_DIR, r.file);
     statByName[r.file] = existsSync(p) ? { size: statSync(p).size } : null;
   }
 
   const todayBeijing = beijingDayOf(new Date());
-  const result = evaluateManifestReports(manifest, { todayBeijing, statByName, allowStaleCodes, requiredCodes, optionalCodes });
+  const result = evaluateManifestReports(manifestForValidation, { todayBeijing, statByName, allowStaleCodes, requiredCodes, optionalCodes });
 
-  log('cyan', `\n▶ [2/4] manifest 校验（北京时间今天 = ${todayBeijing}${batch ? ` · 批次 ${batch}：code ${requiredCodes.join('/')}` : ''}）`);
+  log('cyan', `\n▶ [2/4] manifest 校验（北京时间今天 = ${todayBeijing}${batch ? ` · 批次 ${batch}：code ${requiredCodes.join('/')}` : ''}${onlyProvince ? ` · 逐省 ${onlyProvince}` : ''}）`);
   for (const r of result.reports) {
     const tag = r.province ? `[${r.province}] ` : '';
     log('green', `  ✓ code ${r.code} ${tag}${r.reportName} | ${r.sizeMB}MB | mtime北京 ${beijingDayOf(r.mtime)}`);
@@ -360,7 +380,7 @@ function distributeOne(fileName, label, { dryRun }) {
   return action;
 }
 
-function distribute(reports, manifest, { dryRun, requiredCodes = REQUIRED_REPORT_CODES }) {
+function distribute(reports, manifest, { dryRun, requiredCodes = REQUIRED_REPORT_CODES, onlyProvince = null }) {
   log('cyan', '\n▶ [4/4] 分发到 ETL 源目录（shanxi_→staging/SX；sichuan_/无前缀→数据管理/ 根）');
   for (const r of reports) {
     distributeOne(r.file, `code ${r.code}`, { dryRun });
@@ -372,7 +392,9 @@ function distribute(reports, manifest, { dryRun, requiredCodes = REQUIRED_REPORT
   const inboxNames = existsSync(INBOX_DIR) ? readdirSync(INBOX_DIR) : [];
   const currentFiles = (manifest.reports || []).map((r) => r?.file).filter(Boolean);
   // 补导只认本批的 code（早批不会把上游昨日残留的 02/03 当补导误分发进早批）。
-  const backfills = planBackfillFiles(inboxNames, currentFiles, requiredCodes);
+  let backfills = planBackfillFiles(inboxNames, currentFiles, requiredCodes);
+  // B255 逐省：只分发该省的补导文件（前缀路由派生省份，与 distributeOne 同键）。
+  if (onlyProvince) backfills = backfills.filter((n) => routeBranchCode(n) === onlyProvince);
   if (backfills.length > 0) {
     log('cyan', `\n▶ [4b] 契约外补导文件（manifest 之外、符合报表命名模式）：${backfills.length} 个`);
     for (const name of backfills) {
@@ -390,18 +412,21 @@ function main() {
   log('cyan', '  pull-bi-exports：VPS auto_loadbi → inbox → 校验 → 分发');
   log('cyan', `  inbox: ${INBOX_DIR}${opts.dryRun ? '  (dry-run)' : ''}`);
   log('cyan', `  批次: ${opts.batch ? `${opts.batch}（code ${opts.requiredCodes.join('/')}）` : '全量（不分批）'}`);
+  if (opts.onlyProvince) log('cyan', `  逐省: 只处理 ${opts.onlyProvince}（B255：就绪省放行，陈旧省不连累）`);
   log('cyan', '════════════════════════════════════════════════');
 
   if (opts.skipRsync) log('yellow', '\n⚠ 跳过 rsync（--skip-rsync），使用现有 inbox');
   else runRsync(opts);
 
   const { result, manifest } = loadManifestAndValidate(opts);
-  verifyProvince(result.reports, opts);
-  const backfillCount = distribute(result.reports, manifest, opts);
+  // result.reports 已按 onlyProvince 过滤（校验阶段用省份过滤后的 manifest），此处直接用。
+  const reports = result.reports;
+  verifyProvince(reports, opts);
+  const backfillCount = distribute(reports, manifest, opts);
 
   // 一个 code 现在可能有多省份份数（如 01/02/03/05 各 SC+SX 两份），
   // 分子分母都用「份数」对不上「code 数」会看着像超过 100% —— 拆开报告两个数字更清楚。
-  const distinctCodes = new Set(result.reports.map((r) => r.code)).size;
+  const distinctCodes = new Set(reports.map((r) => r.code)).size;
   log('green', `\n✅ 拉取${opts.dryRun ? '计划打印' : ''}完成：${distinctCodes}/${opts.requiredCodes.length} 张报表（共 ${result.reports.length} 份，含分省）${backfillCount > 0 ? ` + ${backfillCount} 个补导文件` : ''}${opts.dryRun ? '' : '已就位，可跑 ETL（release:daily 或 daily.mjs）'}`);
 }
 

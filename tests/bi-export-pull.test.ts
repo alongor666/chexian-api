@@ -198,6 +198,101 @@ describe('多省份 manifest（分省上线后同一 code 下 SC+SX 两条 — 2
   });
 });
 
+describe('🔴 逐省就绪判定 readyProvinces/staleProvinces（B255：四川缺数据不阻塞山西晚批）', () => {
+  // 真实 manifest 每省一条当前份：同一 code 下 SC + SX 两条，文件名前缀决定省份归属。
+  function provinceReport(code: string, province: 'SC' | 'SX', overrides: Record<string, unknown> = {}) {
+    const prefix = province === 'SX' ? 'shanxi' : 'sichuan';
+    return report(code, {
+      province: prefix,
+      file: `${prefix}_20250601-20260703_${code}_报表.xlsx`,
+      ...overrides,
+    });
+  }
+  // 04 厂牌为全国口径（无省前缀），routeBranchCode 归 SC，可选表不参与逐省判定。
+  function bothProvinceBatch() {
+    return REQUIRED_REPORT_CODES.flatMap((c: string) =>
+      c === '04' ? [report(c)] : [provinceReport(c, 'SC'), provinceReport(c, 'SX')]);
+  }
+
+  it('两省硬闸全新鲜 → readyProvinces=[SC,SX]，staleProvinces=[]', () => {
+    const r = evaluateRemoteManifest(manifestOf(bothProvinceBatch()), { todayBeijing: TODAY });
+    expect(r.ready).toBe(true);
+    expect([...r.readyProvinces].sort()).toEqual(['SC', 'SX']);
+    expect(r.staleProvinces).toEqual([]);
+  });
+
+  it('🔴 四川 01 停在往日、山西全新鲜 → SX ready、SC stale（整体 ready=false 但 SX 可单独放行）', () => {
+    const reports = bothProvinceBatch();
+    const scIdx = reports.findIndex((x) => x.code === '01' && x.province === 'sichuan');
+    reports[scIdx] = { ...reports[scIdx], mtime: STALE_MTIME };
+    const r = evaluateRemoteManifest(manifestOf(reports), { todayBeijing: TODAY });
+    expect(r.ready).toBe(false); // 整体全就绪仍为 false（拆省前逐字节兼容）
+    expect(r.readyProvinces).toEqual(['SX']);
+    expect(r.staleProvinces.map((s: { province: string }) => s.province)).toEqual(['SC']);
+    expect(r.staleProvinces[0].gaps.map((g: { code: string }) => g.code)).toEqual(['01']);
+  });
+
+  it('🔴 四川完全断线（manifest 无任何 SC 条目）→ SC 缺席判 stale、SX ready（不静默漏掉断线省）', () => {
+    const reports = REQUIRED_REPORT_CODES.flatMap((c: string) =>
+      c === '04' ? [] : [provinceReport(c, 'SX')]); // 只有山西，四川一条都没有
+    const r = evaluateRemoteManifest(manifestOf(reports), { todayBeijing: TODAY });
+    expect(r.readyProvinces).toEqual(['SX']);
+    expect(r.staleProvinces.map((s: { province: string }) => s.province)).toEqual(['SC']);
+    // SC 的 gaps 覆盖全部硬闸 code（01/02/03/05）——全部缺席
+    expect(r.staleProvinces[0].gaps.map((g: { code: string }) => g.code).sort()).toEqual(['01', '02', '03', '05']);
+    expect(r.staleProvinces[0].gaps.every((g: { reason: string }) => g.reason.includes('缺该省该 code'))).toBe(true);
+  });
+
+  it('两省硬闸都停在往日 → readyProvinces=[]，两省都 stale', () => {
+    const reports = bothProvinceBatch().map((x) =>
+      x.code === '04' ? x : { ...x, mtime: STALE_MTIME });
+    const r = evaluateRemoteManifest(manifestOf(reports), { todayBeijing: TODAY });
+    expect(r.readyProvinces).toEqual([]);
+    expect(r.staleProvinces.map((s: { province: string }) => s.province).sort()).toEqual(['SC', 'SX']);
+  });
+
+  it('可选表 04 停在往日 → 不影响任何省的逐省就绪（全国口径低频维表不拦省）', () => {
+    const reports = bothProvinceBatch();
+    const idx04 = reports.findIndex((x) => x.code === '04');
+    reports[idx04] = report('04', { mtime: STALE_MTIME });
+    const r = evaluateRemoteManifest(manifestOf(reports), { todayBeijing: TODAY });
+    expect([...r.readyProvinces].sort()).toEqual(['SC', 'SX']);
+    expect(r.staleProvinces).toEqual([]);
+  });
+
+  it('早批子集（01/05）：SC 的 05 停往日 → SC stale 仅因 05，SX ready；02/03 完全不参与', () => {
+    const reports = [
+      provinceReport('01', 'SC'), provinceReport('01', 'SX'),
+      provinceReport('05', 'SC', { mtime: STALE_MTIME }), provinceReport('05', 'SX'),
+      // 02/03 停在往日：早批子集不含它们，不该影响任何省
+      provinceReport('02', 'SC', { mtime: STALE_MTIME }), provinceReport('03', 'SX', { mtime: STALE_MTIME }),
+    ];
+    const r = evaluateRemoteManifest(manifestOf(reports), {
+      todayBeijing: TODAY,
+      requiredCodes: batchAllCodes(EARLY_BATCH),
+      optionalCodes: EARLY_BATCH.optionalCodes,
+    });
+    expect(r.readyProvinces).toEqual(['SX']);
+    expect(r.staleProvinces.map((s: { province: string }) => s.province)).toEqual(['SC']);
+    expect(r.staleProvinces[0].gaps.map((g: { code: string }) => g.code)).toEqual(['05']);
+  });
+
+  it('结构非法 manifest → 所有已注册省判 stale（fail-closed，无法证明任何省就绪）', () => {
+    const r = evaluateRemoteManifest(null, { todayBeijing: TODAY });
+    expect(r.ready).toBe(false);
+    expect(r.readyProvinces).toEqual([]);
+    expect(r.staleProvinces.map((s: { province: string }) => s.province).sort()).toEqual(['SC', 'SX']);
+  });
+
+  it('显式 provinces 参数覆盖（数据驱动，禁硬编）：仅传 [SX] 时不因缺 SC 而报 stale', () => {
+    const reports = REQUIRED_REPORT_CODES.flatMap((c: string) =>
+      c === '04' ? [] : [provinceReport(c, 'SX')]);
+    const r = evaluateRemoteManifest(manifestOf(reports), { todayBeijing: TODAY, provinces: ['SX'] });
+    expect(r.readyProvinces).toEqual(['SX']);
+    expect(r.staleProvinces).toEqual([]);
+  });
+});
+
 describe('routeBranchCode（前缀→省份路由；前缀只是路由键，权威判据是内容核验）', () => {
   it('shanxi_ → SX', () => {
     expect(routeBranchCode('shanxi_20250601-20260703_01_签单清单_定稿.xlsx')).toBe('SX');
