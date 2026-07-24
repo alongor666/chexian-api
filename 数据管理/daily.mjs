@@ -1025,7 +1025,14 @@ function runPeriodTrendReport(scriptDir, python) {
   const skillDir = resolvePeriodTrendSkillDir(process.env, homedir());
   const skillCli = join(skillDir, 'lib/cli.py');
   if (!existsSync(skillCli)) {
-    console.warn(`[ETL] 跳过短中长期对照报告：skill cli.py 不存在 (${skillCli})`);
+    // 技能目录异常与下游"新鲜度闸失败"隔了一层（目录缺→报告未生成→机构比总部新→闸失败），
+    // 故此处点明成因与排查方向，避免 operator 先去查新鲜度闸而非技能目录。区分两条致因路径：
+    // env pin 错路径 vs 缺省软链未装。仅增强文案——控制流/返回值不变（失败仅 warn 不阻塞 ETL）。
+    const envPinned = (process.env.PERIOD_TREND_SKILL_DIR ?? '').trim() !== '';
+    const hint = envPinned
+      ? '成因：PERIOD_TREND_SKILL_DIR 显式 pin 到此路径但 cli.py 缺失 → 核对 .env.local 该变量是否指向正确的技能快照目录'
+      : '成因：缺省 ~/.claude/skills 下未装该技能 → 核对软链是否被移除，或用 .env.local 设 PERIOD_TREND_SKILL_DIR 显式 pin 技能快照目录';
+    console.warn(`[ETL] 跳过短中长期对照报告：skill cli.py 不存在 (${skillCli})。${hint}`);
     return { provinceContractFailed: false, provinceGenFailures: [] };
   }
   const projectRoot = dirname(scriptDir);
