@@ -491,7 +491,7 @@ async function processBatch(batch, ctx) {
   const slice = nextState('failed', { todayBeijing, prevState: prev, note: `release --batch ${batch.id} 失败 ${result.detail}`, nowISO: now });
   ctx.stateRef.value = mergeBatchState(ctx.stateRef.value, batch.id, slice);
   writeState(ctx.stateRef.value);
-  const body = `${batch.label} sync-and-reload ${result.detail}（第 ${slice.attempts}/${maxAttempts} 次）。日志：${LOG_PATH} 与 launchd 日志；上限内下个周期自动重试`;
+  const body = `${batch.label} sync-and-reload ${result.detail}（第 ${slice.attempts}/${maxAttempts} 次）。日志：${LOG_PATH} 与调度器 stdout 日志（cron: auto-release.cron.log / launchd: StandardOutPath）；上限内下个周期自动重试`;
   await notify(...escalatedAlert(`${batch.label} 自动发布失败`, body, slice.consecutiveMissedDays));
   return 'failed';
 }
