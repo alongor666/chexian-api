@@ -2344,3 +2344,23 @@ expires: 2026-10-18
 ### needs_automation: false
 
 （本项自身已把默认评审入账变成可聚合字段 + 可审计 probe，并用首条真实样本闭环；后续若出现连续任务漏写，`default-reviewer` 会回落为命中不增长并由 meta-review 处置。强制“每个任务都必须写字段”超出 F3 的度量补齐范围，不在本 PR 追加第二道治理闸。）
+
+---
+
+## 2026-07-24 · 逐省就绪解耦（某省缺数据不阻塞其他省）（B255，uid 2026-07-24-claude-f8bced）
+
+- **背景**：拆批后就绪判定仍是「一批所有省一起等齐」，四川上游滞后会连累已就绪的山西一起不发布。用户拍板反转既有 deliberate 设计：某省陈旧 → 放行其他就绪省 + 响亮缺口告警 + 该省恢复后下一 tick 自动补齐，且已发省绝不因另一省补齐而重发。韧性改进，不解某省当天上游掉线（四川须 VNC 人工扫码，硬约束外）。
+- **动作**：① `bi-export-pull.evaluateRemoteManifest` 新增 `readyProvinces`/`staleProvinces`（只看硬闸 code；省份枚举 `registeredBranchCodesFromPrefixMap()` 数据驱动·断线省缺席仍判 stale·fail-closed）；② `auto-release-decision` 幂等键细化「批次 × 省 × 天」——`selectBatchProvinceState`/`mergeBatchProvinceState`/`unmetProvinceDependencies`/`planProvinceReleases` 纯函数 + v1/v2/v3 向后兼容迁移；③ `pull-bi-exports`+`sync-and-reload` 加 `--only-province`（校验/ETL/晋升按就绪省选跑）；④ watcher processBatch 逐省编排（逐省 decideTickAction + 缺口告警去重 + 逐省 mark-missed + willCoverAll 补齐点走全量刷新跨省产物）。
+- **验收 oracle**：新增/扩展纯函数单测（bi-export-pull 61 例含逐省 8 例、auto-release-decision 47 例含逐省/迁移/planProvinceReleases）→ `bun run verify:full` 全绿（5858 单测 · governance 61/61 · typecheck 双工程）；watcher `--once --dry-run --batch early` 对**真实上游 manifest** 探测：两省逐省就绪判定正确、dry-run 不触发；`sync-and-reload --only-province SX/SC --dry-run` 计划正确（跳过对省 Stage、report=false、wecom=false；全量运行 report/wecom=true）；`--only-province XX` fail-closed 报错中止。
+
+### 三问复盘
+1. **重来更好？** 主体一次到位，但 `/code-reviewer` fresh 自审逮到 3 项我漏判的：**(a) 报告跨省产物在两省不同 tick 就绪时永不刷新**——初版 `allTogether` 只认「同一 tick 两省齐」，被四川早/山西晚这一 B255 典型场景打穿。改为 `willCoverAll`（当天最后一省补齐那一 tick 走全量发布刷新报告/企微），把「补齐」从「同 tick 巧合」升级为「同天完成」。**(b) 企微在单省运行仍全量推**（把陈旧省当新鲜）——与已显式处理的报告不对称，补 `opts.wecom=false` 同款收窄。**(c) gapAlertDay 在 v2 扁平迁移日被误清**——`isV2Flat` 判据只看 `.status`，改为显式重建批级 slice（只 provinces+gapAlertDay 存活）。教训：跨省产物的「齐备」语义要盯「同天」不是「同 tick」；对称处理（报告收窄了企微也要收窄）。
+2. **复用价值？** `planProvinceReleases` 是「多分片就绪 → 发哪些/等哪些/是否补齐全量」的通用纯函数模式；批次×省×天幂等（v1/v2/v3 迁移 + 兄弟 scope 不覆盖 released）可复用到任何「多维幂等键细化」。
+3. **能否自动化？** 核心正确性（逐省幂等/就绪判定/发布计划）全在纯函数 + vitest 闸；watcher I/O 编排靠 dry-run 集成验证。诚实边界——processBatch 的 spawn/notify/落盘 plumbing 未单测（抽出 `planProvinceReleases` 后剩余为纯 I/O，风险低），靠 dry-run 兜底。
+
+### 评审发现记账
+- reviewer_findings: {P0: 0, P1: 2, P2: 1}
+  （P1：报告跨 tick 永不刷新 / 企微单省未收窄；P2：gapAlertDay 迁移日误清。均已修 + 补测，第二轮无残留。codex 默认关闭，未显式要求故未跑。）
+
+### needs_automation: false
+（逐省正确性已由纯函数单测闸 + verify:full 覆盖；「报告未刷新 ⟺ 某省 missed 有响亮告警」自洽，无静默面需另加治理闸。processBatch I/O plumbing 若未来需强制回归可抽注入式 runner 单测，属 follow-up，不在本 PR。）

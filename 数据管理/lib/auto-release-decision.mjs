@@ -268,3 +268,204 @@ export function unmetDependencies(batch, fullState, todayBeijing) {
   }
   return unmet;
 }
+
+// ── 逐省状态读写（B255 · 2026-07-24：幂等键从「批次 × 天」细化为「批次 × 省 × 天」）──
+//
+// 背景：某省上游陈旧不应阻塞其他省发布（四川缺数据不阻塞山西晚批）。放行就绪省后该省恢复要
+// 能自动补齐，且**已发省不因另一省补齐而重发**（山西已发 → 四川补齐时山西不重跑）。故把批次
+// slice 再按省切分：batches[batchId].provinces[branchCode] = 一份 nextState 形状的 slice。
+//
+// 状态文件 schema（v3）：
+//   { beijingDay, batches: { early: { provinces: { SC:{slice}, SX:{slice} }, gapAlertDay? }, late:{…} }, updatedAt }
+// 决策纯函数（decideTickAction/nextState）仍不感知省——把「某批某省 slice」当独立 scope 喂进去。
+//
+// 向后兼容（升级当天一次性迁移，无数据损失）：
+//   - v2 扁平批 slice（batches[id]={beijingDay,status,…}，无 provinces 子图）：旧模型下同批各省
+//     一起发布，故 selectBatchProvinceState 把它当**该批每个省**的延续读（任意省都读到它）。
+//   - v1 顶层扁平（无 batches）：只有早批继承（与 selectBatchState legacy 对称）。
+//   - 迁移取舍：首次对某省 mergeBatchProvinceState 会把该批转成 provinces 结构；此后兄弟省读不到
+//     v2 扁平 slice（返回 null，视作该省今天从零起）。这仅在升级当天且该批处于 failed/missed 半途
+//     时丢失兄弟省的 attempts 计数——无数据损失、不会重发**已 released** 的省（released 的 v2 扁平
+//     slice 会让 decideTickAction 对每个省都先 skip，根本走不到写入）。
+
+/**
+ * 取某批次某省的决策切片（喂给 decideTickAction / nextState 的 prevState）。
+ * @param {object|null} fullState
+ * @param {string} batchId
+ * @param {string} province branch_code（如 SC/SX）
+ * @returns {{beijingDay:string,status?:string,attempts?:number,consecutiveMissedDays?:number}|null}
+ */
+export function selectBatchProvinceState(fullState, batchId, province) {
+  if (!fullState || typeof fullState !== 'object') return null;
+  const batchSlice = fullState.batches && typeof fullState.batches === 'object'
+    ? fullState.batches[batchId] : undefined;
+  // v3：batches[batchId].provinces[province]
+  if (batchSlice && typeof batchSlice === 'object' && batchSlice.provinces && typeof batchSlice.provinces === 'object') {
+    const ps = batchSlice.provinces[province];
+    return (ps && typeof ps === 'object' && ps.beijingDay) ? ps : null;
+  }
+  // v2 扁平批 slice（无 provinces 子图）：旧模型各省一起发布 → 当作该省的延续读一次
+  if (batchSlice && typeof batchSlice === 'object' && batchSlice.beijingDay && batchSlice.status) {
+    return {
+      beijingDay: batchSlice.beijingDay,
+      status: batchSlice.status,
+      attempts: batchSlice.attempts ?? 0,
+      consecutiveMissedDays: batchSlice.consecutiveMissedDays ?? 0,
+    };
+  }
+  // v1 顶层扁平（2026-07-18 前）：只有早批继承
+  if (!fullState.batches && fullState.beijingDay && fullState.status && batchId === EARLY_BATCH.id) {
+    return {
+      beijingDay: fullState.beijingDay,
+      status: fullState.status,
+      attempts: fullState.attempts ?? 0,
+      consecutiveMissedDays: fullState.consecutiveMissedDays ?? 0,
+    };
+  }
+  return null;
+}
+
+/**
+ * 把某批次某省的新 slice 合并进完整状态文件（纯函数；调用方落盘）。
+ * 只更新该批该省，其余批 / 其余省 slice 原样保留（含批级 gapAlertDay）。
+ * @param {object|null} fullState
+ * @param {string} batchId
+ * @param {string} province
+ * @param {{beijingDay:string,status:string,attempts:number,consecutiveMissedDays:number,note?:string,updatedAt?:string}} newSlice
+ * @returns {object} 新的完整状态文件内容
+ */
+export function mergeBatchProvinceState(fullState, batchId, province, newSlice) {
+  const prevBatches = (fullState && typeof fullState.batches === 'object' && fullState.batches)
+    ? { ...fullState.batches } : {};
+  // 🔴 v1 顶层扁平迁移（镜像 mergeBatchState P1-3）：首写非早批时，若旧文件仅有顶层扁平态，
+  // 先把它物化成早批 v2 扁平 slice，保住早批幂等（selectBatchProvinceState v2 分支为各省读到它），
+  // 否则「旧态=released early + 首写 late」会丢掉早批 → 下 tick 把早批当没跑过重复发布。
+  if (fullState && !fullState.batches && fullState.beijingDay && fullState.status
+      && !prevBatches[EARLY_BATCH.id]) {
+    prevBatches[EARLY_BATCH.id] = {
+      beijingDay: fullState.beijingDay,
+      status: fullState.status,
+      attempts: fullState.attempts ?? 0,
+      consecutiveMissedDays: fullState.consecutiveMissedDays ?? 0,
+      note: fullState.note ?? '',
+      updatedAt: fullState.updatedAt ?? '',
+    };
+  }
+  const prevBatchSlice = (prevBatches[batchId] && typeof prevBatches[batchId] === 'object')
+    ? prevBatches[batchId] : {};
+  // 显式重建 v3 批级 slice：只有 v3 批级字段（provinces 子图 + gapAlertDay）能存活。
+  // v2 扁平 slice 的扁平标量（status/attempts/beijingDay…）**不**抬进批级——它是迁移前的整批态，
+  // 只经 selectBatchProvinceState 的 v2 分支被各省读一次即弃。此举同时修复：v2 扁平 slice 上刚被
+  // withBatchGapAlertDay 打了 gapAlertDay（此时 slice 同时含 .status 与 .gapAlertDay）时，首个省
+  // release 不会因"看到 .status 判 v2 扁平就整批清空"而丢掉 gapAlertDay（缺口告警去重失效）。
+  const provinces = {
+    ...(prevBatchSlice.provinces && typeof prevBatchSlice.provinces === 'object' ? prevBatchSlice.provinces : {}),
+  };
+  provinces[province] = {
+    beijingDay: newSlice.beijingDay,
+    status: newSlice.status,
+    attempts: newSlice.attempts,
+    consecutiveMissedDays: newSlice.consecutiveMissedDays,
+    note: newSlice.note ?? '',
+    updatedAt: newSlice.updatedAt ?? '',
+  };
+  const newBatchSlice = { provinces };
+  if (prevBatchSlice.gapAlertDay) newBatchSlice.gapAlertDay = prevBatchSlice.gapAlertDay;
+  return {
+    beijingDay: newSlice.beijingDay, // 顶层仅展示用
+    batches: { ...prevBatches, [batchId]: newBatchSlice },
+    updatedAt: newSlice.updatedAt ?? '',
+  };
+}
+
+/**
+ * 逐省依赖判定：返回某批次某省「今天尚未满足」的前置批 id（前置批该省当天 released 才算满足）。
+ * 晚批某省 fail-closed 依赖早批同省（晚批 renewal_tracker 用同省早批产出的 policy）。
+ * @param {{dependsOn?:readonly string[]}} batch
+ * @param {object|null} fullState
+ * @param {string} todayBeijing
+ * @param {string} province
+ * @returns {string[]}
+ */
+export function unmetProvinceDependencies(batch, fullState, todayBeijing, province) {
+  const deps = batch?.dependsOn ?? [];
+  const unmet = [];
+  for (const depId of deps) {
+    const slice = selectBatchProvinceState(fullState, depId, province);
+    if (!slice || slice.beijingDay !== todayBeijing || slice.status !== 'released') unmet.push(depId);
+  }
+  return unmet;
+}
+
+/**
+ * 逐省发布计划（纯函数）：给定各省本 tick 决策为 probe 的省 + 远程逐省就绪省 + 当前状态，算出
+ * 本 tick 应发哪些省、哪些省上游仍陈旧、哪些省因依赖未满足暂缓、以及是否走「全量补齐」发布。
+ * 把 watcher processBatch 里最易错的分支判定抽成可 vitest 直测的纯函数（副作用：探测/发布/告警/落盘
+ * 仍在 watcher）。
+ *
+ * willCoverAll（补齐点）：本 tick 待发省 ∪ 今天已 released 的省 == 全部注册省 → 本 tick 完成当天最后
+ * 一块拼图，watcher 据此走单次全量发布（不带 --only-province）以统一刷新跨省产物（短中长期报告 +
+ * 企微）。要求 toRelease 非空（无省可发时不触发全量）。常态两省同 tick 就绪 → toRelease=全省 →
+ * willCoverAll=true（= 旧 allTogether）；就绪省先发陈旧省后补 → 补齐那一 tick willCoverAll=true。
+ *
+ * @param {object} p
+ * @param {string[]} p.provinces 全部注册省
+ * @param {string[]} p.probeProvinces 本 tick 决策为 probe 的省
+ * @param {readonly string[]} p.readyProvinces evaluateRemoteManifest().readyProvinces（上游逐省就绪）
+ * @param {{id:string, dependsOn?:readonly string[]}} p.batch
+ * @param {object|null} p.fullState 状态文件解析结果
+ * @param {string} p.todayBeijing
+ * @param {boolean} [p.allowMissingDep=false] 应急放行逐省依赖闸
+ * @returns {{toRelease:string[], staleWaiting:string[], depBlocked:string[], willCoverAll:boolean}}
+ */
+export function planProvinceReleases({
+  provinces, probeProvinces, readyProvinces, batch, fullState, todayBeijing, allowMissingDep = false,
+}) {
+  const readySet = new Set(readyProvinces);
+  const toRelease = [];
+  const staleWaiting = [];  // 待判省里上游仍未就绪（缺口来源）
+  const depBlocked = [];    // 上游就绪但前置批同省未 released（防混新鲜度，暂缓）
+  for (const province of probeProvinces) {
+    if (!readySet.has(province)) { staleWaiting.push(province); continue; }
+    const unmet = unmetProvinceDependencies(batch, fullState, todayBeijing, province);
+    if (unmet.length > 0 && !allowMissingDep) { depBlocked.push(province); continue; }
+    toRelease.push(province);
+  }
+  const alreadyReleased = provinces.filter((province) => {
+    const s = selectBatchProvinceState(fullState, batch.id, province);
+    return s && s.beijingDay === todayBeijing && s.status === 'released';
+  });
+  const willCoverAll = toRelease.length > 0
+    && provinces.every((province) => toRelease.includes(province) || alreadyReleased.includes(province));
+  return { toRelease, staleWaiting, depBlocked, willCoverAll };
+}
+
+/**
+ * 读某批次「今天是否已发过缺口告警」的去重标记（批级，非省级）。
+ * 缺口告警 = watcher 本 tick 放行了部分省、但仍有省上游陈旧时发的响亮告警；每批每天只发一次。
+ * @param {object|null} fullState
+ * @param {string} batchId
+ * @returns {string|null} gapAlertDay（YYYY-MM-DD）或 null
+ */
+export function selectBatchGapAlertDay(fullState, batchId) {
+  const slice = fullState?.batches?.[batchId];
+  return (slice && typeof slice === 'object' && slice.gapAlertDay) ? slice.gapAlertDay : null;
+}
+
+/**
+ * 写入某批次的缺口告警去重标记（纯函数；保留其余批 / 该批 provinces 子图不变）。
+ * @param {object|null} fullState
+ * @param {string} batchId
+ * @param {string} day YYYY-MM-DD
+ * @returns {object} 新的完整状态文件内容
+ */
+export function withBatchGapAlertDay(fullState, batchId, day) {
+  const prevBatches = (fullState && typeof fullState.batches === 'object' && fullState.batches)
+    ? { ...fullState.batches } : {};
+  const prevBatchSlice = (prevBatches[batchId] && typeof prevBatches[batchId] === 'object')
+    ? prevBatches[batchId] : {};
+  return {
+    ...(fullState && typeof fullState === 'object' ? fullState : {}),
+    batches: { ...prevBatches, [batchId]: { ...prevBatchSlice, gapAlertDay: day } },
+  };
+}

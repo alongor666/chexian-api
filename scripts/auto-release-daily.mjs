@@ -58,11 +58,16 @@ import { homedir } from 'node:os';
 import { beijingDayOf, evaluateRemoteManifest } from '../数据管理/lib/bi-export-pull.mjs';
 import {
   DEFAULT_MAX_ATTEMPTS, isValidHHMM, decideTickAction, nextState,
-  selectBatchState, mergeBatchState, unmetDependencies,
+  // B255 逐省就绪：幂等键 = 批次 × 省 × 天（selectBatchProvinceState / mergeBatchProvinceState），
+  // 逐省依赖闸 unmetProvinceDependencies，缺口告警去重 selectBatchGapAlertDay / withBatchGapAlertDay
+  selectBatchProvinceState, mergeBatchProvinceState, unmetProvinceDependencies,
+  selectBatchGapAlertDay, withBatchGapAlertDay, planProvinceReleases,
 } from '../数据管理/lib/auto-release-decision.mjs';
 import {
   RELEASE_BATCHES, getReleaseBatch, batchAllCodes, RELEASE_BATCH_IDS,
 } from '../数据管理/lib/release-batches.mjs';
+// 省份枚举单一来源（数据驱动，禁硬编 SC/SX）——逐省就绪判定 / 逐省状态 scope
+import { registeredBranchCodesFromPrefixMap } from '../数据管理/lib/source-file-routing.mjs';
 import { resolveLaunchdNodeBin } from '../数据管理/lib/launchd-node-bin.mjs';
 import { collectLedgerDiffFiles, evaluateLedgerUncommittedBulk } from './etl-ledger/governance-check.mjs';
 // 企微失败独立告警（PR #1158 评审 F1 两轮）：发布子进程退出码契约——0=全成功、86=核心成功仅
@@ -275,15 +280,18 @@ function acquireLock() {
 
 // ── 触发发布 ──
 
-function runReleaseDaily(batch) {
-  log('cyan', `▶ ${batch.label} 就绪，触发 sync-and-reload --batch ${batch.id}（Stage 0 做本批 rsync+字节校验+省份核验；企微=${batch.runWecom}）`);
+function runReleaseDaily(batch, province = null) {
+  // B255 逐省：province 非空时只发该省链路（--only-province）；null=全量（两省常态同批就绪时走这条）。
+  const provArgs = province ? ['--only-province', province] : [];
+  const provLabel = province ? `·${province}` : '';
+  log('cyan', `▶ ${batch.label}${provLabel} 就绪，触发 sync-and-reload --batch ${batch.id}${province ? ` --only-province ${province}` : ''}（Stage 0 做本批 rsync+字节校验+省份核验；企微=${batch.runWecom}）`);
   // 全链路打点（2026-07-11）：watcher 预生成 run_id 传给发布链，使 watcher 侧事件与
   // release 全链路事件在台账里同 run_id 可关联；AUTO_RELEASE_TRIGGER 标记触发方式
   //（sync-and-reload 的 run start/end 事件 trigger 字段据此区分 watcher/ai/manual）。
   // 直接调 sync-and-reload.mjs（不走 bun run release:daily，后者硬编 --wecom）：--batch 从 SSOT
   // 决定 ETL 域 / code 子集 / 报告 / 企微。用 process.execPath（当前 node 绝对路径）避免 PATH 依赖。
   const runId = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
-  const r = spawnSync(process.execPath, ['scripts/sync-and-reload.mjs', '--batch', batch.id], {
+  const r = spawnSync(process.execPath, ['scripts/sync-and-reload.mjs', '--batch', batch.id, ...provArgs], {
     cwd: PROJECT_ROOT,
     stdio: 'inherit', // launchd 模式下由 StandardOutPath 收进 launchd 日志
     timeout: 90 * 60 * 1000,
@@ -380,16 +388,22 @@ function uninstallLaunchd() {
 function printStatus() {
   const state = readState();
   process.stdout.write(`状态文件（${STATE_PATH}）：\n${state ? JSON.stringify(state, null, 2) : '（无——尚未运行过）'}\n`);
-  // 按批次概览（双批发布：early / late 各一 slice）
+  // 按批次 × 省概览（B255 逐省：幂等键 = 批次 × 省 × 天）
   const todayBeijing = beijingDayOf(new Date());
-  process.stdout.write(`\n批次状态（北京今天 ${todayBeijing}）：\n`);
+  const provinces = registeredBranchCodesFromPrefixMap();
+  process.stdout.write(`\n批次 × 省状态（北京今天 ${todayBeijing}）：\n`);
   for (const batch of RELEASE_BATCHES) {
-    const slice = selectBatchState(state, batch.id);
     const win = resolveBatchWindow(batch);
-    const desc = slice
-      ? `${slice.status}（北京日 ${slice.beijingDay}${slice.beijingDay === todayBeijing ? '·今天' : '·非今天'}，attempts=${slice.attempts ?? 0}）`
-      : '（今天尚未跑过）';
-    process.stdout.write(`  ${batch.id.padEnd(6)} 窗口 ${win.start}~${win.end} code ${batchAllCodes(batch).join('/')}：${desc}\n`);
+    process.stdout.write(`  ${batch.id.padEnd(6)} 窗口 ${win.start}~${win.end} code ${batchAllCodes(batch).join('/')}：\n`);
+    for (const province of provinces) {
+      const slice = selectBatchProvinceState(state, batch.id, province);
+      const desc = slice
+        ? `${slice.status}（北京日 ${slice.beijingDay}${slice.beijingDay === todayBeijing ? '·今天' : '·非今天'}，attempts=${slice.attempts ?? 0}）`
+        : '（今天尚未跑过）';
+      process.stdout.write(`     ${province}: ${desc}\n`);
+    }
+    const gapDay = selectBatchGapAlertDay(state, batch.id);
+    if (gapDay) process.stdout.write(`     (缺口告警已发日: ${gapDay})\n`);
   }
   const uid = process.getuid();
   const r = spawnSync('launchctl', ['print', `gui/${uid}/${LAUNCHD_LABEL}`], { encoding: 'utf-8' });
@@ -403,97 +417,198 @@ function printStatus() {
 // ── 主流程 ──
 
 /**
- * 处理单个批次的一次 tick。返回本批终态供 main 汇总退出码。
- * 状态读写走 selectBatchState/mergeBatchState（批次 slice 独立），决策仍用不感知批次的纯函数。
- * @returns {Promise<'skip'|'missed'|'probe-error'|'not-ready'|'dry-ready'|'released'|'failed'>}
+ * 企微失败独立告警（PR #1158 评审 F1 两轮）：退出码 86 判定（interpretReleaseExit，非只靠标记文件）——
+ * 核心数据已 released，企微失败单独告警 + 给出独立重试命令，不改状态、不触发重跑；标记文件仅作
+ * 失败明细来源（绑定 runId 防陈旧/并发误读）。逐省/全量发布成功后共用。
+ */
+async function notifyWecomFailure(result, todayBeijing) {
+  let marker = null;
+  try {
+    const markerPath = join(PROJECT_ROOT, WECOM_ALERT_MARKER_RELPATH);
+    marker = existsSync(markerPath) ? JSON.parse(readFileSync(markerPath, 'utf-8')) : null;
+  } catch (e) {
+    log('yellow', `⚠ 企微告警标记读取失败（不阻断，用通用告警文案）：${e.message}`);
+  }
+  const alert = buildWecomFailureAlert(marker, { todayBeijing, runId: result.runId });
+  await notify(alert.title, alert.body);
+}
+
+/**
+ * 触发一次发布并把结果写回相关省份的 slice（B255 逐省幂等：批次 × 省 × 天）。
+ * @param {object} batch
+ * @param {string[]} provincesToMark 本次发布覆盖并要记录状态的省（全量=全部注册省；逐省=单个）
+ * @param {string|null} onlyProvince 传给 runReleaseDaily 的 --only-province（null=全量单次）
+ * @param {object} ctx
+ * @returns {Promise<{released:string[], failed:string[]}>}
+ */
+async function runAndRecord(batch, provincesToMark, onlyProvince, ctx) {
+  const { todayBeijing, maxAttempts } = ctx;
+  acquireLock(); // 幂等：一个 tick 内所有发布共用一把锁（首次 acquire，后续 no-op）
+  const result = runReleaseDaily(batch, onlyProvince);
+  const now = new Date().toISOString();
+  const provStr = provincesToMark.join('/');
+  if (result.ok) {
+    for (const province of provincesToMark) {
+      const prev = selectBatchProvinceState(ctx.stateRef.value, batch.id, province);
+      const slice = nextState('released', { todayBeijing, prevState: prev, note: `自动发布成功（${province}）`, nowISO: now });
+      ctx.stateRef.value = mergeBatchProvinceState(ctx.stateRef.value, batch.id, province, slice);
+    }
+    writeState(ctx.stateRef.value);
+    await notify(`${batch.label}·${provStr} 自动发布成功`,
+      `sync-and-reload --batch ${batch.id}${onlyProvince ? ` --only-province ${onlyProvince}` : ''} 完成（北京 ${todayBeijing} ${beijingNowHHMM()}）`);
+    if (result.wecomFailed) await notifyWecomFailure(result, todayBeijing);
+    return { released: [...provincesToMark], failed: [] };
+  }
+  // 失败：逐省写 failed slice；升级告警按被记录省里最大的连续未发布天数（取任一即可，逐省时唯一）
+  let maxConsecutive = 0;
+  for (const province of provincesToMark) {
+    const prev = selectBatchProvinceState(ctx.stateRef.value, batch.id, province);
+    const slice = nextState('failed', { todayBeijing, prevState: prev, note: `release --batch ${batch.id}${onlyProvince ? ` --only-province ${onlyProvince}` : ''} 失败 ${result.detail}`, nowISO: now });
+    ctx.stateRef.value = mergeBatchProvinceState(ctx.stateRef.value, batch.id, province, slice);
+    maxConsecutive = Math.max(maxConsecutive, slice.consecutiveMissedDays);
+  }
+  writeState(ctx.stateRef.value);
+  const body = `${batch.label}·${provStr} sync-and-reload ${result.detail}。日志：${LOG_PATH} 与调度器 stdout 日志（cron: auto-release.cron.log / launchd: StandardOutPath）；上限内下个周期自动重试`;
+  await notify(...escalatedAlert(`${batch.label}·${provStr} 自动发布失败`, body, maxConsecutive));
+  return { released: [], failed: [...provincesToMark] };
+}
+
+/**
+ * 处理单个批次的一次 tick —— B255 逐省就绪解耦。返回本批各省终态供 main 汇总退出码。
+ *
+ * 核心变化（相对拆省前）：幂等键 = 批次 × 省 × 天。就绪省放行、陈旧省不连累；陈旧省恢复后
+ * 下个 tick 自动补齐；已发省不因另一省补齐而重发（mergeBatchProvinceState 只写目标省 slice）。
+ * 常态两省同批就绪 → 单次全量发布（与拆省前逐字节等价，避免两次昂贵全流程）；仅部分省就绪时
+ * 才逐省 --only-province 发布，并对陈旧省发响亮缺口告警（复用飞书通道，warn 语气·非静默）。
+ *
+ * @returns {Promise<{released:string[], failed:string[], unpublished:string[]}>}
+ *   unpublished = 本 tick 本可发布却未发布的省（未就绪 / 依赖未满足 / probe 出错 / 发布失败），
+ *   供 --once 模式判非零退出（其余省份已处理，missed 已在窗口末尾单独告警）。
  */
 async function processBatch(batch, ctx) {
   const { todayBeijing, nowHHMM, maxAttempts, opts, getManifest } = ctx;
   const window = resolveBatchWindow(batch);
-  const prev = selectBatchState(ctx.stateRef.value, batch.id);
-  const decision = decideTickAction({ state: prev, todayBeijing, nowHHMM, window, maxAttempts, once: opts.once });
   const tag = `[${batch.id}]`;
+  const provinces = registeredBranchCodesFromPrefixMap();
 
-  if (decision.action === 'skip') {
-    // 窗口前的静默 tick 不写日志（每 15 分钟一条噪声）；其余 skip 原因值得留痕
-    if (nowHHMM >= window.start || opts.once) log('yellow', `⏭ ${tag} ${decision.reason}`);
-    return 'skip';
-  }
-  if (decision.action === 'mark-missed') {
-    const slice = nextState('missed', { todayBeijing, prevState: prev, note: decision.reason, nowISO: new Date().toISOString() });
-    ctx.stateRef.value = mergeBatchState(ctx.stateRef.value, batch.id, slice);
+  // 逐省决策：每省用自己的 slice 喂决策纯函数（省份互不干扰）。窗口/once 逻辑省份间一致，仅状态不同。
+  const perProvince = provinces.map((province) => {
+    const prev = selectBatchProvinceState(ctx.stateRef.value, batch.id, province);
+    const decision = decideTickAction({ state: prev, todayBeijing, nowHHMM, window, maxAttempts, once: opts.once });
+    return { province, decision };
+  });
+
+  const released = [];
+  const failed = [];
+  const unpublished = [];
+
+  // 1) mark-missed 的省：窗口已过仍未成功 → 逐省写 missed + 响亮告警（宁可不发也不静默用旧数据）
+  for (const { province, decision } of perProvince) {
+    if (decision.action !== 'mark-missed') continue;
+    const prev = selectBatchProvinceState(ctx.stateRef.value, batch.id, province);
+    const slice = nextState('missed', { todayBeijing, prevState: prev, note: `${province}·${decision.reason}`, nowISO: new Date().toISOString() });
+    ctx.stateRef.value = mergeBatchProvinceState(ctx.stateRef.value, batch.id, province, slice);
     writeState(ctx.stateRef.value);
-    const body = `${batch.label}：${decision.reason}。请人工检查上游出表（ssh myvps 看 auto_loadbi/exports），需要时手动 node scripts/sync-and-reload.mjs --batch ${batch.id}`;
-    await notify(...escalatedAlert(`今天 ${batch.label} 未自动发布`, body, slice.consecutiveMissedDays));
-    return 'missed';
+    const body = `${batch.label}·${province}：${decision.reason}。请人工检查该省上游出表（ssh myvps 看 auto_loadbi/exports），需要时手动 node scripts/sync-and-reload.mjs --batch ${batch.id} --only-province ${province}`;
+    await notify(...escalatedAlert(`今天 ${batch.label}·${province} 未自动发布`, body, slice.consecutiveMissedDays));
+    unpublished.push(province);
   }
 
-  // action === 'probe'
-  log('cyan', `▶ ${tag} ${decision.reason}（北京 ${todayBeijing} ${nowHHMM}·code ${batchAllCodes(batch).join('/')}）`);
+  // 2) skip 的省：窗口前静默（每 15 分钟一条噪声），其余留痕
+  for (const { province, decision } of perProvince) {
+    if (decision.action === 'skip' && (nowHHMM >= window.start || opts.once)) {
+      log('yellow', `⏭ ${tag} ${province}：${decision.reason}`);
+    }
+  }
+
+  // 3) 需要探测的省
+  const probeProvinces = perProvince.filter((p) => p.decision.action === 'probe').map((p) => p.province);
+  if (probeProvinces.length === 0) return { released, failed, unpublished };
+
+  log('cyan', `▶ ${tag} 探测上游（北京 ${todayBeijing} ${nowHHMM}·code ${batchAllCodes(batch).join('/')}·待判省 ${probeProvinces.join('/')}）`);
   const probe = getManifest();
   if (probe.error) {
     log('red', `❌ ${tag} ${probe.error}`);
-    return 'probe-error'; // 周期模式：下个 tick 重试，窗口结束由 mark-missed 兜底告警
+    return { released, failed, unpublished: [...unpublished, ...probeProvinces] }; // 下个 tick 重试；窗口末 mark-missed 兜底
   }
   const verdict = evaluateRemoteManifest(probe.manifest, {
-    todayBeijing, requiredCodes: batchAllCodes(batch), optionalCodes: batch.optionalCodes,
+    todayBeijing, requiredCodes: batchAllCodes(batch), optionalCodes: batch.optionalCodes, provinces,
   });
-  // 可选表（04 厂牌，低频维表/周日更新）异常是 warn：不拦就绪，但始终留痕（分发层跳过异常份保留旧维表）
+  // 可选表（04 厂牌，低频维表/周日更新）异常是 warn：不拦就绪，但始终留痕
   for (const i of verdict.issues.filter((x) => x.level === 'warn')) log('yellow', `  ⚠ ${tag} ${i.message}`);
-  if (!verdict.ready) {
-    for (const i of verdict.issues.filter((x) => x.level === 'error')) log('yellow', `  ⏳ ${tag} ${i.message}`);
-    log('yellow', `⏳ ${tag} 上游未就绪（${verdict.reports.length}/${batchAllCodes(batch).length} 张已出今天的表），${opts.once ? '' : '下个周期再探'}`);
-    return 'not-ready';
-  }
-  log('green', `✓ ${tag} 上游必需报表就绪（均为北京 ${todayBeijing}）：${verdict.reports.map((r) => `${r.code}=${r.sizeMB}MB`).join(' ')}`);
 
-  // 🔴 依赖闸（fail-closed）：前置批（如早批）当天未 released → 不发本批，防混新鲜度发布
-  //（晚批 renewal_tracker / 企微依赖早批 policy）。应急 --allow-missing-dep 放行。
-  const unmet = unmetDependencies(batch, ctx.stateRef.value, todayBeijing);
-  if (unmet.length > 0 && !opts.allowMissingDep) {
-    log('yellow', `⏸ ${tag} 前置批未就绪（${unmet.join(',')} 今日未 released），暂不发布本批（防混新鲜度）；待前置批成功或 --allow-missing-dep 再发`);
-    return 'dep-unmet';
+  // 逐省发布计划（纯函数，vitest 直测）：算出可发省 / 陈旧省 / 依赖暂缓省 / 是否补齐点。
+  const plan = planProvinceReleases({
+    provinces, probeProvinces, readyProvinces: verdict.readyProvinces,
+    batch, fullState: ctx.stateRef.value, todayBeijing, allowMissingDep: opts.allowMissingDep,
+  });
+  const { toRelease, staleWaiting, depBlocked, willCoverAll } = plan;
+
+  for (const province of staleWaiting) {
+    const stale = verdict.staleProvinces.find((s) => s.province === province);
+    const gapDesc = stale ? stale.gaps.map((g) => `${g.code}:${g.reason}`).join('；') : '未就绪';
+    log('yellow', `  ⏳ ${tag} ${province} 上游未就绪：${gapDesc}${opts.once ? '' : '（下个周期再探，窗口末未出则告警缺口）'}`);
+    unpublished.push(province);
   }
+  for (const province of depBlocked) {
+    const unmet = unmetProvinceDependencies(batch, ctx.stateRef.value, todayBeijing, province);
+    log('yellow', `⏸ ${tag} ${province} 前置批未就绪（${unmet.join(',')} 今日未 released），暂不发布（防混新鲜度）；待前置批同省成功或 --allow-missing-dep 再发`);
+    unpublished.push(province);
+  }
+
+  if (toRelease.length === 0) {
+    if (staleWaiting.length > 0) log('yellow', `⏳ ${tag} 待判省均未就绪（${staleWaiting.join('/')}），${opts.once ? '' : '下个周期再探'}`);
+    return { released, failed, unpublished };
+  }
+  log('green', `✓ ${tag} 就绪可发省：${toRelease.join('/')}（均为北京 ${todayBeijing}）${staleWaiting.length ? `；${staleWaiting.join('/')} 仍等待上游` : ''}`);
 
   if (opts.dryRun) {
-    log('cyan', `（dry-run）${tag} 就绪但不触发 release`);
-    return 'dry-ready';
+    for (const province of toRelease) log('cyan', `（dry-run）${tag} ${province} 就绪但不触发 release`);
+    return { released, failed, unpublished };
   }
   if (isWorktreeCheckout()) {
     log('red', '❌ 当前是 git worktree，禁止在 worktree 触发 release（数据/同步/reload 会错位）。请在主仓运行。');
     process.exit(1);
   }
 
-  acquireLock(); // 幂等：两批共用一把锁
-  const result = runReleaseDaily(batch);
-  const now = new Date().toISOString();
-  if (result.ok) {
-    const slice = nextState('released', { todayBeijing, prevState: prev, note: '自动发布成功', nowISO: now });
-    ctx.stateRef.value = mergeBatchState(ctx.stateRef.value, batch.id, slice);
+  // 缺口告警（响亮·去重每批每天一次）：本 tick 放行 ≥1 省但仍有省上游陈旧 → 发飞书告警
+  // （notify → lark-cli bot 通道，warn 语气·非 error·非静默）。窗口末逐省 mark-missed 升级告警兜底。
+  if (staleWaiting.length > 0 && selectBatchGapAlertDay(ctx.stateRef.value, batch.id) !== todayBeijing) {
+    const detail = staleWaiting.map((prov) => {
+      const stale = verdict.staleProvinces.find((s) => s.province === prov);
+      return `${prov}（${stale ? stale.gaps.map((g) => `${g.code}:${g.reason}`).join('；') : '未就绪'}）`;
+    }).join('；');
+    ctx.stateRef.value = withBatchGapAlertDay(ctx.stateRef.value, batch.id, todayBeijing);
     writeState(ctx.stateRef.value);
-    await notify(`${batch.label} 自动发布成功`, `sync-and-reload --batch ${batch.id} 完成（北京 ${todayBeijing} ${beijingNowHHMM()}）`);
-    // 企微失败独立告警（PR #1158 评审 F1 两轮）：退出码 86 判定（interpretReleaseExit，
-    // 非只靠标记文件）——核心数据已 released，企微失败单独告警 + 给出独立重试命令，
-    // 不改批次状态、不触发重跑；标记文件仅作失败明细来源（绑定 runId 防陈旧/并发误读）。
-    if (result.wecomFailed) {
-      let marker = null;
-      try {
-        const markerPath = join(PROJECT_ROOT, WECOM_ALERT_MARKER_RELPATH);
-        marker = existsSync(markerPath) ? JSON.parse(readFileSync(markerPath, 'utf-8')) : null;
-      } catch (e) {
-        log('yellow', `⚠ 企微告警标记读取失败（不阻断，用通用告警文案）：${e.message}`);
-      }
-      const alert = buildWecomFailureAlert(marker, { todayBeijing, runId: result.runId });
-      await notify(alert.title, alert.body);
-    }
-    return 'released';
+    await notify(
+      `${batch.label} 部分省上游缺口：放行 ${toRelease.join('/')}，${staleWaiting.join('/')} 陈旧`,
+      `就绪省照常发布未被连累；陈旧省将在上游恢复后下个 tick 自动补齐，窗口结束仍未出则升级告警。缺口明细：${detail}`,
+    );
   }
-  const slice = nextState('failed', { todayBeijing, prevState: prev, note: `release --batch ${batch.id} 失败 ${result.detail}`, nowISO: now });
-  ctx.stateRef.value = mergeBatchState(ctx.stateRef.value, batch.id, slice);
-  writeState(ctx.stateRef.value);
-  const body = `${batch.label} sync-and-reload ${result.detail}（第 ${slice.attempts}/${maxAttempts} 次）。日志：${LOG_PATH} 与调度器 stdout 日志（cron: auto-release.cron.log / launchd: StandardOutPath）；上限内下个周期自动重试`;
-  await notify(...escalatedAlert(`${batch.label} 自动发布失败`, body, slice.consecutiveMissedDays));
-  return 'failed';
+
+  // 执行策略 —— 「补齐」判定（willCoverAll 来自 planProvinceReleases 纯函数）：报告/企微是跨省产物，
+  // 不能只在两省同一 tick 就绪时才产出。若本 tick 待发省 ∪ 今天已 released 的省 == 全部注册省，则本 tick
+  // 完成当天最后一块拼图 → 走单次全量发布（不带 --only-province）：重算已就绪省 ETL 幂等，关键是让
+  // Stage 1.5/1.6 报告 + Stage 5 企微在两省 current/ 都新鲜时统一产出（跨省 scope 同日、企微不把陈旧省
+  // 当新鲜）。常态两省同 tick 就绪也天然走这条（= 旧 allTogether）；就绪省先发、陈旧省后补的场景，也在
+  // 陈旧省补齐那一 tick 走全量补出报告。否则（仍有省陈旧未补齐）逐省 --only-province 发布，跳过报告/企微。
+  if (willCoverAll) {
+    // 全量发布覆盖两省新鲜 current/：只把本 tick 待发省标 released（已 released 的省 slice 不动，避免
+    // 重复 nextState 抬 attempts）；报告/企微在此统一刷新（当天最后一块拼图落定）。
+    log('cyan', `▶ ${tag} 补齐点：${toRelease.join('/')} 就绪后当天全部注册省齐备 → 走全量发布统一刷新报告/企微`);
+    const outcome = await runAndRecord(batch, toRelease, null, ctx);
+    released.push(...outcome.released);
+    failed.push(...outcome.failed);
+    unpublished.push(...outcome.failed);
+  } else {
+    for (const province of toRelease) {
+      const outcome = await runAndRecord(batch, [province], province, ctx);
+      released.push(...outcome.released);
+      failed.push(...outcome.failed);
+      unpublished.push(...outcome.failed);
+    }
+  }
+  return { released, failed, unpublished };
 }
 
 async function main() {
@@ -515,13 +630,13 @@ async function main() {
   const ctx = { todayBeijing, nowHHMM, maxAttempts, opts, stateRef, getManifest };
 
   let anyReleased = false;
-  let hardFailure = false; // release 真正跑了但失败 → 无论模式都非零退出
-  let onceUnpublished = false; // --once 模式下本批没能发布（probe-error/not-ready/failed）
+  let hardFailure = false; // 某省 release 真正跑了但失败 → 无论模式都非零退出
+  let onceUnpublished = false; // --once 模式下有省没能发布（未就绪/依赖未满足/probe 出错/失败）
   for (const batch of batches) {
     const outcome = await processBatch(batch, ctx);
-    if (outcome === 'released') anyReleased = true;
-    if (outcome === 'failed') hardFailure = true;
-    if (opts.once && (outcome === 'failed' || outcome === 'not-ready' || outcome === 'probe-error')) onceUnpublished = true;
+    if (outcome.released.length > 0) anyReleased = true;
+    if (outcome.failed.length > 0) hardFailure = true;
+    if (opts.once && outcome.unpublished.length > 0) onceUnpublished = true;
   }
 
   if (anyReleased) remindLedgerUncommitted();

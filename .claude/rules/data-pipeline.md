@@ -341,3 +341,28 @@ staging-then-rename 原子性 / leftover preflight）完全未动；人工 `--rl
 
 > ⚠️ 上游 `数据管理/inbox/README-for-etl.md` 由 VPS 导出脚本 rsync 落地（gitignored、upstream 拥有），
 > 其出表时机描述须在 VPS 侧同步更新，不在本仓改（改了会被下次 rsync 覆盖）。
+
+## 逐省就绪解耦（B255 · 2026-07-24：某省缺数据不阻塞其他省）
+
+**背景**：拆批后就绪判定仍是「一批的所有省一起等齐」（`evaluateRemoteManifest` 逐省硬闸，任一省陈旧 → 整批 `ready=false`）。实证痛点：四川上游导出滞后/掉线时，山西数据明明已就绪，却被四川连累一起不发布——「防某省静默漏发」的 deliberate 设计反而在单省故障时拖垮全平台当日发布。
+
+**用户拍板反转**：某省上游陈旧 → **登记响亮缺口告警但放行其他就绪省** → 该省恢复后**下一 tick 自动补齐**；且**已发省绝不因另一省补齐而重发**。这是韧性改进，**不解某省当天的上游掉线**（四川掉线仍须 VNC 5900 人工扫码，硬约束）——只让某省故障别再连累其他省。
+
+**幂等键从「批次 × 天」细化为「批次 × 省 × 天」**（`数据管理/lib/auto-release-decision.mjs`）：
+- `selectBatchProvinceState` / `mergeBatchProvinceState`：状态文件 schema v3 `batches[id].provinces[branchCode]`；向后兼容 v2 扁平批 slice（当作每省延续读一次）与 v1 顶层扁平（仅早批继承）。**已 released 省的 slice 只在写自己那个省时被动，写兄弟省绝不覆盖它**（`decideTickAction` 对 released 先 skip，任何迁移分支都绕不过这层保护）。
+- `unmetProvinceDependencies`：晚批某省依赖早批**同省** released（晚批 renewal_tracker 用同省早批产出的 policy）。
+- `planProvinceReleases`（纯函数，vitest 直测）：给定各省 probe 决策 + 远程逐省就绪 + 当前状态，算出 `toRelease` / `staleWaiting` / `depBlocked` / `willCoverAll`。
+
+**逐省就绪判定**：`evaluateRemoteManifest` 除 `ready`（整体全就绪，逐字节兼容）外新增 `readyProvinces` / `staleProvinces`（只看硬闸 code；04 全国口径可选表不参与逐省）。省份归属经 `routeBranchCode(file)` 从文件名前缀派生，无前缀归 SC。省份枚举**数据驱动**（`registeredBranchCodesFromPrefixMap()`，禁硬编 SC/SX），未注册省 fail-closed。**枚举全集而非只看 manifest 出现的省**——某省完全断线（manifest 无其任何条目）仍须判 stale 才能发缺口告警。
+
+**watcher 编排**（`scripts/auto-release-daily.mjs` processBatch）：
+- 逐省决策 → mark-missed 省（窗口末未成）逐省写 missed + **响亮告警**（复用飞书 `lark-cli --as bot`，升级同 consecutiveMissedDays）；skip 省留痕；probe 省探测一次（两省共用）。
+- 就绪且依赖满足的省 → 发布；上游陈旧省 → 记缺口。放行 ≥1 省但仍有省陈旧 → 发**缺口告警**（去重每批每天一次，`selectBatchGapAlertDay`/`withBatchGapAlertDay`；warn 语气·非 error·非静默）。
+- **补齐点 `willCoverAll`**：本 tick 待发省 ∪ 今天已 released 省 == 全部注册省 → 走**单次全量发布**（不带 `--only-province`），让**报告（Stage 1.5/1.6）+ 企微（Stage 5）在两省 current/ 都新鲜时统一产出**。常态两省同 tick 就绪天然走这条（= 旧 allTogether）；就绪省先发陈旧省后补，也在补齐那一 tick 走全量补出报告。否则逐省 `--only-province` 发布。
+
+**执行端 `--only-province SC|SX`**（`scripts/sync-and-reload.mjs` + `scripts/pull-bi-exports.mjs`）：执行已分省（Stage 1=SC `buildBatchEtlCommands` / Stage 1.1=非 SC `buildBranchEtlSteps` / Stage 3 sync-vps 分省晋升+同步），`--only-province` 只选跑该省链路 + Stage 0 pull 只拉/校验该省文件。
+- **单省运行跳过报告 + 企微**（`opts.runReport=false` + `opts.wecom=false`，除非显式 `--wecom`）：报告 cutoff 是**每省** `MAX(insurance_start_date)`，而 `report-scope-freshness-gate` 要求各 scope 同日——单省运行两省日期不一致会撞闸；企微含跨省表（任卫军读两省），单省运行会把陈旧省当新鲜。故跨省产物**只在两省齐备的全量运行（willCoverAll）产出**。就绪省数据仍经 Stage 3 sync-vps 分省晋升+同步实时上线（RLS 分租户），不依赖报告/企微。
+
+**诚实边界**：某省若当天始终不就绪，其 period-trend 报告/企微表当天不刷新（跨省产物待两省齐备）——但该省窗口末会触发**逐省 mark-missed 响亮告警**，故「报告未刷新」⟺「某省 missed 有告警」，不静默。
+
+**单测**：`tests/bi-export-pull.test.ts`（readyProvinces/staleProvinces：全新鲜/单省陈旧/双省陈旧/断线省缺席/可选 04 不拦/子集）· `tests/auto-release-decision.test.ts`（批次×省×天幂等：已发省不因另一省补齐而重发 + v1/v2/v3 迁移 + 逐省依赖 + 缺口告警去重 + `planProvinceReleases` willCoverAll/依赖闸）。

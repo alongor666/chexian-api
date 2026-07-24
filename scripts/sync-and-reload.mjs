@@ -61,7 +61,10 @@ import { buildBranchEtlSteps, shouldEnableValidationBranchSync, BRANCH_PUBLISH_D
 // 双批发布 SSOT（早批 01+05 / 晚批 02+03+04）：批次 → ETL 域 / code 子集 / 报告·企微编排
 import { getReleaseBatch, batchAllCodes, RELEASE_BATCH_IDS } from '../数据管理/lib/release-batches.mjs';
 // 晚批依赖早批 fail-closed：手动入口独立校验前置批当天已 released（与 watcher 防混新鲜度同）
-import { unmetDependencies } from '../数据管理/lib/auto-release-decision.mjs';
+// B255 逐省：依赖判定细化到「同省」（晚批某省依赖早批同省 released）
+import { unmetProvinceDependencies } from '../数据管理/lib/auto-release-decision.mjs';
+// 省份枚举单一来源（数据驱动，禁硬编 SC/SX）——校验 --only-province 合法性 + 全量运行时遍历各省依赖
+import { registeredBranchCodesFromPrefixMap } from '../数据管理/lib/source-file-routing.mjs';
 // state.db 远程备份（575d2f）：reload 前在 VPS 上备份 PAT/用户/角色权威数据，失败不阻塞
 import { resolveStateDbBackupConfig, buildStateDbBackupScript } from './lib/state-db-backup.mjs';
 import { beijingDayOf } from '../数据管理/lib/bi-export-pull.mjs';
@@ -126,6 +129,7 @@ function parseArgs(argv) {
     runReport: true,      // 是否跑 Stage 1.5 短中长期报告（批次可关；默认开）
     pullCodes: null,      // 传给 Stage 0 pull-bi-exports 的 code 子集（批次派生；null=全量）
     allowMissingDep: false, // 应急放行：跳过「前置批当天已 released」依赖闸（防混新鲜度）
+    onlyProvince: null,   // B255 逐省就绪：'SC'|'SX'；只跑该省 ETL/晋升（就绪省放行，陈旧省不连累）
     dailyArgs: [],
   };
   for (let i = 0; i < argv.length; i++) {
@@ -163,10 +167,21 @@ function parseArgs(argv) {
     }
     else if (a === '--skip-lark-archive') opts.skipLarkArchive = true;
     else if (a === '--allow-missing-dep') opts.allowMissingDep = true;
+    else if (a === '--only-province' || a.startsWith('--only-province=')) {
+      // B255 逐省就绪：只跑该省链路（SC=Stage 1 默认链路；非 SC=Stage 1.1 分省步 + 1.45 晋升）。
+      // fail-closed：只接受已注册省份，未注册即中止（禁静默回落 SC）。
+      const raw = a.includes('=') ? a.slice('--only-province='.length) : argv[++i];
+      const registered = registeredBranchCodesFromPrefixMap();
+      if (!raw || !registered.includes(raw)) {
+        throw new Error(`--only-province 参数非法：${raw ?? '(空)'}（合法值 ${registered.join('/')}，数据驱动·禁硬编）`);
+      }
+      opts.onlyProvince = raw;
+    }
     else if (a === '--help' || a === '-h') {
-      log('cyan', `用法：node scripts/sync-and-reload.mjs [--batch ${RELEASE_BATCH_IDS.join('|')}] [daily.mjs subcommand] [--dry-run] [--skip-pull] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]`);
+      log('cyan', `用法：node scripts/sync-and-reload.mjs [--batch ${RELEASE_BATCH_IDS.join('|')}] [--only-province ${registeredBranchCodesFromPrefixMap().join('|')}] [daily.mjs subcommand] [--dry-run] [--skip-pull] [--skip-governance] [--skip-reload] [--skip-gate [--skip-gate-reason "理由"]] [--wecom|--wecom-dry-run] [--wecom-org 机构列表] [--skip-lark-archive]`);
       log('cyan', '  --batch early：签单+理赔（premium/claims_detail，跑企微）；--batch late：报价+维修+厂牌+尾部域（不跑企微，依赖早批当天 released）。不带 --batch=全量 daily.mjs all。');
-      log('cyan', '  --allow-missing-dep：应急放行晚批依赖闸（早批未 released 也发；可能混新鲜度）。');
+      log('cyan', '  --only-province SC|SX：B255 逐省就绪——只跑该省 ETL/晋升（SC=默认链路 Stage 1；SX=分省链路 Stage 1.1+1.45）。就绪省放行、陈旧省不连累。');
+      log('cyan', '  --allow-missing-dep：应急放行晚批依赖闸（早批同省未 released 也发；可能混新鲜度）。');
       process.exit(0);
     } else opts.dailyArgs.push(a);
   }
@@ -182,6 +197,18 @@ function parseArgs(argv) {
     // 企微：批次默认（早批 false / 晚批 true），除非用户显式 --wecom/--wecom-dry-run 覆盖
     if (!opts.wecomExplicit) opts.wecom = batch.runWecom;
   }
+  // 🔴 B255 逐省：单省运行必须跳过短中长期报告（Stage 1.5/1.6）。原因：period-trend 报告的
+  // cutoff 是**每省** MAX(insurance_start_date)（skill cli.py _resolve_cutoff(branch)），而报告 scope
+  // 新鲜度闸（report-scope-freshness-gate）要求根/各省/各机构报告**同日**。某省上游陈旧时只发另一省，
+  // current/<陈旧省> 停在旧日、current/<就绪省> 前进到今天 → 两省报告日期不一致 → 闸必然拦截 → 反而
+  // 把「就绪省放行」的整个目的顶掉。故单省运行不重算报告（报告是跨省产物，留待下次两省同批就绪的
+  // 全量运行刷新，届时各 scope 同日）；就绪省的数据仍经 Stage 3 sync-vps 分省晋升+同步实时上线（RLS 分租户）。
+  if (opts.onlyProvince) opts.runReport = false;
+  // 企微同理：5 张企微表含按省切分实例（四川邮政 SC / 山西邮政·任卫军 SX），也含跨省表（任卫军读两省）。
+  // 单省运行时另一省 warehouse 未被本次 ETL 刷新，此刻推企微会把陈旧省"当作新鲜"。故单省运行不推企微
+  //（除非用户显式 --wecom）——待 watcher 在当天最后一个省就绪时走全量运行统一推（两省都新鲜，见文件头/
+  // auto-release-daily "willCoverAll" 补齐逻辑）。与 runReport 同一取舍：跨省产物只在两省齐备时产出。
+  if (opts.onlyProvince && !opts.wecomExplicit) opts.wecom = false;
   if (opts.dailyArgs.length === 0) opts.dailyArgs = ['all'];
   // 环境变量兜底（CI / cron / 紧急运维）
   if (!opts.skipGate && (process.env.PREPUBLISH_GATE_SKIP === '1' || process.env.PREPUBLISH_GATE_SKIP === 'true')) {
@@ -390,6 +417,7 @@ async function main() {
   log('bold', '  sync-and-reload：ETL → governance → reload → /health');
   log('bold', '════════════════════════════════════════════════');
   log('cyan', `  批次:              ${opts.batch ? `${opts.batch}（code ${opts.pullCodes.join('/')}；报告=${opts.runReport}）` : '全量（不分批）'}`);
+  log('cyan', `  逐省:              ${opts.onlyProvince ? `${opts.onlyProvince}（只跑该省链路，B255）` : '全部注册省'}`);
   log('cyan', `  daily.mjs args:    ${opts.dailyArgs.join(' ')}`);
   log('cyan', `  skip pull:         ${opts.skipPull}`);
   log('cyan', `  ssh alias:         ${sshAlias}`);
@@ -409,17 +437,27 @@ async function main() {
     if ((batch.dependsOn?.length ?? 0) > 0) {
       let releaseState = null;
       try { releaseState = JSON.parse(readFileSync(join(ROOT_DIR, '数据管理/logs/auto-release-state.json'), 'utf-8')); } catch { /* 无状态文件视为依赖未满足 */ }
-      const unmet = unmetDependencies(batch, releaseState, beijingDayOf(new Date()));
-      if (unmet.length > 0) {
+      // B255 逐省依赖：晚批某省依赖早批**同省** released。--only-province 时只查该省；
+      // 全量运行时逐省检查（任一省前置未满足即拦——防某省晚批用陈旧同省 policy 混新鲜度）。
+      const today = beijingDayOf(new Date());
+      const provincesToCheck = opts.onlyProvince ? [opts.onlyProvince] : registeredBranchCodesFromPrefixMap();
+      const unmetDetails = [];
+      for (const province of provincesToCheck) {
+        for (const dep of unmetProvinceDependencies(batch, releaseState, today, province)) {
+          unmetDetails.push(`${dep}(${province})`);
+        }
+      }
+      if (unmetDetails.length > 0) {
+        const unmetStr = unmetDetails.join(',');
         if (opts.allowMissingDep) {
-          log('yellow', `\n⚠ 前置批未就绪（${unmet.join(',')} 今日未 released），但 --allow-missing-dep 已放行（应急：可能发布混新鲜度数据）`);
+          log('yellow', `\n⚠ 前置批（同省）未就绪（${unmetStr} 今日未 released），但 --allow-missing-dep 已放行（应急：可能发布混新鲜度数据）`);
         } else if (opts.dryRun) {
-          log('yellow', `\n⚠ (dry-run) 前置批未就绪（${unmet.join(',')} 今日未 released）：真实发布会 fail-closed 中止（--allow-missing-dep 可放行）`);
+          log('yellow', `\n⚠ (dry-run) 前置批（同省）未就绪（${unmetStr} 今日未 released）：真实发布会 fail-closed 中止（--allow-missing-dep 可放行）`);
         } else {
-          log('red', `\n❌ 前置批未就绪（${unmet.join(',')} 今日未 released），拒绝发布 ${opts.batch} 批（防混新鲜度：晚批依赖早批产出的 policy）。`);
-          log('yellow', `   请先成功发布早批（node scripts/sync-and-reload.mjs --batch early），或应急 --allow-missing-dep 显式放行。`);
+          log('red', `\n❌ 前置批（同省）未就绪（${unmetStr} 今日未 released），拒绝发布 ${opts.batch} 批（防混新鲜度：晚批依赖早批产出的同省 policy）。`);
+          log('yellow', `   请先成功发布早批（node scripts/sync-and-reload.mjs --batch early${opts.onlyProvince ? ` --only-province ${opts.onlyProvince}` : ''}），或应急 --allow-missing-dep 显式放行。`);
           if (!opts.dryRun) {
-            recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: `依赖闸拒绝：前置批 ${unmet.join(',')} 未 released` });
+            recordEvent({ stage: 'run', step: 'end', status: 'failed', trigger: detectTrigger(), duration_ms: Date.now() - RUN_T0, note: `依赖闸拒绝：前置批 ${unmetStr} 未 released` });
           }
           process.exit(1);
         }
@@ -441,15 +479,22 @@ async function main() {
   } else {
     const pullArgs = ['scripts/pull-bi-exports.mjs'];
     if (opts.batch) pullArgs.push('--batch', opts.batch);
+    if (opts.onlyProvince) pullArgs.push('--only-province', opts.onlyProvince); // B255：只拉该省文件
     await runCmd('pull:bi-exports', 'node', pullArgs, { dryRun: opts.dryRun });
   }
 
   // Stage 1: ETL（先 SC 默认链路）。批次模式逐域调用（daily.mjs 单次只处理一个域）。
+  // B255 逐省：onlyProvince 非 SC 时跳过 SC 默认链路（SC 上游陈旧时不跑它、不连累已就绪的其他省）。
+  const runScChain = !opts.onlyProvince || opts.onlyProvince === 'SC';
   const etlCommands = opts.batch
     ? buildBatchEtlCommands(opts.dailyArgs)
     : buildEtlCommands(opts.dailyArgs, fullSnapshotDomains);
-  for (const step of etlCommands) {
-    await runCmd(step.label, 'node', step.args, { dryRun: opts.dryRun });
+  if (!runScChain) {
+    log('yellow', `\n⚠ --only-province ${opts.onlyProvince}：跳过 SC 默认链路 ETL（Stage 1），只跑 ${opts.onlyProvince} 分省链路`);
+  } else {
+    for (const step of etlCommands) {
+      await runCmd(step.label, 'node', step.args, { dryRun: opts.dryRun });
+    }
   }
   // Stage 1.1: 多省 B2 分省发布——遍历注册的非 SC 省逐域跑（产物落 warehouse/validation/<省>）。
   // BRANCH_PUBLISH=1 让无源域 graceful skip 不中断；有源但转换失败 → fail-fast + 明确定位
@@ -458,7 +503,9 @@ async function main() {
   const branchCoreDomains = opts.batch
     ? BRANCH_PUBLISH_DOMAINS.filter((d) => opts.dailyArgs.includes(d))
     : BRANCH_PUBLISH_DOMAINS;
-  const branchSteps = fullSnapshotDomains.length === 0 ? buildBranchEtlSteps(undefined, branchCoreDomains) : [];
+  let branchSteps = fullSnapshotDomains.length === 0 ? buildBranchEtlSteps(undefined, branchCoreDomains) : [];
+  // B255 逐省：只跑该省的分省步（SC 从不在分省步里，故 onlyProvince=SC 时天然过滤为空）。
+  if (opts.onlyProvince) branchSteps = branchSteps.filter((s) => s.env.BRANCH_CODE === opts.onlyProvince);
   if (fullSnapshotDomains.length === 0) {
     if (branchSteps.length > 0) {
       const provinces = [...new Set(branchSteps.map(s => s.env.BRANCH_CODE))].join(', ');
@@ -505,6 +552,9 @@ async function main() {
   // 又阻断了本能修复它的 Stage 3 晋升 → 死锁。此处提前把晋升做掉，让报告读到已晋升的当日数据。
   // 复用 sync-vps --promote-only（同一 RLS 实时核实 + sx-promote 安全内核）；与 Stage 3 的
   // runSxAutoPromote 幂等（sha256 一致自动 skip），不重复搬运。仅在本批要生成报告时才需要。
+  // 仅在要生成报告时需要「报告前晋升」（避免报告读到旧 current/<省> 的死锁）。
+  // 逐省运行（onlyProvince）已把 runReport 置 false（报告是跨省产物，见 parseArgs 注释），故此处跳过；
+  // 就绪省的 validation/<省> → current/<省> 晋升改由 Stage 3 sync-vps runSxAutoPromote 实时核实后完成。
   if (opts.runReport) {
     await runCmd(
       '非 SC 省晋升（报告前）',
